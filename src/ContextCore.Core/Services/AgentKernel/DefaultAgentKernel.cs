@@ -45,6 +45,9 @@ public sealed class DefaultAgentKernel : IAgentKernel
     private readonly IAgentContextProjector? _contextProjector;
     private readonly KernelTransportOptions _transportOptions;
     private readonly IKernelResultOutbox? _resultOutbox;
+    private readonly IAgentCheckpointFactory? _checkpointFactory;
+    private readonly IAgentContextSnapshotStore? _snapshotStore;
+    private readonly IToolDispatchJournal? _dispatchJournal;
     private readonly Channel<AgentKernelInstruction> _inbox;
     private readonly CancellationTokenSource _shutdownCts;
     private AgentKernelState _state;
@@ -58,6 +61,10 @@ public sealed class DefaultAgentKernel : IAgentKernel
     // SideEffect != Unknown 的结果自动提交；Unknown 需显式 Ack 后才提交。
     // 已提交的结果在 resume 时可安全重放（返回缓存结果不重新执行）。
     private readonly Dictionary<string, ToolDispatchResult> _committedToolResults = new(StringComparer.Ordinal);
+
+    // R28-E P1-3：pending 的 Unknown 副作用 tool 结果（按 RequestId 索引）。
+    // 等待 AcknowledgeToolResult 移到 _committedToolResults 或 RejectToolResult 丢弃。
+    private readonly Dictionary<string, ToolDispatchResult> _pendingToolResults = new(StringComparer.Ordinal);
 
     // R28-C WP-B：跟踪最后一次 session/workspace（用于取消时自动 checkpoint）
     // 和是否为 graceful shutdown（Shutdown 指令 vs 外部取消）
@@ -80,13 +87,29 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// <param name="transportOptions">
     /// R28-C WP-D：Transport 失败策略（FailFast / Retry / FallbackToDeterministic）。null 时使用 Default。
     /// </param>
+    /// <param name="resultOutbox">
+    /// R28-D P0-5：本地结果 outbox（FallbackToDeterministic 策略下持久化失败结果）。null 时不持久化。
+    /// </param>
+    /// <param name="checkpointFactory">
+    /// R28-E P1-1：统一 checkpoint 工厂。null 时 Kernel 内部构建默认工厂。
+    /// </param>
+    /// <param name="snapshotStore">
+    /// R28-E P1-2：snapshot store（ResumeAsync 据此恢复 _lastSnapshot）。null 时 Resume 不恢复 snapshot。
+    /// </param>
+    /// <param name="dispatchJournal">
+    /// R28-E P1-4：tool 分派 journal（exactly-once 语义）。null 时退回进程内去重（不保证崩溃恢复）。
+    /// </param>
     public DefaultAgentKernel(
         IAgentKernelTransport transport,
         IToolDispatcher toolDispatcher,
         IAgentCheckpointStore checkpointStore,
         IContextDecisionRuntime? decisionRuntime = null,
         IAgentContextProjector? contextProjector = null,
-        KernelTransportOptions? transportOptions = null)
+        KernelTransportOptions? transportOptions = null,
+        IKernelResultOutbox? resultOutbox = null,
+        IAgentCheckpointFactory? checkpointFactory = null,
+        IAgentContextSnapshotStore? snapshotStore = null,
+        IToolDispatchJournal? dispatchJournal = null)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
@@ -94,6 +117,22 @@ public sealed class DefaultAgentKernel : IAgentKernel
         _decisionRuntime = decisionRuntime;
         _contextProjector = contextProjector;
         _transportOptions = transportOptions ?? KernelTransportOptions.Default;
+        _resultOutbox = resultOutbox;
+        _snapshotStore = snapshotStore;
+        _dispatchJournal = dispatchJournal;
+
+        // R28-E P1-1：若未注入 checkpointFactory，使用默认实现（绑定到当前 Kernel 状态访问器）
+        if (checkpointFactory is not null)
+        {
+            _checkpointFactory = checkpointFactory;
+        }
+        else
+        {
+            var accessor = new DefaultAgentCheckpointFactory.KernelStateAccessor(
+                getLastSnapshotId: () => _lastSnapshot?.SnapshotId,
+                getCommittedResults: () => _committedToolResults);
+            _checkpointFactory = new DefaultAgentCheckpointFactory(accessor);
+        }
 
         // 容量 256，Wait 模式（满时 SubmitAsync 阻塞等待）
         _inbox = Channel.CreateBounded<AgentKernelInstruction>(new BoundedChannelOptions(256)
@@ -243,7 +282,8 @@ public sealed class DefaultAgentKernel : IAgentKernel
         }
     }
 
-    /// <summary>处理单条指令（Execute / Checkpoint）；Shutdown 由 RunAsync 直接处理。</summary>
+    /// <summary>处理单条指令（Execute / Checkpoint / BuildContext / Acknowledge / Reject / Query）；
+    /// Shutdown 由 RunAsync 直接处理。</summary>
     private async ValueTask<AgentKernelResult> ProcessInstructionAsync(
         AgentKernelInstruction instruction,
         CancellationToken cancellationToken)
@@ -255,6 +295,9 @@ public sealed class DefaultAgentKernel : IAgentKernel
                 AgentKernelInstructionKind.Execute => await ProcessExecuteAsync(instruction, cancellationToken).ConfigureAwait(false),
                 AgentKernelInstructionKind.Checkpoint => await ProcessCheckpointAsync(instruction, cancellationToken).ConfigureAwait(false),
                 AgentKernelInstructionKind.BuildContext => await ProcessBuildContextAsync(instruction, cancellationToken).ConfigureAwait(false),
+                AgentKernelInstructionKind.AcknowledgeToolResult => await ProcessAcknowledgeToolResultAsync(instruction, cancellationToken).ConfigureAwait(false),
+                AgentKernelInstructionKind.RejectToolResult => await ProcessRejectToolResultAsync(instruction, cancellationToken).ConfigureAwait(false),
+                AgentKernelInstructionKind.QueryToolDispatchState => await ProcessQueryToolDispatchStateAsync(instruction, cancellationToken).ConfigureAwait(false),
                 AgentKernelInstructionKind.Shutdown => new AgentKernelResult
                 {
                     InstructionId = instruction.InstructionId,
@@ -289,7 +332,10 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// R28-C WP-C：tool 结果按 RequestId 去重——已提交的结果不重新执行（幂等）。
     /// 副作用分类决定是否自动提交：
     ///   - None / ReadOnly / Write：自动提交到 _committedToolResults
-    ///   - Unknown：不自动提交，恢复时不重放
+    ///   - Unknown：不自动提交，存入 _pendingToolResults，等待 Acknowledge/Reject
+    ///
+    /// R28-E P1-4：若注入了 <see cref="IToolDispatchJournal"/>，按状态机推进：
+    ///   Prepared（调用前）→ Dispatched（tool 返回后）→ Committed（结果提交后）→ ResultDelivered（发送后）
     /// </remarks>
     private async ValueTask<AgentKernelResult> ProcessExecuteAsync(
         AgentKernelInstruction instruction,
@@ -324,6 +370,23 @@ public sealed class DefaultAgentKernel : IAgentKernel
             };
         }
 
+        // R28-E P1-4：调用 tool 前写入 Prepared journal 条目（若注入了 journal）
+        var idempotencyKey = instruction.Metadata.TryGetValue("idempotencyKey", out var ik) && !string.IsNullOrWhiteSpace(ik)
+            ? ik
+            : null;
+
+        if (_dispatchJournal is not null)
+        {
+            await _dispatchJournal.PrepareAsync(new ToolDispatchJournalEntry
+            {
+                RequestId = instruction.InstructionId,
+                ToolName = toolName,
+                State = ToolDispatchState.Prepared,
+                IdempotencyKey = idempotencyKey,
+                UpdatedAt = DateTimeOffset.UtcNow
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
         var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
         {
             ToolName = toolName,
@@ -331,11 +394,28 @@ public sealed class DefaultAgentKernel : IAgentKernel
             RequestId = instruction.InstructionId
         }, cancellationToken).ConfigureAwait(false);
 
+        // R28-E P1-4：tool 返回后标记 Dispatched（若注入了 journal）
+        if (_dispatchJournal is not null)
+        {
+            await _dispatchJournal.MarkDispatchedAsync(instruction.InstructionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
         // R28-C WP-C：副作用分类决定是否自动提交
-        // Unknown 不自动提交——恢复时不重放，需调用方显式确认
+        // Unknown 不自动提交——存入 pending，等待 Acknowledge/Reject
         if (dispatchResult.SideEffect != ToolSideEffect.Unknown)
         {
             _committedToolResults[instruction.InstructionId] = dispatchResult;
+
+            // R28-E P1-4：标记 Committed（若注入了 journal）
+            if (_dispatchJournal is not null)
+            {
+                await _dispatchJournal.MarkCommittedAsync(instruction.InstructionId, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            // R28-E P1-3：Unknown 副作用结果存入 pending，等待显式 Ack/Reject
+            _pendingToolResults[instruction.InstructionId] = dispatchResult;
         }
 
         return new AgentKernelResult
@@ -347,7 +427,12 @@ public sealed class DefaultAgentKernel : IAgentKernel
         };
     }
 
-    /// <summary>处理 Checkpoint 指令：通过 IAgentCheckpointStore 保存检查点。</summary>
+    /// <summary>处理 Checkpoint 指令：通过 IAgentCheckpointFactory + IAgentCheckpointStore 保存检查点。</summary>
+    /// <remarks>
+    /// R28-E P1-1：统一使用 <see cref="IAgentCheckpointFactory"/> 构建 checkpoint，
+    /// 手动 Checkpoint 与自动 AutoCheckpoint 产出相同 KernelCheckpointState 格式。
+    /// instruction.Payload 不再直接作为 StateJson（仅作为元数据可选保留在 checkpoint.Metadata）。
+    /// </remarks>
     private async ValueTask<AgentKernelResult> ProcessCheckpointAsync(
         AgentKernelInstruction instruction,
         CancellationToken cancellationToken)
@@ -360,21 +445,21 @@ public sealed class DefaultAgentKernel : IAgentKernel
             ? w
             : "kernel-default-workspace";
 
-        var checkpoint = new AgentCheckpoint
+        // R28-E P1-1：通过 factory 统一构建 checkpoint（序列化完整 Kernel 状态）
+        var checkpoint = await _checkpointFactory!.CreateCheckpointAsync(
+            instruction.InstructionId, sessionId, workspaceId, cancellationToken).ConfigureAwait(false);
+
+        // 可选：将手动 Payload 作为诊断信息保留到 Metadata
+        if (!string.IsNullOrEmpty(instruction.Payload))
         {
-            CheckpointId = instruction.InstructionId,
-            Session = new AgentSessionId
+            checkpoint = checkpoint with
             {
-                Value = sessionId,
-                WorkspaceId = workspaceId,
-                CreatedAt = DateTimeOffset.UtcNow
-            },
-            CreatedAt = DateTimeOffset.UtcNow,
-            // R28-C WP-B：若存在上次 snapshot，将 SnapshotId 关联到 checkpoint，
-            // 恢复时可据此重建 AgentContextSnapshot。
-            SnapshotId = _lastSnapshot?.SnapshotId,
-            StateJson = instruction.Payload ?? "{}"
-        };
+                Metadata = new Dictionary<string, string>(checkpoint.Metadata, StringComparer.Ordinal)
+                {
+                    ["manualPayload"] = instruction.Payload
+                }
+            };
+        }
 
         await _checkpointStore.SaveAsync(checkpoint, cancellationToken).ConfigureAwait(false);
 
@@ -507,6 +592,163 @@ public sealed class DefaultAgentKernel : IAgentKernel
     }
 
     // =======================================================================
+    // R28-E P1-3：AcknowledgeToolResult / RejectToolResult / QueryToolDispatchState
+    // =======================================================================
+
+    /// <summary>
+    /// R28-E P1-3：处理 AcknowledgeToolResult 指令。
+    /// 将 pending 的 Unknown 副作用结果移到 committed，恢复时可安全重放。
+    /// </summary>
+    private async ValueTask<AgentKernelResult> ProcessAcknowledgeToolResultAsync(
+        AgentKernelInstruction instruction,
+        CancellationToken cancellationToken)
+    {
+        if (!instruction.Metadata.TryGetValue("requestId", out var requestId) || string.IsNullOrWhiteSpace(requestId))
+        {
+            return new AgentKernelResult
+            {
+                InstructionId = instruction.InstructionId,
+                Succeeded = false,
+                Error = "AcknowledgeToolResult Metadata 缺少必填字段 requestId。"
+            };
+        }
+
+        if (!_pendingToolResults.TryGetValue(requestId, out var pending))
+        {
+            return new AgentKernelResult
+            {
+                InstructionId = instruction.InstructionId,
+                Succeeded = false,
+                Error = $"未找到 pending 的 tool 结果: {requestId}（可能已 ack 或不存在）。",
+                AffectedRequestId = requestId
+            };
+        }
+
+        // 移到 committed
+        _pendingToolResults.Remove(requestId);
+        _committedToolResults[requestId] = pending;
+
+        // R28-E P1-4：标记 Committed（若注入了 journal）
+        if (_dispatchJournal is not null)
+        {
+            await _dispatchJournal.MarkCommittedAsync(requestId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new AgentKernelResult
+        {
+            InstructionId = instruction.InstructionId,
+            Succeeded = true,
+            Output = $"acknowledged: {requestId}",
+            AffectedRequestId = requestId
+        };
+    }
+
+    /// <summary>
+    /// R28-E P1-3：处理 RejectToolResult 指令。
+    /// 将 pending 的 Unknown 副作用结果丢弃（不提交，不重放）。
+    /// </summary>
+    private ValueTask<AgentKernelResult> ProcessRejectToolResultAsync(
+        AgentKernelInstruction instruction,
+        CancellationToken cancellationToken)
+    {
+        if (!instruction.Metadata.TryGetValue("requestId", out var requestId) || string.IsNullOrWhiteSpace(requestId))
+        {
+            return ValueTask.FromResult(new AgentKernelResult
+            {
+                InstructionId = instruction.InstructionId,
+                Succeeded = false,
+                Error = "RejectToolResult Metadata 缺少必填字段 requestId。"
+            });
+        }
+
+        if (!_pendingToolResults.Remove(requestId))
+        {
+            return ValueTask.FromResult(new AgentKernelResult
+            {
+                InstructionId = instruction.InstructionId,
+                Succeeded = false,
+                Error = $"未找到 pending 的 tool 结果: {requestId}（可能已 reject 或不存在）。",
+                AffectedRequestId = requestId
+            });
+        }
+
+        // rejected 结果不写入 committed，恢复时不重放
+        var reason = instruction.Metadata.TryGetValue("reason", out var r) && !string.IsNullOrWhiteSpace(r)
+            ? r
+            : "rejected-by-caller";
+
+        return ValueTask.FromResult(new AgentKernelResult
+        {
+            InstructionId = instruction.InstructionId,
+            Succeeded = true,
+            Output = $"rejected: {requestId} ({reason})",
+            AffectedRequestId = requestId
+        });
+    }
+
+    /// <summary>
+    /// R28-E P1-3：处理 QueryToolDispatchState 指令。
+    /// 返回指定 RequestId 的当前分派状态。
+    /// </summary>
+    private async ValueTask<AgentKernelResult> ProcessQueryToolDispatchStateAsync(
+        AgentKernelInstruction instruction,
+        CancellationToken cancellationToken)
+    {
+        if (!instruction.Metadata.TryGetValue("requestId", out var requestId) || string.IsNullOrWhiteSpace(requestId))
+        {
+            return new AgentKernelResult
+            {
+                InstructionId = instruction.InstructionId,
+                Succeeded = false,
+                Error = "QueryToolDispatchState Metadata 缺少必填字段 requestId。"
+            };
+        }
+
+        ToolDispatchState state;
+        string diagnostic;
+
+        // 优先查询 journal（持久化状态）；无 journal 时回退到进程内字典推断
+        if (_dispatchJournal is not null)
+        {
+            var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
+            if (entry is null)
+            {
+                state = ToolDispatchState.Prepared;
+                diagnostic = "no journal entry: tool 从未被调用";
+            }
+            else
+            {
+                state = entry.State;
+                diagnostic = entry.DiagnosticNote ?? $"journal state: {entry.State}";
+            }
+        }
+        else if (_committedToolResults.ContainsKey(requestId))
+        {
+            state = ToolDispatchState.Committed;
+            diagnostic = "in committed results (no journal)";
+        }
+        else if (_pendingToolResults.ContainsKey(requestId))
+        {
+            state = ToolDispatchState.Dispatched;
+            diagnostic = "in pending results (Unknown side effect, awaiting ack)";
+        }
+        else
+        {
+            state = ToolDispatchState.Prepared;
+            diagnostic = "not found in any store";
+        }
+
+        return new AgentKernelResult
+        {
+            InstructionId = instruction.InstructionId,
+            Succeeded = true,
+            Output = $"{state} ({diagnostic})",
+            AffectedRequestId = requestId,
+            DispatchState = state
+        };
+    }
+
+    // =======================================================================
     // R28-C WP-D：Transport 失败策略
     // =======================================================================
 
@@ -527,62 +769,98 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// <param name="cancellationToken">取消令牌。</param>
     private async ValueTask SendResultWithPolicyAsync(AgentKernelResult result, CancellationToken cancellationToken)
     {
-        switch (_transportOptions.FailurePolicy)
+        var sent = false;
+        try
         {
-            case TransportFailurePolicy.FailFast:
-                await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
-                return;
-
-            case TransportFailurePolicy.Retry:
+            switch (_transportOptions.FailurePolicy)
             {
-                Exception? lastEx = null;
-                // 总尝试次数 = MaxRetries + 1（1 次初始 + MaxRetries 次重试）
-                for (var attempt = 0; attempt <= _transportOptions.MaxRetries; attempt++)
+                case TransportFailurePolicy.FailFast:
+                    await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
+                    sent = true;
+                    return;
+
+                case TransportFailurePolicy.Retry:
                 {
+                    Exception? lastEx = null;
+                    // 总尝试次数 = MaxRetries + 1（1 次初始 + MaxRetries 次重试）
+                    for (var attempt = 0; attempt <= _transportOptions.MaxRetries; attempt++)
+                    {
+                        try
+                        {
+                            await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
+                            sent = true;
+                            return;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            lastEx = ex;
+                            if (attempt < _transportOptions.MaxRetries)
+                            {
+                                await Task.Delay(_transportOptions.RetryDelay, cancellationToken).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                    throw new InvalidOperationException(
+                        $"Transport SendResultAsync 在 { _transportOptions.MaxRetries + 1 } 次尝试后仍失败（策略: Retry）。",
+                        lastEx);
+                }
+
+                case TransportFailurePolicy.FallbackToDeterministic:
                     try
                     {
                         await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
-                        return;
+                        sent = true;
                     }
                     catch (OperationCanceledException)
                     {
                         throw;
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        lastEx = ex;
-                        if (attempt < _transportOptions.MaxRetries)
+                        // Transport 不可用：尝试写入 outbox 持久化（若注入）
+                        // 否则静默降级，不中断 Kernel 循环。
+                        if (_resultOutbox is not null && _transportOptions.EnableResultOutbox)
                         {
-                            await Task.Delay(_transportOptions.RetryDelay, cancellationToken).ConfigureAwait(false);
+                            try
+                            {
+                                await _resultOutbox.EnqueueAsync(result, cancellationToken).ConfigureAwait(false);
+                            }
+                            catch
+                            {
+                                // outbox 写入失败也不中断 Kernel 循环
+                            }
                         }
                     }
-                }
-                throw new InvalidOperationException(
-                    $"Transport SendResultAsync 在 { _transportOptions.MaxRetries + 1 } 次尝试后仍失败（策略: Retry）。",
-                    lastEx);
-            }
+                    return;
 
-            case TransportFailurePolicy.FallbackToDeterministic:
+                default:
+                    // 未知策略值：保守按 FailFast 处理
+                    await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
+                    sent = true;
+                    return;
+            }
+        }
+        finally
+        {
+            // R28-E P1-4：发送成功后标记 ResultDelivered（若注入了 journal 且 result 对应已提交的 Execute 指令）。
+            // 仅当 result.InstructionId 对应已提交 tool 结果时才推进 journal；
+            // 否则跳过（如 Checkpoint/BuildContext/Ack/Reject/Query 指令，或 Unknown 副作用 pending 结果）。
+            // 这样保证状态机顺序：Prepared → Dispatched → Committed → ResultDelivered。
+            if (sent && _dispatchJournal is not null && _committedToolResults.ContainsKey(result.InstructionId))
+            {
                 try
                 {
-                    await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
+                    await _dispatchJournal.MarkResultDeliveredAsync(result.InstructionId, cancellationToken).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
+                catch
                 {
-                    throw;
+                    // journal 写入失败不影响已发送的结果；best-effort
                 }
-                catch (Exception)
-                {
-                    // Transport 不可用：静默降级，不中断 Kernel 循环。
-                    // 结果本地丢弃；循环继续处理后续指令。
-                    // 当 transport 恢复后后续结果可正常发送。
-                }
-                return;
-
-            default:
-                // 未知策略值：保守按 FailFast 处理
-                await _transport.SendResultAsync(result, cancellationToken).ConfigureAwait(false);
-                return;
+            }
         }
     }
 
@@ -594,7 +872,12 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// R28-C WP-B：从 checkpoint 恢复 Kernel 状态。
     /// 反序列化已提交的 tool 结果 + snapshot 引用，恢复后 RunAsync 可继续处理。
     /// </summary>
-    public ValueTask ResumeAsync(AgentCheckpoint checkpoint, CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// R28-E P1-1：反序列化使用 <see cref="DefaultAgentCheckpointFactory.KernelCheckpointStateDto"/>，
+    /// 与 factory 产出的格式一致（确保手动/自动 checkpoint 均可恢复）。
+    /// R28-E P1-2：若注入了 <see cref="IAgentContextSnapshotStore"/>，根据 SnapshotId 加载 snapshot。
+    /// </remarks>
+    public async ValueTask ResumeAsync(AgentCheckpoint checkpoint, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(checkpoint);
 
@@ -603,7 +886,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
         {
             try
             {
-                var state = JsonSerializer.Deserialize<KernelCheckpointState>(checkpoint.StateJson);
+                var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson);
                 if (state?.CommittedResults is not null)
                 {
                     foreach (var entry in state.CommittedResults)
@@ -632,11 +915,25 @@ public sealed class DefaultAgentKernel : IAgentKernel
             _lastWorkspaceId = checkpoint.Session.WorkspaceId;
         }
 
+        // R28-E P1-2：若注入了 snapshotStore，根据 SnapshotId 加载 _lastSnapshot
+        _lastSnapshot = null;
+        if (_snapshotStore is not null && !string.IsNullOrWhiteSpace(checkpoint.SnapshotId))
+        {
+            try
+            {
+                _lastSnapshot = await _snapshotStore.GetAsync(
+                    _lastWorkspaceId, checkpoint.SnapshotId, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // snapshot 加载失败不阻断 resume；_lastSnapshot 保持 null
+                // 调用方可通过后续 BuildContext 指令重建 snapshot
+            }
+        }
+
         // 重置状态：恢复后允许再次 RunAsync
         _state = AgentKernelState.Idle;
         _gracefulShutdown = false;
-
-        return ValueTask.CompletedTask;
     }
 
     /// <summary>R28-C WP-B：从指令 Metadata 更新 session/workspace 跟踪。</summary>
@@ -654,7 +951,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
 
     /// <summary>
     /// R28-C WP-B：取消时自动产出可恢复 checkpoint。
-    /// 序列化已提交的 tool 结果 + snapshot 引用到 StateJson，保存到 IAgentCheckpointStore。
+    /// R28-E P1-1：通过 <see cref="IAgentCheckpointFactory"/> 统一构建（与手动 Checkpoint 相同格式）。
     /// </summary>
     private async ValueTask AutoCheckpointAsync(CancellationToken cancellationToken)
     {
@@ -664,54 +961,16 @@ public sealed class DefaultAgentKernel : IAgentKernel
             return;
         }
 
-        var state = new KernelCheckpointState
-        {
-            SnapshotId = _lastSnapshot?.SnapshotId,
-            CommittedResults = _committedToolResults.Select(kv => new CommittedToolResultEntry
-            {
-                RequestId = kv.Key,
-                Succeeded = kv.Value.Succeeded,
-                Result = kv.Value.Result,
-                Error = kv.Value.Error,
-                SideEffect = kv.Value.SideEffect
-            }).ToList()
-        };
-
-        var stateJson = JsonSerializer.Serialize(state);
-
         var checkpointId = $"auto-{_lastSessionId}-{DateTimeOffset.UtcNow.Ticks}";
 
-        var checkpoint = new AgentCheckpoint
-        {
-            CheckpointId = checkpointId,
-            Session = new AgentSessionId
-            {
-                Value = _lastSessionId,
-                WorkspaceId = _lastWorkspaceId,
-                CreatedAt = DateTimeOffset.UtcNow
-            },
-            CreatedAt = DateTimeOffset.UtcNow,
-            SnapshotId = _lastSnapshot?.SnapshotId,
-            StateJson = stateJson
-        };
+        // R28-E P1-1：通过 factory 统一构建（与手动 Checkpoint 相同格式）
+        var checkpoint = await _checkpointFactory!.CreateCheckpointAsync(
+            checkpointId, _lastSessionId, _lastWorkspaceId, cancellationToken).ConfigureAwait(false);
 
         await _checkpointStore.SaveAsync(checkpoint, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>R28-C WP-B：Checkpoint 序列化模型。</summary>
-    private sealed class KernelCheckpointState
-    {
-        public string? SnapshotId { get; init; }
-        public List<CommittedToolResultEntry> CommittedResults { get; init; } = new();
-    }
-
-    /// <summary>R28-C WP-B：已提交 tool 结果的序列化条目。</summary>
-    private sealed class CommittedToolResultEntry
-    {
-        public string RequestId { get; init; } = "";
-        public bool Succeeded { get; init; }
-        public string? Result { get; init; }
-        public string? Error { get; init; }
-        public ToolSideEffect SideEffect { get; init; }
-    }
+    // R28-E P1-1：KernelCheckpointState / CommittedToolResultEntry 序列化模型已移到
+    // DefaultAgentCheckpointFactory（KernelCheckpointStateDto / CommittedToolResultDto），
+    // 供 Kernel 与外部反序列化共享。
 }

@@ -207,7 +207,18 @@ public sealed class R28B_ModelExecutionTests
     {
         var service = new PlattCalibrationService();
 
-        // 默认 A=1, B=0：sigmoid(raw) 必落在 [0, 1]。
+        // R28-F P3-3：默认 Identity（raw 原样返回，不调用 sigmoid）。
+        // 要复用旧 sigmoid 语义，需显式注册 Platt(A=1, B=0)。
+        service.RegisterPlattParameters(a: 1.0, b: 0.0);
+        // 默认参数现在应反映 Platt 注册
+        var defaultParams = service.GetParameters();
+        Assert.IsNotNull(defaultParams);
+        Assert.AreEqual("platt", defaultParams!.Method);
+        Assert.AreEqual(CalibrationMethodKind.Platt, defaultParams.Kind);
+        Assert.AreEqual(1.0, defaultParams.ParameterA);
+        Assert.AreEqual(0.0, defaultParams.ParameterB);
+
+        // sigmoid(raw) 必落在 [0, 1]。
         var rawScores = new[] { -100.0, -10.0, -1.0, 0.0, 1.0, 10.0, 100.0, double.NaN };
         foreach (var raw in rawScores)
         {
@@ -228,6 +239,8 @@ public sealed class R28B_ModelExecutionTests
         Assert.IsNotNull(parameters);
         Assert.AreEqual("platt", parameters!.Method);
         Assert.AreEqual(1.0, parameters.Parameter);
+        Assert.AreEqual(1.0, parameters.ParameterA);
+        Assert.AreEqual(0.0, parameters.ParameterB);
     }
 
     [TestMethod]
@@ -265,10 +278,38 @@ public sealed class R28B_ModelExecutionTests
     public void Calibration_UnknownModel_FallsBackToDefault()
     {
         var service = new PlattCalibrationService();
-        // 未注册的模型名应回退到默认参数（A=1, B=0）。
+        // R28-F P3-3：默认参数现在是 Identity（raw 原样返回），不再执行 sigmoid。
+        // 未注册的模型名应回退到默认参数。
         var calibrated = service.Calibrate(0.0, "never-registered");
-        Assert.AreEqual(0.5, calibrated, 1e-12);
+        Assert.AreEqual(0.0, calibrated, 1e-12);
         Assert.IsNull(service.GetParameters("never-registered"));
+
+        // 验证 Identity 默认行为：raw=0.8 → calibrated=0.8（无变换）
+        var calibratedNonZero = service.Calibrate(0.8, "never-registered");
+        Assert.AreEqual(0.8, calibratedNonZero, 1e-12);
+    }
+
+    [TestMethod]
+    public void Calibration_DefaultIdentity_Identity_NoTransformApplied()
+    {
+        // R28-F P3-3：新增测试 — 默认 Identity 不调用 Math.Exp，原样返回 raw score。
+        var service = new PlattCalibrationService();
+        var parameters = service.GetParameters();
+        Assert.IsNotNull(parameters);
+        Assert.AreEqual(CalibrationMethodKind.Identity, parameters!.Kind);
+        Assert.AreEqual("identity", parameters.Method);
+
+        // 各种 raw score 均应原样返回
+        foreach (var raw in new[] { -100.0, -1.0, 0.0, 0.5, 1.0, 100.0 })
+        {
+            var calibrated = service.Calibrate(raw);
+            Assert.AreEqual(raw, calibrated, 1e-12,
+                $"Identity 校准应原样返回 raw={raw}，实际 {calibrated}");
+        }
+
+        // raw=0 → calibrated=0（关键差异：旧版默认会返回 0.5）
+        Assert.AreEqual(0.0, service.Calibrate(0.0), 1e-12,
+            "Identity 校准对 raw=0 应返回 0，而非旧版 sigmoid(0)=0.5");
     }
 }
 

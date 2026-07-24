@@ -461,7 +461,22 @@ public sealed class DefaultAgentKernelTests
         Assert.AreEqual("ckpt-1", saved!.CheckpointId);
         Assert.AreEqual("session-abc", saved.Session.Value);
         Assert.AreEqual("ws-xyz", saved.Session.WorkspaceId);
-        Assert.AreEqual("{\"state\":\"running\"}", saved.StateJson);
+
+        // R28-E P1-1：StateJson 现为 KernelCheckpointStateDto（SnapshotId + CommittedResults），
+        // 不再直接保存 instruction.Payload。手动 Payload 转存到 Metadata["manualPayload"]。
+        Assert.IsNotNull(saved.StateJson);
+        using (var doc = JsonDocument.Parse(saved.StateJson!))
+        {
+            Assert.IsTrue(doc.RootElement.TryGetProperty("SnapshotId", out _),
+                "StateJson 应包含 KernelCheckpointState.SnapshotId 字段。");
+            Assert.IsTrue(doc.RootElement.TryGetProperty("CommittedResults", out var arr),
+                "StateJson 应包含 KernelCheckpointState.CommittedResults 字段。");
+            Assert.AreEqual(0, arr.GetArrayLength(),
+                "无 tool 执行时 CommittedResults 应为空数组。");
+        }
+        Assert.IsTrue(saved.Metadata.TryGetValue("manualPayload", out var manualPayload),
+            "手动 Checkpoint 的 Payload 应转存到 Metadata[\"manualPayload\"]。");
+        Assert.AreEqual("{\"state\":\"running\"}", manualPayload);
     }
 
     [TestMethod]
@@ -1390,5 +1405,894 @@ public sealed class R28CWorkstreamCAcceptanceTests
         Assert.IsTrue(result.Snapshot!.ActualTokens <= result.Snapshot.TokenBudget,
             $"快照 ActualTokens({result.Snapshot.ActualTokens}) 不应超过 TokenBudget({result.Snapshot.TokenBudget})。");
         Assert.AreEqual(500, result.Snapshot.TokenBudget);
+    }
+}
+
+// ===========================================================================
+// R28-E：Agent Kernel 运行语义可靠性测试
+//
+// 覆盖 4 项关键修复：
+//   P1-1: IAgentCheckpointFactory 统一手动/自动 checkpoint 格式
+//   P1-2: ResumeAsync 通过 IAgentContextSnapshotStore 恢复 _lastSnapshot
+//   P1-3: AcknowledgeToolResult / RejectToolResult / QueryToolDispatchState 指令
+//   P1-4: IToolDispatchJournal 状态机 (Prepared→Dispatched→Committed→ResultDelivered)
+// ===========================================================================
+
+[TestClass]
+[TestCategory("R28-E")]
+public sealed class R28E_AgentKernelReliabilityTests
+{
+    private static CancellationTokenSource CreateTestTimeout()
+        => new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+    private static bool WaitForProcessed(DefaultAgentKernel kernel, int target, TimeSpan timeout)
+        => SpinWait.SpinUntil(() => kernel.GetStatus().ProcessedCount >= target, timeout);
+
+    // -----------------------------------------------------------------------
+    // P1-1: IAgentCheckpointFactory — 手动 Checkpoint 与 AutoCheckpoint 同格式
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task ManualCheckpoint_IncludesCommittedResultsAndSnapshotId()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // 先执行一条 tool（产生已提交结果）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-ack-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "p1",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-manual",
+                ["workspaceId"] = "ws-manual"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token); // 取走 exec 结果
+
+        // 发送手动 Checkpoint 指令
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ckpt-manual-1",
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Payload = "{\"user\":\"data\"}",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-manual",
+                ["workspaceId"] = "ws-manual"
+            }
+        }, testCt.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+
+        var cp = await checkpointStore.GetAsync("ws-manual", "ckpt-manual-1", testCt.Token);
+        Assert.IsNotNull(cp);
+        Assert.IsNotNull(cp!.StateJson);
+
+        // StateJson 应为 KernelCheckpointStateDto（含 CommittedResults）
+        using (var doc = JsonDocument.Parse(cp.StateJson!))
+        {
+            Assert.IsTrue(doc.RootElement.TryGetProperty("CommittedResults", out var arr));
+            Assert.AreEqual(1, arr.GetArrayLength(),
+                "手动 checkpoint 应包含已提交的 tool 结果。");
+            Assert.IsTrue(arr[0].TryGetProperty("RequestId", out var rid));
+            Assert.AreEqual("exec-ack-1", rid.GetString());
+        }
+
+        // 手动 Payload 应转存到 Metadata["manualPayload"]，不直接覆盖 StateJson
+        Assert.IsTrue(cp.Metadata.TryGetValue("manualPayload", out var manualPayload));
+        Assert.AreEqual("{\"user\":\"data\"}", manualPayload);
+    }
+
+    [TestMethod]
+    public async Task ManualAndAutoCheckpoint_ProduceSameStateJsonShape()
+    {
+        // 同一 Kernel 状态下，手动 Checkpoint 与取消触发的 AutoCheckpoint
+        // 都应产出包含 CommittedResults + SnapshotId 字段的 StateJson
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-shared-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "shared",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-shared",
+                ["workspaceId"] = "ws-shared"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // 手动 checkpoint
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ckpt-shared-manual",
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-shared",
+                ["workspaceId"] = "ws-shared"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // 取消触发 AutoCheckpoint
+        testCt.Cancel();
+        try { await runTask; }
+        catch (OperationCanceledException) { }
+
+        Assert.AreEqual(2, checkpointStore.Count,
+            "应存在 1 个手动 + 1 个自动 checkpoint。");
+
+        var manualCp = await checkpointStore.GetAsync("ws-shared", "ckpt-shared-manual", CancellationToken.None);
+        Assert.IsNotNull(manualCp);
+
+        var session = new AgentSessionId
+        {
+            Value = "session-shared",
+            WorkspaceId = "ws-shared",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var autoCheckpoints = await checkpointStore.ListAsync(session, take: 10);
+        var autoCp = autoCheckpoints.FirstOrDefault(c => c.CheckpointId != "ckpt-shared-manual");
+        Assert.IsNotNull(autoCp, "应存在一个 AutoCheckpoint。");
+
+        // 两者 StateJson 都应含 CommittedResults 数组
+        Assert.IsNotNull(manualCp!.StateJson);
+        Assert.IsNotNull(autoCp!.StateJson);
+        using var manualDoc = JsonDocument.Parse(manualCp.StateJson!);
+        using var autoDoc = JsonDocument.Parse(autoCp.StateJson!);
+        Assert.IsTrue(manualDoc.RootElement.TryGetProperty("CommittedResults", out var manualArr));
+        Assert.IsTrue(autoDoc.RootElement.TryGetProperty("CommittedResults", out var autoArr));
+        Assert.AreEqual(1, manualArr.GetArrayLength());
+        Assert.AreEqual(1, autoArr.GetArrayLength());
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-3: AcknowledgeToolResult — Unknown 副作用结果从 pending 移到 committed
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task AcknowledgeToolResult_MovesPendingToCommitted()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Unknown };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // 执行 Unknown 副作用 tool → 进入 pending
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-unknown-ack",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "unknown-1",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-ack",
+                ["workspaceId"] = "ws-ack"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        var execResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(execResult);
+        Assert.IsTrue(execResult!.Succeeded);
+        Assert.AreEqual(1, dispatcher.DispatchCount, "tool 应被分派一次。");
+
+        // Ack 指令缺少 requestId → 应失败
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-no-id",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        var ackNoIdResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(ackNoIdResult);
+        Assert.IsFalse(ackNoIdResult!.Succeeded);
+        Assert.IsTrue(ackNoIdResult.Error!.Contains("requestId", StringComparison.Ordinal));
+
+        // Ack 不存在的 requestId → 应失败
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-missing",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "non-existent" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 3, TimeSpan.FromSeconds(3)));
+        var ackMissingResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(ackMissingResult);
+        Assert.IsFalse(ackMissingResult!.Succeeded);
+        Assert.AreEqual("non-existent", ackMissingResult.AffectedRequestId);
+
+        // Ack 正确的 requestId → 应成功
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-ok",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-unknown-ack" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 4, TimeSpan.FromSeconds(3)));
+        var ackOkResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(ackOkResult);
+        Assert.IsTrue(ackOkResult!.Succeeded);
+        Assert.AreEqual("exec-unknown-ack", ackOkResult.AffectedRequestId);
+        Assert.IsTrue((ackOkResult.Output ?? "").Contains("acknowledged", StringComparison.Ordinal));
+
+        // 再次 Ack 同一 requestId → 应失败（已从 pending 移除）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-duplicate",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-unknown-ack" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 5, TimeSpan.FromSeconds(3)));
+        var ackDupResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(ackDupResult);
+        Assert.IsFalse(ackDupResult!.Succeeded);
+
+        // 手动 Checkpoint 验证 ack 后的结果已进入 committed
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ckpt-verify-ack",
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-ack",
+                ["workspaceId"] = "ws-ack"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 6, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // Shutdown
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+
+        // 验证 checkpoint StateJson 含已 ack 的 tool 结果
+        var cp = await checkpointStore.GetAsync("ws-ack", "ckpt-verify-ack", CancellationToken.None);
+        Assert.IsNotNull(cp);
+        Assert.IsNotNull(cp!.StateJson);
+        using var doc = JsonDocument.Parse(cp.StateJson!);
+        Assert.IsTrue(doc.RootElement.TryGetProperty("CommittedResults", out var arr));
+        Assert.AreEqual(1, arr.GetArrayLength(),
+            "ack 后 tool 结果应进入 committed 并被 checkpoint 持久化。");
+        Assert.IsTrue(arr[0].TryGetProperty("RequestId", out var rid));
+        Assert.AreEqual("exec-unknown-ack", rid.GetString());
+    }
+
+    [TestMethod]
+    public async Task AcknowledgedToolResult_IsCommittedAndNotReexecuted()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Unknown };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // 1. Execute Unknown → pending
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-ack-commit",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "payload-x",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-ack-c",
+                ["workspaceId"] = "ws-ack-c"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // 2. Ack → committed
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-commit",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-ack-commit" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // 3. 再次 Execute 同一 InstructionId → 应返回缓存（dispatch 不增加）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-ack-commit",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "payload-y",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-ack-c",
+                ["workspaceId"] = "ws-ack-c"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 3, TimeSpan.FromSeconds(3)));
+        var cachedResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(cachedResult);
+        Assert.IsTrue(cachedResult!.Succeeded);
+        Assert.AreEqual("payload-x", cachedResult.Output,
+            "应返回缓存的原始 payload-x，而非重放后的 payload-y。");
+        Assert.AreEqual(1, dispatcher.DispatchCount, "已提交结果不应重新分派 tool。");
+
+        // 4. Shutdown
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-3: RejectToolResult — Unknown 副作用结果被丢弃
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task RejectToolResult_DropsPendingResult()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Unknown };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // Execute Unknown → pending
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-reject-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "to-reject",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-reject",
+                ["workspaceId"] = "ws-reject"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // Reject 缺少 requestId → 失败
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "reject-no-id",
+            Kind = AgentKernelInstructionKind.RejectToolResult
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        var rejectNoId = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsFalse(rejectNoId!.Succeeded);
+
+        // Reject 正确 requestId → 成功
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "reject-ok",
+            Kind = AgentKernelInstructionKind.RejectToolResult,
+            Metadata = new Dictionary<string, string>
+            {
+                ["requestId"] = "exec-reject-1",
+                ["reason"] = "external-validation-failed"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 3, TimeSpan.FromSeconds(3)));
+        var rejectOk = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsTrue(rejectOk!.Succeeded);
+        Assert.AreEqual("exec-reject-1", rejectOk.AffectedRequestId);
+        Assert.IsTrue((rejectOk.Output ?? "").Contains("rejected", StringComparison.Ordinal));
+        Assert.IsTrue((rejectOk.Output ?? "").Contains("external-validation-failed", StringComparison.Ordinal));
+
+        // 再次 Reject 同一 requestId → 失败（已从 pending 移除）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "reject-dup",
+            Kind = AgentKernelInstructionKind.RejectToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-reject-1" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 4, TimeSpan.FromSeconds(3)));
+        var rejectDup = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsFalse(rejectDup!.Succeeded);
+
+        // 再次 Execute 同一 InstructionId → 应重新分派（rejected 结果未提交）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-reject-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "retry-after-reject",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-reject",
+                ["workspaceId"] = "ws-reject"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 5, TimeSpan.FromSeconds(3)));
+        var retryResult = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsTrue(retryResult!.Succeeded);
+        Assert.AreEqual("retry-after-reject", retryResult.Output,
+            "rejected 后再次 Execute 应返回新结果（未缓存）。");
+        Assert.AreEqual(2, dispatcher.DispatchCount, "rejected 结果不应缓存，应重新分派。");
+
+        // Shutdown
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-3: QueryToolDispatchState — 返回分派状态
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task QueryToolDispatchState_ReturnsCorrectStatePerLifecycle()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Unknown };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // Query 不存在的 requestId → Prepared（无 journal 时返回 Prepared/not-found）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "query-pre",
+            Kind = AgentKernelInstructionKind.QueryToolDispatchState,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-q-1" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        var q1 = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsTrue(q1!.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Prepared, q1.DispatchState,
+            "未执行 tool 应返回 Prepared 状态。");
+        Assert.AreEqual("exec-q-1", q1.AffectedRequestId);
+
+        // Execute Unknown → pending (Dispatched)
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-q-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "q-payload",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-q",
+                ["workspaceId"] = "ws-q"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // Query → Dispatched (in pending)
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "query-pending",
+            Kind = AgentKernelInstructionKind.QueryToolDispatchState,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-q-1" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 3, TimeSpan.FromSeconds(3)));
+        var q2 = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsTrue(q2!.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Dispatched, q2.DispatchState,
+            "Unknown 副作用结果在 pending 时应返回 Dispatched 状态。");
+
+        // Ack → committed
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-q",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-q-1" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 4, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // Query → Committed
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "query-committed",
+            Kind = AgentKernelInstructionKind.QueryToolDispatchState,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-q-1" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 5, TimeSpan.FromSeconds(3)));
+        var q3 = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsTrue(q3!.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Committed, q3.DispatchState,
+            "ack 后应返回 Committed 状态。");
+
+        // Query 缺少 requestId → 失败
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "query-no-id",
+            Kind = AgentKernelInstructionKind.QueryToolDispatchState
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 6, TimeSpan.FromSeconds(3)));
+        var qNoId = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsFalse(qNoId!.Succeeded);
+
+        // Shutdown
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-2: ResumeAsync 通过 IAgentContextSnapshotStore 恢复 _lastSnapshot
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task ResumeAsync_WithSnapshotStore_RestoresLastSnapshot()
+    {
+        var snapshot = new AgentContextSnapshot
+        {
+            SnapshotId = "snap-resume-1",
+            Session = new AgentSessionId
+            {
+                Value = "session-snap",
+                WorkspaceId = "ws-snap",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            CreatedAt = DateTimeOffset.UtcNow,
+            TokenBudget = 1000,
+            ActualTokens = 500
+        };
+        var snapshotStore = new InMemoryAgentContextSnapshotStore();
+        await snapshotStore.SaveAsync("ws-snap", snapshot, CancellationToken.None);
+
+        // 构造一个含 SnapshotId 的 checkpoint（StateJson 可为空对象）
+        var checkpoint = new AgentCheckpoint
+        {
+            CheckpointId = "ckpt-snap-resume",
+            Session = new AgentSessionId
+            {
+                Value = "session-snap",
+                WorkspaceId = "ws-snap",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            CreatedAt = DateTimeOffset.UtcNow,
+            SnapshotId = snapshot.SnapshotId,
+            StateJson = "{}"
+        };
+
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var dispatcher = new EchoToolDispatcher();
+        var kernel = new DefaultAgentKernel(
+            transport, dispatcher, checkpointStore,
+            snapshotStore: snapshotStore);
+        var testCt = CreateTestTimeout();
+
+        // 恢复
+        await kernel.ResumeAsync(checkpoint, CancellationToken.None);
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // 发送 Checkpoint 指令，验证 LastSnapshotId 已恢复
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ckpt-after-resume",
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-snap",
+                ["workspaceId"] = "ws-snap"
+            }
+        }, testCt.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+
+        var result = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(result);
+        Assert.IsTrue(result!.Succeeded);
+        Assert.AreEqual(snapshot.SnapshotId, result.LastSnapshotId,
+            "ResumeAsync 应通过 snapshotStore 恢复 _lastSnapshot。");
+
+        // 验证 checkpoint 也含 SnapshotId
+        var savedCp = await checkpointStore.GetAsync("ws-snap", "ckpt-after-resume", testCt.Token);
+        Assert.IsNotNull(savedCp);
+        Assert.AreEqual(snapshot.SnapshotId, savedCp!.SnapshotId);
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_WithoutSnapshotStore_LeavesLastSnapshotNull()
+    {
+        // 未注入 snapshotStore 时，即使 checkpoint 含 SnapshotId，_lastSnapshot 也保持 null
+        var checkpoint = new AgentCheckpoint
+        {
+            CheckpointId = "ckpt-no-store",
+            Session = new AgentSessionId
+            {
+                Value = "session-no-store",
+                WorkspaceId = "ws-no-store",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            CreatedAt = DateTimeOffset.UtcNow,
+            SnapshotId = "snap-should-not-load",
+            StateJson = "{}"
+        };
+
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, new EchoToolDispatcher(), checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        await kernel.ResumeAsync(checkpoint, CancellationToken.None);
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ckpt-verify",
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-no-store",
+                ["workspaceId"] = "ws-no-store"
+            }
+        }, testCt.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+
+        var result = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(result);
+        Assert.IsTrue(result!.Succeeded);
+        Assert.IsNull(result.LastSnapshotId,
+            "未注入 snapshotStore 时 _lastSnapshot 应保持 null。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_SnapshotStoreMissingSnapshot_LeavesLastSnapshotNull()
+    {
+        // 注入了 store 但 snapshot 不存在时，应静默跳过（不抛异常）
+        var snapshotStore = new InMemoryAgentContextSnapshotStore();
+        // 不保存任何 snapshot → GetAsync 返回 null
+
+        var checkpoint = new AgentCheckpoint
+        {
+            CheckpointId = "ckpt-missing-snap",
+            Session = new AgentSessionId
+            {
+                Value = "session-missing",
+                WorkspaceId = "ws-missing",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            CreatedAt = DateTimeOffset.UtcNow,
+            SnapshotId = "snap-non-existent",
+            StateJson = "{}"
+        };
+
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(
+            transport, new EchoToolDispatcher(), checkpointStore,
+            snapshotStore: snapshotStore);
+        var testCt = CreateTestTimeout();
+
+        // ResumeAsync 不应抛异常
+        await kernel.ResumeAsync(checkpoint, CancellationToken.None);
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ckpt-verify-2",
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-missing",
+                ["workspaceId"] = "ws-missing"
+            }
+        }, testCt.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+
+        var result = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(result);
+        Assert.IsTrue(result!.Succeeded);
+        Assert.IsNull(result.LastSnapshotId,
+            "snapshot 不存在时 _lastSnapshot 应保持 null（不抛异常）。");
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-4: IToolDispatchJournal 集成 — Kernel 推进 journal 状态机
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task Kernel_WithDispatchJournal_AdvancesStateMachine()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var journal = new InMemoryToolDispatchJournal();
+        var kernel = new DefaultAgentKernel(
+            transport, dispatcher, checkpointStore,
+            dispatchJournal: journal);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-journal-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "j-1",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-j",
+                ["workspaceId"] = "ws-j",
+                ["idempotencyKey"] = "idem-key-1"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // 验证 journal 状态：Write 副作用 → Committed → ResultDelivered（结果已发送）
+        var entry = await journal.GetEntryAsync("exec-journal-1");
+        Assert.IsNotNull(entry);
+        Assert.AreEqual(ToolDispatchState.ResultDelivered, entry!.State,
+            "Write 副作用 tool 完成且结果发送后 journal 应推进到 ResultDelivered。");
+        Assert.AreEqual("idem-key-1", entry.IdempotencyKey,
+            "journal 应保留 idempotencyKey。");
+        Assert.AreEqual("echo", entry.ToolName);
+
+        // Query 验证 journal 路径优先于进程内字典
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "query-journal-1",
+            Kind = AgentKernelInstructionKind.QueryToolDispatchState,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-journal-1" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        var q = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsTrue(q!.Succeeded);
+        Assert.AreEqual(ToolDispatchState.ResultDelivered, q.DispatchState,
+            "Query 应从 journal 读取 ResultDelivered 状态。");
+
+        // Shutdown
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+    }
+
+    [TestMethod]
+    public async Task Kernel_WithDispatchJournal_UnknownSideEffectStopsAtDispatched()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Unknown };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var journal = new InMemoryToolDispatchJournal();
+        var kernel = new DefaultAgentKernel(
+            transport, dispatcher, checkpointStore,
+            dispatchJournal: journal);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-journal-unknown",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "u-1",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-ju",
+                ["workspaceId"] = "ws-ju"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        // 验证 journal 状态：Unknown 副作用 → Dispatched（未 Committed）
+        var entry = await journal.GetEntryAsync("exec-journal-unknown");
+        Assert.IsNotNull(entry);
+        Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State,
+            "Unknown 副作用 tool 完成后 journal 应停留在 Dispatched（未 Ack）。");
+
+        // Ack 后 → Committed
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "ack-journal",
+            Kind = AgentKernelInstructionKind.AcknowledgeToolResult,
+            Metadata = new Dictionary<string, string> { ["requestId"] = "exec-journal-unknown" }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+        await transport.ReceiveResultAsync(testCt.Token);
+
+        var entryAfterAck = await journal.GetEntryAsync("exec-journal-unknown");
+        Assert.IsNotNull(entryAfterAck);
+        Assert.AreEqual(ToolDispatchState.Committed, entryAfterAck!.State,
+            "Ack 后 journal 应推进到 Committed。");
+
+        // Shutdown
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask;
+    }
+}
+
+// ===========================================================================
+// 测试 Stub：InMemoryAgentContextSnapshotStore（P1-2 测试用）
+// ===========================================================================
+
+/// <summary>
+/// 进程内 AgentContextSnapshotStore 测试 Stub。
+/// 按 (workspaceId, snapshotId) 存储Snapshot；跨 workspace 不可见。
+/// </summary>
+internal sealed class InMemoryAgentContextSnapshotStore : IAgentContextSnapshotStore
+{
+    private readonly Dictionary<(string workspaceId, string snapshotId), AgentContextSnapshot> _store = new();
+
+    public ValueTask SaveAsync(string workspaceId, AgentContextSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (string.IsNullOrWhiteSpace(workspaceId))
+            throw new ArgumentException("workspaceId 不能为空。", nameof(workspaceId));
+        if (string.IsNullOrWhiteSpace(snapshot.SnapshotId))
+            throw new ArgumentException("SnapshotId 不能为空。", nameof(snapshot));
+
+        _store[(workspaceId, snapshot.SnapshotId)] = snapshot;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<AgentContextSnapshot?> GetAsync(
+        string workspaceId,
+        string snapshotId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(snapshotId))
+            return ValueTask.FromResult<AgentContextSnapshot?>(null);
+
+        _store.TryGetValue((workspaceId, snapshotId), out var snapshot);
+        return ValueTask.FromResult(snapshot);
     }
 }

@@ -53,6 +53,11 @@ public interface IAgentKernel
     /// </summary>
     /// <param name="checkpoint">之前保存的检查点（含已提交 tool 结果 + snapshot 引用）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// R28-E P1-2：若注入了 <see cref="IAgentContextSnapshotStore"/>，将根据
+    /// <see cref="AgentCheckpoint.SnapshotId"/> 加载并恢复 _lastSnapshot。
+    /// 未注入 store 时仅恢复已提交 tool 结果（snapshot 保持 null）。
+    /// </remarks>
     ValueTask ResumeAsync(AgentCheckpoint checkpoint, CancellationToken cancellationToken = default);
 }
 
@@ -100,7 +105,29 @@ public enum AgentKernelInstructionKind : byte
     /// IAgentContextProjector.Project → 产出 AgentContextSnapshot。
     /// Metadata 必须含 workspaceId / collectionId / sessionId；可选 queryText / tokenBudget / requiredIds。
     /// </summary>
-    BuildContext = 3
+    BuildContext = 3,
+
+    /// <summary>
+    /// R28-E P1-3：确认 Unknown 副作用 tool 结果。
+    /// 将 <see cref="ToolSideEffect.Unknown"/> 的 tool 结果从 pending 移到 committed，
+    /// 恢复时可安全重放。Metadata 必须含 "requestId"（要确认的 tool RequestId）。
+    /// </summary>
+    AcknowledgeToolResult = 4,
+
+    /// <summary>
+    /// R28-E P1-3：拒绝 Unknown 副作用 tool 结果。
+    /// 将 pending 的 Unknown 结果丢弃（不提交，不重放）。
+    /// Metadata 必须含 "requestId"（要拒绝的 tool RequestId）；
+    /// 可选 "reason"（拒绝原因，写入结果 Output）。
+    /// </summary>
+    RejectToolResult = 5,
+
+    /// <summary>
+    /// R28-E P1-3：查询 tool 分派状态。
+    /// 返回指定 RequestId 的分派状态（Prepared/Dispatched/Committed/ResultDelivered/Unknown）。
+    /// Metadata 必须含 "requestId"。
+    /// </summary>
+    QueryToolDispatchState = 6
 }
 
 /// <summary>
@@ -330,6 +357,159 @@ public sealed record ToolDispatchResult
 }
 
 /// <summary>
+/// R28-E P1-4：Tool 分派状态机。
+/// 实现恰好一次（exactly-once）tool 执行的核心状态。
+/// </summary>
+/// <remarks>
+/// 状态流转（不可逆，只能向前）：
+///   <see cref="Prepared"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
+///
+/// 恢复语义：
+///   - 无 journal 记录 → 安全重新执行（tool 从未被调用）。
+///   - <see cref="Prepared"/> 但未 <see cref="Dispatched"/> → 安全重新执行（tool 未真正执行）。
+///   - <see cref="Dispatched"/> 但未 <see cref="Committed"/> → <b>模糊状态</b>：tool 可能已成功执行外部副作用，
+///     需调用方查询外部系统或人工裁决；不可盲目重新执行。
+///   - <see cref="Committed"/> 但未 <see cref="ResultDelivered"/> → 结果已持久化，可安全重发到 transport。
+///   - <see cref="ResultDelivered"/> → 完全完成，无需任何动作。
+/// </remarks>
+public enum ToolDispatchState : byte
+{
+    /// <summary>已准备（journal 已写入 Prepared 条目，但 tool 尚未真正调用）。</summary>
+    Prepared = 0,
+
+    /// <summary>已分派（tool 已调用并返回，或外部调用已发起但结果未确认）。</summary>
+    Dispatched = 1,
+
+    /// <summary>已提交（结果已写入 committed store / _committedToolResults）。</summary>
+    Committed = 2,
+
+    /// <summary>结果已送达（已通过 Transport.SendResultAsync 成功发送）。</summary>
+    ResultDelivered = 3
+}
+
+/// <summary>
+/// R28-E P1-4：Tool 分派 journal 条目。
+/// 持久化记录每个 tool 调用的状态机进度，用于崩溃恢复时判断是否可安全重放。
+/// </summary>
+public sealed record ToolDispatchJournalEntry
+{
+    /// <summary>Tool 调用 RequestId（与 InstructionId 对应）。</summary>
+    public required string RequestId { get; init; }
+
+    /// <summary>Tool 名称。</summary>
+    public required string ToolName { get; init; }
+
+    /// <summary>当前分派状态。</summary>
+    public required ToolDispatchState State { get; init; }
+
+    /// <summary>调用方提供的幂等键（可选；用于外部系统去重）。</summary>
+    public string? IdempotencyKey { get; init; }
+
+    /// <summary>外部操作 ID（tool 实际执行后返回的外部系统 ID，可用于查询/对账）。</summary>
+    public string? ExternalOperationId { get; init; }
+
+    /// <summary>journal 条目更新时间（UTC）。</summary>
+    public required DateTimeOffset UpdatedAt { get; init; }
+
+    /// <summary>失败/模糊状态原因诊断（如 Dispatched 但未 Committed 时的说明）。</summary>
+    public string? DiagnosticNote { get; init; }
+}
+
+/// <summary>
+/// R28-E P1-4：Tool 分派 journal 抽象。
+/// 持久化 <see cref="ToolDispatchJournalEntry"/> 以支持 exactly-once tool 执行。
+/// </summary>
+/// <remarks>
+/// <b>journal 是可选依赖</b>。未注入时 Kernel 退回到旧行为（仅进程内 Dictionary 去重，
+/// 不保证崩溃恢复的 exactly-once）。生产部署应注入持久化实现（如基于 DB/WAL 的 journal）。
+///
+/// Journal 写入顺序（与 <see cref="DefaultAgentKernel"/> 调用点对应）：
+///   1. <see cref="PrepareAsync"/>：在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。
+///   2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
+///   3. <see cref="MarkCommittedAsync"/>：结果写入 _committedToolResults 后。
+///   4. <see cref="MarkResultDeliveredAsync"/>：Transport.SendResultAsync 成功后。
+/// </remarks>
+public interface IToolDispatchJournal
+{
+    /// <summary>写入 Prepared 条目（在调用 tool 之前）。</summary>
+    /// <param name="entry">journal 条目（State 应为 Prepared）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
+
+    /// <summary>将指定 RequestId 的状态推进到 Dispatched（tool 已返回结果）。</summary>
+    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="externalOperationId">可选的外部操作 ID（tool 返回）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask MarkDispatchedAsync(string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>将指定 RequestId 的状态推进到 Committed（结果已提交）。</summary>
+    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>将指定 RequestId 的状态推进到 ResultDelivered（结果已送达 transport）。</summary>
+    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>查询指定 RequestId 的当前 journal 状态（用于恢复时判断）。</summary>
+    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>journal 条目；不存在时返回 null（表示 tool 从未被调用，可安全重新执行）。</returns>
+    ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(string requestId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R28-E P1-1：Agent Checkpoint 工厂抽象。
+/// 统一手动 Checkpoint 指令与自动 AutoCheckpoint 的状态格式，
+/// 确保两者都序列化完整的 Kernel 状态（已提交 tool 结果 + snapshot 引用）。
+/// </summary>
+/// <remarks>
+/// <b>引入背景</b>：手动 Checkpoint 曾直接使用 instruction.Payload 作为 StateJson，
+/// 导致 ResumeAsync 无法恢复已提交的 tool 结果。引入工厂后所有 checkpoint 入口
+/// 都产出同一 KernelCheckpointState 格式，Resume 可靠恢复幂等状态。
+/// </remarks>
+public interface IAgentCheckpointFactory
+{
+    /// <summary>从当前 Kernel 状态构建 checkpoint。</summary>
+    /// <param name="checkpointId">Checkpoint 唯一 ID。</param>
+    /// <param name="sessionId">当前 session。</param>
+    /// <param name="workspaceId">当前 workspace。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>包含完整 Kernel 状态的 AgentCheckpoint。</returns>
+    /// <remarks>
+    /// 实现应序列化 KernelCheckpointState（含 CommittedResults + SnapshotId）到 <see cref="AgentCheckpoint.StateJson"/>，
+    /// 并设置 <see cref="AgentCheckpoint.SnapshotId"/>（若存在 _lastSnapshot）。
+    /// </remarks>
+    ValueTask<AgentCheckpoint> CreateCheckpointAsync(
+        string checkpointId,
+        string sessionId,
+        string workspaceId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R28-E P1-2：Agent Context Snapshot Store 抽象。
+/// 按 SnapshotId 加载 <see cref="AgentContextSnapshot"/>，供 ResumeAsync 恢复 _lastSnapshot。
+/// </summary>
+/// <remarks>
+/// <b>可选依赖</b>：未注入时 ResumeAsync 只恢复已提交 tool 结果，不恢复 snapshot。
+/// 生产部署应注入持久化实现（如基于 DB 的 snapshot store）。
+/// </remarks>
+public interface IAgentContextSnapshotStore
+{
+    /// <summary>按 workspace + snapshotId 加载 snapshot。</summary>
+    /// <param name="workspaceId">workspace 作用域（保证跨 workspace 隔离）。</param>
+    /// <param name="snapshotId">Snapshot 唯一 ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Snapshot；不存在或跨 workspace 不可见时返回 null。</returns>
+    ValueTask<AgentContextSnapshot?> GetAsync(
+        string workspaceId,
+        string snapshotId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// R28-C：Kernel 执行结果。
 /// </summary>
 /// <remarks>
@@ -361,4 +541,16 @@ public sealed record AgentKernelResult
     /// 用于恢复时定位上次 context 快照。
     /// </summary>
     public string? LastSnapshotId { get; init; }
+
+    /// <summary>
+    /// R28-E P1-3：QueryToolDispatchState 指令产出的 tool 分派状态。
+    /// 非 QueryToolDispatchState 指令时为 null。
+    /// </summary>
+    public ToolDispatchState? DispatchState { get; init; }
+
+    /// <summary>
+    /// R28-E P1-3：AcknowledgeToolResult/RejectToolResult 指令影响的 RequestId。
+    /// 用于调用方关联被确认/拒绝的 tool 结果。
+    /// </summary>
+    public string? AffectedRequestId { get; init; }
 }

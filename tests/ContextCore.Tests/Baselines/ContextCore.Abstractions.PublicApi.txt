@@ -29,9 +29,12 @@ F:ContextCore.Abstractions.AgentEventLevel.Error
 F:ContextCore.Abstractions.AgentEventLevel.Information
 F:ContextCore.Abstractions.AgentEventLevel.Trace
 F:ContextCore.Abstractions.AgentEventLevel.Warning
+F:ContextCore.Abstractions.AgentKernelInstructionKind.AcknowledgeToolResult
 F:ContextCore.Abstractions.AgentKernelInstructionKind.BuildContext
 F:ContextCore.Abstractions.AgentKernelInstructionKind.Checkpoint
 F:ContextCore.Abstractions.AgentKernelInstructionKind.Execute
+F:ContextCore.Abstractions.AgentKernelInstructionKind.QueryToolDispatchState
+F:ContextCore.Abstractions.AgentKernelInstructionKind.RejectToolResult
 F:ContextCore.Abstractions.AgentKernelInstructionKind.Shutdown
 F:ContextCore.Abstractions.AgentKernelState.Draining
 F:ContextCore.Abstractions.AgentKernelState.Idle
@@ -42,6 +45,10 @@ F:ContextCore.Abstractions.AgentRuntimeKind.Codex
 F:ContextCore.Abstractions.AgentRuntimeKind.Custom
 F:ContextCore.Abstractions.AgentRuntimeKind.GenericTool
 F:ContextCore.Abstractions.AgentRuntimeKind.Unknown
+F:ContextCore.Abstractions.CalibrationMethodKind.Identity
+F:ContextCore.Abstractions.CalibrationMethodKind.Isotonic
+F:ContextCore.Abstractions.CalibrationMethodKind.Platt
+F:ContextCore.Abstractions.CalibrationMethodKind.Temperature
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.HashBased
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.PercentageBased
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.Random
@@ -855,6 +862,10 @@ F:ContextCore.Abstractions.StorageProviderKind.Postgres
 F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
+F:ContextCore.Abstractions.ToolDispatchState.Committed
+F:ContextCore.Abstractions.ToolDispatchState.Dispatched
+F:ContextCore.Abstractions.ToolDispatchState.Prepared
+F:ContextCore.Abstractions.ToolDispatchState.ResultDelivered
 F:ContextCore.Abstractions.ToolSideEffect.None
 F:ContextCore.Abstractions.ToolSideEffect.ReadOnly
 F:ContextCore.Abstractions.ToolSideEffect.Unknown
@@ -1417,6 +1428,13 @@ M:ContextCore.Abstractions.ExpertRoutingDecisionSet.GetHashCode()
 M:ContextCore.Abstractions.ExpertRoutingDecisionSet.GetType()
 M:ContextCore.Abstractions.ExpertRoutingDecisionSet.IsExpertEnabled(ContextCore.Abstractions.RetrievalExpert)
 M:ContextCore.Abstractions.ExpertRoutingDecisionSet.ToString()
+M:ContextCore.Abstractions.FeatureBatch.#ctor()
+M:ContextCore.Abstractions.FeatureBatch.<Clone>$()
+M:ContextCore.Abstractions.FeatureBatch.Equals(ContextCore.Abstractions.FeatureBatch)
+M:ContextCore.Abstractions.FeatureBatch.Equals(System.Object)
+M:ContextCore.Abstractions.FeatureBatch.GetHashCode()
+M:ContextCore.Abstractions.FeatureBatch.GetType()
+M:ContextCore.Abstractions.FeatureBatch.ToString()
 M:ContextCore.Abstractions.FeatureDefinition.#ctor()
 M:ContextCore.Abstractions.FeatureDefinition.<Clone>$()
 M:ContextCore.Abstractions.FeatureDefinition.Equals(ContextCore.Abstractions.FeatureDefinition)
@@ -1463,6 +1481,7 @@ M:ContextCore.Abstractions.FinalArtifactTokenCost.Equals(System.Object)
 M:ContextCore.Abstractions.FinalArtifactTokenCost.GetHashCode()
 M:ContextCore.Abstractions.FinalArtifactTokenCost.GetType()
 M:ContextCore.Abstractions.FinalArtifactTokenCost.ToString()
+M:ContextCore.Abstractions.IAgentCheckpointFactory.CreateCheckpointAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentCheckpointStore.DeleteAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentCheckpointStore.GetAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentCheckpointStore.ListAsync(ContextCore.Abstractions.AgentSessionId, System.Int32, System.Threading.CancellationToken)
@@ -1473,6 +1492,7 @@ M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractio
 M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractions.ContextDecisionExecutionResult, ContextCore.Abstractions.ProjectionContext)
 M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.CandidateWorkingSet)
 M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.CandidateWorkingSet, ContextCore.Abstractions.ProjectionContext)
+M:ContextCore.Abstractions.IAgentContextSnapshotStore.GetAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentEventStream.QueryAsync(ContextCore.Abstractions.AgentEventQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentEventStream.SubscribeAsync(ContextCore.Abstractions.AgentSessionId, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentKernel.GetStatus()
@@ -1506,6 +1526,7 @@ M:ContextCore.Abstractions.IArtifactStore.ReadJsonAsync``1(ContextCore.Abstracti
 M:ContextCore.Abstractions.IArtifactStore.WriteJsonAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, ContextCore.Abstractions.IArtifactStore+!!0, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.WriteMarkdownAsync(ContextCore.Abstractions.Models.ArtifactDescriptor, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IBatchInferenceEngine.InferAsync(ContextCore.Abstractions.BatchInferenceRequest, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IBatchInferenceEngine.InferBatchAsync(ContextCore.Abstractions.FeatureBatch, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IBoundedContextOrchestrator.OrchestrateAsync(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.Models.PackageQualityReport, ContextCore.Abstractions.ContextRepairBudget, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ICalibrationService.Calibrate(System.Double, System.String)
 M:ContextCore.Abstractions.ICalibrationService.CalibrateBatch(System.Collections.Generic.IReadOnlyList<System.Double>, System.String)
@@ -1625,6 +1646,8 @@ M:ContextCore.Abstractions.IGlobalContextStore.SaveAsync(ContextCore.Abstraction
 M:ContextCore.Abstractions.IGuardedOptimizationPipeline.AdvanceAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IGuardedOptimizationPipeline.GetStatusAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IGuardedOptimizationPipeline.StartAsync(ContextCore.Abstractions.OptimizationProposal, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IInferenceResultValidator.Validate(ContextCore.Abstractions.BatchInferenceRequest, ContextCore.Abstractions.BatchInferenceResult)
+M:ContextCore.Abstractions.IInferenceResultValidator.Validate(ContextCore.Abstractions.FeatureBatch, ContextCore.Abstractions.BatchInferenceResult)
 M:ContextCore.Abstractions.IKernelResultOutbox.DequeueAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IKernelResultOutbox.EnqueueAsync(ContextCore.Abstractions.AgentKernelResult, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILearningFeatureCandidateStore.QueryAsync(ContextCore.Abstractions.Models.LearningFeatureCandidateQuery, System.Threading.CancellationToken)
@@ -1756,6 +1779,11 @@ M:ContextCore.Abstractions.IStableReviewCandidateStore.QueryAsync(ContextCore.Ab
 M:ContextCore.Abstractions.IStableReviewCandidateStore.QueryReviewsAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IStableReviewCandidateStore.SaveAsync(ContextCore.Abstractions.Models.StableReviewCandidate, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IStateCacheInvalidator.InvalidateAsync(ContextCore.Abstractions.CacheInvalidationKey, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatchJournal.GetEntryAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatchJournal.MarkCommittedAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatchJournal.MarkDispatchedAsync(System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatchJournal.MarkResultDeliveredAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatchJournal.PrepareAsync(ContextCore.Abstractions.ToolDispatchJournalEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.DispatchAsync(ContextCore.Abstractions.ToolDispatchRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalContextStore.SaveAsync(ContextCore.Abstractions.Models.ContextItem, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalRelationProjectionWriter.WriteAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.Models.ContextRelation>, System.String, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
@@ -1804,6 +1832,20 @@ M:ContextCore.Abstractions.InferenceOutput.Equals(System.Object)
 M:ContextCore.Abstractions.InferenceOutput.GetHashCode()
 M:ContextCore.Abstractions.InferenceOutput.GetType()
 M:ContextCore.Abstractions.InferenceOutput.ToString()
+M:ContextCore.Abstractions.InferenceValidationResult.#ctor()
+M:ContextCore.Abstractions.InferenceValidationResult.<Clone>$()
+M:ContextCore.Abstractions.InferenceValidationResult.Equals(ContextCore.Abstractions.InferenceValidationResult)
+M:ContextCore.Abstractions.InferenceValidationResult.Equals(System.Object)
+M:ContextCore.Abstractions.InferenceValidationResult.GetHashCode()
+M:ContextCore.Abstractions.InferenceValidationResult.GetType()
+M:ContextCore.Abstractions.InferenceValidationResult.ToString()
+M:ContextCore.Abstractions.IsotonicPoint.#ctor()
+M:ContextCore.Abstractions.IsotonicPoint.<Clone>$()
+M:ContextCore.Abstractions.IsotonicPoint.Equals(ContextCore.Abstractions.IsotonicPoint)
+M:ContextCore.Abstractions.IsotonicPoint.Equals(System.Object)
+M:ContextCore.Abstractions.IsotonicPoint.GetHashCode()
+M:ContextCore.Abstractions.IsotonicPoint.GetType()
+M:ContextCore.Abstractions.IsotonicPoint.ToString()
 M:ContextCore.Abstractions.KernelTransportOptions.#ctor()
 M:ContextCore.Abstractions.KernelTransportOptions.<Clone>$()
 M:ContextCore.Abstractions.KernelTransportOptions.Equals(ContextCore.Abstractions.KernelTransportOptions)
@@ -1902,6 +1944,13 @@ M:ContextCore.Abstractions.ModelCompatibilityContract.Equals(System.Object)
 M:ContextCore.Abstractions.ModelCompatibilityContract.GetHashCode()
 M:ContextCore.Abstractions.ModelCompatibilityContract.GetType()
 M:ContextCore.Abstractions.ModelCompatibilityContract.ToString()
+M:ContextCore.Abstractions.ModelExecutionSnapshot.#ctor()
+M:ContextCore.Abstractions.ModelExecutionSnapshot.<Clone>$()
+M:ContextCore.Abstractions.ModelExecutionSnapshot.Equals(ContextCore.Abstractions.ModelExecutionSnapshot)
+M:ContextCore.Abstractions.ModelExecutionSnapshot.Equals(System.Object)
+M:ContextCore.Abstractions.ModelExecutionSnapshot.GetHashCode()
+M:ContextCore.Abstractions.ModelExecutionSnapshot.GetType()
+M:ContextCore.Abstractions.ModelExecutionSnapshot.ToString()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.#ctor()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.<Clone>$()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.Equals(ContextCore.Abstractions.Models.ArtifactDescriptor)
@@ -4282,6 +4331,13 @@ M:ContextCore.Abstractions.TokenTruncationResult.Equals(System.Object)
 M:ContextCore.Abstractions.TokenTruncationResult.GetHashCode()
 M:ContextCore.Abstractions.TokenTruncationResult.GetType()
 M:ContextCore.Abstractions.TokenTruncationResult.ToString()
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.#ctor()
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.<Clone>$()
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.Equals(ContextCore.Abstractions.ToolDispatchJournalEntry)
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.Equals(System.Object)
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.GetHashCode()
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.GetType()
+M:ContextCore.Abstractions.ToolDispatchJournalEntry.ToString()
 M:ContextCore.Abstractions.ToolDispatchRequest.#ctor()
 M:ContextCore.Abstractions.ToolDispatchRequest.<Clone>$()
 M:ContextCore.Abstractions.ToolDispatchRequest.Equals(ContextCore.Abstractions.ToolDispatchRequest)
@@ -4432,6 +4488,8 @@ P:ContextCore.Abstractions.AgentKernelInstruction.InstructionId (get|init)
 P:ContextCore.Abstractions.AgentKernelInstruction.Kind (get|init)
 P:ContextCore.Abstractions.AgentKernelInstruction.Metadata (get|init)
 P:ContextCore.Abstractions.AgentKernelInstruction.Payload (get|init)
+P:ContextCore.Abstractions.AgentKernelResult.AffectedRequestId (get|init)
+P:ContextCore.Abstractions.AgentKernelResult.DispatchState (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.Error (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.InstructionId (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.LastSnapshotId (get|init)
@@ -4507,8 +4565,13 @@ P:ContextCore.Abstractions.CacheInvalidationKey.EntityId (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.StoreKind (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.WorkspaceId (get|init)
 P:ContextCore.Abstractions.CalibrationParameters.FittedAt (get|init)
+P:ContextCore.Abstractions.CalibrationParameters.IsotonicPoints (get|init)
+P:ContextCore.Abstractions.CalibrationParameters.Kind (get|init)
 P:ContextCore.Abstractions.CalibrationParameters.Method (get|init)
 P:ContextCore.Abstractions.CalibrationParameters.Parameter (get|init)
+P:ContextCore.Abstractions.CalibrationParameters.ParameterA (get|init)
+P:ContextCore.Abstractions.CalibrationParameters.ParameterB (get|init)
+P:ContextCore.Abstractions.CalibrationParameters.Temperature (get|init)
 P:ContextCore.Abstractions.CanaryAssignment.AffectedCollectionIds (get|init)
 P:ContextCore.Abstractions.CanaryAssignment.AffectedWorkspaceIds (get|init)
 P:ContextCore.Abstractions.CanaryAssignment.AssignedAt (get)
@@ -4889,6 +4952,11 @@ P:ContextCore.Abstractions.ExpertRoutingDecisionSet.Decisions (get|init)
 P:ContextCore.Abstractions.ExpertRoutingDecisionSet.RouterId (get|init)
 P:ContextCore.Abstractions.ExpertRoutingDecisionSet.RouterVersion (get|init)
 P:ContextCore.Abstractions.ExpertRoutingDecisionSet.TotalTokenBudget (get|init)
+P:ContextCore.Abstractions.FeatureBatch.FeatureCount (get|init)
+P:ContextCore.Abstractions.FeatureBatch.FeatureNames (get|init)
+P:ContextCore.Abstractions.FeatureBatch.RowCount (get|init)
+P:ContextCore.Abstractions.FeatureBatch.SchemaVersion (get|init)
+P:ContextCore.Abstractions.FeatureBatch.Values (get|init)
 P:ContextCore.Abstractions.FeatureDefinition.DefaultValue (get|init)
 P:ContextCore.Abstractions.FeatureDefinition.IsRequired (get|init)
 P:ContextCore.Abstractions.FeatureDefinition.Name (get|init)
@@ -4914,6 +4982,8 @@ P:ContextCore.Abstractions.IAgentRuntime.RuntimeKind (get)
 P:ContextCore.Abstractions.IAgentRuntimeRegistry.Count (get)
 P:ContextCore.Abstractions.IAgentSession.Events (get)
 P:ContextCore.Abstractions.IAgentSession.SessionId (get)
+P:ContextCore.Abstractions.IBatchInferenceEngine.CalibrationVersion (get)
+P:ContextCore.Abstractions.IBatchInferenceEngine.ContentHash (get)
 P:ContextCore.Abstractions.IBatchInferenceEngine.Kind (get)
 P:ContextCore.Abstractions.IBatchInferenceEngine.ModelVersion (get)
 P:ContextCore.Abstractions.ICandidateProvider.Kind (get)
@@ -4936,6 +5006,11 @@ P:ContextCore.Abstractions.IWriteTransactionScope.IsActive (get)
 P:ContextCore.Abstractions.InferenceOutput.Confidence (get|init)
 P:ContextCore.Abstractions.InferenceOutput.PerClassScores (get|init)
 P:ContextCore.Abstractions.InferenceOutput.Score (get|init)
+P:ContextCore.Abstractions.InferenceValidationResult.Error (get|init)
+P:ContextCore.Abstractions.InferenceValidationResult.IsValid (get|init)
+P:ContextCore.Abstractions.InferenceValidationResult.Violations (get|init)
+P:ContextCore.Abstractions.IsotonicPoint.Input (get|init)
+P:ContextCore.Abstractions.IsotonicPoint.Output (get|init)
 P:ContextCore.Abstractions.KernelTransportOptions.Default (get)
 P:ContextCore.Abstractions.KernelTransportOptions.EnableResultOutbox (get|init)
 P:ContextCore.Abstractions.KernelTransportOptions.FailurePolicy (get|init)
@@ -5048,6 +5123,13 @@ P:ContextCore.Abstractions.ModelCompatibilityContract.CompatibilityLevel (get)
 P:ContextCore.Abstractions.ModelCompatibilityContract.MaxRuntimeVersion (get)
 P:ContextCore.Abstractions.ModelCompatibilityContract.MinRuntimeVersion (get)
 P:ContextCore.Abstractions.ModelCompatibilityContract.RequiredFeatureSchemaVersion (get)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.CalibrationVersion (get|init)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.ContentHash (get|init)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.CreatedAt (get|init)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.EngineKind (get|init)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.FeatureSchemaVersion (get|init)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.ModelArtifactId (get|init)
+P:ContextCore.Abstractions.ModelExecutionSnapshot.ModelVersion (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CapabilityId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CollectionId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.DateShard (get|init)
@@ -9082,6 +9164,13 @@ P:ContextCore.Abstractions.StoreVersionVector.Versions (get)
 P:ContextCore.Abstractions.TokenTruncationResult.TokenCount (get|init)
 P:ContextCore.Abstractions.TokenTruncationResult.TruncatedContent (get|init)
 P:ContextCore.Abstractions.TokenTruncationResult.WasTruncated (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.DiagnosticNote (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.ExternalOperationId (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.IdempotencyKey (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.RequestId (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.State (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.ToolName (get|init)
+P:ContextCore.Abstractions.ToolDispatchJournalEntry.UpdatedAt (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.Payload (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.RequestId (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.ToolName (get|init)
@@ -9161,6 +9250,7 @@ T:ContextCore.Abstractions.BatchInferenceResult
 T:ContextCore.Abstractions.BoundedContextOrchestrationResult
 T:ContextCore.Abstractions.BudgetProfile
 T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
+T:ContextCore.Abstractions.CalibrationMethodKind (Enum)
 T:ContextCore.Abstractions.CalibrationParameters
 T:ContextCore.Abstractions.CanaryAssignment
 T:ContextCore.Abstractions.CanaryAssignmentStrategy (Enum)
@@ -9231,6 +9321,7 @@ T:ContextCore.Abstractions.ExpertKind (Enum)
 T:ContextCore.Abstractions.ExpertOrigin
 T:ContextCore.Abstractions.ExpertRoutingDecision
 T:ContextCore.Abstractions.ExpertRoutingDecisionSet
+T:ContextCore.Abstractions.FeatureBatch
 T:ContextCore.Abstractions.FeatureDefinition
 T:ContextCore.Abstractions.FeaturePipelineContext
 T:ContextCore.Abstractions.FeatureSchema
@@ -9238,10 +9329,12 @@ T:ContextCore.Abstractions.FeatureSchemaVersion
 T:ContextCore.Abstractions.FeatureType (Enum)
 T:ContextCore.Abstractions.FeatureVector
 T:ContextCore.Abstractions.FinalArtifactTokenCost
+T:ContextCore.Abstractions.IAgentCheckpointFactory (Interface)
 T:ContextCore.Abstractions.IAgentCheckpointStore (Interface)
 T:ContextCore.Abstractions.IAgentContextBridge (Interface)
 T:ContextCore.Abstractions.IAgentContextDeltaCalculator (Interface)
 T:ContextCore.Abstractions.IAgentContextProjector (Interface)
+T:ContextCore.Abstractions.IAgentContextSnapshotStore (Interface)
 T:ContextCore.Abstractions.IAgentEventStream (Interface)
 T:ContextCore.Abstractions.IAgentKernel (Interface)
 T:ContextCore.Abstractions.IAgentKernelTransport (Interface)
@@ -9308,6 +9401,7 @@ T:ContextCore.Abstractions.IFeatureRegistry (Interface)
 T:ContextCore.Abstractions.IGlobalAllocator (Interface)
 T:ContextCore.Abstractions.IGlobalContextStore (Interface)
 T:ContextCore.Abstractions.IGuardedOptimizationPipeline (Interface)
+T:ContextCore.Abstractions.IInferenceResultValidator (Interface)
 T:ContextCore.Abstractions.IKernelResultOutbox (Interface)
 T:ContextCore.Abstractions.ILearningFeatureCandidateStore (Interface)
 T:ContextCore.Abstractions.ILearningFeedbackReviewStore (Interface)
@@ -9353,6 +9447,7 @@ T:ContextCore.Abstractions.IStableLifecycleReviewStore (Interface)
 T:ContextCore.Abstractions.IStableReviewCandidateStore (Interface)
 T:ContextCore.Abstractions.IStateCacheInvalidator (Interface)
 T:ContextCore.Abstractions.IStoreRuntimeCapabilities (Interface)
+T:ContextCore.Abstractions.IToolDispatchJournal (Interface)
 T:ContextCore.Abstractions.IToolDispatcher (Interface)
 T:ContextCore.Abstractions.ITransactionalContextStore (Interface)
 T:ContextCore.Abstractions.ITransactionalRelationProjectionWriter (Interface)
@@ -9370,6 +9465,8 @@ T:ContextCore.Abstractions.IWriteTransactionScope (Interface)
 T:ContextCore.Abstractions.IWriteTransactionScopeFactory (Interface)
 T:ContextCore.Abstractions.InferenceEngineKind (Enum)
 T:ContextCore.Abstractions.InferenceOutput
+T:ContextCore.Abstractions.InferenceValidationResult
+T:ContextCore.Abstractions.IsotonicPoint
 T:ContextCore.Abstractions.KernelTransportOptions
 T:ContextCore.Abstractions.LifecycleGateResult
 T:ContextCore.Abstractions.MandatoryContextWindowExceededException
@@ -9388,6 +9485,7 @@ T:ContextCore.Abstractions.ModelArtifactStatus (Enum)
 T:ContextCore.Abstractions.ModelArtifactVersion
 T:ContextCore.Abstractions.ModelCompatibilityContract
 T:ContextCore.Abstractions.ModelCompatibilityLevel (Enum)
+T:ContextCore.Abstractions.ModelExecutionSnapshot
 T:ContextCore.Abstractions.Models.AnchorType (Enum)
 T:ContextCore.Abstractions.Models.ArtifactDescriptor
 T:ContextCore.Abstractions.Models.ArtifactKind (Enum)
@@ -9898,8 +9996,10 @@ T:ContextCore.Abstractions.StoreOperationAttribute
 T:ContextCore.Abstractions.StoreOperationKind (Enum)
 T:ContextCore.Abstractions.StoreVersionVector
 T:ContextCore.Abstractions.TokenTruncationResult
+T:ContextCore.Abstractions.ToolDispatchJournalEntry
 T:ContextCore.Abstractions.ToolDispatchRequest
 T:ContextCore.Abstractions.ToolDispatchResult
+T:ContextCore.Abstractions.ToolDispatchState (Enum)
 T:ContextCore.Abstractions.ToolSideEffect (Enum)
 T:ContextCore.Abstractions.TransportFailurePolicy (Enum)
 T:ContextCore.Abstractions.TruncationResult

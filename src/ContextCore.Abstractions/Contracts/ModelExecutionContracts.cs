@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R28-D：Model Execution Runtime 契约
+// R28-D / R28-F：Model Execution Runtime 契约
 //
 // 目标：
 //   把分散在 ModelGateway 基础设施之上的特征管理、批量推理、模型校准能力
@@ -17,7 +17,17 @@ namespace ContextCore.Abstractions;
 //   2. FeatureSchema 全局不可变：版本号一旦注册不可修改，新版本通过新 schema 注册实现。
 //   3. BatchInference 必须可降级：当真实模型不可用时回退到 Deterministic 实现，
 //      保证主链始终能产出非空结果（fail-safe 而非 fail-fast）。
-//   4. Calibration 默认 identity（A=1, B=0），未配置参数时等价于恒等变换。
+//   4. Calibration 默认 identity：未配置参数时校准等价于恒等变换（返回原始 raw score）。
+//
+// R28-F（本迭代新增）：
+//   - ModelExecutionSnapshot：把 ModelArtifactId/ModelVersion/FeatureSchemaVersion/
+//     CalibrationVersion/InferenceEngineKind/ContentHash 组成精确模型执行快照，
+//     替代之前用 engine.ModelVersion 直接解析 FeatureSchema 的耦合。
+//   - CalibrationParameters 扩展：支持 Platt(A,B)/Temperature(T)/Isotonic(points)/Identity，
+//     旧的 Parameter 字段保留为 Platt A 的兼容别名。
+//   - FeatureBatch：连续数值内存（ReadOnlyMemory<float>），替代 boxing 字典。
+//   - IBatchInferenceEngine 增加 ContentHash/CalibrationVersion/InferBatchAsync。
+//   - IInferenceResultValidator：推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
 // ===========================================================================
 
 /// <summary>R28-D：Feature Registry — 管理特征 schema 版本。</summary>
@@ -119,6 +129,26 @@ public interface IBatchInferenceEngine
     /// DeterministicReplay 类型不得在默认配置下改变 FinalScore。
     /// </summary>
     InferenceEngineKind Kind { get; }
+
+    /// <summary>
+    /// R28-F P3-1：模型工件内容哈希（用于精确 Model Execution Snapshot）。
+    /// 真实模型应返回 ONNX/序列化模型的 SHA-256；
+    /// Deterministic 引擎返回自身实现的哈希（用于版本一致性检查）。
+    /// </summary>
+    string ContentHash { get; }
+
+    /// <summary>
+    /// R28-F P3-1：绑定的校准版本号（与 CalibrationParameters 的拟合版本对齐）。
+    /// 默认 "default-v1"。
+    /// </summary>
+    string CalibrationVersion { get; }
+
+    /// <summary>
+    /// R28-F P4-1：基于连续数值内存（FeatureBatch）的批量推理。
+    /// 比 InferAsync(BatchInferenceRequest) 减少装箱与字典查找开销，适合高频推理。
+    /// 默认实现回退到字典路径（向后兼容）。
+    /// </summary>
+    ValueTask<BatchInferenceResult> InferBatchAsync(FeatureBatch batch, CancellationToken ct = default);
 }
 
 /// <summary>R28-D：批量推理请求。</summary>
@@ -186,15 +216,175 @@ public interface ICalibrationService
     CalibrationParameters? GetParameters(string? modelName = null);
 }
 
-/// <summary>R28-D：校准参数。</summary>
+/// <summary>
+/// R28-D / R28-F P3-3：校准方法种类。用于精确路由 calibration 策略。
+/// </summary>
+public enum CalibrationMethodKind : byte
+{
+    /// <summary>恒等变换：calibrated = rawScore。不改变输入。</summary>
+    Identity = 0,
+
+    /// <summary>Platt scaling：calibrated = sigmoid(A * raw + B)。</summary>
+    Platt = 1,
+
+    /// <summary>Temperature scaling：calibrated = sigmoid(raw / T)。</summary>
+    Temperature = 2,
+
+    /// <summary>Isotonic regression：分段线性映射。</summary>
+    Isotonic = 3
+}
+
+/// <summary>
+/// R28-D / R28-F P3-3：校准参数。
+/// R28-D 原始契约仅暴露单个 Parameter（= Platt A）；R28-F 扩展为完整支持
+/// Platt(A,B) / Temperature(T) / Isotonic(points) / Identity。
+/// 旧字段 Parameter 保留为 Platt A 的兼容别名（值同步 ParameterA）。
+/// </summary>
 public sealed record CalibrationParameters
 {
-    /// <summary>校准方法名（"isotonic" / "platt" / "temperature"）。</summary>
+    /// <summary>
+    /// 校准方法名（"identity" / "platt" / "temperature" / "isotonic"）。
+    /// 与 <see cref="Kind"/> 对应；推荐使用 Kind 枚举判断分支。
+    /// </summary>
     public required string Method { get; init; }
 
-    /// <summary>校准参数（Platt: A；Temperature: T；Isotonic: 忽略）。</summary>
-    public required double Parameter { get; init; }
+    /// <summary>R28-F P3-3：方法种类枚举（强类型路由）。</summary>
+    public CalibrationMethodKind Kind { get; init; } = CalibrationMethodKind.Platt;
+
+    /// <summary>
+    /// R28-D：校准参数（Platt: A；Temperature: T；Isotonic: 忽略）。
+    /// <b>保留为向后兼容别名</b>，值与 <see cref="ParameterA"/> 同步。
+    /// 新代码应使用 <see cref="ParameterA"/> / <see cref="ParameterB"/> / <see cref="Temperature"/>。
+    /// </summary>
+    public double Parameter { get; init; } = 1.0;
+
+    /// <summary>R28-F P3-3：Platt A 参数（calibrated = sigmoid(A*raw + B)）。</summary>
+    public double ParameterA { get; init; } = 1.0;
+
+    /// <summary>R28-F P3-3：Platt B 参数。</summary>
+    public double ParameterB { get; init; } = 0.0;
+
+    /// <summary>R28-F P3-3：Temperature T 参数（calibrated = sigmoid(raw / T)）。</summary>
+    public double Temperature { get; init; } = 1.0;
+
+    /// <summary>R28-F P3-3：Isotonic 回归的输入→输出映射点（按 Input 升序）。</summary>
+    public IReadOnlyList<IsotonicPoint> IsotonicPoints { get; init; } = Array.Empty<IsotonicPoint>();
 
     /// <summary>参数拟合时间戳。</summary>
     public required DateTimeOffset FittedAt { get; init; }
+}
+
+/// <summary>
+/// R28-F P3-3：Isotonic 回归的单个映射点。
+/// </summary>
+public sealed record IsotonicPoint
+{
+    /// <summary>原始分数输入。</summary>
+    public required double Input { get; init; }
+
+    /// <summary>校准后输出。</summary>
+    public required double Output { get; init; }
+}
+
+/// <summary>
+/// R28-F P3-1：Model Execution Snapshot。
+/// 把 ModelArtifactId / ModelVersion / FeatureSchemaVersion / CalibrationVersion /
+/// InferenceEngineKind / ContentHash 组成精确的模型执行快照，
+/// 用于：(1) Scorer 解耦 schema 解析与模型版本；
+///       (2) 审计/复现一次推理所用的精确工件组合；
+///       (3) 检测跨节点 HA 不一致（不同节点加载了不同 ContentHash）。
+/// </summary>
+public sealed record ModelExecutionSnapshot
+{
+    /// <summary>模型工件 ID（对应 RoutingProfile.ModelArtifactId）。</summary>
+    public required string ModelArtifactId { get; init; }
+
+    /// <summary>模型版本号（来自 IBatchInferenceEngine.ModelVersion）。</summary>
+    public required string ModelVersion { get; init; }
+
+    /// <summary>特征 schema 版本（来自 EffectivePolicySnapshot.FeatureSchemaVersion）。</summary>
+    public required string FeatureSchemaVersion { get; init; }
+
+    /// <summary>校准版本号（来自 IBatchInferenceEngine.CalibrationVersion）。</summary>
+    public required string CalibrationVersion { get; init; }
+
+    /// <summary>推理引擎类型（来自 IBatchInferenceEngine.Kind）。</summary>
+    public required InferenceEngineKind EngineKind { get; init; }
+
+    /// <summary>模型工件内容哈希（来自 IBatchInferenceEngine.ContentHash）。</summary>
+    public required string ContentHash { get; init; }
+
+    /// <summary>本次快照构建时间。</summary>
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// R28-F P4-1：连续数值内存的批量特征数据。
+/// 替代 <see cref="FeatureVector"/>（IReadOnlyDictionary&lt;string,object&gt; 装箱）的高性能等价物。
+/// 内存布局：row-major，RowCount × FeatureCount 连续 float。
+/// </summary>
+/// <remarks>
+/// 推荐使用方式：
+///   var batch = FeatureBatch.FromRows(schema, rows);
+///   var result = await engine.InferBatchAsync(batch, ct);
+/// 一次 batch inference / request，避免每候选装箱与字典查找。
+/// </remarks>
+public sealed record FeatureBatch
+{
+    /// <summary>关联的 schema 版本（与 FeatureSchema.Version 对齐）。</summary>
+    public required string SchemaVersion { get; init; }
+
+    /// <summary>
+    /// 连续 float 缓冲区（row-major：第 i 行第 j 列位于 Values[i * FeatureCount + j]）。
+    /// 长度必须等于 RowCount × FeatureCount。
+    /// </summary>
+    public required ReadOnlyMemory<float> Values { get; init; }
+
+    /// <summary>行数（候选数量）。</summary>
+    public required int RowCount { get; init; }
+
+    /// <summary>每行特征数量（与 FeatureSchema.Features.Count 一致）。</summary>
+    public required int FeatureCount { get; init; }
+
+    /// <summary>
+    /// 特征名列表（按列顺序；长度必须等于 FeatureCount）。
+    /// 与 FeatureSchema.Features 顺序对齐，用于校验 schema 一致性。
+    /// </summary>
+    public required IReadOnlyList<string> FeatureNames { get; init; }
+}
+
+/// <summary>
+/// R28-F P3-2：推理输出验证结果。
+/// </summary>
+public sealed record InferenceValidationResult
+{
+    /// <summary>是否通过验证。</summary>
+    public required bool IsValid { get; init; }
+
+    /// <summary>聚合错误消息（IsValid=true 时为 null）。</summary>
+    public required string? Error { get; init; }
+
+    /// <summary>所有违规明细（IsValid=true 时为空）。</summary>
+    public required IReadOnlyList<string> Violations { get; init; }
+}
+
+/// <summary>
+/// R28-F P3-2：推理输出验证器。
+/// 在 Scorer 应用模型分数到 Allocator 排序前，对 BatchInferenceResult 执行严格验证：
+///   - Outputs.Count == Inputs.Count
+///   - Score/Confidence 不是 NaN/Infinity
+///   - Confidence 在 [0,1]
+///   - schema/version 与输入一致
+///   - timeout 真实执行（Duration > 0 当 TimeoutMs > 0）
+/// </summary>
+public interface IInferenceResultValidator
+{
+    /// <summary>验证一次批量推理结果。</summary>
+    /// <param name="request">原始请求（用于检查 Inputs.Count 与 SchemaVersion）。</param>
+    /// <param name="result">推理结果。</param>
+    /// <returns>验证结果（IsValid=false 时含违规明细）。</returns>
+    InferenceValidationResult Validate(BatchInferenceRequest request, BatchInferenceResult result);
+
+    /// <summary>R28-F P4-1：基于 FeatureBatch 的重载（验证 SchemaVersion 一致性）。</summary>
+    InferenceValidationResult Validate(FeatureBatch batch, BatchInferenceResult result);
 }

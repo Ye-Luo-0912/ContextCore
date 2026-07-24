@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Policy;
 
 namespace ContextCore.Core.Services.DecisionEngine;
@@ -2638,6 +2639,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     private readonly IBatchInferenceEngine? _inferenceEngine;
     private readonly ICalibrationService? _calibrationService;
     private readonly IFeatureRegistry? _featureRegistry;
+    private readonly IInferenceResultValidator? _inferenceValidator;
 
     /// <summary>
     /// 构造 Utility Scorer。
@@ -2645,14 +2647,20 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     /// <param name="inferenceEngine">R28-D：模型批量推理引擎（null 时强制 rule-only）。</param>
     /// <param name="calibrationService">R28-D：分数校准服务（null 时使用原始模型分数）。</param>
     /// <param name="featureRegistry">R28-D：特征 schema 注册表（null 时无法构造 FeatureVector，强制 rule-only）。</param>
+    /// <param name="inferenceValidator">
+    /// R28-F P3-2：推理输出验证器。null 时使用默认 DefaultInferenceResultValidator。
+    /// 验证失败时降级到 deterministic（不抛异常，fail-safe）。
+    /// </param>
     public DefaultUtilityScorer(
         IBatchInferenceEngine? inferenceEngine = null,
         ICalibrationService? calibrationService = null,
-        IFeatureRegistry? featureRegistry = null)
+        IFeatureRegistry? featureRegistry = null,
+        IInferenceResultValidator? inferenceValidator = null)
     {
         _inferenceEngine = inferenceEngine;
         _calibrationService = calibrationService;
         _featureRegistry = featureRegistry;
+        _inferenceValidator = inferenceValidator ?? new DefaultInferenceResultValidator();
     }
 
     /// <summary>对候选集合计算效用评分，返回更新后的 envelope 列表。</summary>
@@ -2734,7 +2742,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         return result;
     }
 
-    /// <summary>R28-D：模型加权评分路径。</summary>
+    /// <summary>R28-D / R28-F：模型加权评分路径。</summary>
     private async ValueTask<IReadOnlyList<ContextCandidateEnvelope>> ScoreWithModelAsync(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
         EffectivePolicySnapshot snapshot,
@@ -2746,8 +2754,15 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         var threshold = routing.ModelConfidenceThreshold;
         var modelArtifactId = routing.ModelArtifactId;
 
-        // 按 ModelVersion 解析 FeatureSchema
-        var featureSchema = _featureRegistry!.Get(_inferenceEngine!.ModelVersion);
+        // R28-F P3-2：验证 ScoreWeights（w_d / w_m 非负且和为 1.0）。
+        // 验证失败不抛异常，但记录降级原因（fail-safe）。
+        var weightsValidation = _inferenceValidator is DefaultInferenceResultValidator defaultValidator
+            ? defaultValidator.ValidateScoreWeights(w_d, w_m)
+            : null;
+
+        // R28-F P3-1：按 snapshot.FeatureSchemaVersion 解析 FeatureSchema（不再用 engine.ModelVersion）。
+        // 这是关键解耦：模型版本与特征 schema 版本是不同维度。
+        var featureSchema = _featureRegistry!.Get(snapshot.FeatureSchemaVersion);
         if (featureSchema is null)
         {
             // 无匹配 schema → 标记降级
@@ -2773,14 +2788,13 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
 
         // 调用模型批量推理（fail-open：异常降级到 deterministic）
         BatchInferenceResult inferenceResult;
+        var inferenceRequest = new BatchInferenceRequest
+        {
+            Inputs = featureVectors
+        };
         try
         {
-            inferenceResult = await _inferenceEngine.InferAsync(
-                new BatchInferenceRequest
-                {
-                    Inputs = featureVectors
-                },
-                cancellationToken).ConfigureAwait(false);
+            inferenceResult = await _inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -2796,6 +2810,15 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         {
             // 推理报告失败 → 标记降级
             return MarkModelAttempted(envelopes, applied: false, fallbackReason: "inference-succeeded-false");
+        }
+
+        // R28-F P3-2：推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
+        // 验证失败时降级到 deterministic（不抛异常，避免异常模型输出污染排序）。
+        var validationResult = _inferenceValidator!.Validate(inferenceRequest, inferenceResult);
+        if (!validationResult.IsValid)
+        {
+            return MarkModelAttempted(envelopes, applied: false,
+                fallbackReason: $"inference-validation-failed: {validationResult.Error}");
         }
 
         // 应用校准并聚合 FinalScore
@@ -2843,7 +2866,11 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
             }
 
             // 模型加权：FinalScore = w_d * Det + w_m * Model
+            // R28-F P3-2：若 weights 验证未通过，仍计算加权但 ReasonCode 标记 weights-invalid。
             var finalScore = w_d * envelope.Utility.DeterministicScore + w_m * calibratedScore;
+            var reasonCode = weightsValidation is not null && !weightsValidation.IsValid
+                ? "model-weighted-weights-invalid"
+                : "model-weighted";
             result.Add(envelope with
             {
                 Utility = envelope.Utility with
@@ -2851,7 +2878,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                     ModelScore = calibratedScore,
                     ModelConfidence = confidence,
                     FinalScore = finalScore,
-                    ReasonCode = "model-weighted",
+                    ReasonCode = reasonCode,
                     ModelArtifactRef = modelArtifactId,
                     ModelAttempted = true,
                     ModelApplied = true,

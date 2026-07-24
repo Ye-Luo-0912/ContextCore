@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
@@ -218,7 +219,8 @@ public sealed class R28D_DefaultUtilityScorerTests
             enableModelScoring: true,
             deterministicWeight: 0.6,
             modelWeight: 0.4,
-            modelArtifactId: "test-model-v1");
+            modelArtifactId: "test-model-v1",
+            featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
@@ -247,7 +249,7 @@ public sealed class R28D_DefaultUtilityScorerTests
             R28DTestHelpers.MakeEnvelope("c2", detScore: 0.3),
             R28DTestHelpers.MakeEnvelope("c3", detScore: 0.1)
         };
-        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, deterministicWeight: 1.0, modelWeight: 0.0);
+        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, deterministicWeight: 1.0, modelWeight: 0.0, featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(envelopes, snapshot, default);
 
@@ -278,7 +280,8 @@ public sealed class R28D_DefaultUtilityScorerTests
             enableModelScoring: true,
             deterministicWeight: 0.6,
             modelWeight: 0.4,
-            confidenceThreshold: 0.70);
+            confidenceThreshold: 0.70,
+            featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
@@ -303,7 +306,8 @@ public sealed class R28D_DefaultUtilityScorerTests
             enableModelScoring: true,
             deterministicWeight: 0.5,
             modelWeight: 0.5,
-            confidenceThreshold: 0.70);
+            confidenceThreshold: 0.70,
+            featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
@@ -324,7 +328,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         var scorer = new DefaultUtilityScorer(engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
-        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true);
+        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
@@ -346,7 +350,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         var scorer = new DefaultUtilityScorer(engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
-        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true);
+        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
@@ -362,18 +366,22 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_MissingSchema_ReturnsEnvelopesUnchanged()
     {
-        // registry 中无引擎 ModelVersion 对应的 schema
+        // R28-F P3-1：Scorer 按 snapshot.FeatureSchemaVersion 解析 schema（不再用 engine.ModelVersion）。
+        // registry 中无 snapshot.FeatureSchemaVersion 对应的 schema → 标记降级。
         var engine = new StubBatchInferenceEngine("unknown-model-v1").WithOutput(0.8, 0.95);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("different-model-v1");
         var scorer = new DefaultUtilityScorer(engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
-        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true);
+        var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, featureSchemaVersion: "nonexistent-schema");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
         Assert.AreEqual(1, result.Count);
         Assert.IsNull(result[0].Utility.ModelScore);
+        Assert.IsTrue(result[0].Utility.ModelAttempted, "ModelAttempted 应为 true（模型已尝试）");
+        Assert.IsFalse(result[0].Utility.ModelApplied, "ModelApplied 应为 false（schema 未找到）");
+        Assert.AreEqual("schema-not-found", result[0].Utility.ModelFallbackReason);
     }
 
     [TestMethod]
@@ -398,19 +406,22 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_CalibrationApplied_UsesCalibratedScore()
     {
-        // PlattCalibrationService 默认 A=1, B=0 → sigmoid(raw)
+        // R28-F P3-3：默认 calibration 现在是 Identity（raw 原样返回）。
+        // 要复用旧 sigmoid 语义，需显式注册 Platt(A=1, B=0) 参数。
         // raw=0.8 → sigmoid(0.8) = 1/(1+e^-0.8) ≈ 0.689974
         var engine = new StubBatchInferenceEngine("test-model-v1")
             .WithOutput(score: 0.8, confidence: 0.95);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
         var calibration = new PlattCalibrationService();
+        calibration.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: "test-model-v1");
         var scorer = new DefaultUtilityScorer(engine, calibration, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(
             enableModelScoring: true,
             deterministicWeight: 0.5,
-            modelWeight: 0.5);
+            modelWeight: 0.5,
+            featureSchemaVersion: "test-model-v1");
 
         var result = await scorer.ScoreAsync(new[] { envelope }, snapshot, default);
 
@@ -490,7 +501,8 @@ public sealed class R28D_EndToEndIntegrationTests
             modelWeight: 0.5,
             modelArtifactId: engine.ModelVersion,
             confidenceThreshold: 0.0, // Deterministic 引擎的 confidence 可能低于默认 0.70，置 0 确保 model-weighted 路径
-            allowDeterministicReplayScoring: true); // R28-D P0-1：显式允许 DeterministicReplay 参与评分（测试/预览场景）
+            allowDeterministicReplayScoring: true, // R28-D P0-1：显式允许 DeterministicReplay 参与评分（测试/预览场景）
+            featureSchemaVersion: engine.ModelVersion);
 
         // 阶段 1：特征提升
         var enriched = await pipeline.EnrichAsync(envelopes, R28DTestHelpers.BuildContext(), default);
@@ -598,7 +610,8 @@ internal static class R28DTestHelpers
         double modelWeight = 0.0,
         double confidenceThreshold = 0.70,
         string? modelArtifactId = null,
-        bool allowDeterministicReplayScoring = false)
+        bool allowDeterministicReplayScoring = false,
+        string? featureSchemaVersion = null)
     {
         var bundle = DefaultPolicyBundleFactory.Create();
         var routing = bundle.Routing with
@@ -621,7 +634,9 @@ internal static class R28DTestHelpers
             Safety = bundle.Safety,
             Budget = bundle.Budget,
             Routing = routing,
-            FeatureSchemaVersion = bundle.Policies.DecisionSchemaVersion,
+            // R28-F P3-1：FeatureSchemaVersion 可显式传入（默认使用 bundle 的 DecisionSchemaVersion）。
+            // 测试中应与 BuildRegistryWithSchema 的 schemaVersion 参数保持一致。
+            FeatureSchemaVersion = featureSchemaVersion ?? bundle.Policies.DecisionSchemaVersion,
             ResolutionScope = new ContextDecisionScope("test-ws", "test-col"),
             AllowDeterministicReplayScoring = allowDeterministicReplayScoring
         };
@@ -645,6 +660,33 @@ internal static class R28DTestHelpers
             }
         });
         return registry;
+    }
+
+    /// <summary>
+    /// R28-F P3-1：构造 registry + snapshot 配对（同 schemaVersion），保证两者对齐。
+    /// 旧测试调用 BuildRegistryWithSchema("test-model-v1") + BuildSnapshot() 会导致
+    /// registry 的 schema 版本与 snapshot.FeatureSchemaVersion 不一致（前者 "test-model-v1"，
+    /// 后者 bundle.Policies.DecisionSchemaVersion）。新测试应使用此方法避免不一致。
+    /// </summary>
+    public static (IFeatureRegistry registry, EffectivePolicySnapshot snapshot) BuildRegistryAndSnapshot(
+        string schemaVersion,
+        bool enableModelScoring = true,
+        double deterministicWeight = 0.5,
+        double modelWeight = 0.5,
+        double confidenceThreshold = 0.70,
+        string? modelArtifactId = null,
+        bool allowDeterministicReplayScoring = false)
+    {
+        return (
+            BuildRegistryWithSchema(schemaVersion),
+            BuildSnapshot(
+                enableModelScoring: enableModelScoring,
+                deterministicWeight: deterministicWeight,
+                modelWeight: modelWeight,
+                confidenceThreshold: confidenceThreshold,
+                modelArtifactId: modelArtifactId,
+                allowDeterministicReplayScoring: allowDeterministicReplayScoring,
+                featureSchemaVersion: schemaVersion));
     }
 }
 
@@ -671,6 +713,10 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
     // R28-D P0-1：Stub 默认为 RealModel，让测试可验证 model-weighted 路径
     public InferenceEngineKind Kind { get; set; } = InferenceEngineKind.RealModel;
 
+    // R28-F P3-1：Stub 默认 ContentHash/CalibrationVersion（测试可控）
+    public string ContentHash { get; set; } = "stub-content-hash";
+    public string CalibrationVersion { get; set; } = "stub-calibration-v1";
+
     public StubBatchInferenceEngine WithOutput(double score, double confidence)
     {
         _outputs.Add(new InferenceOutput { Score = score, Confidence = confidence });
@@ -692,6 +738,7 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
     public ValueTask<BatchInferenceResult> InferAsync(BatchInferenceRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        var startedAt = Stopwatch.GetTimestamp();
         if (ct.IsCancellationRequested)
         {
             return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
@@ -728,12 +775,63 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
                 : new InferenceOutput { Score = 0.0, Confidence = 0.0 };
         }
 
+        // R28-F P3-2：返回真实执行时间（非零），避免推理验证器误判 timeout 未执行。
         return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
         {
             Outputs = outputs,
             Succeeded = true,
             Error = null,
-            Duration = TimeSpan.Zero
+            Duration = Stopwatch.GetElapsedTime(startedAt)
+        });
+    }
+
+    // R28-F P4-1：Stub 的 FeatureBatch 路径直接复用 InferAsync 的输出策略
+    public ValueTask<BatchInferenceResult> InferBatchAsync(FeatureBatch batch, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        var startedAt = Stopwatch.GetTimestamp();
+        if (ct.IsCancellationRequested)
+        {
+            return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
+            {
+                Outputs = Array.Empty<InferenceOutput>(),
+                Succeeded = false,
+                Error = "cancelled",
+                Duration = TimeSpan.Zero
+            });
+        }
+
+        if (_throw is not null)
+        {
+            throw _throw;
+        }
+
+        if (_failureError is not null)
+        {
+            return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
+            {
+                Outputs = Array.Empty<InferenceOutput>(),
+                Succeeded = false,
+                Error = _failureError,
+                Duration = TimeSpan.Zero
+            });
+        }
+
+        // 按行数填充输出
+        var outputs = new InferenceOutput[batch.RowCount];
+        for (var i = 0; i < batch.RowCount; i++)
+        {
+            outputs[i] = i < _outputs.Count
+                ? _outputs[i]
+                : new InferenceOutput { Score = 0.0, Confidence = 0.0 };
+        }
+
+        return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
+        {
+            Outputs = outputs,
+            Succeeded = true,
+            Error = null,
+            Duration = Stopwatch.GetElapsedTime(startedAt)
         });
     }
 }
