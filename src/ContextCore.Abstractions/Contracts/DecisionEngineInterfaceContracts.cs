@@ -206,8 +206,20 @@ public sealed class ContextDecisionOutcomeSummary
     /// <summary>丢弃的候选数。</summary>
     public int DroppedCount { get; init; }
 
-    /// <summary>选中候选的总 token 数。</summary>
-    public int EstimatedTokens { get; init; }
+    /// <summary>选中候选的有效 token 总数（基于 TokenCost.ContentTokens 精确计算）。</summary>
+    /// <remarks>
+    /// R29 WP-D-3：权威 token 汇总字段。Allocator / Projector 应基于此字段做预算验证。
+    /// 旧字段 <see cref="EstimatedTokens"/> 保留为 [Obsolete] 别名，委托到此字段。
+    /// </remarks>
+    public int EffectiveTokens { get; init; }
+
+    /// <summary>选中候选的 token 数（[Obsolete] 别名，委托到 <see cref="EffectiveTokens"/>）。</summary>
+    [Obsolete("Use EffectiveTokens. EstimatedTokens is retained as alias for backward compatibility.")]
+    public int EstimatedTokens
+    {
+        get => EffectiveTokens;
+        init => EffectiveTokens = value;
+    }
 
     /// <summary>请求的 token 预算上限。</summary>
     public int TokenBudget { get; init; }

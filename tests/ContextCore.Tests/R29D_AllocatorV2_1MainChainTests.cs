@@ -550,3 +550,145 @@ public sealed class R29D_MandatoryOverflowPolicyTests
             "AllowOverflowWithDiagnostic 不应触发 HardWindowViolated。");
     }
 }
+
+// ===========================================================================
+// R29 WP-D-3：TokenCost 权威化验收测试
+//
+// 覆盖：
+//   1. Engine Legacy 路径使用 TokenCost.ContentTokens（而非 EstimatedTokens）
+//   2. ContextDecisionOutcomeSummary.EffectiveTokens 为权威字段
+//   3. EstimatedTokens 别名向后兼容（委托到 EffectiveTokens）
+//
+// 设计原则：
+//   - 测试 Legacy 路径（无 PolicySnapshot → 走静态内联分配）
+//   - 构造带 TokenCost 的 envelope，验证 Engine 用精确 token 做预算检查
+//   - 所有代码注释使用中文
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-D-3：TokenCost 权威化验收测试。
+/// </summary>
+[TestClass]
+[TestCategory("R29")]
+[TestCategory("DecisionEngine")]
+public sealed class R29D_TokenCostAuthorityTests
+{
+    /// <summary>构建带 TokenCost 的候选（精确 token，不同于 EstimatedTokens）。</summary>
+    private static ContextCandidateEnvelope MakeEnvelopeWithTokenCost(
+        string candidateId,
+        int estimatedTokens,
+        int preciseTokens,
+        double score = 0.8) => new()
+        {
+            CandidateId = candidateId,
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: candidateId,
+                entityVersion: "v1"),
+            Source = ContextCandidateSource.Semantic,
+            Type = "test-type",
+            #pragma warning disable CS0618 // EstimatedTokens 已标记 [Obsolete]，测试中仍需设置 fallback 值
+            EstimatedTokens = estimatedTokens,
+            #pragma warning restore CS0618
+            Safety = new CandidateSafetyState { PassesSafetyGate = true },
+            Utility = new CandidateUtilityScore { DeterministicScore = score, FinalScore = score, ReasonCode = "test" },
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = preciseTokens,
+                TokenizerId = "test-tokenizer",
+                IsEstimated = false
+            }
+        };
+
+    [TestMethod]
+    public async Task Engine_LegacyPath_UsesTokenCost_OverEstimatedTokens()
+    {
+        // Legacy 路径（无 PolicySnapshot）应使用 TokenCost.ContentTokens 做预算检查，
+        // 而非 EstimatedTokens（length/4 粗估）。
+        // 候选 EstimatedTokens=50（粗估）但 TokenCost.ContentTokens=200（精确），
+        // 预算=100：若用 EstimatedTokens 则会被选入（50<100），若用 TokenCost 则被丢弃（200>100）。
+        var engine = new DefaultContextDecisionEngine();
+
+        var candidate = MakeEnvelopeWithTokenCost("c-1", estimatedTokens: 50, preciseTokens: 200, score: 0.9);
+        var request = new ContextDecisionRequest
+        {
+            RequestId = "req-token-cost",
+            DecisionSource = ContextDecisionSource.Retrieval,
+            WorkspaceId = "test-ws",
+            CollectionId = "test-col",
+            Candidates = new[] { candidate },
+            TokenBudget = 100
+        };
+
+        var result = await engine.DecideAsync(request);
+
+        // 候选精确 token=200 > 预算=100，应被丢弃（TokenBudgetExceeded）
+        Assert.AreEqual(0, result.SelectedEnvelopes.Count,
+            "TokenCost.ContentTokens=200 > budget=100，候选应被丢弃。");
+        Assert.AreEqual(1, result.DroppedEnvelopes.Count,
+            "候选应因 token 预算超限被丢弃。");
+        Assert.AreEqual(CandidateDecisionReasonCode.TokenBudgetExceeded,
+            result.DroppedEnvelopes[0].Safety.BlockReasonCode);
+    }
+
+    [TestMethod]
+    public async Task Engine_LegacyPath_TokenCostNull_FallsBackToEstimatedTokens()
+    {
+        // TokenCost=null 时回退到 EstimatedTokens（向后兼容 Legacy 候选）
+        var engine = new DefaultContextDecisionEngine();
+
+        var candidate = R28BTestHelpers.MakeEnvelope("c-1", ContextCandidateSource.Semantic, 0.9, 50);
+        // TokenCost 未设置（null）→ 回退到 EstimatedTokens=50
+        var request = new ContextDecisionRequest
+        {
+            RequestId = "req-fallback",
+            DecisionSource = ContextDecisionSource.Retrieval,
+            WorkspaceId = "test-ws",
+            CollectionId = "test-col",
+            Candidates = new[] { candidate },
+            TokenBudget = 100
+        };
+
+        var result = await engine.DecideAsync(request);
+
+        // EstimatedTokens=50 < 预算=100，应被选入
+        Assert.AreEqual(1, result.SelectedEnvelopes.Count,
+            "TokenCost=null 时回退到 EstimatedTokens=50 < budget=100，候选应被选入。");
+    }
+
+    [TestMethod]
+    public void OutcomeSummary_EffectiveTokens_IsAuthoritativeField()
+    {
+        // ContextDecisionOutcomeSummary.EffectiveTokens 是权威字段
+        var summary = new ContextDecisionOutcomeSummary
+        {
+            SelectedCount = 3,
+            EffectiveTokens = 150
+        };
+
+        Assert.AreEqual(150, summary.EffectiveTokens,
+            "EffectiveTokens 应为设置的值。");
+        #pragma warning disable CS0618 // 测试 EstimatedTokens 别名向后兼容
+        Assert.AreEqual(150, summary.EstimatedTokens,
+            "EstimatedTokens 别名应委托到 EffectiveTokens。");
+        #pragma warning restore CS0618
+    }
+
+    [TestMethod]
+    public void OutcomeSummary_EstimatedTokens_Init_Sets_EffectiveTokens()
+    {
+        // 通过 EstimatedTokens init 设置的值应委托到 EffectiveTokens（向后兼容）
+        #pragma warning disable CS0618 // 测试 init 别名向后兼容
+        var summary = new ContextDecisionOutcomeSummary
+        {
+            SelectedCount = 1,
+            EstimatedTokens = 200
+        };
+        #pragma warning restore CS0618
+
+        Assert.AreEqual(200, summary.EffectiveTokens,
+            "通过 EstimatedTokens init 设置的值应委托到 EffectiveTokens。");
+    }
+}

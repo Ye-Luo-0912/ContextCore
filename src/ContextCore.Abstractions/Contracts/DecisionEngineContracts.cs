@@ -339,6 +339,13 @@ public sealed record ContextCandidateEnvelope
     public CandidateUtilityScore Utility { get; init; } = new();
 
     /// <summary>候选估算 token 数（截断前）。</summary>
+    /// <remarks>
+    /// R29 WP-D-3：已标记 [Obsolete]。此字段使用 length/4 粗略估算，
+    /// 对中文/代码/JSON 场景严重低估 token 成本。
+    /// 新代码应通过 <see cref="TokenCost"/>?.ContentTokens 读取（由 Provider 经
+    /// <c>EnrichTokenCost</c> 填充），或使用 <c>GetEffectiveTokens</c> helper。
+    /// </remarks>
+    [Obsolete("Use TokenCost.ContentTokens. Fallback to length/4 is inaccurate for CJK/code/JSON.")]
     public int EstimatedTokens { get; init; }
 
     /// <summary>R28-B.7 P0-4：候选 token 成本（精确计算或估算）。</summary>

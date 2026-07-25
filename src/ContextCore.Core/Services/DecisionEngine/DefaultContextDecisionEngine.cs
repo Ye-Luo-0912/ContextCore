@@ -202,13 +202,14 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         var enableModel = request.EnableModel && (routing?.EnableModelScoring ?? true);
         var scored = passing.Select(e => ApplyUtilityScoring(e, routing, enableModel)).ToList();
 
-        // 排序键：IsMandatory 降序 → FinalScore 降序 → EstimatedTokens 降序 → CandidateId 升序
+        // 排序键：IsMandatory 降序 → FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
         // 注意：IsMandatory 不影响 safety gate 准入（已在 SafetyState 注释中说明），
         //       但在排序中强制 mandatory 候选优先于非 mandatory。
+        // R29 WP-D-3：使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
         var ordered = scored
             .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
             .ThenByDescending(e => e.Utility.FinalScore)
-            .ThenByDescending(e => e.EstimatedTokens)
+            .ThenByDescending(e => GetEffectiveTokens(e))
             .ThenBy(e => e.CandidateId, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -244,7 +245,9 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
 
             // Token budget 检查（Retrieval 全局硬上限语义）
-            if (!isMandatory && usedTokens + envelope.EstimatedTokens > tokenBudget)
+            // R29 WP-D-3：使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
+            var effectiveTokens = GetEffectiveTokens(envelope);
+            if (!isMandatory && usedTokens + effectiveTokens > tokenBudget)
             {
                 droppedByBudget.Add(envelope with
                 {
@@ -258,7 +261,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
 
             selected.Add(envelope);
-            usedTokens += envelope.EstimatedTokens;
+            usedTokens += effectiveTokens;
             takenCount++;
         }
 
@@ -603,5 +606,15 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         {
             EnableModelScoring = routingOverride.EnableModelScoring ?? baseProfile.EnableModelScoring
         };
+    }
+
+    /// <summary>
+    /// R29 WP-D-3：获取候选的有效 token 数（与 DefaultGlobalAllocator / DefaultAllocatorV2_1 语义一致）。
+    /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
+    /// 回退到 EstimatedTokens（length/4 粗估，仅用于兼容 Legacy 候选）。
+    /// </summary>
+    private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
+    {
+        return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
     }
 }
