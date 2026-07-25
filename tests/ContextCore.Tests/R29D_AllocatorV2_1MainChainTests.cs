@@ -360,3 +360,193 @@ public sealed class R29D_AllocatorV2_1MainChainTests
         Assert.IsInstanceOfType(allocatorV2_1, typeof(DefaultAllocatorV2_1));
     }
 }
+
+// ===========================================================================
+// R29 WP-D-2：MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试
+//
+// 覆盖：
+//   1. FailClosed + mandatory 超预算 → 抛 MandatoryContextWindowExceededException
+//   2. RejectLowestAuthorityMandatory + mandatory 超预算 → 最低优先级被拒绝
+//   3. AllowOverflowWithDiagnostic + mandatory 超预算 → 全部选入（回归）
+//   4. 诊断字段验证（MandatoryOverflowTokens / HardWindowViolated / Policy）
+//
+// 设计原则：
+//   - 直接测试 DefaultAllocatorV2_1.AllocateWithDiversity（单元级，不经 Engine）
+//   - 复用 MakeMandatoryEnvelope / MakeNonMandatoryEnvelope helper
+//   - 所有代码注释使用中文
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-D-2：MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试。
+/// </summary>
+[TestClass]
+[TestCategory("R29")]
+[TestCategory("DecisionEngine")]
+public sealed class R29D_MandatoryOverflowPolicyTests
+{
+    // =======================================================================
+    // 辅助方法
+    // =======================================================================
+
+    /// <summary>构建带 mandatory 标记的候选。</summary>
+    private static ContextCandidateEnvelope MakeMandatoryEnvelope(
+        string candidateId, int tokens, double score = 1.0) => new()
+        {
+            CandidateId = candidateId,
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "mandatory",
+                entityId: candidateId,
+                entityVersion: "v1"),
+            Source = ContextCandidateSource.Mandatory,
+            Type = "mandatory-type",
+            EstimatedTokens = tokens,
+            Safety = new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true },
+            Utility = new CandidateUtilityScore { DeterministicScore = score, FinalScore = score, ReasonCode = "mandatory" }
+        };
+
+    /// <summary>构建 AllocationContext（携带指定的 MandatoryOverflowPolicy）。</summary>
+    private static AllocationContext MakeContext(
+        int tokenBudget,
+        MandatoryOverflowPolicy policy,
+        ContextDecisionPurpose purpose = ContextDecisionPurpose.Package) => new()
+        {
+            Purpose = purpose,
+            Budget = new BudgetProfile
+            {
+                ProfileId = "test-budget",
+                DefaultTokenBudget = tokenBudget,
+                DefaultTopK = 50
+            },
+            MandatoryOverflowPolicy = policy
+        };
+
+    /// <summary>构建 V2.1 分配器实例。</summary>
+    private static DefaultAllocatorV2_1 MakeAllocator() => new(new DefaultGlobalAllocator());
+
+    // =======================================================================
+    // 1. FailClosed
+    // =======================================================================
+
+    [TestMethod]
+    public void FailClosed_MandatoryExceedsBudget_ThrowsException()
+    {
+        // FailClosed + mandatory 总 token 超出预算 → 抛 MandatoryContextWindowExceededException
+        var allocator = MakeAllocator();
+        var context = MakeContext(tokenBudget: 100, policy: MandatoryOverflowPolicy.FailClosed);
+        var options = new DiversityOptions();
+
+        var m1 = MakeMandatoryEnvelope("m-1", tokens: 80, score: 0.9);
+        var m2 = MakeMandatoryEnvelope("m-2", tokens: 50, score: 0.5); // 总 130 > 预算 100
+
+        var ex = Assert.ThrowsException<MandatoryContextWindowExceededException>(() =>
+            allocator.AllocateWithDiversity(new[] { m1, m2 }, context, options));
+
+        Assert.AreEqual(130, ex.MandatoryTokens, "异常应携带 mandatory 总 token 需求。");
+        Assert.AreEqual(100, ex.BudgetLimit, "异常应携带预算上限。");
+        Assert.AreEqual(2, ex.OverflowedCandidateIds.Count, "异常应列出所有溢出 mandatory 候选 ID。");
+        CollectionAssert.AreEquivalent(new[] { "m-1", "m-2" }, ex.OverflowedCandidateIds.ToList());
+    }
+
+    [TestMethod]
+    public void FailClosed_MandatoryWithinBudget_NoException()
+    {
+        // FailClosed + mandatory 总 token 在预算内 → 正常返回，不抛异常
+        var allocator = MakeAllocator();
+        var context = MakeContext(tokenBudget: 200, policy: MandatoryOverflowPolicy.FailClosed);
+        var options = new DiversityOptions();
+
+        var m1 = MakeMandatoryEnvelope("m-1", tokens: 80, score: 0.9);
+        var m2 = MakeMandatoryEnvelope("m-2", tokens: 50, score: 0.5); // 总 130 < 预算 200
+
+        var result = allocator.AllocateWithDiversity(new[] { m1, m2 }, context, options);
+
+        Assert.AreEqual(2, result.Selected.Count, "mandatory 在预算内应全部选入。");
+        Assert.IsFalse(result.Outcome.Diagnostics.ContainsKey("MandatoryOverflowTokens"),
+            "无溢出时不应记录 MandatoryOverflowTokens 诊断。");
+    }
+
+    // =======================================================================
+    // 2. RejectLowestAuthorityMandatory
+    // =======================================================================
+
+    [TestMethod]
+    public void RejectLowestAuthorityMandatory_RejectsLowestScoreFirst()
+    {
+        // RejectLowestAuthorityMandatory + mandatory 超预算 → 按 FinalScore 升序拒绝最低优先级
+        var allocator = MakeAllocator();
+        var context = MakeContext(tokenBudget: 100, policy: MandatoryOverflowPolicy.RejectLowestAuthorityMandatory);
+        var options = new DiversityOptions { Lambda = 1.0 }; // 纯 relevance，禁用 MMR
+
+        var m1 = MakeMandatoryEnvelope("m-high", tokens: 60, score: 0.9); // 高优先级
+        var m2 = MakeMandatoryEnvelope("m-low", tokens: 60, score: 0.3);  // 低优先级，总 120 > 100
+
+        var result = allocator.AllocateWithDiversity(new[] { m1, m2 }, context, options);
+
+        // m-low（FinalScore=0.3）应被拒绝，m-high（FinalScore=0.9）应保留
+        Assert.AreEqual(1, result.Selected.Count, "应只保留 1 个 mandatory（预算仅够 1 个）。");
+        Assert.IsTrue(result.Selected.Any(e => e.CandidateId == "m-high"),
+            "高优先级 mandatory 应被保留。");
+        Assert.AreEqual(1, result.Dropped.Count, "应拒绝 1 个 mandatory。");
+        Assert.IsTrue(result.Dropped.Any(e => e.CandidateId == "m-low"),
+            "低优先级 mandatory 应被拒绝。");
+
+        // 被拒绝候选的 decision 应为 TokenBudgetExceeded
+        var rejectedDecision = result.AllocationDecisions.First(d => d.CandidateKey == m2.CanonicalKey);
+        Assert.AreEqual(CandidateDecisionReasonCode.TokenBudgetExceeded, rejectedDecision.ReasonCode);
+        Assert.AreEqual(0, rejectedDecision.IncludedTokens);
+    }
+
+    [TestMethod]
+    public void RejectLowestAuthorityMandatory_DiagnosticsRecorded()
+    {
+        // RejectLowestAuthorityMandatory 路径应记录诊断字段
+        var allocator = MakeAllocator();
+        var context = MakeContext(tokenBudget: 50, policy: MandatoryOverflowPolicy.RejectLowestAuthorityMandatory);
+        var options = new DiversityOptions();
+
+        var m1 = MakeMandatoryEnvelope("m-1", tokens: 40, score: 0.9);
+        var m2 = MakeMandatoryEnvelope("m-2", tokens: 40, score: 0.5); // 总 80 > 预算 50
+
+        var result = allocator.AllocateWithDiversity(new[] { m1, m2 }, context, options);
+
+        Assert.IsTrue(result.Outcome.Diagnostics.ContainsKey("MandatoryOverflowPolicy"),
+            "应记录 MandatoryOverflowPolicy 诊断。");
+        Assert.AreEqual("RejectLowestAuthorityMandatory", result.Outcome.Diagnostics["MandatoryOverflowPolicy"]);
+        Assert.IsTrue(result.Outcome.Diagnostics.ContainsKey("HardWindowViolated"),
+            "应记录 HardWindowViolated 诊断。");
+        Assert.AreEqual("true", result.Outcome.Diagnostics["HardWindowViolated"]);
+        Assert.IsTrue(result.Outcome.Diagnostics.ContainsKey("Purpose"),
+            "应记录 Purpose 诊断。");
+    }
+
+    // =======================================================================
+    // 3. AllowOverflowWithDiagnostic（回归测试）
+    // =======================================================================
+
+    [TestMethod]
+    public void AllowOverflowWithDiagnostic_MandatoryAlwaysSelected_RecordsDiagnostic()
+    {
+        // AllowOverflowWithDiagnostic + mandatory 超预算 → 全部选入（当前行为不变），记录诊断
+        var allocator = MakeAllocator();
+        var context = MakeContext(tokenBudget: 100, policy: MandatoryOverflowPolicy.AllowOverflowWithDiagnostic);
+        var options = new DiversityOptions();
+
+        var m1 = MakeMandatoryEnvelope("m-1", tokens: 80, score: 0.9);
+        var m2 = MakeMandatoryEnvelope("m-2", tokens: 50, score: 0.5); // 总 130 > 预算 100
+
+        var result = allocator.AllocateWithDiversity(new[] { m1, m2 }, context, options);
+
+        Assert.AreEqual(2, result.Selected.Count, "AllowOverflowWithDiagnostic 应全部选入 mandatory 候选。");
+        Assert.AreEqual(0, result.Dropped.Count, "无 mandatory 应被丢弃。");
+        // 诊断应记录溢出量
+        Assert.IsTrue(result.Outcome.Diagnostics.ContainsKey("MandatoryOverflowTokens"),
+            "应记录 MandatoryOverflowTokens 诊断。");
+        Assert.AreEqual("30", result.Outcome.Diagnostics["MandatoryOverflowTokens"],
+            "溢出量应为 130-100=30。");
+        Assert.AreEqual("AllowOverflowWithDiagnostic", result.Outcome.Diagnostics["MandatoryOverflowPolicy"]);
+        Assert.AreEqual("false", result.Outcome.Diagnostics["HardWindowViolated"],
+            "AllowOverflowWithDiagnostic 不应触发 HardWindowViolated。");
+    }
+}

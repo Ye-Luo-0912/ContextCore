@@ -114,7 +114,76 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         var selected = candidates.Where(c => selectedKeys.Contains(c.CanonicalKey)).ToList();
         var dropped = candidates.Where(c => !selectedKeys.Contains(c.CanonicalKey)).ToList();
 
-        var estimatedTokens = sectionResults.Sum(s => s.AllocatedTokens);
+        // R29 WP-D-2：接入 MandatoryOverflowPolicy。
+        // V2.1 section 分配阶段 mandatory 候选始终选入（AllowOverflowWithDiagnostic 语义），
+        // 此处在 section 分配完成后统一检查总 mandatory token 是否超出总预算：
+        //   - FailClosed：收集溢出 mandatory 候选 ID + 总 token 需求，抛 MandatoryContextWindowExceededException
+        //     （Runtime 不捕获，让请求真正失败，fail-closed 语义）
+        //   - RejectLowestAuthorityMandatory：按 FinalScore 升序（最低优先级优先）拒绝 mandatory 候选，
+        //     直到总 mandatory token 降至预算内；被拒绝的候选移入 dropped，decision 标记 TokenBudgetExceeded
+        //   - AllowOverflowWithDiagnostic（默认）：当前行为不变，仅在诊断中记录溢出量
+        var mandatoryOverflowPolicy = context.MandatoryOverflowPolicy;
+        var mandatorySelected = selected
+            .Where(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
+            .ToList();
+        var mandatoryTotalTokens = mandatorySelected.Sum(GetEffectiveTokens);
+        var mandatoryOverflowTokens = Math.Max(0, mandatoryTotalTokens - tokenBudget);
+        var hardWindowViolated = false;
+
+        if (mandatoryOverflowTokens > 0)
+        {
+            switch (mandatoryOverflowPolicy)
+            {
+                case MandatoryOverflowPolicy.FailClosed:
+                    // 硬窗口 fail-closed — 收集溢出 mandatory 候选 ID + 总 token 需求，抛异常
+                    var overflowedIds = mandatorySelected
+                        .OrderByDescending(e => e.Utility.FinalScore) // 高优先级在前，末尾即最低优先级（用于诊断）
+                        .Select(e => e.CandidateId)
+                        .ToList();
+                    throw new MandatoryContextWindowExceededException(
+                        mandatoryTokens: mandatoryTotalTokens,
+                        budgetLimit: tokenBudget,
+                        overflowedCandidateIds: overflowedIds);
+
+                case MandatoryOverflowPolicy.RejectLowestAuthorityMandatory:
+                    // 按 FinalScore 升序（最低优先级优先）拒绝 mandatory 候选，直到总 token 降至预算内
+                    var rejectable = mandatorySelected
+                        .OrderBy(e => e.Utility.FinalScore)
+                        .ThenBy(e => e.CandidateId, StringComparer.Ordinal)
+                        .ToList();
+                    foreach (var envelope in rejectable)
+                    {
+                        if (mandatoryTotalTokens <= tokenBudget) break;
+                        var envTokens = GetEffectiveTokens(envelope);
+                        mandatoryTotalTokens -= envTokens;
+                        // 将候选从 selected 移入 dropped
+                        selected.Remove(envelope);
+                        dropped.Add(envelope);
+                        // 更新 decision：IncludedTokens=0，reason=TokenBudgetExceeded
+                        var decisionIdx = allDecisions.FindIndex(d => d.CandidateKey == envelope.CanonicalKey);
+                        if (decisionIdx >= 0)
+                        {
+                            allDecisions[decisionIdx] = allDecisions[decisionIdx] with
+                            {
+                                IncludedTokens = 0,
+                                IsTruncated = false,
+                                ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+                            };
+                        }
+                    }
+                    hardWindowViolated = true;
+                    break;
+
+                case MandatoryOverflowPolicy.AllowOverflowWithDiagnostic:
+                default:
+                    // 允许溢出但记录诊断（Package/Retrieval 默认语义），当前行为不变
+                    break;
+            }
+        }
+
+        // 重新计算 estimatedTokens（RejectLowestAuthorityMandatory 可能移除了 mandatory 候选，
+        // 不能直接用 sectionResults.AllocatedTokens 总和，需基于最终 decisions 的 IncludedTokens）
+        var estimatedTokens = allDecisions.Where(d => d.IncludedTokens > 0).Sum(d => d.IncludedTokens);
         var sections = sectionResults.Select(s => s.Section).ToList();
 
         // 构建 diagnostics（记录 V2.1 特有信息）
@@ -133,6 +202,15 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             diagnostics[$"section.{sr.Section}.allocated"] = sr.AllocatedTokens.ToString(CultureInfo.InvariantCulture);
             diagnostics[$"section.{sr.Section}.rollover"] = sr.RolloverTokens.ToString(CultureInfo.InvariantCulture);
             diagnostics[$"section.{sr.Section}.borrowed"] = sr.BorrowedTokens.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // R29 WP-D-2：记录 mandatory overflow 诊断（与 V2.0 DefaultGlobalAllocator 诊断字段对齐）
+        if (mandatoryOverflowTokens > 0 || hardWindowViolated)
+        {
+            diagnostics["MandatoryOverflowTokens"] = mandatoryOverflowTokens.ToString(CultureInfo.InvariantCulture);
+            diagnostics["MandatoryOverflowPolicy"] = mandatoryOverflowPolicy.ToString();
+            diagnostics["HardWindowViolated"] = hardWindowViolated.ToString().ToLowerInvariant();
+            diagnostics["Purpose"] = context.Purpose.ToString();
         }
 
         var outcome = new ContextDecisionOutcomeSummary
