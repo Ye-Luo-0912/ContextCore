@@ -474,6 +474,20 @@ public interface IPersistentToolDispatchJournal : IToolDispatchJournal
 }
 
 /// <summary>
+/// R29 WP-B-2：持久化 Kernel Result Outbox 抽象。
+/// 继承 <see cref="IKernelResultOutbox"/> 并标记为持久化实现，用于崩溃恢复的结果投递。
+/// </summary>
+/// <remarks>
+/// 生产部署应注入基于 DB/WAL 的持久化实现（如 <c>PostgresKernelResultOutbox</c>）。
+/// 开发环境可继续使用 <see cref="ContextCore.Core.Services.AgentKernel.InMemoryKernelResultOutbox"/>。
+/// 由于继承自 <see cref="IKernelResultOutbox"/>，可直接注入 <see cref="DefaultAgentKernel"/> 的
+/// <c>IKernelResultOutbox?</c> 参数，无需修改 Kernel 构造签名。
+/// </remarks>
+public interface IPersistentKernelResultOutbox : IKernelResultOutbox
+{
+}
+
+/// <summary>
 /// R28-E P1-1：Agent Checkpoint 工厂抽象。
 /// 统一手动 Checkpoint 指令与自动 AutoCheckpoint 的状态格式，
 /// 确保两者都序列化完整的 Kernel 状态（已提交 tool 结果 + snapshot 引用）。

@@ -27,8 +27,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R28-B.8：v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
     /// R28-E：v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
     /// R29 WP-B-1：v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
+    /// R29 WP-B-2：v21 → v22，新增 kernel_result_outbox 表与索引（持久化 Kernel Result Outbox，支持崩溃恢复结果重放）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v21";
+    public const string SchemaVersion = "cc-schema-v22";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -102,7 +103,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "utility_ledger_entries",
         "conflict_sets",
         // R29 WP-B-1：Tool Dispatch Journal 持久化（HA 崩溃恢复 exactly-once）
-        "tool_dispatch_journal_entries"
+        "tool_dispatch_journal_entries",
+        // R29 WP-B-2：Kernel Result Outbox 持久化（崩溃恢复结果重放）
+        "kernel_result_outbox"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -239,7 +242,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("conflict_sets", "candidate"),
         // R29 WP-B-1：Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
         ("tool_dispatch_journal_entries", "state"),
-        ("tool_dispatch_journal_entries", "idempotency")
+        ("tool_dispatch_journal_entries", "idempotency"),
+        // R29 WP-B-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史）
+        ("kernel_result_outbox", "state"),
+        ("kernel_result_outbox", "instruction")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -337,6 +343,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var conflictSets = Infrastructure.PostgresNames.Table(options, "conflict_sets");
         // R29 WP-B-1：Tool Dispatch Journal 持久化表
         var toolDispatchJournalEntries = Infrastructure.PostgresNames.Table(options, "tool_dispatch_journal_entries");
+        // R29 WP-B-2：Kernel Result Outbox 持久化表
+        var kernelResultOutbox = Infrastructure.PostgresNames.Table(options, "kernel_result_outbox");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1492,6 +1500,23 @@ CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- R29 WP-B-2：Kernel Result Outbox 持久化表（崩溃恢复结果重放）
+-- kernel_result_outbox: outbox_id 主键 — 每个未投递的 AgentKernelResult 一条行
+-- state 为 text（'Pending' / 'Dispatched'）；instruction_id 反规范化以便查询
+-- 完整 AgentKernelResult 保存在 data jsonb；DequeueAsync 使用 FOR UPDATE SKIP LOCKED 支持 worker 并发
+CREATE TABLE IF NOT EXISTS {kernelResultOutbox} (
+    outbox_id text NOT NULL,
+    instruction_id text NOT NULL DEFAULT '',
+    state text NOT NULL DEFAULT 'Pending',
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (outbox_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "state")} ON {kernelResultOutbox} (state, created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "instruction")} ON {kernelResultOutbox} (instruction_id);
 """;
     }
 
