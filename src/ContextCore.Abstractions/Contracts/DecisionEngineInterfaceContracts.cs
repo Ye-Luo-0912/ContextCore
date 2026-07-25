@@ -127,6 +127,18 @@ public sealed class ContextDecisionRequest
     /// null = Legacy 路径或无 Allocator 注入（Engine 使用旧 Allocate 重载）。
     /// </remarks>
     public AllocationContext? AllocationContext { get; init; }
+
+    /// <summary>
+    /// R29 WP-D-1：Diversity 配置（V2.1 Allocator 路径专用）。
+    /// </summary>
+    /// <remarks>
+    /// 由 DefaultContextDecisionRuntime 从 EffectivePolicySnapshot.DiversityOptions 读取并设置。
+    /// Engine 在 V2 路径根据此字段决定走 V2.1 AllocateWithDiversity 还是 V2.0 Allocate：
+    ///   - 非空 + IAllocatorV2_1 注入 → AllocateWithDiversity（section rollover + MMR）
+    ///   - null 或 IAllocatorV2_1 未注入 → Allocate（V2.0 fallback）
+    /// null = 使用 V2.0 Allocator（向后兼容 R28-G 之前的行为）。
+    /// </remarks>
+    public DiversityOptions? DiversityOptions { get; init; }
 }
 
 /// <summary>

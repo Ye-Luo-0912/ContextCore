@@ -356,12 +356,14 @@ internal static class CoreExtensions
 		services.TryAddSingleton<IPolicyRegistry>(sp => sp.GetRequiredService<DefaultPolicyRegistry>());
 		// R28-B.6：Engine 注入全部 V2 决策抽象（SafetyGate/LifecycleGate/UtilityScorer/GlobalAllocator）。
 		// Engine 是唯一决策点：Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score。
+		// R29 WP-D-1：注入 IAllocatorV2_1，使 Engine 在 DiversityOptions 非空时走 V2.1 AllocateWithDiversity。
 		services.AddSingleton<DefaultContextDecisionEngine>(sp => new DefaultContextDecisionEngine(
 			sp.GetService<IPolicyRegistry>(),
 			safetyGate: sp.GetService<ISafetyGate>(),
 			lifecycleGate: sp.GetService<ILifecycleGate>(),
 			utilityScorer: sp.GetService<IUtilityScorer>(),
-			globalAllocator: sp.GetService<IGlobalAllocator>()));
+			globalAllocator: sp.GetService<IGlobalAllocator>(),
+			allocatorV2_1: sp.GetService<IAllocatorV2_1>()));
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
 		// P0-3：将 IResolvedPolicyProvider 从 B-1 骨架 DefaultResolvedPolicyProvider 替换为
 		// PostgresResolvedPolicyProvider，接入 IPolicyRegistry（CAS epoch + content hash +

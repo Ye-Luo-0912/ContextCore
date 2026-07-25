@@ -590,6 +590,19 @@ public sealed record EffectivePolicySnapshot
     /// 仅在测试 / 预览场景显式开启 true。
     /// </summary>
     public bool AllowDeterministicReplayScoring { get; init; } = false;
+
+    /// <summary>
+    /// R29 WP-D-1：Diversity 配置（V2.1 Allocator 路径专用）。
+    /// </summary>
+    /// <remarks>
+    /// 由 DefaultPolicyBundleFactory 在解析 bundle 时填充（默认 Lambda=0.5、SectionReserveRatio=0.1）。
+    /// DefaultContextDecisionRuntime 读取此字段并写入 ContextDecisionRequest.DiversityOptions。
+    /// Engine 在 V2 路径根据此字段决定走 V2.1 AllocateWithDiversity 还是 V2.0 Allocate：
+    ///   - 非空 + IAllocatorV2_1 注入 → AllocateWithDiversity（section rollover + MMR）
+    ///   - null 或 IAllocatorV2_1 未注入 → Allocate（V2.0 fallback）
+    /// null = 禁用 V2.1 路径（向后兼容 R28-G 之前的行为）。
+    /// </remarks>
+    public DiversityOptions? DiversityOptions { get; init; }
 }
 
 /// <summary>

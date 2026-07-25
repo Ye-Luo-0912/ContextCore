@@ -65,6 +65,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     private readonly ILifecycleGate? _lifecycleGate;
     private readonly IUtilityScorer? _utilityScorer;
     private readonly IGlobalAllocator? _globalAllocator;
+    private readonly IAllocatorV2_1? _allocatorV2_1;
 
     /// <summary>构造默认 Engine（无注入；使用静态内联逻辑，向后兼容 R18-2 行为）。</summary>
     public DefaultContextDecisionEngine()
@@ -92,12 +93,33 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         ILifecycleGate? lifecycleGate,
         IUtilityScorer? utilityScorer,
         IGlobalAllocator? globalAllocator)
+        : this(policyRegistry, safetyGate, lifecycleGate, utilityScorer, globalAllocator, allocatorV2_1: null)
+    {
+    }
+
+    /// <summary>
+    /// R29 WP-D-1：构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator。
+    /// </summary>
+    /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
+    /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="lifecycleGate">Lifecycle Gate 评估器（null 时跳过 lifecycle 检查）。</param>
+    /// <param name="utilityScorer">效用评分器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="globalAllocator">全局分配器（V2.0 基础，null 时走 Legacy 静态路径）。</param>
+    /// <param name="allocatorV2_1">V2.1 Allocator（section rollover + MMR；null 时回退 V2.0 Allocate）。</param>
+    public DefaultContextDecisionEngine(
+        IPolicyRegistry? policyRegistry,
+        ISafetyGate? safetyGate,
+        ILifecycleGate? lifecycleGate,
+        IUtilityScorer? utilityScorer,
+        IGlobalAllocator? globalAllocator,
+        IAllocatorV2_1? allocatorV2_1)
     {
         _policyRegistry = policyRegistry;
         _safetyGate = safetyGate;
         _lifecycleGate = lifecycleGate;
         _utilityScorer = utilityScorer;
         _globalAllocator = globalAllocator;
+        _allocatorV2_1 = allocatorV2_1;
     }
 
     /// <summary>
@@ -375,11 +397,41 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             || effectiveTopK != snapshot.Budget.DefaultTopK)
             ? snapshot with { Budget = snapshot.Budget with { DefaultTokenBudget = effectiveTokenBudget, DefaultTopK = effectiveTopK } }
             : snapshot;
-        // R28-B.6 P0-5：当 request.AllocationContext 非空时，使用新重载（携带 Purpose + MandatoryOverflowPolicy），
-        // 让 Allocator 按 Purpose 选择 overflow 策略并记录诊断；否则回退到 Legacy 重载（向后兼容）。
-        var allocation = request.AllocationContext is not null
-            ? _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot, request.AllocationContext)
-            : _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot);
+        // R29 WP-D-1：V2.1 路径选择 — 当 request.DiversityOptions 非空 + IAllocatorV2_1 注入 +
+        // AllocationContext 非空时，走 AllocateWithDiversity（section rollover + MMR）；
+        // 否则回退 V2.0 Allocate（向后兼容 R28-G 之前的行为）。
+        // V2.1 需要 AllocationContext 携带 Purpose + MandatoryOverflowPolicy，保证安全边界不被绕过。
+        AllocationResult allocation;
+        if (_allocatorV2_1 is not null
+            && request.DiversityOptions is not null
+            && request.AllocationContext is not null)
+        {
+            // 将 request 级 budget override 合并到 AllocationContext（与 effectiveSnapshot 对齐），
+            // 保证 V2.1 Allocator 读到的 context.Budget 与 V2.0 路径的 effectiveSnapshot.Budget 一致。
+            var effectiveContext = (effectiveTokenBudget != request.AllocationContext.Budget.DefaultTokenBudget
+                || effectiveTopK != request.AllocationContext.Budget.DefaultTopK)
+                ? request.AllocationContext with
+                {
+                    Budget = request.AllocationContext.Budget with
+                    {
+                        DefaultTokenBudget = effectiveTokenBudget,
+                        DefaultTopK = effectiveTopK
+                    }
+                }
+                : request.AllocationContext;
+            allocation = _allocatorV2_1.AllocateWithDiversity(
+                lifecyclePassed, effectiveContext, request.DiversityOptions);
+        }
+        else if (request.AllocationContext is not null)
+        {
+            // R28-B.6 P0-5：携带 Purpose + MandatoryOverflowPolicy 的 V2.0 重载
+            allocation = _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot, request.AllocationContext);
+        }
+        else
+        {
+            // Legacy 重载（向后兼容）
+            allocation = _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot);
+        }
 
         // 合并所有 dropped（safety + lifecycle + budget）
         var allDropped = new List<ContextCandidateEnvelope>(

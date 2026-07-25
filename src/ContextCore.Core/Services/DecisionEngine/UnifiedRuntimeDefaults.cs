@@ -268,7 +268,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             EnableModel = snapshot.Routing.EnableModelScoring,
             PolicySnapshot = snapshot,
             // P0-5：传 AllocationContext 给 Engine，让 Engine 在 V2 路径调用 Allocator 时使用
-            AllocationContext = allocationContext
+            AllocationContext = allocationContext,
+            // R29 WP-D-1：从 EffectivePolicySnapshot 读取 DiversityOptions 传给 Engine，
+            // Engine 据此选择 V2.1 AllocateWithDiversity 或回退 V2.0 Allocate。
+            DiversityOptions = snapshot.DiversityOptions
         };
 
         var engineResult = await DecideWithFailClosedPropagationAsync(
@@ -1686,7 +1689,10 @@ public sealed class DefaultResolvedPolicyProvider : IResolvedPolicyProvider
             FeatureSchemaVersion = bundle.Policies.DecisionSchemaVersion,
             RouterModelHash = null, // B-1 骨架：deterministic router
             RankerModelHash = null, // B-1 骨架：deterministic scorer
-            ResolutionScope = request.Scope
+            ResolutionScope = request.Scope,
+            // R29 WP-D-1：默认启用 V2.1 diversity 路径（Lambda=0.5, SectionReserveRatio=0.1）。
+            // Engine 仅在 IAllocatorV2_1 注入时才走 AllocateWithDiversity；否则回退 V2.0。
+            DiversityOptions = new DiversityOptions()
         };
 
         return ValueTask.FromResult(snapshot);
@@ -1817,7 +1823,10 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
             FeatureSchemaVersion = bundle.Policies.DecisionSchemaVersion,
             RouterModelHash = ResolveModelArtifactVersion(bundle, routing),
             RankerModelHash = ResolveModelArtifactVersion(bundle, routing),
-            ResolutionScope = request.Scope
+            ResolutionScope = request.Scope,
+            // R29 WP-D-1：默认启用 V2.1 diversity 路径（Lambda=0.5, SectionReserveRatio=0.1）。
+            // Engine 仅在 IAllocatorV2_1 注入时才走 AllocateWithDiversity；否则回退 V2.0。
+            DiversityOptions = new DiversityOptions()
         };
 
         return snapshot;
