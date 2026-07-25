@@ -547,7 +547,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v20", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v21", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -754,6 +754,12 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "ix_cc_agent_checkpoints_created");
         StringAssert.Contains(sql, "ix_cc_agent_task_states_session");
         StringAssert.Contains(sql, "ix_cc_agent_task_states_updated");
+        // R29 WP-B-1：tool_dispatch_journal_entries 表 DDL（持久化 Tool Dispatch Journal）
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_tool_dispatch_journal_entries");
+        StringAssert.Contains(sql, "request_id text NOT NULL");
+        StringAssert.Contains(sql, "state smallint NOT NULL DEFAULT 0");
+        StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_state");
+        StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_idempotency");
     }
 
     [TestMethod]

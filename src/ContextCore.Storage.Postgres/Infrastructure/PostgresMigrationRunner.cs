@@ -26,8 +26,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R28-B.6 阶段 E：v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
     /// R28-B.8：v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
     /// R28-E：v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
+    /// R29 WP-B-1：v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v20";
+    public const string SchemaVersion = "cc-schema-v21";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -99,7 +100,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "stage_transitions",
         // R28-E：Durable Memory Governance 持久化（Utility Ledger + ConflictSet durable projection）
         "utility_ledger_entries",
-        "conflict_sets"
+        "conflict_sets",
+        // R29 WP-B-1：Tool Dispatch Journal 持久化（HA 崩溃恢复 exactly-once）
+        "tool_dispatch_journal_entries"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -233,7 +236,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("utility_ledger_entries", "materialized"),
         ("conflict_sets", "workspace"),
         ("conflict_sets", "status"),
-        ("conflict_sets", "candidate")
+        ("conflict_sets", "candidate"),
+        // R29 WP-B-1：Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
+        ("tool_dispatch_journal_entries", "state"),
+        ("tool_dispatch_journal_entries", "idempotency")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -329,6 +335,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R28-E：Durable Memory Governance 持久化表
         var utilityLedgerEntries = Infrastructure.PostgresNames.Table(options, "utility_ledger_entries");
         var conflictSets = Infrastructure.PostgresNames.Table(options, "conflict_sets");
+        // R29 WP-B-1：Tool Dispatch Journal 持久化表
+        var toolDispatchJournalEntries = Infrastructure.PostgresNames.Table(options, "tool_dispatch_journal_entries");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1466,6 +1474,24 @@ CREATE TABLE IF NOT EXISTS {conflictSets} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "workspace")} ON {conflictSets} (workspace_id, collection_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "status")} ON {conflictSets} (resolution_status);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "candidate")} ON {conflictSets} USING gin ((data->'Entries'));
+
+-- R29 WP-B-1：Tool Dispatch Journal 持久化表（HA 崩溃恢复 exactly-once）
+-- tool_dispatch_journal_entries: request_id 主键 — 每个 tool 调用一条 journal 条目
+-- state 为 smallint（ToolDispatchState byte 枚举：0=Prepared, 1=Dispatched, 2=Committed, 3=ResultDelivered）
+-- 前向推进由 UPDATE ... WHERE state < :target 保证原子性
+CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
+    request_id text NOT NULL,
+    tool_name text NOT NULL DEFAULT '',
+    state smallint NOT NULL DEFAULT 0,
+    idempotency_key text,
+    external_operation_id text,
+    updated_at timestamptz NOT NULL,
+    diagnostic_note text,
+    PRIMARY KEY (request_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 """;
     }
 

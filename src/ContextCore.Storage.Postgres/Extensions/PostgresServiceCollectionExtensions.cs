@@ -143,6 +143,14 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentTaskStateStore>();
         services.AddSingleton<IAgentTaskStateStore>(sp => sp.GetRequiredService<PostgresAgentTaskStateStore>());
 
+        // R29 WP-B-1：Tool Dispatch Journal 持久化（PostgreSQL）。
+        // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下 tool 调用状态机可跨进程持久化与崩溃恢复。
+        // 注册为 IToolDispatchJournal 让 DefaultAgentKernel 的 nullable 参数自动注入；
+        // 同时注册为 IPersistentToolDispatchJournal 以便显式区分持久化能力。
+        services.AddSingleton<PostgresToolDispatchJournal>();
+        services.AddSingleton<IToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
+        services.AddSingleton<IPersistentToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
+
         // R27-3：Evolution Pipeline 持久化（run state + 3 audit tables）。
         // 替代 InMemory 默认注册，让 HA 场景下 pipeline run state / canary / rollback / baseline 审计记录可跨进程持久化。
         services.AddSingleton<PostgresPipelineRunStore>();

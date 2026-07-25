@@ -460,6 +460,20 @@ public interface IToolDispatchJournal
 }
 
 /// <summary>
+/// R29 WP-B-1：持久化 Tool Dispatch Journal 抽象。
+/// 继承 <see cref="IToolDispatchJournal"/> 并标记为持久化实现，用于崩溃恢复的 exactly-once 语义。
+/// </summary>
+/// <remarks>
+/// 生产部署应注入基于 DB/WAL 的持久化实现（如 <c>PostgresToolDispatchJournal</c>）。
+/// 开发环境可继续使用 <see cref="ContextCore.Core.Services.AgentKernel.InMemoryToolDispatchJournal"/>。
+/// 由于继承自 <see cref="IToolDispatchJournal"/>，可直接注入 <see cref="DefaultAgentKernel"/> 的
+/// <c>IToolDispatchJournal?</c> 参数，无需修改 Kernel 构造签名。
+/// </remarks>
+public interface IPersistentToolDispatchJournal : IToolDispatchJournal
+{
+}
+
+/// <summary>
 /// R28-E P1-1：Agent Checkpoint 工厂抽象。
 /// 统一手动 Checkpoint 指令与自动 AutoCheckpoint 的状态格式，
 /// 确保两者都序列化完整的 Kernel 状态（已提交 tool 结果 + snapshot 引用）。
