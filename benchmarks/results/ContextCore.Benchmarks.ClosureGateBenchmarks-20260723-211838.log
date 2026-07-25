@@ -1,0 +1,283 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 3 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\obj\Release\net10.0/" /p:OutDir="D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0/" /p:OutputPath="D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0/" in D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2
+// command took 1.55 sec and exited with 0
+// start dotnet  build -c Release --no-restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\obj\Release\net10.0/" /p:OutDir="D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0/" /p:OutputPath="D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0/" --output "D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0/" in D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2
+// command took 16.81 sec and exited with 0
+// ***** Done, took 00:00:18 (18.64 sec)   *****
+// Found 3 benchmarks:
+//   ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=10]
+//   ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=50]
+//   ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=200]
+
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=10]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 1b1407c4-091f-4ee9-8b4f-423fb888d4d2.dll --anonymousPipes 2444 2600 --benchmarkName "ContextCore.Benchmarks.ClosureGateBenchmarks.V2Retrieval_100Percent(ItemCount: 10)" --job "IterationCount=1, LaunchCount=1, WarmupCount=1" --benchmarkId 0 in D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX-512F+CD+BW+DQ+VL+VBMI,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-VSMIPP(IterationCount=1, LaunchCount=1, WarmupCount=1)
+
+OverheadJitting  1: 1 op, 212000.00 ns, 212.0000 us/op
+WorkloadJitting  1: 1 op, 58993400.00 ns, 58.9934 ms/op
+
+WorkloadPilot    1: 2 op, 859200.00 ns, 429.6000 us/op
+WorkloadPilot    2: 3 op, 810500.00 ns, 270.1667 us/op
+WorkloadPilot    3: 4 op, 1312600.00 ns, 328.1500 us/op
+WorkloadPilot    4: 5 op, 1191400.00 ns, 238.2800 us/op
+WorkloadPilot    5: 6 op, 1629500.00 ns, 271.5833 us/op
+WorkloadPilot    6: 7 op, 1898200.00 ns, 271.1714 us/op
+WorkloadPilot    7: 8 op, 1979300.00 ns, 247.4125 us/op
+WorkloadPilot    8: 9 op, 3275100.00 ns, 363.9000 us/op
+WorkloadPilot    9: 10 op, 2625700.00 ns, 262.5700 us/op
+WorkloadPilot   10: 11 op, 3417700.00 ns, 310.7000 us/op
+WorkloadPilot   11: 12 op, 3036600.00 ns, 253.0500 us/op
+WorkloadPilot   12: 13 op, 3914100.00 ns, 301.0846 us/op
+WorkloadPilot   13: 14 op, 3457700.00 ns, 246.9786 us/op
+WorkloadPilot   14: 15 op, 4538400.00 ns, 302.5600 us/op
+WorkloadPilot   15: 16 op, 4440900.00 ns, 277.5563 us/op
+WorkloadPilot   16: 32 op, 8956400.00 ns, 279.8875 us/op
+WorkloadPilot   17: 64 op, 17487700.00 ns, 273.2453 us/op
+WorkloadPilot   18: 128 op, 32094900.00 ns, 250.7414 us/op
+WorkloadPilot   19: 256 op, 80520800.00 ns, 314.5344 us/op
+WorkloadPilot   20: 512 op, 179143400.00 ns, 349.8895 us/op
+WorkloadPilot   21: 1024 op, 362524500.00 ns, 354.0278 us/op
+WorkloadPilot   22: 2048 op, 591617800.00 ns, 288.8759 us/op
+
+WorkloadWarmup   1: 2048 op, 415883000.00 ns, 203.0679 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 2048 op, 323817000.00 ns, 158.1138 us/op
+
+// AfterActualRun
+WorkloadResult   1: 2048 op, 323817000.00 ns, 158.1138 us/op
+// GC:  38 3 0 323129120 2048
+// Threading:  0 0 2048
+
+// AfterAll
+// Benchmark Process 34152 has exited with code 0.
+
+Mean = 158.114 μs, StdErr = 0.000 μs (0.00%), N = 1, StdDev = 0.000 μs
+Min = 158.114 μs, Q1 = 158.114 μs, Median = 158.114 μs, Q3 = 158.114 μs, Max = 158.114 μs
+IQR = 0.000 μs, LowerFence = 158.114 μs, UpperFence = 158.114 μs
+ConfidenceInterval = [NaN μs; NaN μs] (CI 99.9%), Margin = NaN μs (NaN% of Mean)
+Skewness = NaN, Kurtosis = NaN, MValue = 2
+
+// ** Remained 2 (66.7%) benchmark(s) to run. Estimated finish 2026-07-23 21:19 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=50]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 1b1407c4-091f-4ee9-8b4f-423fb888d4d2.dll --anonymousPipes 2444 2600 --benchmarkName "ContextCore.Benchmarks.ClosureGateBenchmarks.V2Retrieval_100Percent(ItemCount: 50)" --job "IterationCount=1, LaunchCount=1, WarmupCount=1" --benchmarkId 1 in D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX-512F+CD+BW+DQ+VL+VBMI,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-SGHXKK(IterationCount=1, LaunchCount=1, WarmupCount=1)
+
+OverheadJitting  1: 1 op, 203000.00 ns, 203.0000 us/op
+WorkloadJitting  1: 1 op, 63121900.00 ns, 63.1219 ms/op
+
+WorkloadPilot    1: 2 op, 1327400.00 ns, 663.7000 us/op
+WorkloadPilot    2: 3 op, 1423600.00 ns, 474.5333 us/op
+WorkloadPilot    3: 4 op, 2338400.00 ns, 584.6000 us/op
+WorkloadPilot    4: 5 op, 2637600.00 ns, 527.5200 us/op
+WorkloadPilot    5: 6 op, 2931300.00 ns, 488.5500 us/op
+WorkloadPilot    6: 7 op, 3496900.00 ns, 499.5571 us/op
+WorkloadPilot    7: 8 op, 3908800.00 ns, 488.6000 us/op
+WorkloadPilot    8: 9 op, 4330600.00 ns, 481.1778 us/op
+WorkloadPilot    9: 10 op, 4548900.00 ns, 454.8900 us/op
+WorkloadPilot   10: 11 op, 5058000.00 ns, 459.8182 us/op
+WorkloadPilot   11: 12 op, 5872100.00 ns, 489.3417 us/op
+WorkloadPilot   12: 13 op, 5901900.00 ns, 453.9923 us/op
+WorkloadPilot   13: 14 op, 6586000.00 ns, 470.4286 us/op
+WorkloadPilot   14: 15 op, 7365100.00 ns, 491.0067 us/op
+WorkloadPilot   15: 16 op, 7589500.00 ns, 474.3438 us/op
+WorkloadPilot   16: 32 op, 16127900.00 ns, 503.9969 us/op
+WorkloadPilot   17: 64 op, 31254500.00 ns, 488.3516 us/op
+WorkloadPilot   18: 128 op, 89227200.00 ns, 697.0875 us/op
+WorkloadPilot   19: 256 op, 193274800.00 ns, 754.9797 us/op
+WorkloadPilot   20: 512 op, 382596500.00 ns, 747.2588 us/op
+WorkloadPilot   21: 1024 op, 499885100.00 ns, 488.1690 us/op
+WorkloadPilot   22: 2048 op, 582387000.00 ns, 284.3687 us/op
+
+WorkloadWarmup   1: 2048 op, 442755600.00 ns, 216.1893 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 2048 op, 415524400.00 ns, 202.8928 us/op
+
+// AfterActualRun
+WorkloadResult   1: 2048 op, 415524400.00 ns, 202.8928 us/op
+// GC:  55 5 0 460065424 2048
+// Threading:  0 0 2048
+
+// AfterAll
+// Benchmark Process 40128 has exited with code 0.
+
+Mean = 202.893 μs, StdErr = 0.000 μs (0.00%), N = 1, StdDev = 0.000 μs
+Min = 202.893 μs, Q1 = 202.893 μs, Median = 202.893 μs, Q3 = 202.893 μs, Max = 202.893 μs
+IQR = 0.000 μs, LowerFence = 202.893 μs, UpperFence = 202.893 μs
+ConfidenceInterval = [NaN μs; NaN μs] (CI 99.9%), Margin = NaN μs (NaN% of Mean)
+Skewness = NaN, Kurtosis = NaN, MValue = 2
+
+// ** Remained 1 (33.3%) benchmark(s) to run. Estimated finish 2026-07-23 21:19 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=200]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 1b1407c4-091f-4ee9-8b4f-423fb888d4d2.dll --anonymousPipes 1384 2848 --benchmarkName "ContextCore.Benchmarks.ClosureGateBenchmarks.V2Retrieval_100Percent(ItemCount: 200)" --job "IterationCount=1, LaunchCount=1, WarmupCount=1" --benchmarkId 2 in D:\Users\Ye_Luo\AppData\Local\Context\benchmarks\ContextCore.Benchmarks\bin\Release\net10.0\1b1407c4-091f-4ee9-8b4f-423fb888d4d2\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX-512F+CD+BW+DQ+VL+VBMI,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-MCFLKY(IterationCount=1, LaunchCount=1, WarmupCount=1)
+
+OverheadJitting  1: 1 op, 203200.00 ns, 203.2000 us/op
+WorkloadJitting  1: 1 op, 62873700.00 ns, 62.8737 ms/op
+
+WorkloadPilot    1: 2 op, 3057500.00 ns, 1.5288 ms/op
+WorkloadPilot    2: 3 op, 3848400.00 ns, 1.2828 ms/op
+WorkloadPilot    3: 4 op, 4884800.00 ns, 1.2212 ms/op
+WorkloadPilot    4: 5 op, 6534000.00 ns, 1.3068 ms/op
+WorkloadPilot    5: 6 op, 7078700.00 ns, 1.1798 ms/op
+WorkloadPilot    6: 7 op, 9381800.00 ns, 1.3403 ms/op
+WorkloadPilot    7: 8 op, 10812900.00 ns, 1.3516 ms/op
+WorkloadPilot    8: 9 op, 11207800.00 ns, 1.2453 ms/op
+WorkloadPilot    9: 10 op, 13000400.00 ns, 1.3000 ms/op
+WorkloadPilot   10: 11 op, 12968500.00 ns, 1.1790 ms/op
+WorkloadPilot   11: 12 op, 15264800.00 ns, 1.2721 ms/op
+WorkloadPilot   12: 13 op, 15947700.00 ns, 1.2267 ms/op
+WorkloadPilot   13: 14 op, 16918400.00 ns, 1.2085 ms/op
+WorkloadPilot   14: 15 op, 25650300.00 ns, 1.7100 ms/op
+WorkloadPilot   15: 16 op, 36533900.00 ns, 2.2834 ms/op
+WorkloadPilot   16: 32 op, 66412900.00 ns, 2.0754 ms/op
+WorkloadPilot   17: 64 op, 137294200.00 ns, 2.1452 ms/op
+WorkloadPilot   18: 128 op, 249122900.00 ns, 1.9463 ms/op
+WorkloadPilot   19: 256 op, 250162500.00 ns, 977.1973 us/op
+WorkloadPilot   20: 512 op, 380939400.00 ns, 744.0223 us/op
+WorkloadPilot   21: 1024 op, 703719500.00 ns, 687.2261 us/op
+
+WorkloadWarmup   1: 1024 op, 611848700.00 ns, 597.5085 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 1024 op, 721812200.00 ns, 704.8947 us/op
+
+// AfterActualRun
+WorkloadResult   1: 1024 op, 721812200.00 ns, 704.8947 us/op
+// GC:  56 5 0 469807536 1024
+// Threading:  0 0 1024
+
+// AfterAll
+// Benchmark Process 19680 has exited with code 0.
+
+Mean = 704.895 μs, StdErr = 0.000 μs (0.00%), N = 1, StdDev = 0.000 μs
+Min = 704.895 μs, Q1 = 704.895 μs, Median = 704.895 μs, Q3 = 704.895 μs, Max = 704.895 μs
+IQR = 0.000 μs, LowerFence = 704.895 μs, UpperFence = 704.895 μs
+ConfidenceInterval = [NaN μs; NaN μs] (CI 99.9%), Margin = NaN μs (NaN% of Mean)
+Skewness = NaN, Kurtosis = NaN, MValue = 2
+
+// ** Remained 0 (0.0%) benchmark(s) to run. Estimated finish 2026-07-23 21:19 (0h 0m from now) **
+Successfully reverted power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  benchmarks\results\results\ContextCore.Benchmarks.ClosureGateBenchmarks-report-full.json
+  benchmarks\results\results\ContextCore.Benchmarks.ClosureGateBenchmarks-report-github.md
+  benchmarks\results\results\ContextCore.Benchmarks.ClosureGateBenchmarks-report.csv
+
+// * Detailed results *
+ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=10]
+Runtime = .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI; GC = Concurrent Workstation
+Mean = 158.114 μs, StdErr = 0.000 μs (0.00%), N = 1, StdDev = 0.000 μs
+Min = 158.114 μs, Q1 = 158.114 μs, Median = 158.114 μs, Q3 = 158.114 μs, Max = 158.114 μs
+IQR = 0.000 μs, LowerFence = 158.114 μs, UpperFence = 158.114 μs
+ConfidenceInterval = [NaN μs; NaN μs] (CI 99.9%), Margin = NaN μs (NaN% of Mean)
+Skewness = NaN, Kurtosis = NaN, MValue = 2
+-------------------- Histogram --------------------
+[158.113 μs ; 158.114 μs) | @
+---------------------------------------------------
+
+ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=50]
+Runtime = .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI; GC = Concurrent Workstation
+Mean = 202.893 μs, StdErr = 0.000 μs (0.00%), N = 1, StdDev = 0.000 μs
+Min = 202.893 μs, Q1 = 202.893 μs, Median = 202.893 μs, Q3 = 202.893 μs, Max = 202.893 μs
+IQR = 0.000 μs, LowerFence = 202.893 μs, UpperFence = 202.893 μs
+ConfidenceInterval = [NaN μs; NaN μs] (CI 99.9%), Margin = NaN μs (NaN% of Mean)
+Skewness = NaN, Kurtosis = NaN, MValue = 2
+-------------------- Histogram --------------------
+[202.892 μs ; 202.893 μs) | @
+---------------------------------------------------
+
+ClosureGateBenchmarks.V2Retrieval_100Percent: Job-ZEPTGT(IterationCount=1, LaunchCount=1, WarmupCount=1) [ItemCount=200]
+Runtime = .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI; GC = Concurrent Workstation
+Mean = 704.895 μs, StdErr = 0.000 μs (0.00%), N = 1, StdDev = 0.000 μs
+Min = 704.895 μs, Q1 = 704.895 μs, Median = 704.895 μs, Q3 = 704.895 μs, Max = 704.895 μs
+IQR = 0.000 μs, LowerFence = 704.895 μs, UpperFence = 704.895 μs
+ConfidenceInterval = [NaN μs; NaN μs] (CI 99.9%), Margin = NaN μs (NaN% of Mean)
+Skewness = NaN, Kurtosis = NaN, MValue = 2
+-------------------- Histogram --------------------
+[704.894 μs ; 704.895 μs) | @
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.14.0, Windows 11 (10.0.26300.8935)
+Unknown processor
+.NET SDK 11.0.100-preview.6.26359.118
+  [Host]     : .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+  Job-ZEPTGT : .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+
+IterationCount=1  LaunchCount=1  WarmupCount=1  
+
+| Method                 | ItemCount | Mean     | Error | StoreQueryCalls | StoreGetCalls | RouterCalls | ProviderCalls | Gen0    | Gen1   | Allocated |
+|----------------------- |---------- |---------:|------:|----------------:|--------------:|------------:|--------------:|--------:|-------:|----------:|
+| V2Retrieval_100Percent | 10        | 158.1 μs |    NA |               - |             - |           - |             - | 18.5547 | 1.4648 | 154.08 KB |
+| V2Retrieval_100Percent | 50        | 202.9 μs |    NA |               - |             - |           - |             - | 26.8555 | 2.4414 | 219.38 KB |
+| V2Retrieval_100Percent | 200       | 704.9 μs |    NA |               - |             - |           - |             - | 54.6875 | 4.8828 | 448.04 KB |
+// * Config Issues *
+
+// * Warnings *
+Configuration
+  Summary -> The exporter JsonExporter-full is already present in configuration. There may be unexpected results.
+  Summary -> The exporter MarkdownExporter-github is already present in configuration. There may be unexpected results.
+  Summary -> The exporter CsvExporter is already present in configuration. There may be unexpected results.
+
+// * Legends *
+  ItemCount       : Value of the 'ItemCount' parameter
+  Mean            : Arithmetic mean of all measurements
+  Error           : Half of 99.9% confidence interval
+  StoreQueryCalls : StoreQueryCalls（每次 op 的调用次数）
+  StoreGetCalls   : StoreGetCalls（每次 op 的调用次数）
+  RouterCalls     : RouterCalls（每次 op 的调用次数）
+  ProviderCalls   : ProviderCalls（每次 op 的调用次数）
+  Gen0            : GC Generation 0 collects per 1000 operations
+  Gen1            : GC Generation 1 collects per 1000 operations
+  Allocated       : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  1 μs            : 1 Microsecond (0.000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:00:10 (10.79 sec), executed benchmarks: 3
+
+Global total time: 00:00:29 (29.58 sec), executed benchmarks: 3
+// * Artifacts cleanup *
+Artifacts cleanup is finished
