@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -66,6 +67,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     private readonly IUtilityScorer? _utilityScorer;
     private readonly IGlobalAllocator? _globalAllocator;
     private readonly IAllocatorV2_1? _allocatorV2_1;
+    private readonly IPerformanceMonitor? _performanceMonitor;
 
     /// <summary>构造默认 Engine（无注入；使用静态内联逻辑，向后兼容 R18-2 行为）。</summary>
     public DefaultContextDecisionEngine()
@@ -113,6 +115,28 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         IUtilityScorer? utilityScorer,
         IGlobalAllocator? globalAllocator,
         IAllocatorV2_1? allocatorV2_1)
+        : this(policyRegistry, safetyGate, lifecycleGate, utilityScorer, globalAllocator, allocatorV2_1, performanceMonitor: null)
+    {
+    }
+
+    /// <summary>
+    /// R29 WP-F-3：构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator + 性能监控。
+    /// </summary>
+    /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
+    /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="lifecycleGate">Lifecycle Gate 评估器（null 时跳过 lifecycle 检查）。</param>
+    /// <param name="utilityScorer">效用评分器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="globalAllocator">全局分配器（V2.0 基础，null 时走 Legacy 静态路径）。</param>
+    /// <param name="allocatorV2_1">V2.1 Allocator（section rollover + MMR；null 时回退 V2.0 Allocate）。</param>
+    /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 R28-G 行为）。</param>
+    public DefaultContextDecisionEngine(
+        IPolicyRegistry? policyRegistry,
+        ISafetyGate? safetyGate,
+        ILifecycleGate? lifecycleGate,
+        IUtilityScorer? utilityScorer,
+        IGlobalAllocator? globalAllocator,
+        IAllocatorV2_1? allocatorV2_1,
+        IPerformanceMonitor? performanceMonitor)
     {
         _policyRegistry = policyRegistry;
         _safetyGate = safetyGate;
@@ -120,6 +144,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         _utilityScorer = utilityScorer;
         _globalAllocator = globalAllocator;
         _allocatorV2_1 = allocatorV2_1;
+        _performanceMonitor = performanceMonitor;
     }
 
     /// <summary>
@@ -315,12 +340,28 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     /// <summary>
     /// R28-B.6：V2 决策路径。委托 ISafetyGate → ILifecycleGate → IUtilityScorer → IGlobalAllocator。
     /// Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
+    /// R29 WP-F-3：注入 IPerformanceMonitor 时，V2 路径执行前后埋点；超过阈值时下次请求自动回退到 V2.0 Allocator。
     /// </summary>
     private async Task<ContextDecisionResult> ExecuteV2PathAsync(
         ContextDecisionRequest request,
         CancellationToken cancellationToken)
     {
         var snapshot = request.PolicySnapshot!;
+
+        // R29 WP-F-3：性能埋点 — 启动计时器，构造 scopeKey。
+        var scopeKey = $"{request.WorkspaceId}/{request.CollectionId}";
+        var monitor = _performanceMonitor;
+        var perfEnabled = monitor is not null;
+        var sw = perfEnabled ? Stopwatch.StartNew() : null;
+
+        // R29 WP-F-3：查询是否应回退到 V2.0 Allocator（避免 V2.1 性能回退拖累主链）。
+        // 回退条件：monitor.ShouldFallbackToV20(scopeKey) 返回 true（基于最近样本 P95 + 阈值）。
+        // 触发回退时：跳过 V2.1 AllocateWithDiversity，直接走 V2.0 Allocate。
+        var forceV20Fallback = perfEnabled && monitor!.ShouldFallbackToV20(scopeKey);
+        if (forceV20Fallback)
+        {
+            monitor!.RecordFallback(scopeKey, "v21_p95_exceeded_threshold", lastDurationMs: 0);
+        }
 
         // 阶段 1：SafetyGate — 委托 ISafetyGate
         var passing = new List<ContextCandidateEnvelope>(request.Candidates.Count);
@@ -404,10 +445,13 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         // AllocationContext 非空时，走 AllocateWithDiversity（section rollover + MMR）；
         // 否则回退 V2.0 Allocate（向后兼容 R28-G 之前的行为）。
         // V2.1 需要 AllocationContext 携带 Purpose + MandatoryOverflowPolicy，保证安全边界不被绕过。
+        // R29 WP-F-3：forceV20Fallback=true 时强制跳过 V2.1 路径，避免性能回退拖累主链。
         AllocationResult allocation;
+        var usedV21Path = false;
         if (_allocatorV2_1 is not null
             && request.DiversityOptions is not null
-            && request.AllocationContext is not null)
+            && request.AllocationContext is not null
+            && !forceV20Fallback)
         {
             // 将 request 级 budget override 合并到 AllocationContext（与 effectiveSnapshot 对齐），
             // 保证 V2.1 Allocator 读到的 context.Budget 与 V2.0 路径的 effectiveSnapshot.Budget 一致。
@@ -424,6 +468,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
                 : request.AllocationContext;
             allocation = _allocatorV2_1.AllocateWithDiversity(
                 lifecyclePassed, effectiveContext, request.DiversityOptions);
+            usedV21Path = true;
         }
         else if (request.AllocationContext is not null)
         {
@@ -434,6 +479,13 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         {
             // Legacy 重载（向后兼容）
             allocation = _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot);
+        }
+
+        // R29 WP-F-3：记录本次 V2 路径执行耗时（仅在 monitor 注入时）。
+        if (perfEnabled)
+        {
+            sw!.Stop();
+            monitor!.RecordExecutionTime(scopeKey, sw.Elapsed.TotalMilliseconds, usedV21Path);
         }
 
         // 合并所有 dropped（safety + lifecycle + budget）
@@ -451,18 +503,57 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
                ?? allocation.Selected.FirstOrDefault(e => e.Utility.ModelArtifactRef != null)?.Utility.ModelArtifactRef)
             : null;
 
+        // R29 WP-F-3：合并性能诊断到 Outcome.Diagnostics（保留 Allocator 原有诊断）。
+        var outcome = perfEnabled
+            ? MergePerformanceDiagnostics(allocation.Outcome, monitor!.GetDiagnostics(scopeKey), forceV20Fallback, usedV21Path)
+            : allocation.Outcome;
+
         return new ContextDecisionResult
         {
             RequestId = request.RequestId,
             DecisionSource = request.DecisionSource,
             SelectedEnvelopes = allocation.Selected,
             DroppedEnvelopes = allDropped,
-            Outcome = allocation.Outcome,
+            Outcome = outcome,
             PolicyVersion = snapshot.Reference.BundleVersion,
             ModelVersion = modelVersion,
             ModelEnabled = modelEnabled,
             AllocationDecisions = allocation.AllocationDecisions,
             PolicyReference = snapshot.Reference
+        };
+    }
+
+    /// <summary>
+    /// R29 WP-F-3：将性能诊断合并到 Outcome.Diagnostics（保留 Allocator 原有诊断 + 追加 perf.* 字段）。
+    /// ContextDecisionOutcomeSummary 是 init-only class，构造新实例复制原字段并替换 Diagnostics。
+    /// </summary>
+    private static ContextDecisionOutcomeSummary MergePerformanceDiagnostics(
+        ContextDecisionOutcomeSummary outcome,
+        IReadOnlyDictionary<string, string> perfDiagnostics,
+        bool fallbackTriggered,
+        bool usedV21Path)
+    {
+        var merged = new Dictionary<string, string>(
+            outcome.Diagnostics is { Count: > 0 } existing
+                ? existing
+                : new Dictionary<string, string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        foreach (var kv in perfDiagnostics)
+        {
+            merged[kv.Key] = kv.Value;
+        }
+        merged["performance.v21_path_used"] = usedV21Path.ToString().ToLowerInvariant();
+        merged["performance.fallback_applied"] = fallbackTriggered.ToString().ToLowerInvariant();
+        return new ContextDecisionOutcomeSummary
+        {
+            SelectedCount = outcome.SelectedCount,
+            DroppedCount = outcome.DroppedCount,
+            EffectiveTokens = outcome.EffectiveTokens,
+            TokenBudget = outcome.TokenBudget,
+            Sections = outcome.Sections,
+            SafetyGateBlockedCount = outcome.SafetyGateBlockedCount,
+            BudgetExceededCount = outcome.BudgetExceededCount,
+            Diagnostics = merged
         };
     }
 

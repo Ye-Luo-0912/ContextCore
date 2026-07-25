@@ -300,3 +300,96 @@ public interface IResultProjector<TResult>
     /// <returns>目标 DTO。</returns>
     TResult Project(ContextDecisionResult result, CandidateWorkingSet workingSet);
 }
+
+// ===========================================================================
+// R29 WP-F-3：性能监控 + 自动回退阈值契约
+//
+// 目标：
+//   1. 提供 IPerformanceMonitor 抽象，让 DefaultContextDecisionEngine 在 V2 路径
+//      执行前后埋点：执行前查询是否应回退到 V2.0 Allocator；执行后记录本次耗时。
+//   2. 当 V2 路径（含 V2.1 AllocateWithDiversity）执行时间超过阈值（可配置，默认 500ms）
+//      时，标记该 scope（workspaceId+collectionId）需要回退；下次请求 Engine 跳过 V2.1
+//      直接走 V2.0 Allocate，避免性能回退拖累主链。
+//   3. 接口仅定义"观察 + 查询"契约；具体实现（ring buffer / DDSketch / 持久化 metric store）
+//      由 ContextCore.Core 提供，可被生产实现替换。
+//
+// 设计原则：
+//   1. 接口极薄：仅 3 个方法（RecordExecutionTime / ShouldFallbackToV20 / RecordFallback）。
+//   2. 接口可选注入：DefaultContextDecisionEngine 在 IPerformanceMonitor 为 null 时
+//      保持旧行为（不监控、不回退），向后兼容 R28-G 之前的测试。
+//   3. 接口无副作用：调用方负责实际路径切换；Monitor 仅返回布尔值并提供诊断信息。
+//   4. 线程安全：实现应线程安全；多个 Engine 实例可能并发调用同一 Monitor。
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-F-3：性能监控 + 自动回退阈值配置。
+/// </summary>
+/// <remarks>
+/// 当 V2 路径执行时间超过 <see cref="ThresholdMs"/> 时，标记该 scope 需要 V2.0 回退；
+/// <see cref="RecoverySamples"/> 个连续低于阈值的样本后解除回退状态（自愈）。
+/// </remarks>
+public sealed record PerformanceFallbackOptions
+{
+    /// <summary>触发回退的执行时间阈值（毫秒，默认 500ms）。</summary>
+    public int ThresholdMs { get; init; } = 500;
+
+    /// <summary>每个 scope 保留的最近样本数（ring buffer 容量，默认 16）。</summary>
+    public int SampleWindow { get; init; } = 16;
+
+    /// <summary>触发回退的最小样本数（避免冷启动单次抖动误判，默认 3）。</summary>
+    public int MinSamplesBeforeFallback { get; init; } = 3;
+
+    /// <summary>解除回退状态所需的连续低于阈值样本数（默认 5）。</summary>
+    public int RecoverySamples { get; init; } = 5;
+
+    /// <summary>默认配置（阈值 500ms / 窗口 16 / 最小样本 3 / 恢复样本 5）。</summary>
+    public static PerformanceFallbackOptions Default { get; } = new();
+}
+
+/// <summary>
+/// R29 WP-F-3：性能监控抽象。让 Engine 在 V2 路径执行前查询是否应回退到 V2.0 Allocator，
+/// 执行后记录耗时。实现可选择任意 metric store（in-memory ring buffer / DDSketch / Prometheus）。
+/// </summary>
+/// <remarks>
+/// 设计原则：
+///   1. 接口线程安全；实现应支持多 Engine 实例并发调用。
+///   2. scope（workspaceId + collectionId）是隔离单元：一个 scope 触发回退不影响其他 scope。
+///   3. 回退状态可恢复：低于阈值的连续样本累积到 <see cref="PerformanceFallbackOptions.RecoverySamples"/>
+///      后，<see cref="ShouldFallbackToV20"/> 返回 false（自愈）。
+/// </remarks>
+public interface IPerformanceMonitor
+{
+    /// <summary>获取当前生效的回退阈值配置。</summary>
+    PerformanceFallbackOptions Options { get; }
+
+    /// <summary>
+    /// 记录一次 V2 路径执行的耗时。
+    /// </summary>
+    /// <param name="scopeKey">scope 标识（通常是 workspaceId + "/" + collectionId）。</param>
+    /// <param name="durationMs">本次执行耗时（毫秒）。</param>
+    /// <param name="usedV21Path">本次是否走了 V2.1 AllocateWithDiversity 路径。</param>
+    void RecordExecutionTime(string scopeKey, double durationMs, bool usedV21Path);
+
+    /// <summary>
+    /// 查询指定 scope 当前是否应回退到 V2.0 Allocator（避免 V2.1 性能回退）。
+    /// </summary>
+    /// <param name="scopeKey">scope 标识（workspaceId + "/" + collectionId）。</param>
+    /// <returns>true = 应回退到 V2.0；false = 可继续走 V2.1。</returns>
+    bool ShouldFallbackToV20(string scopeKey);
+
+    /// <summary>
+    /// 记录一次回退事件（Engine 因阈值触发而切换到 V2.0 路径）。
+    /// 用于诊断与可观测性（不改变 ShouldFallbackToV20 状态）。
+    /// </summary>
+    /// <param name="scopeKey">scope 标识。</param>
+    /// <param name="reason">回退原因（如 "p95_exceeded_threshold"）。</param>
+    /// <param name="lastDurationMs">触发回退的最近一次执行耗时（毫秒）。</param>
+    void RecordFallback(string scopeKey, string reason, double lastDurationMs);
+
+    /// <summary>
+    /// 获取指定 scope 的诊断快照（用于 Result.Diagnostics 投影）。
+    /// </summary>
+    /// <param name="scopeKey">scope 标识。</param>
+    /// <returns>诊断键值对（如 fallback_triggered / threshold_ms / recent_p95_ms / sample_count）。</returns>
+    IReadOnlyDictionary<string, string> GetDiagnostics(string scopeKey);
+}
