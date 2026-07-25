@@ -376,25 +376,33 @@ internal static class CoreExtensions
 		services.AddSingleton<ICanonicalCandidateMerger, DefaultCanonicalCandidateMerger>();
 		// R28-B.6：真实 ICandidateProvider 注册。每个 Provider 对应一个 ExpertKind，
 		// 注入对应 Store（可选 Store 为 null 时 Provider 返回空结果，不抛异常）。
+		// R29 WP-D-3：所有 Provider 注入 IContextTokenizerResolver（fail-fast：内容非空但 tokenizer 不可用时抛异常）。
 		services.AddSingleton<ICandidateProvider>(sp => new MandatoryCandidateProvider(
-			sp.GetRequiredService<IContextStore>()));
+			sp.GetRequiredService<IContextStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ICandidateProvider>(sp => new ConstraintCandidateProvider(
-			sp.GetService<IConstraintStore>()));
+			sp.GetService<IConstraintStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ICandidateProvider>(sp => new LexicalCandidateProvider(
-			sp.GetRequiredService<IContextStore>()));
+			sp.GetRequiredService<IContextStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ICandidateProvider>(sp => new SemanticCandidateProvider(
 			sp.GetRequiredService<IContextStore>(),
 			sp.GetService<IMemoryStore>(),
 			sp.GetService<IEmbeddingProvider>(),
-			sp.GetService<IVectorStore>()));
+			sp.GetService<IVectorStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ICandidateProvider>(sp => new WorkingMemoryCandidateProvider(
-			sp.GetService<IMemoryStore>()));
+			sp.GetService<IMemoryStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ICandidateProvider>(sp => new StableMemoryCandidateProvider(
-			sp.GetService<IMemoryStore>()));
+			sp.GetService<IMemoryStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ICandidateProvider>(sp => new GraphCandidateProvider(
 			sp.GetRequiredService<IContextStore>(),
 			sp.GetService<IRelationStore>(),
-			sp.GetService<IMemoryStore>()));
+			sp.GetService<IMemoryStore>(),
+			sp.GetService<IContextTokenizerResolver>()));
 		// 收集所有 ICandidateProvider 到 IReadOnlyList（DI 容器不自动处理 IReadOnlyList<T>）
 		services.AddSingleton<IReadOnlyList<ICandidateProvider>>(
 			sp => sp.GetServices<ICandidateProvider>().ToList());

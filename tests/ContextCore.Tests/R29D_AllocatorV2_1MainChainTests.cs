@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Policy;
 using Microsoft.Extensions.DependencyInjection;
@@ -690,5 +691,173 @@ public sealed class R29D_TokenCostAuthorityTests
 
         Assert.AreEqual(200, summary.EffectiveTokens,
             "通过 EstimatedTokens init 设置的值应委托到 EffectiveTokens。");
+    }
+}
+
+// ===========================================================================
+// R29 WP-D-3：Provider EnrichTokenCost fail-fast 验收测试
+//
+// 覆盖：
+//   1. Provider 未注入 tokenizer + 非空内容 → 抛 InvalidOperationException
+//   2. Provider 注入 tokenizer + 非空内容 → 正常产出 envelope（TokenCost 已填充）
+//   3. Provider 未注入 tokenizer + IncludeContent=false（空内容）→ 正常产出（无需 tokenize）
+//   4. 多 Provider 类型覆盖（Mandatory / Lexical）
+//
+// 设计原则：
+//   - 复用 FixedItemContextStore 作为 mock store，控制 item.Content
+//   - 使用 DefaultContextTokenizerResolver 作为可用 tokenizer
+//   - 所有代码注释使用中文
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-D-3：Provider EnrichTokenCost fail-fast 验收测试。
+/// </summary>
+[TestClass]
+[TestCategory("R29")]
+[TestCategory("DecisionEngine")]
+public sealed class R29D_ProviderTokenCostFailFastTests
+{
+    /// <summary>构建测试用 ContextItem（带非空 Content）。</summary>
+    private static ContextItem MakeItemWithContent(string id, string content) => new()
+    {
+        Id = id,
+        WorkspaceId = "test-ws",
+        CollectionId = "test-col",
+        Content = content,
+        Type = "test",
+        Tags = new[] { "mandatory" }
+    };
+
+    /// <summary>构建最小化 EffectivePolicySnapshot（默认 bundle）。</summary>
+    private static EffectivePolicySnapshot MakeSnapshot()
+    {
+        var bundle = DefaultPolicyBundleFactory.Create();
+        return new EffectivePolicySnapshot
+        {
+            Reference = new ResolvedPolicyReference
+            {
+                BundleId = bundle.BundleId,
+                BundleVersion = bundle.Version,
+                BundleContentHash = DefaultResolvedPolicyProvider.DefaultContentHash,
+                ActivationEpoch = DefaultResolvedPolicyProvider.DefaultActivationEpoch
+            },
+            Safety = bundle.Safety,
+            Budget = bundle.Budget,
+            Routing = bundle.Routing,
+            FeatureSchemaVersion = bundle.Policies.DecisionSchemaVersion,
+            ResolutionScope = new ContextDecisionScope("test-ws", "test-col")
+        };
+    }
+
+    /// <summary>构建最小化 CandidateProviderContext（Retrieval 用途）。</summary>
+    private static CandidateProviderContext MakeContext(RetrievalExpert expert, bool includeContent = true)
+    {
+        var snapshot = MakeSnapshot();
+        return new CandidateProviderContext(
+            Request: new ContextDecisionRuntimeRequest
+            {
+                RequestId = "req-fail-fast",
+                Scope = new ContextDecisionScope("test-ws", "test-col"),
+                Purpose = ContextDecisionPurpose.Retrieval,
+                TokenBudget = 4096,
+                TopK = 10,
+                RetrievalInput = new RetrievalInput { IncludeContent = includeContent }
+            },
+            Policy: snapshot,
+            Routing: new ExpertRoutingDecision
+            {
+                Expert = expert,
+                Enabled = true,
+                TopK = snapshot.Budget.DefaultTopK,
+                TokenBudget = snapshot.Budget.DefaultTokenBudget,
+                Weight = 1.0,
+                ReasonCode = "test"
+            },
+            AdaptationContext: new CandidateAdaptationContext
+            {
+                WorkspaceId = "test-ws",
+                CollectionId = "test-col",
+                ObservedAt = DateTimeOffset.UtcNow
+            });
+    }
+
+    // =======================================================================
+    // 1. 未注入 tokenizer + 非空内容 → 抛 InvalidOperationException
+    // =======================================================================
+
+    [TestMethod]
+    public async Task MandatoryProvider_NoTokenizer_NonEmptyContent_Throws()
+    {
+        // Provider 未注入 tokenizer（null）+ item.Content 非空 → 调用 EnrichTokenCost 时抛异常
+        var store = new FixedItemContextStore(MakeItemWithContent("m-1", "this is real content"));
+        var provider = new MandatoryCandidateProvider(store, tokenizerResolver: null);
+
+        var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
+            provider.ExecuteAsync(MakeContext(RetrievalExpert.Mandatory, includeContent: true)).AsTask());
+
+        Assert.IsTrue(ex.Message.Contains("IContextTokenizerResolver", StringComparison.Ordinal),
+            "异常消息应明确指出 IContextTokenizerResolver 不可用。");
+        Assert.IsTrue(ex.Message.Contains("R29 WP-D-3", StringComparison.Ordinal),
+            "异常消息应标记 R29 WP-D-3 fail-fast 来源。");
+    }
+
+    [TestMethod]
+    public async Task LexicalProvider_NoTokenizer_NonEmptyContent_Throws()
+    {
+        // LexicalCandidateProvider 同样 fail-fast（不同 Provider 类型覆盖）
+        // 注意：Lexical 需要 QueryText 才会进入召回路径（否则早期返回 Empty）
+        var store = new FixedItemContextStore(MakeItemWithContent("lex-1", "lexical content here"));
+        var provider = new LexicalCandidateProvider(store, tokenizerResolver: null);
+
+        var ctx = MakeContext(RetrievalExpert.Lexical, includeContent: true);
+        // 设置 QueryText 让 Lexical 进入召回路径
+        ctx = ctx with { Request = ctx.Request with { QueryText = "lexical" } };
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
+            provider.ExecuteAsync(ctx).AsTask());
+    }
+
+    // =======================================================================
+    // 2. 注入 tokenizer + 非空内容 → 正常产出 envelope（TokenCost 已填充）
+    // =======================================================================
+
+    [TestMethod]
+    public async Task MandatoryProvider_WithTokenizer_NonEmptyContent_Succeeds()
+    {
+        // Provider 注入 DefaultContextTokenizerResolver → 调用 EnrichTokenCost 正常填充 TokenCost
+        var store = new FixedItemContextStore(MakeItemWithContent("m-1", "this is real content"));
+        var tokenizer = new DefaultContextTokenizerResolver();
+        var provider = new MandatoryCandidateProvider(store, tokenizerResolver: tokenizer);
+
+        var result = await provider.ExecuteAsync(MakeContext(RetrievalExpert.Mandatory, includeContent: true));
+
+        Assert.AreEqual(1, result.Envelopes.Count, "应召回 1 个候选。");
+        var envelope = result.Envelopes[0];
+        Assert.IsNotNull(envelope.TokenCost, "TokenCost 必须被填充。");
+        Assert.IsTrue(envelope.TokenCost!.ContentTokens > 0, "ContentTokens 应大于 0（非空内容）。");
+        Assert.IsFalse(envelope.TokenCost!.IsEstimated,
+            "DefaultContextTokenizerResolver 返回的 TokenCost 不应是 length/4 估算。");
+    }
+
+    // =======================================================================
+    // 3. 未注入 tokenizer + IncludeContent=false（空内容）→ 正常产出
+    // =======================================================================
+
+    [TestMethod]
+    public async Task MandatoryProvider_NoTokenizer_EmptyContent_Succeeds()
+    {
+        // IncludeContent=false → material.Content 为空字符串 → 无需 tokenize → 不抛异常
+        var store = new FixedItemContextStore(MakeItemWithContent("m-1", "raw content ignored"));
+        var provider = new MandatoryCandidateProvider(store, tokenizerResolver: null);
+
+        var result = await provider.ExecuteAsync(MakeContext(RetrievalExpert.Mandatory, includeContent: false));
+
+        Assert.AreEqual(1, result.Envelopes.Count, "IncludeContent=false 不影响候选召回数量。");
+        var envelope = result.Envelopes[0];
+        Assert.IsNotNull(envelope.TokenCost, "空内容也应填充 TokenCost（ContentTokens=0）。");
+        Assert.AreEqual(0, envelope.TokenCost!.ContentTokens,
+            "IncludeContent=false 时 ContentTokens 应为 0。");
+        // Material.Content 应为空字符串
+        Assert.AreEqual(string.Empty, result.Materials[envelope.CanonicalKey].Content);
     }
 }

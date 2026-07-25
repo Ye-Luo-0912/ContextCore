@@ -50,16 +50,20 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// R28-D P0-3：使用 tokenizer 精确计算候选正文 token 数，填充 envelope.TokenCost。
+    /// R28-D P0-3 / R29 WP-D-3：使用 tokenizer 精确计算候选正文 token 数，填充 envelope.TokenCost。
     /// </summary>
     /// <param name="envelope">待填充的 envelope（TokenCost 字段会被设置）。</param>
     /// <param name="material">对应的 Material（提供正文）。</param>
-    /// <param name="tokenizerResolver">tokenizer 解析器（null 时 TokenCost 也基于 length/4 但 IsEstimated=true）。</param>
+    /// <param name="tokenizerResolver">tokenizer 解析器（必须非空；IncludeContent=false 时 material.Content 为空，仍可接受 null）。</param>
     /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
     /// <remarks>
-    /// 即使 tokenizerResolver 为 null 也填充 TokenCost（IsEstimated=true），
-    /// 让 Allocator 始终消费 TokenCost 而非裸 EstimatedTokens，保证硬不变量 FinalSerializedTokenCount <= TokenBudget。
+    /// R29 WP-D-3 fail-fast：当 <paramref name="material"/>.Content 非空且 <paramref name="tokenizerResolver"/> 为 null 时，
+    /// 抛 <see cref="InvalidOperationException"/>，不再静默回退到 length/4 粗估。
+    /// 空内容（IncludeContent=false 路径）不需要 tokenize，仍填充 TokenCost(ContentTokens=0)，不抛异常。
     /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// 当 material.Content 非空且 tokenizerResolver 为 null 时抛出。
+    /// </exception>
     internal static ContextCandidateEnvelope EnrichTokenCost(
         ContextCandidateEnvelope envelope,
         CandidateMaterial material,
@@ -72,6 +76,17 @@ internal static class CandidateProviderHelpers
         }
 
         var content = material?.Content;
+
+        // R29 WP-D-3：fail-fast — 内容非空但 tokenizer 不可用时抛异常，杜绝 length/4 静默回退
+        if (!string.IsNullOrEmpty(content) && tokenizerResolver is null)
+        {
+            throw new InvalidOperationException(
+                "CandidateProviderHelpers.EnrichTokenCost: IContextTokenizerResolver is not available. " +
+                "Provider must inject IContextTokenizerResolver to produce TokenCost for non-empty content " +
+                "(R29 WP-D-3 fail-fast; silent length/4 fallback is no longer permitted). " +
+                $"CandidateId={envelope.CandidateId}, ContentLength={content!.Length}.");
+        }
+
         var cost = TokenCostHelper.ComputeTokenCost(content, tokenizerResolver, modelName);
         return envelope with { TokenCost = cost };
     }
@@ -465,10 +480,17 @@ internal static class CandidateProviderHelpers
 public sealed class MandatoryCandidateProvider : ICandidateProvider
 {
     private readonly IContextStore _contextStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
-    public MandatoryCandidateProvider(IContextStore contextStore)
+    public MandatoryCandidateProvider(
+        IContextStore contextStore,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _contextStore = contextStore ?? throw new ArgumentNullException(nameof(contextStore));
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.Mandatory;
@@ -562,7 +584,8 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         {
             var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                 item, ContextCandidateSource.Mandatory, ExpertKind.Mandatory, 1000.0,
-                context.AdaptationContext, includeContent);
+                context.AdaptationContext, includeContent,
+                _tokenizerResolver, _tokenizerModelName);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -616,10 +639,17 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
 public sealed class ConstraintCandidateProvider : ICandidateProvider
 {
     private readonly IConstraintStore? _constraintStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
-    public ConstraintCandidateProvider(IConstraintStore? constraintStore = null)
+    public ConstraintCandidateProvider(
+        IConstraintStore? constraintStore = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _constraintStore = constraintStore;
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.Constraint;
@@ -652,7 +682,8 @@ public sealed class ConstraintCandidateProvider : ICandidateProvider
                 ? 1000.0
                 : 100.0;
             var (envelope, material) = CandidateProviderHelpers.BuildFromConstraint(
-                constraint, ExpertKind.Constraint, score, context.AdaptationContext);
+                constraint, ExpertKind.Constraint, score, context.AdaptationContext,
+                _tokenizerResolver, _tokenizerModelName);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -675,10 +706,17 @@ public sealed class ConstraintCandidateProvider : ICandidateProvider
 public sealed class LexicalCandidateProvider : ICandidateProvider
 {
     private readonly IContextStore _contextStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
-    public LexicalCandidateProvider(IContextStore contextStore)
+    public LexicalCandidateProvider(
+        IContextStore contextStore,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _contextStore = contextStore ?? throw new ArgumentNullException(nameof(contextStore));
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.Lexical;
@@ -763,7 +801,8 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             }
             var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                 item, ContextCandidateSource.Lexical, ExpertKind.Lexical, score,
-                context.AdaptationContext, includeContent);
+                context.AdaptationContext, includeContent,
+                _tokenizerResolver, _tokenizerModelName);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -820,17 +859,23 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
     private readonly IMemoryStore? _memoryStore;
     private readonly IEmbeddingProvider? _embeddingProvider;
     private readonly IVectorStore? _vectorStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
     public SemanticCandidateProvider(
         IContextStore contextStore,
         IMemoryStore? memoryStore = null,
         IEmbeddingProvider? embeddingProvider = null,
-        IVectorStore? vectorStore = null)
+        IVectorStore? vectorStore = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _contextStore = contextStore ?? throw new ArgumentNullException(nameof(contextStore));
         _memoryStore = memoryStore;
         _embeddingProvider = embeddingProvider;
         _vectorStore = vectorStore;
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.Semantic;
@@ -1031,7 +1076,8 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 
                 // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
-                    item, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent);
+                    item, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent,
+                    _tokenizerResolver, _tokenizerModelName);
 
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
@@ -1045,7 +1091,8 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 
                 // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
-                    memory, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent);
+                    memory, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent,
+                    _tokenizerResolver, _tokenizerModelName);
 
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
@@ -1081,10 +1128,17 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 {
     private readonly IMemoryStore? _memoryStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
-    public WorkingMemoryCandidateProvider(IMemoryStore? memoryStore = null)
+    public WorkingMemoryCandidateProvider(
+        IMemoryStore? memoryStore = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _memoryStore = memoryStore;
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.WorkingMemory;
@@ -1130,7 +1184,8 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
             // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
             var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                 memory, ContextCandidateSource.WorkingMemory, ExpertKind.WorkingMemory,
-                50.0, context.AdaptationContext, includeContent);
+                50.0, context.AdaptationContext, includeContent,
+                _tokenizerResolver, _tokenizerModelName);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -1149,10 +1204,17 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 public sealed class StableMemoryCandidateProvider : ICandidateProvider
 {
     private readonly IMemoryStore? _memoryStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
-    public StableMemoryCandidateProvider(IMemoryStore? memoryStore = null)
+    public StableMemoryCandidateProvider(
+        IMemoryStore? memoryStore = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _memoryStore = memoryStore;
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.StableMemory;
@@ -1199,7 +1261,8 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
             // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
             var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                 memory, ContextCandidateSource.StableMemory, ExpertKind.StableMemory,
-                80.0, context.AdaptationContext, includeContent);
+                80.0, context.AdaptationContext, includeContent,
+                _tokenizerResolver, _tokenizerModelName);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -1227,15 +1290,21 @@ public sealed class GraphCandidateProvider : ICandidateProvider
     private readonly IRelationStore? _relationStore;
     private readonly IContextStore _contextStore;
     private readonly IMemoryStore? _memoryStore;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
     public GraphCandidateProvider(
         IContextStore contextStore,
         IRelationStore? relationStore = null,
-        IMemoryStore? memoryStore = null)
+        IMemoryStore? memoryStore = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _contextStore = contextStore ?? throw new ArgumentNullException(nameof(contextStore));
         _relationStore = relationStore;
         _memoryStore = memoryStore;
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     public ExpertKind Kind => ExpertKind.Graph;
@@ -1441,7 +1510,8 @@ public sealed class GraphCandidateProvider : ICandidateProvider
                 // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                     item, ContextCandidateSource.Graph, ExpertKind.Graph,
-                    30.0, context.AdaptationContext, includeContent);
+                    30.0, context.AdaptationContext, includeContent,
+                    _tokenizerResolver, _tokenizerModelName);
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
                     envelopes.Add(envelope);
@@ -1455,7 +1525,8 @@ public sealed class GraphCandidateProvider : ICandidateProvider
                 // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                     memory, ContextCandidateSource.Graph, ExpertKind.Graph,
-                    30.0, context.AdaptationContext, includeContent);
+                    30.0, context.AdaptationContext, includeContent,
+                    _tokenizerResolver, _tokenizerModelName);
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
                     envelopes.Add(envelope);
