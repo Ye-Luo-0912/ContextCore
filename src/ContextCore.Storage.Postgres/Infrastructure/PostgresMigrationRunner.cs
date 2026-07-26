@@ -29,8 +29,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R29 WP-B-1：v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
     /// R29 WP-B-2：v21 → v22，新增 kernel_result_outbox 表与索引（持久化 Kernel Result Outbox，支持崩溃恢复结果重放）。
     /// R29 WP-B-4：v22 → v23，新增 kernel_transport_inbox + kernel_transport_outbox 表与索引（Durable Transport，PostgreSQL-backed Channel 支持 HA 跨进程指令/结果传输）。
+    /// R29 WP-A-1：v23 → v24，新增 model_artifacts 表与索引（Model Artifact Registry 持久化，集中管理 ModelArtifactDescriptor 的注册与查询）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v23";
+    public const string SchemaVersion = "cc-schema-v24";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -109,7 +110,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "kernel_result_outbox",
         // R29 WP-B-4：Durable Transport 持久化（PostgreSQL-backed Channel，跨进程指令/结果传输）
         "kernel_transport_inbox",
-        "kernel_transport_outbox"
+        "kernel_transport_outbox",
+        // R29 WP-A-1：Model Artifact Registry 持久化（集中管理 ModelArtifactDescriptor 注册与查询）
+        "model_artifacts"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -254,7 +257,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("kernel_transport_inbox", "created"),
         ("kernel_transport_inbox", "instruction"),
         ("kernel_transport_outbox", "created"),
-        ("kernel_transport_outbox", "instruction")
+        ("kernel_transport_outbox", "instruction"),
+        // R29 WP-A-1：Model Artifact Registry 索引（按 model_name + registered_at 查最新版本 / 列举所有版本）
+        ("model_artifacts", "model_name"),
+        ("model_artifacts", "registered")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -357,6 +363,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R29 WP-B-4：Durable Transport 持久化表（inbox/outbox）
         var kernelTransportInbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_inbox");
         var kernelTransportOutbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_outbox");
+        // R29 WP-A-1：Model Artifact Registry 持久化表
+        var modelArtifacts = Infrastructure.PostgresNames.Table(options, "model_artifacts");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1557,6 +1565,29 @@ CREATE TABLE IF NOT EXISTS {kernelTransportOutbox} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "created")} ON {kernelTransportOutbox} (created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "instruction")} ON {kernelTransportOutbox} (instruction_id);
+
+-- R29 WP-A-1：Model Artifact Registry 持久化表
+-- model_artifacts: model_artifact_id 主键 — 每个已注册模型工件描述符一行
+-- 反规范化 model_name / model_version / feature_schema_version / calibration_version / engine_kind /
+-- content_hash / registered_at 字段以便索引查询；完整 ModelArtifactDescriptor 保存在 data jsonb。
+-- 不可变语义：同一 ModelArtifactId 仅允许注册一次（ON CONFLICT DO NOTHING → 重复注册抛异常）。
+CREATE TABLE IF NOT EXISTS {modelArtifacts} (
+    model_artifact_id text NOT NULL,
+    model_name text NOT NULL,
+    model_version text NOT NULL,
+    feature_schema_version text NOT NULL,
+    calibration_version text NOT NULL,
+    engine_kind smallint NOT NULL,
+    content_hash text NOT NULL,
+    artifact_path text,
+    description text,
+    registered_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (model_artifact_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_artifacts", "model_name")} ON {modelArtifacts} (model_name, registered_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_artifacts", "registered")} ON {modelArtifacts} (registered_at ASC);
 """;
     }
 

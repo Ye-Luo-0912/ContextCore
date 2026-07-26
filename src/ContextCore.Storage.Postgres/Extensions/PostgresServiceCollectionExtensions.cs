@@ -170,6 +170,14 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresDurableTransport>();
         services.AddSingleton<IDurableTransport>(sp => sp.GetRequiredService<PostgresDurableTransport>());
 
+        // R29 WP-A-1：Model Artifact Registry 持久化（PostgreSQL）。
+        // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下模型工件描述符可跨进程持久化与查询。
+        // 注册为 IModelArtifactRegistry 让消费方（如 OnnxInferenceEngine 启动加载器）自动注入；
+        // 同时注册为 IPersistentModelArtifactRegistry 以便显式区分持久化能力。
+        services.AddSingleton<PostgresModelArtifactRegistry>();
+        services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
+        services.AddSingleton<IPersistentModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
+
         // R27-3：Evolution Pipeline 持久化（run state + 3 audit tables）。
         // 替代 InMemory 默认注册，让 HA 场景下 pipeline run state / canary / rollback / baseline 审计记录可跨进程持久化。
         services.AddSingleton<PostgresPipelineRunStore>();
