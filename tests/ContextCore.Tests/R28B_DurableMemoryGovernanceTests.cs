@@ -787,10 +787,10 @@ public sealed class R28B_DurableMemoryGovernanceTests
     // =========================================================================
 
     [TestMethod]
-    public void SchemaVersion_IsV22()
+    public void SchemaVersion_IsV23()
     {
-        // R29 WP-B-2：v21 → v22，新增 kernel_result_outbox 表与索引。
-        Assert.AreEqual("cc-schema-v22", PostgresMigrationRunner.SchemaVersion);
+        // R29 WP-B-4：v22 → v23，新增 kernel_transport_inbox + kernel_transport_outbox 表与索引。
+        Assert.AreEqual("cc-schema-v23", PostgresMigrationRunner.SchemaVersion);
     }
 
     [TestMethod]

@@ -28,8 +28,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R28-E：v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
     /// R29 WP-B-1：v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
     /// R29 WP-B-2：v21 → v22，新增 kernel_result_outbox 表与索引（持久化 Kernel Result Outbox，支持崩溃恢复结果重放）。
+    /// R29 WP-B-4：v22 → v23，新增 kernel_transport_inbox + kernel_transport_outbox 表与索引（Durable Transport，PostgreSQL-backed Channel 支持 HA 跨进程指令/结果传输）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v22";
+    public const string SchemaVersion = "cc-schema-v23";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -105,7 +106,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R29 WP-B-1：Tool Dispatch Journal 持久化（HA 崩溃恢复 exactly-once）
         "tool_dispatch_journal_entries",
         // R29 WP-B-2：Kernel Result Outbox 持久化（崩溃恢复结果重放）
-        "kernel_result_outbox"
+        "kernel_result_outbox",
+        // R29 WP-B-4：Durable Transport 持久化（PostgreSQL-backed Channel，跨进程指令/结果传输）
+        "kernel_transport_inbox",
+        "kernel_transport_outbox"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -245,7 +249,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("tool_dispatch_journal_entries", "idempotency"),
         // R29 WP-B-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史）
         ("kernel_result_outbox", "state"),
-        ("kernel_result_outbox", "instruction")
+        ("kernel_result_outbox", "instruction"),
+        // R29 WP-B-4：Durable Transport 索引（inbox/outbox 按 created_at FIFO 取最旧 + 按 instruction_id 查历史）
+        ("kernel_transport_inbox", "created"),
+        ("kernel_transport_inbox", "instruction"),
+        ("kernel_transport_outbox", "created"),
+        ("kernel_transport_outbox", "instruction")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -345,6 +354,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var toolDispatchJournalEntries = Infrastructure.PostgresNames.Table(options, "tool_dispatch_journal_entries");
         // R29 WP-B-2：Kernel Result Outbox 持久化表
         var kernelResultOutbox = Infrastructure.PostgresNames.Table(options, "kernel_result_outbox");
+        // R29 WP-B-4：Durable Transport 持久化表（inbox/outbox）
+        var kernelTransportInbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_inbox");
+        var kernelTransportOutbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_outbox");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1517,6 +1529,34 @@ CREATE TABLE IF NOT EXISTS {kernelResultOutbox} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "state")} ON {kernelResultOutbox} (state, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "instruction")} ON {kernelResultOutbox} (instruction_id);
+
+-- R29 WP-B-4：Durable Transport 持久化表（PostgreSQL-backed Channel）
+-- kernel_transport_inbox: instruction_id 主键 — 每条待处理指令一行
+-- created_at 用于 FIFO 排序；ReceiveAsync 使用 FOR UPDATE SKIP LOCKED 取最旧行并 DELETE
+-- 完整 AgentKernelInstruction 保存在 data jsonb
+CREATE TABLE IF NOT EXISTS {kernelTransportInbox} (
+    instruction_id text NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (instruction_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "created")} ON {kernelTransportInbox} (created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "instruction")} ON {kernelTransportInbox} (instruction_id);
+
+-- kernel_transport_outbox: result_id 主键 — 每条待读取结果一行
+-- created_at 用于 FIFO 排序；ReceiveResultAsync 使用 FOR UPDATE SKIP LOCKED 取最旧行并 DELETE
+-- 完整 AgentKernelResult 保存在 data jsonb；instruction_id 反规范化以便查询
+CREATE TABLE IF NOT EXISTS {kernelTransportOutbox} (
+    result_id text NOT NULL,
+    instruction_id text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (result_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "created")} ON {kernelTransportOutbox} (created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "instruction")} ON {kernelTransportOutbox} (instruction_id);
 """;
     }
 

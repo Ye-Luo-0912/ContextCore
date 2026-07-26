@@ -212,6 +212,21 @@ public sealed record KernelTransportOptions
     public int MaxOutboxBacklog { get; init; } = 1024;
 
     /// <summary>
+    /// R29 WP-B-4：是否启用 Durable Transport（PostgreSQL-backed Channel）。
+    /// 默认 <c>false</c>：使用 <see cref="ContextCore.Core.Services.AgentKernel.InProcessTransport"/>（进程内 Channel，开发环境）。
+    /// 设为 <c>true</c> 时，<c>AddContextCorePostgresStorage</c> 的 overload 会替换
+    /// <see cref="IAgentKernelTransport"/> 绑定为 <c>PostgresDurableTransport</c>，
+    /// 让指令/结果跨进程持久化以支持 HA 崩溃恢复。
+    /// 开发环境保留 InMemory（默认）以避免不必要的 DB 依赖。
+    /// </summary>
+    /// <remarks>
+    /// 性能预期：durable 路径延迟 ≤ InMemory × 3（参见 R29 spec §6.3）。
+    /// 该开关仅影响 transport 实现；checkpoint / journal / outbox 的持久化由各自的
+    /// <c>IPersistent*</c> 标记接口独立控制。
+    /// </remarks>
+    public bool UseDurableTransport { get; init; }
+
+    /// <summary>
     /// 默认选项（FailFast 策略，与 R28-C 之前行为一致）。
     /// </summary>
     public static KernelTransportOptions Default { get; } = new();
@@ -503,6 +518,27 @@ public interface IPersistentKernelResultOutbox : IKernelResultOutbox
 /// Store 本身不需要感知 delta 语义 — 只需持久化完整 <c>AgentCheckpoint</c> blob。
 /// </remarks>
 public interface IPersistentAgentCheckpointStore : IAgentCheckpointStore
+{
+}
+
+/// <summary>
+/// R29 WP-B-4：Durable Transport 抽象。继承 <see cref="IAgentKernelTransport"/> 并标记为持久化实现，
+/// 用于跨进程 / 跨实例的指令与结果传输（PostgreSQL-backed Channel）。
+/// </summary>
+/// <remarks>
+/// 默认实现 <c>InProcessTransport</c>（Core 层）使用进程内 <c>System.Threading.Channels.Channel&lt;T&gt;</c>，
+/// 仅适用于单进程部署。<c>PostgresDurableTransport</c>（Storage.Postgres 层）将 inbox / outbox 持久化到
+/// PostgreSQL 表，让多个 Kernel 实例可共享同一 transport，支持 HA 崩溃恢复。
+///
+/// 通过 <see cref="KernelTransportOptions.UseDurableTransport"/> 开关启用：
+/// 开发环境保留 <c>InMemory</c>（默认）；生产环境通过 <c>AddContextCorePostgresStorage</c> overload
+/// 传入 <c>KernelTransportOptions { UseDurableTransport = true }</c> 或调用
+/// <c>UsePostgresDurableTransport()</c> 扩展方法显式启用。
+///
+/// 由于继承自 <see cref="IAgentKernelTransport"/>，可直接注入 <see cref="DefaultAgentKernel"/> 的
+/// <c>IAgentKernelTransport</c> 参数，无需修改 Kernel 构造签名。
+/// </remarks>
+public interface IDurableTransport : IAgentKernelTransport
 {
 }
 
