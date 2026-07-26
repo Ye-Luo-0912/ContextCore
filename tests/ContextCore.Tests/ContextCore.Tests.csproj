@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\ContextCore.Core\ContextCore.Core.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Evaluation\ContextCore.Evaluation.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Embedding\ContextCore.Embedding.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Inference.Onnx\ContextCore.Inference.Onnx.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Storage.InMemory\ContextCore.Storage.InMemory.csproj" />

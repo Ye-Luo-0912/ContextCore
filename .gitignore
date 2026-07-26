@@ -49,3 +49,8 @@ connectionstrings.local.json
 *.pt
 *.pth
 *.onnx
+# Don't let *.onnx ignore the ContextCore.Inference.Onnx source directory
+# (the pattern matches the dir name case-insensitively on Windows/macOS).
+!src/ContextCore.Inference.Onnx/
+!src/ContextCore.Inference.Onnx/*.cs
+!src/ContextCore.Inference.Onnx/*.csproj
