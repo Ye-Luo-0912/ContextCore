@@ -488,6 +488,25 @@ public interface IPersistentKernelResultOutbox : IKernelResultOutbox
 }
 
 /// <summary>
+/// R29 WP-B-3：持久化 Agent Checkpoint Store 抽象。
+/// 继承 <see cref="IAgentCheckpointStore"/> 并标记为持久化实现，用于崩溃恢复的 checkpoint 链。
+/// </summary>
+/// <remarks>
+/// 生产部署应注入基于 DB/WAL 的持久化实现（如 <c>PostgresAgentCheckpointStore</c>）。
+/// 开发环境可继续使用 <see cref="ContextCore.Core.Services.Agent.InMemoryAgentCheckpointStore"/>。
+/// 由于继承自 <see cref="IAgentCheckpointStore"/>，可直接注入 <see cref="DefaultAgentKernel"/> 的
+/// <c>IAgentCheckpointStore</c> 参数，无需修改 Kernel 构造签名。
+///
+/// <b>R28-G P1-5 delta 链路复用</b>：delta checkpoint 机制完全封装在 <c>StateJson</c> 负载
+/// （<c>KernelCheckpointStateDto</c> 的 <c>Mode</c>/<c>BaseCheckpointId</c>/<c>LastSequence</c> 字段），
+/// 由 <see cref="DefaultAgentKernel.ResumeAsync"/> 通过标准 <see cref="GetAsync"/> 递归走链。
+/// Store 本身不需要感知 delta 语义 — 只需持久化完整 <c>AgentCheckpoint</c> blob。
+/// </remarks>
+public interface IPersistentAgentCheckpointStore : IAgentCheckpointStore
+{
+}
+
+/// <summary>
 /// R28-E P1-1：Agent Checkpoint 工厂抽象。
 /// 统一手动 Checkpoint 指令与自动 AutoCheckpoint 的状态格式，
 /// 确保两者都序列化完整的 Kernel 状态（已提交 tool 结果 + snapshot 引用）。

@@ -18,7 +18,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   5. P0-6 修复：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
 ///      SQL WHERE 同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读 / 误删。
 /// </remarks>
-public sealed class PostgresAgentCheckpointStore : PostgresStoreBase, IAgentCheckpointStore
+public sealed class PostgresAgentCheckpointStore : PostgresStoreBase, IAgentCheckpointStore, IPersistentAgentCheckpointStore
 {
     public PostgresAgentCheckpointStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)

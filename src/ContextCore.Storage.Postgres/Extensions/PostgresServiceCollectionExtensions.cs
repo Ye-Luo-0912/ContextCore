@@ -140,6 +140,10 @@ public static class PostgresServiceCollectionExtensions
         // 替代 InMemory 默认注册，让 HA 场景下 agent session/task 状态可跨进程持久化与恢复。
         services.AddSingleton<PostgresAgentCheckpointStore>();
         services.AddSingleton<IAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
+        // R29 WP-B-3：显式注册 IPersistentAgentCheckpointStore 标记接口以区分持久化能力。
+        // delta 链路（R28-G P1-5）完全由 DefaultAgentKernel.ResumeAsync 通过标准 GetAsync 走链，
+        // Store 不需感知 delta 语义 — 只持久化完整 AgentCheckpoint blob。
+        services.AddSingleton<IPersistentAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
         services.AddSingleton<PostgresAgentTaskStateStore>();
         services.AddSingleton<IAgentTaskStateStore>(sp => sp.GetRequiredService<PostgresAgentTaskStateStore>());
 
