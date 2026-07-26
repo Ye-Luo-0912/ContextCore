@@ -538,6 +538,12 @@ internal static class CoreExtensions
 		// 或退化为 Identity。与 ICalibrationService 互补：前者验证参数本身，后者应用参数。
 		services.TryAddSingleton<ICalibrationValidator, DefaultCalibrationValidator>();
 
+		// R29 WP-A-4：IFeatureSchemaValidator — 推理前输入特征与 FeatureSchema 的严格匹配验证。
+		// 检查 SchemaVersion / 必填 / 未知特征 / 类型可转换性 / 默认值回退。
+		// 不抛异常：返回结构化 FeatureSchemaValidationResult，让 Scorer 在推理前 fail-fast。
+		// 与 IInferenceResultValidator 互补：前者关心输入 vs schema，后者关心输出 vs 输入约束。
+		services.TryAddSingleton<IFeatureSchemaValidator, DefaultFeatureSchemaValidator>();
+
 		// R28-C：Agent Kernel — .NET 决策循环（Transport + ToolDispatcher + Kernel + V2 Runtime）。
 		// 默认实现：InProcessTransport（进程内 Channel）+ EchoToolDispatcher（测试用 echo）+
 		// DefaultAgentKernel（编排 Transport → ToolDispatcher → CheckpointStore → IContextDecisionRuntime）。
