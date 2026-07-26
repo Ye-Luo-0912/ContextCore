@@ -586,6 +586,17 @@ public sealed class CanaryProgressionService
             }
         }
 
+        // 4. R29 WP-C-3：质量分下限（quality_score）：experimentMetrics["quality_score"] < MinQualityScore
+        // 阈值 = 0.0 时禁用此检查（不触发回滚）。
+        if (_options.MinQualityScore > 0.0 &&
+            experimentMetrics.TryGetValue("quality_score", out var quality) &&
+            quality < _options.MinQualityScore)
+        {
+            return ("quality_score", quality, RollbackReason.ModelPerformanceRegression,
+                $"质量分 {quality:F4} < 阈值 {_options.MinQualityScore:F4}（MinQualityScore）；" +
+                $"V2 产出质量退化（section 覆盖率 + 候选相关性综合分过低）；自动回滚。");
+        }
+
         return null;
     }
 

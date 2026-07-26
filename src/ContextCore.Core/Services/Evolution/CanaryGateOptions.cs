@@ -67,6 +67,24 @@ public sealed class CanaryGateOptions
     public double MaxLatencyMultiplier { get; init; } = 2.0;
 
     /// <summary>
+    /// R29 WP-C-3：质量分下限阈值（V2 路径 quality_score &lt; 此值则自动回滚）。
+    /// </summary>
+    /// <remarks>
+    /// 语义：experimentMetrics["quality_score"]（0.0-1.0）&lt; MinQualityScore 时触发回滚。
+    /// <para>
+    /// 质量分由 AuthoritativeRuntime 从 ContextDecisionExecutionResult 计算：
+    /// quality_score = 0.5 × SectionCoverage + 0.5 × AvgRelevance。
+    /// 综合反映 V2 产出的内容覆盖度（token 预算利用率）与候选相关性（FinalScore 均值）。
+    /// 权重为固定默认值（0.5/0.5）；如需调整，可在 CanaryQualityScoreCalculator 中修改。
+    /// </para>
+    /// <para>
+    /// 默认 0.3：质量分 &lt; 0.3 时视为 V2 产出质量严重退化（如无候选被选中、token 预算利用率极低）。
+    /// 设为 0.0 时禁用质量分回滚阈值（仅 latency/error/divergence 三类阈值生效）。
+    /// </para>
+    /// </remarks>
+    public double MinQualityScore { get; init; } = 0.3;
+
+    /// <summary>
     /// 从环境变量构建配置。未设置的环境变量回退到默认值。
     /// </summary>
     /// <remarks>
@@ -77,6 +95,7 @@ public sealed class CanaryGateOptions
     /// <item><c>CC_CANARY_MAX_DIVERGENCE_RATE</c>：parity 差异率阈值（double）。</item>
     /// <item><c>CC_CANARY_MAX_ERROR_RATE_DELTA</c>：错误率差阈值（double）。</item>
     /// <item><c>CC_CANARY_MAX_LATENCY_MULTIPLIER</c>：p95 延迟倍数阈值（double）。</item>
+    /// <item><c>CC_CANARY_MIN_QUALITY_SCORE</c>：质量分下限阈值（double，0.0-1.0）。</item>
     /// </list>
     /// </remarks>
     public static CanaryGateOptions FromEnvironment()
@@ -94,6 +113,9 @@ public sealed class CanaryGateOptions
         var maxLatencyMultiplier = ParseDouble(
             Environment.GetEnvironmentVariable("CC_CANARY_MAX_LATENCY_MULTIPLIER"),
             2.0);
+        var minQualityScore = ParseDouble(
+            Environment.GetEnvironmentVariable("CC_CANARY_MIN_QUALITY_SCORE"),
+            0.3);
 
         return new CanaryGateOptions
         {
@@ -101,7 +123,8 @@ public sealed class CanaryGateOptions
             MinObservationPeriod = minObservation,
             MaxDivergenceRate = maxDivergence,
             MaxErrorRateDelta = maxErrorDelta,
-            MaxLatencyMultiplier = maxLatencyMultiplier
+            MaxLatencyMultiplier = maxLatencyMultiplier,
+            MinQualityScore = minQualityScore
         };
     }
 

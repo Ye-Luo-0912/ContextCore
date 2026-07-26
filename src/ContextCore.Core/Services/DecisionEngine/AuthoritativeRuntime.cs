@@ -103,6 +103,143 @@ internal static class CanaryRunIdResolver
     }
 }
 
+// ===========================================================================
+// R29 WP-C-3：Canary 质量分计算器
+//
+// 目标：
+//   从 ContextDecisionExecutionResult 计算 0.0-1.0 范围的质量分，
+//   综合 section 覆盖率（token 预算利用率）与候选相关性（FinalScore 均值）：
+//     quality_score = SectionCoverageWeight × SectionCoverage + RelevanceWeight × AvgRelevance
+//
+// 设计边界：
+//   - 输入为 null（V2 失败/未执行）时返回 0.0（无质量信号）。
+//   - 权重默认 0.5 / 0.5，可通过 CanaryGateOptions 配置。
+//   - section 覆盖率优先从 FinalArtifactTokenCost 读取（精确），
+//     回退到 Outcome.EffectiveTokens / Outcome.TokenBudget（粗略）。
+//   - 候选相关性取 SelectedEnvelopes.Utility.FinalScore 均值，无选中候选时为 0.0。
+//   - 所有中间值 Clamp 到 [0.0, 1.0]，防止异常输入导致质量分越界。
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-C-3：Canary 质量分计算器。从 V2 执行结果计算综合质量分。
+/// </summary>
+internal static class CanaryQualityScoreCalculator
+{
+    /// <summary>默认 section 覆盖率权重（0.5）。</summary>
+    public const double DefaultSectionCoverageWeight = 0.5;
+
+    /// <summary>默认候选相关性权重（0.5）。</summary>
+    public const double DefaultRelevanceWeight = 0.5;
+
+    /// <summary>
+    /// 从完整 V2 执行结果计算质量分。execution 为 null 时返回 0.0。
+    /// </summary>
+    /// <param name="execution">V2 执行结果（含 Decision + WorkingSet + FinalTokenCost）。可为 null。</param>
+    /// <param name="sectionCoverageWeight">section 覆盖率权重（默认 0.5）。</param>
+    /// <param name="relevanceWeight">候选相关性权重（默认 0.5）。</param>
+    /// <returns>质量分（0.0-1.0）。</returns>
+    public static double Compute(
+        ContextDecisionExecutionResult? execution,
+        double sectionCoverageWeight = DefaultSectionCoverageWeight,
+        double relevanceWeight = DefaultRelevanceWeight)
+    {
+        if (execution is null)
+        {
+            return 0.0;
+        }
+        return Compute(execution.Decision, execution.FinalTokenCost, sectionCoverageWeight, relevanceWeight);
+    }
+
+    /// <summary>
+    /// 从决策结果 + 最终 token 成本计算质量分。decision 为 null 时返回 0.0。
+    /// </summary>
+    /// <param name="decision">V2 决策结果（含 SelectedEnvelopes + Outcome）。</param>
+    /// <param name="finalTokenCost">最终序列化 token 成本（可为 null，回退到 Outcome 估算）。</param>
+    /// <param name="sectionCoverageWeight">section 覆盖率权重（默认 0.5）。</param>
+    /// <param name="relevanceWeight">候选相关性权重（默认 0.5）。</param>
+    /// <returns>质量分（0.0-1.0）。</returns>
+    public static double Compute(
+        ContextDecisionResult? decision,
+        FinalArtifactTokenCost? finalTokenCost,
+        double sectionCoverageWeight = DefaultSectionCoverageWeight,
+        double relevanceWeight = DefaultRelevanceWeight)
+    {
+        if (decision is null)
+        {
+            return 0.0;
+        }
+
+        var sectionCoverage = ComputeSectionCoverage(decision, finalTokenCost);
+        var avgRelevance = ComputeAvgRelevance(decision);
+        var totalWeight = sectionCoverageWeight + relevanceWeight;
+        // 权重全为 0 时退化为等权（避免除零）；否则按比例归一化
+        if (totalWeight <= 0.0)
+        {
+            sectionCoverageWeight = DefaultSectionCoverageWeight;
+            relevanceWeight = DefaultRelevanceWeight;
+            totalWeight = sectionCoverageWeight + relevanceWeight;
+        }
+        var score = (sectionCoverageWeight * sectionCoverage + relevanceWeight * avgRelevance) / totalWeight;
+        return Math.Clamp(score, 0.0, 1.0);
+    }
+
+    /// <summary>
+    /// 计算 section 覆盖率（token 预算利用率，capped at 1.0）。
+    /// 优先从 FinalArtifactTokenCost 读取（精确，含 section 分隔符 + 头部）；
+    /// 回退到 Outcome.EffectiveTokens / Outcome.TokenBudget（粗略）；
+    /// 无预算约束时返回 1.0（视为完整覆盖）。
+    /// </summary>
+    private static double ComputeSectionCoverage(ContextDecisionResult decision, FinalArtifactTokenCost? finalTokenCost)
+    {
+        // 优先路径：FinalArtifactTokenCost（精确）
+        if (finalTokenCost is not null && finalTokenCost.BudgetLimit > 0)
+        {
+            return Math.Clamp((double)finalTokenCost.TotalTokens / finalTokenCost.BudgetLimit, 0.0, 1.0);
+        }
+
+        // 回退路径：Outcome 字段（粗略，可能为 0）
+        var budget = decision.Outcome.TokenBudget;
+        if (budget > 0)
+        {
+            return Math.Clamp((double)decision.Outcome.EffectiveTokens / budget, 0.0, 1.0);
+        }
+
+        // 无预算约束（如 Retrieval 场景 Outcome.TokenBudget=0）→ 视为完整覆盖
+        return 1.0;
+    }
+
+    /// <summary>
+    /// 计算候选相关性均值：SelectedEnvelopes.Utility.FinalScore 的算术均值。
+    /// 无选中候选时返回 0.0（质量差）。FinalScore 异常值（NaN/Infinity/负数）被忽略。
+    /// </summary>
+    private static double ComputeAvgRelevance(ContextDecisionResult decision)
+    {
+        var selected = decision.SelectedEnvelopes;
+        if (selected is null || selected.Count == 0)
+        {
+            return 0.0;
+        }
+        var sum = 0.0;
+        var count = 0;
+        foreach (var envelope in selected)
+        {
+            var score = envelope.Utility.FinalScore;
+            if (double.IsNaN(score) || double.IsInfinity(score) || score < 0.0)
+            {
+                continue;
+            }
+            // FinalScore 通常已归一化到 [0,1]，但仍 Clamp 防止异常输入
+            sum += Math.Clamp(score, 0.0, 1.0);
+            count++;
+        }
+        if (count == 0)
+        {
+            return 0.0;
+        }
+        return sum / count;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // §9.2 AuthoritativeRetrievalRuntime — Retrieval 权威路径
 // ---------------------------------------------------------------------------
@@ -239,22 +376,27 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
                 if (gateResult.OverallLevel == ParityLevel.Divergent)
                 {
                     // Divergent → 回退到 Legacy（仍上报观察样本，让 Canary 看到发散率）
+                    // R29 WP-C-3：从 shadowReport.Execution（若存在）计算质量分；
+                    // Divergent 不代表 V2 无产出，质量分仍反映 V2 内容质量
                     RecordCanaryObservation(
                         request, shadowReport.Parity,
                         v2Succeeded: true, legacySucceeded: true,
                         v2Duration: v2Stopwatch.Elapsed,
-                        legacyDuration: legacyStopwatch.Elapsed);
+                        legacyDuration: legacyStopwatch.Elapsed,
+                        qualityScore: CanaryQualityScoreCalculator.Compute(shadowReport.Execution));
                     return legacyResult;
                 }
             }
 
             // Parity 通过 → 使用 V2 结果（通过 Projector 投影为 ContextRetrievalResult）
             // P0-7：传入 WorkingSet，让 Projector 从 Material sidecar 恢复 Content
+            // R29 WP-C-3：从 shadowReport.Execution（若存在）计算质量分
             RecordCanaryObservation(
                 request, shadowReport.Parity,
                 v2Succeeded: true, legacySucceeded: true,
                 v2Duration: v2Stopwatch.Elapsed,
-                legacyDuration: legacyStopwatch.Elapsed);
+                legacyDuration: legacyStopwatch.Elapsed,
+                qualityScore: CanaryQualityScoreCalculator.Compute(shadowReport.Execution));
             return _retrievalProjector.Project(shadowReport.V2Result, shadowReport.WorkingSet);
         }
         // P0-8：用户取消时立即传播，不回退 Legacy
@@ -268,6 +410,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
             v2Stopwatch.Stop();
             // R28-D P0-6：V2 失败也要上报样本（V2 error rate 是回滚阈值之一）。
             // parity 用空报告占位（Divergent 视为 true，让 Canary 看到失败）。
+            // R29 WP-C-3：V2 失败 → 质量分记为 0.0（默认值，无需显式传参）。
             RecordCanaryObservation(
                 request, shadowReport?.Parity ?? BuildEmptyParityReport(),
                 v2Succeeded: false, legacySucceeded: true,
@@ -398,11 +541,13 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
                 shadowReport, request.OperationId, "retrieval-sampled-shadow");
 
             // R28-D P0-6：sampled shadow 同样上报 Canary 样本（V2 + Legacy 耗时均为真实测量值）
+            // R29 WP-C-3：从 v2Execution 直接计算质量分（sampled shadow 路径有完整 execution）
             RecordCanaryObservation(
                 request, shadowReport.Parity,
                 v2Succeeded: true, legacySucceeded: true,
                 v2Duration: v2Stopwatch.Elapsed,
-                legacyDuration: legacyStopwatch.Elapsed);
+                legacyDuration: legacyStopwatch.Elapsed,
+                qualityScore: CanaryQualityScoreCalculator.Compute(v2Execution));
         }
         catch (OperationCanceledException)
         {
@@ -419,6 +564,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     /// <summary>
     /// R28-D P0-6：上报 Canary 观察样本到 ICanaryMetricsCollector（若注入）。
     /// 仅当请求 metadata 中携带 canaryRunId 时上报（无 runId 的请求不属于任何 canary run）。
+    /// R29 WP-C-3：新增 qualityScore 参数（null 时记为 0.0；由调用方从 V2 执行结果计算）。
     /// </summary>
     private void RecordCanaryObservation(
         ContextRetrievalRequest request,
@@ -426,7 +572,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         bool v2Succeeded,
         bool legacySucceeded,
         TimeSpan v2Duration,
-        TimeSpan legacyDuration)
+        TimeSpan legacyDuration,
+        double? qualityScore = null)
     {
         if (_canaryMetricsCollector is null)
         {
@@ -441,7 +588,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         {
             _canaryMetricsCollector.RecordObservation(
                 runId, parityReport, v2Succeeded, legacySucceeded,
-                v2Duration, legacyDuration);
+                v2Duration, legacyDuration, qualityScore);
         }
         catch
         {
@@ -605,20 +752,24 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
                 if (gateResult.OverallLevel == ParityLevel.Divergent)
                 {
                     // Divergent → 回退到 Legacy（仍上报观察样本，让 Canary 看到发散率）
+                    // R29 WP-C-3：从 shadowReport.Execution（若存在）计算质量分
                     RecordCanaryObservation(
                         request, shadowReport.Parity,
                         v2Succeeded: true, legacySucceeded: true,
                         v2Duration: v2Stopwatch.Elapsed,
-                        legacyDuration: legacyStopwatch.Elapsed);
+                        legacyDuration: legacyStopwatch.Elapsed,
+                        qualityScore: CanaryQualityScoreCalculator.Compute(shadowReport.Execution));
                     return legacyResult;
                 }
             }
 
+            // R29 WP-C-3：从 shadowReport.Execution（若存在）计算质量分
             RecordCanaryObservation(
                 request, shadowReport.Parity,
                 v2Succeeded: true, legacySucceeded: true,
                 v2Duration: v2Stopwatch.Elapsed,
-                legacyDuration: legacyStopwatch.Elapsed);
+                legacyDuration: legacyStopwatch.Elapsed,
+                qualityScore: CanaryQualityScoreCalculator.Compute(shadowReport.Execution));
             return _packageProjector.Project(shadowReport.V2Result, shadowReport.WorkingSet);
         }
         catch (OperationCanceledException)
@@ -629,6 +780,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         {
             v2Stopwatch.Stop();
             // R28-D P0-6：V2 失败也上报样本（V2 error rate 是回滚阈值之一）
+            // R29 WP-C-3：V2 失败 → 质量分记为 0.0（默认值，无需显式传参）。
             RecordCanaryObservation(
                 request, shadowReport?.Parity ?? BuildEmptyParityReport(),
                 v2Succeeded: false, legacySucceeded: true,
@@ -752,11 +904,13 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
                 shadowReport, requestId, "package-sampled-shadow");
 
             // R28-D P0-6：sampled shadow 同样上报 Canary 样本（V2 + Legacy 耗时均为真实测量值）
+            // R29 WP-C-3：从 v2Execution 直接计算质量分（sampled shadow 路径有完整 execution）
             RecordCanaryObservation(
                 request, shadowReport.Parity,
                 v2Succeeded: true, legacySucceeded: true,
                 v2Duration: v2Stopwatch.Elapsed,
-                legacyDuration: legacyStopwatch.Elapsed);
+                legacyDuration: legacyStopwatch.Elapsed,
+                qualityScore: CanaryQualityScoreCalculator.Compute(v2Execution));
         }
         catch (OperationCanceledException)
         {
@@ -779,7 +933,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         bool v2Succeeded,
         bool legacySucceeded,
         TimeSpan v2Duration,
-        TimeSpan legacyDuration)
+        TimeSpan legacyDuration,
+        double? qualityScore = null)
     {
         if (_canaryMetricsCollector is null)
         {
@@ -794,7 +949,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         {
             _canaryMetricsCollector.RecordObservation(
                 runId, parityReport, v2Succeeded, legacySucceeded,
-                v2Duration, legacyDuration);
+                v2Duration, legacyDuration, qualityScore);
         }
         catch
         {

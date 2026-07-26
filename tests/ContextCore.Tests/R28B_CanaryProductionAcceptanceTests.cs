@@ -49,10 +49,16 @@ internal static class CanaryAcceptanceHelpers
         };
 
     /// <summary>默认 Canary Gate 配置：1→5→10→25→50→100，最小观察 1 秒。</summary>
+    /// <remarks>
+    /// R29 WP-C-3：显式设置 <see cref="CanaryGateOptions.MinQualityScore"/>=0.0 禁用质量分回滚阈值，
+    /// 因 R28B 验收测试不通过 RecordObservation 上报 quality_score（旧测试在 R29 WP-C-3 之前编写）。
+    /// R29C_QualityScoreTests 单独覆盖 quality_score 回滚行为。
+    /// </remarks>
     public static CanaryGateOptions DefaultOptions => new()
     {
         PercentageLadder = [1, 5, 10, 25, 50, 100],
-        MinObservationPeriod = TimeSpan.FromSeconds(1)
+        MinObservationPeriod = TimeSpan.FromSeconds(1),
+        MinQualityScore = 0.0
     };
 
     /// <summary>在 store 中创建一个处于 ScopedCanary 阶段的 pipeline run。</summary>

@@ -51,6 +51,19 @@ public sealed record CanaryObservationMetrics
     /// <summary>Legacy p95 延迟（毫秒）。</summary>
     public required double LegacyP95LatencyMs { get; init; }
 
+    /// <summary>
+    /// R29 WP-C-3：V2 路径产出质量分（0.0-1.0）。
+    /// <para>
+    /// 综合 section 覆盖率（token 预算利用率）与候选相关性（SelectedEnvelopes.Utility.FinalScore 均值），
+    /// 由 AuthoritativeRuntime 在 RecordObservation 调用点从 ContextDecisionExecutionResult 计算得到。
+    /// 0.0 = 无候选被选中或无质量信号；1.0 = 完美覆盖 + 高相关性。
+    /// </para>
+    /// <para>
+    /// 回滚阈值由 <see cref="CanaryGateOptions.MinQualityScore"/> 配置（默认 0.3）。
+    /// </para>
+    /// </summary>
+    public required double AverageQualityScore { get; init; }
+
     /// <summary>观察窗口起始时间（UTC）。</summary>
     public required DateTimeOffset WindowStart { get; init; }
 
@@ -74,13 +87,20 @@ public interface ICanaryMetricsCollector
     /// 缺省值 <c>null</c> 时回退到 <paramref name="v2Duration"/>（向后兼容旧调用点），
     /// 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
     /// </param>
+    /// <param name="qualityScore">
+    /// R29 WP-C-3：V2 路径产出质量分（0.0-1.0）。
+    /// 由调用方从 <c>ContextDecisionExecutionResult</c> 计算（section 覆盖率 + 候选相关性加权）。
+    /// 缺省值 <c>null</c> 时记为 0.0（无质量信号），不影响 latency/error/divergence 指标。
+    /// V2 失败（<paramref name="v2Succeeded"/>=false）的样本应传 0.0 以反映失败质量。
+    /// </param>
     void RecordObservation(
         string runId,
         ParityReport parityReport,
         bool v2Succeeded,
         bool legacySucceeded,
         TimeSpan v2Duration,
-        TimeSpan? legacyDuration = null);
+        TimeSpan? legacyDuration = null,
+        double? qualityScore = null);
 
     /// <summary>获取当前观察窗口的聚合指标。</summary>
     /// <param name="runId">Canary run ID。</param>
@@ -133,7 +153,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         bool v2Succeeded,
         bool legacySucceeded,
         TimeSpan v2Duration,
-        TimeSpan? legacyDuration = null)
+        TimeSpan? legacyDuration = null,
+        double? qualityScore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(parityReport);
@@ -144,6 +165,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         // 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
         var legacyMs = (legacyDuration ?? v2Duration).TotalMilliseconds;
         var v2Ms = v2Duration.TotalMilliseconds;
+        // R29 WP-C-3：缺省 qualityScore 时记为 0.0（无质量信号；不参与 AverageQualityScore 的提升）
+        var quality = qualityScore ?? 0.0;
 
         var bucket = _buckets.GetOrAdd(runId, _ => new ObservationBucket(_maxSamplesPerRun));
         lock (bucket)
@@ -160,6 +183,9 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             if (!v2Succeeded) bucket.V2ErrorCount++;
             if (!legacySucceeded) bucket.LegacyErrorCount++;
 
+            // R29 WP-C-3：质量分滚动求和（用于 AverageQualityScore 计算）
+            bucket.QualityScoreSum += quality;
+
             // DDSketch 累积：P95 查询走 sketch，无需全量排序
             bucket.V2LatencySketch.Add(v2Ms);
             bucket.LegacyLatencySketch.Add(legacyMs);
@@ -170,7 +196,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 V2Succeeded: v2Succeeded,
                 LegacySucceeded: legacySucceeded,
                 V2DurationMs: v2Ms,
-                LegacyDurationMs: legacyMs));
+                LegacyDurationMs: legacyMs,
+                QualityScore: quality));
 
             var now = DateTimeOffset.UtcNow;
             if (bucket.TotalObservations == 1)
@@ -200,6 +227,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 LegacyErrorRate = 0.0,
                 V2P95LatencyMs = 0.0,
                 LegacyP95LatencyMs = 0.0,
+                AverageQualityScore = 0.0,
                 WindowStart = now,
                 WindowEnd = now
             };
@@ -207,7 +235,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
 
         // R28-G P1-6：直接读取滚动计数器 + DDSketch 查询，无需复制/扫描/排序
         long total, divergentCount, v2ErrorCount, legacyErrorCount;
-        double v2P95, legacyP95;
+        double v2P95, legacyP95, qualityScoreSum;
         DateTimeOffset windowStart, windowEnd;
 
         lock (bucket)
@@ -218,6 +246,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             legacyErrorCount = bucket.LegacyErrorCount;
             v2P95 = bucket.V2LatencySketch.GetQuantile(0.95);
             legacyP95 = bucket.LegacyLatencySketch.GetQuantile(0.95);
+            qualityScoreSum = bucket.QualityScoreSum;
             windowStart = bucket.WindowStart;
             windowEnd = bucket.WindowEnd;
         }
@@ -235,6 +264,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 LegacyErrorRate = 0.0,
                 V2P95LatencyMs = 0.0,
                 LegacyP95LatencyMs = 0.0,
+                AverageQualityScore = 0.0,
                 WindowStart = windowStart,
                 WindowEnd = windowEnd
             };
@@ -251,6 +281,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             LegacyErrorRate = (double)legacyErrorCount / total,
             V2P95LatencyMs = v2P95,
             LegacyP95LatencyMs = legacyP95,
+            // R29 WP-C-3：质量分均值 = sum / total（包含 V2 失败样本的 0.0 贡献）
+            AverageQualityScore = qualityScoreSum / total,
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
@@ -275,7 +307,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         bool V2Succeeded,
         bool LegacySucceeded,
         double V2DurationMs,
-        double LegacyDurationMs);
+        double LegacyDurationMs,
+        double QualityScore);
 
     /// <summary>
     /// R28-G P1-6：per-runId 的样本桶（含锁保护）。
@@ -300,6 +333,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         public long DivergentCount { get; set; }
         public long V2ErrorCount { get; set; }
         public long LegacyErrorCount { get; set; }
+        // R29 WP-C-3：质量分滚动求和（与 TotalObservations 配合计算均值）
+        public double QualityScoreSum { get; set; }
         public DDSketch V2LatencySketch { get; }
         public DDSketch LegacyLatencySketch { get; }
         public DateTimeOffset WindowStart { get; set; }
@@ -326,6 +361,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             if (oldest.Divergent) DivergentCount--;
             if (!oldest.V2Succeeded) V2ErrorCount--;
             if (!oldest.LegacySucceeded) LegacyErrorCount--;
+            // R29 WP-C-3：回滚质量分贡献，保持 AverageQualityScore 一致性
+            QualityScoreSum -= oldest.QualityScore;
 
             // 注意：DDSketch 不支持回滚（buckets 仅单调累加）。
             // 这意味着 P95 估计会包含已淘汰样本的延迟值。
@@ -344,6 +381,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             DivergentCount = 0;
             V2ErrorCount = 0;
             LegacyErrorCount = 0;
+            QualityScoreSum = 0.0;
             V2LatencySketch.Reset();
             LegacyLatencySketch.Reset();
             var now = DateTimeOffset.UtcNow;
@@ -368,11 +406,16 @@ public static class CanaryMetricsExtensions
         };
 
     /// <summary>将 <see cref="CanaryObservationMetrics"/> 转换为实验路径（V2 路径）指标字典。</summary>
+    /// <remarks>
+    /// R29 WP-C-3：新增 <c>quality_score</c> 字段，由 CanaryProgressionService.CheckRollbackThresholds
+    /// 与 <see cref="CanaryGateOptions.MinQualityScore"/> 比较决定是否触发回滚。
+    /// </remarks>
     public static IReadOnlyDictionary<string, double> ToExperimentMetrics(this CanaryObservationMetrics metrics)
         => new Dictionary<string, double>
         {
             ["error_rate"] = metrics.V2ErrorRate,
             ["p95_latency_ms"] = metrics.V2P95LatencyMs,
-            ["divergence_rate"] = metrics.DivergenceRate
+            ["divergence_rate"] = metrics.DivergenceRate,
+            ["quality_score"] = metrics.AverageQualityScore
         };
 }
