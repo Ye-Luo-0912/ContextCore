@@ -615,10 +615,16 @@ public sealed class R28B_DurableMemoryGovernanceTests
 
         Assert.IsTrue(services.Any(s => s.ServiceType == typeof(PostgresUtilityLedgerStore)));
         Assert.IsTrue(services.Any(s => s.ServiceType == typeof(IUtilityLedgerStore)));
+        // R29 WP-E-1：写契约 IUtilityLedger 也绑定到同一 Postgres singleton。
+        Assert.IsTrue(services.Any(s => s.ServiceType == typeof(IUtilityLedger)));
 
         await using var sp = services.BuildServiceProvider();
         var store = sp.GetService<IUtilityLedgerStore>();
         Assert.IsInstanceOfType<PostgresUtilityLedgerStore>(store);
+        // IUtilityLedger 与 IUtilityLedgerStore 解析到同一 singleton 实例。
+        var ledger = sp.GetService<IUtilityLedger>();
+        Assert.IsInstanceOfType<PostgresUtilityLedgerStore>(ledger);
+        Assert.AreSame(store, ledger);
     }
 
     [TestMethod]
@@ -627,6 +633,7 @@ public sealed class R28B_DurableMemoryGovernanceTests
         // 模拟完整启动顺序 — 先注册 InMemory，再 AddContextCorePostgresStorage，后注册者胜出。
         var services = new ServiceCollection();
         services.AddSingleton<IUtilityLedgerStore, InMemoryUtilityLedgerStore>();
+        services.AddSingleton<IUtilityLedger, InMemoryUtilityLedgerStore>();
         services.AddContextCorePostgresStorage(new PostgresOptions
         {
             ConnectionString = "Host=localhost;Database=x;Username=x;Password=x",
@@ -636,6 +643,32 @@ public sealed class R28B_DurableMemoryGovernanceTests
         await using var sp = services.BuildServiceProvider();
         var store = sp.GetService<IUtilityLedgerStore>();
         Assert.IsInstanceOfType<PostgresUtilityLedgerStore>(store);
+        // IUtilityLedger 同样被 Postgres 实现覆盖。
+        var ledger = sp.GetService<IUtilityLedger>();
+        Assert.IsInstanceOfType<PostgresUtilityLedgerStore>(ledger);
+    }
+
+    [TestMethod]
+    public async Task AddContextCorePostgresStorage_RegistersPostgresConflictSetStoreAndWriteLedger()
+    {
+        // R29 WP-E-1：验证 IConflictSetStore + IConflictSetLedger 均绑定到 PostgresConflictSetStore singleton。
+        var services = new ServiceCollection();
+        services.AddContextCorePostgresStorage(new PostgresOptions
+        {
+            ConnectionString = "Host=localhost;Database=x;Username=x;Password=x",
+            AutoMigrate = false
+        });
+
+        Assert.IsTrue(services.Any(s => s.ServiceType == typeof(PostgresConflictSetStore)));
+        Assert.IsTrue(services.Any(s => s.ServiceType == typeof(IConflictSetStore)));
+        Assert.IsTrue(services.Any(s => s.ServiceType == typeof(IConflictSetLedger)));
+
+        await using var sp = services.BuildServiceProvider();
+        var store = sp.GetService<IConflictSetStore>();
+        Assert.IsInstanceOfType<PostgresConflictSetStore>(store);
+        var ledger = sp.GetService<IConflictSetLedger>();
+        Assert.IsInstanceOfType<PostgresConflictSetStore>(ledger);
+        Assert.AreSame(store, ledger);
     }
 
     // =========================================================================
@@ -787,10 +820,16 @@ public sealed class R28B_DurableMemoryGovernanceTests
     // =========================================================================
 
     [TestMethod]
-    public void SchemaVersion_IsV23()
+    public void SchemaVersion_IsV30()
     {
-        // R29 WP-B-4：v22 → v23，新增 kernel_transport_inbox + kernel_transport_outbox 表与索引。
-        Assert.AreEqual("cc-schema-v23", PostgresMigrationRunner.SchemaVersion);
+        // P0-2：v29 → v30，kernel_result_outbox 追加 lease_owner / lease_expires_at / lease_token 列与配套索引，
+        // 将 DequeueAsync 的 Dispatched 终态改为租约模型（Pending → Leased → Acked），
+        // 避免 consumer 崩溃后 Dispatched 行永久滞留。
+        // 历史：v28 → v29（P0-1：kernel_transport_inbox/outbox 租约模型）；
+        //       v27 → v28（P0-3：tool_dispatch_journal_entries.idempotency_key UNIQUE partial index）；
+        //       v26 → v27（WP-E-5：user_feedback_entries 表）；
+        //       v25 → v26（WP-E-4：vw_utility_ledger_calibration_data 视图）。
+        Assert.AreEqual("cc-schema-v30", PostgresMigrationRunner.SchemaVersion);
     }
 
     [TestMethod]
@@ -829,6 +868,47 @@ public sealed class R28B_DurableMemoryGovernanceTests
         CollectionAssert.AreEquivalent(
             new[] { "workspace", "status", "candidate" },
             indexSuffixes);
+    }
+
+    // R29 WP-E-5：User Feedback Ledger 表与索引验证
+    [TestMethod]
+    public void RequiredTables_IncludeUserFeedbackEntries()
+    {
+        Assert.IsTrue(PostgresMigrationRunner.RequiredOperationalTableSuffixes.Contains("user_feedback_entries"));
+    }
+
+    [TestMethod]
+    public void RequiredIndexes_IncludeUserFeedbackEntriesIndexes()
+    {
+        var indexSuffixes = PostgresMigrationRunner.RequiredOperationalIndexDefinitions
+            .Where(d => d.TableSuffix == "user_feedback_entries")
+            .Select(d => d.IndexSuffix)
+            .ToList();
+
+        CollectionAssert.AreEquivalent(
+            new[] { "workspace", "decision", "candidate", "given_by", "given_at", "idempotency" },
+            indexSuffixes);
+    }
+
+    [TestMethod]
+    public void PostgresMigrationSql_IncludesUserFeedbackEntriesTable()
+    {
+        var sql = PostgresMigrationRunner.BuildMigrationSql(new PostgresOptions
+        {
+            ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
+            TablePrefix = "cc_",
+            EnablePgVectorExtension = false
+        });
+
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_user_feedback_entries");
+        StringAssert.Contains(sql, "feedback_entry_id text NOT NULL");
+        StringAssert.Contains(sql, "idempotency_key text NOT NULL");
+        StringAssert.Contains(sql, "given_at timestamptz NOT NULL");
+        StringAssert.Contains(sql, "CREATE INDEX IF NOT EXISTS ix_cc_user_feedback_entries_workspace");
+        StringAssert.Contains(sql, "CREATE UNIQUE INDEX IF NOT EXISTS ix_cc_user_feedback_entries_idempotency");
+        // JOIN 视图
+        StringAssert.Contains(sql, "CREATE OR REPLACE VIEW cc_vw_utility_ledger_with_user_feedback");
+        StringAssert.Contains(sql, "LEFT JOIN LATERAL");
     }
 
     // =========================================================================

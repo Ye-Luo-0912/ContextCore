@@ -255,6 +255,14 @@ public interface IKernelResultOutbox
 
     /// <summary>当前 outbox 中待重放的结果数量。</summary>
     int PendingCount { get; }
+
+    /// <summary>
+    /// P2：异步获取 pending 数量（推荐用于热路径）。
+    /// 同步属性 <see cref="PendingCount"/> 保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 outbox 中 state='Pending' 的结果数（不含 Leased）。</returns>
+    ValueTask<int> GetPendingCountAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -443,28 +451,53 @@ public sealed record ToolDispatchJournalEntry
 ///   2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
 ///   3. <see cref="MarkCommittedAsync"/>：结果写入 _committedToolResults 后。
 ///   4. <see cref="MarkResultDeliveredAsync"/>：Transport.SendResultAsync 成功后。
+///
+/// <b>P0-3：expected-state CAS 语义</b>。
+/// Mark* 方法使用 expected-state CAS 推进状态机，<b>不自动创建 stub 条目</b>：
+/// <list type="bullet">
+///   <item>若 request_id 不存在（缺失 Prepared 前驱） → 抛 <see cref="InvalidOperationException"/>，
+///     而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
+///   <item>若 request_id 存在但 state ≥ target（逆退） → 抛 <see cref="InvalidOperationException"/>。</item>
+/// </list>
+///
+/// <b>外部副作用 exactly-once 边界（P0-3）</b>。
+/// Journal 仅保证 ContextCore 内部的"恰好一次编排记录"——同一 request_id 的状态机只向前推进一次。
+/// 完整的外部副作用 exactly-once 还需要：
+/// <list type="bullet">
+///   <item>调用方提供 <see cref="ToolDispatchJournalEntry.IdempotencyKey"/>（持久化实现应有 UNIQUE 约束兜底去重）；</item>
+///   <item>Tool provider 支持幂等键 / 外部操作 ID（外部系统侧去重）；</item>
+///   <item>崩溃恢复时对 Dispatched 但未 Committed 的模糊状态进行外部对账。</item>
+/// </list>
+/// 对于不支持幂等键的 Tool，只能声明 at-least-once 或要求人工确认。
 /// </remarks>
 public interface IToolDispatchJournal
 {
     /// <summary>写入 Prepared 条目（在调用 tool 之前）。</summary>
     /// <param name="entry">journal 条目（State 应为 Prepared）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 幂等：重复 Prepare 同一 request_id 不覆盖已推进的状态（ON CONFLICT DO NOTHING / TryAdd 语义）。
+    /// 持久化实现要求 <see cref="ToolDispatchJournalEntry.IdempotencyKey"/> 全局唯一（UNIQUE partial index）。
+    /// </remarks>
     ValueTask PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 Dispatched（tool 已返回结果）。</summary>
-    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="requestId">Tool RequestId（必须已存在 Prepared 条目）。</param>
     /// <param name="externalOperationId">可选的外部操作 ID（tool 返回）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Prepared 前驱）或当前 state ≥ Dispatched（逆退）。</exception>
     ValueTask MarkDispatchedAsync(string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 Committed（结果已提交）。</summary>
-    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="requestId">Tool RequestId（必须已存在 Dispatched 条目）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Dispatched 前驱）或当前 state ≥ Committed（逆退）。</exception>
     ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 ResultDelivered（结果已送达 transport）。</summary>
-    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="requestId">Tool RequestId（必须已存在 Committed 条目）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Committed 前驱）或当前 state ≥ ResultDelivered（逆退）。</exception>
     ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>查询指定 RequestId 的当前 journal 状态（用于恢复时判断）。</summary>
@@ -489,7 +522,7 @@ public interface IPersistentToolDispatchJournal : IToolDispatchJournal
 }
 
 /// <summary>
-/// R29 WP-B-2：持久化 Kernel Result Outbox 抽象。
+/// R29 WP-B-2 / P0-2：持久化 Kernel Result Outbox 抽象。
 /// 继承 <see cref="IKernelResultOutbox"/> 并标记为持久化实现，用于崩溃恢复的结果投递。
 /// </summary>
 /// <remarks>
@@ -497,9 +530,82 @@ public interface IPersistentToolDispatchJournal : IToolDispatchJournal
 /// 开发环境可继续使用 <see cref="ContextCore.Core.Services.AgentKernel.InMemoryKernelResultOutbox"/>。
 /// 由于继承自 <see cref="IKernelResultOutbox"/>，可直接注入 <see cref="DefaultAgentKernel"/> 的
 /// <c>IKernelResultOutbox?</c> 参数，无需修改 Kernel 构造签名。
+///
+/// <b>P0-2：租约模型（crash-recoverable outbox）</b>。
+/// 旧版 <see cref="IKernelResultOutbox.DequeueAsync"/> 在 Postgres 实现中将行标记为 <c>Dispatched</c>，
+/// 但若消费方在 Dequeue 后、实际投递前崩溃，该行将永久滞留在 <c>Dispatched</c> 状态（无 Ack/Nack/Retry 机制）。
+/// P0-2 在持久化 outbox 上扩展租约状态机：
+/// <code>
+/// Pending → Leased(owner, expires_at, token) → Acked(DELETE)
+///                ↓ (lease expires)
+///          RequeueExpired → Pending
+/// </code>
+/// 生产消费者应使用 <see cref="LeaseAsync"/> + <see cref="AckAsync"/> 显式管理租约生命周期；
+/// 遗留 <see cref="IKernelResultOutbox.DequeueAsync"/> 内部调用 <see cref="LeaseAsync"/>（默认租约）并丢弃 token，
+/// 仅供单实例/测试场景使用，不 Ack 的行将在租约过期后由 <see cref="RequeueExpiredAsync"/> 回滚为 Pending。
 /// </remarks>
 public interface IPersistentKernelResultOutbox : IKernelResultOutbox
 {
+    /// <summary>租约一条 Pending 结果（Pending → Leased），返回结果与租约 token。</summary>
+    /// <param name="leaseDuration">租约有效期；过期后由 <see cref="RequeueExpiredAsync"/> 回滚为 Pending。</param>
+    /// <param name="owner">可选租约持有者标识（用于诊断，如实例 ID）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>租约到的结果与 token；无 Pending 行时返回 null。</returns>
+    /// <remarks>
+    /// 使用 <c>FOR UPDATE SKIP LOCKED</c> 支持多 worker 并发；返回的行标记为 Leased，<b>不删除</b>。
+    /// 调用方必须在处理完成后调用 <see cref="AckAsync"/> 确认；否则租约过期后由 <see cref="RequeueExpiredAsync"/> 回滚。
+    /// </remarks>
+    ValueTask<LeasedOutboxResult?> LeaseAsync(TimeSpan leaseDuration, string? owner = null, CancellationToken cancellationToken = default);
+
+    /// <summary>确认结果已成功投递（Leased → DELETE）。</summary>
+    /// <param name="outboxId">租约返回的 outbox ID。</param>
+    /// <param name="leaseToken">租约返回的 token。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="InvalidOperationException">token 不匹配、租约已过期回滚或已确认（0 行受影响）。</exception>
+    ValueTask AckAsync(string outboxId, string leaseToken, CancellationToken cancellationToken = default);
+
+    /// <summary>否定确认：立即回滚为 Pending（Leased → Pending），让其他 worker 可重新租约。</summary>
+    /// <param name="outboxId">租约返回的 outbox ID。</param>
+    /// <param name="leaseToken">租约返回的 token。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="InvalidOperationException">token 不匹配、租约已过期回滚或已确认（0 行受影响）。</exception>
+    ValueTask NackAsync(string outboxId, string leaseToken, CancellationToken cancellationToken = default);
+
+    /// <summary>续租：延长 lease_expires_at（需 token 匹配且仍为 Leased）。</summary>
+    /// <param name="outboxId">租约返回的 outbox ID。</param>
+    /// <param name="leaseToken">租约返回的 token。</param>
+    /// <param name="extension">续租时长（从当前 UTC 时间起计算新的 expires_at = now + extension）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="InvalidOperationException">token 不匹配、租约已过期回滚或已确认（0 行受影响）。</exception>
+    ValueTask RenewLeaseAsync(string outboxId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default);
+
+    /// <summary>扫描所有 state='Leased' AND lease_expires_at &lt; now 的行，回滚为 Pending（崩溃 worker 持有的租约最终释放）。</summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>回滚的行数。</returns>
+    ValueTask<int> RequeueExpiredAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P0-2：持久化 Kernel Result Outbox 租约结果。
+/// </summary>
+/// <remarks>
+/// 由 <see cref="IPersistentKernelResultOutbox.LeaseAsync"/> 返回，包含结果本体、outbox ID 与租约信息。
+/// 调用方处理完成后需使用 <see cref="LeasedOutboxResult.LeaseToken"/> 调用
+/// <see cref="IPersistentKernelResultOutbox.AckAsync"/> 确认。
+/// </remarks>
+public sealed record LeasedOutboxResult
+{
+    /// <summary>Outbox 行 ID（GUID），用于 Ack/Nack/Renew 定位。</summary>
+    public required string OutboxId { get; init; }
+
+    /// <summary>租约到的结果本体。</summary>
+    public required AgentKernelResult Result { get; init; }
+
+    /// <summary>租约 token（Ack/Nack/Renew 需匹配此 token）。</summary>
+    public required string LeaseToken { get; init; }
+
+    /// <summary>租约过期时间（UTC）。</summary>
+    public required DateTimeOffset LeaseExpiresAt { get; init; }
 }
 
 /// <summary>
@@ -537,9 +643,196 @@ public interface IPersistentAgentCheckpointStore : IAgentCheckpointStore
 ///
 /// 由于继承自 <see cref="IAgentKernelTransport"/>，可直接注入 <see cref="DefaultAgentKernel"/> 的
 /// <c>IAgentKernelTransport</c> 参数，无需修改 Kernel 构造签名。
+///
+/// <b>P0-1：租约模型（crash-recoverable durable transport）</b>。
+/// 旧版 <see cref="IAgentKernelTransport.ReceiveAsync"/> 在 Postgres 实现中使用破坏性 DELETE 出队，
+/// 崩溃窗口（DELETE 成功 → Kernel 未处理 → 进程崩溃）会导致指令永久丢失。
+/// P0-1 改为租约模型：
+/// <code>
+/// Pending → Leased(owner, expires_at) → Acked(DELETE)
+///                ↓ (lease expires)
+///          RequeueExpired → Pending
+/// </code>
+/// 生产消费者应使用 <see cref="LeaseAsync"/> + <see cref="AckAsync"/> 显式管理租约生命周期，
+/// 而非依赖遗留的 <see cref="IAgentKernelTransport.ReceiveAsync"/>（后者内部改为 lease + 内部跟踪 token，
+/// 调用方仍需调用 <see cref="AckAsync"/> 确认；未确认的行在租约过期后由 <see cref="RequeueExpiredAsync"/> 回滚）。
 /// </remarks>
 public interface IDurableTransport : IAgentKernelTransport
 {
+    /// <summary>
+    /// P0-1：从 inbox 租约下一条 Pending 指令（原子 CAS：Pending → Leased）。
+    /// 使用 <c>FOR UPDATE SKIP LOCKED</c> 支持多 worker 并发；返回的行标记为 Leased，<b>不删除</b>。
+    /// 调用方必须在处理完成后调用 <see cref="AckAsync"/> 确认；否则租约过期后由 <see cref="RequeueExpiredAsync"/> 回滚。
+    /// </summary>
+    /// <param name="leaseDuration">租约有效期（从当前 UTC 时间开始计算）。</param>
+    /// <param name="owner">可选的租约持有者标识（如 worker ID），用于诊断。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>租约的指令 + lease token；inbox 为空（无 Pending 行）时返回 null。</returns>
+    ValueTask<LeasedInstruction?> LeaseAsync(TimeSpan leaseDuration, string? owner = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P1：批量租约多条 Pending 指令（原子 CAS：Pending → Leased）。
+    /// 生产高并发下减少网络往返；调用方处理完成后逐条 <see cref="AckAsync"/> 或批量 <see cref="AckBatchAsync"/>。
+    /// </summary>
+    /// <param name="limit">单次批量租约的最大条数（必须 &gt; 0）。</param>
+    /// <param name="leaseDuration">租约有效期（从当前 UTC 时间开始计算）。</param>
+    /// <param name="owner">可选的租约持有者标识（如 worker ID），用于诊断。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>租约到的指令列表（按 FIFO 顺序）；inbox 为空时返回空列表。</returns>
+    ValueTask<IReadOnlyList<LeasedInstruction>> LeaseBatchAsync(int limit, TimeSpan leaseDuration, string? owner = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1：确认指令已处理完成（Leased → Acked → DELETE）。
+    /// 必须提供正确的 <paramref name="leaseToken"/>；token 不匹配时抛 <see cref="InvalidOperationException"/>（租约被其他 worker 接管或已过期回滚）。
+    /// </summary>
+    /// <param name="instructionId">指令 ID。</param>
+    /// <param name="leaseToken">租约 token（来自 <see cref="LeaseAsync"/> 返回值）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask AckAsync(string instructionId, string leaseToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P1：批量确认（逐条校验 lease token，部分成功不抛异常，返回失败的 instruction_id 列表）。
+    /// 用于配合 <see cref="LeaseBatchAsync"/> 批量消费后批量确认；失败的 ack（token 不匹配、租约已过期回滚或已确认）
+    /// 不抛异常，调用方可根据返回的失败列表决定重试或丢弃。
+    /// </summary>
+    /// <param name="acks">待确认的 (InstructionId, LeaseToken) 元组列表。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>失败的 instruction_id 列表（token 不匹配或状态非 Leased）；全部成功时为空列表。</returns>
+    ValueTask<IReadOnlyList<string>> AckBatchAsync(IReadOnlyList<(string InstructionId, string LeaseToken)> acks, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1：拒绝指令（Leased → Pending），立即将行回滚为 Pending 供其他 worker 重新租约。
+    /// 必须提供正确的 <paramref name="leaseToken"/>；token 不匹配时抛 <see cref="InvalidOperationException"/>。
+    /// </summary>
+    /// <param name="instructionId">指令 ID。</param>
+    /// <param name="leaseToken">租约 token。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask NackAsync(string instructionId, string leaseToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1：续租约（延长 lease_expires_at）。适用于长耗时处理需要更多时间。
+    /// 必须提供正确的 <paramref name="leaseToken"/>；token 不匹配时抛 <see cref="InvalidOperationException"/>。
+    /// </summary>
+    /// <param name="instructionId">指令 ID。</param>
+    /// <param name="leaseToken">租约 token。</param>
+    /// <param name="extension">延长的时间量（从当前 UTC 时间开始计算新的 expires_at）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask RenewLeaseAsync(string instructionId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1：扫描并回滚所有过期的 Leased 行（lease_expires_at &lt; now → state = Pending）。
+    /// 应由后台定时任务或新实例启动时调用，确保崩溃 worker 持有的租约最终被释放。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>回滚的行数。</returns>
+    ValueTask<int> RequeueExpiredAsync(CancellationToken cancellationToken = default);
+
+    // ── Outbox（结果）租约模型 ──────────────────────────────────────────
+
+    /// <summary>
+    /// P0-1：从 outbox 租约下一条 Pending 结果（原子 CAS：Pending → Leased）。
+    /// 与 <see cref="LeaseAsync"/> 对称，用于结果消费方管理租约生命周期。
+    /// </summary>
+    ValueTask<LeasedResult?> LeaseResultAsync(TimeSpan leaseDuration, string? owner = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P1：批量租约多条 Pending 结果（与 <see cref="LeaseBatchAsync"/> 对称）。
+    /// 生产高并发下减少网络往返；调用方处理完成后逐条 <see cref="AckResultAsync"/> 或批量 <see cref="AckResultBatchAsync"/>。
+    /// </summary>
+    /// <param name="limit">单次批量租约的最大条数（必须 &gt; 0）。</param>
+    /// <param name="leaseDuration">租约有效期（从当前 UTC 时间开始计算）。</param>
+    /// <param name="owner">可选的租约持有者标识（如 worker ID），用于诊断。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>租约到的结果列表（按 FIFO 顺序）；outbox 为空时返回空列表。</returns>
+    ValueTask<IReadOnlyList<LeasedResult>> LeaseResultBatchAsync(int limit, TimeSpan leaseDuration, string? owner = null, CancellationToken cancellationToken = default);
+
+    /// <summary>P0-1：确认结果已处理完成（Leased → Acked → DELETE）。</summary>
+    ValueTask AckResultAsync(string resultId, string leaseToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P1：批量确认结果（与 <see cref="AckBatchAsync"/> 对称，返回失败的 result_id 列表）。
+    /// 用于配合 <see cref="LeaseResultBatchAsync"/> 批量消费后批量确认。
+    /// </summary>
+    /// <param name="acks">待确认的 (ResultId, LeaseToken) 元组列表。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>失败的 result_id 列表（token 不匹配或状态非 Leased）；全部成功时为空列表。</returns>
+    ValueTask<IReadOnlyList<string>> AckResultBatchAsync(IReadOnlyList<(string ResultId, string LeaseToken)> acks, CancellationToken cancellationToken = default);
+
+    /// <summary>P0-1：拒绝结果（Leased → Pending），立即回滚为 Pending 供重新租约。</summary>
+    ValueTask NackResultAsync(string resultId, string leaseToken, CancellationToken cancellationToken = default);
+
+    /// <summary>P0-1：续结果租约（延长 lease_expires_at）。</summary>
+    ValueTask RenewResultLeaseAsync(string resultId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P2：异步获取 inbox 中 Pending 指令数（推荐用于热路径）。
+    /// 同步属性 <c>PendingInstructionCount</c>（具体实现上）保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 inbox 中 state='Pending' 的指令数（不含 Leased）。</returns>
+    ValueTask<int> GetPendingInstructionCountAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P2：异步获取 outbox 中 Pending 结果数（推荐用于热路径）。
+    /// 同步属性 <c>PendingResultCount</c>（具体实现上）保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 outbox 中 state='Pending' 的结果数（不含 Leased）。</returns>
+    ValueTask<int> GetPendingResultCountAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P0-1：租约的指令（LeaseAsync 返回值）。
+/// 包含指令本体 + lease token（用于后续 Ack/Nack/Renew）+ 过期时间。
+/// </summary>
+public sealed record LeasedInstruction
+{
+    /// <summary>租约的指令。</summary>
+    public required AgentKernelInstruction Instruction { get; init; }
+
+    /// <summary>租约 token（调用 Ack/Nack/Renew 时必须提供）。</summary>
+    public required string LeaseToken { get; init; }
+
+    /// <summary>租约过期时间（UTC）。超过此时间未 Ack 的行将被 RequeueExpiredAsync 回滚。</summary>
+    public required DateTimeOffset LeaseExpiresAt { get; init; }
+}
+
+/// <summary>
+/// P0-1：租约的结果（LeaseResultAsync 返回值）。
+/// 包含结果本体 + result_id + lease token + 过期时间。
+/// </summary>
+public sealed record LeasedResult
+{
+    /// <summary>租约的结果。</summary>
+    public required AgentKernelResult Result { get; init; }
+
+    /// <summary>结果行 ID（outbox 主键，用于 Ack/Nack/Renew）。</summary>
+    public required string ResultId { get; init; }
+
+    /// <summary>租约 token。</summary>
+    public required string LeaseToken { get; init; }
+
+    /// <summary>租约过期时间（UTC）。</summary>
+    public required DateTimeOffset LeaseExpiresAt { get; init; }
+}
+
+/// <summary>
+/// P0-4：Durable Transport lease 元数据键约定。
+/// <see cref="ContextCore.Service.Hosting.DurableTransportInstructionPumpService"/>（指令 pump）租约指令后，
+/// 将 lease token 写入 <see cref="AgentKernelInstruction.Metadata"/>，使
+/// <see cref="DefaultAgentKernel"/> 在处理完成后能调用 <see cref="IDurableTransport.AckAsync"/> 确认。
+/// </summary>
+/// <remarks>
+/// 键名使用 <c>durable-*</c> 前缀避免与业务元数据冲突。
+/// Kernel 读取这些键是可选的——若 Metadata 中无此键，Kernel 不执行 Ack（兼容 InProcessTransport 路径）。
+/// </remarks>
+public static class DurableTransportMetadataKeys
+{
+    /// <summary>租约 token（Ack/Nack 时必须提供）。值为 lease token 字符串。</summary>
+    public const string LeaseToken = "durable-lease-token";
+
+    /// <summary>租约持有者标识（诊断用，如 pump 实例 ID）。值可能为空字符串。</summary>
+    public const string LeaseOwner = "durable-lease-owner";
 }
 
 /// <summary>

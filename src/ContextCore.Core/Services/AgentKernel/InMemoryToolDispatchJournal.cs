@@ -12,6 +12,8 @@ namespace ContextCore.Core.Services.AgentKernel;
 // 设计决策：
 //   - 使用 ConcurrentDictionary 支持多线程并发访问。
 //   - 状态推进为单向（只能向前），违反时抛 InvalidOperationException。
+//   - P0-3：缺失前驱记录时抛 InvalidOperationException（不再 auto-create stub），
+//     与 PostgresToolDispatchJournal 的 expected-state CAS 语义一致，保证审计链完整。
 //   - 进程内实现仅用于测试/单机部署；生产部署应替换为持久化实现（DB/WAL）。
 //   - 不持久化到磁盘：进程崩溃后状态丢失。生产部署需注入持久化实现。
 // ===========================================================================
@@ -23,6 +25,9 @@ namespace ContextCore.Core.Services.AgentKernel;
 /// <remarks>
 /// <b>此实现不持久化</b>：进程崩溃后 journal 状态丢失。
 /// 生产部署应注入基于 DB/WAL 的持久化实现以保证崩溃恢复的 exactly-once。
+///
+/// <b>P0-3</b>：Mark* 方法在缺失前驱记录时抛 <see cref="InvalidOperationException"/>，
+/// 不再 auto-create stub 条目——保证审计链完整，与 PostgresToolDispatchJournal 语义一致。
 /// </remarks>
 public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
 {
@@ -54,15 +59,12 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         var now = DateTimeOffset.UtcNow;
         _entries.AddOrUpdate(
             requestId,
-            // 不应发生：Dispatched 必须在 Prepare 之后
-            _ => new ToolDispatchJournalEntry
+            // P0-3：缺失 Prepared 前驱 → 抛异常（不再 auto-create stub）
+            _ =>
             {
-                RequestId = requestId,
-                ToolName = string.Empty,
-                State = ToolDispatchState.Dispatched,
-                ExternalOperationId = externalOperationId,
-                UpdatedAt = now,
-                DiagnosticNote = "Dispatched without prior Prepare (auto-created)"
+                throw new InvalidOperationException(
+                    $"Tool dispatch journal 缺失前驱记录：request_id={requestId}，目标状态=Dispatched（期望前驱=Prepared）。" +
+                    $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) =>
             {
@@ -89,14 +91,12 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         var now = DateTimeOffset.UtcNow;
         _entries.AddOrUpdate(
             requestId,
-            // 不应发生：Committed 必须在 Dispatched 之后
-            _ => new ToolDispatchJournalEntry
+            // P0-3：缺失 Dispatched 前驱 → 抛异常（不再 auto-create stub）
+            _ =>
             {
-                RequestId = requestId,
-                ToolName = string.Empty,
-                State = ToolDispatchState.Committed,
-                UpdatedAt = now,
-                DiagnosticNote = "Committed without prior Dispatched (auto-created)"
+                throw new InvalidOperationException(
+                    $"Tool dispatch journal 缺失前驱记录：request_id={requestId}，目标状态=Committed（期望前驱=Dispatched）。" +
+                    $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) =>
             {
@@ -122,14 +122,12 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         var now = DateTimeOffset.UtcNow;
         _entries.AddOrUpdate(
             requestId,
-            // 不应发生：ResultDelivered 必须在 Committed 之后
-            _ => new ToolDispatchJournalEntry
+            // P0-3：缺失 Committed 前驱 → 抛异常（不再 auto-create stub）
+            _ =>
             {
-                RequestId = requestId,
-                ToolName = string.Empty,
-                State = ToolDispatchState.ResultDelivered,
-                UpdatedAt = now,
-                DiagnosticNote = "ResultDelivered without prior Committed (auto-created)"
+                throw new InvalidOperationException(
+                    $"Tool dispatch journal 缺失前驱记录：request_id={requestId}，目标状态=ResultDelivered（期望前驱=Committed）。" +
+                    $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) =>
             {

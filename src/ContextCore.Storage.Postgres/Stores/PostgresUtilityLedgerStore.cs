@@ -6,21 +6,22 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// R28-E：PostgreSQL Utility Ledger Store 持久化实现。
+/// R28-E / R29 WP-E-1：PostgreSQL Utility Ledger 持久化实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R21-2 契约澄清 #4）：
-///   1. 公共 API 是 read-only（QueryAsync / GetLatestEntryAsync / GetExpertContributionsAsync），
-///      与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryUtilityLedgerStore"/> 行为一致。
-///   2. 写入由 internal <see cref="BulkInsertAsync"/> 暴露，仅供 UtilityLedgerMaterializer 调用
-///      （生产环境的 materializer 适配器通过此方法批量物化 ledger 条目）。
+/// 设计原则（对齐 R21-2 契约澄清 #4 + R29 学习闭环）：
+///   1. 实现 <see cref="IUtilityLedger"/>：读 API（QueryAsync / GetLatestEntryAsync /
+///      GetExpertContributionsAsync）+ 异步批量写 API（<see cref="AppendEntriesAsync"/>）。
+///   2. 写入由 <c>UtilityLedgerMaterializer</c> 通过 <see cref="AppendEntriesAsync"/> 调用
+///      （生产路径）；与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryUtilityLedgerStore"/>
+///      实现同一 <see cref="IUtilityLedger"/> 契约，materializer 无需感知存储后端。
 ///   3. 表 <c>utility_ledger_entries</c> 反规范化 workspace_id / collection_id / candidate_item_id /
 ///      expert / decision_id / materialized_at 等字段以便索引查询；完整 <see cref="UtilityLedgerEntry"/>
 ///      对象保存在 <c>data jsonb</c>，由 store 反序列化。
 ///   4. QueryAsync 按 materialized_at DESC 排序（与 InMemory 实现语义一致）。
 ///   5. GetExpertContributionsAsync 在数据库侧 GROUP BY expert 求平均（避免拉全量行到应用侧）。
 /// </remarks>
-public sealed class PostgresUtilityLedgerStore : PostgresStoreBase, IUtilityLedgerStore
+public sealed class PostgresUtilityLedgerStore : PostgresStoreBase, IUtilityLedger
 {
     public PostgresUtilityLedgerStore(
         PostgresConnectionFactory connectionFactory,
@@ -176,14 +177,14 @@ GROUP BY expert;
     }
 
     /// <summary>
-    /// 内部批量写入方法（仅供 UtilityLedgerMaterializer 调用）。
+    /// 批量写入 ledger 条目（实现 <see cref="IUtilityLedger.AppendEntriesAsync"/>）。
     /// 幂等：同 entry_id 重复写入时覆盖（ON CONFLICT DO UPDATE），保持最新快照。
     /// </summary>
     /// <remarks>
     /// router_id / materialization_batch_id 在 DDL 中为 NOT NULL，但 record 字段可空；
     /// 此处将 null 规范化为空字符串写入索引列（data jsonb 仍保留真实 null 值，读路径不受影响）。
     /// </remarks>
-    internal async Task BulkInsertAsync(
+    public async Task AppendEntriesAsync(
         IReadOnlyList<UtilityLedgerEntry> entries,
         CancellationToken cancellationToken = default)
     {

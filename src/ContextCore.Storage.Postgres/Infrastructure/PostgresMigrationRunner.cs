@@ -30,8 +30,22 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R29 WP-B-2：v21 → v22，新增 kernel_result_outbox 表与索引（持久化 Kernel Result Outbox，支持崩溃恢复结果重放）。
     /// R29 WP-B-4：v22 → v23，新增 kernel_transport_inbox + kernel_transport_outbox 表与索引（Durable Transport，PostgreSQL-backed Channel 支持 HA 跨进程指令/结果传输）。
     /// R29 WP-A-1：v23 → v24，新增 model_artifacts 表与索引（Model Artifact Registry 持久化，集中管理 ModelArtifactDescriptor 的注册与查询）。
+    /// R29 WP-E-3：v24 → v25，新增 vw_utility_ledger_training_data 视图（训练数据导出 SQL 接口，供 ad-hoc 查询与 BI 工具直接消费）。
+    /// R29 WP-E-4：v25 → v26，新增 vw_utility_ledger_calibration_data 视图（校准数据导出 SQL 接口，predicted / observed / weight 三段式）。
+    /// R29 WP-E-5：v26 → v27，新增 user_feedback_entries 表与索引（用户显式反馈接入 ledger：thumbs up/down + 评分修正 + 文本反馈）。
+    /// P0-3：v27 → v28，tool_dispatch_journal_entries.idempotency_key 索引由普通 index 升级为 UNIQUE partial index，
+    ///       防止不同 request_id 使用相同幂等键分别执行（外部副作用 exactly-once 的数据库层兜底）。
+    /// P0-1：v28 → v29，kernel_transport_inbox / kernel_transport_outbox 追加 state / lease_owner / lease_expires_at 列
+    ///       与配套索引，将破坏性 DELETE 出队改为租约模型（Pending → Leased → Acked），
+    ///       支持崩溃恢复后由新实例重新租约或 RequeueExpired 回滚过期租约。
+    /// P0-2：v29 → v30，kernel_result_outbox 追加 lease_owner / lease_expires_at / lease_token 列与配套索引，
+    ///       将 DequeueAsync 的 Dispatched 终态改为租约模型（Pending → Leased → Acked），
+    ///       避免 consumer 崩溃后 Dispatched 行永久滞留；旧 DequeueAsync 内部改用 LeaseAsync（默认租约）。
+    /// 任务 F：v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
+    /// 任务 D：v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
+    ///       （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v24";
+    public const string SchemaVersion = "cc-schema-v32";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -112,7 +126,15 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "kernel_transport_inbox",
         "kernel_transport_outbox",
         // R29 WP-A-1：Model Artifact Registry 持久化（集中管理 ModelArtifactDescriptor 注册与查询）
-        "model_artifacts"
+        "model_artifacts",
+        // R29 WP-E-5：User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）
+        "user_feedback_entries",
+        // 任务 F：Agent Run 状态机 + 事件流哈希链持久化
+        "agent_runs",
+        "agent_run_events",
+        // 任务 D：Canary HA 聚合（跨实例指标样本 + Leader 租约）
+        "canary_metrics_samples",
+        "canary_leader_leases"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -250,17 +272,39 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R29 WP-B-1：Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
         ("tool_dispatch_journal_entries", "state"),
         ("tool_dispatch_journal_entries", "idempotency"),
-        // R29 WP-B-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史）
+        // R29 WP-B-2 / P0-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史 + 租约模型 pending/expired）
         ("kernel_result_outbox", "state"),
         ("kernel_result_outbox", "instruction"),
+        ("kernel_result_outbox", "pending"),
+        ("kernel_result_outbox", "expired"),
         // R29 WP-B-4：Durable Transport 索引（inbox/outbox 按 created_at FIFO 取最旧 + 按 instruction_id 查历史）
         ("kernel_transport_inbox", "created"),
         ("kernel_transport_inbox", "instruction"),
+        ("kernel_transport_inbox", "pending"),
+        ("kernel_transport_inbox", "expired"),
         ("kernel_transport_outbox", "created"),
         ("kernel_transport_outbox", "instruction"),
+        ("kernel_transport_outbox", "pending"),
+        ("kernel_transport_outbox", "expired"),
         // R29 WP-A-1：Model Artifact Registry 索引（按 model_name + registered_at 查最新版本 / 列举所有版本）
         ("model_artifacts", "model_name"),
-        ("model_artifacts", "registered")
+        ("model_artifacts", "registered"),
+        // R29 WP-E-5：User Feedback Ledger 索引（按作用域/决策/候选/反馈者/时间查 + 按 idempotency_key 去重）
+        ("user_feedback_entries", "workspace"),
+        ("user_feedback_entries", "decision"),
+        ("user_feedback_entries", "candidate"),
+        ("user_feedback_entries", "given_by"),
+        ("user_feedback_entries", "given_at"),
+        ("user_feedback_entries", "idempotency"),
+        // 任务 F：Agent Run 索引（按 session 列举 + 按 state 拉取待处理；events 主键已覆盖按 run 查询）
+        ("agent_runs", "session"),
+        ("agent_runs", "state"),
+        // 任务 D：Canary HA 聚合索引
+        // canary_metrics_samples：按 run + recorded_at 查最新样本（聚合器 SELECT）+ 按 run + instance 去重
+        ("canary_metrics_samples", "run_recorded"),
+        ("canary_metrics_samples", "run_instance"),
+        // canary_leader_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
+        ("canary_leader_leases", "expires")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -365,6 +409,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var kernelTransportOutbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_outbox");
         // R29 WP-A-1：Model Artifact Registry 持久化表
         var modelArtifacts = Infrastructure.PostgresNames.Table(options, "model_artifacts");
+        // R29 WP-E-5：User Feedback Ledger 持久化表
+        var userFeedbackEntries = Infrastructure.PostgresNames.Table(options, "user_feedback_entries");
+        // 任务 F：Agent Run 状态机 + 事件流哈希链持久化表
+        var agentRuns = Infrastructure.PostgresNames.Table(options, "agent_runs");
+        var agentRunEvents = Infrastructure.PostgresNames.Table(options, "agent_run_events");
+        // 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约）
+        var canaryMetricsSamples = Infrastructure.PostgresNames.Table(options, "canary_metrics_samples");
+        var canaryLeaderLeases = Infrastructure.PostgresNames.Table(options, "canary_leader_leases");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1519,12 +1571,20 @@ CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
+-- P0-3：idempotency_key 升级为 UNIQUE partial index。
+--   旧版本（v21）创建的是普通 index；此处先 DROP 旧 index（若存在）再创建 UNIQUE index，
+--   保证已有数据库升级后幂等键全局唯一，防止不同 request_id 复用同一幂等键分别执行。
+--   partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
+DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")};
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- R29 WP-B-2：Kernel Result Outbox 持久化表（崩溃恢复结果重放）
 -- kernel_result_outbox: outbox_id 主键 — 每个未投递的 AgentKernelResult 一条行
--- state 为 text（'Pending' / 'Dispatched'）；instruction_id 反规范化以便查询
--- 完整 AgentKernelResult 保存在 data jsonb；DequeueAsync 使用 FOR UPDATE SKIP LOCKED 支持 worker 并发
+-- P0-2：state 为 text（'Pending' / 'Leased' / 'Dispatched'）；instruction_id 反规范化以便查询
+--   - 'Pending'：待租约（LeaseAsync 取最旧行）
+--   - 'Leased'：已租约未确认（持有 lease_token）；过期由 RequeueExpiredAsync 回滚为 Pending
+--   - 'Dispatched'：遗留终态（旧 DequeueAsync 直接标记）；P0-2 后 DequeueAsync 改用 LeaseAsync，不再产生新 Dispatched 行
+-- 完整 AgentKernelResult 保存在 data jsonb；LeaseAsync 使用 FOR UPDATE SKIP LOCKED 支持 worker 并发
 CREATE TABLE IF NOT EXISTS {kernelResultOutbox} (
     outbox_id text NOT NULL,
     instruction_id text NOT NULL DEFAULT '',
@@ -1535,12 +1595,25 @@ CREATE TABLE IF NOT EXISTS {kernelResultOutbox} (
     PRIMARY KEY (outbox_id)
 );
 
+-- P0-2：租约模型列追加（幂等）— 与 kernel_transport_inbox/outbox 对齐
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS lease_owner text;
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
+
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "state")} ON {kernelResultOutbox} (state, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "instruction")} ON {kernelResultOutbox} (instruction_id);
+-- P0-2：按 created_at 查 Pending 行（LeaseAsync 取最旧 Pending，FOR UPDATE SKIP LOCKED）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "pending")} ON {kernelResultOutbox} (created_at ASC) WHERE state = 'Pending';
+-- P0-2：按 lease_expires_at 查过期 Leased 行（RequeueExpiredAsync 扫描）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "expired")} ON {kernelResultOutbox} (lease_expires_at ASC) WHERE state = 'Leased';
 
 -- R29 WP-B-4：Durable Transport 持久化表（PostgreSQL-backed Channel）
+-- P0-1：租约模型 — 破坏性 DELETE 出队改为 Pending → Leased(owner,expires_at) → Acked(DELETE)。
+--   state: 'Pending'（待租约）/ 'Leased'（已租约，未确认）/ 'Acked'（已确认，将被删除）
+--   lease_owner: 租约持有者标识（如 worker ID）；lease_expires_at: 租约过期时间
+--   崩溃恢复：过期 Leased 行由 RequeueExpiredAsync 回滚为 Pending；新实例可重新租约。
 -- kernel_transport_inbox: instruction_id 主键 — 每条待处理指令一行
--- created_at 用于 FIFO 排序；ReceiveAsync 使用 FOR UPDATE SKIP LOCKED 取最旧行并 DELETE
+-- created_at 用于 FIFO 排序；LeaseAsync 使用 FOR UPDATE SKIP LOCKED 取最旧 Pending 行并标记 Leased
 -- 完整 AgentKernelInstruction 保存在 data jsonb
 CREATE TABLE IF NOT EXISTS {kernelTransportInbox} (
     instruction_id text NOT NULL,
@@ -1549,11 +1622,21 @@ CREATE TABLE IF NOT EXISTS {kernelTransportInbox} (
     PRIMARY KEY (instruction_id)
 );
 
+-- P0-1：租约模型列追加（幂等）
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS state text NOT NULL DEFAULT 'Pending';
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS lease_owner text;
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS lease_token text;
+
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "created")} ON {kernelTransportInbox} (created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "instruction")} ON {kernelTransportInbox} (instruction_id);
+-- P0-1：按 state + created_at 查 Pending 行（LeaseAsync 取最旧 Pending）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "pending")} ON {kernelTransportInbox} (created_at ASC) WHERE state = 'Pending';
+-- P0-1：按 lease_expires_at 查过期 Leased 行（RequeueExpiredAsync 扫描）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "expired")} ON {kernelTransportInbox} (lease_expires_at ASC) WHERE state = 'Leased';
 
 -- kernel_transport_outbox: result_id 主键 — 每条待读取结果一行
--- created_at 用于 FIFO 排序；ReceiveResultAsync 使用 FOR UPDATE SKIP LOCKED 取最旧行并 DELETE
+-- created_at 用于 FIFO 排序；LeaseResultAsync 使用 FOR UPDATE SKIP LOCKED 取最旧 Pending 行并标记 Leased
 -- 完整 AgentKernelResult 保存在 data jsonb；instruction_id 反规范化以便查询
 CREATE TABLE IF NOT EXISTS {kernelTransportOutbox} (
     result_id text NOT NULL,
@@ -1563,8 +1646,18 @@ CREATE TABLE IF NOT EXISTS {kernelTransportOutbox} (
     PRIMARY KEY (result_id)
 );
 
+-- P0-1：租约模型列追加（幂等）
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS state text NOT NULL DEFAULT 'Pending';
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS lease_owner text;
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
+
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "created")} ON {kernelTransportOutbox} (created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "instruction")} ON {kernelTransportOutbox} (instruction_id);
+-- P0-1：按 state + created_at 查 Pending 行
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "pending")} ON {kernelTransportOutbox} (created_at ASC) WHERE state = 'Pending';
+-- P0-1：按 lease_expires_at 查过期 Leased 行
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "expired")} ON {kernelTransportOutbox} (lease_expires_at ASC) WHERE state = 'Leased';
 
 -- R29 WP-A-1：Model Artifact Registry 持久化表
 -- model_artifacts: model_artifact_id 主键 — 每个已注册模型工件描述符一行
@@ -1588,6 +1681,225 @@ CREATE TABLE IF NOT EXISTS {modelArtifacts} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_artifacts", "model_name")} ON {modelArtifacts} (model_name, registered_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_artifacts", "registered")} ON {modelArtifacts} (registered_at ASC);
+
+-- R29 WP-E-3：训练数据导出视图。
+-- 供 ad-hoc SQL 查询与 BI 工具直接消费，字段对齐 TrainingDataRecord（feature / label / metadata 三段式）。
+-- 视图是只读的；导出工具（TrainingDataExporter）通过 IUtilityLedgerStore.QueryAsync 走应用层路径，
+-- 此视图作为 SQL 接口供 DBA / 数据分析师 / BI 工具直接查询，无需经过应用层。
+CREATE OR REPLACE VIEW {Infrastructure.PostgresNames.Table(options, "vw_utility_ledger_training_data")} AS
+SELECT
+    -- feature
+    deterministic_score AS deterministic_score,
+    model_score AS model_score,
+    utility_contribution AS utility_contribution,
+    expert AS expert,
+    -- label
+    is_selected AS is_selected,
+    drop_reason_code AS drop_reason_code,
+    -- metadata
+    decision_id AS decision_id,
+    candidate_item_id AS candidate_item_id,
+    workspace_id AS workspace_id,
+    collection_id AS collection_id,
+    materialized_at AS materialized_at,
+    policy_version AS policy_version
+FROM {utilityLedgerEntries};
+
+-- R29 WP-E-4：校准数据导出视图。
+-- 供 ad-hoc SQL 查询与 BI 工具直接消费，字段对齐 CalibrationDataRecord（predicted / observed / weight / metadata 四段式）。
+-- 仅包含 model_score 非 null 的条目（校准必须有模型预测分数）；
+-- 视图是只读的；导出工具（CalibrationDataExporter）通过 IUtilityLedgerStore.QueryAsync 走应用层路径，
+-- 此视图作为 SQL 接口供 DBA / 数据分析师 / BI 工具直接查询，无需经过应用层。
+CREATE OR REPLACE VIEW {Infrastructure.PostgresNames.Table(options, "vw_utility_ledger_calibration_data")} AS
+SELECT
+    -- predicted
+    model_score AS model_score,
+    deterministic_score AS deterministic_score,
+    final_score AS final_score,
+    -- observed
+    is_selected AS is_selected,
+    drop_reason_code AS drop_reason_code,
+    -- weight
+    CASE WHEN utility_contribution > 0 THEN utility_contribution ELSE 1.0 END AS weight,
+    -- metadata
+    decision_id AS decision_id,
+    candidate_item_id AS candidate_item_id,
+    workspace_id AS workspace_id,
+    collection_id AS collection_id,
+    expert AS expert,
+    materialized_at AS materialized_at,
+    policy_version AS policy_version
+FROM {utilityLedgerEntries}
+WHERE model_score IS NOT NULL;
+
+-- R29 WP-E-5：User Feedback Ledger 持久化表（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）。
+-- user_feedback_entries：与 utility_ledger_entries 通过 (workspace_id, collection_id, decision_id, candidate_item_id) 关联。
+-- 反规范化 workspace_id / collection_id / decision_id / candidate_item_id / kind / given_by / given_at 字段以便索引查询；
+-- 完整 UserFeedbackEntry 对象保存在 data jsonb，由 store 反序列化。
+-- 写入路径由 IUserFeedbackLedger.AppendFeedbackAsync 调用（来自 Service API 端点 POST /api/utility-ledger/feedback）。
+-- 幂等：idempotency_key 重复写入由 ON CONFLICT DO UPDATE 覆盖（保留最新反馈）。
+-- 关联校验：写入时通过 EXISTS 子查询验证 (decision_id, candidate_item_id, workspace_id, collection_id)
+--          在 utility_ledger_entries 中存在；否则抛出 ForeignKeyViolation（强一致性保证）。
+CREATE TABLE IF NOT EXISTS {userFeedbackEntries} (
+    feedback_entry_id text NOT NULL,
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    decision_id text NOT NULL,
+    candidate_item_id text NOT NULL,
+    kind text NOT NULL,
+    feedback_value double precision NOT NULL,
+    feedback_text text,
+    given_by text NOT NULL DEFAULT '',
+    given_at timestamptz NOT NULL,
+    idempotency_key text NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (feedback_entry_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "workspace")} ON {userFeedbackEntries} (workspace_id, collection_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "decision")} ON {userFeedbackEntries} (decision_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "candidate")} ON {userFeedbackEntries} (candidate_item_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "given_by")} ON {userFeedbackEntries} (given_by);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "given_at")} ON {userFeedbackEntries} (given_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "idempotency")} ON {userFeedbackEntries} (idempotency_key);
+
+-- R29 WP-E-5：Utility Ledger + User Feedback JOIN 视图。
+-- 供 ad-hoc SQL 查询与 BI 工具直接消费，将每次决策的 candidate 与其最新用户反馈关联起来。
+-- 反馈关联策略：取每个 (workspace_id, collection_id, decision_id, candidate_item_id) 的最新反馈条目（given_at DESC LIMIT 1）。
+-- 无反馈的 candidate 仍会出现在结果中（LEFT JOIN），user_feedback_kind / user_feedback_value 为 null — 与 P8 硬边界一致：
+-- 保留"无反馈"样本以避免偏差。
+CREATE OR REPLACE VIEW {Infrastructure.PostgresNames.Table(options, "vw_utility_ledger_with_user_feedback")} AS
+SELECT
+    le.entry_id AS ledger_entry_id,
+    le.workspace_id AS workspace_id,
+    le.collection_id AS collection_id,
+    le.decision_id AS decision_id,
+    le.candidate_item_id AS candidate_item_id,
+    le.expert AS expert,
+    le.utility_contribution AS utility_contribution,
+    le.deterministic_score AS deterministic_score,
+    le.model_score AS model_score,
+    le.final_score AS final_score,
+    le.is_selected AS is_selected,
+    le.drop_reason_code AS drop_reason_code,
+    le.policy_version AS policy_version,
+    le.materialized_at AS materialized_at,
+    uf.feedback_entry_id AS feedback_entry_id,
+    uf.kind AS user_feedback_kind,
+    uf.feedback_value AS user_feedback_value,
+    uf.feedback_text AS user_feedback_text,
+    uf.given_by AS user_feedback_given_by,
+    uf.given_at AS user_feedback_given_at
+FROM {utilityLedgerEntries} le
+LEFT JOIN LATERAL (
+    SELECT *
+    FROM {userFeedbackEntries} uf_inner
+    WHERE uf_inner.workspace_id = le.workspace_id
+      AND uf_inner.collection_id = le.collection_id
+      AND uf_inner.decision_id = le.decision_id
+      AND uf_inner.candidate_item_id = le.candidate_item_id
+    ORDER BY uf_inner.given_at DESC
+    LIMIT 1
+) uf ON true;
+
+-- 任务 F：Agent Run 状态机持久化表（替代 InMemoryAgentRunStore，支持 HA 跨进程恢复）
+-- 反规范化 workspace_id / run_id / session_id / state / turn 字段以便索引查询；
+-- turn_budget_json / cost_budget_json 存预算 JSON 列；
+-- 完整 AgentRun 对象保存在 data jsonb，由 store 反序列化。
+-- CreateAsync 使用 ON CONFLICT (workspace_id, run_id) DO NOTHING（幂等）。
+-- TransitionStateAsync 使用 expected-state CAS：UPDATE WHERE state = @expected（0 行抛异常）。
+CREATE TABLE IF NOT EXISTS {agentRuns} (
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    session_id text NOT NULL,
+    task text NOT NULL DEFAULT '',
+    state smallint NOT NULL DEFAULT 0,
+    turn integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    finished_at timestamptz NULL,
+    failure_reason text NULL,
+    final_answer text NULL,
+    turn_budget_json text NULL,
+    cost_budget_json text NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (workspace_id, run_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);
+
+-- 任务 F：Agent Run 事件流哈希链持久化表
+-- 主键 (workspace_id, run_id, sequence)：UNIQUE 约束防重序列号，保证事件流单调递增。
+-- AppendAsync 校验 sequence 连续性 + prev_chain_hash 链接（链头为 null）。
+-- 完整 AgentRunEvent 对象保存在 data jsonb，由 store 反序列化。
+-- 哈希链字段：content_hash（SHA-256 of payload）、prev_chain_hash（前一事件 content_hash）。
+CREATE TABLE IF NOT EXISTS {agentRunEvents} (
+    event_id text NOT NULL,
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    sequence integer NOT NULL,
+    event_type smallint NOT NULL,
+    state smallint NOT NULL,
+    payload text NOT NULL DEFAULT '',
+    content_hash text,
+    prev_chain_hash text,
+    occurred_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (workspace_id, run_id, sequence)
+);
+
+-- 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约）
+-- canary_metrics_samples：各实例定期写入本地 CanaryObservationMetrics 快照（含外部指标），
+--   聚合器通过 SUM/AVG 合并跨实例视图。sample_id 主键（GUID），幂等写入由调用方保证。
+--   反规范化 run_id / instance_id / recorded_at 字段以便索引查询；
+--   外部指标 nullable（未采集时为 NULL，聚合用 AVG 跳过 NULL）。
+CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
+    sample_id text NOT NULL,
+    run_id text NOT NULL,
+    instance_id text NOT NULL,
+    recorded_at timestamptz NOT NULL,
+    total_observations integer NOT NULL DEFAULT 0,
+    divergent_count integer NOT NULL DEFAULT 0,
+    v2_error_count integer NOT NULL DEFAULT 0,
+    legacy_error_count integer NOT NULL DEFAULT 0,
+    v2_p95_latency_ms double precision NOT NULL DEFAULT 0,
+    legacy_p95_latency_ms double precision NOT NULL DEFAULT 0,
+    average_quality_score double precision NOT NULL DEFAULT 0,
+    task_success_rate double precision,
+    tool_success_rate double precision,
+    repair_rate double precision,
+    safety_violation_rate double precision,
+    context_precision double precision,
+    context_recall_proxy double precision,
+    user_acceptance double precision,
+    answer_quality double precision,
+    token_cost double precision,
+    inference_cost double precision,
+    external_sample_count integer NOT NULL DEFAULT 0,
+    external_window_start timestamptz,
+    external_window_end timestamptz,
+    PRIMARY KEY (sample_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_metrics_samples", "run_recorded")} ON {canaryMetricsSamples} (run_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_metrics_samples", "run_instance")} ON {canaryMetricsSamples} (run_id, instance_id, recorded_at DESC);
+
+-- canary_leader_leases：Leader 租约表（每个 run_id 至多一条行）。
+-- TryAcquireAsync 使用 INSERT ... ON CONFLICT (run_id) DO UPDATE WHERE lease_expires_at < now
+--   原子获取租约：无现有行 → INSERT 成功；现有行过期 → ON CONFLICT 更新；现有行未过期 → 0 行返回 null。
+-- RenewAsync / ReleaseAsync 通过 lease_token CAS 保证只有持有者能操作。
+-- ReapExpiredAsync 删除 lease_expires_at < now 的行（崩溃 leader 持有的过期租约最终释放）。
+CREATE TABLE IF NOT EXISTS {canaryLeaderLeases} (
+    run_id text NOT NULL,
+    owner text NOT NULL,
+    lease_token text NOT NULL,
+    acquired_at timestamptz NOT NULL,
+    lease_expires_at timestamptz NOT NULL,
+    PRIMARY KEY (run_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_leader_leases", "expires")} ON {canaryLeaderLeases} (lease_expires_at ASC);
 """;
     }
 

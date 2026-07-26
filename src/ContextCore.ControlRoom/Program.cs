@@ -95,6 +95,14 @@ static async Task ExecuteCommandAsync(
         case "report":
             await ReportCommand.ExecuteAsync(service, commandArgs, cancellationToken);
             break;
+        case "export-training-data":
+        case "training-data":
+            await TrainingDataCommand.ExecuteAsync(service, commandArgs, cancellationToken);
+            break;
+        case "export-calibration-data":
+        case "calibration-data":
+            await CalibrationDataCommand.ExecuteAsync(service, commandArgs, cancellationToken);
+            break;
         case "policy":
         case "policies":
             await PolicyCommand.ExecuteAsync(service, commandArgs, cancellationToken);
@@ -705,6 +713,8 @@ static void PrintHelp()
       context room --workspace default --collection test jobs --state failed
       context room --workspace default --collection test model status
       context room --workspace default --collection test report export --out report.md
+      context room --workspace default --collection test export-training-data --out ./training-data
+      context room --workspace default --collection test export-calibration-data --out ./calibration-data
       context room --workspace default --collection test policy list
       context room --workspace default --collection test policy edit default-context --token-budget 1600
       context room --workspace default --collection test package-preview --policy default-context

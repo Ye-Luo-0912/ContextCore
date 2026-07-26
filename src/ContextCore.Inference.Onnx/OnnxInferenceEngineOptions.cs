@@ -102,4 +102,27 @@ public sealed class OnnxInferenceEngineOptions
     /// 默认 true；输入 shape 频繁变化时关闭以减少内存碎片。
     /// </summary>
     public bool EnableMemoryPattern { get; init; } = true;
+
+    /// <summary>
+    /// P3 步骤3：单次 session.Run 的最大行数限制。
+    /// 默认 0 = 不限制（不分片）。
+    /// 大于 0 时，当 FeatureBatch.RowCount 超过此值，OnnxInferenceEngine 会按 MaxBatchSize
+    /// 分片调用 session，合并各片输出。这避免 large batch 一次性加载到 GPU 显存导致 OOM。
+    /// </summary>
+    /// <remarks>
+    /// 典型场景：GPU 部署时显存有限，单次 Run 256 行可能 OOM，设为 32 强制分 8 片执行。
+    /// CPU 部署通常不需要分片（默认 0 即可）。
+    /// </remarks>
+    public int MaxBatchSize { get; init; } = 0;
+
+    /// <summary>
+    /// P3 步骤4：是否在引擎构造后自动执行 warmup。
+    /// 默认 true；warmup 用一个 1 行全 0 的 dummy FeatureBatch 调用一次 session.InferBatchAsync，
+    /// 让 ORT 完成 graph optimization 与内存分配，避免首次真实推理的冷启动延迟。
+    /// </summary>
+    /// <remarks>
+    /// warmup 失败不抛异常（仅记录到引擎内部状态），不影响后续真实推理；
+    /// 真实推理时若 ORT 仍报错，由 InferBatchAsync 的异常处理路径捕获。
+    /// </remarks>
+    public bool EnableWarmup { get; init; } = true;
 }

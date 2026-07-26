@@ -29,7 +29,6 @@ namespace ContextCore.Benchmarks;
 /// 测量 Prepared → Dispatched → Committed → ResultDelivered 全状态机推进。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class ToolDispatchJournalBenchmarks
 {
     [Params(1, 10, 100)]
@@ -85,7 +84,6 @@ public class ToolDispatchJournalBenchmarks
 /// 测量 Full / Delta 两种 checkpoint 模式的创建开销。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class CheckpointFactoryBenchmarks
@@ -158,7 +156,6 @@ public class CheckpointFactoryBenchmarks
 /// WP-F-1 §3+§4：Agent Kernel 端到端 + Checkpoint Store 往返。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class AgentKernelEndToEndBenchmarks

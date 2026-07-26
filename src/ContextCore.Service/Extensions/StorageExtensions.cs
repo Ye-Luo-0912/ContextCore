@@ -3,6 +3,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Runtime;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
@@ -410,6 +411,22 @@ internal static class StorageExtensions
 			var logsRoot = Path.Combine(fsOptions.ResolvedRootPath, "logs");
 			return new FileContextEventSink(logsRoot);
 		});
+
+		// R29 WP-E-2/E-3：Utility Ledger + ConflictSet Ledger（FileSystem 模式回退到 InMemory 实现）。
+		// FileSystem 当前未提供持久化 ledger 实现；生产路径应使用 Postgres 模式。
+		// 这里注册 InMemory 实现以保证 Service 端 UtilityLedgerMaterializer / TrainingDataExporter
+		// 在 FileSystem 模式下仍可解析（物化数据为进程内临时状态，重启后丢失）。
+		services.AddSingleton<InMemoryUtilityLedgerStore>();
+		services.AddSingleton<IUtilityLedgerStore>(sp => sp.GetRequiredService<InMemoryUtilityLedgerStore>());
+		services.AddSingleton<IUtilityLedger>(sp => sp.GetRequiredService<InMemoryUtilityLedgerStore>());
+		services.AddSingleton<InMemoryConflictSetStore>();
+		services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
+		services.AddSingleton<IConflictSetLedger>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
+
+		// R29 WP-E-5：User Feedback Ledger（FileSystem 模式回退到 InMemory 实现）。
+		// Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 写入。
+		services.AddSingleton<InMemoryUserFeedbackLedgerStore>();
+		services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<InMemoryUserFeedbackLedgerStore>());
 	}
 
 	private static void RegisterScopedRelationGovernancePostgresSupport(IServiceCollection services, StorageOptions options)
@@ -477,6 +494,20 @@ internal static class StorageExtensions
 
 		services.AddPlain<IContextJobQueue, InMemoryJobQueue>();
 		services.AddForwardedService<IContextJobQueryStore, InMemoryJobQueue>();
+
+		// R29 WP-E-1/E-2：Utility Ledger + ConflictSet Ledger（InMemory 实现）。
+		// 生产路径由 PostgresServiceCollectionExtensions 注册 Postgres 实现（同一 IUtilityLedger / IConflictSetLedger 契约）。
+		// IUtilityLedgerStore / IConflictSetStore 旧读 API 也由同一实现提供（向后兼容）。
+		services.AddSingleton<InMemoryUtilityLedgerStore>();
+		services.AddSingleton<IUtilityLedgerStore>(sp => sp.GetRequiredService<InMemoryUtilityLedgerStore>());
+		services.AddSingleton<IUtilityLedger>(sp => sp.GetRequiredService<InMemoryUtilityLedgerStore>());
+		services.AddSingleton<InMemoryConflictSetStore>();
+		services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
+		services.AddSingleton<IConflictSetLedger>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
+
+		// R29 WP-E-5：User Feedback Ledger（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		services.AddSingleton<InMemoryUserFeedbackLedgerStore>();
+		services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<InMemoryUserFeedbackLedgerStore>());
 	}
 }
 

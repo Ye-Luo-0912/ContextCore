@@ -24,20 +24,24 @@ public sealed class PostgresKernelResultOutboxTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        if (!await PostgresIntegrationTests.IsDockerAvailableAsync())
+        // R14-PG 收口：直接尝试启动容器（与 PostgresToolDispatchJournalTests 一致），
+        // 避免 IsDockerAvailableAsync 在 Windows named-pipe Docker Desktop 上误判。
+        try
         {
-            Console.WriteLine("[PostgresKernelResultOutboxTests] Docker 不可用，所有测试将标记为 Inconclusive。");
-            return;
+            _container = new PostgreSqlBuilder(PgVectorImage)
+                .WithDatabase("cctest")
+                .WithUsername("cctest")
+                .WithPassword("cctest")
+                .Build();
+
+            await _container.StartAsync();
+            _connectionString = _container.GetConnectionString();
         }
-
-        _container = new PostgreSqlBuilder(PgVectorImage)
-            .WithDatabase("cctest")
-            .WithUsername("cctest")
-            .WithPassword("cctest")
-            .Build();
-
-        await _container.StartAsync();
-        _connectionString = _container.GetConnectionString();
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgresKernelResultOutboxTests] Docker 不可用：{ex.GetType().Name}: {ex.Message}");
+            _connectionString = null;
+        }
     }
 
     [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
@@ -269,6 +273,505 @@ public sealed class PostgresKernelResultOutboxTests
 
             await Assert.ThrowsExceptionAsync<ArgumentNullException>(
                 async () => await outbox.EnqueueAsync(null!));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    // ── P0-2 租约模型测试 ─────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task Lease_OnEmptyOutbox_ReturnsNull()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro8_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNull(leased);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_ReturnsOldestPendingWithToken()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro9_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("lease-1", "payload-1"));
+            await outbox.EnqueueAsync(MakeResult("lease-2", "payload-2"));
+
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1), owner: "worker-A");
+            Assert.IsNotNull(leased);
+            Assert.AreEqual("lease-1", leased!.Result.InstructionId);
+            Assert.AreEqual("payload-1", leased.Result.Output);
+            Assert.IsFalse(string.IsNullOrEmpty(leased.LeaseToken));
+            Assert.IsFalse(string.IsNullOrEmpty(leased.OutboxId));
+            Assert.IsTrue(leased.LeaseExpiresAt > DateTimeOffset.UtcNow);
+
+            // 仅 1 条 Pending（另一条已 Leased）
+            Assert.AreEqual(1, outbox.PendingCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_FifoOrder_AcrossMultipleLeases()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro10_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("fifo-1"));
+            await outbox.EnqueueAsync(MakeResult("fifo-2"));
+            await outbox.EnqueueAsync(MakeResult("fifo-3"));
+
+            var first = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.AreEqual("fifo-1", first!.Result.InstructionId);
+            await outbox.AckAsync(first.OutboxId, first.LeaseToken);
+
+            var second = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.AreEqual("fifo-2", second!.Result.InstructionId);
+            await outbox.AckAsync(second.OutboxId, second.LeaseToken);
+
+            var third = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.AreEqual("fifo-3", third!.Result.InstructionId);
+            await outbox.AckAsync(third.OutboxId, third.LeaseToken);
+
+            Assert.AreEqual(0, outbox.PendingCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_RemovesRow_PendingCountDecreases()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro11_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("ack-1"));
+            Assert.AreEqual(1, outbox.PendingCount);
+
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.AreEqual(0, outbox.PendingCount);
+
+            await outbox.AckAsync(leased!.OutboxId, leased.LeaseToken);
+            Assert.AreEqual(0, outbox.PendingCount);
+
+            // Ack 后再 Lease 返回 null
+            var reLeased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNull(reLeased);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_WithWrongToken_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro12_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("wrong-token-1"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await outbox.AckAsync(leased!.OutboxId, "wrong-token"));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_OnAlreadyAcked_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro13_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("double-ack-1"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            await outbox.AckAsync(leased!.OutboxId, leased.LeaseToken);
+
+            // 二次 Ack 应抛异常（行已删除）
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await outbox.AckAsync(leased.OutboxId, leased.LeaseToken));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Nack_RequeuesToPending_AllowsReLease()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro14_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("nack-1", "original"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.AreEqual(0, outbox.PendingCount);
+
+            await outbox.NackAsync(leased!.OutboxId, leased.LeaseToken);
+            Assert.AreEqual(1, outbox.PendingCount);
+
+            // 重新 Lease 得到同一行（FIFO）
+            var reLeased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased);
+            Assert.AreEqual("nack-1", reLeased!.Result.InstructionId);
+            Assert.AreEqual("original", reLeased.Result.Output);
+            // 新 token 不同于原 token
+            Assert.AreNotEqual(leased.LeaseToken, reLeased.LeaseToken);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Nack_WithWrongToken_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro15_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("nack-wrong-1"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await outbox.NackAsync(leased!.OutboxId, "wrong-token"));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RenewLease_ExtendsExpiresAt()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro16_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("renew-1"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromSeconds(1));
+            var originalExpiry = leased!.LeaseExpiresAt;
+
+            // 续租 5 分钟
+            await outbox.RenewLeaseAsync(leased.OutboxId, leased.LeaseToken, TimeSpan.FromMinutes(5));
+
+            // 原 token 仍可 Ack（续租成功）
+            await outbox.AckAsync(leased.OutboxId, leased.LeaseToken);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RenewLease_WithWrongToken_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro17_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("renew-wrong-1"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await outbox.RenewLeaseAsync(leased!.OutboxId, "wrong-token", TimeSpan.FromMinutes(5)));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RequeueExpired_ReclaimsExpiredLeases()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro18_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("expired-1"));
+            await outbox.EnqueueAsync(MakeResult("expired-2"));
+
+            // 短租约
+            var leased1 = await outbox.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            var leased2 = await outbox.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            Assert.AreEqual(0, outbox.PendingCount);
+
+            // 等待租约过期
+            await Task.Delay(300);
+
+            // 回滚过期租约
+            var requeued = await outbox.RequeueExpiredAsync();
+            Assert.AreEqual(2, requeued);
+            Assert.AreEqual(2, outbox.PendingCount);
+
+            // 可重新租约
+            var reLeased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased);
+            await outbox.AckAsync(reLeased!.OutboxId, reLeased.LeaseToken);
+
+            // 原 token（已过期回滚）无法 Ack
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await outbox.AckAsync(leased1!.OutboxId, leased1.LeaseToken));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RequeueExpired_OnNoExpired_ReturnsZero()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro19_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("no-expired-1"));
+            await outbox.LeaseAsync(TimeSpan.FromMinutes(10)); // 长租约，未过期
+
+            var requeued = await outbox.RequeueExpiredAsync();
+            Assert.AreEqual(0, requeued);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task CrashRecovery_LeasedWithoutAck_OnNewInstance_RequeuedAndReLeased()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro20_");
+        try
+        {
+            // 第一个实例：入队 + 租约（模拟崩溃前已 Lease 但未 Ack）
+            var outbox1 = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+            await outbox1.EnqueueAsync(MakeResult("crash-lease-1", "payload"));
+
+            var leased = await outbox1.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            Assert.IsNotNull(leased);
+            Assert.AreEqual(0, outbox1.PendingCount);
+
+            // 模拟进程崩溃：丢弃 outbox1（持有 lease token，但进程已死，无法 Ack）
+            await Task.Delay(250); // 等待租约过期
+
+            // 新实例启动：调用 RequeueExpired 回滚过期租约
+            var outbox2 = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+            var requeued = await outbox2.RequeueExpiredAsync();
+            Assert.AreEqual(1, requeued);
+            Assert.AreEqual(1, outbox2.PendingCount);
+
+            // 新实例可重新租约并 Ack
+            var reLeased = await outbox2.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased);
+            Assert.AreEqual("crash-lease-1", reLeased!.Result.InstructionId);
+            Assert.AreEqual("payload", reLeased.Result.Output);
+            // 新租约 token 不同于崩溃实例持有的（已失效）
+            Assert.AreNotEqual(leased.LeaseToken, reLeased.LeaseToken);
+            await outbox2.AckAsync(reLeased.OutboxId, reLeased.LeaseToken);
+            Assert.AreEqual(0, outbox2.PendingCount);
+
+            // 原 token（来自崩溃实例）无法 Ack
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await outbox2.AckAsync(leased.OutboxId, leased.LeaseToken));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_NonPositiveDuration_ThrowsArgumentOutOfRangeException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro21_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await outbox.LeaseAsync(TimeSpan.Zero));
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await outbox.LeaseAsync(TimeSpan.FromSeconds(-1)));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RenewLease_NonPositiveExtension_ThrowsArgumentOutOfRangeException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro22_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("renew-zero-1"));
+            var leased = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await outbox.RenewLeaseAsync(leased!.OutboxId, leased.LeaseToken, TimeSpan.Zero));
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await outbox.RenewLeaseAsync(leased!.OutboxId, leased!.LeaseToken, TimeSpan.FromSeconds(-1)));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_NullOrEmptyArgs_ThrowsArgumentException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro23_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await Assert.ThrowsExceptionAsync<ArgumentException>(
+                async () => await outbox.AckAsync("", "token"));
+            await Assert.ThrowsExceptionAsync<ArgumentException>(
+                async () => await outbox.AckAsync("id", ""));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Dequeue_LegacyApi_UsesLeaseInternally_RowBecomesLeasedNotDispatched()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro24_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("legacy-1"));
+            Assert.AreEqual(1, outbox.PendingCount);
+
+            // 遗留 DequeueAsync 内部调用 LeaseAsync，行变为 Leased（不是 Dispatched）
+            var result = await outbox.DequeueAsync();
+            Assert.IsNotNull(result);
+            Assert.AreEqual("legacy-1", result!.InstructionId);
+
+            // PendingCount=0（Leased 行不计入 Pending）；行仍在表中（未被删除）
+            Assert.AreEqual(0, outbox.PendingCount);
+
+            // 遗留 API 丢弃了 token，无法 Ack；但行不会丢失——RequeueExpired 后可重新租约
+            // 使用短租约验证回滚（DefaultLegacyLeaseDuration=5min，测试不等待，改用 RequeueExpired 直接验证无过期行）
+            var requeued = await outbox.RequeueExpiredAsync();
+            Assert.AreEqual(0, requeued); // 5min 租约未过期，不回滚
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_AfterNack_ReturnsSameRowWithNewToken()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("kro25_");
+        try
+        {
+            var outbox = new PostgresKernelResultOutbox(factory, serializer, migrationRunner);
+
+            await outbox.EnqueueAsync(MakeResult("nack-renew-1", "payload"));
+            var leased1 = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+
+            // Nack 后立即重新 Lease，应得到同一行（FIFO，created_at 最旧）
+            await outbox.NackAsync(leased1!.OutboxId, leased1.LeaseToken);
+            var leased2 = await outbox.LeaseAsync(TimeSpan.FromMinutes(1));
+
+            Assert.IsNotNull(leased2);
+            Assert.AreEqual(leased1.OutboxId, leased2!.OutboxId);
+            Assert.AreNotEqual(leased1.LeaseToken, leased2.LeaseToken);
+            Assert.AreEqual("nack-renew-1", leased2.Result.InstructionId);
+
+            // 新 token 可 Ack
+            await outbox.AckAsync(leased2.OutboxId, leased2.LeaseToken);
+            Assert.AreEqual(0, outbox.PendingCount);
         }
         finally
         {

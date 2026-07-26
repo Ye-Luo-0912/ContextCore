@@ -27,7 +27,6 @@ namespace ContextCore.Benchmarks;
 /// WP-F-1 §1+§2：Canary Metrics Collector 微基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class CanaryMetricsCollectorBenchmarks
@@ -153,7 +152,6 @@ public class CanaryMetricsCollectorBenchmarks
 /// WP-F-1 §3：DDSketch 微基准（绕过 collector 测纯 sketch 性能）。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class DDSketchBenchmarks

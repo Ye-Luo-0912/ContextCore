@@ -297,7 +297,6 @@ public sealed class ClosureGateBenchmarksConfig : ManualConfig
 // ---------------------------------------------------------------------------
 
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [Config(typeof(ClosureGateBenchmarksConfig))]
 public class ClosureGateBenchmarks
 {

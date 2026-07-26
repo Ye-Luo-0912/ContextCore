@@ -85,6 +85,42 @@ public sealed class CanaryGateOptions
     public double MinQualityScore { get; init; } = 0.3;
 
     /// <summary>
+    /// 任务 C：任务成功率下限阈值（V2 路径 task_success_rate &lt; 此值则自动回滚）。
+    /// </summary>
+    /// <remarks>
+    /// 语义：experimentMetrics["task_success_rate"]（0.0-1.0）&lt; MinTaskSuccessRate 时触发回滚。
+    /// <para>
+    /// 默认 0.7：任务成功率 &lt; 70% 时视为 V2 路径功能严重退化。设为 0.0 时禁用此检查。
+    /// 仅当 task_success_rate 已采集（非 null）时检查；未采集时跳过（优雅降级）。
+    /// </para>
+    /// </remarks>
+    public double MinTaskSuccessRate { get; init; } = 0.7;
+
+    /// <summary>
+    /// 任务 C：安全违规率上限阈值（V2 路径 safety_violation_rate &gt; 此值则自动回滚）。
+    /// </summary>
+    /// <remarks>
+    /// 语义：experimentMetrics["safety_violation_rate"]（0.0-1.0）&gt; MaxSafetyViolationRate 时触发回滚。
+    /// <para>
+    /// 默认 0.0：任何安全违规（&gt; 0）都触发回滚（零容忍策略）。设为 1.0 时禁用此检查。
+    /// 仅当 safety_violation_rate 已采集（非 null）时检查；未采集时跳过（优雅降级）。
+    /// </para>
+    /// </remarks>
+    public double MaxSafetyViolationRate { get; init; } = 0.0;
+
+    /// <summary>
+    /// 任务 C：用户接受率下限阈值（V2 路径 user_acceptance &lt; 此值则自动回滚）。
+    /// </summary>
+    /// <remarks>
+    /// 语义：experimentMetrics["user_acceptance"]（0.0-1.0）&lt; MinUserAcceptance 时触发回滚。
+    /// <para>
+    /// 默认 0.5：用户接受率 &lt; 50% 时视为 V2 路径用户体验退化。设为 0.0 时禁用此检查。
+    /// 仅当 user_acceptance 已采集（非 null）时检查；未采集时跳过（优雅降级）。
+    /// </para>
+    /// </remarks>
+    public double MinUserAcceptance { get; init; } = 0.5;
+
+    /// <summary>
     /// 从环境变量构建配置。未设置的环境变量回退到默认值。
     /// </summary>
     /// <remarks>
@@ -96,6 +132,9 @@ public sealed class CanaryGateOptions
     /// <item><c>CC_CANARY_MAX_ERROR_RATE_DELTA</c>：错误率差阈值（double）。</item>
     /// <item><c>CC_CANARY_MAX_LATENCY_MULTIPLIER</c>：p95 延迟倍数阈值（double）。</item>
     /// <item><c>CC_CANARY_MIN_QUALITY_SCORE</c>：质量分下限阈值（double，0.0-1.0）。</item>
+    /// <item><c>CC_CANARY_MIN_TASK_SUCCESS_RATE</c>：任务成功率下限阈值（double，0.0-1.0）。</item>
+    /// <item><c>CC_CANARY_MAX_SAFETY_VIOLATION_RATE</c>：安全违规率上限阈值（double，0.0-1.0）。</item>
+    /// <item><c>CC_CANARY_MIN_USER_ACCEPTANCE</c>：用户接受率下限阈值（double，0.0-1.0）。</item>
     /// </list>
     /// </remarks>
     public static CanaryGateOptions FromEnvironment()
@@ -116,6 +155,15 @@ public sealed class CanaryGateOptions
         var minQualityScore = ParseDouble(
             Environment.GetEnvironmentVariable("CC_CANARY_MIN_QUALITY_SCORE"),
             0.3);
+        var minTaskSuccessRate = ParseDouble(
+            Environment.GetEnvironmentVariable("CC_CANARY_MIN_TASK_SUCCESS_RATE"),
+            0.7);
+        var maxSafetyViolationRate = ParseDouble(
+            Environment.GetEnvironmentVariable("CC_CANARY_MAX_SAFETY_VIOLATION_RATE"),
+            0.0);
+        var minUserAcceptance = ParseDouble(
+            Environment.GetEnvironmentVariable("CC_CANARY_MIN_USER_ACCEPTANCE"),
+            0.5);
 
         return new CanaryGateOptions
         {
@@ -124,7 +172,10 @@ public sealed class CanaryGateOptions
             MaxDivergenceRate = maxDivergence,
             MaxErrorRateDelta = maxErrorDelta,
             MaxLatencyMultiplier = maxLatencyMultiplier,
-            MinQualityScore = minQualityScore
+            MinQualityScore = minQualityScore,
+            MinTaskSuccessRate = minTaskSuccessRate,
+            MaxSafetyViolationRate = maxSafetyViolationRate,
+            MinUserAcceptance = minUserAcceptance
         };
     }
 

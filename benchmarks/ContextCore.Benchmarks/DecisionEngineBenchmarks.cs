@@ -29,7 +29,6 @@ namespace ContextCore.Benchmarks;
 /// WP-F-1 §1+§2+§3：Allocator 微基准（V2.0 / V2.1 / MMR）。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class AllocatorBenchmarks
@@ -172,7 +171,6 @@ public class AllocatorBenchmarks
 /// WP-F-1 §4：CanonicalCandidateMerger 微基准。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class CanonicalMergerBenchmarks
 {
     private const string WorkspaceId = "bench-ws";
@@ -276,7 +274,6 @@ public class CanonicalMergerBenchmarks
 /// WP-F-1 §5+§6：Projector 微基准（Retrieval / Package）。
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class ProjectorBenchmarks

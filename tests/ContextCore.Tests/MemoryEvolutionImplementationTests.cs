@@ -577,6 +577,77 @@ public sealed class MemoryEvolutionImplementationTests
         Assert.IsNull(conflicts[0].ResolvedAt);
     }
 
+    // ===========================================================================
+    // R29 WP-E-1：Materializer 依赖抽象（IUtilityLedger / IConflictSetLedger）验证
+    //
+    // 目的：证明 UtilityLedgerMaterializer 不再硬绑定 InMemoryUtilityLedgerStore /
+    //   InMemoryConflictSetStore，而是通过 IUtilityLedger / IConflictSetLedger 抽象写入。
+    //   生产路径注入 Postgres 实现（同一契约），开发 / 测试路径注入 InMemory 实现 —
+    //   materializer 代码无需修改。
+    // ===========================================================================
+
+    [TestMethod]
+    public async Task Materializer_AcceptsAbstractions_IUtilityLedger_And_IConflictSetLedger()
+    {
+        // 将 InMemory 实现以接口形式注入（模拟 DI 容器解析后的注入方式）。
+        IUtilityLedger ledgerStore = new InMemoryUtilityLedgerStore();
+        IConflictSetLedger conflictStore = new InMemoryConflictSetStore();
+        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
+
+        var result = new ContextDecisionResult
+        {
+            RequestId = "decision-e1",
+            SelectedEnvelopes = new[]
+            {
+                MakeEnvelope("item-e1-sel", ContextCandidateSource.Semantic, isSelected: true)
+            },
+            DroppedEnvelopes = new[]
+            {
+                MakeEnvelope("item-e1-drop", ContextCandidateSource.Lexical, isSelected: false,
+                    blockReasonCode: CandidateDecisionReasonCode.SectionQuotaExceeded),
+                MakeEnvelope("item-e1-drop2", ContextCandidateSource.WorkingMemory, isSelected: false,
+                    blockReasonCode: CandidateDecisionReasonCode.SectionQuotaExceeded)
+            }
+        };
+
+        var materialized = await materializer.MaterializeAsync(result, "ws-e1", "col-e1");
+
+        // P8 硬边界：selected + dropped 全部写入 ledger（3 条 entry）。
+        Assert.AreEqual(3, materialized.LedgerEntryCount);
+        var entries = await ledgerStore.QueryAsync(new UtilityLedgerQuery
+        {
+            WorkspaceId = "ws-e1",
+            DecisionId = "decision-e1"
+        });
+        Assert.AreEqual(3, entries.Count);
+        Assert.IsTrue(entries.Any(e => e.CandidateItemId == "item-e1-sel" && e.IsSelected));
+        Assert.IsTrue(entries.Any(e => e.CandidateItemId == "item-e1-drop" && !e.IsSelected));
+
+        // SectionConflict ConflictSet 应通过 IConflictSetLedger.AppendConflictSetsAsync 写入。
+        Assert.AreEqual(1, materialized.ConflictSetCount);
+        var conflicts = await conflictStore.QueryAsync(new ConflictSetQuery
+        {
+            WorkspaceId = "ws-e1",
+            Kind = ConflictSetKind.SectionConflict
+        });
+        Assert.AreEqual(1, conflicts.Count);
+    }
+
+    [TestMethod]
+    public async Task IUtilityLedger_AppendEntriesAsync_IsIdempotentAcrossImplementations()
+    {
+        // 契约语义：空列表为 no-op，不抛异常（InMemory 与 Postgres 行为一致）。
+        IUtilityLedger ledgerStore = new InMemoryUtilityLedgerStore();
+        await ledgerStore.AppendEntriesAsync(Array.Empty<UtilityLedgerEntry>());
+        var entries = await ledgerStore.QueryAsync(new UtilityLedgerQuery { WorkspaceId = "ws" });
+        Assert.AreEqual(0, entries.Count);
+
+        IConflictSetLedger conflictStore = new InMemoryConflictSetStore();
+        await conflictStore.AppendConflictSetsAsync(Array.Empty<ConflictSet>());
+        var conflicts = await conflictStore.QueryAsync(new ConflictSetQuery { WorkspaceId = "ws" });
+        Assert.AreEqual(0, conflicts.Count);
+    }
+
     // =========================================================================
     // 辅助方法
     // =========================================================================

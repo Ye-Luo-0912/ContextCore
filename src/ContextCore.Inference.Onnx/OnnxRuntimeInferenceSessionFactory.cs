@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using ContextCore.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -210,16 +212,30 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
 
         try
         {
-            var inputs = CreateInputs(batch);
-            using var results = _session.Run(inputs);
-            var outputs = ParseOutputs(results);
-            return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
+            var inputs = CreateInputs(batch, out var rentedBuffer);
+            try
             {
-                Outputs = outputs,
-                Succeeded = true,
-                Error = null,
-                Duration = Stopwatch.GetElapsedTime(startedAt)
-            });
+                using var results = _session.Run(inputs);
+                var outputs = ParseOutputs(results);
+                return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
+                {
+                    Outputs = outputs,
+                    Succeeded = true,
+                    Error = null,
+                    Duration = Stopwatch.GetElapsedTime(startedAt)
+                });
+            }
+            finally
+            {
+                // P3 步骤5：ArrayPool buffer 在 session.Run 完成后归还。
+                // ORT session.Run 同步执行，返回时输入张量数据已被复制到 ORT 内部内存，
+                // 此后 DenseTensor 的 backing buffer 不再被引用，可安全归还。
+                // 零拷贝路径 rentedBuffer=null，跳过归还。
+                if (rentedBuffer is not null)
+                {
+                    ArrayPool<float>.Shared.Return(rentedBuffer);
+                }
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -239,18 +255,61 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
         return ValueTask.CompletedTask;
     }
 
-    private IReadOnlyList<NamedOnnxValue> CreateInputs(FeatureBatch batch)
+    /// <summary>
+    /// 构造 ONNX 输入张量。
+    /// P3 步骤2：零拷贝路径 — 当 batch.Values 由完整 float[] 支撑时（生产 Scorer 的 TryBuildFeatureBatch 路径），
+    /// 通过 MemoryMarshal.TryGetArray 直接复用底层数组，避免 ToArray 拷贝。
+    /// P3 步骤5：ArrayPool 回退路径 — 当零拷贝不可行时（如 batch.Values 是切片或非数组 backing），
+    /// 从 ArrayPool.Rent 租借缓冲区并拷贝，session.Run 完成后由调用方归还。
+    /// </summary>
+    /// <param name="batch">批量特征数据。</param>
+    /// <param name="rentedBuffer">若使用 ArrayPool 路径，返回租借的 buffer 供调用方归还；零拷贝路径返回 null。</param>
+    /// <returns>ONNX 输入 NamedOnnxValue 列表。</returns>
+    private IReadOnlyList<NamedOnnxValue> CreateInputs(FeatureBatch batch, out float[]? rentedBuffer)
     {
-        // DenseTensor<float> 构造需要 Memory<float>，而 FeatureBatch.Values 是 ReadOnlyMemory<float>。
-        // 这里通过 ToArray() 复制一份连续内存，避免修改上游不可变 buffer。
-        // 高频场景下应由调用方直接使用 InferBatchAsync(FeatureBatch) 路径。
+        rentedBuffer = null;
         var dimensions = new[] { batch.RowCount, batch.FeatureCount };
-        var buffer = batch.Values.ToArray();
-        var tensor = new DenseTensor<float>(buffer, dimensions, false);
-        return new[]
+        var requiredLength = batch.RowCount * batch.FeatureCount;
+
+        // P3 步骤2：零拷贝路径 — 尝试获取 batch.Values 的底层 array。
+        // 当 batch.Values 由完整 float[] 直接构造（offset=0 + count=full）时，
+        // 直接复用底层数组，避免 ToArray 拷贝。这是生产 Scorer → ONNX 推理的 hot path。
+        if (MemoryMarshal.TryGetArray(batch.Values, out var arraySegment)
+            && arraySegment.Array is { } underlyingArray
+            && arraySegment.Offset == 0
+            && arraySegment.Count == underlyingArray.Length
+            && underlyingArray.Length == requiredLength)
         {
-            NamedOnnxValue.CreateFromTensor(_options.InputTensorName, tensor)
-        };
+            // 零拷贝：直接复用底层 float[]，DenseTensor 引用同一数组。
+            // 注意：batch.Values 是 ReadOnlyMemory<float>，ORT input tensor 不会被 ORT 修改，
+            // 因此共享只读 backing 是安全的。
+            var tensor = new DenseTensor<float>(underlyingArray, dimensions, false);
+            return new[]
+            {
+                NamedOnnxValue.CreateFromTensor(_options.InputTensorName, tensor)
+            };
+        }
+
+        // P3 步骤5：ArrayPool 回退路径 — 租借缓冲区 + 拷贝，避免每次 ToArray 造成的 GC 压力。
+        // 注意：Rent 返回的 buffer.Length >= requiredLength，可能更大；
+        // 通过 AsMemory(0, requiredLength) 切片传给 DenseTensor，仅暴露所需范围。
+        var buffer = ArrayPool<float>.Shared.Rent(requiredLength);
+        try
+        {
+            batch.Values.Span.CopyTo(buffer.AsSpan(0, requiredLength));
+            rentedBuffer = buffer;
+            var tensor = new DenseTensor<float>(buffer.AsMemory(0, requiredLength), dimensions, false);
+            return new[]
+            {
+                NamedOnnxValue.CreateFromTensor(_options.InputTensorName, tensor)
+            };
+        }
+        catch
+        {
+            // 构造失败时立即归还，避免泄漏
+            ArrayPool<float>.Shared.Return(buffer);
+            throw;
+        }
     }
 
     private IReadOnlyList<InferenceOutput> ParseOutputs(IReadOnlyList<DisposableNamedOnnxValue> results)

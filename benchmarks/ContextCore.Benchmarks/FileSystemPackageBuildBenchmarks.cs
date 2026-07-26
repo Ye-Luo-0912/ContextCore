@@ -10,7 +10,6 @@ namespace ContextCore.Benchmarks;
 // 真实 FileSystem 存储基准：使用 FileXxxStore（非 InMemory）测量真实 I/O 下的构建延迟。
 // 验证并行预取在真实磁盘 I/O 下的效果，以及冷构建 vs 缓存命中的实际差距。
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class FileSystemPackageBuildBenchmarks
 {
     private const string WorkspaceId = "bench-ws";

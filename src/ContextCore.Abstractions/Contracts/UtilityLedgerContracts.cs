@@ -186,6 +186,32 @@ public interface IUtilityLedgerStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// R29 WP-E-1：Utility Ledger 读写契约。继承 <see cref="IUtilityLedgerStore"/> 的读 API，
+/// 并追加异步批量写入方法，供 <c>UtilityLedgerMaterializer</c> 在生产路径（Postgres）与
+/// 开发路径（InMemory）上以统一方式物化决策结果。
+/// </summary>
+/// <remarks>
+/// 设计原则（对齐澄清 #4 + R29 学习闭环目标）：
+///   1. 读 API 仍由 <see cref="IUtilityLedgerStore"/> 提供；本接口仅追加写方法。
+///   2. 写入由 <c>UtilityLedgerMaterializer</c> 异步批量调用，不暴露同步 API。
+///   3. 实现层负责幂等：同 <see cref="UtilityLedgerEntry.EntryId"/> 重复写入时由实现保证
+///      覆盖或忽略（Postgres 用 <c>ON CONFLICT DO UPDATE</c>，InMemory 不去重 — append-only 语义）。
+///   4. P8 硬边界：所有 candidate（selected/dropped）都应写入 ledger，避免"dropped 视为负样本"的简化。
+/// </remarks>
+public interface IUtilityLedger : IUtilityLedgerStore
+{
+    /// <summary>
+    /// 批量追加 ledger 条目（仅供 UtilityLedgerMaterializer 调用）。
+    /// </summary>
+    /// <param name="entries">待写入的条目列表（不可为 null；空列表为 no-op）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task AppendEntriesAsync(
+        IReadOnlyList<UtilityLedgerEntry> entries,
+        CancellationToken cancellationToken = default);
+}
+
 // ---------------------------------------------------------------------------
 // ConflictSet（冲突集合）
 // ---------------------------------------------------------------------------
@@ -393,4 +419,278 @@ public interface IConflictSetStore
         string collectionId,
         string candidateItemId,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R29 WP-E-1：ConflictSet 读写契约。继承 <see cref="IConflictSetStore"/> 的读 API，
+/// 并追加异步批量写入方法，与 <see cref="IUtilityLedger"/> 对称地供
+/// <c>UtilityLedgerMaterializer</c> 在生产 / 开发路径上统一物化冲突集合。
+/// </summary>
+/// <remarks>
+/// 设计原则：
+///   1. 读 API 仍由 <see cref="IConflictSetStore"/> 提供；本接口仅追加写方法。
+///   2. 写入由 <c>UtilityLedgerMaterializer</c> 异步批量调用。
+///   3. 实现层负责幂等：同 <see cref="ConflictSet.ConflictSetId"/> 重复写入时由实现保证覆盖或忽略。
+/// </remarks>
+public interface IConflictSetLedger : IConflictSetStore
+{
+    /// <summary>
+    /// 批量追加 ConflictSet（仅供 UtilityLedgerMaterializer 调用）。
+    /// </summary>
+    /// <param name="conflictSets">待写入的冲突集合列表（不可为 null；空列表为 no-op）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task AppendConflictSetsAsync(
+        IReadOnlyList<ConflictSet> conflictSets,
+        CancellationToken cancellationToken = default);
+}
+
+// ===========================================================================
+// R29 WP-E-5：User Feedback Signal（用户显式反馈接入）
+//
+// 目标：
+//   将用户对决策结果的显式反馈（thumbs up / thumbs down / 评分修正）写入独立 ledger，
+//   与 UtilityLedgerEntry 通过 (WorkspaceId, CollectionId, DecisionId, CandidateItemId) 关联。
+//   反馈不修改原始 ledger 条目（append-only 语义），而是在独立的 user_feedback_entries 表中
+//   追加新条目；后续 TrainingDataExporter / CalibrationDataExporter 可 JOIN 两个 ledger
+//   生成带 user_feedback 标签的离线数据集。
+//
+// 设计原则：
+//   1. 显式反馈只追加，不修改：原始 ledger 条目保持不可变，反馈作为独立事件流持久化。
+//   2. 幂等：调用方提供 IdempotencyKey；同键重复写入由实现保证覆盖或忽略。
+//   3. 关联约束：DecisionId + CandidateItemId 必须能在 utility_ledger_entries 中找到至少一条
+//      匹配条目；Store 应在写入时验证关联存在（仅 Postgres 实现做 FK 检查；InMemory 跳过）。
+//   4. P8 硬边界延续：用户反馈是观察信号而非训练标签；导出器需保留"无反馈"样本以避免偏差。
+//   5. 与 LearningFeedbackEvent（运行时反馈）的关系：
+//      - LearningFeedbackEvent 是早期反馈收集机制，面向审核流程；
+//      - UserFeedbackSignal 直接关联到 Utility Ledger 条目，作为校准/训练的标签信号。
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-E-5：用户反馈类型。对齐 thumbs up/down 语义 + 评分修正 + 文本反馈。
+/// </summary>
+public enum UserFeedbackKind : byte
+{
+    /// <summary>未知类型（仅用于历史数据兼容）。</summary>
+    Unknown = 0,
+
+    /// <summary>正向反馈（thumbs up；FeedbackValue = +1.0）。</summary>
+    ThumbsUp = 1,
+
+    /// <summary>负向反馈（thumbs down；FeedbackValue = -1.0）。</summary>
+    ThumbsDown = 2,
+
+    /// <summary>评分修正（用户给出修正后的分数；FeedbackValue 为修正后的最终分，范围 [0.0, 1.0]）。</summary>
+    ScoreCorrection = 3,
+
+    /// <summary>文本反馈（用户给出自然语言说明；FeedbackValue = 0.0，FeedbackText 必填）。</summary>
+    TextFeedback = 4,
+
+    /// <summary>举报（用户标记内容不当；FeedbackValue = -1.0）。</summary>
+    Report = 5
+}
+
+/// <summary>
+/// R29 WP-E-5：用户反馈信号条目。与 UtilityLedgerEntry 通过 (DecisionId, CandidateItemId) 关联。
+/// </summary>
+/// <remarks>
+/// 设计原则：
+///   1. 不可变：一旦写入不可修改（append-only 语义；同 (DecisionId, CandidateItemId, GivenBy)
+///      可有多条历史快照，便于追踪反馈演变）。
+///   2. 显式反馈：本条目仅记录用户主动给出的反馈，不包含隐式信号（点击、停留等）。
+///   3. 关联到决策：DecisionId + CandidateItemId 必须能匹配 Utility Ledger 中的至少一条条目；
+///      写入时由 Store 校验关联存在（Postgres 用 EXISTS 子查询；InMemory 跳过）。
+///   4. 幂等：IdempotencyKey 由调用方提供，重复写入由实现保证覆盖或忽略。
+///   5. P8 硬边界：用户反馈是观察信号；导出器需保留"无反馈"样本以避免偏差。
+/// </remarks>
+public sealed record UserFeedbackEntry
+{
+    /// <summary>条目唯一 ID（如 "feedback-{guid}"）。</summary>
+    public required string FeedbackEntryId { get; init; }
+
+    /// <summary>workspace 作用域（必填）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>collection 作用域（必填）。</summary>
+    public required string CollectionId { get; init; }
+
+    /// <summary>关联的 DecisionResult ID（与 UtilityLedgerEntry.DecisionId 对应）。</summary>
+    public required string DecisionId { get; init; }
+
+    /// <summary>关联的 Candidate ID（与 UtilityLedgerEntry.CandidateItemId 对应）。</summary>
+    public required string CandidateItemId { get; init; }
+
+    /// <summary>反馈类型（必填）。</summary>
+    public required UserFeedbackKind Kind { get; init; }
+
+    /// <summary>
+    /// 反馈数值。
+    ///   - ThumbsUp: +1.0
+    ///   - ThumbsDown: -1.0
+    ///   - ScoreCorrection: 修正后的最终分（范围 [0.0, 1.0]）
+    ///   - TextFeedback: 0.0
+    ///   - Report: -1.0
+    /// </summary>
+    public required double FeedbackValue { get; init; }
+
+    /// <summary>反馈文本（可空；TextFeedback 必填；其他类型可选）。</summary>
+    public string? FeedbackText { get; init; }
+
+    /// <summary>反馈者标识（用户 ID 或会话 ID；可空表示匿名反馈）。</summary>
+    public string? GivenBy { get; init; }
+
+    /// <summary>反馈提交时间（UTC；由调用方或 Store 写入时记录）。</summary>
+    public required DateTimeOffset GivenAt { get; init; }
+
+    /// <summary>幂等键（调用方提供；同键重复写入由实现保证覆盖或忽略）。</summary>
+    public required string IdempotencyKey { get; init; }
+
+    /// <summary>条目元数据（自定义键值对，用于追溯与审计）。</summary>
+    public IReadOnlyDictionary<string, string> Metadata { get; init; }
+        = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>
+/// R29 WP-E-5：用户反馈查询条件。
+/// </summary>
+public sealed record UserFeedbackQuery
+{
+    /// <summary>workspace 作用域（必填）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>collection 作用域（可空 = 跨集合）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>按 DecisionId 过滤（可空 = 不限制）。</summary>
+    public string? DecisionId { get; init; }
+
+    /// <summary>按 CandidateItemId 过滤（可空 = 不限制）。</summary>
+    public string? CandidateItemId { get; init; }
+
+    /// <summary>按反馈类型过滤（可空 = 不限制）。</summary>
+    public UserFeedbackKind? Kind { get; init; }
+
+    /// <summary>按反馈者过滤（可空 = 不限制）。</summary>
+    public string? GivenBy { get; init; }
+
+    /// <summary>仅返回 GivenAt &gt;= Since 的条目（可空 = 不限制）。</summary>
+    public DateTimeOffset? Since { get; init; }
+
+    /// <summary>仅返回 GivenAt &lt;= Until 的条目（可空 = 不限制）。</summary>
+    public DateTimeOffset? Until { get; init; }
+
+    /// <summary>最大返回数量（默认 100；0 = 不限制）。</summary>
+    public int Take { get; init; } = 100;
+}
+
+/// <summary>
+/// R29 WP-E-5：用户反馈 Ledger 接口（读 + 写）。
+/// </summary>
+/// <remarks>
+/// 设计原则：
+///   1. 读 API：QueryFeedbackAsync / GetLatestFeedbackForCandidateAsync。
+///   2. 写 API：AppendFeedbackAsync — 单条写入（用户反馈通常是低频异步事件，无需批量）。
+///   3. 实现层负责幂等：同 IdempotencyKey 重复写入时由实现保证覆盖或忽略
+///      （Postgres 用 ON CONFLICT DO UPDATE；InMemory 不去重 — append-only 语义）。
+///   4. 关联校验：Postgres 实现在写入时验证 (DecisionId, CandidateItemId) 在
+///      utility_ledger_entries 中存在；InMemory 实现跳过校验以保持测试友好。
+/// </remarks>
+public interface IUserFeedbackLedger
+{
+    /// <summary>追加单条用户反馈（实现负责幂等与关联校验）。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task AppendFeedbackAsync(
+        UserFeedbackEntry feedback,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>按条件查询用户反馈（按 GivenAt 降序返回）。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<IReadOnlyList<UserFeedbackEntry>> QueryFeedbackAsync(
+        UserFeedbackQuery query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>查询指定 candidate 的最新反馈条目（按 GivenAt 降序取首条）。</summary>
+    /// <returns>最新条目；candidate 从未被反馈时返回 null。</returns>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<UserFeedbackEntry?> GetLatestFeedbackForCandidateAsync(
+        string workspaceId,
+        string collectionId,
+        string candidateItemId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R29 WP-E-5：用户反馈提交请求（API 入口层 DTO）。
+/// 与 <see cref="UserFeedbackEntry"/> 分离，便于入口层做目标类型校验后再映射到 ledger 条目。
+/// </summary>
+/// <remarks>
+/// 设计原则：
+///   1. 调用方无需提供 FeedbackEntryId / GivenAt / IdempotencyKey — 由 Service 端点自动生成
+///      （FeedbackEntryId = "feedback-{guid}"，GivenAt = UtcNow，IdempotencyKey 由调用方按需提供或自动生成）。
+///   2. FeedbackKind 必填：ThumbsUp / ThumbsDown / ScoreCorrection / TextFeedback / Report。
+///   3. FeedbackValue 由 Kind 推导（ThumbsUp=+1.0 / ThumbsDown=-1.0 / Report=-1.0）；
+///      ScoreCorrection 时调用方必须显式提供 FeedbackValue（范围 [0.0, 1.0]）。
+///   4. TextFeedback 时 FeedbackText 必填。
+/// </remarks>
+public sealed class UserFeedbackSubmitRequest
+{
+    /// <summary>workspace 作用域（必填）。</summary>
+    public string WorkspaceId { get; init; } = string.Empty;
+
+    /// <summary>collection 作用域（必填）。</summary>
+    public string CollectionId { get; init; } = string.Empty;
+
+    /// <summary>关联的 DecisionResult ID（必填；与 UtilityLedgerEntry.DecisionId 对应）。</summary>
+    public string DecisionId { get; init; } = string.Empty;
+
+    /// <summary>关联的 Candidate ID（必填；与 UtilityLedgerEntry.CandidateItemId 对应）。</summary>
+    public string CandidateItemId { get; init; } = string.Empty;
+
+    /// <summary>反馈类型（必填）。</summary>
+    public UserFeedbackKind Kind { get; init; }
+
+    /// <summary>
+    /// 反馈数值（可选；不填时由 Kind 推导）。
+    ///   - ThumbsUp / Report：忽略，自动设为 +1.0 / -1.0
+    ///   - ThumbsDown：忽略，自动设为 -1.0
+    ///   - ScoreCorrection：必填，范围 [0.0, 1.0]
+    ///   - TextFeedback：忽略，自动设为 0.0
+    /// </summary>
+    public double? FeedbackValue { get; init; }
+
+    /// <summary>反馈文本（可空；TextFeedback 必填；其他类型可选）。</summary>
+    public string? FeedbackText { get; init; }
+
+    /// <summary>反馈者标识（用户 ID 或会话 ID；可空表示匿名反馈）。</summary>
+    public string? GivenBy { get; init; }
+
+    /// <summary>
+    /// 幂等键（可选；不填时自动生成 "fb-idem-{guid}"）。
+    /// 同键重复写入由实现保证覆盖或忽略。
+    /// </summary>
+    public string? IdempotencyKey { get; init; }
+
+    /// <summary>条目元数据（可选，用于追溯与审计）。</summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+}
+
+/// <summary>
+/// R29 WP-E-5：用户反馈提交结果。
+/// </summary>
+public sealed class UserFeedbackSubmitResult
+{
+    /// <summary>写入的反馈条目 ID。</summary>
+    public string FeedbackEntryId { get; init; } = string.Empty;
+
+    /// <summary>是否为新建条目（false 表示幂等覆盖已存在的 IdempotencyKey 条目）。</summary>
+    public bool Created { get; init; }
+
+    /// <summary>是否为幂等覆盖（IdempotencyKey 已存在，覆盖旧反馈）。</summary>
+    public bool IdempotentReplaced { get; init; }
+
+    /// <summary>反馈条目（写入后的完整快照）。</summary>
+    public UserFeedbackEntry Entry { get; init; } = null!;
+
+    /// <summary>警告列表（例如 ScoreCorrection 超出 [0,1] 范围时自动裁剪等）。</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }

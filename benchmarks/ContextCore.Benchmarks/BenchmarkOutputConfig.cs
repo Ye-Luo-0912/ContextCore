@@ -3,6 +3,7 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Exporters.Csv;
 using BenchmarkDotNet.Exporters.Json;
+using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Loggers;
 
 namespace ContextCore.Benchmarks;
@@ -14,7 +15,7 @@ namespace ContextCore.Benchmarks;
 /// <list type="bullet">
 ///   <item>变更前运行 → 复制 JSON 报告为 <c>benchmarks/results/baseline.json</c></item>
 ///   <item>变更后运行 → 复制 JSON 报告为 <c>benchmarks/results/current.json</c></item>
-///   <item>使用 BenchmarkDotNet 的 <c>--diff baseline.json</c> 生成对比</item>
+///   <item>使用 BenchmarkDotNet 的 <c>--diff baseline.json</c> 生成对比</li>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -34,6 +35,22 @@ public sealed class BenchmarkOutputConfig : ManualConfig
         var resultsPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(
             System.AppContext.BaseDirectory, "..", "..", "..", "..", "results"));
         ArtifactsPath = resultsPath;
+
+        // P0-9：集中化 Job 配置，提供可靠的迭代次数下限，
+        // 避免 CI 因样本数不足 / 噪声触发假阳性回归告警。
+        // 各 benchmark 类不再声明 [SimpleJob]，统一由此处决定测量参数，
+        // 防止 config Job 与 attribute Job 并存导致重复运行。
+        //   - MinWarmupCount=3 / MaxWarmupCount=10：足够预热 JIT 与 CPU 分支预测器
+        //   - MinIterationCount=15 / MaxIterationCount=25：N≥15 保证 StdErr 收敛，
+        //     配合 benchmark-compare.sh 的置信区间检查（2×StdErr）抑制噪声假阳性
+        //   - 离群值剔除（OutlierMode.RemoveUpper）为 BenchmarkDotNet 默认行为，保持默认即可
+        //   - 不设置 MaxAbsoluteError / MeanAbsoluteError：误差驱动的迭代次数在 CI 上不可预测，
+        //     固定上下限更可控；置信区间检查由 benchmark-compare.sh 在统计层完成
+        AddJob(Job.Default
+            .WithMinWarmupCount(3)
+            .WithMaxWarmupCount(10)
+            .WithMinIterationCount(15)
+            .WithMaxIterationCount(25));
 
         // JSON 全量导出（含所有统计指标），用于 baseline/current 对比
         AddExporter(JsonExporter.Full);

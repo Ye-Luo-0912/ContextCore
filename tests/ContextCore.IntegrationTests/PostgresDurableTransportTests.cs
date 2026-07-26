@@ -10,8 +10,10 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// R29 WP-B-4：PostgresDurableTransport 端到端集成测试（Testcontainers）。
+/// R29 WP-B-4 / P0-1：PostgresDurableTransport 端到端集成测试（Testcontainers）。
 /// 验证持久化 Durable Transport 的 inbox/outbox 持久化、FIFO 顺序、跨进程崩溃恢复与配置开关。
+/// P0-1：追加租约模型测试（LeaseAsync/AckAsync/NackAsync/RenewLeaseAsync/RequeueExpiredAsync + 结果变体），
+/// 覆盖崩溃恢复、租约过期回滚、token 不匹配、续租等场景。
 /// </summary>
 [TestClass]
 [TestCategory("Integration")]
@@ -27,20 +29,24 @@ public sealed class PostgresDurableTransportTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        if (!await PostgresIntegrationTests.IsDockerAvailableAsync())
+        // R14-PG 收口：直接尝试启动容器（与 PostgresToolDispatchJournalTests 一致），
+        // 避免 IsDockerAvailableAsync 在 Windows named-pipe Docker Desktop 上误判。
+        try
         {
-            Console.WriteLine("[PostgresDurableTransportTests] Docker 不可用，所有测试将标记为 Inconclusive。");
-            return;
+            _container = new PostgreSqlBuilder(PgVectorImage)
+                .WithDatabase("cctest")
+                .WithUsername("cctest")
+                .WithPassword("cctest")
+                .Build();
+
+            await _container.StartAsync();
+            _connectionString = _container.GetConnectionString();
         }
-
-        _container = new PostgreSqlBuilder(PgVectorImage)
-            .WithDatabase("cctest")
-            .WithUsername("cctest")
-            .WithPassword("cctest")
-            .Build();
-
-        await _container.StartAsync();
-        _connectionString = _container.GetConnectionString();
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgresDurableTransportTests] Docker 不可用：{ex.GetType().Name}: {ex.Message}");
+            _connectionString = null;
+        }
     }
 
     [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
@@ -414,5 +420,565 @@ public sealed class PostgresDurableTransportTests
         var provider2 = services.BuildServiceProvider();
         var transport2 = provider2.GetRequiredService<IAgentKernelTransport>();
         Assert.IsInstanceOfType(transport2, typeof(PostgresDurableTransport));
+    }
+
+    // ── P0-1：租约模型测试 ────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task LeaseAndAck_Inbox_RoundtripsFifo()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt11_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+            var leaseDuration = TimeSpan.FromMinutes(1);
+
+            await transport.SubmitAsync(MakeInstruction("lease-1"));
+            await Task.Delay(15);
+            await transport.SubmitAsync(MakeInstruction("lease-2"));
+            await Task.Delay(15);
+            await transport.SubmitAsync(MakeInstruction("lease-3"));
+
+            Assert.AreEqual(3, transport.PendingInstructionCount);
+
+            // FIFO 租约 + Ack：每条指令 Ack 后从表中删除
+            var first = await transport.LeaseAsync(leaseDuration);
+            Assert.IsNotNull(first);
+            Assert.AreEqual("lease-1", first!.Instruction.InstructionId);
+            Assert.IsFalse(string.IsNullOrEmpty(first.LeaseToken));
+            Assert.IsTrue(first.LeaseExpiresAt > DateTimeOffset.UtcNow);
+            Assert.AreEqual(2, transport.PendingInstructionCount); // lease-1 已 Leased，不计入 Pending
+            await transport.AckAsync("lease-1", first.LeaseToken);
+            Assert.AreEqual(2, transport.PendingInstructionCount); // 仍为 2（lease-2/3 Pending）
+
+            var second = await transport.LeaseAsync(leaseDuration);
+            Assert.IsNotNull(second);
+            Assert.AreEqual("lease-2", second!.Instruction.InstructionId);
+            await transport.AckAsync("lease-2", second.LeaseToken);
+
+            var third = await transport.LeaseAsync(leaseDuration);
+            Assert.IsNotNull(third);
+            Assert.AreEqual("lease-3", third!.Instruction.InstructionId);
+            await transport.AckAsync("lease-3", third.LeaseToken);
+
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+
+            // 无 Pending 行 → null
+            var empty = await transport.LeaseAsync(leaseDuration);
+            Assert.IsNull(empty);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task LeaseResultAndAckResult_Outbox_RoundtripsFifo()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt12_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+            var leaseDuration = TimeSpan.FromMinutes(1);
+
+            await transport.SendResultAsync(MakeResult("r-1", "out-1"));
+            await transport.SendResultAsync(MakeResult("r-2", "out-2"));
+
+            Assert.AreEqual(2, transport.PendingResultCount);
+
+            var first = await transport.LeaseResultAsync(leaseDuration);
+            Assert.IsNotNull(first);
+            Assert.AreEqual("r-1", first!.Result.InstructionId);
+            Assert.AreEqual("out-1", first.Result.Output);
+            Assert.IsFalse(string.IsNullOrEmpty(first.ResultId));
+            Assert.IsFalse(string.IsNullOrEmpty(first.LeaseToken));
+            Assert.AreEqual(1, transport.PendingResultCount);
+            await transport.AckResultAsync(first.ResultId, first.LeaseToken);
+            Assert.AreEqual(1, transport.PendingResultCount);
+
+            var second = await transport.LeaseResultAsync(leaseDuration);
+            Assert.IsNotNull(second);
+            Assert.AreEqual("r-2", second!.Result.InstructionId);
+            await transport.AckResultAsync(second.ResultId, second.LeaseToken);
+
+            Assert.AreEqual(0, transport.PendingResultCount);
+
+            var empty = await transport.LeaseResultAsync(leaseDuration);
+            Assert.IsNull(empty);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_WithoutAck_RowStaysLeased_NotReLeasedUntilRequeued()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt13_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("stuck-1"));
+
+            // 租约但不 Ack → 行变为 Leased，PendingCount=0
+            var leased = await transport.LeaseAsync(TimeSpan.FromSeconds(1));
+            Assert.IsNotNull(leased);
+            Assert.AreEqual("stuck-1", leased!.Instruction.InstructionId);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+
+            // 再次 Lease → 返回 null（无 Pending 行；Leased 行不会被重复租约）
+            var reLeased = await transport.LeaseAsync(TimeSpan.FromSeconds(1));
+            Assert.IsNull(reLeased);
+
+            // RequeueExpired 未过期 → 0 行回滚
+            var requeued = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(0, requeued);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+
+            // 等待租约过期 → RequeueExpired 回滚为 Pending
+            await Task.Delay(1200); // 等待 1 秒租约过期
+            var requeued2 = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(1, requeued2);
+            Assert.AreEqual(1, transport.PendingInstructionCount);
+
+            // 回滚后可重新租约
+            var reLeased2 = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased2);
+            Assert.AreEqual("stuck-1", reLeased2!.Instruction.InstructionId);
+            // 新租约有新 token（不同于原 token）
+            Assert.AreNotEqual(leased.LeaseToken, reLeased2.LeaseToken);
+            await transport.AckAsync("stuck-1", reLeased2.LeaseToken);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Nack_ReturnsRowToPending_CanBeReLeased()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt14_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("nack-1"));
+
+            var leased = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(leased);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+
+            // Nack 立即回滚为 Pending
+            await transport.NackAsync("nack-1", leased!.LeaseToken);
+            Assert.AreEqual(1, transport.PendingInstructionCount);
+
+            // 可重新租约（FIFO 顺序保持）
+            var reLeased = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased);
+            Assert.AreEqual("nack-1", reLeased!.Instruction.InstructionId);
+            Assert.AreNotEqual(leased.LeaseToken, reLeased.LeaseToken);
+            await transport.AckAsync("nack-1", reLeased.LeaseToken);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task NackResult_ReturnsRowToPending_CanBeReLeased()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt15_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SendResultAsync(MakeResult("nr-1", "out-1"));
+
+            var leased = await transport.LeaseResultAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(leased);
+            Assert.AreEqual(0, transport.PendingResultCount);
+
+            await transport.NackResultAsync(leased!.ResultId, leased.LeaseToken);
+            Assert.AreEqual(1, transport.PendingResultCount);
+
+            var reLeased = await transport.LeaseResultAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased);
+            Assert.AreEqual("nr-1", reLeased!.Result.InstructionId);
+            await transport.AckResultAsync(reLeased.ResultId, reLeased.LeaseToken);
+            Assert.AreEqual(0, transport.PendingResultCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RenewLease_ExtendsExpiry_PreventsRequeue()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt16_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("renew-1"));
+
+            // 短租约（100ms）
+            var leased = await transport.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            Assert.IsNotNull(leased);
+
+            // 立即续租到 1 分钟
+            await transport.RenewLeaseAsync("renew-1", leased!.LeaseToken, TimeSpan.FromMinutes(1));
+
+            // 等待原租约过期时间
+            await Task.Delay(250);
+
+            // RequeueExpired 不应回滚（已续租）
+            var requeued = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(0, requeued);
+            Assert.AreEqual(0, transport.PendingInstructionCount); // 仍为 Leased
+
+            // Ack 仍可用（续租后 token 不变）
+            await transport.AckAsync("renew-1", leased.LeaseToken);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RenewResultLease_ExtendsExpiry_PreventsRequeue()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt17_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SendResultAsync(MakeResult("rr-1", "out-1"));
+
+            var leased = await transport.LeaseResultAsync(TimeSpan.FromMilliseconds(100));
+            Assert.IsNotNull(leased);
+
+            await transport.RenewResultLeaseAsync(leased!.ResultId, leased.LeaseToken, TimeSpan.FromMinutes(1));
+            await Task.Delay(250);
+
+            var requeued = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(0, requeued);
+
+            await transport.AckResultAsync(leased.ResultId, leased.LeaseToken);
+            Assert.AreEqual(0, transport.PendingResultCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_WithWrongToken_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt18_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("wrong-ack-1"));
+            var leased = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(leased);
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await transport.AckAsync("wrong-ack-1", "wrong-token-not-matching"));
+
+            // 失败的 Ack 不影响行状态（仍为 Leased）
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+
+            // 正确 token 仍可 Ack
+            await transport.AckAsync("wrong-ack-1", leased!.LeaseToken);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Nack_WithWrongToken_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt19_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("wrong-nack-1"));
+            var leased = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(leased);
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await transport.NackAsync("wrong-nack-1", "wrong-token"));
+
+            // 正确 token 仍可 Nack
+            await transport.NackAsync("wrong-nack-1", leased!.LeaseToken);
+            Assert.AreEqual(1, transport.PendingInstructionCount);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RenewLease_WithWrongToken_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt20_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("wrong-renew-1"));
+            var leased = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(leased);
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await transport.RenewLeaseAsync("wrong-renew-1", "wrong-token", TimeSpan.FromMinutes(2)));
+
+            // 正确 token 仍可续租
+            await transport.RenewLeaseAsync("wrong-renew-1", leased!.LeaseToken, TimeSpan.FromMinutes(2));
+            await transport.AckAsync("wrong-renew-1", leased.LeaseToken);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_AfterRequeueExpired_ThrowsInvalidOperationException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt21_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await transport.SubmitAsync(MakeInstruction("expired-ack-1"));
+            var leased = await transport.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            Assert.IsNotNull(leased);
+
+            await Task.Delay(250); // 等待租约过期
+            var requeued = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(1, requeued);
+            Assert.AreEqual(1, transport.PendingInstructionCount); // 已回滚为 Pending
+
+            // 原 token 已失效（行已回滚为 Pending）→ Ack 应抛
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await transport.AckAsync("expired-ack-1", leased!.LeaseToken));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task RequeueExpired_ReturnsTotalCount_InboxAndOutbox()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt22_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            // 2 条 inbox + 1 条 outbox，全部短租约（不 Ack）
+            await transport.SubmitAsync(MakeInstruction("exp-1"));
+            await transport.SubmitAsync(MakeInstruction("exp-2"));
+            await transport.SendResultAsync(MakeResult("exp-r-1"));
+
+            var l1 = await transport.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            var l2 = await transport.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            var lr1 = await transport.LeaseResultAsync(TimeSpan.FromMilliseconds(100));
+
+            Assert.IsNotNull(l1);
+            Assert.IsNotNull(l2);
+            Assert.IsNotNull(lr1);
+            Assert.AreEqual(0, transport.PendingInstructionCount);
+            Assert.AreEqual(0, transport.PendingResultCount);
+
+            await Task.Delay(250); // 等待全部过期
+
+            var requeued = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(3, requeued); // 2 inbox + 1 outbox
+            Assert.AreEqual(2, transport.PendingInstructionCount);
+            Assert.AreEqual(1, transport.PendingResultCount);
+
+            // 二次调用应为 0（已全部回滚）
+            var requeued2 = await transport.RequeueExpiredAsync();
+            Assert.AreEqual(0, requeued2);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task CrashRecovery_LeasedWithoutAck_OnNewInstance_RequeuedAndReLeased()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt23_");
+        try
+        {
+            // 第一个实例：提交 + 租约（模拟崩溃前已 Lease 但未 Ack）
+            var transport1 = new PostgresDurableTransport(factory, serializer, migrationRunner);
+            await transport1.SubmitAsync(MakeInstruction("crash-lease-1"));
+
+            var leased = await transport1.LeaseAsync(TimeSpan.FromMilliseconds(100));
+            Assert.IsNotNull(leased);
+            Assert.AreEqual(0, transport1.PendingInstructionCount);
+
+            // 模拟进程崩溃：丢弃 transport1（持有 lease token，但进程已死，无法 Ack）
+            await Task.Delay(250); // 等待租约过期
+
+            // 新实例启动：调用 RequeueExpired 回滚过期租约
+            var transport2 = new PostgresDurableTransport(factory, serializer, migrationRunner);
+            var requeued = await transport2.RequeueExpiredAsync();
+            Assert.AreEqual(1, requeued);
+            Assert.AreEqual(1, transport2.PendingInstructionCount);
+
+            // 新实例可重新租约并 Ack
+            var reLeased = await transport2.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(reLeased);
+            Assert.AreEqual("crash-lease-1", reLeased!.Instruction.InstructionId);
+            // 新租约 token 不同于崩溃实例持有的（已失效）
+            Assert.AreNotEqual(leased.LeaseToken, reLeased.LeaseToken);
+            await transport2.AckAsync("crash-lease-1", reLeased.LeaseToken);
+            Assert.AreEqual(0, transport2.PendingInstructionCount);
+
+            // 原 token（来自崩溃实例）无法 Ack（已被回滚并重新租约给新实例）
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                async () => await transport2.AckAsync("crash-lease-1", leased.LeaseToken));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_OnEmptyInbox_ReturnsNull()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt24_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            var instruction = await transport.LeaseAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNull(instruction);
+
+            var result = await transport.LeaseResultAsync(TimeSpan.FromMinutes(1));
+            Assert.IsNull(result);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Lease_ZeroOrNegativeDuration_ThrowsArgumentOutOfRangeException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt25_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await transport.LeaseAsync(TimeSpan.Zero));
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await transport.LeaseAsync(TimeSpan.FromSeconds(-1)));
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await transport.LeaseResultAsync(TimeSpan.Zero));
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await transport.RenewLeaseAsync("x", "t", TimeSpan.Zero));
+
+            await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+                async () => await transport.RenewResultLeaseAsync("x", "t", TimeSpan.FromSeconds(-1)));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    public async Task Ack_NullOrEmptyArgs_ThrowsArgumentException()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("pdt26_");
+        try
+        {
+            var transport = new PostgresDurableTransport(factory, serializer, migrationRunner);
+
+            // 空字符串 → ArgumentException（ThrowIfNullOrWhiteSpace 对 empty/whitespace 抛 ArgumentException）
+            await Assert.ThrowsExceptionAsync<ArgumentException>(
+                async () => await transport.AckAsync("", "token"));
+            await Assert.ThrowsExceptionAsync<ArgumentException>(
+                async () => await transport.AckAsync("id", ""));
+            // null → ArgumentNullException（ThrowIfNullOrWhiteSpace 对 null 抛 ArgumentNullException，
+            //   ArgumentNullException : ArgumentException，但 MSTest ThrowsExceptionAsync<T> 要求精确匹配）
+            await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+                async () => await transport.NackAsync(null!, "token"));
+            await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+                async () => await transport.RenewLeaseAsync("id", null!, TimeSpan.FromMinutes(1)));
+            await Assert.ThrowsExceptionAsync<ArgumentException>(
+                async () => await transport.AckResultAsync("", "token"));
+            await Assert.ThrowsExceptionAsync<ArgumentException>(
+                async () => await transport.NackResultAsync("id", ""));
+            await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+                async () => await transport.RenewResultLeaseAsync("id", null!, TimeSpan.FromMinutes(1)));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
     }
 }

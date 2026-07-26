@@ -12,7 +12,6 @@ namespace ContextCore.Benchmarks;
 // InMemory store 无 I/O 延迟，并行无优势；本基准用延迟装饰器模拟真实存储（FS/Postgres）的 per-query 延迟，
 // 对比"无延迟（InMemory 直接）"与"有延迟（每 query 1ms）"下并行预取的效果。
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class ParallelPrefetchBenchmarks
 {
     private const string WorkspaceId = "bench-ws";

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Evolution;
@@ -985,14 +986,20 @@ public sealed class AuthoritativeAgentContextRuntime
 {
     private readonly IContextDecisionRuntime _v2Runtime;
     private readonly IAgentContextProjector _agentContextProjector;
+    private readonly IComponentHealthRegistry? _componentHealthRegistry;
 
     /// <summary>构造 AgentContext 权威路径运行时。</summary>
+    /// <param name="v2Runtime">V2 Runtime（编排 Provider → Merge → Feature → Engine）。</param>
+    /// <param name="agentContextProjector">AgentContext 投影器。</param>
+    /// <param name="componentHealthRegistry">P5：组件健康注册表（null 时跳过 projection_ms 归因，向后兼容）。</param>
     public AuthoritativeAgentContextRuntime(
         IContextDecisionRuntime v2Runtime,
-        IAgentContextProjector agentContextProjector)
+        IAgentContextProjector agentContextProjector,
+        IComponentHealthRegistry? componentHealthRegistry = null)
     {
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
         _agentContextProjector = agentContextProjector ?? throw new ArgumentNullException(nameof(agentContextProjector));
+        _componentHealthRegistry = componentHealthRegistry;
     }
 
     /// <summary>
@@ -1033,9 +1040,29 @@ public sealed class AuthoritativeAgentContextRuntime
 
         // R28-B.6 P0-3：使用 execution.WorkingSet（包含 Provider 新召回的 Material），而非 caller 原始 WorkingSet
         // R28-B.7 P0-6：使用 execution 重载
-        return effectiveContext is not null
-            ? _agentContextProjector.Project(execution, effectiveContext)
-            : _agentContextProjector.Project(execution);
+        // P5：用 Stopwatch 拆分 projection_ms（IAgentContextProjector 投影耗时），记录到 IComponentHealthRegistry
+        var componentRegistry = _componentHealthRegistry;
+        var componentScopeKey = $"{request.Scope.WorkspaceId}/{request.Scope.CollectionId}";
+        var projectionSw = componentRegistry is not null ? Stopwatch.StartNew() : null;
+        bool projectionSucceeded = false;
+        try
+        {
+            var snapshot = effectiveContext is not null
+                ? _agentContextProjector.Project(execution, effectiveContext)
+                : _agentContextProjector.Project(execution);
+            projectionSucceeded = true;
+            return snapshot;
+        }
+        finally
+        {
+            if (projectionSw is not null)
+            {
+                projectionSw.Stop();
+                componentRegistry!.RecordComponentTime(
+                    ComponentKind.Projection, projectionSw.Elapsed.TotalMilliseconds,
+                    projectionSucceeded, componentScopeKey, cancellationToken);
+            }
+        }
     }
 
     /// <summary>

@@ -4,21 +4,21 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：IUtilityLedgerStore 的 in-memory 实现（read-only 公共 API）。
+/// R21-3：IUtilityLedger 的 in-memory 实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4）：
-///   1. 公共 API 是 read-only（QueryAsync / GetLatestEntryAsync / GetExpertContributionsAsync）。
-///   2. 写入由 internal AppendEntries 方法暴露，仅供 UtilityLedgerMaterializer 调用。
-///   3. 生产部署应替换为 PostgresUtilityLedgerStore（仍保持 read-only 公共 API，
-///      写入由 materializer 通过 store 内部的 bulk insert SQL 完成）。
+/// 设计原则（对齐澄清 #4 + R29 WP-E-1）：
+///   1. 读 API 由 <see cref="IUtilityLedgerStore"/> 提供（QueryAsync / GetLatestEntryAsync / GetExpertContributionsAsync）。
+///   2. 写 API 由 <see cref="IUtilityLedger"/> 提供（AppendEntriesAsync）；内部仍保留同步
+///      <c>AppendEntries</c> 供遗留调用方使用，但 materializer 已迁移到异步接口。
+///   3. 生产部署应替换为 PostgresUtilityLedgerStore（实现同一 <see cref="IUtilityLedger"/> 契约）。
 /// </remarks>
-public sealed class InMemoryUtilityLedgerStore : IUtilityLedgerStore
+public sealed class InMemoryUtilityLedgerStore : IUtilityLedger
 {
     private readonly ConcurrentBag<UtilityLedgerEntry> _entries = new();
 
     /// <summary>
-    /// 内部写入方法（仅供 UtilityLedgerMaterializer 调用）。
+    /// 内部同步写入方法（保留以兼容遗留调用方；新代码应使用 <see cref="AppendEntriesAsync"/>）。
     /// 批量追加 ledger 条目；不去重（同 candidate 可有多条历史快照）。
     /// </summary>
     internal void AppendEntries(IEnumerable<UtilityLedgerEntry> entries)
@@ -32,6 +32,17 @@ public sealed class InMemoryUtilityLedgerStore : IUtilityLedgerStore
     }
 
     /// <inheritdoc />
+    public Task AppendEntriesAsync(
+        IReadOnlyList<UtilityLedgerEntry> entries,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        cancellationToken.ThrowIfCancellationRequested();
+        AppendEntries(entries);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<UtilityLedgerEntry>> QueryAsync(
         UtilityLedgerQuery query,
         CancellationToken cancellationToken = default)
@@ -41,6 +52,11 @@ public sealed class InMemoryUtilityLedgerStore : IUtilityLedgerStore
 
         IEnumerable<UtilityLedgerEntry> results = _entries;
 
+        // WorkspaceId 是必填字段（与 PostgresUtilityLedgerStore 一致），始终作为主过滤条件。
+        if (!string.IsNullOrEmpty(query.WorkspaceId))
+        {
+            results = results.Where(e => e.WorkspaceId == query.WorkspaceId);
+        }
         if (query.CollectionId is not null)
         {
             results = results.Where(e => e.CollectionId == query.CollectionId);

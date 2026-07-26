@@ -7,13 +7,15 @@ using NpgsqlTypes;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// R28-E：PostgreSQL ConflictSet Store 持久化实现。
+/// R28-E / R29 WP-E-1：PostgreSQL ConflictSet Store 持久化实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R21-2 契约澄清 #4）：
-///   1. 公共 API 是 read-only（QueryAsync / GetAsync / GetConflictsForCandidateAsync），
-///      与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryConflictSetStore"/> 行为一致。
-///   2. 写入由 internal <see cref="BulkInsertAsync"/> 暴露，仅供 UtilityLedgerMaterializer 调用。
+/// 设计原则（对齐 R21-2 契约澄清 #4 + R29 学习闭环）：
+///   1. 实现 <see cref="IConflictSetLedger"/>：读 API（QueryAsync / GetAsync /
+///      GetConflictsForCandidateAsync）+ 异步批量写 API（<see cref="AppendConflictSetsAsync"/>）。
+///   2. 写入由 <c>UtilityLedgerMaterializer</c> 通过 <see cref="AppendConflictSetsAsync"/> 调用
+///      （生产路径）；与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryConflictSetStore"/>
+///      实现同一 <see cref="IConflictSetLedger"/> 契约，materializer 无需感知存储后端。
 ///   3. 表 <c>conflict_sets</c> 反规范化 workspace_id / collection_id / kind / decision_id /
 ///      resolution_status / created_at 字段以便索引查询；完整 <see cref="ConflictSet"/> 对象保存在
 ///      <c>data jsonb</c>，由 store 反序列化。
@@ -22,7 +24,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///      PostgresJsonSerializer 默认序列化），由 GIN 索引加速。
 ///   5. QueryAsync 按 created_at DESC 排序（created_at 列对应 record 的 MaterializedAt，与 InMemory 语义一致）。
 /// </remarks>
-public sealed class PostgresConflictSetStore : PostgresStoreBase, IConflictSetStore
+public sealed class PostgresConflictSetStore : PostgresStoreBase, IConflictSetLedger
 {
     public PostgresConflictSetStore(
         PostgresConnectionFactory connectionFactory,
@@ -168,7 +170,7 @@ ORDER BY created_at DESC;
     }
 
     /// <summary>
-    /// 内部批量写入方法（仅供 UtilityLedgerMaterializer 调用）。
+    /// 批量写入 ConflictSet（实现 <see cref="IConflictSetLedger.AppendConflictSetsAsync"/>）。
     /// 幂等：同 conflict_set_id 重复写入时覆盖（ON CONFLICT DO UPDATE），保持最新快照。
     /// </summary>
     /// <remarks>
@@ -176,7 +178,7 @@ ORDER BY created_at DESC;
     /// memory_state_event_id / relation_id 在 DDL 中为可空；record 字段同样可空，直接传 DBNull。
     /// created_at 列对应 record 的 MaterializedAt（排序键）。
     /// </remarks>
-    internal async Task BulkInsertAsync(
+    public async Task AppendConflictSetsAsync(
         IReadOnlyList<ConflictSet> conflictSets,
         CancellationToken cancellationToken = default)
     {

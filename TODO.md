@@ -1,12 +1,74 @@
 # ContextCore 项目路线图
 
-> 最近更新：R27 + R18-R21 全部完成，所有路线图既定阶段已收口（2026-07-21，HEAD `6fe3203` + docs `ff49c3d`）。下一步由用户决定推进方向。
+> 最近更新：R29 Final Closure 六条工作流全部完成 + 30 项硬验收测试通过（2026-07-27，HEAD `1502b72`）。下一阶段为 R30 Self-Learning Agent Runtime。
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
 ---
 
 ## 当前阶段
+
+**R29 Final Closure — Production Truth Gate 已完成**（HEAD `1502b72`）。六条工作流全部收口，30 项硬验收测试通过。下一阶段为 R30 Self-Learning Agent Runtime。
+
+### R28 — 持久化可靠性基础（已完成，HEAD `6fe3203` → `1502b72`）
+
+R28 系列为 R29 Final Closure 奠定持久化可靠性基础，涵盖 Tool Journal、Durable Transport、Outbox、Checkpoint 哈希链、Canary Metrics 等核心组件。
+
+- **R28-B Evolution Pipeline**：Canary Metrics Collector（ring buffer + DDSketch）+ CanaryProgressionHostedService + CanaryProgressionService（4 类回滚阈值 + 渐进晋升）
+- **R28-C Agent Kernel**：极薄 .NET 决策循环（IAgentKernel + IAgentKernelTransport + IToolDispatcher）+ Tool Dispatch 状态机（Prepared→Dispatched→Committed→ResultDelivered）+ InMemory 持久化实现
+- **R28-E Tool Journal**：IToolDispatchJournal 契约 + InMemoryToolDispatchJournal + 持久化标记接口 IPersistentToolDispatchJournal
+- **R28-F Model Execution**：DeterministicBatchInferenceEngine（FNV-1a 64-bit hash，无装箱）+ FeatureBatch 连续内存路径 + ContentHash/CalibrationVersion 契约
+
+### R29 — Final Closure Production Truth Gate（已完成，HEAD `1502b72`）
+
+R29 作为完整里程碑推进六条工作流，不再拆分小阶段。所有工作流已实现完成并通过硬验收测试。
+
+#### 工作流 A：Durable Delivery（已完成）
+- **P0-1 Durable Transport lease 模型**：PostgresDurableTransport 从破坏性 DELETE 改为 Pending→Leased→Acked 状态机（FOR UPDATE SKIP LOCKED + lease_token + lease_expires_at），26 个 Testcontainers 测试通过
+- **P0-2 Result Outbox Ack/Retry/Lease**：IPersistentKernelResultOutbox 扩展 LeaseAsync/AckAsync/NackAsync/RenewLeaseAsync/RequeueExpiredAsync，schema v29→v30，18 个新测试
+- **P0-4 Kernel 主输入链集成**：DurableTransportInstructionPumpService + ResultOutboxReplayService + LeaseReaperService 三个 HostedService
+- **P1 批量 Lease + 指数退避**：LeaseBatchAsync(32) + AckBatchAsync + 本地 bounded channel + 指数退避（×1.5 上限 5s），未引入 LISTEN/NOTIFY（遵循项目设计决策）
+- **P2 PendingCount 异步化**：GetPendingCountAsync + volatile 本地 counter（Enqueue±1），同步属性标记 Obsolete
+
+#### 工作流 B：Tool Effect Safety（已完成）
+- **P0-3 Tool Journal CAS + 幂等唯一性**：idempotency_key 升级为 UNIQUE partial index（WHERE idempotency_key IS NOT NULL），schema v27→v28；expected-state CAS 语义（缺失前驱抛 InvalidOperationException，不 auto-create stub）；InMemoryToolDispatchJournal 对齐 Postgres 语义
+
+#### 工作流 C：Model Activation（已完成）
+- **P0-7 ModelActivationManager**：权威模型激活管理器，编排 IModelArtifactRegistry→ICalibrationValidator→IFeatureRegistry→IOnnxInferenceSessionFactory→OnnxInferenceEngine，线程安全引擎切换（lock + volatile），fallback 代理（未激活时委托 DeterministicBatchInferenceEngine）
+- **P0-8 Validator 集成**：ICalibrationValidator + IFeatureSchemaValidator 注入生产加载路径，校准参数非法（Platt A=0）拒绝激活，schema 未注册拒绝激活
+- **P0-6 真实 ONNX E2E**：7 个测试加载真实 BGE/MiniLM ONNX 文件，验证张量名校验、完整激活流程、真实 ONNX Runtime 调用、SHA-256 ContentHash、ActivateLatestAsync、fail-safe 回退
+- **P3 ONNX 连续 FeatureBatch**：DefaultUtilityScorer 直构 row-major float[]（无 boxing）+ OnnxRuntimeInferenceSession 零拷贝（MemoryMarshal.TryGetArray + ArrayPool 回退）+ MaxBatchSize 分片 + lazy warmup
+
+#### 工作流 D：Agent Intelligence（已完成）
+- **6 个核心接口**：IAgentModelTransport / IAgentLoopPolicy / IAgentRunStore(+IPersistent) / IAgentApprovalGate / IAgentToolCallValidator / IAgentRunEventStore(+IPersistent)
+- **AgentRunState 状态机**：10 状态（Created→ContextBuilding→ModelCalling→AwaitingApproval→ToolDispatching→Observing→Checkpointing→Completed/Failed/Cancelled），复用 ToolDispatchState CAS 模式
+- **AgentRunActor + AgentKernelHost**：per-run 执行者实现 Task→BuildContext→Model→ToolCall→ToolResult→Model→Final 完整循环；AgentKernelHost 替代 Singleton Kernel 实现多 Session 隔离
+- **AgentRunEvent 哈希链**：ContentHash/PrevChainHash SHA-256 防篡改，复用 Checkpoint 哈希链模式
+- **DefaultAgentLoopPolicy / DefaultAgentToolCallValidator / DefaultAgentApprovalGate**：默认策略实现
+
+#### 工作流 E：Canary Truth（已完成）
+- **外部结果指标**：ExternalResultMetrics（10 个指标：TaskSuccessRate/ToolSuccessRate/RepairRate/SafetyViolationRate/ContextPrecision/ContextRecallProxy/UserAcceptance/AnswerQuality/TokenCost/InferenceCost）替代仅依赖 token budget + FinalScore 的 quality_score
+- **CanaryObservationMetrics 扩展**：新增外部指标字段 + RecordObservationWithExternalMetrics 重载 + 阈值门控（MinTaskSuccessRate/MaxSafetyViolationRate/MinUserAcceptance）
+- **HA 聚合**：ICanaryMetricsAggregator + PostgresCanaryMetricsAggregator（跨实例 AVG/SUM/MAX rollup + canary_metrics_samples 表）
+- **Leader Lease**：ICanaryLeaderLease + PostgresCanaryLeaderLease（FOR UPDATE SKIP LOCKED 租约模式）+ CanaryLeaderHostedService（leader 选举 + 心跳续约）
+
+#### 工作流 F：Performance Truth（已完成）
+- **P0-9 Benchmark CI 消除假阳性**：集中 BenchmarkDotNet Job 配置（N≥15）+ 四层假阳性抑制（噪声底 3% + 最小样本 5 + 置信区间 2σ + I/O 宽松阈值 30%）+ CI 环境归一化 + benchmark-selftest.yml 7 个合成 case
+- **P4 Checkpoint cursor 模式**：Cursor>Delta>Full 三模式优先级，Cursor 仅记 last_event_sequence+snapshotId+budget 不复制完整结果集，从 AgentRunEventStore 重建 CommittedResults
+- **P5 性能回退组件归因**：7 组件 Stopwatch 拆分（provider/merge/feature/inference/scoring/allocation/projection）+ IComponentHealthRegistry + 组件级回退（Inference→Deterministic、Allocation→V2.0、Semantic→Lexical、Graph→Disabled）
+
+#### 硬验收测试（30 项全部通过）
+`tests/ContextCore.Tests/R29_FinalClosureAcceptanceTests.cs` — 6 个测试类对应六条工作流，每类 5 个测试方法，统一 `[TestCategory("R29-Closure")]`：
+- Workflow-A：FIFO 出队、PendingCount 同步/异步一致性、Transport 指令与结果往返
+- Workflow-B：Prepare 写入、完整状态机推进、P0-3 expected-state CAS、状态不可逆退
+- Workflow-C：TaskSuccessRate/ToolSuccessRate/SafetyViolationRate 计算与空数据优雅降级
+- Workflow-D：fallback 代理、未知 artifact 失败、schema 未注册拒绝、session 创建失败 fail-safe、真实 ONNX E2E
+- Workflow-E：合法流转、终态短路、SHA-256 哈希链计算与校验、CAS 状态不匹配抛异常
+- Workflow-F：默认 Healthy、连续失败触发 FallbackActive、自愈机制、scope 隔离、脚本四层假阳性抑制参数
+
+---
+
+## R27 Evolution Pipeline Postgres 持久化（已完成）
 
 **R27 Evolution Pipeline Postgres 持久化已完成**（HEAD `6fe3203`）。延续 R26 in-memory → Postgres 模式，将 `DefaultGuardedOptimizationPipeline` 的 in-memory `ConcurrentDictionary` 状态扩展到 PostgreSQL，支持 HA 场景下的跨进程恢复。
 
@@ -80,12 +142,12 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-21 R27 Evolution Pipeline Postgres Persistence 完成）
+## 当前验收指标（2026-07-27 R29 Final Closure 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `6fe3203`（R27）；R22 Bounded Orchestrator → R23 Agent Runtime → R24 Agent Bridge → R25 Bridging Provider → R26 Agent Postgres → R27 Pipeline Postgres 全部完成 | - |
-| PublicApi baseline 行数 | 9047（R27 +30 PipelineRunSnapshot + IPipelineRunStore；R26 9017；R23 8976；R17-2 7967）— 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
+| 当前 HEAD | `1502b72`（R29 Final Closure）；R28 持久化可靠性基础 → R29 六条工作流（Durable Delivery / Tool Effect Safety / Model Activation / Agent Intelligence / Canary Truth / Performance Truth）全部完成 | - |
+| PublicApi baseline 行数 | R29 新增 AgentRunContracts + CanaryHAAggregationContracts + PerformanceAttributionContracts 三大契约集（IAgentModelTransport/IAgentLoopPolicy/IAgentRunStore/IAgentApprovalGate/IAgentToolCallValidator/IAgentRunEventStore + ICanaryExternalMetricsSource/ICanaryMetricsAggregator/ICanaryLeaderLease + IComponentHealthRegistry 等） | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
 | 测试 | ContextCore.Tests 2103/2103 passed / 9 skipped（R27 +34 自 R26 的 2069）；IntegrationTests 75/75（1 skip pg_dump）；Service.Tests 61/61（1 skip manual OpenApi_RegenerateSnapshot） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
@@ -137,6 +199,36 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 ---
 
 ## 下一阶段任务
+
+### R30 — Self-Learning Agent Runtime（待启动）
+
+R29 Final Closure 完成后，下一阶段为 R30 Self-Learning Agent Runtime。核心闭环：
+
+```
+Execution Artifact
++ Tool Outcome
++ User/Task Feedback
+→ Utility Ledger
+→ Dataset Builder
+→ Training / Calibration
+→ Replay
+→ Canary
+→ Promotion
+```
+
+**关键组件**（复用 R29 已有基础）：
+- **Utility Ledger 物化**：从 AgentRunEventStore（R29 工作流 D）+ ExecutionArtifact（R18）+ Tool Outcome 自动写入 MemoryUtilityLedger（R21-2 已有契约），异步批量物化不影响热路径
+- **Dataset Builder**：从 Utility Ledger + AgentRunEvent 构建训练数据集，复用 R29 EventStore 哈希链保证数据完整性
+- **Training / Calibration**：对接 ICalibrationService（R29 工作流 C 已有），产出 Platt/Isotonic 校准参数
+- **Replay**：从 AgentRunEventStore 重放 Run（R29 Cursor checkpoint 已支持从 EventStore 重建状态）
+- **Canary**：复用 R29 工作流 E 的 Canary HA + Leader Lease + 外部指标，对校准参数变更做 canary 推进
+- **Promotion**：复用 R29 工作流 E 的 CanaryProgressionService 渐进晋升 + DefaultPromotionJudge 跨阶段晋升
+
+**与 R29 的衔接**：
+- R29 工作流 D 的 AgentRunActor 产出 AgentRunEvent → R30 Utility Ledger 物化输入
+- R29 工作流 C 的 ICalibrationValidator → R30 训练后校准参数验证
+- R29 工作流 E 的 Canary + 外部指标 → R30 校准参数 canary 推进的决策依据
+- R29 工作流 F 的组件归因 → R30 训练后性能回归检测
 
 ### R15 — Incremental Context Package（V1/V2 已完成）
 

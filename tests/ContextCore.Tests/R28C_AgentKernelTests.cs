@@ -2582,6 +2582,639 @@ public sealed class R28G_AgentKernelCheckpointTests
 }
 
 // ===========================================================================
+// P0-5：Checkpoint Delta Chain 完整性治理测试
+//
+// 覆盖：
+//   1. ContentHash 计算 + 校验（Full/Delta 模式均生成 ContentHash）。
+//   2. PrevChainHash 链接（Delta 的 PrevChainHash == base 的 ContentHash）。
+//   3. ChainSessionId 绑定（防跨 session 链接）。
+//   4. BaseLastSequence 校验（base 匹配）。
+//   5. Delta 条目 Sequence > base.LastSequence（无重叠/回退）。
+//   6. 链深度限制（MaxCheckpointChainDepth）。
+//   7. 向后兼容：旧 checkpoint（无 ContentHash）跳过校验。
+//   8. 篡改检测：修改 StateJson 内容后 ContentHash 校验失败。
+// ===========================================================================
+[TestClass]
+[TestCategory("P0-5")]
+[TestCategory("R28-G")]
+public sealed class P0_5_CheckpointChainIntegrityTests
+{
+    private static CancellationTokenSource CreateTestTimeout()
+        => new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+    private static bool WaitForProcessed(DefaultAgentKernel kernel, int target, TimeSpan timeout)
+        => SpinWait.SpinUntil(() => kernel.GetStatus().ProcessedCount >= target, timeout);
+
+    private static async Task<(DefaultAgentKernel kernel, InProcessTransport transport, InMemoryAgentCheckpointStore store, Task runTask)> StartKernelAsync(CancellationToken cancellationToken = default)
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var store = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, store);
+        var runTask = Task.Run(() => kernel.RunAsync(cancellationToken).AsTask(), cancellationToken);
+        SpinWait.SpinUntil(() => kernel.GetStatus().State == AgentKernelState.Running, TimeSpan.FromSeconds(2));
+        return (kernel, transport, store, runTask);
+    }
+
+    private static async Task SubmitAndWaitAsync(DefaultAgentKernel kernel, InProcessTransport transport, string instructionId, string payload, CancellationToken ct)
+    {
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = instructionId,
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = payload,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p0-5",
+                ["workspaceId"] = "ws-p0-5",
+                ["tool"] = "echo"
+            }
+        }, ct);
+        Assert.IsTrue(WaitForProcessed(kernel, kernel.GetStatus().ProcessedCount + 1, TimeSpan.FromSeconds(3)),
+            $"Kernel 未在超时内处理 instruction {instructionId}。");
+        await transport.ReceiveResultAsync(ct);
+    }
+
+    private static async Task<string> SubmitCheckpointAsync(DefaultAgentKernel kernel, InProcessTransport transport, string checkpointId, CancellationToken ct)
+    {
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = checkpointId,
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p0-5",
+                ["workspaceId"] = "ws-p0-5"
+            }
+        }, ct);
+        Assert.IsTrue(WaitForProcessed(kernel, kernel.GetStatus().ProcessedCount + 1, TimeSpan.FromSeconds(3)));
+        var result = await transport.ReceiveResultAsync(ct);
+        return result?.Output ?? string.Empty;
+    }
+
+    private static async Task ShutdownKernelAsync(DefaultAgentKernel kernel, Task runTask, CancellationToken ct)
+    {
+        if (kernel.GetStatus().State != AgentKernelState.Stopped)
+        {
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "shutdown",
+                Kind = AgentKernelInstructionKind.Shutdown
+            }, ct);
+            await runTask;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // P0-5.1: ContentHash 生成与校验（单元测试）
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public void ComputeContentHash_Deterministic_SameInputSameHash()
+    {
+        var json = """{"SnapshotId":"s1","Mode":0,"LastSequence":1}""";
+        var hash1 = DefaultAgentCheckpointFactory.ComputeContentHash(json);
+        var hash2 = DefaultAgentCheckpointFactory.ComputeContentHash(json);
+
+        Assert.AreEqual(64, hash1.Length, "SHA-256 hex 应为 64 字符。");
+        Assert.AreEqual(hash1, hash2, "相同输入应产出相同哈希。");
+    }
+
+    [TestMethod]
+    public void ComputeContentHash_DifferentInput_DifferentHash()
+    {
+        var json1 = """{"SnapshotId":"s1","Mode":0,"LastSequence":1}""";
+        var json2 = """{"SnapshotId":"s2","Mode":0,"LastSequence":1}""";
+
+        var hash1 = DefaultAgentCheckpointFactory.ComputeContentHash(json1);
+        var hash2 = DefaultAgentCheckpointFactory.ComputeContentHash(json2);
+
+        Assert.AreNotEqual(hash1, hash2, "不同输入应产出不同哈希。");
+    }
+
+    [TestMethod]
+    public void VerifyContentHash_LegacyCheckpoint_NoContentHash_ReturnsTrue()
+    {
+        // 旧 checkpoint（P0-5 之前）无 ContentHash 字段 → 跳过校验
+        var legacyJson = """{"SnapshotId":"s1","Mode":0,"LastSequence":1,"CommittedResults":[],"PendingResults":[]}""";
+
+        Assert.IsTrue(DefaultAgentCheckpointFactory.VerifyContentHash(legacyJson),
+            "旧 checkpoint 无 ContentHash 应跳过校验返回 true。");
+    }
+
+    [TestMethod]
+    public void VerifyContentHash_ValidCheckpoint_ReturnsTrue()
+    {
+        // 通过工厂构建真实 checkpoint → ContentHash 应校验通过
+        var accessor = new DefaultAgentCheckpointFactory.KernelStateAccessor(
+            getLastSnapshotId: () => "snap-1",
+            getCommittedResults: () => new Dictionary<string, ToolDispatchResult>(),
+            getCommittedResultSequences: () => new Dictionary<string, long>(),
+            getPendingResults: () => new Dictionary<string, ToolDispatchResult>(),
+            getLastCheckpointSequence: () => 0,
+            getLastCheckpointId: () => null,
+            getLastCheckpointContentHash: () => null);
+        var factory = new DefaultAgentCheckpointFactory(accessor);
+
+        var checkpoint = factory.CreateCheckpointAsync("ckpt-1", "session-1", "ws-1").Result;
+
+        Assert.IsTrue(DefaultAgentCheckpointFactory.VerifyContentHash(checkpoint.StateJson),
+            "工厂产出的 checkpoint ContentHash 应校验通过。");
+    }
+
+    [TestMethod]
+    public void VerifyContentHash_TamperedStateJson_ReturnsFalse()
+    {
+        var accessor = new DefaultAgentCheckpointFactory.KernelStateAccessor(
+            getLastSnapshotId: () => "snap-1",
+            getCommittedResults: () => new Dictionary<string, ToolDispatchResult>(),
+            getCommittedResultSequences: () => new Dictionary<string, long>(),
+            getPendingResults: () => new Dictionary<string, ToolDispatchResult>(),
+            getLastCheckpointSequence: () => 0,
+            getLastCheckpointId: () => null,
+            getLastCheckpointContentHash: () => null);
+        var factory = new DefaultAgentCheckpointFactory(accessor);
+
+        var checkpoint = factory.CreateCheckpointAsync("ckpt-1", "session-1", "ws-1").Result;
+
+        // 篡改 StateJson：修改 SnapshotId 但保留旧 ContentHash
+        var tamperedJson = checkpoint.StateJson.Replace("snap-1", "snap-tampered");
+
+        Assert.IsFalse(DefaultAgentCheckpointFactory.VerifyContentHash(tamperedJson),
+            "篡改后的 StateJson ContentHash 校验应失败。");
+    }
+
+    // -----------------------------------------------------------------------
+    // P0-5.2: Full/Delta 模式 ContentHash + PrevChainHash 生成
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task FullCheckpoint_HasContentHash_NoPrevChainHash()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string cpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-1", "p1", testCt.Token);
+            cpId = await SubmitCheckpointAsync(kernel, transport, "cp-full-1", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var cp = await store.GetAsync("ws-p0-5", cpId, testCt.Token);
+        Assert.IsNotNull(cp);
+        var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(cp!.StateJson);
+
+        Assert.AreEqual(DefaultAgentCheckpointFactory.CheckpointMode.Full, state!.Mode);
+        Assert.IsFalse(string.IsNullOrEmpty(state.ContentHash), "Full checkpoint 应有 ContentHash。");
+        Assert.IsNull(state.PrevChainHash, "Full checkpoint 无前驱 → PrevChainHash 应为 null。");
+        Assert.IsFalse(string.IsNullOrEmpty(state.ChainSessionId), "Full checkpoint 应有 ChainSessionId。");
+        Assert.AreEqual(0, state.BaseLastSequence, "Full checkpoint BaseLastSequence 应为 0。");
+    }
+
+    [TestMethod]
+    public async Task DeltaCheckpoint_HasContentHash_PrevChainHash_MatchesBaseContentHash()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-1", "p1", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-full-1", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-2", "p2", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-delta-1", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var fullCp = await store.GetAsync("ws-p0-5", firstCpId, testCt.Token);
+        var deltaCp = await store.GetAsync("ws-p0-5", secondCpId, testCt.Token);
+        Assert.IsNotNull(fullCp);
+        Assert.IsNotNull(deltaCp);
+
+        var fullState = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(fullCp!.StateJson)!;
+        var deltaState = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(deltaCp!.StateJson)!;
+
+        Assert.AreEqual(DefaultAgentCheckpointFactory.CheckpointMode.Delta, deltaState.Mode);
+        Assert.IsFalse(string.IsNullOrEmpty(deltaState.ContentHash), "Delta checkpoint 应有 ContentHash。");
+        Assert.IsFalse(string.IsNullOrEmpty(deltaState.PrevChainHash), "Delta checkpoint 应有 PrevChainHash。");
+        Assert.AreEqual(fullState.ContentHash, deltaState.PrevChainHash,
+            "Delta 的 PrevChainHash 必须等于 base 的 ContentHash。");
+        Assert.AreEqual(fullState.LastSequence, deltaState.BaseLastSequence,
+            "Delta 的 BaseLastSequence 必须等于 base 的 LastSequence。");
+        Assert.AreEqual(fullState.ChainSessionId, deltaState.ChainSessionId,
+            "Delta 与 base 的 ChainSessionId 必须一致。");
+    }
+
+    // -----------------------------------------------------------------------
+    // P0-5.3: ResumeAsync 完整性校验
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task ResumeAsync_ValidDeltaChain_SucceedsAndRebuildsState()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-valid-1", "p1", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-valid-full", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-valid-2", "p2", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-valid-delta", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        // 新 kernel 从 delta checkpoint resume（含完整性校验）
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+        var deltaCp = await store.GetAsync("ws-p0-5", secondCpId, testCt.Token);
+
+        Assert.IsNotNull(deltaCp);
+        await kernel2.ResumeAsync(deltaCp!, testCt.Token); // 不抛异常 = 校验通过
+
+        // 验证状态重建：exec-valid-1 应走缓存
+        var runTask2 = Task.Run(() => kernel2.RunAsync(testCt.Token).AsTask(), testCt.Token);
+        SpinWait.SpinUntil(() => kernel2.GetStatus().State == AgentKernelState.Running, TimeSpan.FromSeconds(2));
+
+        await kernel2.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-valid-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "p1-replay",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p0-5",
+                ["workspaceId"] = "ws-p0-5",
+                ["tool"] = "echo"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel2, 1, TimeSpan.FromSeconds(3)));
+        var r = await transport2.ReceiveResultAsync(testCt.Token);
+        Assert.AreEqual("p1", r?.Output, "Valid delta chain resume 应重建缓存。");
+        Assert.AreEqual(0, dispatcher2.DispatchCount, "应走缓存，DispatchCount=0。");
+
+        await ShutdownKernelAsync(kernel2, runTask2, testCt.Token);
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_TamperedContentHash_ThrowsInvalidOperationException()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string cpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-tamper-1", "p1", testCt.Token);
+            cpId = await SubmitCheckpointAsync(kernel, transport, "cp-tamper", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var cp = await store.GetAsync("ws-p0-5", cpId, testCt.Token);
+        Assert.IsNotNull(cp);
+
+        // 篡改 StateJson：修改内容但保留旧 ContentHash
+        var tamperedJson = cp!.StateJson.Replace("p1", "p1-tampered");
+        var tamperedCp = cp with { StateJson = tamperedJson };
+
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await kernel2.ResumeAsync(tamperedCp, testCt.Token),
+            "篡改 StateJson 后 ContentHash 校验应失败并抛出 InvalidOperationException。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_PrevChainHashMismatch_ThrowsInvalidOperationException()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-prev-1", "p1", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-prev-full", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-prev-2", "p2", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-prev-delta", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var deltaCp = await store.GetAsync("ws-p0-5", secondCpId, testCt.Token);
+        Assert.IsNotNull(deltaCp);
+
+        // 篡改 delta 的 PrevChainHash 为错误值
+        var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(deltaCp!.StateJson)!;
+        var tamperedState = new DefaultAgentCheckpointFactory.KernelCheckpointStateDto
+        {
+            SnapshotId = state.SnapshotId,
+            Mode = state.Mode,
+            BaseCheckpointId = state.BaseCheckpointId,
+            LastSequence = state.LastSequence,
+            CommittedResults = state.CommittedResults,
+            PendingResults = state.PendingResults,
+            BaseLastSequence = state.BaseLastSequence,
+            PrevChainHash = "deadbeef0000000000000000000000000000000000000000000000000000ffff", // 错误的 PrevChainHash
+            ChainSessionId = state.ChainSessionId,
+            ContentHash = state.ContentHash // 保留旧 ContentHash（但因为 PrevChainHash 变了，实际 ContentHash 也不匹配）
+        };
+        var tamperedJson = JsonSerializer.Serialize(tamperedState);
+        var tamperedCp = deltaCp with { StateJson = tamperedJson };
+
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await kernel2.ResumeAsync(tamperedCp, testCt.Token),
+            "PrevChainHash 与 base ContentHash 不匹配应抛出 InvalidOperationException。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_CrossSessionChain_ThrowsInvalidOperationException()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-xsession-1", "p1", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-xsession-full", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-xsession-2", "p2", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-xsession-delta", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var deltaCp = await store.GetAsync("ws-p0-5", secondCpId, testCt.Token);
+        Assert.IsNotNull(deltaCp);
+
+        // 篡改 delta 的 ChainSessionId 为不同 session
+        var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(deltaCp!.StateJson)!;
+        var tamperedState = new DefaultAgentCheckpointFactory.KernelCheckpointStateDto
+        {
+            SnapshotId = state.SnapshotId,
+            Mode = state.Mode,
+            BaseCheckpointId = state.BaseCheckpointId,
+            LastSequence = state.LastSequence,
+            CommittedResults = state.CommittedResults,
+            PendingResults = state.PendingResults,
+            BaseLastSequence = state.BaseLastSequence,
+            PrevChainHash = state.PrevChainHash,
+            ChainSessionId = "different-session-id", // 错误的 session
+            ContentHash = null // 设为 null 跳过 ContentHash 校验，专注于 ChainSessionId 校验
+        };
+        var tamperedJson = JsonSerializer.Serialize(tamperedState);
+        var tamperedCp = deltaCp with { StateJson = tamperedJson };
+
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await kernel2.ResumeAsync(tamperedCp, testCt.Token),
+            "跨 session 链接应抛出 InvalidOperationException。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_BaseLastSequenceMismatch_ThrowsInvalidOperationException()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-basels-1", "p1", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-basels-full", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-basels-2", "p2", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-basels-delta", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var deltaCp = await store.GetAsync("ws-p0-5", secondCpId, testCt.Token);
+        Assert.IsNotNull(deltaCp);
+
+        // 篡改 delta 的 BaseLastSequence 为错误值
+        var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(deltaCp!.StateJson)!;
+        var tamperedState = new DefaultAgentCheckpointFactory.KernelCheckpointStateDto
+        {
+            SnapshotId = state.SnapshotId,
+            Mode = state.Mode,
+            BaseCheckpointId = state.BaseCheckpointId,
+            LastSequence = state.LastSequence,
+            CommittedResults = state.CommittedResults,
+            PendingResults = state.PendingResults,
+            BaseLastSequence = state.BaseLastSequence + 999, // 错误的 BaseLastSequence
+            PrevChainHash = state.PrevChainHash,
+            ChainSessionId = state.ChainSessionId,
+            ContentHash = null // 跳过 ContentHash 校验，专注于 BaseLastSequence 校验
+        };
+        var tamperedJson = JsonSerializer.Serialize(tamperedState);
+        var tamperedCp = deltaCp with { StateJson = tamperedJson };
+
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await kernel2.ResumeAsync(tamperedCp, testCt.Token),
+            "BaseLastSequence 与 base.LastSequence 不匹配应抛出 InvalidOperationException。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_DeltaEntrySequenceOverlap_ThrowsInvalidOperationException()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-overlap-1", "p1", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-overlap-full", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-overlap-2", "p2", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-overlap-delta", testCt.Token);
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        var deltaCp = await store.GetAsync("ws-p0-5", secondCpId, testCt.Token);
+        Assert.IsNotNull(deltaCp);
+
+        // 篡改 delta 条目的 Sequence 为 <= base.LastSequence 的值
+        var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(deltaCp!.StateJson)!;
+        var tamperedResults = state.CommittedResults.Select(r => new DefaultAgentCheckpointFactory.CommittedToolResultDto
+        {
+            RequestId = r.RequestId,
+            Succeeded = r.Succeeded,
+            Result = r.Result,
+            Error = r.Error,
+            SideEffect = r.SideEffect,
+            Sequence = 0 // 故意设为 0，<= base.LastSequence
+        }).ToList();
+
+        var tamperedState = new DefaultAgentCheckpointFactory.KernelCheckpointStateDto
+        {
+            SnapshotId = state.SnapshotId,
+            Mode = state.Mode,
+            BaseCheckpointId = state.BaseCheckpointId,
+            LastSequence = state.LastSequence,
+            CommittedResults = tamperedResults,
+            PendingResults = state.PendingResults,
+            BaseLastSequence = state.BaseLastSequence,
+            PrevChainHash = state.PrevChainHash,
+            ChainSessionId = state.ChainSessionId,
+            ContentHash = null // 跳过 ContentHash 校验
+        };
+        var tamperedJson = JsonSerializer.Serialize(tamperedState);
+        var tamperedCp = deltaCp with { StateJson = tamperedJson };
+
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await kernel2.ResumeAsync(tamperedCp, testCt.Token),
+            "Delta 条目 Sequence <= base.LastSequence 应抛出 InvalidOperationException。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_ChainDepthExceeded_ThrowsInvalidOperationException()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(testCt.Token);
+
+        // 创建超过 MaxCheckpointChainDepth 个 delta checkpoint
+        var checkpointIds = new List<string>();
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-depth-0", "p0", testCt.Token);
+            checkpointIds.Add(await SubmitCheckpointAsync(kernel, transport, "cp-depth-0", testCt.Token));
+
+            for (int i = 1; i <= DefaultAgentKernel.MaxCheckpointChainDepth + 1; i++)
+            {
+                await SubmitAndWaitAsync(kernel, transport, $"exec-depth-{i}", $"p{i}", testCt.Token);
+                checkpointIds.Add(await SubmitCheckpointAsync(kernel, transport, $"cp-depth-{i}", testCt.Token));
+            }
+        }
+        finally
+        {
+            await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+        }
+
+        // 从最深的 delta checkpoint resume — 链深度超过 MaxCheckpointChainDepth
+        var lastCpId = checkpointIds[^1];
+        var lastCp = await store.GetAsync("ws-p0-5", lastCpId, testCt.Token);
+        Assert.IsNotNull(lastCp);
+
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await kernel2.ResumeAsync(lastCp!, testCt.Token),
+            $"链深度超过 {DefaultAgentKernel.MaxCheckpointChainDepth} 应抛出 InvalidOperationException。");
+    }
+
+    [TestMethod]
+    public async Task ResumeAsync_LegacyCheckpoint_NoContentHash_Succeeds()
+    {
+        var testCt = CreateTestTimeout();
+        var store = new InMemoryAgentCheckpointStore();
+
+        // 构造旧格式 checkpoint（无 ContentHash/PrevChainHash/ChainSessionId/BaseLastSequence）
+        var legacyStateJson = """{"SnapshotId":"snap-legacy","Mode":0,"BaseCheckpointId":null,"LastSequence":1,"CommittedResults":[{"RequestId":"r-legacy","Succeeded":true,"Result":"legacy-payload","Error":null,"SideEffect":0,"Sequence":1}],"PendingResults":[]}""";
+        var legacyCheckpoint = new AgentCheckpoint
+        {
+            CheckpointId = "cp-legacy",
+            Session = new AgentSessionId
+            {
+                Value = "session-legacy",
+                WorkspaceId = "ws-legacy",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            CreatedAt = DateTimeOffset.UtcNow,
+            SnapshotId = "snap-legacy",
+            StateJson = legacyStateJson
+        };
+        await store.SaveAsync(legacyCheckpoint);
+
+        // 新 kernel resume 旧 checkpoint — 应跳过 ContentHash 校验（向后兼容）
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, store);
+
+        await kernel.ResumeAsync(legacyCheckpoint, testCt.Token); // 不抛异常 = 向后兼容
+
+        // 验证旧 checkpoint 的 committed result 已恢复
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+        SpinWait.SpinUntil(() => kernel.GetStatus().State == AgentKernelState.Running, TimeSpan.FromSeconds(2));
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "r-legacy",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "replay",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-legacy",
+                ["workspaceId"] = "ws-legacy",
+                ["tool"] = "echo"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)));
+        var r = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.AreEqual("legacy-payload", r?.Output, "旧 checkpoint 的 committed result 应恢复为缓存。");
+        Assert.AreEqual(0, dispatcher.DispatchCount, "应走缓存，DispatchCount=0。");
+
+        await ShutdownKernelAsync(kernel, runTask, testCt.Token);
+    }
+}
+
+// ===========================================================================
 // 测试 Stub：InMemoryAgentContextSnapshotStore（P1-2 测试用）
 // ===========================================================================
 

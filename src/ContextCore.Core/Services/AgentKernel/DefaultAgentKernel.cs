@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using ContextCore.Abstractions;
 
@@ -47,6 +48,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
     private readonly IKernelResultOutbox? _resultOutbox;
     private readonly IAgentCheckpointFactory? _checkpointFactory;
     private readonly IAgentContextSnapshotStore? _snapshotStore;
+    private readonly IAgentRunEventStore? _eventStore;
     private readonly IToolDispatchJournal? _dispatchJournal;
     private readonly Channel<AgentKernelInstruction> _inbox;
     private readonly CancellationTokenSource _shutdownCts;
@@ -83,6 +85,22 @@ public sealed class DefaultAgentKernel : IAgentKernel
     // R28-G P1-5：上次成功 checkpoint 的 ID（用于 delta 链 BaseCheckpointId 链接）。
     private string? _lastCheckpointId;
 
+    // P0-5：上次成功 checkpoint 的 ContentHash（用于 delta 链 PrevChainHash 链接）。
+    private string? _lastCheckpointContentHash;
+
+    // P4：AgentRunEventStore 的最后事件序列号缓存（Cursor 模式专用）。
+    // 由 AutoCheckpointAsync 在调用 CreateCheckpointAsync 前从 _eventStore.GetLastSequenceAsync 读取并缓存；
+    // accessor 委托 getLastEventSequence 同步读取此缓存（委托无法直接 await 异步 API）。
+    // null 表示未注入 EventStore 或尚未读取过 → 工厂退回 Delta/Full 模式。
+    private int? _lastEventSequenceCache;
+
+    // P4：turn/cost 预算计数器（Cursor 模式 round-trip 持久化）。
+    // 当前 Kernel 不主动维护这些计数器（仍由 AgentRunActor/IAgentLoopPolicy 层负责预算追踪），
+    // 但提供字段以便 Cursor 模式 checkpoint 携带预算状态供未来扩展使用。
+    private int _turnsUsed;
+    private int _tokensUsed;
+    private double _costUsedUsd;
+
     // R28-E P1-3：pending 的 Unknown 副作用 tool 结果（按 RequestId 索引）。
     // 等待 AcknowledgeToolResult 移到 _committedToolResults 或 RejectToolResult 丢弃。
     private readonly Dictionary<string, ToolDispatchResult> _pendingToolResults = new(StringComparer.Ordinal);
@@ -98,6 +116,13 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// 长会话下 _committedToolResults 不会无界增长；旧条目按 FIFO 淘汰。
     /// </summary>
     public const int DefaultMaxCommittedResults = 1024;
+
+    /// <summary>
+    /// P0-5：Checkpoint delta 链最大深度（32）。
+    /// ResumeAsync 递归加载 base checkpoint 时限制深度，防止损坏/恶意链导致栈溢出。
+    /// 超过此深度抛 InvalidOperationException。
+    /// </summary>
+    public const int MaxCheckpointChainDepth = 32;
 
     /// <summary>
     /// 构造默认 Agent Kernel。
@@ -129,6 +154,11 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// <param name="maxCommittedResults">
     /// R28-G P1-5：_committedToolResults 容量上限。超过时按 FIFO 淘汰最旧条目。null 或 &lt;= 0 时使用默认 1024。
     /// </param>
+    /// <param name="eventStore">
+    /// P4：Agent Run 事件流存储（Cursor 模式 checkpoint 的真相源）。null 时退回 Delta/Full 模式。
+    /// 注入后 AutoCheckpointAsync 会读取最新事件 sequence 作为 cursor，工厂产出 Cursor 模式 checkpoint
+    /// （不序列化 CommittedResults，ResumeAsync 时从事件流重建）。
+    /// </param>
     public DefaultAgentKernel(
         IAgentKernelTransport transport,
         IToolDispatcher toolDispatcher,
@@ -140,7 +170,8 @@ public sealed class DefaultAgentKernel : IAgentKernel
         IAgentCheckpointFactory? checkpointFactory = null,
         IAgentContextSnapshotStore? snapshotStore = null,
         IToolDispatchJournal? dispatchJournal = null,
-        int? maxCommittedResults = null)
+        int? maxCommittedResults = null,
+        IAgentRunEventStore? eventStore = null)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
@@ -150,11 +181,13 @@ public sealed class DefaultAgentKernel : IAgentKernel
         _transportOptions = transportOptions ?? KernelTransportOptions.Default;
         _resultOutbox = resultOutbox;
         _snapshotStore = snapshotStore;
+        _eventStore = eventStore;
         _dispatchJournal = dispatchJournal;
         _maxCommittedResults = maxCommittedResults is > 0 ? maxCommittedResults.Value : DefaultMaxCommittedResults;
 
         // R28-E P1-1：若未注入 checkpointFactory，使用默认实现（绑定到当前 Kernel 状态访问器）
         // R28-G P1-5：accessor 暴露 delta cursor + pending results，支持 delta checkpoint
+        // P4：accessor 暴露 event cursor + 活跃 snapshot + 预算计数器，支持 cursor checkpoint
         if (checkpointFactory is not null)
         {
             _checkpointFactory = checkpointFactory;
@@ -167,7 +200,11 @@ public sealed class DefaultAgentKernel : IAgentKernel
                 getCommittedResultSequences: () => _committedResultSequences,
                 getPendingResults: () => _pendingToolResults,
                 getLastCheckpointSequence: () => _lastCheckpointSequence,
-                getLastCheckpointId: () => _lastCheckpointId);
+                getLastCheckpointId: () => _lastCheckpointId,
+                getLastCheckpointContentHash: () => _lastCheckpointContentHash,
+                getLastEventSequence: () => _lastEventSequenceCache,
+                getActiveSnapshotId: () => _lastSnapshot?.SnapshotId,
+                getBudgetCounters: () => new DefaultAgentCheckpointFactory.BudgetCountersDto(_turnsUsed, _tokensUsed, _costUsedUsd));
             _checkpointFactory = new DefaultAgentCheckpointFactory(accessor);
         }
 
@@ -238,9 +275,43 @@ public sealed class DefaultAgentKernel : IAgentKernel
                 }
 
                 // 处理 Execute / Checkpoint / BuildContext 指令
-                var result = await ProcessInstructionAsync(instruction, ct).ConfigureAwait(false);
+                // P0-4：若指令来自 Durable Transport pump（Metadata 含 lease token），处理完成后需 Ack。
+                // 处理或发送失败时 Nack 回滚为 Pending，让 reaper/pump 重新租约。
+                AgentKernelResult result;
+                try
+                {
+                    result = await ProcessInstructionAsync(instruction, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // 处理失败：Nack 让指令回滚为 Pending 供重试（幂等性由调用方/dedup 保证）
+                    await NackDurableLeaseIfPresentAsync(instruction, ex, ct).ConfigureAwait(false);
+                    throw;
+                }
+
                 // R28-C WP-D：按 TransportFailurePolicy 发送结果（FailFast/Retry/FallbackToDeterministic）
-                await SendResultWithPolicyAsync(result, ct).ConfigureAwait(false);
+                try
+                {
+                    await SendResultWithPolicyAsync(result, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // 发送失败：Nack 让指令回滚为 Pending（结果可能已写入 outbox，重试时会重新处理）
+                    await NackDurableLeaseIfPresentAsync(instruction, ex, ct).ConfigureAwait(false);
+                    throw;
+                }
+
+                // P0-4：Durable Transport lease 确认（处理 + 发送均成功）
+                await AckDurableLeaseIfPresentAsync(instruction, ct).ConfigureAwait(false);
+
                 Interlocked.Increment(ref _processedCount);
                 _lastProcessedAt = DateTimeOffset.UtcNow;
             }
@@ -906,6 +977,63 @@ public sealed class DefaultAgentKernel : IAgentKernel
     }
 
     // =======================================================================
+    // P0-4：Durable Transport lease 确认
+    // =======================================================================
+
+    /// <summary>
+    /// P0-4：若指令来自 Durable Transport pump（Metadata 含 lease token），在处理 + 发送成功后调用 AckAsync 确认。
+    /// Ack 失败（token 不匹配/已过期回滚/已确认）不抛异常——best-effort，过期行由 reaper 回滚后 pump 重新租约。
+    /// </summary>
+    private async ValueTask AckDurableLeaseIfPresentAsync(AgentKernelInstruction instruction, CancellationToken cancellationToken)
+    {
+        if (_transport is not IDurableTransport durable) return;
+        if (!instruction.Metadata.TryGetValue(DurableTransportMetadataKeys.LeaseToken, out var token) || string.IsNullOrEmpty(token)) return;
+
+        try
+        {
+            await durable.AckAsync(instruction.InstructionId, token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // best-effort：Ack 失败不中断 Kernel 循环。可能原因：
+            //   - 租约已过期被 reaper 回滚为 Pending（pump 会重新租约 + Submit，dedup 保证不重复执行）
+            //   - 已被其他 worker 接管（不应发生，pump 是单实例）
+            //   - 已调用过 Ack（不应发生）
+            // 记录警告但不抛出，避免 Kernel 循环因 Ack 竞态而终止。
+            _ = ex; // suppress
+        }
+    }
+
+    /// <summary>
+    /// P0-4：若指令来自 Durable Transport pump，处理或发送失败时调用 NackAsync 回滚为 Pending。
+    /// 让 pump 能重新租约该指令（幂等性由 dedup / journal 保证）。
+    /// Nack 失败不掩盖原始异常——best-effort，过期行由 reaper 回滚。
+    /// </summary>
+    private async ValueTask NackDurableLeaseIfPresentAsync(AgentKernelInstruction instruction, Exception processingException, CancellationToken cancellationToken)
+    {
+        if (_transport is not IDurableTransport durable) return;
+        if (!instruction.Metadata.TryGetValue(DurableTransportMetadataKeys.LeaseToken, out var token) || string.IsNullOrEmpty(token)) return;
+
+        try
+        {
+            await durable.NackAsync(instruction.InstructionId, token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // best-effort：Nack 失败（租约已过期/已被接管）不掩盖原始处理异常。
+            // 过期 Leased 行由 reaper 回滚为 Pending，pump 重新租约。
+        }
+    }
+
+    // =======================================================================
     // R28-C WP-B：Checkpoint 恢复 + 自动 Checkpoint
     // =======================================================================
 
@@ -931,72 +1059,10 @@ public sealed class DefaultAgentKernel : IAgentKernel
         _committedResultSequence = 0;
         _lastCheckpointSequence = 0;
         _lastCheckpointId = null;
+        _lastCheckpointContentHash = null; // P0-5：重置 hash chain cursor
 
-        // 反序列化 checkpoint StateJson → 恢复已提交 tool 结果
-        if (!string.IsNullOrWhiteSpace(checkpoint.StateJson))
-        {
-            try
-            {
-                var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson);
-                if (state is not null)
-                {
-                    // R28-G P1-5：Delta 模式需先加载 BaseCheckpoint（递归到 Full），再 apply delta 条目。
-                    if (state.Mode == DefaultAgentCheckpointFactory.CheckpointMode.Delta
-                        && !string.IsNullOrEmpty(state.BaseCheckpointId)
-                        && _checkpointStore is not null)
-                    {
-                        var baseCheckpoint = await _checkpointStore.GetAsync(
-                            checkpoint.Session?.WorkspaceId ?? checkpoint.Session?.Value ?? string.Empty,
-                            state.BaseCheckpointId, cancellationToken).ConfigureAwait(false);
-                        if (baseCheckpoint is not null)
-                        {
-                            // 递归 resume base checkpoint（Full 模式），重建完整状态后再 apply delta。
-                            await ResumeAsync(baseCheckpoint, cancellationToken).ConfigureAwait(false);
-                        }
-                    }
-
-                    // apply committed results（Full：完整重建；Delta：仅追加新增条目）
-                    if (state.CommittedResults is not null)
-                    {
-                        foreach (var entry in state.CommittedResults)
-                        {
-                            AddCommittedResult(entry.RequestId, new ToolDispatchResult
-                            {
-                                Succeeded = entry.Succeeded,
-                                Result = entry.Result,
-                                Error = entry.Error,
-                                Duration = TimeSpan.Zero,
-                                SideEffect = entry.SideEffect
-                            });
-                        }
-                    }
-
-                    // R28-G P1-5：恢复 pending results（Unknown 副作用，未提交）
-                    if (state.PendingResults is not null)
-                    {
-                        foreach (var entry in state.PendingResults)
-                        {
-                            _pendingToolResults[entry.RequestId] = new ToolDispatchResult
-                            {
-                                Succeeded = entry.Succeeded,
-                                Result = entry.Result,
-                                Error = entry.Error,
-                                Duration = TimeSpan.Zero,
-                                SideEffect = entry.SideEffect
-                            };
-                        }
-                    }
-
-                    // R28-G P1-5：恢复 delta cursor，确保下次 checkpoint 为 Delta（基于本次 LastSequence）
-                    _lastCheckpointSequence = state.LastSequence;
-                    _lastCheckpointId = checkpoint.CheckpointId;
-                }
-            }
-            catch (JsonException)
-            {
-                // StateJson 非预期格式（可能是旧版 checkpoint 或手动构造）；跳过恢复
-            }
-        }
+        // P0-5：递归加载 checkpoint 链（含深度限制 + 完整性校验）
+        await ResumeAsyncInternal(checkpoint, depth: 0, cancellationToken).ConfigureAwait(false);
 
         // 恢复 session/workspace 跟踪
         if (checkpoint.Session is not null)
@@ -1006,13 +1072,17 @@ public sealed class DefaultAgentKernel : IAgentKernel
         }
 
         // R28-E P1-2：若注入了 snapshotStore，根据 SnapshotId 加载 _lastSnapshot
+        // P4：Cursor 模式优先使用 state.ActiveSnapshotId（与 checkpoint.SnapshotId 在工厂产出时一致，
+        // 但显式优先 ActiveSnapshotId 以符合 Cursor 模式语义——ActiveSnapshotId 是 Cursor 模式的权威字段）
         _lastSnapshot = null;
-        if (_snapshotStore is not null && !string.IsNullOrWhiteSpace(checkpoint.SnapshotId))
+        var cursorSnapshotId = TryGetCursorActiveSnapshotId(checkpoint);
+        var snapshotIdToLoad = !string.IsNullOrWhiteSpace(cursorSnapshotId) ? cursorSnapshotId : checkpoint.SnapshotId;
+        if (_snapshotStore is not null && !string.IsNullOrWhiteSpace(snapshotIdToLoad))
         {
             try
             {
                 _lastSnapshot = await _snapshotStore.GetAsync(
-                    _lastWorkspaceId, checkpoint.SnapshotId, cancellationToken).ConfigureAwait(false);
+                    _lastWorkspaceId, snapshotIdToLoad, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -1024,6 +1094,331 @@ public sealed class DefaultAgentKernel : IAgentKernel
         // 重置状态：恢复后允许再次 RunAsync
         _state = AgentKernelState.Idle;
         _gracefulShutdown = false;
+    }
+
+    /// <summary>
+    /// P4：从 Cursor 模式 checkpoint 恢复 Kernel 状态。
+    /// 从 AgentRunEventStore 读取事件流，过滤 ToolCallCompleted 事件重建 _committedToolResults；
+    /// 恢复 BudgetCounters 到 Kernel 计数器；恢复 PendingResults；推进 cursor。
+    /// 不递归加载 base checkpoint 链（事件流是完整真相源）。
+    /// </summary>
+    /// <param name="checkpoint">Cursor 模式 checkpoint。</param>
+    /// <param name="state">已解析的 KernelCheckpointStateDto（Mode=Cursor）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 前提：<see cref="_eventStore"/> 已注入。若未注入则抛 <see cref="InvalidOperationException"/>
+    /// （Cursor 模式 checkpoint 无法在没有 EventStore 的情况下恢复）。
+    /// </remarks>
+    private async ValueTask ResumeFromCursorCheckpointAsync(
+        AgentCheckpoint checkpoint,
+        DefaultAgentCheckpointFactory.KernelCheckpointStateDto state,
+        CancellationToken cancellationToken)
+    {
+        if (_eventStore is null)
+        {
+            throw new InvalidOperationException(
+                $"Cursor 模式 checkpoint {checkpoint.CheckpointId} 无法恢复：Kernel 未注入 IAgentRunEventStore。" +
+                "Cursor 模式要求 EventStore 作为事件流真相源以重建 CommittedResults。");
+        }
+
+        // P4：从 EventStore 读取事件流（sequence 0..LastEventSequence，含两端）
+        // LastEventSequence 为 null 时退回 0（无事件可重建——CommittedResults 保持空）
+        var lastSeq = state.LastEventSequence ?? -1;
+        var take = lastSeq + 1; // sequence 从 0 开始；读 [0, lastSeq] 共 lastSeq+1 条
+        if (take > 0)
+        {
+            var workspaceId = checkpoint.Session?.WorkspaceId ?? _lastWorkspaceId;
+            var runId = checkpoint.Session?.Value ?? _lastSessionId;
+            IReadOnlyList<AgentRunEvent> events;
+            try
+            {
+                events = await _eventStore.ReadAsync(
+                    workspaceId, runId, 0, take, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // EventStore 读取失败：CommittedResults 保持空（cursor 仍推进）
+                events = Array.Empty<AgentRunEvent>();
+            }
+
+            // 过滤 ToolCallCompleted 事件，从 payload 反序列化重建 _committedToolResults
+            // payload 结构（AgentRunActor 写入）：{ toolName, succeeded, output, error, durationMs }
+            // 注意：payload 不含 requestId / sideEffect——requestId 用合成值（evt-{sequence}），
+            // sideEffect 默认 Unknown（保守策略：未声明的 tool 不自动重放）。
+            foreach (var evt in events)
+            {
+                if (evt.EventType != AgentRunEventType.ToolCallCompleted)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(evt.Payload))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var payload = JsonSerializer.Deserialize<ToolCallCompletedPayload>(evt.Payload);
+                    if (payload is null)
+                    {
+                        continue;
+                    }
+
+                    var syntheticRequestId = $"evt-{evt.Sequence}";
+                    AddCommittedResult(syntheticRequestId, new ToolDispatchResult
+                    {
+                        Succeeded = payload.Succeeded,
+                        Result = payload.Output,
+                        Error = payload.Error,
+                        Duration = payload.DurationMs > 0
+                            ? TimeSpan.FromMilliseconds(payload.DurationMs)
+                            : TimeSpan.Zero,
+                        SideEffect = ToolSideEffect.Unknown // 保守：事件 payload 不含 sideEffect
+                    });
+                }
+                catch (JsonException)
+                {
+                    // payload 解析失败：跳过此事件（不阻断恢复）
+                }
+            }
+        }
+
+        // P4：恢复 BudgetCounters 到 Kernel 计数器
+        if (state.BudgetCounters is not null)
+        {
+            _turnsUsed = state.BudgetCounters.TurnsUsed;
+            _tokensUsed = state.BudgetCounters.TokensUsed;
+            _costUsedUsd = state.BudgetCounters.CostUsedUsd;
+        }
+
+        // P4：恢复 pending results（Unknown 副作用，未提交——与 Full/Delta 路径一致）
+        if (state.PendingResults is not null)
+        {
+            foreach (var entry in state.PendingResults)
+            {
+                _pendingToolResults[entry.RequestId] = new ToolDispatchResult
+                {
+                    Succeeded = entry.Succeeded,
+                    Result = entry.Result,
+                    Error = entry.Error,
+                    Duration = TimeSpan.Zero,
+                    SideEffect = entry.SideEffect
+                };
+            }
+        }
+
+        // P4：恢复 cursor（LastSequence / LastCheckpointId / ContentHash）
+        // Cursor 模式不递归 base 链，但下次 AutoCheckpoint 仍可走 Cursor 路径（EventStore cursor 持续推进）
+        _lastCheckpointSequence = state.LastSequence;
+        _lastCheckpointId = checkpoint.CheckpointId;
+        _lastCheckpointContentHash = state.ContentHash;
+
+        // P4：缓存 LastEventSequence 供下次 CreateCheckpointAsync 的 accessor 委托读取
+        _lastEventSequenceCache = state.LastEventSequence;
+    }
+
+    /// <summary>
+    /// P4：尝试从 checkpoint StateJson 解析 Cursor 模式的 ActiveSnapshotId。
+    /// 非 Cursor 模式或解析失败时返回 null（调用方退回 checkpoint.SnapshotId）。
+    /// </summary>
+    private static string? TryGetCursorActiveSnapshotId(AgentCheckpoint checkpoint)
+    {
+        if (string.IsNullOrWhiteSpace(checkpoint.StateJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson);
+            if (state is null || state.Mode != DefaultAgentCheckpointFactory.CheckpointMode.Cursor)
+            {
+                return null;
+            }
+            return state.ActiveSnapshotId;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// P0-5：递归加载 checkpoint 链（含深度限制 + hash chain 完整性校验）。
+    /// </summary>
+    /// <param name="checkpoint">当前要加载的 checkpoint（Full 或 Delta）。</param>
+    /// <param name="depth">当前递归深度（0 = 顶层 delta；每递归到 base +1）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 校验项：
+    ///   1. 链深度 ≤ <see cref="MaxCheckpointChainDepth"/>（防止损坏/恶意链导致栈溢出）。
+    ///   2. ContentHash 一致性（StateJson 未被篡改）。
+    ///   3. Delta 模式：PrevChainHash == base.ContentHash（base 未被篡改/替换）。
+    ///   4. Delta 模式：ChainSessionId == base.ChainSessionId（防跨 session 链接）。
+    ///   5. Delta 模式：BaseLastSequence == base.LastSequence（base 匹配）。
+    ///   6. Delta 模式：所有 delta 条目 Sequence > base.LastSequence（无重叠/回退）。
+    /// 旧 checkpoint（无 ContentHash/ChainSessionId）跳过对应校验（向后兼容）。
+    /// </remarks>
+    private async ValueTask ResumeAsyncInternal(AgentCheckpoint checkpoint, int depth, CancellationToken cancellationToken)
+    {
+        // P0-5：链深度限制
+        if (depth > MaxCheckpointChainDepth)
+        {
+            throw new InvalidOperationException(
+                $"Checkpoint delta 链深度超过上限（{MaxCheckpointChainDepth}）；可能存在循环或损坏的链。");
+        }
+
+        if (string.IsNullOrWhiteSpace(checkpoint.StateJson))
+        {
+            return;
+        }
+
+        DefaultAgentCheckpointFactory.KernelCheckpointStateDto state;
+        try
+        {
+            state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson)!;
+            if (state is null)
+            {
+                return;
+            }
+        }
+        catch (JsonException)
+        {
+            // StateJson 非预期格式（可能是旧版 checkpoint 或手动构造）；跳过恢复
+            return;
+        }
+
+        // P0-5：校验 ContentHash（旧 checkpoint 无此字段 → 跳过）
+        if (!string.IsNullOrEmpty(state.ContentHash))
+        {
+            if (!DefaultAgentCheckpointFactory.VerifyContentHash(checkpoint.StateJson))
+            {
+                throw new InvalidOperationException(
+                    $"Checkpoint {checkpoint.CheckpointId} 的 ContentHash 校验失败；StateJson 可能被篡改或损坏。");
+            }
+        }
+
+        // P4：Cursor 模式——从 AgentRunEventStore 重建 CommittedResults，无需递归加载 base 链。
+        // 事件流是完整真相源；checkpoint 仅记录 LastEventSequence cursor + ActiveSnapshotId + BudgetCounters + PendingResults。
+        if (state.Mode == DefaultAgentCheckpointFactory.CheckpointMode.Cursor)
+        {
+            await ResumeFromCursorCheckpointAsync(checkpoint, state, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // R28-G P1-5 / P0-5：Delta 模式 — 加载 base checkpoint 并校验链完整性
+        if (state.Mode == DefaultAgentCheckpointFactory.CheckpointMode.Delta
+            && !string.IsNullOrEmpty(state.BaseCheckpointId)
+            && _checkpointStore is not null)
+        {
+            var baseCheckpoint = await _checkpointStore.GetAsync(
+                checkpoint.Session?.WorkspaceId ?? checkpoint.Session?.Value ?? string.Empty,
+                state.BaseCheckpointId, cancellationToken).ConfigureAwait(false);
+            if (baseCheckpoint is null)
+            {
+                throw new InvalidOperationException(
+                    $"Delta checkpoint {checkpoint.CheckpointId} 引用的 base checkpoint {state.BaseCheckpointId} 未找到。");
+            }
+
+            // P0-5：解析 base state 用于链完整性校验
+            DefaultAgentCheckpointFactory.KernelCheckpointStateDto? baseState = null;
+            if (!string.IsNullOrWhiteSpace(baseCheckpoint.StateJson))
+            {
+                try
+                {
+                    baseState = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(baseCheckpoint.StateJson);
+                }
+                catch (JsonException)
+                {
+                    // base StateJson 解析失败 → 跳过链校验（base 自身的 ContentHash 校验会在递归时进行）
+                }
+            }
+
+            // P0-5：校验 PrevChainHash（delta 的 PrevChainHash 必须等于 base 的 ContentHash）
+            if (!string.IsNullOrEmpty(state.PrevChainHash) && !string.IsNullOrEmpty(baseState?.ContentHash))
+            {
+                if (!string.Equals(state.PrevChainHash, baseState!.ContentHash, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Delta checkpoint {checkpoint.CheckpointId} 的 PrevChainHash 与 base {state.BaseCheckpointId} 的 ContentHash 不匹配；base 可能被篡改或替换。");
+                }
+            }
+
+            // P0-5：校验 ChainSessionId（delta 与 base 必须属于同一 session）
+            if (!string.IsNullOrEmpty(state.ChainSessionId) && !string.IsNullOrEmpty(baseState?.ChainSessionId))
+            {
+                if (!string.Equals(state.ChainSessionId, baseState!.ChainSessionId, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Delta checkpoint {checkpoint.CheckpointId} 的 ChainSessionId 与 base {state.BaseCheckpointId} 不匹配；检测到跨 session 链接。");
+                }
+            }
+
+            // P0-5：校验 BaseLastSequence（delta 记录的 base cursor 必须等于 base 实际的 LastSequence）
+            if (baseState is not null && state.BaseLastSequence != 0)
+            {
+                if (state.BaseLastSequence != baseState.LastSequence)
+                {
+                    throw new InvalidOperationException(
+                        $"Delta checkpoint {checkpoint.CheckpointId} 的 BaseLastSequence ({state.BaseLastSequence}) 与 base {state.BaseCheckpointId} 的 LastSequence ({baseState.LastSequence}) 不匹配。");
+                }
+            }
+
+            // P0-5：校验 delta 条目 Sequence 全部 > base.LastSequence（无重叠/回退）
+            if (baseState is not null && state.CommittedResults is not null && state.CommittedResults.Count > 0)
+            {
+                foreach (var entry in state.CommittedResults)
+                {
+                    if (entry.Sequence <= baseState.LastSequence)
+                    {
+                        throw new InvalidOperationException(
+                            $"Delta checkpoint {checkpoint.CheckpointId} 包含 Sequence ({entry.Sequence}) <= base.LastSequence ({baseState.LastSequence}) 的条目；存在重叠或序号回退。");
+                    }
+                }
+            }
+
+            // 递归加载 base checkpoint（depth + 1），重建完整状态后再 apply delta 条目
+            await ResumeAsyncInternal(baseCheckpoint, depth + 1, cancellationToken).ConfigureAwait(false);
+        }
+
+        // apply committed results（Full：完整重建；Delta：仅追加新增条目）
+        if (state.CommittedResults is not null)
+        {
+            foreach (var entry in state.CommittedResults)
+            {
+                AddCommittedResult(entry.RequestId, new ToolDispatchResult
+                {
+                    Succeeded = entry.Succeeded,
+                    Result = entry.Result,
+                    Error = entry.Error,
+                    Duration = TimeSpan.Zero,
+                    SideEffect = entry.SideEffect
+                });
+            }
+        }
+
+        // R28-G P1-5：恢复 pending results（Unknown 副作用，未提交）
+        if (state.PendingResults is not null)
+        {
+            foreach (var entry in state.PendingResults)
+            {
+                _pendingToolResults[entry.RequestId] = new ToolDispatchResult
+                {
+                    Succeeded = entry.Succeeded,
+                    Result = entry.Result,
+                    Error = entry.Error,
+                    Duration = TimeSpan.Zero,
+                    SideEffect = entry.SideEffect
+                };
+            }
+        }
+
+        // R28-G P1-5：恢复 delta cursor，确保下次 checkpoint 为 Delta（基于本次 LastSequence）
+        // P0-5：同时恢复 ContentHash，供下次 delta checkpoint 构建 PrevChainHash
+        _lastCheckpointSequence = state.LastSequence;
+        _lastCheckpointId = checkpoint.CheckpointId;
+        _lastCheckpointContentHash = state.ContentHash;
     }
 
     /// <summary>R28-C WP-B：从指令 Metadata 更新 session/workspace 跟踪。</summary>
@@ -1092,6 +1487,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
             {
                 _lastCheckpointSequence = state.LastSequence;
                 _lastCheckpointId = checkpoint.CheckpointId;
+                _lastCheckpointContentHash = state.ContentHash; // P0-5：推进 hash chain cursor
             }
         }
         catch (JsonException)
@@ -1104,6 +1500,8 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// R28-C WP-B：取消时自动产出可恢复 checkpoint。
     /// R28-E P1-1：通过 <see cref="IAgentCheckpointFactory"/> 统一构建（与手动 Checkpoint 相同格式）。
     /// R28-G P1-5：成功保存后推进 delta cursor（下次 AutoCheckpoint 走 Delta 路径）。
+    /// P4：若注入了 <see cref="IAgentRunEventStore"/>，先读取最新事件 sequence 缓存到
+    /// _lastEventSequenceCache，工厂据此产出 Cursor 模式 checkpoint（不序列化 CommittedResults）。
     /// </summary>
     private async ValueTask AutoCheckpointAsync(CancellationToken cancellationToken)
     {
@@ -1111,6 +1509,23 @@ public sealed class DefaultAgentKernel : IAgentKernel
         if (_committedToolResults.Count == 0 && _lastSnapshot is null)
         {
             return;
+        }
+
+        // P4：若注入 EventStore，读取最新事件 sequence 作为 cursor 缓存。
+        // accessor 委托 getLastEventSequence 同步读取此缓存；工厂据此决定 Cursor 模式。
+        // 使用 _lastSessionId 作为 runId（Kernel 不区分 session/run；调用方负责对齐）。
+        if (_eventStore is not null)
+        {
+            try
+            {
+                _lastEventSequenceCache = await _eventStore.GetLastSequenceAsync(
+                    _lastWorkspaceId, _lastSessionId, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // EventStore 读取失败：清空缓存，工厂退回 Delta/Full 模式（安全降级）
+                _lastEventSequenceCache = null;
+            }
         }
 
         var checkpointId = $"auto-{_lastSessionId}-{DateTimeOffset.UtcNow.Ticks}";
@@ -1128,4 +1543,32 @@ public sealed class DefaultAgentKernel : IAgentKernel
     // R28-E P1-1：KernelCheckpointState / CommittedToolResultEntry 序列化模型已移到
     // DefaultAgentCheckpointFactory（KernelCheckpointStateDto / CommittedToolResultDto），
     // 供 Kernel 与外部反序列化共享。
+
+    /// <summary>
+    /// P4：ToolCallCompleted 事件 payload 反序列化模型。
+    /// 与 <c>AgentRunActor</c> 写入的 payload 结构对齐（camelCase 字段名）：
+    /// <c>{ toolName, succeeded, output, error, durationMs }</c>。
+    /// </summary>
+    private sealed class ToolCallCompletedPayload
+    {
+        /// <summary>Tool 名称（仅用于审计；重建时不使用）。</summary>
+        [JsonPropertyName("toolName")]
+        public string? ToolName { get; init; }
+
+        /// <summary>是否成功。</summary>
+        [JsonPropertyName("succeeded")]
+        public bool Succeeded { get; init; }
+
+        /// <summary>Tool 输出（成功时）。</summary>
+        [JsonPropertyName("output")]
+        public string? Output { get; init; }
+
+        /// <summary>错误信息（失败时）。</summary>
+        [JsonPropertyName("error")]
+        public string? Error { get; init; }
+
+        /// <summary>执行耗时（毫秒）。</summary>
+        [JsonPropertyName("durationMs")]
+        public double DurationMs { get; init; }
+    }
 }

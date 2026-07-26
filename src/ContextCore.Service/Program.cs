@@ -174,7 +174,8 @@ app
 	.MapLearningEndpoints()
 	.MapProvenanceEndpoints()
 	.MapVectorEndpoints()
-	.MapModelEndpoints();
+	.MapModelEndpoints()
+	.MapUtilityLedgerEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", utc = DateTimeOffset.UtcNow }))
 	.WithTags("Health")

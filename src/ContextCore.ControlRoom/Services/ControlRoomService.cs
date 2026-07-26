@@ -7,6 +7,7 @@ using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Core.Services.Storage;
 using ContextCore.Embedding;
@@ -87,6 +88,9 @@ public sealed partial class ControlRoomService
             var modelAdapters = ModelAdapterFactory.CreateAdapters(modelOptions, apiKeyResolver);
             var modelUsageLogStore = new InMemoryModelUsageLogStore();
             var tokenizerResolver = new DefaultContextTokenizerResolver();
+            // R29 WP-E-3：本地 Direct 模式使用 InMemoryUtilityLedgerStore 作为训练数据 ledger。
+            // 生产路径应由 Service 端 PostgresUtilityLedgerStore 维护；本地仅用于离线导出。
+            var utilityLedgerStore = new InMemoryUtilityLedgerStore();
             var runtime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
             {
                 ContextStore = contextStore,
@@ -133,7 +137,9 @@ public sealed partial class ControlRoomService
                 Retriever = runtime.Retriever,
                 ModelGatewayOptions = modelOptions,
                 ModelHealthService = new ModelHealthService(modelOptions, modelAdapters, apiKeyResolver),
-                ModelUsageLogStore = modelUsageLogStore
+                ModelUsageLogStore = modelUsageLogStore,
+                TrainingDataExporter = new TrainingDataExporter(utilityLedgerStore),
+                CalibrationDataExporter = new CalibrationDataExporter(utilityLedgerStore)
             };
         }
 
@@ -167,6 +173,9 @@ public sealed partial class ControlRoomService
         var fileModelAdapters = ModelAdapterFactory.CreateAdapters(fileModelOptions, fileApiKeyResolver);
         var fileModelUsageLogStore = new InMemoryModelUsageLogStore();
         var fileTokenizerResolver = new DefaultContextTokenizerResolver();
+        // R29 WP-E-3：FileSystem 模式下同样使用 InMemoryUtilityLedgerStore 作为本地 ledger
+        // （FileSystem 当前未实现 IUtilityLedgerStore；生产 ledger 由 Service 端 Postgres 维护）。
+        var fileUtilityLedgerStore = new InMemoryUtilityLedgerStore();
         var fileRuntime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
         {
             ContextStore = fileContextStore,
@@ -213,7 +222,9 @@ public sealed partial class ControlRoomService
             Retriever = fileRuntime.Retriever,
             ModelGatewayOptions = fileModelOptions,
             ModelHealthService = new ModelHealthService(fileModelOptions, fileModelAdapters, fileApiKeyResolver),
-            ModelUsageLogStore = fileModelUsageLogStore
+            ModelUsageLogStore = fileModelUsageLogStore,
+            TrainingDataExporter = new TrainingDataExporter(fileUtilityLedgerStore),
+            CalibrationDataExporter = new CalibrationDataExporter(fileUtilityLedgerStore)
         };
     }
 

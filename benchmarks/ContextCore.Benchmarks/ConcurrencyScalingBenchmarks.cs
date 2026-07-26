@@ -11,7 +11,6 @@ namespace ContextCore.Benchmarks;
 // ConcurrencyLevel=1 为串行基线（一次一个构建），>1 为并行构建。
 // 使用延迟装饰器模拟真实存储 I/O（1ms/query 近似 FileSystem），使并行优势可见。
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class ConcurrencyScalingBenchmarks
 {
     private const string WorkspaceId = "bench-ws";

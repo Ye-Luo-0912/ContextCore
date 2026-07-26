@@ -4,20 +4,21 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：IConflictSetStore 的 in-memory 实现（read-only 公共 API）。
+/// R21-3：IConflictSetLedger 的 in-memory 实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4）：
-///   1. 公共 API 是 read-only（QueryAsync / GetAsync / GetConflictsForCandidateAsync）。
-///   2. 写入由 internal AppendConflictSets 方法暴露，仅供 UtilityLedgerMaterializer 调用。
-///   3. 生产部署应替换为 PostgresConflictSetStore（仍保持 read-only 公共 API）。
+/// 设计原则（对齐澄清 #4 + R29 WP-E-1）：
+///   1. 读 API 由 <see cref="IConflictSetStore"/> 提供（QueryAsync / GetAsync / GetConflictsForCandidateAsync）。
+///   2. 写 API 由 <see cref="IConflictSetLedger"/> 提供（AppendConflictSetsAsync）；内部仍保留同步
+///      <c>AppendConflictSets</c> 供遗留调用方使用，但 materializer 已迁移到异步接口。
+///   3. 生产部署应替换为 PostgresConflictSetStore（实现同一 <see cref="IConflictSetLedger"/> 契约）。
 /// </remarks>
-public sealed class InMemoryConflictSetStore : IConflictSetStore
+public sealed class InMemoryConflictSetStore : IConflictSetLedger
 {
     private readonly ConcurrentBag<ConflictSet> _conflictSets = new();
 
     /// <summary>
-    /// 内部写入方法（仅供 UtilityLedgerMaterializer 调用）。
+    /// 内部同步写入方法（保留以兼容遗留调用方；新代码应使用 <see cref="AppendConflictSetsAsync"/>）。
     /// 批量追加 ConflictSet；不去重（同 decision 可有多个 ConflictSet）。
     /// </summary>
     internal void AppendConflictSets(IEnumerable<ConflictSet> conflictSets)
@@ -28,6 +29,17 @@ public sealed class InMemoryConflictSetStore : IConflictSetStore
             ArgumentNullException.ThrowIfNull(set);
             _conflictSets.Add(set);
         }
+    }
+
+    /// <inheritdoc />
+    public Task AppendConflictSetsAsync(
+        IReadOnlyList<ConflictSet> conflictSets,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(conflictSets);
+        cancellationToken.ThrowIfCancellationRequested();
+        AppendConflictSets(conflictSets);
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />

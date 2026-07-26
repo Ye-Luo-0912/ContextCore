@@ -180,6 +180,9 @@ public sealed class ContextCorePostgresStorageTests
         // R27-3：Evolution Pipeline 持久化注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresPipelineRunStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPipelineRunStore)));
+        // R29 WP-E-5：User Feedback Ledger 注册（Postgres 实现做 EXISTS 关联校验）
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresUserFeedbackLedgerStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IUserFeedbackLedger)));
     }
 
     [TestMethod]
@@ -619,7 +622,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v23", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v30", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -832,12 +835,18 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "state smallint NOT NULL DEFAULT 0");
         StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_state");
         StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_idempotency");
-        // R29 WP-B-2：kernel_result_outbox 表 DDL（持久化 Kernel Result Outbox）
+        // R29 WP-B-2 / P0-2：kernel_result_outbox 表 DDL + 租约模型列（持久化 Kernel Result Outbox）
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_kernel_result_outbox");
         StringAssert.Contains(sql, "outbox_id text NOT NULL");
         StringAssert.Contains(sql, "state text NOT NULL DEFAULT 'Pending'");
         StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_state");
         StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_instruction");
+        // P0-2：租约模型列 + 索引（pending/expired partial index）
+        StringAssert.Contains(sql, "ALTER TABLE cc_kernel_result_outbox ADD COLUMN IF NOT EXISTS lease_owner text");
+        StringAssert.Contains(sql, "ALTER TABLE cc_kernel_result_outbox ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz");
+        StringAssert.Contains(sql, "ALTER TABLE cc_kernel_result_outbox ADD COLUMN IF NOT EXISTS lease_token text");
+        StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_pending");
+        StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_expired");
         // R29 WP-B-4：kernel_transport_inbox + kernel_transport_outbox 表 DDL（Durable Transport）
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_kernel_transport_inbox");
         StringAssert.Contains(sql, "instruction_id text NOT NULL");

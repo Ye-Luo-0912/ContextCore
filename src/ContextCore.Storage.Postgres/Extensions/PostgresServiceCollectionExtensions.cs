@@ -210,13 +210,48 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresContextEventSink>();
         services.AddSingleton<IContextEventSink>(sp => sp.GetRequiredService<PostgresContextEventSink>());
 
-        // R28-E：Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
-        // read-only 公共 API；写入由 UtilityLedgerMaterializer 通过 internal BulkInsertAsync 调用。
-        // 无需失效 Decorator（读路径未接入缓存，与 IDecisionTraceStore / IRetrievalTraceStore 一致）。
+        // R28-E / R29 WP-E-1：Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
+        // 读 API（IUtilityLedgerStore / IConflictSetStore）+ 写 API（IUtilityLedger / IConflictSetLedger）
+        // 均绑定到同一 singleton；UtilityLedgerMaterializer 通过 IUtilityLedger / IConflictSetLedger
+        // 异步批量写入，无需感知存储后端。无需失效 Decorator（读路径未接入缓存）。
         services.AddSingleton<PostgresUtilityLedgerStore>();
         services.AddSingleton<IUtilityLedgerStore>(sp => sp.GetRequiredService<PostgresUtilityLedgerStore>());
+        services.AddSingleton<IUtilityLedger>(sp => sp.GetRequiredService<PostgresUtilityLedgerStore>());
         services.AddSingleton<PostgresConflictSetStore>();
         services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<PostgresConflictSetStore>());
+        services.AddSingleton<IConflictSetLedger>(sp => sp.GetRequiredService<PostgresConflictSetStore>());
+
+        // R29 WP-E-5：User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）。
+        // Postgres 实现做关联校验（EXISTS 子查询验证 (decision_id, candidate_item_id) 在 utility_ledger_entries 中存在）。
+        // Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 写入。
+        services.AddSingleton<PostgresUserFeedbackLedgerStore>();
+        services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<PostgresUserFeedbackLedgerStore>());
+
+        // 任务 F：Agent Run 状态机 + 事件流哈希链持久化（PostgreSQL）。
+        // 替代 InMemory 默认实现，让 HA 场景下 Agent Run 元数据 + 审计事件流可跨进程持久化与崩溃恢复。
+        // - IAgentRunStore / IAgentRunEventStore：让 AgentRunActor / AgentKernelHost 自动注入持久化实现；
+        // - IPersistentAgentRunStore / IPersistentAgentRunEventStore：标记接口以显式区分持久化能力。
+        services.AddSingleton<PostgresAgentRunStore>();
+        services.AddSingleton<IAgentRunStore>(sp => sp.GetRequiredService<PostgresAgentRunStore>());
+        services.AddSingleton<IPersistentAgentRunStore>(sp => sp.GetRequiredService<PostgresAgentRunStore>());
+        services.AddSingleton<PostgresAgentRunEventStore>();
+        services.AddSingleton<IAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
+        services.AddSingleton<IPersistentAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
+
+        // 任务 D：Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
+        // 替代单节点 InMemory 默认实现，让 HA 场景下 Canary 指标可跨实例聚合 + Leader 选举确保单 leader 推进。
+        // - ICanaryLeaderLease：CanaryLeaderHostedService 通过 TryAcquireAsync/RenewAsync/ReleaseAsync
+        //   竞争 per-run leader 租约（复用 P0-1/P0-2 租约模式，但状态机简化为"持有/未持有"两态）。
+        // - ICanaryMetricsAggregator：各实例将本地 CanaryObservationMetrics 快照写入 canary_metrics_samples 表，
+        //   leader 实例通过 SQL SUM/AVG/MAX 合并跨实例视图，产出 CanaryAggregatedMetrics 供 CanaryProgressionService 评估。
+        // 注意：CanaryLeaderHostedService 自身在 ContextCore.Service 项目中注册（依赖方向约束），
+        //       Storage.Postgres 不引用 Service；调用方应在 Service 层调用
+        //       <c>AddCanaryLeaderHostedService()</c>（若已提供）或 <c>services.AddHostedService&lt;CanaryLeaderHostedService&gt;()</c>
+        //       并配置 <see cref="CanaryLeaderOptions"/>（Enabled=true 启用 HA 模式）。
+        services.AddSingleton<PostgresCanaryLeaderLease>();
+        services.AddSingleton<ICanaryLeaderLease>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
+        services.AddSingleton<PostgresCanaryMetricsAggregator>();
+        services.AddSingleton<ICanaryMetricsAggregator>(sp => sp.GetRequiredService<PostgresCanaryMetricsAggregator>());
 
         // R14-PG-10：Postgres 备份/恢复 + PITR 执行器。
         // 注册为 Transient 因为它们持有 PostgresConnectionFactory（内含 NpgsqlDataSource），
@@ -260,6 +295,14 @@ public static class PostgresServiceCollectionExtensions
     /// 以确保 <see cref="PostgresDurableTransport"/> 单例已注册。
     /// 此扩展会移除 CoreExtensions 注册的 InProcessTransport 默认绑定并替换为持久化实现。
     /// 开发环境保留 InMemory（不调用本方法）以避免不必要的 DB 依赖。
+    ///
+    /// <b>P0-4：启用后台托管服务</b>。调用本方法后，还需在 Service 层调用
+    /// <c>AddDurableTransportHostedServices()</c>（<c>ContextCore.Service.Extensions.DurableTransportServiceCollectionExtensions</c>）
+    /// 注册 3 个后台服务：
+    ///   - <c>DurableTransportInstructionPumpService</c>：从 PG inbox 租约指令 → <see cref="IAgentKernel.SubmitAsync"/>
+    ///   - <c>ResultOutboxReplayService</c>：从 outbox 租约结果 → <see cref="IAgentKernelTransport.SendResultAsync"/> → Ack
+    ///   - <c>LeaseReaperService</c>：定时回滚过期 Leased 行
+    /// 分离注册的原因：<see cref="ContextCore.Storage.Postgres"/> 不引用 <c>ContextCore.Service</c>（依赖方向约束）。
     /// </remarks>
     public static IServiceCollection UsePostgresDurableTransport(this IServiceCollection services)
     {

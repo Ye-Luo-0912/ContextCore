@@ -7,6 +7,7 @@ using ContextCore.Core.Services.Agent;
 using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Evolution;
+using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
@@ -157,6 +158,10 @@ internal static class CoreExtensions
 		services.AddSingleton<LearningFeedbackService>();
 		services.AddSingleton<LearningFeedbackReviewService>();
 		services.AddSingleton<LearningFeedbackFeatureCandidateBuilder>();
+		// R29 WP-E-5：用户反馈服务（thumbs up/down + 评分修正 + 文本反馈 → IUserFeedbackLedger）。
+		// 生产路径 IUserFeedbackLedger 由 PostgresServiceCollectionExtensions 注册；
+		// Service 端 StorageExtensions 在 FileSystem / InMemory 模式下注册 InMemoryUserFeedbackLedgerStore。
+		services.AddSingleton<UserFeedbackService>();
 	// Embedding provider 注册由 AddEmbeddingProviders 扩展方法在 Program.cs 中显式调用，
 	// 根据 EmbeddingProviderOptions.ProviderType 条件注册 IEmbeddingGenerator / IEmbeddingProvider。
 	// - DeterministicHash: 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false
@@ -358,8 +363,13 @@ internal static class CoreExtensions
 		// Engine 是唯一决策点：Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score。
 		// R29 WP-D-1：注入 IAllocatorV2_1，使 Engine 在 DiversityOptions 非空时走 V2.1 AllocateWithDiversity。
 		// R29 WP-F-3：注入 IPerformanceMonitor，使 Engine 在 V2 路径执行超过阈值时自动回退到 V2.0 Allocator。
+		// P5：注入 IComponentHealthRegistry，使 Engine/Runtime 按组件归因耗时并支持组件级回退。
 		services.TryAddSingleton<DefaultPerformanceMonitor>();
 		services.TryAddSingleton<IPerformanceMonitor>(sp => sp.GetRequiredService<DefaultPerformanceMonitor>());
+		// P5：组件健康注册表（Singleton，与 DefaultPerformanceMonitor 同生命周期）。
+		// 参考 DefaultPerformanceMonitor 注册模式：TryAddSingleton 避免重复注册；默认使用 ComponentFallbackOptions.Default。
+		services.TryAddSingleton<DefaultComponentHealthRegistry>();
+		services.TryAddSingleton<IComponentHealthRegistry>(sp => sp.GetRequiredService<DefaultComponentHealthRegistry>());
 		services.AddSingleton<DefaultContextDecisionEngine>(sp => new DefaultContextDecisionEngine(
 			sp.GetService<IPolicyRegistry>(),
 			safetyGate: sp.GetService<ISafetyGate>(),
@@ -367,7 +377,8 @@ internal static class CoreExtensions
 			utilityScorer: sp.GetService<IUtilityScorer>(),
 			globalAllocator: sp.GetService<IGlobalAllocator>(),
 			allocatorV2_1: sp.GetService<IAllocatorV2_1>(),
-			performanceMonitor: sp.GetService<IPerformanceMonitor>()));
+			performanceMonitor: sp.GetService<IPerformanceMonitor>(),
+			componentHealthRegistry: sp.GetService<IComponentHealthRegistry>()));
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
 		// P0-3：将 IResolvedPolicyProvider 从 B-1 骨架 DefaultResolvedPolicyProvider 替换为
 		// PostgresResolvedPolicyProvider，接入 IPolicyRegistry（CAS epoch + content hash +
@@ -434,6 +445,21 @@ internal static class CoreExtensions
 		services.TryAddSingleton<IRuntimeRequestNormalizer>(DefaultRuntimeRequestNormalizer.Instance);
 		services.TryAddSingleton<IRequestSemanticHasher>(DefaultRequestSemanticHasher.Instance);
 		services.TryAddSingleton<IExecutionArtifactFactory>(DefaultExecutionArtifactFactory.Instance);
+		// R29 WP-E-2：Utility Ledger Materializer（依赖 IUtilityLedger + IConflictSetLedger）。
+		// TryAddSingleton：若测试路径注入 mock materializer 则跳过；生产路径 Postgres / 开发路径 InMemory
+		// 均已注册 IUtilityLedger / IConflictSetLedger（PostgresServiceCollectionExtensions / RegisterInMemory）。
+		// DefaultContextDecisionRuntime 通过 nullable 参数注入；未注册时跳过物化（保持向后兼容）。
+		services.TryAddSingleton<UtilityLedgerMaterializer>(sp => new UtilityLedgerMaterializer(
+			sp.GetRequiredService<IUtilityLedger>(),
+			sp.GetRequiredService<IConflictSetLedger>()));
+		// R29 WP-E-3：训练数据导出器（依赖 IUtilityLedgerStore；Postgres / InMemory 均已注册）。
+		// TryAddSingleton：若测试路径注入 mock exporter 则跳过；生产路径通过 IUtilityLedgerStore 抽象读取 ledger。
+		services.TryAddSingleton<ITrainingDataExporter>(sp => new TrainingDataExporter(
+			sp.GetRequiredService<IUtilityLedgerStore>()));
+		// R29 WP-E-4：校准数据导出器（依赖 IUtilityLedgerStore；同 TrainingDataExporter）。
+		// 输出 predicted / observed / weight 三段式 JSONL，供 Platt / Temperature / Isotonic 校准拟合消费。
+		services.TryAddSingleton<ICalibrationDataExporter>(sp => new CalibrationDataExporter(
+			sp.GetRequiredService<IUtilityLedgerStore>()));
 		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();

@@ -327,6 +327,9 @@ public interface IResultProjector<TResult>
 /// <remarks>
 /// 当 V2 路径执行时间超过 <see cref="ThresholdMs"/> 时，标记该 scope 需要 V2.0 回退；
 /// <see cref="RecoverySamples"/> 个连续低于阈值的样本后解除回退状态（自愈）。
+/// P5：新增 <see cref="ComponentPolicies"/> 支持组件级回退阈值（每组件独立 P95 阈值），
+/// 与整体 V2 路径阈值 <see cref="ThresholdMs"/> 共存：整体阈值作为兜底，
+/// 组件阈值用于细粒度归因与回退（由 IComponentHealthRegistry 使用）。
 /// </remarks>
 public sealed record PerformanceFallbackOptions
 {
@@ -342,7 +345,29 @@ public sealed record PerformanceFallbackOptions
     /// <summary>解除回退状态所需的连续低于阈值样本数（默认 5）。</summary>
     public int RecoverySamples { get; init; } = 5;
 
-    /// <summary>默认配置（阈值 500ms / 窗口 16 / 最小样本 3 / 恢复样本 5）。</summary>
+    /// <summary>
+    /// P5：组件级回退策略（每组件独立 P95 阈值）。由 IComponentHealthRegistry 使用。
+    /// 为 null 或空时使用 ComponentFallbackOptions.Default 默认策略。
+    /// 保留 <see cref="ThresholdMs"/> 等 V2 整体阈值作为兜底（IPerformanceMonitor 使用）。
+    /// </summary>
+    public Dictionary<ComponentKind, ComponentFallbackPolicy>? ComponentPolicies { get; init; }
+
+    /// <summary>
+    /// P5：获取指定组件的回退策略。
+    /// 优先使用 <see cref="ComponentPolicies"/>；未配置时回退到 <see cref="ComponentFallbackOptions.Default"/> 默认策略。
+    /// </summary>
+    /// <param name="kind">组件类型。</param>
+    /// <returns>该组件的回退策略。</returns>
+    public ComponentFallbackPolicy GetComponentPolicy(ComponentKind kind)
+    {
+        if (ComponentPolicies is not null && ComponentPolicies.TryGetValue(kind, out var policy))
+        {
+            return policy;
+        }
+        return ComponentFallbackOptions.Default.GetPolicy(kind);
+    }
+
+    /// <summary>默认配置（阈值 500ms / 窗口 16 / 最小样本 3 / 恢复样本 5 / 组件策略默认）。</summary>
     public static PerformanceFallbackOptions Default { get; } = new();
 }
 

@@ -597,6 +597,42 @@ public sealed class CanaryProgressionService
                 $"V2 产出质量退化（section 覆盖率 + 候选相关性综合分过低）；自动回滚。");
         }
 
+        // 任务 C：外部指标回滚检查。指标未采集（不在字典中）时跳过（优雅降级）。
+        // 与 quality_score 不同，外部指标只在被 DefaultCanaryExternalMetricsSource 等采集源
+        // 真正写入时才出现在 experimentMetrics 字典中（ToExperimentMetrics 仅写入非 null 字段）。
+
+        // 5. 任务成功率下限（task_success_rate < MinTaskSuccessRate）
+        if (_options.MinTaskSuccessRate > 0.0 &&
+            experimentMetrics.TryGetValue("task_success_rate", out var taskSuccess) &&
+            taskSuccess < _options.MinTaskSuccessRate)
+        {
+            return ("task_success_rate", taskSuccess, RollbackReason.ModelPerformanceRegression,
+                $"任务成功率 {taskSuccess:F4} < 阈值 {_options.MinTaskSuccessRate:F4}（MinTaskSuccessRate）；" +
+                $"V2 路径功能严重退化；自动回滚。");
+        }
+
+        // 6. 安全违规率上限（safety_violation_rate > MaxSafetyViolationRate）
+        // 默认 MaxSafetyViolationRate=0.0（零容忍）；设为 1.0 时禁用。
+        // RollbackReason 复用 ModelPerformanceRegression（safety violation 视为 V2 路径退化的一种）。
+        if (_options.MaxSafetyViolationRate < 1.0 &&
+            experimentMetrics.TryGetValue("safety_violation_rate", out var safetyViolation) &&
+            safetyViolation > _options.MaxSafetyViolationRate)
+        {
+            return ("safety_violation_rate", safetyViolation, RollbackReason.ModelPerformanceRegression,
+                $"安全违规率 {safetyViolation:F4} > 阈值 {_options.MaxSafetyViolationRate:F4}（MaxSafetyViolationRate）；" +
+                $"V2 路径触发安全违规；自动回滚（零容忍）。");
+        }
+
+        // 7. 用户接受率下限（user_acceptance < MinUserAcceptance）
+        if (_options.MinUserAcceptance > 0.0 &&
+            experimentMetrics.TryGetValue("user_acceptance", out var userAcceptance) &&
+            userAcceptance < _options.MinUserAcceptance)
+        {
+            return ("user_acceptance", userAcceptance, RollbackReason.ModelPerformanceRegression,
+                $"用户接受率 {userAcceptance:F4} < 阈值 {_options.MinUserAcceptance:F4}（MinUserAcceptance）；" +
+                $"V2 路径用户体验退化；自动回滚。");
+        }
+
         return null;
     }
 

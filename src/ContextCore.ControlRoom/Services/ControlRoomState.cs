@@ -86,6 +86,18 @@ public sealed class ControlRoomState
 
     public IModelUsageLogStore? ModelUsageLogStore { get; init; }
 
+    /// <summary>
+    /// R29 WP-E-3：训练数据导出器（Direct 模式可用）。
+    /// Service 模式下为 null（CLI 通过 Service API 远程调用，不走本地导出）。
+    /// </summary>
+    public ITrainingDataExporter? TrainingDataExporter { get; init; }
+
+    /// <summary>
+    /// R29 WP-E-4：校准数据导出器（Direct 模式可用）。
+    /// Service 模式下为 null（CLI 通过 Service API 远程调用，不走本地导出）。
+    /// </summary>
+    public ICalibrationDataExporter? CalibrationDataExporter { get; init; }
+
     public ContextPackage? LastPackage { get; set; }
 
     public bool IsServiceMode => Mode == ControlRoomMode.Service;

@@ -11,7 +11,6 @@ namespace ContextCore.Benchmarks;
 // - 按 scope 失效的性能（scope 反向索引 O(M)）
 // 结果用于决定是否需要换用 CLOCK/分段近似 LRU。
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class CacheChurnBenchmarks
 {
     private InMemoryContextStateCache _cache = null!;

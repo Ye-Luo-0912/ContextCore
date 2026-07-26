@@ -71,4 +71,11 @@ public sealed class InMemoryKernelResultOutbox : IKernelResultOutbox
 
     /// <inheritdoc />
     public int PendingCount => _channel.Reader.Count;
+
+    /// <inheritdoc />
+    public ValueTask<int> GetPendingCountAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<int>(_channel.Reader.Count);
+    }
 }

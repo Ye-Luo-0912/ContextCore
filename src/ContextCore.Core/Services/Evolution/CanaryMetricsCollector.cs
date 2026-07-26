@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ContextCore.Abstractions;
 using ContextCore.Core.Services.DecisionEngine;
 
 namespace ContextCore.Core.Services.Evolution;
@@ -64,6 +65,41 @@ public sealed record CanaryObservationMetrics
     /// </summary>
     public required double AverageQualityScore { get; init; }
 
+    // -----------------------------------------------------------------------
+    // 任务 C：外部结果指标（ground truth 信号）。null = 未采集，聚合器应优雅跳过。
+    // 与 <see cref="ExternalResultMetrics"/> 同名字段对齐，但此处为窗口内加权均值。
+    // -----------------------------------------------------------------------
+
+    /// <summary>任务成功率（1.0 = 全部成功；0.0 = 全部失败）；null = 未采集。</summary>
+    public double? TaskSuccessRate { get; init; }
+
+    /// <summary>Tool 调用成功率（1.0 = 全部成功）；null = 未采集。</summary>
+    public double? ToolSuccessRate { get; init; }
+
+    /// <summary>修复率（自动修复成功次数 / 需要修复的总次数）；null = 未采集。</summary>
+    public double? RepairRate { get; init; }
+
+    /// <summary>安全违规率（0.0 = 无违规；越高越严重）；null = 未采集。</summary>
+    public double? SafetyViolationRate { get; init; }
+
+    /// <summary>上下文精确率（相关候选 / 总候选）；null = 未采集。</summary>
+    public double? ContextPrecision { get; init; }
+
+    /// <summary>上下文召回率 proxy（命中 / 应命中）；null = 未采集。</summary>
+    public double? ContextRecallProxy { get; init; }
+
+    /// <summary>用户接受率（用户接受 / 总展示；1.0 = 全部接受）；null = 未采集。</summary>
+    public double? UserAcceptance { get; init; }
+
+    /// <summary>回答质量分（人工评分或 LLM-as-judge；范围 [0.0, 1.0]）；null = 未采集。</summary>
+    public double? AnswerQuality { get; init; }
+
+    /// <summary>Token 成本（每千次请求的 token 消耗；越低越好）；null = 未采集。</summary>
+    public double? TokenCost { get; init; }
+
+    /// <summary>推理成本（每千次请求的推理费用，单位美元；越低越好）；null = 未采集。</summary>
+    public double? InferenceCost { get; init; }
+
     /// <summary>观察窗口起始时间（UTC）。</summary>
     public required DateTimeOffset WindowStart { get; init; }
 
@@ -101,6 +137,35 @@ public interface ICanaryMetricsCollector
         TimeSpan v2Duration,
         TimeSpan? legacyDuration = null,
         double? qualityScore = null);
+
+    /// <summary>
+    /// 任务 C：记录一次 shadow/parity 评估结果 + 外部结果指标（ground truth 信号）。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="parityReport">parity 对比报告。</param>
+    /// <param name="v2Succeeded">V2 路径是否成功。</param>
+    /// <param name="legacySucceeded">Legacy 路径是否成功。</param>
+    /// <param name="v2Duration">V2 路径执行耗时。</param>
+    /// <param name="legacyDuration">Legacy 路径执行耗时（缺省回退到 v2Duration）。</param>
+    /// <param name="qualityScore">V2 路径产出质量分（0.0-1.0）。</param>
+    /// <param name="externalMetrics">
+    /// 外部结果指标（可为 null）。非 null 字段会存入 ring buffer 样本并参与滚动聚合；
+    /// null 字段在聚合时优雅跳过（不计入均值）。当本参数整体为 null 时等价于 <see cref="RecordObservation"/>。
+    /// </param>
+    /// <remarks>
+    /// 外部指标按"非 null 字段计数"独立聚合：每个字段维护 (sum, count) 两个滚动累加器，
+    /// 均值 = sum / count（不计入未采集样本）。这与 parity/error/latency 的"全样本聚合"语义不同：
+    /// 外部信号通常稀疏（如 UserAcceptance 仅在用户反馈时才有），按字段独立计数更准确。
+    /// </remarks>
+    void RecordObservationWithExternalMetrics(
+        string runId,
+        ParityReport parityReport,
+        bool v2Succeeded,
+        bool legacySucceeded,
+        TimeSpan v2Duration,
+        TimeSpan? legacyDuration = null,
+        double? qualityScore = null,
+        ExternalResultMetrics? externalMetrics = null);
 
     /// <summary>获取当前观察窗口的聚合指标。</summary>
     /// <param name="runId">Canary run ID。</param>
@@ -155,6 +220,20 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         TimeSpan v2Duration,
         TimeSpan? legacyDuration = null,
         double? qualityScore = null)
+        => RecordObservationWithExternalMetrics(
+            runId, parityReport, v2Succeeded, legacySucceeded,
+            v2Duration, legacyDuration, qualityScore, externalMetrics: null);
+
+    /// <inheritdoc />
+    public void RecordObservationWithExternalMetrics(
+        string runId,
+        ParityReport parityReport,
+        bool v2Succeeded,
+        bool legacySucceeded,
+        TimeSpan v2Duration,
+        TimeSpan? legacyDuration = null,
+        double? qualityScore = null,
+        ExternalResultMetrics? externalMetrics = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(parityReport);
@@ -190,14 +269,28 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             bucket.V2LatencySketch.Add(v2Ms);
             bucket.LegacyLatencySketch.Add(legacyMs);
 
-            // 保留样本记录用于诊断（可选；ring buffer 自动淘汰）
-            bucket.AddSample(new ObservationSample(
+            // 任务 C：外部指标按"非 null 字段计数"独立聚合（稀疏信号按字段计数更准确）
+            var sample = new ObservationSample(
                 Divergent: divergent,
                 V2Succeeded: v2Succeeded,
                 LegacySucceeded: legacySucceeded,
                 V2DurationMs: v2Ms,
                 LegacyDurationMs: legacyMs,
-                QualityScore: quality));
+                QualityScore: quality,
+                TaskSuccessRate: externalMetrics?.TaskSuccessRate,
+                ToolSuccessRate: externalMetrics?.ToolSuccessRate,
+                RepairRate: externalMetrics?.RepairRate,
+                SafetyViolationRate: externalMetrics?.SafetyViolationRate,
+                ContextPrecision: externalMetrics?.ContextPrecision,
+                ContextRecallProxy: externalMetrics?.ContextRecallProxy,
+                UserAcceptance: externalMetrics?.UserAcceptance,
+                AnswerQuality: externalMetrics?.AnswerQuality,
+                TokenCost: externalMetrics?.TokenCost,
+                InferenceCost: externalMetrics?.InferenceCost);
+            bucket.AccumulateExternal(sample);
+
+            // 保留样本记录用于诊断（可选；ring buffer 自动淘汰）
+            bucket.AddSample(sample);
 
             var now = DateTimeOffset.UtcNow;
             if (bucket.TotalObservations == 1)
@@ -228,6 +321,16 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 V2P95LatencyMs = 0.0,
                 LegacyP95LatencyMs = 0.0,
                 AverageQualityScore = 0.0,
+                TaskSuccessRate = null,
+                ToolSuccessRate = null,
+                RepairRate = null,
+                SafetyViolationRate = null,
+                ContextPrecision = null,
+                ContextRecallProxy = null,
+                UserAcceptance = null,
+                AnswerQuality = null,
+                TokenCost = null,
+                InferenceCost = null,
                 WindowStart = now,
                 WindowEnd = now
             };
@@ -237,6 +340,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         long total, divergentCount, v2ErrorCount, legacyErrorCount;
         double v2P95, legacyP95, qualityScoreSum;
         DateTimeOffset windowStart, windowEnd;
+        ExternalAccumulator extSnapshot;
 
         lock (bucket)
         {
@@ -249,6 +353,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             qualityScoreSum = bucket.QualityScoreSum;
             windowStart = bucket.WindowStart;
             windowEnd = bucket.WindowEnd;
+            extSnapshot = bucket.ExternalMetrics.Clone();
         }
 
         if (total == 0)
@@ -265,6 +370,16 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 V2P95LatencyMs = 0.0,
                 LegacyP95LatencyMs = 0.0,
                 AverageQualityScore = 0.0,
+                TaskSuccessRate = null,
+                ToolSuccessRate = null,
+                RepairRate = null,
+                SafetyViolationRate = null,
+                ContextPrecision = null,
+                ContextRecallProxy = null,
+                UserAcceptance = null,
+                AnswerQuality = null,
+                TokenCost = null,
+                InferenceCost = null,
                 WindowStart = windowStart,
                 WindowEnd = windowEnd
             };
@@ -283,6 +398,17 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             LegacyP95LatencyMs = legacyP95,
             // R29 WP-C-3：质量分均值 = sum / total（包含 V2 失败样本的 0.0 贡献）
             AverageQualityScore = qualityScoreSum / total,
+            // 任务 C：外部指标按字段独立均值（稀疏信号不计入未采集样本）
+            TaskSuccessRate = extSnapshot.MeanOf(FieldTaskSuccessRate),
+            ToolSuccessRate = extSnapshot.MeanOf(FieldToolSuccessRate),
+            RepairRate = extSnapshot.MeanOf(FieldRepairRate),
+            SafetyViolationRate = extSnapshot.MeanOf(FieldSafetyViolationRate),
+            ContextPrecision = extSnapshot.MeanOf(FieldContextPrecision),
+            ContextRecallProxy = extSnapshot.MeanOf(FieldContextRecallProxy),
+            UserAcceptance = extSnapshot.MeanOf(FieldUserAcceptance),
+            AnswerQuality = extSnapshot.MeanOf(FieldAnswerQuality),
+            TokenCost = extSnapshot.MeanOf(FieldTokenCost),
+            InferenceCost = extSnapshot.MeanOf(FieldInferenceCost),
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
@@ -308,7 +434,81 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         bool LegacySucceeded,
         double V2DurationMs,
         double LegacyDurationMs,
-        double QualityScore);
+        double QualityScore,
+        double? TaskSuccessRate,
+        double? ToolSuccessRate,
+        double? RepairRate,
+        double? SafetyViolationRate,
+        double? ContextPrecision,
+        double? ContextRecallProxy,
+        double? UserAcceptance,
+        double? AnswerQuality,
+        double? TokenCost,
+        double? InferenceCost);
+
+    // -----------------------------------------------------------------------
+    // 任务 C：外部指标字段常量（用于 ExternalAccumulator 数组索引）。
+    // 顺序与 CanaryObservationMetrics / ExternalResultMetrics 字段对齐。
+    // -----------------------------------------------------------------------
+    private const int FieldTaskSuccessRate = 0;
+    private const int FieldToolSuccessRate = 1;
+    private const int FieldRepairRate = 2;
+    private const int FieldSafetyViolationRate = 3;
+    private const int FieldContextPrecision = 4;
+    private const int FieldContextRecallProxy = 5;
+    private const int FieldUserAcceptance = 6;
+    private const int FieldAnswerQuality = 7;
+    private const int FieldTokenCost = 8;
+    private const int FieldInferenceCost = 9;
+    private const int ExternalFieldCount = 10;
+
+    /// <summary>
+    /// 任务 C：外部指标的滚动累加器（per-field sum + count）。
+    /// 每个 nullable 字段独立计数：未采集样本不计入该字段的均值，避免稀疏信号被稀释。
+    /// </summary>
+    private sealed class ExternalAccumulator
+    {
+        private readonly double[] _sum = new double[ExternalFieldCount];
+        private readonly long[] _count = new long[ExternalFieldCount];
+
+        public void Add(int field, double? value)
+        {
+            if (value.HasValue)
+            {
+                _sum[field] += value.Value;
+                _count[field]++;
+            }
+        }
+
+        public void Subtract(int field, double? value)
+        {
+            if (value.HasValue)
+            {
+                _sum[field] -= value.Value;
+                _count[field]--;
+            }
+        }
+
+        public double? MeanOf(int field)
+            => _count[field] > 0 ? _sum[field] / _count[field] : null;
+
+        public ExternalAccumulator Clone()
+        {
+            var copy = new ExternalAccumulator();
+            for (var i = 0; i < ExternalFieldCount; i++)
+            {
+                copy._sum[i] = _sum[i];
+                copy._count[i] = _count[i];
+            }
+            return copy;
+        }
+
+        public void Reset()
+        {
+            Array.Clear(_sum, 0, ExternalFieldCount);
+            Array.Clear(_count, 0, ExternalFieldCount);
+        }
+    }
 
     /// <summary>
     /// R28-G P1-6：per-runId 的样本桶（含锁保护）。
@@ -327,6 +527,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             _count = 0;
             V2LatencySketch = new DDSketch();
             LegacyLatencySketch = new DDSketch();
+            ExternalMetrics = new ExternalAccumulator();
         }
 
         public long TotalObservations { get; set; } // 累计观察次数（含已淘汰样本）
@@ -337,6 +538,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         public double QualityScoreSum { get; set; }
         public DDSketch V2LatencySketch { get; }
         public DDSketch LegacyLatencySketch { get; }
+        // 任务 C：外部指标 per-field 累加器（稀疏信号按字段计数）
+        public ExternalAccumulator ExternalMetrics { get; }
         public DateTimeOffset WindowStart { get; set; }
         public DateTimeOffset WindowEnd { get; set; }
 
@@ -347,6 +550,21 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             _ringBuffer[_head] = sample;
             _head = (_head + 1) % _ringBuffer.Length;
             if (_count < _ringBuffer.Length) _count++;
+        }
+
+        /// <summary>任务 C：将样本中的外部指标累加到滚动累加器（null 字段跳过）。</summary>
+        public void AccumulateExternal(ObservationSample sample)
+        {
+            ExternalMetrics.Add(FieldTaskSuccessRate, sample.TaskSuccessRate);
+            ExternalMetrics.Add(FieldToolSuccessRate, sample.ToolSuccessRate);
+            ExternalMetrics.Add(FieldRepairRate, sample.RepairRate);
+            ExternalMetrics.Add(FieldSafetyViolationRate, sample.SafetyViolationRate);
+            ExternalMetrics.Add(FieldContextPrecision, sample.ContextPrecision);
+            ExternalMetrics.Add(FieldContextRecallProxy, sample.ContextRecallProxy);
+            ExternalMetrics.Add(FieldUserAcceptance, sample.UserAcceptance);
+            ExternalMetrics.Add(FieldAnswerQuality, sample.AnswerQuality);
+            ExternalMetrics.Add(FieldTokenCost, sample.TokenCost);
+            ExternalMetrics.Add(FieldInferenceCost, sample.InferenceCost);
         }
 
         /// <summary>淘汰最旧样本，并回滚其计数贡献（保持滚动计数器一致性）。</summary>
@@ -363,6 +581,18 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             if (!oldest.LegacySucceeded) LegacyErrorCount--;
             // R29 WP-C-3：回滚质量分贡献，保持 AverageQualityScore 一致性
             QualityScoreSum -= oldest.QualityScore;
+
+            // 任务 C：回滚外部指标累加器（保持 per-field 均值一致性）
+            ExternalMetrics.Subtract(FieldTaskSuccessRate, oldest.TaskSuccessRate);
+            ExternalMetrics.Subtract(FieldToolSuccessRate, oldest.ToolSuccessRate);
+            ExternalMetrics.Subtract(FieldRepairRate, oldest.RepairRate);
+            ExternalMetrics.Subtract(FieldSafetyViolationRate, oldest.SafetyViolationRate);
+            ExternalMetrics.Subtract(FieldContextPrecision, oldest.ContextPrecision);
+            ExternalMetrics.Subtract(FieldContextRecallProxy, oldest.ContextRecallProxy);
+            ExternalMetrics.Subtract(FieldUserAcceptance, oldest.UserAcceptance);
+            ExternalMetrics.Subtract(FieldAnswerQuality, oldest.AnswerQuality);
+            ExternalMetrics.Subtract(FieldTokenCost, oldest.TokenCost);
+            ExternalMetrics.Subtract(FieldInferenceCost, oldest.InferenceCost);
 
             // 注意：DDSketch 不支持回滚（buckets 仅单调累加）。
             // 这意味着 P95 估计会包含已淘汰样本的延迟值。
@@ -384,6 +614,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             QualityScoreSum = 0.0;
             V2LatencySketch.Reset();
             LegacyLatencySketch.Reset();
+            ExternalMetrics.Reset();
             var now = DateTimeOffset.UtcNow;
             WindowStart = now;
             WindowEnd = now;
@@ -409,13 +640,36 @@ public static class CanaryMetricsExtensions
     /// <remarks>
     /// R29 WP-C-3：新增 <c>quality_score</c> 字段，由 CanaryProgressionService.CheckRollbackThresholds
     /// 与 <see cref="CanaryGateOptions.MinQualityScore"/> 比较决定是否触发回滚。
+    /// <para>
+    /// 任务 C：新增外部指标键值对（task_success_rate / tool_success_rate / repair_rate /
+    /// safety_violation_rate / context_precision / context_recall_proxy / user_acceptance /
+    /// answer_quality / token_cost / inference_cost）。
+    /// 仅当外部指标非 null（已采集）时写入字典；null 字段不写入（CanaryProgressionService
+    /// 通过 TryGetValue 检测，未采集时跳过回滚检查，优雅降级）。
+    /// </para>
     /// </remarks>
     public static IReadOnlyDictionary<string, double> ToExperimentMetrics(this CanaryObservationMetrics metrics)
-        => new Dictionary<string, double>
+    {
+        var dict = new Dictionary<string, double>
         {
             ["error_rate"] = metrics.V2ErrorRate,
             ["p95_latency_ms"] = metrics.V2P95LatencyMs,
             ["divergence_rate"] = metrics.DivergenceRate,
             ["quality_score"] = metrics.AverageQualityScore
         };
+
+        // 任务 C：外部指标仅在非 null 时写入字典；CheckRollbackThresholds 用 TryGetValue 优雅降级
+        if (metrics.TaskSuccessRate.HasValue) dict["task_success_rate"] = metrics.TaskSuccessRate.Value;
+        if (metrics.ToolSuccessRate.HasValue) dict["tool_success_rate"] = metrics.ToolSuccessRate.Value;
+        if (metrics.RepairRate.HasValue) dict["repair_rate"] = metrics.RepairRate.Value;
+        if (metrics.SafetyViolationRate.HasValue) dict["safety_violation_rate"] = metrics.SafetyViolationRate.Value;
+        if (metrics.ContextPrecision.HasValue) dict["context_precision"] = metrics.ContextPrecision.Value;
+        if (metrics.ContextRecallProxy.HasValue) dict["context_recall_proxy"] = metrics.ContextRecallProxy.Value;
+        if (metrics.UserAcceptance.HasValue) dict["user_acceptance"] = metrics.UserAcceptance.Value;
+        if (metrics.AnswerQuality.HasValue) dict["answer_quality"] = metrics.AnswerQuality.Value;
+        if (metrics.TokenCost.HasValue) dict["token_cost"] = metrics.TokenCost.Value;
+        if (metrics.InferenceCost.HasValue) dict["inference_cost"] = metrics.InferenceCost.Value;
+
+        return dict;
+    }
 }

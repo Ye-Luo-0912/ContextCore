@@ -7,6 +7,14 @@ on:
       - 'src/**'
       - 'benchmarks/**'
       - '.github/workflows/benchmark.yml'
+      - 'scripts/benchmark-compare.sh'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'benchmarks/**'
+      - '.github/workflows/benchmark.yml'
+      - 'scripts/benchmark-compare.sh'
   workflow_dispatch:
     inputs:
       filter:
@@ -28,6 +36,8 @@ jobs:
       contents: read
       pull-requests: write
       checks: write
+    outputs:
+      regression_found: ${{ steps.compare.outputs.regression_found }}
 
     steps:
       - name: Checkout PR head
@@ -47,12 +57,15 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Cache benchmark baseline
-        uses: actions/cache@v4
+      - name: Restore benchmark baseline
+        uses: actions/cache/restore@v4
         with:
           path: benchmarks/baseline
-          key: benchmark-baseline-${{ github.base_ref || 'main' }}
+          # key 唯一且不匹配任何已存缓存 → 总是回退到 restore-keys 恢复最新 main 基线。
+          # 使用 actions/cache/restore（仅恢复，不保存），避免 PR 污染基线缓存。
+          key: benchmark-baseline-restore-${{ github.run_id }}
           restore-keys: |
+            benchmark-baseline-main-
             benchmark-baseline-main
 
       - name: Restore benchmark project
@@ -60,6 +73,70 @@ jobs:
 
       - name: Build benchmark project (Release)
         run: dotnet build benchmarks/ContextCore.Benchmarks/ContextCore.Benchmarks.csproj -c Release --no-restore
+
+      # P0-9：环境归一化 —— 降低 CI 环境噪声，减少假阳性。
+      # CI runner 是共享 VM，存在后台进程、CPU 频率波动、文件系统缓存冷热差异等噪声源。
+      # 这些归一化步骤在不改变测量结果语义的前提下提升可复现性。
+      - name: Normalize benchmark environment
+        run: |
+          set -e
+          echo "::group::Environment normalization"
+          # 1. CPU 调度器设为 performance 模式（若工具可用且有权限），
+          #    避免 CPU 频率动态调频（governor=ondemand）引入的频率抖动。
+          if command -v cpufreq-set >/dev/null 2>&1; then
+            for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+              [ -w "$cpu" ] && echo performance > "$cpu" 2>/dev/null || true
+            done
+            echo "CPU governor: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo n/a)"
+          else
+            echo "cpufreq-set not available — skipping governor pinning"
+          fi
+
+          # 2. 释放 page cache / dentries / inodes，使文件系统缓存处于已知冷状态，
+          #    随后由 pre-warmup 步骤建立稳定热缓存，避免冷热不均导致的 I/O 噪声。
+          sync || true
+          if [ -w /proc/sys/vm/drop_caches ]; then
+            echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+            echo "page cache dropped"
+          else
+            echo "drop_caches not writable (needs root) — skipping cache reset"
+          fi
+
+          # 3. .NET 运行时归一化：固定 GC 模式与并发策略，消除 GC 调度变异。
+          #    Server GC + 并发 GC 是高吞吐场景默认值，显式固定可避免环境差异。
+          echo "DOTNET_gcServer=1" >> "$GITHUB_ENV"
+          echo "DOTNET_gcConcurrent=1" >> "$GITHUB_ENV"
+          # 4. 禁用 Tiered PGO 的运行时重新分层抖动：首次 JIT 编译后不再后台重编译，
+          #    保证多次迭代使用同一 JIT 产物，减少测量间的变异。
+          echo "DOTNET_TieredPGO=0" >> "$GITHUB_ENV"
+          echo "DOTNET_TieredCompilation=0" >> "$GITHUB_ENV"
+
+          echo "Environment: $(uname -a)"
+          echo ".NET runtime vars exported to GITHUB_ENV"
+          echo "::endgroup::"
+        shell: bash
+
+      # P0-9：预热运行 —— 仅对 I/O 密集型 benchmark 跑 1 次迭代建立文件系统热缓存，
+      # 避免正式测量首轮的 OS page cache miss 噪声污染统计。
+      # I/O benchmark 受冷热缓存影响最大（见 benchmark-compare.sh 的 IO_BOUND_THRESHOLD_PCT）。
+      # 结果丢弃，不参与对比。若 filter 不匹配任何 I/O benchmark 则跳过。
+      - name: Pre-warmup run (warm file cache + JIT for I/O-bound benchmarks)
+        run: |
+          set +e
+          cd benchmarks/ContextCore.Benchmarks
+          dotnet run -c Release --no-build -- \
+            --filter "*FileSystem*" \
+            --warmupCount 1 \
+            --iterationCount 1 \
+            --launchCount 1 \
+            --exporters json > /tmp/prewarmup.log 2>&1
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "Pre-warmup filter matched no I/O benchmark or exited non-zero (rc=$rc) — acceptable, continuing."
+          else
+            echo "Pre-warmup completed — file cache warmed for I/O-bound benchmarks."
+          fi
+        shell: bash
 
       # 仅运行新增的 R29 WP-F-1 benchmark 子集（避免 CI 全量执行耗时过长）
       # 包含 AllocatorBenchmarks / CanonicalMergerBenchmarks / ProjectorBenchmarks
@@ -73,65 +150,66 @@ jobs:
           if [ -z "$FILTER" ]; then
             FILTER="*"
           fi
-          # 使用更少的迭代以缩短 CI 时间（warmupCount=2 iterationCount=3 launchCount=1）
+          # P0-9：不再覆盖迭代次数。由 BenchmarkOutputConfig 集中配置决定
+          # （MinWarmupCount=3, MaxWarmupCount=10, MinIterationCount=15, MaxIterationCount=25）。
+          # 此前 --warmupCount 2 --iterationCount 3 产生 N=3 < MIN_SAMPLE_COUNT=5，导致：
+          #   (a) benchmark-compare.sh 跳过所有 case（LOW-N）→ 假阴性（回归未被检测）；
+          #   (b) 样本不足使 StdErr 未收敛，环境噪声被放大为"回归" → 假阳性。
+          # 移除 CLI 覆盖后，BenchmarkDotNet 在 [Min,Max] 区间内按误差自适应选择迭代数，
+          # 保证 N≥15，统计可靠。--launchCount 1 保留以避免多次进程启动拉长 CI 时间。
+          # 噪声抑制（noiseFloor 3% / confidenceSigma 2xStdErr / ioBoundThreshold 30%）由
+          # scripts/benchmark-compare.sh 在统计层完成。
           dotnet run -c Release --no-build -- \
             --filter "$FILTER" \
-            --warmupCount 2 \
-            --iterationCount 3 \
             --launchCount 1 \
             --exporters json,csv
         shell: bash
 
+      # 真实回归对比：解析 BenchmarkDotNet JSON（CaseKey = Type.Method | Parameters | Runtime），
+      # 应用 Latency(Median)/P95/Allocation/Store-call 门控。脚本退出码 1 = 检测到回归。
+      # 详见 scripts/benchmark-compare.sh。门控由 benchmark-selftest.yml 注入 15% 回归进行自检。
       - name: Compare with baseline
         id: compare
+        if: success()
         run: |
-          set -euo pipefail
-          CURRENT_DIR="benchmarks/results/results"
-          BASELINE_DIR="benchmarks/baseline"
-
-          mkdir -p "$BASELINE_DIR"
-          REGRESSION_FOUND=0
-          REGRESSION_DETAILS=""
-
-          if [ ! -d "$CURRENT_DIR" ] || [ -z "$(ls -A "$CURRENT_DIR" 2>/dev/null)" ]; then
-            echo "No benchmark results found, skipping comparison."
+          set +e
+          bash scripts/benchmark-compare.sh benchmarks/results/results benchmarks/baseline > /tmp/compare.out 2>&1
+          rc=$?
+          cat /tmp/compare.out
+          if grep -q 'regression_found=true' /tmp/compare.out; then
+            echo "regression_found=true" >> $GITHUB_OUTPUT
+          else
             echo "regression_found=false" >> $GITHUB_OUTPUT
-            exit 0
           fi
-
-          if [ ! -d "$BASELINE_DIR" ] || [ -z "$(ls -A "$BASELINE_DIR" 2>/dev/null)" ]; then
-            echo "No baseline found — first run establishes baseline."
-            cp -r "$CURRENT_DIR"/* "$BASELINE_DIR"/
-            echo "regression_found=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # 逐 benchmark 比较 Mean（仅 JSON 全量导出含可比较字段）
-          for current in "$CURRENT_DIR"/*.json; do
-            [ -e "$current" ] || continue
-            filename=$(basename "$current")
-            baseline="$BASELINE_DIR/$filename"
-            if [ ! -f "$baseline" ]; then
-              echo "New benchmark: $filename — no baseline, skipping comparison"
-              continue
-            fi
-
-            # 提取每个 benchmark case 的 Mean（ns）并比较
-            # BenchmarkDotNet JSON 格式含 Measurements 数组
-            # 使用 PowerShell-compatible jq 或简单 awk 提取
-            echo "Comparing: $filename"
-            # 简化：跳过逐 case 比较，仅在 summary 中标注回归
-          done
-
-          echo "regression_found=false" >> $GITHUB_OUTPUT
+          # 对比详情供 summary job 引用
+          {
+            echo "DETAIL<<EOF"
+            cat /tmp/compare.out
+            echo "EOF"
+          } >> $GITHUB_ENV
         shell: bash
 
-      - name: Update baseline (only on main merge, not PR)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Fail on performance regression
+        if: success() && steps.compare.outputs.regression_found == 'true'
+        run: |
+          echo "Performance regression detected — see comparison output above."
+          exit 1
+        shell: bash
+
+      # 仅在 main push 且无回归时更新基线（回归时不覆盖好的基线）。
+      - name: Update baseline (main only, no regression)
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           mkdir -p benchmarks/baseline
-          cp -r benchmarks/results/results/* benchmarks/baseline/ 2>/dev/null || true
+          cp benchmarks/results/results/*-report-full.json benchmarks/baseline/ 2>/dev/null || true
         shell: bash
+
+      - name: Save benchmark baseline (main only)
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: benchmarks/baseline
+          key: benchmark-baseline-main-${{ github.sha }}
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
@@ -141,8 +219,8 @@ jobs:
           path: benchmarks/results/results/
           retention-days: 30
 
-      - name: Add performance-regression label on failure
-        if: failure() && github.event_name == 'pull_request'
+      - name: Add performance-regression label
+        if: always() && steps.compare.outputs.regression_found == 'true' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
@@ -164,10 +242,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const reg = '${{ needs.benchmark.outputs.regression_found }}' === 'true';
             const status = '${{ needs.benchmark.result }}';
-            const body = status === 'success'
-              ? '✅ **Benchmark check passed** — no performance regression detected (>10% threshold). Results uploaded as artifact.'
-              : `⚠️ **Benchmark check ${status}** — see workflow logs for details. Performance regression label added if benchmarks failed.`;
+            const gates = 'gates: latency>10% p95>15% alloc>5% | noise suppress: floor=3% minN=5 conf=2xStdErr io=30%';
+            const body = reg
+              ? `⛔ **Performance regression detected** — ${gates}. See benchmark job logs. Label \`performance-regression\` added.`
+              : (status === 'success'
+                ? `✅ **Benchmark check passed** — no performance regression (${gates}). Results uploaded as artifact.`
+                : `⚠️ **Benchmark check ${status}** — see workflow logs for details (may be infrastructure failure, not a regression).`);
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

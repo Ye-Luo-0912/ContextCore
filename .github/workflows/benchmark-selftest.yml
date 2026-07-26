@@ -1,0 +1,227 @@
+name: Benchmark Self-Test
+
+# 验证 benchmark-compare.sh 门控真实生效：注入 15% 性能回退，断言 CI 检测到回归并失败。
+# 修复前：compare 步骤硬编码 regression_found=false，即使回退 50% 也会通过（假阳性）。
+# 修复后：本 self-test 必须在注入回退时失败；若门控未触发则本 self-test 失败（证明门控失效）。
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'scripts/benchmark-compare.sh'
+      - '.github/workflows/benchmark.yml'
+      - '.github/workflows/benchmark-selftest.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/benchmark-compare.sh'
+      - '.github/workflows/benchmark.yml'
+      - '.github/workflows/benchmark-selftest.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate-self-test:
+    name: Verify regression gates catch injected regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify jq available
+        run: jq --version
+        shell: bash
+
+      - name: Build synthetic baseline + current (7 cases covering detection + false-positive suppression)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bench_base /tmp/bench_cur
+
+          # P0-9：合成 fixture 必须包含 Statistics.N 与 Statistics.StandardError，
+          # 否则 benchmark-compare.sh 的 MIN_SAMPLE_COUNT 检查会因 N 缺失（默认 0）跳过所有 case
+          # （LOW-N(0<5) 假阴性），且置信区间检查因 SE 缺失而无法生效。
+          #
+          # Case 设计（base 全部 Median=1000, P95=1000, alloc=1000, N=15, SE=10，除非另注）：
+          #   1. LatencyCase       cur +15% median        → 期望触发 LATENCY（15%>10%, |reg|=150>2×10=20）
+          #   2. AllocCase          cur +10% alloc         → 期望触发 ALLOC（10%>5%, 分配仅噪声底 3%）
+          #   3. CleanCase          cur +5% all           → 不触发（5%<10% latency, 5% 不>5% alloc）
+          #   4. WithinNoiseCase    cur +2% all           → 不触发（2% < 3% 噪声底，直接忽略）
+          #   5. ConfidenceCase     cur +4% median, SE=30 → 不触发（4%>3% 过噪声底，但 |reg|=40 < 2×30=60 落入置信区间）
+          #   6. LowSampleCase      base N=3, cur +20%    → 跳过（LOW-N(3<5)，即使 +20% 也不报告，避免统计不可靠的假阳性）
+          #   7. IoCase             Type=FileSystemBench, cur +20% → 不触发（I/O 宽松阈值 30%，20%<30%）
+          cat > /tmp/bench_base/Synthetic-report-full.json <<'JSON'
+          {
+            "HostEnvironmentInfo": { "RuntimeVersion": ".NET 10.0.9" },
+            "Benchmarks": [
+              { "Type": "Bench", "Method": "LatencyCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "AllocCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "CleanCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "WithinNoiseCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "ConfidenceCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 30 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "LowSampleCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 3, "StandardError": 50 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "FileSystemBench", "Method": "IoCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } }
+            ]
+          }
+          JSON
+
+          # 当前：LatencyCase +15% median；AllocCase +10% alloc；CleanCase +5%（低于门控）；
+          #       WithinNoiseCase +2%（低于噪声底）；ConfidenceCase +4%（落入置信区间）；
+          #       LowSampleCase +20%（但 N=3 被跳过）；IoCase +20%（I/O 宽松阈值 30% 下不触发）
+          cat > /tmp/bench_cur/Synthetic-report-full.json <<'JSON'
+          {
+            "HostEnvironmentInfo": { "RuntimeVersion": ".NET 10.0.9" },
+            "Benchmarks": [
+              { "Type": "Bench", "Method": "LatencyCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1150, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "AllocCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1000, "Percentiles": { "P95": 1000 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1100 } },
+              { "Type": "Bench", "Method": "CleanCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1050, "Percentiles": { "P95": 1050 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1050 } },
+              { "Type": "Bench", "Method": "WithinNoiseCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1020, "Percentiles": { "P95": 1020 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1020 } },
+              { "Type": "Bench", "Method": "ConfidenceCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1040, "Percentiles": { "P95": 1040 }, "N": 15, "StandardError": 30 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "Bench", "Method": "LowSampleCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1200, "Percentiles": { "P95": 1200 }, "N": 3, "StandardError": 50 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } },
+              { "Type": "FileSystemBench", "Method": "IoCase", "Parameters": "N=1",
+                "Statistics": { "Median": 1200, "Percentiles": { "P95": 1200 }, "N": 15, "StandardError": 10 },
+                "Memory": { "BytesAllocatedPerOperation": 1000 } }
+            ]
+          }
+          JSON
+          echo "Synthetic fixtures created (7 cases: 2 detect, 5 suppress)."
+        shell: bash
+
+      - name: Assert injected regressions are caught (expect exit 1)
+        run: |
+          set +e
+          bash scripts/benchmark-compare.sh /tmp/bench_cur /tmp/bench_base > /tmp/regression.out 2>&1
+          rc=$?
+          cat /tmp/regression.out
+          echo "compare exit code: $rc"
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::门控未检测到注入的回归（期望 exit 1，实际 exit $rc）。门控失效。"
+            exit 1
+          fi
+          if ! grep -q 'regression_found=true' /tmp/regression.out; then
+            echo "::error::compare 输出未包含 regression_found=true。"
+            exit 1
+          fi
+          if ! grep -q 'LATENCY' /tmp/regression.out; then
+            echo "::error::未报告 LATENCY 回归（LatencyCase +15% 应触发）。"
+            exit 1
+          fi
+          if ! grep -q 'ALLOC' /tmp/regression.out; then
+            echo "::error::未报告 ALLOC 回归（AllocCase +10% 应触发）。"
+            exit 1
+          fi
+          echo "✅ 注入的 15% latency + 10% alloc 回归被正确检测。"
+        shell: bash
+
+      - name: Assert false-positive cases are suppressed and low-sample skipped
+        run: |
+          set -e
+          # 复用上一步的 /tmp/regression.out（同一对比结果）
+          # 1. CleanCase +5% 不应出现在回归列表（5%<10% latency, 5% 不>5% alloc）
+          if grep -E 'LATENCY|P95|ALLOC|STORE' /tmp/regression.out | grep -q 'CleanCase'; then
+            echo "::error::CleanCase（+5%，低于门控）被误报为回归。"
+            grep -E 'LATENCY|P95|ALLOC|STORE' /tmp/regression.out | grep 'CleanCase'
+            exit 1
+          fi
+          # 2. WithinNoiseCase +2% 不应触发（低于 3% 噪声底）
+          if grep -E 'LATENCY|P95|ALLOC|STORE' /tmp/regression.out | grep -q 'WithinNoiseCase'; then
+            echo "::error::WithinNoiseCase（+2%，低于噪声底 3%）被误报为回归。"
+            exit 1
+          fi
+          # 3. ConfidenceCase +4% 不应触发（落入置信区间：|reg|=40 < 2×SE=60）
+          if grep -E 'LATENCY|P95|ALLOC|STORE' /tmp/regression.out | grep -q 'ConfidenceCase'; then
+            echo "::error::ConfidenceCase（+4%，落入置信区间 2×StdErr）被误报为回归。"
+            exit 1
+          fi
+          # 4. IoCase +20% 不应触发（I/O 宽松阈值 30%）
+          if grep -E 'LATENCY|P95|ALLOC|STORE' /tmp/regression.out | grep -q 'IoCase'; then
+            echo "::error::IoCase（+20%，I/O 宽松阈值 30% 下不应触发）被误报为回归。"
+            exit 1
+          fi
+          # 5. LowSampleCase 必须出现在跳过列表（N=3 < MIN_SAMPLE_COUNT=5）
+          if ! grep -q 'LOW-N' /tmp/regression.out; then
+            echo "::error::未输出 LOW-N 跳过信息（LowSampleCase N=3 应被跳过）。"
+            exit 1
+          fi
+          if ! grep -E 'LOW-N' /tmp/regression.out | grep -q 'LowSampleCase'; then
+            echo "::error::LowSampleCase 未被 LOW-N 跳过。"
+            grep -E 'LOW-N' /tmp/regression.out
+            exit 1
+          fi
+          # 6. 对比 case 数应为 7（LowSampleCase 计入 COMPARED 后才被跳过）
+          if ! grep -q '对比 case 数：7' /tmp/regression.out; then
+            echo "::error::对比 case 数不为 7（期望 7）。"
+            grep '对比 case 数' /tmp/regression.out
+            exit 1
+          fi
+          echo "✅ 假阳性抑制全部生效：噪声底 / 置信区间 / I/O 阈值 / 低样本跳过。"
+        shell: bash
+
+      - name: Assert clean run produces no false positive (expect exit 0)
+        run: |
+          set +e
+          bash scripts/benchmark-compare.sh /tmp/bench_base /tmp/bench_base > /tmp/clean.out 2>&1
+          rc=$?
+          cat /tmp/clean.out
+          echo "compare exit code: $rc"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::无回归运行被误判为回归（期望 exit 0，实际 exit $rc）。存在假阳性。"
+            exit 1
+          fi
+          if ! grep -q 'regression_found=false' /tmp/clean.out; then
+            echo "::error::clean 运行未输出 regression_found=false。"
+            exit 1
+          fi
+          echo "✅ 无回归运行未被误报。"
+        shell: bash
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Benchmark gate self-test ${{ job.status == 'success' && 'passed' || 'FAILED' }}"
+          echo ""
+          echo "### 检测类（必须触发 exit 1）"
+          echo "- LatencyCase +15% median → LATENCY 门控"
+          echo "- AllocCase  +10% alloc   → ALLOC 门控"
+          echo ""
+          echo "### 假阳性抑制类（必须不触发）"
+          echo "- CleanCase       +5%   → 低于所有阈值"
+          echo "- WithinNoiseCase +2%   → 低于噪声底 3%"
+          echo "- ConfidenceCase  +4%   → 落入置信区间 2×StdErr（|reg|=40 < 2×30=60）"
+          echo "- IoCase          +20%  → I/O 宽松阈值 30%（Type=FileSystemBench）"
+          echo ""
+          echo "### 跳过类（统计不可靠）"
+          echo "- LowSampleCase   +20%  → N=3 < MIN_SAMPLE_COUNT=5，LOW-N 跳过"
+          echo ""
+          echo "### 完全无回归运行 → 必须通过（exit 0）"
+          echo ""
+          echo "若本 self-test 失败，说明 benchmark-compare.sh 门控失效，benchmark.yml 的回归检测不可信。"
+        shell: bash

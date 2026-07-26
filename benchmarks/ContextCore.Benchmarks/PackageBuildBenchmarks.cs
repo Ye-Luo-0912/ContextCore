@@ -11,7 +11,6 @@ namespace ContextCore.Benchmarks;
 // 基准：测量 BasicContextPackageBuilder.BuildDetailedAsync —— 最热的读路径
 // （6 次 store 查询 + filter + assembly）。包含"缓存前"冷构建基线与"缓存后"命中/并发场景。
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class PackageBuildBenchmarks
 {
     private const string WorkspaceId = "bench-ws";

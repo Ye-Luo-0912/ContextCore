@@ -4,18 +4,20 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：Utility Ledger Materializer。异步批量物化 ContextDecisionResult
+/// R21-3 / R29 WP-E-1：Utility Ledger Materializer。异步批量物化 ContextDecisionResult
 /// 中的 SelectedEnvelopes + DroppedEnvelopes 为 UtilityLedgerEntry 条目，
 /// 并检测冲突候选生成 ConflictSet。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4）：
-///   1. Materializer 是写入边界：通过 InMemoryUtilityLedgerStore / InMemoryConflictSetStore
-///      的 internal write API 异步批量写入。
-///   2. Store 的公共 API 仍是 read-only；写入只通过 materializer 触发。
-///   3. P8 硬边界：所有 candidate（selected/dropped）都写入 ledger，
+/// 设计原则（对齐澄清 #4 + R29 学习闭环）：
+///   1. Materializer 是写入边界：通过 <see cref="IUtilityLedger.AppendEntriesAsync"/> /
+///      <see cref="IConflictSetLedger.AppendConflictSetsAsync"/> 异步批量写入。
+///   2. Materializer 依赖 <see cref="IUtilityLedger"/> + <see cref="IConflictSetLedger"/> 抽象，
+///      生产路径注入 Postgres 实现，开发 / 测试路径注入 InMemory 实现 — 无需修改 materializer 代码。
+///   3. Store 的读 API 仍是 read-only；写入只通过 materializer 触发。
+///   4. P8 硬边界：所有 candidate（selected/dropped）都写入 ledger，
 ///      避免"dropped 视为负样本"的简化。
-///   4. ConflictSet 检测规则（对齐澄清 #7）：
+///   5. ConflictSet 检测规则（对齐澄清 #7）：
 ///      - Duplicate：envelope.Safety.IsDuplicate = true 的候选
 ///      - SectionConflict：envelope.Safety.BlockReasonCode = SectionQuotaExceeded
 ///      - BudgetConflict：envelope.Safety.BlockReasonCode = TokenBudgetExceeded
@@ -23,13 +25,13 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// </remarks>
 public sealed class UtilityLedgerMaterializer
 {
-    private readonly InMemoryUtilityLedgerStore _ledgerStore;
-    private readonly InMemoryConflictSetStore _conflictSetStore;
+    private readonly IUtilityLedger _ledgerStore;
+    private readonly IConflictSetLedger _conflictSetStore;
     private readonly TimeProvider? _timeProvider;
 
     public UtilityLedgerMaterializer(
-        InMemoryUtilityLedgerStore ledgerStore,
-        InMemoryConflictSetStore conflictSetStore,
+        IUtilityLedger ledgerStore,
+        IConflictSetLedger conflictSetStore,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(ledgerStore);
@@ -47,7 +49,7 @@ public sealed class UtilityLedgerMaterializer
     /// <param name="collectionId">collection 作用域（默认从 envelope 提取）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>写入的 ledger 条目数 + ConflictSet 数。</returns>
-    public Task<UtilityLedgerMaterializationResult> MaterializeAsync(
+    public async Task<UtilityLedgerMaterializationResult> MaterializeAsync(
         ContextDecisionResult result,
         string? workspaceId = null,
         string? collectionId = null,
@@ -82,15 +84,15 @@ public sealed class UtilityLedgerMaterializer
             envelopes.Add((envelope, false));
         }
 
-        _ledgerStore.AppendEntries(entries);
+        await _ledgerStore.AppendEntriesAsync(entries, cancellationToken).ConfigureAwait(false);
 
         // 检测 ConflictSet
         var conflictSets = DetectConflictSets(envelopes, decisionId, workspaceId, collectionId, now, batchId);
-        _conflictSetStore.AppendConflictSets(conflictSets);
+        await _conflictSetStore.AppendConflictSetsAsync(conflictSets, cancellationToken).ConfigureAwait(false);
 
-        return Task.FromResult(new UtilityLedgerMaterializationResult(
+        return new UtilityLedgerMaterializationResult(
             LedgerEntryCount: entries.Count,
-            ConflictSetCount: conflictSets.Count));
+            ConflictSetCount: conflictSets.Count);
     }
 
     private static UtilityLedgerEntry BuildEntry(
