@@ -532,6 +532,12 @@ internal static class CoreExtensions
 		services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
 		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
 
+		// R29 WP-A-3：ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
+		// 不抛异常：返回结构化 CalibrationValidationResult（Error / Warning / Info），
+		// 让 ModelArtifactRegistry 加载 descriptor 后能拒绝在统计上不合理的校准配置，
+		// 或退化为 Identity。与 ICalibrationService 互补：前者验证参数本身，后者应用参数。
+		services.TryAddSingleton<ICalibrationValidator, DefaultCalibrationValidator>();
+
 		// R28-C：Agent Kernel — .NET 决策循环（Transport + ToolDispatcher + Kernel + V2 Runtime）。
 		// 默认实现：InProcessTransport（进程内 Channel）+ EchoToolDispatcher（测试用 echo）+
 		// DefaultAgentKernel（编排 Transport → ToolDispatcher → CheckpointStore → IContextDecisionRuntime）。
