@@ -5,6 +5,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Policy;
 using ContextCore.Core.Services.Retrieval;
 
@@ -325,7 +326,7 @@ public sealed class ArtifactTruthAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: allocator ?? new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -339,7 +340,7 @@ public sealed class ArtifactTruthAcceptanceTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakeExpertResultFromEnvelope(ContextCandidateEnvelope envelope)
@@ -1011,7 +1012,7 @@ public sealed class ProductionReplayAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         var integration = new DecisionExperimentPlaneIntegration(

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using ContextCore.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -24,9 +25,10 @@ namespace ContextCore.Inference.Onnx;
 //   3. 不在本层做 timeout 取消：OnnxRuntime 的 Run 不支持 CancellationToken；
 //      超时控制由 OnnxInferenceEngine 通过 CancellationTokenSource 实现。
 //   4. 输出张量解析支持一维 [batch] 与二维 [batch, classes] 两种形态：
-//      - 一维：Score 取第 0 列，Confidence = 1 - Score（二分类互补）
+//      - 一维：Score 取第 0 列，Confidence = 1.0（默认高置信，子问题5修正：
+//        模型只输出单个分数时无独立 confidence 信号，不再用 1-Score 互补猜测）
 //      - 二维：Score 取 ScoreOutputIndex 列，Confidence 取 ConfidenceOutputIndex 列
-//        或从独立 ConfidenceOutputName 输出张量读取。
+//        或从独立 ConfidenceOutputName 输出张量读取（classes≥2 时才有效）。
 // ===========================================================================
 
 /// <summary>
@@ -39,7 +41,7 @@ namespace ContextCore.Inference.Onnx;
 public sealed class OnnxRuntimeInferenceSessionFactory : IOnnxInferenceSessionFactory
 {
     /// <inheritdoc />
-    public ValueTask<IOnnxInferenceSession> CreateAsync(
+    public async ValueTask<IOnnxInferenceSession> CreateAsync(
         OnnxInferenceEngineOptions options,
         ModelArtifactDescriptor? descriptor = null,
         CancellationToken cancellationToken = default)
@@ -55,13 +57,29 @@ public sealed class OnnxRuntimeInferenceSessionFactory : IOnnxInferenceSessionFa
                 modelPath);
         }
 
+        // 子问题1：流式计算磁盘模型文件的真实 SHA-256，与 descriptor.ContentHash 精确比较。
+        // 不匹配时抛 InvalidOperationException（ModelFileHashMismatch），不创建 Session。
+        // 即使 descriptor.ContentHash 为空/unspecified，也填充计算出的实际哈希到 Session 元数据。
+        var actualHashHex = await ComputeFileSha256HexAsync(modelPath, cancellationToken).ConfigureAwait(false);
+        var expectedHashHex = NormalizeHashHex(descriptor?.ContentHash ?? options.ContentHash);
+        if (!string.IsNullOrEmpty(expectedHashHex)
+            && !string.Equals(expectedHashHex, "unspecified", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(expectedHashHex, actualHashHex, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"ModelFileHashMismatch：模型文件 '{modelPath}' 的实际 SHA-256 与 descriptor.ContentHash 不一致。" +
+                $"Expected={expectedHashHex}, Actual={actualHashHex}。" +
+                "可能原因：文件被篡改、传输损坏或 descriptor 引用了错误版本。");
+        }
+
         var sessionOptions = CreateSessionOptions(options);
         var session = new InferenceSession(modelPath, sessionOptions);
         ValidateTensorNames(session, options);
 
         var modelArtifactId = descriptor?.ModelArtifactId ?? options.ModelArtifactId;
         var modelVersion = descriptor?.ModelVersion ?? options.ModelVersion;
-        var contentHash = descriptor?.ContentHash ?? options.ContentHash;
+        // 使用计算出的实际哈希（带 sha256: 前缀，与 descriptor.ContentHash 格式一致）
+        var contentHash = $"sha256:{actualHashHex}";
 
         IOnnxInferenceSession result = new OnnxRuntimeInferenceSession(
             modelArtifactId,
@@ -69,7 +87,45 @@ public sealed class OnnxRuntimeInferenceSessionFactory : IOnnxInferenceSessionFa
             contentHash,
             options,
             session);
-        return ValueTask.FromResult(result);
+        return result;
+    }
+
+    /// <summary>
+    /// 子问题1：流式读取文件并计算 SHA-256，返回小写 hex 字符串（不带前缀）。
+    /// 使用 useAsync=true 的 FileStream 避免 sync-over-async 阻塞线程池。
+    /// </summary>
+    private static async ValueTask<string> ComputeFileSha256HexAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            useAsync: true);
+        var hashBytes = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// 子问题1：规范化哈希字符串，去除 "sha256:" 等算法前缀并转小写。
+    /// 空或空白时返回空字符串（表示无期望哈希，跳过比较）。
+    /// </summary>
+    private static string NormalizeHashHex(string? hash)
+    {
+        if (string.IsNullOrWhiteSpace(hash))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = hash.Trim();
+        var colonIndex = trimmed.IndexOf(':');
+        if (colonIndex >= 0 && colonIndex < trimmed.Length - 1)
+        {
+            trimmed = trimmed[(colonIndex + 1)..];
+        }
+
+        return trimmed.ToLowerInvariant();
     }
 
     private static string ResolveModelPath(
@@ -108,7 +164,63 @@ public sealed class OnnxRuntimeInferenceSessionFactory : IOnnxInferenceSessionFa
             sessionOptions.InterOpNumThreads = options.InterOpNumThreads;
         }
 
+        // Execution Provider 配置：CPU 为默认（不附加 EP，由 ORT 内置 CPU 算子承担）。
+        // CUDA / TensorRT 需要相应的 native 包；缺失时抛 OnnxRuntimeException，
+        // 由上层 ModelActivationManager 捕获并转为激活失败（fail-safe）。
+        AppendExecutionProvider(sessionOptions, options);
+
         return sessionOptions;
+    }
+
+    /// <summary>
+    /// 根据 <see cref="OnnxInferenceEngineOptions.ExecutionProvider"/> 附加 EP。
+    /// CPU 时不附加（ORT 默认即为 CPU）；CUDA/TensorRT 调用对应的 AppendExecutionProvider_*。
+    /// </summary>
+    /// <remarks>
+    /// GPU 包未安装时 <c>AppendExecutionProvider_CUDA</c> / <c>AppendExecutionProvider_Tensorrt</c>
+    /// 会抛 <see cref="Microsoft.ML.OnnxRuntime.OnnxRuntimeException"/>。本方法捕获并重新抛出
+    /// 带更清晰提示的 <see cref="InvalidOperationException"/>，让调用方明确"需要安装 GPU 包"。
+    /// </remarks>
+    private static void AppendExecutionProvider(SessionOptions sessionOptions, OnnxInferenceEngineOptions options)
+    {
+        switch (options.ExecutionProvider)
+        {
+            case OnnxExecutionProvider.CPU:
+                // 默认 EP，无需附加。ORT 在未指定 EP 时使用 CPU。
+                return;
+
+            case OnnxExecutionProvider.CUDA:
+                try
+                {
+                    sessionOptions.AppendExecutionProvider_CUDA(options.ExecutionProviderDeviceId);
+                }
+                catch (Microsoft.ML.OnnxRuntime.OnnxRuntimeException ex)
+                {
+                    throw new InvalidOperationException(
+                        $"AppendExecutionProvider_CUDA(deviceId={options.ExecutionProviderDeviceId}) 失败：" +
+                        $"{ex.Message}。请确认已安装 Microsoft.ML.OnnxRuntime.Gpu NuGet 包，" +
+                        "且目标机器具备 NVIDIA GPU 驱动与匹配的 CUDA 运行时。", ex);
+                }
+                return;
+
+            case OnnxExecutionProvider.TensorRT:
+                try
+                {
+                    sessionOptions.AppendExecutionProvider_Tensorrt(options.ExecutionProviderDeviceId);
+                }
+                catch (Microsoft.ML.OnnxRuntime.OnnxRuntimeException ex)
+                {
+                    throw new InvalidOperationException(
+                        $"AppendExecutionProvider_Tensorrt(deviceId={options.ExecutionProviderDeviceId}) 失败：" +
+                        $"{ex.Message}。请确认已安装 Microsoft.ML.OnnxRuntime.Gpu NuGet 包，" +
+                        "且目标机器具备 NVIDIA GPU 驱动、CUDA 运行时与 TensorRT 库。", ex);
+                }
+                return;
+
+            default:
+                // 防御性：未知 EP 回退到 CPU（与默认行为一致）。
+                return;
+        }
     }
 
     private static void ValidateTensorNames(InferenceSession session, OnnxInferenceEngineOptions options)
@@ -326,23 +438,101 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
             ? ExtractTensor(results, confidenceName) ?? scoreTensor
             : scoreTensor;
 
-        var scoreDims = scoreTensor.Dimensions.ToArray();
-        var confidenceDims = confidenceTensor.Dimensions.ToArray();
+        // G7 输出零拷贝：
+        //   - 热路径（ORT 始终返回 DenseTensor<float>）：直接用 Buffer.Span 访问底层内存，零分配。
+        //   - 回退路径（理论非 DenseTensor，ORT 不会触发）：用 ArrayPool 租借 buffer 并 CopyTo，
+        //     避免每批 ToArray 产生堆分配。buffer 在 finally 中归还。
+        // Span 的生命周期由 using var results 限定（DisposableNamedOnnxValue Dispose 后失效）。
+        var scoreRented = TryGetBuffer(scoreTensor, out var scoreMemory)
+            ? null
+            : RentAndCopyTensor(scoreTensor, out scoreMemory);
+        Memory<float> confidenceMemory;
+        float[]? confidenceRented;
+        if (ReferenceEquals(scoreTensor, confidenceTensor))
+        {
+            // 共享 scoreTensor 的同一份内存，无需重复租借。
+            confidenceMemory = scoreMemory;
+            confidenceRented = null;
+        }
+        else if (TryGetBuffer(confidenceTensor, out confidenceMemory))
+        {
+            confidenceRented = null;
+        }
+        else
+        {
+            confidenceRented = RentAndCopyTensor(confidenceTensor, out confidenceMemory);
+        }
+
+        try
+        {
+            var scoreSpan = (ReadOnlySpan<float>)scoreMemory.Span;
+            var confidenceSpan = ReferenceEquals(scoreTensor, confidenceTensor)
+                ? scoreSpan
+                : confidenceMemory.Span;
+
+            return BuildOutputs(scoreTensor, confidenceTensor, scoreSpan, confidenceSpan);
+        }
+        finally
+        {
+            if (scoreRented is not null)
+            {
+                ArrayPool<float>.Shared.Return(scoreRented);
+            }
+            if (confidenceRented is not null)
+            {
+                ArrayPool<float>.Shared.Return(confidenceRented);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 从张量读取 score/confidence 并构造 InferenceOutput 数组。
+    /// 抽取自 ParseOutputs 以隔离 ArrayPool 租借/归还与结果构造逻辑。
+    /// </summary>
+    private IReadOnlyList<InferenceOutput> BuildOutputs(
+        Tensor<float> scoreTensor,
+        Tensor<float> confidenceTensor,
+        ReadOnlySpan<float> scoreSpan,
+        ReadOnlySpan<float> confidenceSpan)
+    {
+        // Dimensions 已是 ReadOnlySpan<int>，直接消费，避免 ToArray 分配。
+        var scoreDims = scoreTensor.Dimensions;
+        var confidenceDims = confidenceTensor.Dimensions;
         var batchSize = scoreDims.Length > 0 ? scoreDims[0] : 0;
 
-        var outputs = new InferenceOutput[batchSize];
-        var scoreValues = scoreTensor.ToArray();
-        var confidenceValues = ReferenceEquals(scoreTensor, confidenceTensor)
-            ? scoreValues
-            : confidenceTensor.ToArray();
+        // 子问题5：Confidence 语义修正。
+        // 当 Score 与 Confidence 来自同一张量（confidenceTensor == scoreTensor）且该张量为 1D [batch] 时，
+        // 每行只有 1 个元素，Score 与 Confidence 会从同一元素读取，导致 Confidence == Score（而非互补概率）。
+        // 修复：1D 同张量场景下，Confidence 不再从同一元素读取，而是使用默认值 1.0（高置信）。
+        //  - 1.0 表示"模型只输出了 score，没有独立的 confidence 信号，假定高置信"。
+        //  - 这避免下游 Scorer 因 Confidence == Score 而误判置信度（如 Score=0.9 时 Confidence=0.9 看似合理，
+        //    但 Score=0.1 时 Confidence=0.1 会触发低置信回退，而模型实际上没有提供 confidence 信息）。
+        // 当 confidenceTensor != scoreTensor（独立 confidence 输出张量）或张量为 2D [batch, classes≥2] 时，
+        // 仍按原逻辑从指定列读取 confidence。
+        var sameTensor1D = ReferenceEquals(scoreTensor, confidenceTensor) && scoreDims.Length == 1;
+        // 2D 张量但 classes=1 时也属于"每行单元素"，同样使用默认 confidence。
+        var sameTensor2DSingleClass = ReferenceEquals(scoreTensor, confidenceTensor)
+            && scoreDims.Length == 2
+            && scoreDims[1] <= 1;
 
+        var outputs = new InferenceOutput[batchSize];
         for (var row = 0; row < batchSize; row++)
         {
-            var rawScore = ReadValue(scoreValues, scoreDims, row, _options.ScoreOutputIndex);
-            var rawConfidence = ReadValue(confidenceValues, confidenceDims, row, _options.ConfidenceOutputIndex);
+            var rawScore = ReadValue(scoreSpan, scoreDims, row, _options.ScoreOutputIndex);
+
+            // 子问题5：1D 同张量或 2D 单列场景下，Confidence 使用默认值 1.0（不再读同一元素）。
+            double confidence;
+            if (sameTensor1D || sameTensor2DSingleClass)
+            {
+                confidence = 1.0;
+            }
+            else
+            {
+                var rawConfidence = ReadValue(confidenceSpan, confidenceDims, row, _options.ConfidenceOutputIndex);
+                confidence = _options.ApplySigmoidToConfidence ? Sigmoid(rawConfidence) : rawConfidence;
+            }
 
             var score = _options.ApplySigmoid ? Sigmoid(rawScore) : rawScore;
-            var confidence = _options.ApplySigmoidToConfidence ? Sigmoid(rawConfidence) : rawConfidence;
 
             outputs[row] = new InferenceOutput
             {
@@ -355,13 +545,62 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
         return outputs;
     }
 
+    /// <summary>
+    /// G7 输出零拷贝：尝试从 Tensor 获取 DenseTensor.Buffer（Memory<float>）。
+    /// ORT 输出始终为 DenseTensor<float>；若非 DenseTensor 返回 false（调用方走 ArrayPool 回退路径）。
+    /// </summary>
+    private static bool TryGetBuffer(Tensor<float> tensor, out Memory<float> buffer)
+    {
+        if (tensor is DenseTensor<float> dense)
+        {
+            buffer = dense.Buffer;
+            return true;
+        }
+        buffer = default;
+        return false;
+    }
+
+    /// <summary>
+    /// G7 输出 ArrayPool 回退：为非 DenseTensor 的 Tensor&lt;float&gt; 租借 buffer 并拷贝数据。
+    /// 这是 ORT 输出的防御性回退路径（ORT 始终返回 DenseTensor，理论不触发）。
+    /// 用 ArrayPool 复用替代每次 ToArray 的堆分配，避免 GC 压力。
+    /// </summary>
+    /// <param name="tensor">待读取的张量。</param>
+    /// <param name="memory">输出 Memory&lt;float&gt;（长度 = tensor.Length）。</param>
+    /// <returns>租借的 buffer，调用方需在 finally 中通过 ArrayPool.Return 归还；tensor.Length=0 时返回 null。</returns>
+    private static float[]? RentAndCopyTensor(Tensor<float> tensor, out Memory<float> memory)
+    {
+        var length = (int)tensor.Length;
+        if (length <= 0)
+        {
+            memory = Memory<float>.Empty;
+            return null;
+        }
+
+        var buffer = ArrayPool<float>.Shared.Rent(length);
+        try
+        {
+            // Tensor<T> 实现 ICollection<T>，通过 CopyTo(T[], int) 把所有元素拷贝到数组。
+            // buffer.Length >= length，从 index 0 开始拷贝 length 个元素，超出部分被忽略。
+            ((ICollection<float>)tensor).CopyTo(buffer, 0);
+            memory = buffer.AsMemory(0, length);
+            return buffer;
+        }
+        catch
+        {
+            // CopyTo 失败（理论上不会发生）：归还 buffer 并重新抛出，让上层异常路径处理。
+            ArrayPool<float>.Shared.Return(buffer);
+            throw;
+        }
+    }
+
     private static Tensor<float>? ExtractTensor(IReadOnlyList<DisposableNamedOnnxValue> results, string name)
     {
         var value = results.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.Ordinal));
         return value?.AsTensor<float>();
     }
 
-    private static float ReadValue(float[] values, int[] dims, int row, int columnIndex)
+    private static float ReadValue(ReadOnlySpan<float> values, ReadOnlySpan<int> dims, int row, int columnIndex)
     {
         if (dims.Length == 1)
         {

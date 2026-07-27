@@ -12,6 +12,7 @@
     <ProjectReference Include="..\ContextCore.ControlRoom\ContextCore.ControlRoom.csproj" />
     <ProjectReference Include="..\ContextCore.Core\ContextCore.Core.csproj" />
     <ProjectReference Include="..\ContextCore.Embedding\ContextCore.Embedding.csproj" />
+    <ProjectReference Include="..\ContextCore.Inference.Onnx\ContextCore.Inference.Onnx.csproj" />
     <ProjectReference Include="..\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />
     <ProjectReference Include="..\ContextCore.Runtime\ContextCore.Runtime.csproj" />
     <ProjectReference Include="..\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />

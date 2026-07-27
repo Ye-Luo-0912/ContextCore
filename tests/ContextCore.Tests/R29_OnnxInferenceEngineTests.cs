@@ -391,6 +391,53 @@ public sealed class R29_OnnxInferenceEngineTests
         Assert.IsFalse(result.Succeeded);
     }
 
+    [TestMethod]
+    public async Task InferBatchAsync_OrphanBackPressure_RejectsWhenNativePoolSaturated()
+    {
+        // 子问题7：native session.Run 无法被中断；超时后孤儿任务占用 ORT 线程池。
+        // 当孤儿数达 MaxOrphanedInferences 时，新请求立即返回 NativePoolSaturated（back-pressure）。
+        var session = new SlowOnnxInferenceSession(delayMs: 1000); // 孤儿存活 1s
+        var options = new OnnxInferenceEngineOptions
+        {
+            InputTensorName = "input",
+            ScoreOutputName = "logits",
+            InferenceTimeoutMs = 100, // 100ms 超时
+            MaxOrphanedInferences = 1, // 仅允许 1 个孤儿
+            CircuitBreakerThreshold = 0 // 禁用熔断器，隔离 back-pressure 行为
+        };
+        var engine = new OnnxInferenceEngine(session, options);
+
+        var batch = new FeatureBatch
+        {
+            SchemaVersion = "v1",
+            Values = new float[] { 1.0f },
+            RowCount = 1,
+            FeatureCount = 1,
+            FeatureNames = new[] { "a" }
+        };
+
+        // 请求 1：超时（100ms），产生 1 个孤儿 native 调用（存活 1000ms）。
+        var result1 = await engine.InferBatchAsync(batch);
+        Assert.IsFalse(result1.Succeeded);
+        Assert.IsTrue(result1.Error!.Contains("InferenceTimeout"), $"应为超时：{result1.Error}");
+
+        // 请求 2：孤儿数已达上限（1），立即被 back-pressure 拒绝。
+        var stopwatch = Stopwatch.StartNew();
+        var result2 = await engine.InferBatchAsync(batch);
+        stopwatch.Stop();
+        Assert.IsFalse(result2.Succeeded);
+        Assert.IsTrue(result2.Error!.Contains("NativePoolSaturated"), $"应为 back-pressure 拒绝：{result2.Error}");
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 100, $"应立即拒绝，实际耗时 {stopwatch.ElapsedMilliseconds}ms");
+
+        // 等待孤儿 native 调用完成（1000ms + 余量），back-pressure 释放。
+        await Task.Delay(1300);
+
+        // 请求 3：孤儿已退出，不再被 back-pressure 拒绝（会再次超时，但不应是 NativePoolSaturated）。
+        var result3 = await engine.InferBatchAsync(batch);
+        Assert.IsFalse(result3.Succeeded);
+        Assert.IsFalse(result3.Error!.Contains("NativePoolSaturated"), $"back-pressure 应已释放：{result3.Error}");
+    }
+
     // ===========================================================================
     // §7 DI 注册扩展
     // ===========================================================================

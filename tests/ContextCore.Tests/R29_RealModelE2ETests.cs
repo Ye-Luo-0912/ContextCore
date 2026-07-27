@@ -51,7 +51,7 @@ public sealed class R29_RealModelE2ETests
         var inferenceValidator = new DefaultInferenceResultValidator();
         var calibration = new PlattCalibrationService();
         calibration.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelArtifactId);
-        var scorer = new DefaultUtilityScorer(engine, calibration, registry, inferenceValidator);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, calibration, registry, inferenceValidator);
 
         // 输入：detScore=0.5, breakdown 满足 schema 必填项
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5,
@@ -107,7 +107,7 @@ public sealed class R29_RealModelE2ETests
         var engine = new StubBatchInferenceEngine(ModelArtifactId)
             .WithOutput(score: 0.9, confidence: 0.50); // 低于阈值 0.70
         var registry = BuildRegistryWithSchema(SchemaVersion);
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -130,7 +130,7 @@ public sealed class R29_RealModelE2ETests
             .WithOutput(score: double.NaN, confidence: 0.95);
         var registry = BuildRegistryWithSchema(SchemaVersion);
         var inferenceValidator = new DefaultInferenceResultValidator();
-        var scorer = new DefaultUtilityScorer(engine, null, registry, inferenceValidator);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry, inferenceValidator);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -203,7 +203,7 @@ public sealed class R29_RealModelE2ETests
             .WithOutput(score: 0.9, confidence: 0.95);
         var registry = BuildRegistryWithSchema(SchemaVersion);
         var schemaValidator = new DefaultFeatureSchemaValidator();
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         // 故意使用不匹配的 schema 版本
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -518,7 +518,7 @@ public sealed class R29_RealModelE2ETests
 
         // 与 DefaultUtilityScorer 串联
         var registry = BuildRegistryWithSchema(SchemaVersion);
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.4);
         var snapshot = R28DTestHelpers.BuildSnapshot(
             enableModelScoring: true,
@@ -569,7 +569,7 @@ public sealed class R29_RealModelE2ETests
             .WithOutput(score: 0.9, confidence: 0.95)
             .WithOutput(score: 0.3, confidence: 0.6); // 低置信度
         var registry = BuildRegistryWithSchema(SchemaVersion);
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelopes = new[]
         {

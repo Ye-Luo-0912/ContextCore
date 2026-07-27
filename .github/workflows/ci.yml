@@ -1,0 +1,252 @@
+name: CI
+
+# 主 CI：构建 + 单元测试 + Postgres 集成测试 + 架构 / 公共 API / OpenAPI 快照守卫。
+# 与 benchmark-pr.yml / benchmark-main.yml 分离：本 workflow 不运行性能基准。
+# 触发：push 到 main + 任意 pull_request（含外部 fork）。
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build solution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore ContextCore.sln
+
+      - name: Build (Release)
+        run: dotnet build ContextCore.sln -c Release --no-restore -warnaserror
+
+  unit:
+    name: Unit tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # 排除 Integration（需 Postgres）、Architecture（独立 job）、Contract（public-api / openapi-snapshot 独立 job）
+      - name: Run unit tests (non-Integration / non-Architecture / non-Contract)
+        run: >
+          dotnet test ContextCore.sln -c Release --no-restore
+          --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
+          -- RunConfiguration.TreatNoTestsAsError=true
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=unit-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests-${{ github.run_id }}
+          path: '**/TestResults/*.trx'
+          retention-days: 7
+
+  integration-postgres:
+    name: Postgres integration tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # 提供 Docker Postgres 服务容器。Testcontainers 测试仍会自行启动容器（不依赖此 service），
+    # 此 service 主要供需要直连 connection string 的非 Testcontainers 测试使用。
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: context_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ConnectionStrings__Postgres: "Host=localhost;Port=5432;Database=context_test;Username=postgres;Password=postgres"
+      POSTGRES_TEST_CONNECTION_STRING: "Host=localhost;Port=5432;Database=context_test;Username=postgres;Password=postgres"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Run Postgres integration tests
+        env:
+          # Testcontainers 需要 Docker socket
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: >
+          dotnet test ContextCore.sln -c Release --no-restore
+          --filter "TestCategory=Integration"
+          -- RunConfiguration.TreatNoTestsAsError=true
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=integration-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-tests-${{ github.run_id }}
+          path: '**/TestResults/*.trx'
+          retention-days: 7
+
+  architecture:
+    name: Architecture consistency tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # ContextCoreDiArchitectureTests 验证 DI 注册不变量（Data/Control Plane 分离、无 Unsupported 占位等）
+      - name: Run architecture tests
+        run: >
+          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-restore
+          --filter "TestCategory=Architecture"
+          -- RunConfiguration.TreatNoTestsAsError=true
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=architecture-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-tests-${{ github.run_id }}
+          path: '**/TestResults/*.trx'
+          retention-days: 7
+
+  public-api:
+    name: Public API baseline tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # PublicApiBaselineTests 反射枚举 ContextCore.Abstractions 公共 API 与签入 baseline 对比
+      - name: Run public API baseline tests
+        run: >
+          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-restore
+          --filter "FullyQualifiedName~PublicApiBaselineTests"
+          -- RunConfiguration.TreatNoTestsAsError=true
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=public-api-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-api-tests-${{ github.run_id }}
+          path: '**/TestResults/*.trx'
+          retention-days: 7
+
+  openapi-snapshot:
+    name: OpenAPI snapshot drift tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # OpenApiSnapshotDriftTests 启动服务拉取 /openapi/v1.json 与 service/openapi/service-api.openapi.json 对比
+      - name: Run OpenAPI snapshot drift tests
+        run: >
+          dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-restore
+          --filter "FullyQualifiedName~OpenApiSnapshotDriftTests"
+          -- RunConfiguration.TreatNoTestsAsError=true
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=openapi-snapshot-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-snapshot-tests-${{ github.run_id }}
+          path: '**/TestResults/*.trx'
+          retention-days: 7

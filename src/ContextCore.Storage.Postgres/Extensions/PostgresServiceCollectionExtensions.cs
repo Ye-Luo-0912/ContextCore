@@ -178,6 +178,13 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
         services.AddSingleton<IPersistentModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
 
+        // P0-6：Model Activation Audit 持久化（PostgreSQL）。
+        // 替代 FileSystem / InMemory provider 下的 InMemory 默认实现，让 HA 场景下
+        // 模型生命周期审计记录（Activate / Rollback / Retire / Shadow 等）可跨进程持久化与查询。
+        // Service API 端点 /api/models/{id}/audit 通过 IModelActivationAuditStore.ListByModelAsync 查询历史。
+        services.AddSingleton<PostgresModelActivationAuditStore>();
+        services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<PostgresModelActivationAuditStore>());
+
         // R27-3：Evolution Pipeline 持久化（run state + 3 audit tables）。
         // 替代 InMemory 默认注册，让 HA 场景下 pipeline run state / canary / rollback / baseline 审计记录可跨进程持久化。
         services.AddSingleton<PostgresPipelineRunStore>();
@@ -227,6 +234,14 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresUserFeedbackLedgerStore>();
         services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<PostgresUserFeedbackLedgerStore>());
 
+        // Learning Loop Durable Outbox 持久化（PostgreSQL）。
+        // 替代 fire-and-forget Task.Run 物化路径：Decision committed → learning_event_outbox 表 →
+        // LearningMaterializationWorker 后台轮询 + bounded batch worker → MaterializeAsync → Ack/Retry/DeadLetter。
+        // 仅 Postgres provider 注册此接口；FileSystem/InMemory 不注册——
+        // LearningMaterializationDispatcher 检测到 null 时回退到 in-memory bounded Channel（非持久但消除 Task.Run）。
+        services.AddSingleton<PostgresLearningEventOutboxStore>();
+        services.AddSingleton<ILearningEventOutboxStore>(sp => sp.GetRequiredService<PostgresLearningEventOutboxStore>());
+
         // 任务 F：Agent Run 状态机 + 事件流哈希链持久化（PostgreSQL）。
         // 替代 InMemory 默认实现，让 HA 场景下 Agent Run 元数据 + 审计事件流可跨进程持久化与崩溃恢复。
         // - IAgentRunStore / IAgentRunEventStore：让 AgentRunActor / AgentKernelHost 自动注入持久化实现；
@@ -237,6 +252,17 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunEventStore>();
         services.AddSingleton<IAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
         services.AddSingleton<IPersistentAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
+
+        // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化（PostgreSQL）。
+        // - IAgentApprovalStore：让 DefaultAgentApprovalGate 自动注入持久化实现，
+        //   审批状态（Pending/Approved/Rejected）跨进程持久化，崩溃恢复后可重新加载未决审批。
+        // - IAgentRunLease：让 AgentKernelHost 自动注入持久化租约实现，
+        //   确保同一时刻仅一个 Host 实例处理同一 Run（复用 canary_leader_leases 模式）。
+        services.AddSingleton<PostgresAgentApprovalStore>();
+        services.AddSingleton<IAgentApprovalStore>(sp => sp.GetRequiredService<PostgresAgentApprovalStore>());
+        services.AddSingleton<IPersistentAgentApprovalStore>(sp => sp.GetRequiredService<PostgresAgentApprovalStore>());
+        services.AddSingleton<PostgresAgentRunLease>();
+        services.AddSingleton<IAgentRunLease>(sp => sp.GetRequiredService<PostgresAgentRunLease>());
 
         // 任务 D：Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
         // 替代单节点 InMemory 默认实现，让 HA 场景下 Canary 指标可跨实例聚合 + Leader 选举确保单 leader 推进。

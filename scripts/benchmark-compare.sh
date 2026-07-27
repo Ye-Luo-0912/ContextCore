@@ -24,11 +24,16 @@
 #                          I/O 受 OS 文件缓存 / 磁盘调度影响，CI 上天然变异大，需更宽阈值。
 #   IO_BOUND_PATTERNS      I/O 密集型 benchmark 的 Type 名 glob 模式（默认 "FileSystem*|*Io*|FileIo*"），
 #                          以 "|" 分隔。匹配的 case 应用 IO_BOUND_THRESHOLD_PCT。
+#   REQUIRE_BASELINE       1 = 基线缺失时拒绝通过（PR 门禁专用，避免"无基线即通过"假阴性）；
+#                          0 = 兼容旧行为，基线缺失时跳过对比并退出 0（main 首次建立基线场景）。默认 0。
+#                          基线文件存在但损坏（空 / 非法 JSON）时无论此值如何都会退出 4。
 #
 # CaseKey = Type.Method | Parameters | Runtime（Runtime 取自 HostEnvironmentInfo.RuntimeVersion）
 # Regression = Current / Baseline - 1
 #
-# 退出码：0 = 无回归；1 = 至少一个门控触发；2 = 输入错误。
+# 退出码：0 = 无回归；1 = 至少一个门控触发；2 = 输入错误；
+#        3 = 基线缺失且 REQUIRE_BASELINE=1（PR 门禁拒绝"无基线即通过"）；
+#        4 = 基线文件存在但损坏（空文件 / 非法 JSON）。
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -55,11 +60,33 @@ if [ ! -d "$CURRENT_DIR" ]; then
   echo "current-dir 不存在：$CURRENT_DIR" >&2
   exit 2
 fi
+# REQUIRE_BASELINE=1 时基线缺失必须失败（PR 门禁不允许"无基线即通过"的假阴性）。
+# 默认 0：保持向后兼容，首次 main 运行无基线时跳过对比并退出 0，由后续 push 建立基线。
+REQUIRE_BASELINE="${REQUIRE_BASELINE:-0}"
 if [ ! -d "$BASELINE_DIR" ] || [ -z "$(ls -A "$BASELINE_DIR" 2>/dev/null)" ]; then
+  if [ "$REQUIRE_BASELINE" = "1" ]; then
+    echo "::error::Baseline not found at $BASELINE_DIR — 拒绝通过。请先运行 benchmark-main.yml 生成基线缓存，或设置 REQUIRE_BASELINE=0 显式跳过。"
+    echo "regression_found=unknown"
+    exit 3
+  fi
   echo "No baseline found — 跳过对比（首次运行建立基线）。"
   echo "regression_found=false"
   exit 0
 fi
+
+# 基线完整性校验：每个 *-report-full.json 必须存在、非空、JSON 合法。
+# cache hit 不等于基线可用——cache 可能被部分恢复或损坏。校验失败时退出 4（区分于"无基线"的 3 与"有回归"的 1）。
+for baseline_file in "$BASELINE_DIR"/*-report-full.json; do
+  [ -f "$baseline_file" ] || continue
+  if [ ! -s "$baseline_file" ]; then
+    echo "::error::Baseline file is empty: $baseline_file" >&2
+    exit 4
+  fi
+  if ! jq empty "$baseline_file" >/dev/null 2>&1; then
+    echo "::error::Baseline file is not valid JSON: $baseline_file" >&2
+    exit 4
+  fi
+done
 
 REGRESSIONS=()
 SKIPPED=()
@@ -230,7 +257,7 @@ if [ "${#SKIPPED[@]}" -gt 0 ]; then
   printf '  %s\n' "${SKIPPED[@]}"
 fi
 echo "门控阈值：latency>${LATENCY_THRESHOLD_PCT}% p95>${P95_THRESHOLD_PCT}% alloc>${ALLOCATION_THRESHOLD_PCT}% store>${STORECALL_THRESHOLD_PCT}%"
-echo "噪声抑制：noiseFloor=${NOISE_FLOOR_PCT}% minSamples=${MIN_SAMPLE_COUNT} confidenceSigma=${CONFIDENCE_SIGMA}xStdErr ioBoundThreshold=${IO_BOUND_THRESHOLD_PCT}% ioBoundPatterns=${IO_BOUND_PATTERNS}"
+echo "噪声抑制：noiseFloor=${NOISE_FLOOR_PCT}% minSamples=${MIN_SAMPLE_COUNT} confidenceSigma=${CONFIDENCE_SIGMA}xStdErr ioBoundThreshold=${IO_BOUND_THRESHOLD_PCT}% ioBoundPatterns=${IO_BOUND_PATTERNS} requireBaseline=${REQUIRE_BASELINE}"
 
 if [ "${#REGRESSIONS[@]}" -gt 0 ]; then
   echo "regression_found=true"

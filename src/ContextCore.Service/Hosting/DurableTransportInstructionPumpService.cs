@@ -1,22 +1,28 @@
-using System.Threading.Channels;
 using ContextCore.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace ContextCore.Service.Hosting;
 
 /// <summary>
-/// P0-4 / P1：Durable Transport 指令 pump 后台服务。
+/// P0-4 / P1 / P0-6-5：Durable Transport 指令 pump 后台服务。
 /// 从 <see cref="IDurableTransport.LeaseBatchAsync"/> 批量租约 Pending 指令，将 lease token 写入
 /// <see cref="AgentKernelInstruction.Metadata"/>（键 <see cref="DurableTransportMetadataKeys.LeaseToken"/>），
-/// 然后通过本地 bounded channel 串行调用 <see cref="IAgentKernel.SubmitAsync"/> 推入 Kernel 的 inbox channel。
+/// 然后直接调用 <see cref="IAgentKernel.SubmitAsync"/> 推入 Kernel 的 inbox channel。
 /// Kernel 处理完成后（<see cref="DefaultAgentKernel.RunAsync"/> 循环内）自动调用
 /// <see cref="IDurableTransport.AckAsync"/> 确认；崩溃未 Ack 的行由 <see cref="LeaseReaperService"/> 回滚。
 /// </summary>
 /// <remarks>
+/// <b>P0-6-5：去掉第二层 bounded channel</b>。
+/// 旧实现 LeaseBatch → 本地 bounded channel → Kernel.SubmitAsync，排队期间 lease 无续租，
+/// lease 过期后由 reaper 回滚导致重复执行。新实现 LeaseBatch 后直接 Submit 到 Kernel，
+/// lease 的续租由 Kernel 在处理期间启动后台 Task 维护（参见 <see cref="DefaultAgentKernel.ProcessLeasedInstructionAsync"/>）。
+/// SubmitAsync 写入 Kernel inbox 是非阻塞的（Kernel inbox 是 bounded channel，Wait 模式），
+/// 若 inbox 满 pump 会等待 Kernel 消费，不会 lease 堆积。
+///
 /// <b>P1：批量租约 + 指数退避</b>。
 /// 单次 <see cref="IDurableTransport.LeaseBatchAsync"/> 拉取 <see cref="DurableTransportHostingOptions.BatchLeaseLimit"/>
-/// 条指令，减少高并发下的网络往返；拉取到指令后写入本地 bounded channel 供 Kernel 消费（容量与 BatchLeaseLimit 一致）。
-/// 连续空轮询时 polling interval 按 <see cref="DurableTransportHostingOptions.PollBackoffMultiplier"/> 指数增长
+/// 条指令，减少高并发下的网络往返。连续空轮询时 polling interval 按
+/// <see cref="DurableTransportHostingOptions.PollBackoffMultiplier"/> 指数增长
 /// （上限 <see cref="DurableTransportHostingOptions.MaxPollInterval"/>）；拉取到指令时立即重置为
 /// <see cref="DurableTransportHostingOptions.PollInterval"/>。
 ///
@@ -31,7 +37,7 @@ namespace ContextCore.Service.Hosting;
 /// Checkpoint / BuildContext 等非幂等指令由调用方保证幂等（如带幂等键）。
 ///
 /// <b>启动顺序</b>：本服务启动后立即开始 pump。Kernel.RunAsync 应由独立的 HostedService 或调用方启动。
-/// 若 Kernel 未运行，SubmitAsync 仍会成功（写入 channel），指令在 channel 中排队等待 Kernel 启动。
+/// 若 Kernel 未运行，SubmitAsync 仍会成功（写入 Kernel inbox channel），指令在 inbox 中排队等待 Kernel 启动。
 ///
 /// <b>降级路径</b>：若 <see cref="IDurableTransport.LeaseBatchAsync"/> 抛出 NotImplementedException 等异常
 /// （兼容旧实现），pump 回退到单条 <see cref="IDurableTransport.LeaseAsync"/> 路径，保证向后兼容。
@@ -63,57 +69,35 @@ internal sealed class DurableTransportInstructionPumpService : BackgroundService
             return;
         }
 
-        // P1：本地 bounded channel 用于在批量 lease 与 Kernel.SubmitAsync 之间解耦。
-        // 容量取 BatchLeaseLimit（一次批量 lease 的最大条数），避免 lease 拉取快于 Kernel 消费时无限堆积。
         var batchLimit = Math.Max(1, options.BatchLeaseLimit);
-        var localChannel = Channel.CreateBounded<AgentKernelInstruction>(new BoundedChannelOptions(batchLimit)
-        {
-            SingleReader = true,
-            SingleWriter = true,
-            FullMode = BoundedChannelFullMode.Wait
-        });
 
         _logger.LogInformation(
             "Durable transport instruction pump started. PollInterval={Poll}ms, MaxPollInterval={MaxPoll}ms, " +
-            "BackoffMultiplier={Mult}, BatchLeaseLimit={Batch}, LeaseDuration={Lease}, Owner={Owner}.",
+            "BackoffMultiplier={Mult}, BatchLeaseLimit={Batch}, LeaseDuration={Lease}, " +
+            "LeaseRenewalInterval={Renew}, MaxProcessingTime={MaxProc}, Owner={Owner}.",
             options.PollInterval.TotalMilliseconds,
             options.MaxPollInterval.TotalMilliseconds,
             options.PollBackoffMultiplier,
             batchLimit,
             options.InstructionLeaseDuration,
+            options.LeaseRenewalInterval,
+            options.MaxProcessingTime,
             _owner);
 
-        // 启动消费者任务：从 localChannel 读取并调用 kernel.SubmitAsync。
-        // 与 lease 循环并行执行，避免 SubmitAsync 阻塞下一次 lease。
-        var consumerTask = Task.Run(() => ConsumeLocalChannelAsync(localChannel.Reader, stoppingToken), stoppingToken);
-
-        try
-        {
-            await PumpLeaseLoopAsync(localChannel.Writer, batchLimit, stoppingToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            // lease 循环退出时关闭 channel 写入端，让消费者自然排空后退出
-            localChannel.Writer.TryComplete();
-            try
-            {
-                await consumerTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                // 消费者因取消退出，正常
-            }
-        }
+        // P0-6-5：不再使用本地 bounded channel。LeaseBatch 后直接 Submit 到 Kernel inbox，
+        // 让 lease 的续租由 Kernel 在处理期间维护（避免排队期间 lease 无续租）。
+        await PumpLeaseLoopAsync(batchLimit, stoppingToken).ConfigureAwait(false);
 
         _logger.LogInformation("Durable transport instruction pump stopped.");
     }
 
     /// <summary>
-    /// P1：批量租约主循环。从 <see cref="IDurableTransport.LeaseBatchAsync"/> 拉取指令写入 localChannel；
+    /// P1 / P0-6-5：批量租约主循环。从 <see cref="IDurableTransport.LeaseBatchAsync"/> 拉取指令后
+    /// 直接调用 <see cref="IAgentKernel.SubmitAsync"/> 推入 Kernel inbox（不再经过本地 channel）。
     /// 连续空轮询时按 <see cref="DurableTransportHostingOptions.PollBackoffMultiplier"/> 指数退避，
     /// 上限 <see cref="DurableTransportHostingOptions.MaxPollInterval"/>；拉取到指令时立即重置为 PollInterval。
     /// </summary>
-    private async Task PumpLeaseLoopAsync(ChannelWriter<AgentKernelInstruction> writer, int batchLimit, CancellationToken stoppingToken)
+    private async Task PumpLeaseLoopAsync(int batchLimit, CancellationToken stoppingToken)
     {
         var options = _options.Value;
         var currentInterval = options.PollInterval;
@@ -160,8 +144,11 @@ internal sealed class DurableTransportInstructionPumpService : BackgroundService
                     continue;
                 }
 
-                // 拉取到指令：重置 polling interval，写入 localChannel 供消费者处理
+                // 拉取到指令：重置 polling interval，直接 Submit 到 Kernel inbox
                 currentInterval = options.PollInterval;
+
+                // P0-6-5：复用同一 scope 内的 Kernel 实例提交指令（避免每条指令创建新 scope）。
+                var kernel = scope.ServiceProvider.GetRequiredService<IAgentKernel>();
 
                 foreach (var item in leased)
                 {
@@ -175,9 +162,23 @@ internal sealed class DurableTransportInstructionPumpService : BackgroundService
                         },
                     };
 
-                    await writer.WriteAsync(instruction, stoppingToken).ConfigureAwait(false);
-                    _logger.LogDebug("Leased and queued instruction {InstructionId} (token={Token}).",
-                        instruction.InstructionId, item.LeaseToken);
+                    try
+                    {
+                        await kernel.SubmitAsync(instruction, stoppingToken).ConfigureAwait(false);
+                        _logger.LogDebug("Leased and submitted instruction {InstructionId} (token={Token}).",
+                            instruction.InstructionId, item.LeaseToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        // SubmitAsync 失败（如 Kernel inbox 已满且 Kernel 已停止）不影响 lease 循环；
+                        // 指令仍处于 Leased 状态，租约过期后由 LeaseReaperService 回滚为 Pending 重新租约。
+                        _logger.LogWarning(ex, "SubmitAsync 失败：instructionId={InstructionId}；租约将过期回滚。",
+                            instruction.InstructionId);
+                    }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -191,35 +192,6 @@ internal sealed class DurableTransportInstructionPumpService : BackgroundService
                 catch (OperationCanceledException) { break; }
                 // 异常后也按指数退避递增（避免 tight-loop 失败时打满 DB）
                 currentInterval = NextBackoffInterval(currentInterval, multiplier, maxInterval);
-            }
-        }
-    }
-
-    /// <summary>
-    /// P1：从 localChannel 读取指令并调用 <see cref="IAgentKernel.SubmitAsync"/> 推入 Kernel inbox。
-    /// 与 lease 循环并行执行；channel 关闭后自然退出。
-    /// </summary>
-    private async Task ConsumeLocalChannelAsync(ChannelReader<AgentKernelInstruction> reader, CancellationToken stoppingToken)
-    {
-        using var scope = _services.CreateScope();
-        var kernel = scope.ServiceProvider.GetRequiredService<IAgentKernel>();
-
-        await foreach (var instruction in reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
-        {
-            try
-            {
-                await kernel.SubmitAsync(instruction, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                // SubmitAsync 失败不影响 lease 循环；指令仍处于 Leased 状态，
-                // 租约过期后由 LeaseReaperService 回滚为 Pending 重新租约。
-                _logger.LogWarning(ex, "SubmitAsync 失败：instructionId={InstructionId}；租约将过期回滚。",
-                    instruction.InstructionId);
             }
         }
     }

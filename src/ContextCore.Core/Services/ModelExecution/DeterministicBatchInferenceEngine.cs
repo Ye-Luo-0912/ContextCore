@@ -39,8 +39,11 @@ namespace ContextCore.Core.Services.ModelExecution;
 /// <remarks>
 /// 相同输入始终产出相同分数；不调用真实模型，适合作为 fallback 或基础设施测试实现。
 /// R28-F：同时支持字典路径（InferAsync）与连续内存路径（InferBatchAsync）。
+/// 子问题1：实现 <see cref="IFallbackInferenceEngine"/> 标记接口，
+/// 让 ModelActivationManager 通过 IFallbackInferenceEngine 注入本引擎，
+/// 避免 DI 容器解析 IBatchInferenceEngine 时回到 ModelActivationManager 自身（循环依赖）。
 /// </remarks>
-public sealed class DeterministicBatchInferenceEngine : IBatchInferenceEngine
+public sealed class DeterministicBatchInferenceEngine : IFallbackInferenceEngine
 {
     private const string DefaultModelVersion = "deterministic-hash-v1";
 

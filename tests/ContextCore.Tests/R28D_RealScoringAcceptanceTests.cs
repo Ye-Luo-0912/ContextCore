@@ -187,7 +187,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     {
         // 无推理引擎、无 registry → 即便 EnableModelScoring=true 也回退；
         // 默认 snapshot EnableModelScoring=false → 直接返回不变
-        var scorer = new DefaultUtilityScorer();
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator());
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.7);
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: false);
 
@@ -212,7 +212,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         var engine = new StubBatchInferenceEngine(modelVersion: "test-model-v1")
             .WithOutput(score: 0.8, confidence: 0.95);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, calibrationService: null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, calibrationService: null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -241,7 +241,7 @@ public sealed class R28D_DefaultUtilityScorerTests
             .WithOutput(0.6, 0.90)
             .WithOutput(0.4, 0.85);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelopes = new[]
         {
@@ -273,7 +273,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         var engine = new StubBatchInferenceEngine("test-model-v1")
             .WithOutput(score: 0.9, confidence: 0.50);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.4);
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -299,7 +299,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         var engine = new StubBatchInferenceEngine("test-model-v1")
             .WithOutput(score: 0.8, confidence: 0.70);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -325,7 +325,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     {
         var engine = new StubBatchInferenceEngine("test-model-v1").WithThrow(new InvalidOperationException("model down"));
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, featureSchemaVersion: "test-model-v1");
@@ -347,7 +347,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     {
         var engine = new StubBatchInferenceEngine("test-model-v1").WithFailure("timeout");
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, featureSchemaVersion: "test-model-v1");
@@ -370,7 +370,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         // registry 中无 snapshot.FeatureSchemaVersion 对应的 schema → 标记降级。
         var engine = new StubBatchInferenceEngine("unknown-model-v1").WithOutput(0.8, 0.95);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("different-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true, featureSchemaVersion: "nonexistent-schema");
@@ -388,7 +388,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     public async Task Score_MissingEngineAndRegistry_ReturnsEnvelopesUnchanged()
     {
         // null 依赖 → 即便 EnableModelScoring=true 也回退 rule-only
-        var scorer = new DefaultUtilityScorer(inferenceEngine: null, calibrationService: null, featureRegistry: null);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), inferenceEngine: null, calibrationService: null, featureRegistry: null);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: true);
@@ -414,7 +414,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         var registry = R28DTestHelpers.BuildRegistryWithSchema("test-model-v1");
         var calibration = new PlattCalibrationService();
         calibration.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: "test-model-v1");
-        var scorer = new DefaultUtilityScorer(engine, calibration, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, calibration, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.5);
         var snapshot = R28DTestHelpers.BuildSnapshot(
@@ -440,7 +440,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_EmptyInput_ReturnsEmpty()
     {
-        var scorer = new DefaultUtilityScorer();
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator());
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: false);
         var result = await scorer.ScoreAsync(Array.Empty<ContextCandidateEnvelope>(), snapshot, default);
         Assert.AreEqual(0, result.Count);
@@ -449,7 +449,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_NullEnvelopes_Throws()
     {
-        var scorer = new DefaultUtilityScorer();
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator());
         var snapshot = R28DTestHelpers.BuildSnapshot(enableModelScoring: false);
         await Assert.ThrowsExceptionAsync<ArgumentNullException>(() =>
             scorer.ScoreAsync(null!, snapshot, default).AsTask());
@@ -458,7 +458,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_NullSnapshot_Throws()
     {
-        var scorer = new DefaultUtilityScorer();
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator());
         await Assert.ThrowsExceptionAsync<ArgumentNullException>(() =>
             scorer.ScoreAsync(Array.Empty<ContextCandidateEnvelope>(), null!, default).AsTask());
     }
@@ -479,7 +479,7 @@ public sealed class R28D_EndToEndIntegrationTests
         var pipeline = new DefaultFeaturePipeline();
         var engine = new DeterministicBatchInferenceEngine();
         var registry = R28DTestHelpers.BuildRegistryWithSchema(engine.ModelVersion);
-        var scorer = new DefaultUtilityScorer(engine, calibrationService: null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, calibrationService: null, registry);
 
         var envelopes = new[]
         {
@@ -534,7 +534,7 @@ public sealed class R28D_EndToEndIntegrationTests
         var pipeline = new DefaultFeaturePipeline();
         var engine = new DeterministicBatchInferenceEngine();
         var registry = R28DTestHelpers.BuildRegistryWithSchema(engine.ModelVersion);
-        var scorer = new DefaultUtilityScorer(engine, null, registry);
+        var scorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator(), engine, null, registry);
 
         var envelope = R28DTestHelpers.MakeEnvelope("c1", detScore: 0.42, breakdown: new Dictionary<string, double>
         {

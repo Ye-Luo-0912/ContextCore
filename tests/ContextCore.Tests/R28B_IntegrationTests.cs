@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Storage.InMemory.Stores;
 
@@ -214,7 +215,7 @@ public sealed class V2RetrievalIntegrationTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -228,7 +229,7 @@ public sealed class V2RetrievalIntegrationTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakeExpertResultWithContent(string entityId, string content)
@@ -395,7 +396,7 @@ public sealed class V2PackageIntegrationTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -409,7 +410,7 @@ public sealed class V2PackageIntegrationTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakePackageExpertResult(string entityId, string content)
@@ -721,7 +722,7 @@ public sealed class CutoverTransitionIntegrationTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -735,7 +736,7 @@ public sealed class CutoverTransitionIntegrationTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakeExpertResultWithContent(string entityId, string content)

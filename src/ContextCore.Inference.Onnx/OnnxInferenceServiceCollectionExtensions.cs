@@ -108,28 +108,135 @@ public static class OnnxInferenceServiceCollectionExtensions
     /// P0-8：此注册将 <see cref="ICalibrationValidator"/> 纳入模型激活（加载）路径，
     /// 在 <see cref="IModelActivationManager.ActivateAsync"/> 调用时验证校准参数统计有效性。
     /// <see cref="IFeatureSchemaValidator"/> 应由上游消费方在推理前调用（生产推理路径）。
+    /// 子问题1：fallback 引擎注册为 <see cref="IFallbackInferenceEngine"/>（而非 IBatchInferenceEngine），
+    /// 避免与 ModelActivationManager 自身注册为 IBatchInferenceEngine 冲突导致循环依赖。
     /// </remarks>
     /// <param name="services">DI 容器。</param>
-    /// <param name="fallbackEngine">降级引擎（未激活时使用，通常为 DeterministicBatchInferenceEngine）。</param>
+    /// <param name="fallbackEngine">降级引擎（未激活时使用，通常为 DeterministicBatchInferenceEngine）。
+    /// 必须实现 <see cref="IFallbackInferenceEngine"/> 标记接口。</param>
     /// <returns>DI 容器（链式调用）。</returns>
     public static IServiceCollection AddModelActivationManager(
         this IServiceCollection services,
-        IBatchInferenceEngine fallbackEngine)
+        IFallbackInferenceEngine fallbackEngine)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(fallbackEngine);
 
-        // 注册 fallback 引擎（供 ModelActivationManager 注入）
+        // 子问题1：注册 fallback 引擎为 IFallbackInferenceEngine（而非 IBatchInferenceEngine）。
+        // 这样 ModelActivationManager 构造函数注入 IFallbackInferenceEngine 时，
+        // DI 容器解析到的是 fallback 实例，而非 ModelActivationManager 自身（避免循环依赖）。
         services.AddSingleton(fallbackEngine);
 
         // 默认注册 OnnxRuntimeInferenceSessionFactory；调用方可覆盖
         services.TryAddSingleton<IOnnxInferenceSessionFactory, OnnxRuntimeInferenceSessionFactory>();
 
         // 注册 ModelActivationManager 为 IModelActivationManager 和 IBatchInferenceEngine
+        // 子问题1：ModelActivationManager 构造函数注入 IFallbackInferenceEngine（fallback），
+        // 消费方通过 IBatchInferenceEngine 获取 ModelActivationManager 代理。
         services.AddSingleton<ModelActivationManager>();
         services.AddSingleton<IModelActivationManager>(sp => sp.GetRequiredService<ModelActivationManager>());
         services.AddSingleton<IBatchInferenceEngine>(sp => sp.GetRequiredService<ModelActivationManager>());
 
         return services;
     }
+
+    /// <summary>
+    /// 在已注册的 <see cref="IBatchInferenceEngine"/> 之上叠加 <see cref="InferenceScheduler"/>，
+    /// 提供有界队列、最大并发治理与动态批处理。
+    /// </summary>
+    /// <remarks>
+    /// <b>调用顺序约束</b>：必须在 <see cref="AddOnnxInferenceEngine(OnnxInferenceEngineOptions, string?, ModelArtifactDescriptor?)"/>
+    /// 或 <see cref="AddModelActivationManager"/> 之后调用，确保 IBatchInferenceEngine 已注册。
+    /// 本方法会把 IBatchInferenceEngine 的注册替换为 InferenceScheduler 包裹的版本，
+    /// 内部引擎通过 <c>GetService&lt;IBatchInferenceEngine&gt;()</c> 在首次解析时获取。
+    /// <para>
+    /// <b>默认行为</b>：当 <see cref="InferenceSchedulerOptions.EnableDynamicBatching"/>=false（默认）
+    /// 时，InferenceScheduler 直接转发请求到内部引擎，行为与未引入本方法完全一致。
+    /// 仅在显式设置 EnableDynamicBatching=true 时才走 channel + 微批路径。
+    /// </para>
+    /// <para>
+    /// <b>启用前评估</b>：动态批处理在低 QPS 单条请求场景下只会增加 BatchWaitWindow 量级延迟
+    /// 而不增加吞吐。建议先通过真实 profile 验证 QPS ≥ 100 且单次推理耗时 ≥ 1ms 后再开启。
+    /// </para>
+    /// </remarks>
+    /// <param name="services">DI 容器。</param>
+    /// <param name="configure">调度器配置回调。</param>
+    /// <returns>DI 容器（链式调用）。</returns>
+    public static IServiceCollection UseInferenceScheduler(
+        this IServiceCollection services,
+        Action<InferenceSchedulerOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = new InferenceSchedulerOptions();
+        configure(options);
+        services.AddSingleton(options);
+
+        // 把已有的 IBatchInferenceEngine 注册移到内部位（InnerBatchInferenceEngine），
+        // 让 InferenceScheduler 通过 InnerBatchInferenceEngine 获取内部引擎，
+        // 避免与 InferenceScheduler 自身注册为 IBatchInferenceEngine 冲突导致循环解析。
+        var existingRegistration = services.FirstOrDefault(
+            d => d.ServiceType == typeof(IBatchInferenceEngine));
+        if (existingRegistration is null)
+        {
+            throw new InvalidOperationException(
+                "UseInferenceScheduler 必须在 AddOnnxInferenceEngine / AddModelActivationManager 之后调用：" +
+                "DI 容器中尚未注册 IBatchInferenceEngine，InferenceScheduler 没有可包裹的内部引擎。");
+        }
+
+        services.Remove(existingRegistration);
+        services.AddSingleton<InnerBatchInferenceEngine>(
+            sp => new InnerBatchInferenceEngine(BuildInnerEngine(sp, existingRegistration)));
+        services.AddSingleton<InferenceScheduler>(sp =>
+        {
+            var inner = sp.GetRequiredService<InnerBatchInferenceEngine>();
+            var opts = sp.GetRequiredService<InferenceSchedulerOptions>();
+            return new InferenceScheduler(inner.Engine, opts);
+        });
+        services.AddSingleton<IBatchInferenceEngine>(sp => sp.GetRequiredService<InferenceScheduler>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// 从原始注册描述符解析内部 IBatchInferenceEngine 实例。
+    /// 支持 Instance / Factory / Object 三种注册方式。
+    /// </summary>
+    private static IBatchInferenceEngine BuildInnerEngine(
+        IServiceProvider sp,
+        ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationInstance is IBatchInferenceEngine instance)
+        {
+            return instance;
+        }
+
+        if (descriptor.ImplementationFactory is { } factory)
+        {
+            return (IBatchInferenceEngine)factory(sp);
+        }
+
+        if (descriptor.ImplementationType is { } implType)
+        {
+            return (IBatchInferenceEngine)sp.GetRequiredService(implType);
+        }
+
+        throw new InvalidOperationException(
+            "无法解析原始 IBatchInferenceEngine 注册（既非 Instance 也非 Factory 也非 Type）。");
+    }
+}
+
+/// <summary>
+/// 内部 IBatchInferenceEngine 包装器：用于在 DI 容器中把原始引擎注册"隐藏"起来，
+/// 让 InferenceScheduler 通过本类型获取内部引擎，避免与自身注册为 IBatchInferenceEngine 冲突。
+/// </summary>
+internal sealed class InnerBatchInferenceEngine
+{
+    public InnerBatchInferenceEngine(IBatchInferenceEngine engine)
+    {
+        Engine = engine;
+    }
+
+    public IBatchInferenceEngine Engine { get; }
 }

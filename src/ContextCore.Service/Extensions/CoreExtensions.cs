@@ -5,6 +5,7 @@ using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Agent;
 using ContextCore.Core.Services.AgentKernel;
+using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.MemoryEvolution;
@@ -14,9 +15,11 @@ using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Policy;
 using ContextCore.Core.Services.Retrieval;
+using ContextCore.Inference.Onnx;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
 using ContextCore.Runtime;
+using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.Postgres.Stores;
@@ -29,8 +32,20 @@ namespace ContextCore.Service.Extensions;
 internal static class CoreExtensions
 {
 	/// <summary>注册 Core 业务服务（摄取、打包、校验、晋升、工作记忆）。</summary>
+	/// <remarks>子问题5：使用默认 ModelExecutionOptions（Deterministic 模式），向后兼容。</remarks>
 	public static IServiceCollection AddContextCore(this IServiceCollection services)
+		=> AddContextCore(services, ModelExecutionOptions.Default);
+
+	/// <summary>
+	/// 注册 Core 业务服务，并按 <paramref name="modelExecutionOptions"/> 选择 IBatchInferenceEngine 注册方式。
+	/// </summary>
+	/// <param name="services">DI 容器。</param>
+	/// <param name="modelExecutionOptions">模型执行配置（子问题5：控制 Deterministic / RealModel 模式）。</param>
+	public static IServiceCollection AddContextCore(this IServiceCollection services, ModelExecutionOptions modelExecutionOptions)
 	{
+		// 子问题5：注册 ModelExecutionOptions 单例（供 HostedService / 运行时查询当前模式）。
+		services.AddSingleton(modelExecutionOptions ?? ModelExecutionOptions.Default);
+
 		// R11-P6：ContextStateCache 基础设施。InMemoryContextStateCache 同时实现
 		// IContextStateCache（读路径可选缓存）和 IStateCacheInvalidator（写入边界失效信号接收）。
 		// Store Decorator 在写入成功后调用 InvalidateAsync，移除受影响的缓存项。
@@ -427,10 +442,14 @@ internal static class CoreExtensions
 		services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
 		// R28-D：DefaultUtilityScorer 注入模型推理 + 校准 + 特征 schema（可选）。
 		// null 时强制 rule-only（EnableModelScoring=true 也不触发模型路径）。
+		// 子问题6：IFeatureSchemaValidator 为必须依赖（非 null），推理前强制校验输入特征与 schema 一致性；
+		// IInferenceResultValidator 可选（未注册时 Scorer 内部回退 DefaultInferenceResultValidator）。
 		services.AddSingleton<IUtilityScorer>(sp => new DefaultUtilityScorer(
+			sp.GetRequiredService<IFeatureSchemaValidator>(),
 			sp.GetService<IBatchInferenceEngine>(),
 			sp.GetService<ICalibrationService>(),
-			sp.GetService<IFeatureRegistry>()));
+			sp.GetService<IFeatureRegistry>(),
+			sp.GetService<IInferenceResultValidator>()));
 		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
 		// R28-B.8.1：Allocator V2.1（section rollover + MMR diversity）。
 		// 默认不替换 IGlobalAllocator（仍为 V2.0 DefaultGlobalAllocator）；
@@ -460,7 +479,82 @@ internal static class CoreExtensions
 		// 输出 predicted / observed / weight 三段式 JSONL，供 Platt / Temperature / Isotonic 校准拟合消费。
 		services.TryAddSingleton<ICalibrationDataExporter>(sp => new CalibrationDataExporter(
 			sp.GetRequiredService<IUtilityLedgerStore>()));
-		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
+
+		// Learning Event Pipeline 补齐：非 decision 事件统一 sink + 数据质量闸门链。
+		// 依赖 IUtilityLedgerStore（Postgres / InMemory 均已注册）+ IUserFeedbackLedger（同 UserFeedbackService）。
+		// TryAddSingleton：测试路径注入 mock 实现时跳过默认实现。
+		services.TryAddSingleton<ILearningPipelineSink>(sp => new LearningPipelineSink(
+			logger: sp.GetService<Microsoft.Extensions.Logging.ILogger<LearningPipelineSink>>()));
+		services.TryAddSingleton<ILabelQualityScorer>(sp => new LabelQualityScorer(
+			sp.GetRequiredService<IUtilityLedgerStore>(),
+			sp.GetRequiredService<IUserFeedbackLedger>()));
+		services.TryAddSingleton<ILeakageDetector>(sp => new LeakageDetector(
+			sp.GetRequiredService<IUtilityLedgerStore>(),
+			sp.GetService<IUserFeedbackLedger>()));
+		services.TryAddSingleton<ILearningDatasetSplitter>(sp => new LearningDatasetSplitter(
+			sp.GetRequiredService<IUtilityLedgerStore>()));
+		services.TryAddSingleton<IOfflineReplayGate>(sp => new OfflineReplayGate(
+			sp.GetRequiredService<ILabelQualityScorer>(),
+			sp.GetRequiredService<ILeakageDetector>(),
+			sp.GetRequiredService<ILearningDatasetSplitter>()));
+		// 延迟用户反馈服务（依赖 UserFeedbackService + ILearningPipelineSink；两者均已注册）。
+		services.TryAddSingleton<DelayedUserFeedbackService>();
+
+		// Learning Loop Durable Outbox：替代 fire-and-forget Task.Run 物化路径。
+		// 配置从 "LearningMaterialization" 节绑定（Program.cs 中 Configure<LearningMaterializationOptions>）。
+		// 这里注册为直接的 LearningMaterializationOptions 单例（从 IOptions 解包），让 Dispatcher / Worker
+		// 构造函数可直接注入（无需依赖 IOptions<T> 抽象）。
+		// Metrics 单例：线程安全 Interlocked 计数器 + 延迟环形缓冲，供 dispatcher / worker / 诊断端点共享。
+		// Dispatcher 单例 + IHostedService：构造时根据 ILearningEventOutboxStore 是否注册自动选择路径——
+		//   - Postgres provider：Durable Outbox（持久化，进程崩溃不丢数据）；
+		//   - FileSystem/InMemory：in-memory bounded Channel + 固定 worker（消除 Task.Run，但非持久）。
+		// 注入到 DefaultContextDecisionRuntime 后，主决策流通过 EnqueueAsync 入队（无 Task.Run）。
+		services.AddSingleton<LearningMaterializationOptions>(sp =>
+		{
+			// 优先从 IOptions<LearningMaterializationOptions> 解包（Program.cs 已 Configure 绑定配置节）。
+			// 兼容路径：IOptions 未注册时使用默认值（Enabled=false）。
+			var opts = sp.GetService<Microsoft.Extensions.Options.IOptions<LearningMaterializationOptions>>()?.Value;
+			if (opts is not null) return opts;
+			var fallback = new LearningMaterializationOptions();
+			sp.GetService<IConfiguration>()?.GetSection("LearningMaterialization").Bind(fallback);
+			return fallback;
+		});
+		services.AddSingleton<LearningMaterializationMetrics>();
+		services.AddSingleton<LearningMaterializationDispatcher>();
+		services.AddHostedService<LearningMaterializationDispatcher>(sp => sp.GetRequiredService<LearningMaterializationDispatcher>());
+
+		// DefaultContextDecisionRuntime 注册改为工厂：注入 LearningMaterializationDispatcher（替代 Task.Run 热路径）。
+		// dispatcher null 时（测试容器未注册）回退到 materializer 直接调用路径（保持向后兼容）。
+		services.AddSingleton<IContextDecisionRuntime>(sp =>
+		{
+			var engine = sp.GetRequiredService<IContextDecisionEngine>();
+			var policyProvider = sp.GetRequiredService<IResolvedPolicyProvider>();
+			var router = sp.GetRequiredService<ContextCore.Abstractions.IRouter>();
+			var expertCatalog = sp.GetRequiredService<IExpertCatalog>();
+			var candidateProviders = sp.GetServices<ICandidateProvider>().ToArray();
+			var canonicalMerger = sp.GetRequiredService<ICanonicalCandidateMerger>();
+			var earlyAdmissionGate = sp.GetRequiredService<IEarlyAdmissionGate>();
+			var featurePipeline = sp.GetRequiredService<IFeaturePipeline>();
+			var safetyGate = sp.GetRequiredService<ISafetyGate>();
+			var lifecycleGate = sp.GetRequiredService<ILifecycleGate>();
+			var utilityScorer = sp.GetRequiredService<IUtilityScorer>();
+			var requestNormalizer = sp.GetService<IRuntimeRequestNormalizer>();
+			var requestSemanticHasher = sp.GetService<IRequestSemanticHasher>();
+			var executionArtifactFactory = sp.GetService<IExecutionArtifactFactory>();
+			var utilityLedgerMaterializer = sp.GetService<UtilityLedgerMaterializer>();
+			var componentHealthRegistry = sp.GetService<IComponentHealthRegistry>();
+			var materializationDispatcher = sp.GetService<LearningMaterializationDispatcher>();
+			return new DefaultContextDecisionRuntime(
+				engine, policyProvider, router, expertCatalog, candidateProviders,
+				canonicalMerger, earlyAdmissionGate, featurePipeline, safetyGate, lifecycleGate,
+				utilityScorer,
+				requestNormalizer: requestNormalizer,
+				requestSemanticHasher: requestSemanticHasher,
+				executionArtifactFactory: executionArtifactFactory,
+				utilityLedgerMaterializer: utilityLedgerMaterializer,
+				componentHealthRegistry: componentHealthRegistry,
+				materializationDispatcher: materializationDispatcher);
+		});
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();
 		services.AddSingleton<ShadowGate>();
@@ -529,9 +623,32 @@ internal static class CoreExtensions
 		// HostedService 注册：定时轮询 ScopedCanary 阶段的 run 并自动推进/回滚。
 		services.AddHostedService<CanaryProgressionHostedService>();
 
+		// 任务 C：默认外部指标采集源（ICanaryExternalMetricsSource 实现）。
+		// 从 Tool 执行结果、用户反馈、安全审计等外部信号采集 ground truth 指标，
+		// 替代仅依赖 token budget + FinalScore 的 quality_score。
+		// 注册为 Singleton：进程内 in-memory 计数器，线程安全（lock 保护）。
+		// 注入 IToolDispatchJournal（可选）用于 RegisterToolResultAsync 诊断校验。
+		services.AddSingleton<ICanaryExternalMetricsSource>(sp =>
+			new DefaultCanaryExternalMetricsSource(sp.GetService<IToolDispatchJournal>()));
+
+		// 任务 D：Canary HA Leader HostedService（多实例部署模式）。
+		// CanaryLeaderOptions 从配置节 "CanaryLeader" 绑定（未配置时 Enabled=false，单节点模式）。
+		// Enabled=false 时 ExecuteAsync 立即退出，由 CanaryProgressionHostedService 处理单节点推进；
+		// Enabled=true 时启用 HA 模式：各实例记录本地样本，leader 实例聚合跨实例指标并驱动推进/回滚。
+		// 与 CanaryProgressionHostedService 互斥运行：HA 模式下应将 CanarySchedulerOptions.Enabled=false。
+		// 注意：ICanaryLeaderLease / ICanaryMetricsAggregator 由 PostgresServiceCollectionExtensions 注册
+		// （Storage.Postgres 不引用 Service，故 HostedService 在此注册）。
+		services.AddSingleton<IOptions<CanaryLeaderOptions>>(sp =>
+		{
+			var opts = new CanaryLeaderOptions();
+			sp.GetService<IConfiguration>()?.GetSection("CanaryLeader").Bind(opts);
+			return Options.Create(opts);
+		});
+		services.AddHostedService<CanaryLeaderHostedService>();
+
 		// R28-D：Model Execution Runtime 默认实现。
 		// - IFeatureRegistry：in-memory 特征 schema 注册表（生产可替换为持久化实现）
-		// - IBatchInferenceEngine：Deterministic fallback，真实模型不可用时使用 feature hash 产出确定性分数
+		// - IBatchInferenceEngine：按 ModelExecutionMode 选择注册方式（子问题5）
 		// - ICalibrationService：Platt scaling 默认 A=1 B=0（identity 的 sigmoid 形式）
 		// 三者均为 Singleton 生命周期：无状态/线程安全，可被多个请求共享。
 		// R28-D WP-D：IFeatureRegistry 预注册 default schema 匹配 DeterministicBatchInferenceEngine.ModelVersion，
@@ -555,7 +672,49 @@ internal static class CoreExtensions
 			});
 			return registry;
 		});
-		services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
+
+		// 子问题5：按 ModelExecutionMode 选择 IBatchInferenceEngine 注册方式。
+		// 默认 Deterministic 模式：注册 DeterministicBatchInferenceEngine（feature hash 确定性分数）。
+		// RealModel 模式：注册 ModelActivationManager，以 DeterministicBatchInferenceEngine 为 fallback，
+		// 运行时通过 IModelActivationManager.ActivateAsync 切换到真实 ONNX 模型。
+		// 两种模式都注册 DeterministicBatchInferenceEngine 为具体类型（供 fallback / 直接消费方使用）。
+		services.TryAddSingleton<DeterministicBatchInferenceEngine>();
+		// 子问题1：同时注册 DeterministicBatchInferenceEngine 为 IFallbackInferenceEngine，
+		// 供 ModelActivationManager 构造函数注入（避免与 IBatchInferenceEngine 注册冲突导致循环依赖）。
+		services.TryAddSingleton<IFallbackInferenceEngine>(sp => sp.GetRequiredService<DeterministicBatchInferenceEngine>());
+		if (modelExecutionOptions.Mode == ModelExecutionMode.RealModel)
+		{
+			// RealModel 模式：注册 ModelActivationManager 为 IBatchInferenceEngine。
+			// 前置条件：调用方需注册 IModelArtifactRegistry（由 PostgresServiceCollectionExtensions 提供）。
+			// IOnnxInferenceSessionFactory 默认使用 OnnxRuntimeInferenceSessionFactory（TryAdd 不覆盖调用方注册）。
+			// 子问题1：ModelActivationManager 构造函数注入 IFallbackInferenceEngine（而非 IBatchInferenceEngine），
+			// 避免解析 IBatchInferenceEngine 时回到 ModelActivationManager 自身（循环依赖）。
+			services.TryAddSingleton<IOnnxInferenceSessionFactory, OnnxRuntimeInferenceSessionFactory>();
+			services.AddSingleton<ModelActivationManager>(sp => new ModelActivationManager(
+			sp.GetRequiredService<IModelArtifactRegistry>(),
+			sp.GetRequiredService<ICalibrationValidator>(),
+			sp.GetRequiredService<IFeatureRegistry>(),
+			sp.GetRequiredService<IOnnxInferenceSessionFactory>(),
+			sp.GetRequiredService<IFallbackInferenceEngine>(),
+			sp.GetService<ICalibrationService>()));
+		services.AddSingleton<IModelActivationManager>(sp => sp.GetRequiredService<ModelActivationManager>());
+		services.AddSingleton<IBatchInferenceEngine>(sp => sp.GetRequiredService<ModelActivationManager>());
+
+		// P0-6：ShadowModelManager — Champion/Challenger 影子模式支持。
+		// 维护独立于 ActiveEngine 的 Challenger 引擎，让控制平面能在不替换 active 模型的前提下
+		// 加载并验证候选模型（Challenger 推理结果不返回给用户，仅用于对比）。
+		// 仅 RealModel 模式注册（依赖 IOnnxInferenceSessionFactory）。
+		services.AddSingleton<ShadowModelManager>(sp => new ShadowModelManager(
+			sp.GetRequiredService<IOnnxInferenceSessionFactory>(),
+			sp.GetRequiredService<IFeatureRegistry>(),
+			sp.GetRequiredService<ICalibrationValidator>(),
+			sp.GetService<ICalibrationService>()));
+		}
+		else
+		{
+			// Deterministic 模式（默认）：注册 DeterministicBatchInferenceEngine 为 IBatchInferenceEngine。
+			services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
+		}
 		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
 
 		// R29 WP-A-3：ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
@@ -569,6 +728,11 @@ internal static class CoreExtensions
 		// 不抛异常：返回结构化 FeatureSchemaValidationResult，让 Scorer 在推理前 fail-fast。
 		// 与 IInferenceResultValidator 互补：前者关心输入 vs schema，后者关心输出 vs 输入约束。
 		services.TryAddSingleton<IFeatureSchemaValidator, DefaultFeatureSchemaValidator>();
+
+		// 子问题6：IInferenceResultValidator — 推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
+		// 由 DefaultUtilityScorer 在推理后调用，验证失败时降级到 deterministic（fail-safe）。
+		// TryAddSingleton 避免覆盖调用方注册的自定义验证器。
+		services.TryAddSingleton<IInferenceResultValidator, DefaultInferenceResultValidator>();
 
 		// R28-C：Agent Kernel — .NET 决策循环（Transport + ToolDispatcher + Kernel + V2 Runtime）。
 		// 默认实现：InProcessTransport（进程内 Channel）+ EchoToolDispatcher（测试用 echo）+
@@ -584,7 +748,89 @@ internal static class CoreExtensions
 		services.TryAddSingleton<IToolDispatcher, EchoToolDispatcher>();
 		services.TryAddSingleton<IAgentKernel, DefaultAgentKernel>();
 
+		// 子问题 8：Agent Run Actor 生产化注册（模型驱动的 Agent 执行循环）。
+		// 注册顺序：底层依赖（Store / Journal / Executor）→ 策略 / 校验 / 审批 → ModelTransport → Host。
+		// 所有注册使用 TryAdd 不覆盖调用方已注册的自定义实现；保留旧 IAgentKernel/DefaultAgentKernel
+		// 注册以向后兼容（旧路径仍可用，新路径通过 AgentKernelHost 启动）。
+
+		// 子问题 8：Agent Run 元数据 Store（进程内默认实现；Postgres provider 可覆盖）
+		services.TryAddSingleton<IAgentRunStore, InMemoryAgentRunStore>();
+		// 子问题 8：Agent Run 事件流 Store（进程内默认实现；Postgres provider 可覆盖）
+		services.TryAddSingleton<IAgentRunEventStore, InMemoryAgentRunEventStore>();
+
+		// 子问题 8：循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
+		services.TryAddSingleton<IAgentLoopPolicy, DefaultAgentLoopPolicy>();
+		services.TryAddSingleton<IAgentToolCallValidator, DefaultAgentToolCallValidator>();
+		services.TryAddSingleton<IAgentApprovalGate, DefaultAgentApprovalGate>();
+
+		// 子问题 8：IAgentCheckpointFactory（默认实现，依赖 IAgentRunEventStore / IAgentRunStore）
+		services.TryAddSingleton<IAgentCheckpointFactory, DefaultAgentCheckpointFactory>();
+
+		// 子问题 7：IAgentModelTransport fallback 实现（确定性响应，不调用真实 LLM）。
+		// 生产部署应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
+		services.TryAddSingleton<IAgentModelTransport, DeterministicAgentModelTransport>();
+
+		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
+		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。
+		services.TryAddSingleton<IDurableToolExecutor, DefaultDurableToolExecutor>();
+
+		// 子问题 8：IToolDispatchJournal（进程内默认实现；Postgres provider 可覆盖）。
+		// 注册为 singleton 让 DefaultDurableToolExecutor 与 DefaultAgentKernel 共享同一 journal 实例。
+		services.TryAddSingleton<IToolDispatchJournal, InMemoryToolDispatchJournal>();
+
+		// 子问题 9：IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
+		services.TryAddSingleton<IAgentRunLease, InMemoryAgentRunLease>();
+
+		// 子问题 9：AgentHostOptions 配置（默认单节点模式；生产部署通过配置覆盖）。
+		services.TryAddSingleton(AgentHostOptionsDefaultFactory);
+
+		// 子问题 8：AgentKernelHost（Singleton，per-run Actor 通过 IServiceProvider 解析）。
+		services.TryAddSingleton<AgentKernelHost>();
+
 		return services;
+	}
+
+	/// <summary>
+	/// 子问题 9：AgentHostOptions 默认工厂。
+	/// 从 IConfiguration 读取 "AgentHost" 段；未配置时返回默认值（单节点模式）。
+	/// </summary>
+	private static AgentHostOptions AgentHostOptionsDefaultFactory(IServiceProvider sp)
+	{
+		// 尝试从 IConfiguration 读取配置；未配置时返回默认值
+		var configuration = sp.GetService(typeof(Microsoft.Extensions.Configuration.IConfiguration))
+			as Microsoft.Extensions.Configuration.IConfiguration;
+		if (configuration is null)
+		{
+			return new AgentHostOptions();
+		}
+
+		var opts = new AgentHostOptions();
+		var section = configuration.GetSection("AgentHost");
+		if (section.Exists())
+		{
+			opts.LeaseEnabled = section.GetValue("LeaseEnabled", opts.LeaseEnabled);
+			opts.MaxGlobalRuns = section.GetValue("MaxGlobalRuns", opts.MaxGlobalRuns);
+			opts.MaxWorkspaceRuns = section.GetValue("MaxWorkspaceRuns", opts.MaxWorkspaceRuns);
+
+			var leaseDurationStr = section["LeaseDuration"];
+			if (TimeSpan.TryParse(leaseDurationStr, out var ld))
+			{
+				opts.LeaseDuration = ld;
+			}
+
+			var heartbeatStr = section["HeartbeatInterval"];
+			if (TimeSpan.TryParse(heartbeatStr, out var hb))
+			{
+				opts.HeartbeatInterval = hb;
+			}
+
+			var owner = section["Owner"];
+			if (!string.IsNullOrWhiteSpace(owner))
+			{
+				opts.Owner = owner;
+			}
+		}
+		return opts;
 	}
 
 	/// <summary>

@@ -265,10 +265,10 @@ public sealed class DurableTransportHostingTests
     }
 
     /// <summary>
-    /// P0-4 DI 注册验证：AddDurableTransportHostedServices 注册 3 个 HostedService + 选项。
+    /// P0-4 DI 注册验证：AddDurableTransportHostedServices 注册 4 个 HostedService + 选项。
     /// </summary>
     [TestMethod]
-    public void AddDurableTransportHostedServices_RegistersThreeHostedServicesAndOptions()
+    public void AddDurableTransportHostedServices_RegistersHostedServicesAndOptions()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -276,6 +276,7 @@ public sealed class DurableTransportHostingTests
         {
             opt.PollInterval = TimeSpan.FromMilliseconds(50);
             opt.ReaperInterval = TimeSpan.FromSeconds(5);
+            opt.MetricsInterval = TimeSpan.FromSeconds(15);
         });
 
         var provider = services.BuildServiceProvider();
@@ -283,10 +284,12 @@ public sealed class DurableTransportHostingTests
         Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "DurableTransportInstructionPumpService"));
         Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "ResultOutboxReplayService"));
         Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "LeaseReaperService"));
+        Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "PendingCountMetricsService"));
 
         var options = provider.GetRequiredService<IOptions<DurableTransportHostingOptions>>().Value;
         Assert.AreEqual(50, options.PollInterval.TotalMilliseconds);
         Assert.AreEqual(5, options.ReaperInterval.TotalSeconds);
+        Assert.AreEqual(15, options.MetricsInterval.TotalSeconds);
     }
 
     private sealed class NopToolDispatcher : IToolDispatcher

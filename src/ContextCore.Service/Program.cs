@@ -5,6 +5,7 @@ using ContextCore.Service.Endpoints;
 using ContextCore.Service.Extensions;
 using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
+using ContextCore.Service.Security;
 using ContextCore.Core.Services;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.Postgres;
@@ -62,6 +63,8 @@ builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
 // P1-5：RelationReconciliation worker。默认 Enabled=false；启用时周期性调度 outbox pending 记录。
 // FileSystem/InMemory provider 时 worker 内部检测 IRelationOutboxStore=null 后立即退出（no-op）。
 builder.Services.AddHostedService<RelationReconciliationWorker>();
+// LearningMaterializationWorker 已迁移至 AddContextCoreProductionRuntime 统一注册（按 Profile 分发）。
+// 配置绑定 LearningMaterializationOptions 也由 AddContextCoreProductionRuntime 完成。
 builder.Services.AddSingleton<ContextCoreMetrics>();
 builder.Services.AddRequestTimeouts(options =>
 {
@@ -87,7 +90,18 @@ builder.Services
 	.AddContextStorage(storageOptions)
 	.AddContextCore()
 	.AddContextModelGateway(builder.Configuration)
-	.AddEmbeddingProviders(embeddingProviderOptions);
+        .AddEmbeddingProviders(embeddingProviderOptions)
+        // 生产 Composition Root：唯一显式入口，按 ProductionRuntime:Profile 分发注册
+        // Durable Transport hosted services / AgentKernel loop / Run Recovery / Canary Leader 等。
+        // 必须在 AddContextStorage / AddContextCore 之后调用（依赖其注册的 IAgentKernel / IAgentRunStore 等）。
+        .AddContextCoreProductionRuntime(builder.Configuration)
+        // 安全框架注册：WorkspaceContext / RBAC / API Key Store（含轮换）/ Tool Authorizer /
+        // Workspace Quota / Audit Retention。默认实现为进程内版本，生产应替换为持久化实现。
+        // 默认所有开关关闭（向后兼容），通过 appsettings.json Security:Rbac:Enforce /
+        // Security:RateLimit:Enabled / Security:ApiKeyRotation:EnableStaticKeyRotation 等显式启用。
+        .AddContextCoreSecurity(securityOptions)
+        .AddContextCoreRateLimiter(securityOptions)
+        .AddContextCoreApiKeyPurgeWorker(securityOptions);
 
 // ── 可观测性（OpenTelemetry，按 Observability:Enabled 条件启用）─────────
 var otlpEndpoint = builder.Configuration["Observability:OtlpEndpoint"];
@@ -136,12 +150,22 @@ if (securityOptions.AllowedOrigins.Count > 0)
 // ── 构建应用 ─────────────────────────────────────────────────────────
 var app = builder.Build();
 
+// 中间件顺序（重要）：
+//   RateLimiter → RequestTimeouts → CORS → ApiKey → WorkspaceContext → AuditLog → Endpoint
+// RateLimiter 最先：在认证前拒绝超限请求（节省下游资源）。
+// ApiKey 在 WorkspaceContext 之前：WorkspaceContext 依赖 ApiKey 已写入的 ApiKeyId。
+// AuditLog 在 WorkspaceContext 之后：审计日志需要 workspace_id（由 WorkspaceContext 填充）。
+if (securityOptions.RateLimit.Enabled)
+{
+        app.UseRateLimiter();
+}
 app.UseRequestTimeouts();
 if (securityOptions.AllowedOrigins.Count > 0)
 {
-	app.UseCors(CorsPolicyName);
+        app.UseCors(CorsPolicyName);
 }
 app.UseMiddleware<ApiKeyMiddleware>();
+app.UseMiddleware<WorkspaceContextMiddleware>();
 app.UseMiddleware<AuditLogMiddleware>();
 
 // ── OpenAPI / Scalar UI ──────────────────────────────────────────────
@@ -175,7 +199,10 @@ app
 	.MapProvenanceEndpoints()
 	.MapVectorEndpoints()
 	.MapModelEndpoints()
-	.MapUtilityLedgerEndpoints();
+	.MapModelControlPlaneEndpoints()
+	.MapUtilityLedgerEndpoints()
+	.MapProductionRuntimeEndpoints()
+	.MapAgentExecutionEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", utc = DateTimeOffset.UtcNow }))
 	.WithTags("Health")

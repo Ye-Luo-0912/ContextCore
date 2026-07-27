@@ -21,7 +21,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   4. QueryAsync 按 materialized_at DESC 排序（与 InMemory 实现语义一致）。
 ///   5. GetExpertContributionsAsync 在数据库侧 GROUP BY expert 求平均（避免拉全量行到应用侧）。
 /// </remarks>
-public sealed class PostgresUtilityLedgerStore : PostgresStoreBase, IUtilityLedger
+public sealed class PostgresUtilityLedgerStore : PostgresStoreBase, IUtilityLedger, ITransactionalUtilityLedger
 {
     public PostgresUtilityLedgerStore(
         PostgresConnectionFactory connectionFactory,
@@ -181,8 +181,15 @@ GROUP BY expert;
     /// 幂等：同 entry_id 重复写入时覆盖（ON CONFLICT DO UPDATE），保持最新快照。
     /// </summary>
     /// <remarks>
+    /// <para>
     /// router_id / materialization_batch_id 在 DDL 中为 NOT NULL，但 record 字段可空；
     /// 此处将 null 规范化为空字符串写入索引列（data jsonb 仍保留真实 null 值，读路径不受影响）。
+    /// </para>
+    /// <para>
+    /// 优化：使用 <c>unnest</c> 将整批条目在单条 SQL 内展开，一次往返完成全部 INSERT。
+    /// 相比旧版 foreach 逐条 INSERT（N 次往返），1000 条 Ledger Entry 从 1000 次降为 1 次。
+    /// ON CONFLICT (entry_id) DO UPDATE 保留幂等覆盖语义。
+    /// </para>
     /// </remarks>
     public async Task AppendEntriesAsync(
         IReadOnlyList<UtilityLedgerEntry> entries,
@@ -197,25 +204,131 @@ GROUP BY expert;
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            foreach (var entry in entries)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ArgumentNullException.ThrowIfNull(entry);
+            await AppendEntriesCoreAsync(entries, connection, transaction, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch { /* 不掩盖原始异常 */ }
+            throw;
+        }
+    }
 
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-                command.CommandTimeout = Options.CommandTimeoutSeconds;
-                command.CommandText = $"""
+    /// <summary>
+    /// 事务作用域内批量写入 ledger 条目（实现 <see cref="ITransactionalUtilityLedger.AppendEntriesAsync"/>）。
+    /// 复用 scope 持有的连接与事务，不开启新连接/事务——与 ConflictSet 写入共享同一事务，
+    /// 保证 ledger + ConflictSet 原子提交（避免一边成功、一边失败）。
+    /// </summary>
+    public async Task AppendEntriesAsync(
+        IReadOnlyList<UtilityLedgerEntry> entries,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(scope);
+        if (entries.Count == 0) return;
+
+        if (scope is not PostgresWriteTransactionScope pgScope)
+        {
+            throw new InvalidOperationException(
+                "PostgresUtilityLedgerStore 仅支持 PostgresWriteTransactionScope；请通过 PostgresWriteTransactionScopeFactory 创建事务作用域。");
+        }
+        if (!scope.IsActive)
+        {
+            throw new InvalidOperationException("事务作用域已结束（Commit/Rollback），无法继续写入。");
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await AppendEntriesCoreAsync(entries, pgScope.Connection, pgScope.Transaction, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>共享的 unnest 批量 INSERT/ON CONFLICT 逻辑，由无事务与事务重载复用。</summary>
+    private async Task AppendEntriesCoreAsync(
+        IReadOnlyList<UtilityLedgerEntry> entries,
+        NpgsqlConnection connection,
+        NpgsqlTransaction? transaction,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var count = entries.Count;
+        var entryIds = new string[count];
+        var workspaceIds = new string[count];
+        var collectionIds = new string[count];
+        var candidateItemIds = new string[count];
+        var experts = new string[count];
+        var utilityContributions = new double[count];
+        var deterministicScores = new double[count];
+        var modelScores = new double?[count];
+        var finalScores = new double[count];
+        var isSelecteds = new bool[count];
+        var dropReasonCodes = new string?[count];
+        var decisionIds = new string[count];
+        var policyVersions = new string[count];
+        var routerIds = new string[count];
+        var materializedAts = new DateTimeOffset[count];
+        var materializationBatchIds = new string[count];
+        var datas = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            var entry = entries[i];
+            ArgumentNullException.ThrowIfNull(entry);
+            entryIds[i] = entry.EntryId;
+            workspaceIds[i] = entry.WorkspaceId;
+            collectionIds[i] = entry.CollectionId;
+            candidateItemIds[i] = entry.CandidateItemId;
+            experts[i] = entry.Expert.ToString();
+            utilityContributions[i] = entry.UtilityContribution;
+            deterministicScores[i] = entry.DeterministicScore;
+            modelScores[i] = entry.ModelScore;
+            finalScores[i] = entry.FinalScore;
+            isSelecteds[i] = entry.IsSelected;
+            dropReasonCodes[i] = entry.DropReasonCode;
+            decisionIds[i] = entry.DecisionId;
+            policyVersions[i] = entry.PolicyVersion;
+            // router_id / materialization_batch_id DDL 为 NOT NULL；null 规范化为空字符串。
+            routerIds[i] = entry.RouterId ?? string.Empty;
+            materializedAts[i] = entry.MaterializedAt;
+            materializationBatchIds[i] = entry.MaterializationBatchId ?? string.Empty;
+            datas[i] = Serializer.Serialize(entry);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
 INSERT INTO {Table("utility_ledger_entries")} (
     entry_id, workspace_id, collection_id, candidate_item_id, expert,
     utility_contribution, deterministic_score, model_score, final_score,
     is_selected, drop_reason_code, decision_id, policy_version, router_id,
     materialized_at, materialization_batch_id, data)
-VALUES (
-    @entry_id, @workspace_id, @collection_id, @candidate_item_id, @expert,
-    @utility_contribution, @deterministic_score, @model_score, @final_score,
-    @is_selected, @drop_reason_code, @decision_id, @policy_version, @router_id,
-    @materialized_at, @materialization_batch_id, @data)
+SELECT
+    entry_id, workspace_id, collection_id, candidate_item_id, expert,
+    utility_contribution, deterministic_score, model_score, final_score,
+    is_selected, drop_reason_code, decision_id, policy_version, router_id,
+    materialized_at, materialization_batch_id, data::jsonb
+FROM unnest(
+    @entry_ids::text[],
+    @workspace_ids::text[],
+    @collection_ids::text[],
+    @candidate_item_ids::text[],
+    @experts::text[],
+    @utility_contributions::double precision[],
+    @deterministic_scores::double precision[],
+    @model_scores::double precision[],
+    @final_scores::double precision[],
+    @is_selecteds::boolean[],
+    @drop_reason_codes::text[],
+    @decision_ids::text[],
+    @policy_versions::text[],
+    @router_ids::text[],
+    @materialized_ats::timestamptz[],
+    @materialization_batch_ids::text[],
+    @datas::jsonb[]
+) AS t(entry_id, workspace_id, collection_id, candidate_item_id, expert,
+    utility_contribution, deterministic_score, model_score, final_score,
+    is_selected, drop_reason_code, decision_id, policy_version, router_id,
+    materialized_at, materialization_batch_id, data)
 ON CONFLICT (entry_id) DO UPDATE SET
     workspace_id = EXCLUDED.workspace_id,
     collection_id = EXCLUDED.collection_id,
@@ -234,34 +347,23 @@ ON CONFLICT (entry_id) DO UPDATE SET
     materialization_batch_id = EXCLUDED.materialization_batch_id,
     data = EXCLUDED.data;
 """;
-                command.Parameters.AddWithValue("entry_id", entry.EntryId);
-                command.Parameters.AddWithValue("workspace_id", entry.WorkspaceId);
-                command.Parameters.AddWithValue("collection_id", entry.CollectionId);
-                command.Parameters.AddWithValue("candidate_item_id", entry.CandidateItemId);
-                command.Parameters.AddWithValue("expert", entry.Expert.ToString());
-                command.Parameters.AddWithValue("utility_contribution", entry.UtilityContribution);
-                command.Parameters.AddWithValue("deterministic_score", entry.DeterministicScore);
-                command.Parameters.AddWithValue("model_score", (object?)entry.ModelScore ?? DBNull.Value);
-                command.Parameters.AddWithValue("final_score", entry.FinalScore);
-                command.Parameters.AddWithValue("is_selected", entry.IsSelected);
-                command.Parameters.AddWithValue("drop_reason_code", (object?)entry.DropReasonCode ?? DBNull.Value);
-                command.Parameters.AddWithValue("decision_id", entry.DecisionId);
-                command.Parameters.AddWithValue("policy_version", entry.PolicyVersion);
-                // router_id / materialization_batch_id DDL 为 NOT NULL；null 规范化为空字符串。
-                command.Parameters.AddWithValue("router_id", entry.RouterId ?? string.Empty);
-                command.Parameters.AddWithValue("materialized_at", entry.MaterializedAt);
-                command.Parameters.AddWithValue("materialization_batch_id", entry.MaterializationBatchId ?? string.Empty);
-                AddJson(command, "data", entry);
-                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch { /* 不掩盖原始异常 */ }
-            throw;
-        }
+        AddTextArray(command, "entry_ids", entryIds);
+        AddTextArray(command, "workspace_ids", workspaceIds);
+        AddTextArray(command, "collection_ids", collectionIds);
+        AddTextArray(command, "candidate_item_ids", candidateItemIds);
+        AddTextArray(command, "experts", experts);
+        AddArrayParameter(command, "utility_contributions", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Double, utilityContributions);
+        AddArrayParameter(command, "deterministic_scores", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Double, deterministicScores);
+        AddNullableDoubleArray(command, "model_scores", modelScores);
+        AddArrayParameter(command, "final_scores", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Double, finalScores);
+        AddArrayParameter(command, "is_selecteds", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Boolean, isSelecteds);
+        AddNullableTextArray(command, "drop_reason_codes", dropReasonCodes);
+        AddTextArray(command, "decision_ids", decisionIds);
+        AddTextArray(command, "policy_versions", policyVersions);
+        AddTextArray(command, "router_ids", routerIds);
+        AddArrayParameter(command, "materialized_ats", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.TimestampTz, materializedAts);
+        AddTextArray(command, "materialization_batch_ids", materializationBatchIds);
+        AddArrayParameter(command, "datas", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Jsonb, datas);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 }

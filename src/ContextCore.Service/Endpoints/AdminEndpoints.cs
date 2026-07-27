@@ -5,6 +5,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Backup;
 using ContextCore.Core.Services;
 using ContextCore.Service.Infrastructure;
+using ContextCore.Service.Security;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Backup;
@@ -30,7 +31,11 @@ internal static class AdminEndpoints
 
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/admin").WithTags("Admin");
+        // Admin 端点全部需要 Admin 角色（含备份 / 校验 / Schema 迁移 / 配置写入）。
+        // RBAC 强制校验未启用时（Security:Rbac:Enforce=false）自动放行，仅记录审计日志。
+        var group = app.MapGroup("/api/admin")
+            .WithTags("Admin")
+            .RequireWorkspaceRole(WorkspaceRole.Admin);
 
         // ── Admin ingest ───────────────────────────────────────────────
         group.MapPost("/ingest", async Task<IResult> (

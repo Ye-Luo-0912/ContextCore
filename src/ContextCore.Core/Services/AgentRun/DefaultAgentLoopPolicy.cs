@@ -12,12 +12,14 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   4. 模型返回无 ToolCalls 且非最终答案 → CallModel（再试一次）
 //   5. TurnBudget.IsExhausted → Complete（强制终止，避免无限循环）
 //   6. CostBudget.IsTokenBudgetExhausted → Fail（成本超限，标记失败）
+//   7. 子问题 2：ModelCallsUsed >= MaxModelCalls → Fail（防止无 Tool 的模型循环无限运行）
 //
 // 设计决策：
 //   - 预算校验优先于业务决策（避免超额消耗）；
 //   - 首轮强制 CallModel（无模型响应时不能分派工具）；
 //   - 完全无 ToolCalls 且非最终答案时选择重试，避免误判 Complete；
 //   - 策略本身不修改 Run 状态（由 AgentRunActor 通过 TransitionStateAsync 推进）。
+//   - 子问题 2：模型调用预算校验优先于业务决策（防止无限循环消耗 token）。
 // ===========================================================================
 
 /// <summary>
@@ -35,6 +37,20 @@ public sealed class DefaultAgentLoopPolicy : IAgentLoopPolicy
 
         // 1. CostBudget 校验优先（成本超限 → Fail）
         if (run.CostBudget is { IsTokenBudgetExhausted: true })
+        {
+            return ValueTask.FromResult(AgentLoopDecision.Fail);
+        }
+
+        // 1b. 子问题 2：CostBudget 费用超限 → Fail
+        if (run.CostBudget is { IsCostBudgetExhausted: true })
+        {
+            return ValueTask.FromResult(AgentLoopDecision.Fail);
+        }
+
+        // 1c. 子问题 2：ModelCallsUsed >= MaxModelCalls → Fail（防止无 Tool 的模型循环无限运行）
+        // MaxModelCalls=0 表示未配置上限，不强制终止
+        if (run.TurnBudget is { MaxModelCalls: > 0 } tb
+            && run.ModelCallsUsed >= tb.MaxModelCalls)
         {
             return ValueTask.FromResult(AgentLoopDecision.Fail);
         }

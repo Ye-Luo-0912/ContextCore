@@ -151,6 +151,21 @@ public interface IBatchInferenceEngine
     ValueTask<BatchInferenceResult> InferBatchAsync(FeatureBatch batch, CancellationToken ct = default);
 }
 
+/// <summary>
+/// 子问题1：Fallback Inference Engine — 用于 ModelActivationManager 注入的降级引擎标记接口。
+/// </summary>
+/// <remarks>
+/// 仅为 <see cref="IBatchInferenceEngine"/> 的 marker 接口，不新增成员。
+/// 引入此接口的目的：在 DI 容器中将 fallback 引擎（通常为 DeterministicBatchInferenceEngine）
+/// 与 <see cref="IModelActivationManager"/> 自身（也实现 IBatchInferenceEngine）区分开，
+/// 避免 ModelActivationManager 构造时解析 IBatchInferenceEngine 又回到自身的循环依赖。
+/// ModelActivationManager 构造函数注入 <see cref="IFallbackInferenceEngine"/>，
+/// 而消费方仍通过 <see cref="IBatchInferenceEngine"/> 获取 ModelActivationManager 代理。
+/// </remarks>
+public interface IFallbackInferenceEngine : IBatchInferenceEngine
+{
+}
+
 /// <summary>R28-D：批量推理请求。</summary>
 public sealed record BatchInferenceRequest
 {

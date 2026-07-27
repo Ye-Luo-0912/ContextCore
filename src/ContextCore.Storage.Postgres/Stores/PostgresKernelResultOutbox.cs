@@ -29,7 +29,8 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   5. <see cref="NackAsync"/>：Leased → Pending（立即回滚，需 token 匹配）。
 ///   6. <see cref="RenewLeaseAsync"/>：延长 lease_expires_at（需 token 匹配）。
 ///   7. <see cref="RequeueExpiredAsync"/>：扫描所有 state='Leased' AND lease_expires_at &lt; now 的行，回滚为 Pending。
-///   8. <see cref="PendingCount"/> 返回 state='Pending' 的行数（同步查询，非精确计数）。
+///   8. <see cref="PendingCount"/> 同步属性执行 DB COUNT(*) 查询，返回<b>全局精确值</b>（跨实例）；
+///      <b>避免热路径调用</b>（同步阻塞），推荐 <see cref="GetPendingCountAsync"/> 或后台聚合的 global_pending_count 指标。
 ///
 /// <b>遗留 API 兼容</b>：<see cref="DequeueAsync"/> 内部调用 <see cref="LeaseAsync"/>（默认租约 5 分钟）并丢弃 token，
 /// 仅供单实例/测试场景使用；生产消费者应使用 <see cref="LeaseAsync"/> + <see cref="AckAsync"/> 显式管理租约生命周期。
@@ -45,10 +46,12 @@ public sealed class PostgresKernelResultOutbox : PostgresStoreBase, IPersistentK
     public static readonly TimeSpan DefaultLegacyLeaseDuration = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// P2：outbox Pending 结果数的本地近似 counter。
-    /// Enqueue (+1) / Lease (-1) / Nack (+1) 时维护；RequeueExpired 时重新同步。
-    /// 不访问 DB，仅供 <see cref="PendingCount"/> 同步属性快速读取；
-    /// 精确值用 <see cref="GetPendingCountAsync"/>。
+    /// P2：outbox Pending 结果数的<b>本实例趋势值</b>（非全局精确）。
+    /// Enqueue (+1) / Lease (-1) / Nack (+1) 时通过 <see cref="Interlocked"/> 维护；GetPendingCountAsync 时从 DB 重新同步。
+    /// <b>注意</b>：当前实现中此字段仅供 <see cref="GetPendingCountAsync"/> 内部缓存使用，
+    /// <see cref="PendingCount"/> 同步属性实际执行 DB COUNT(*) 查询（不读此字段）。
+    /// <b>不可靠场景</b>：新实例启动时为 0（不反映 DB 已有 backlog）、其他实例的增减不会被本地感知。
+    /// <b>不可用于调度/安全判断</b>；生产指标应使用 <see cref="GetPendingCountAsync"/> 或后台聚合服务导出的 global_pending_count。
     /// </summary>
     private volatile int _pendingCountApprox;
 
@@ -309,17 +312,21 @@ WHERE state = 'Leased' AND lease_expires_at < @now;
     }
 
     /// <summary>
-    /// 当前 outbox 中 state='Pending' 的结果数（不含 Leased）。
+    /// 当前 outbox 中 state='Pending' 的结果数（不含 Leased）——同步 DB COUNT(*) 查询，返回<b>全局精确值</b>。
     /// </summary>
     /// <remarks>
     /// P0-2：仅计数 Pending 行，Leased 行不计入（已被 worker 持有，等待 Ack 或过期回滚）。
-    /// 同步查询（非精确计数），用于监控与诊断。
+    /// 此属性执行同步 DB 查询（<c>ExecuteScalar</c> 阻塞调用线程），返回<b>跨实例全局精确值</b>，
+    /// 与 <see cref="PostgresDurableTransport.PendingInstructionCount"/>（本实例趋势值）语义不同。
+    /// <b>避免在热路径调用</b>——同步 DB I/O 在高并发下会成为瓶颈；推荐使用 <see cref="GetPendingCountAsync"/>
+    /// 或后台聚合服务导出的 <c>global_pending_count</c> 指标。
     /// </remarks>
+    [Obsolete("Sync DB COUNT(*) query blocks the calling thread; use GetPendingCountAsync for hot paths, or consume global_pending_count metric from PendingCountMetricsService.")]
     public int PendingCount
     {
         get
         {
-            // PostgreSQL COUNT(*) 返回 Int64（long），需用 Convert.ToInt32 转换；与 PostgresDurableTransport.PendingInstructionCount 一致。
+            // PostgreSQL COUNT(*) 返回 Int64（long），需用 Convert.ToInt32 转换。
             using var connection = ConnectionFactory.OpenConnectionAsync(CancellationToken.None).GetAwaiter().GetResult();
             using var command = connection.CreateCommand();
             command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -334,7 +341,8 @@ SELECT COUNT(*) FROM {Table("kernel_result_outbox")} WHERE state = 'Pending';
     /// <inheritdoc />
     /// <remarks>
     /// P2：异步版本 <see cref="PendingCount"/>，推荐用于热路径。
-    /// 同步属性 <see cref="PendingCount"/> 保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// 返回 <b>DB 精确值（全局，跨实例）</b>——反映所有实例的累积 Pending 行数，可用于调度/安全判断。
+    /// 同步属性 <see cref="PendingCount"/> 保留向后兼容，但 Postgres 实现内部走 COUNT(*) 同步阻塞，应避免热路径调用。
     /// </remarks>
     public async ValueTask<int> GetPendingCountAsync(CancellationToken cancellationToken = default)
     {

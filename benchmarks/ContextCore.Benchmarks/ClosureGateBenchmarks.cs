@@ -11,6 +11,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
@@ -258,32 +259,24 @@ internal sealed class CounterColumn : IColumn
 }
 
 // ---------------------------------------------------------------------------
-// §5 Benchmark 配置 — 复用 BenchmarkOutputConfig 的导出器 + 追加计数列
+// §5 Benchmark 配置 — 继承 BenchmarkOutputConfig（含 Job[MinIterationCount=15]
+//    + JSON/Markdown/CSV 导出器 + ConsoleLogger + DefaultColumnProviders），
+//    仅追加自定义计数列。确保配置链路：
+//    Program.Main → BenchmarkSwitcher → BenchmarkOutputConfig → MinIterationCount=15
+//    对本类同样生效，避免 [Config] 覆盖 switcher 配置后丢失迭代次数下限。
 // ---------------------------------------------------------------------------
 
-public sealed class ClosureGateBenchmarksConfig : ManualConfig
+public sealed class ClosureGateBenchmarksConfig : BenchmarkOutputConfig
 {
     public ClosureGateBenchmarksConfig()
     {
-        // 固定输出路径：benchmarks/results/（与 BenchmarkOutputConfig 一致）
-        var resultsPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(
-            System.AppContext.BaseDirectory, "..", "..", "..", "..", "results"));
-        ArtifactsPath = resultsPath;
-
         // 初始化计数文件目录并通过环境变量传递给子进程（§0 跨进程计数）
         ClosureGateCounters.PrepareCountersDir();
 
-        // JSON 全量导出（含所有统计指标），用于 baseline/current 对比
-        AddExporter(JsonExporter.Full);
-        // Markdown GitHub 格式导出，便于 review
-        AddExporter(MarkdownExporter.GitHub);
-        // CSV 导出，便于脚本处理
-        AddExporter(CsvExporter.Default);
-
-        AddLogger(ConsoleLogger.Default);
-        AddColumnProvider(DefaultColumnProviders.Instance);
-
         // 追加自定义计数列（§1 Provider/Store-call 计数）
+        // 其余配置（ArtifactsPath / Job[MinIterationCount=15, MaxIterationCount=25] /
+        // MinWarmupCount=3 / MaxWarmupCount=10 / JSON+Markdown+CSV 导出器 /
+        // ConsoleLogger / DefaultColumnProviders）均继承自 BenchmarkOutputConfig。
         AddColumn(
             new CounterColumn("StoreQueryCalls", "StoreQueryCalls", ClosureGateCounters.StoreQueryCallsKey),
             new CounterColumn("StoreGetCalls", "StoreGetCalls", ClosureGateCounters.StoreGetCallsKey),
@@ -384,7 +377,7 @@ public class ClosureGateBenchmarks
         // 5. 构造 V2 共享组件
         var safetyGate = new DefaultSafetyGate();
         var lifecycleGate = new DefaultLifecycleGate();
-        var utilityScorer = new DefaultUtilityScorer();
+        var utilityScorer = new DefaultUtilityScorer(new DefaultFeatureSchemaValidator());
         var globalAllocator = new DefaultGlobalAllocator();
 
         var engine = new DefaultContextDecisionEngine(

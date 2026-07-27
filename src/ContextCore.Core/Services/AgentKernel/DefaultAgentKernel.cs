@@ -50,6 +50,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
     private readonly IAgentContextSnapshotStore? _snapshotStore;
     private readonly IAgentRunEventStore? _eventStore;
     private readonly IToolDispatchJournal? _dispatchJournal;
+    private readonly IInstructionReconciliation? _reconciliation;
     private readonly Channel<AgentKernelInstruction> _inbox;
     private readonly CancellationTokenSource _shutdownCts;
     private AgentKernelState _state;
@@ -171,7 +172,8 @@ public sealed class DefaultAgentKernel : IAgentKernel
         IAgentContextSnapshotStore? snapshotStore = null,
         IToolDispatchJournal? dispatchJournal = null,
         int? maxCommittedResults = null,
-        IAgentRunEventStore? eventStore = null)
+        IAgentRunEventStore? eventStore = null,
+        IInstructionReconciliation? reconciliation = null)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
@@ -183,6 +185,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
         _snapshotStore = snapshotStore;
         _eventStore = eventStore;
         _dispatchJournal = dispatchJournal;
+        _reconciliation = reconciliation;
         _maxCommittedResults = maxCommittedResults is > 0 ? maxCommittedResults.Value : DefaultMaxCommittedResults;
 
         // R28-E P1-1：若未注入 checkpointFactory，使用默认实现（绑定到当前 Kernel 状态访问器）
@@ -264,53 +267,22 @@ public sealed class DefaultAgentKernel : IAgentKernel
                 // R28-C WP-B：从指令 Metadata 更新 session/workspace 跟踪
                 TrackSessionFromInstruction(instruction);
 
-                // Shutdown 指令：排空 inbox 后停止
+                // P0-6-1：Shutdown 指令也走统一完成协议——先 Ack Durable lease，再排空 inbox。
+                // 旧实现直接排空返回，绕过了 Ack，导致 Shutdown 指令的 lease 过期后由 reaper 回滚重投递。
                 if (instruction.Kind == AgentKernelInstructionKind.Shutdown)
                 {
                     _gracefulShutdown = true;
                     _state = AgentKernelState.Draining;
+                    // P0-6-1：Ack Shutdown 指令自身的 lease（若来自 Durable pump）。
+                    await AckDurableLeaseIfPresentAsync(instruction, InstructionProcessingOutcome.Succeeded, null, ct).ConfigureAwait(false);
                     await DrainInboxAsync(cancellationToken).ConfigureAwait(false);
                     _state = AgentKernelState.Stopped;
                     return;
                 }
 
-                // 处理 Execute / Checkpoint / BuildContext 指令
-                // P0-4：若指令来自 Durable Transport pump（Metadata 含 lease token），处理完成后需 Ack。
-                // 处理或发送失败时 Nack 回滚为 Pending，让 reaper/pump 重新租约。
-                AgentKernelResult result;
-                try
-                {
-                    result = await ProcessInstructionAsync(instruction, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    // 处理失败：Nack 让指令回滚为 Pending 供重试（幂等性由调用方/dedup 保证）
-                    await NackDurableLeaseIfPresentAsync(instruction, ex, ct).ConfigureAwait(false);
-                    throw;
-                }
-
-                // R28-C WP-D：按 TransportFailurePolicy 发送结果（FailFast/Retry/FallbackToDeterministic）
-                try
-                {
-                    await SendResultWithPolicyAsync(result, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    // 发送失败：Nack 让指令回滚为 Pending（结果可能已写入 outbox，重试时会重新处理）
-                    await NackDurableLeaseIfPresentAsync(instruction, ex, ct).ConfigureAwait(false);
-                    throw;
-                }
-
-                // P0-4：Durable Transport lease 确认（处理 + 发送均成功）
-                await AckDurableLeaseIfPresentAsync(instruction, ct).ConfigureAwait(false);
+                // 处理 Execute / Checkpoint / BuildContext 等指令。
+                // P0-6-2：统一走 ProcessLeasedInstructionAsync——含续租、outcome 决策、Ack/Nack/DeadLetter。
+                await ProcessLeasedInstructionAsync(instruction, ct).ConfigureAwait(false);
 
                 Interlocked.Increment(ref _processedCount);
                 _lastProcessedAt = DateTimeOffset.UtcNow;
@@ -362,13 +334,18 @@ public sealed class DefaultAgentKernel : IAgentKernel
     }
 
     /// <summary>排空 inbox 中剩余指令（Shutdown 后调用），处理并发出结果。</summary>
+    /// <remarks>
+    /// P0-6-2：统一走 <see cref="ProcessLeasedInstructionAsync"/>，保证 Durable lease 的 Ack/Nack
+    /// 在 drain 路径也生效。旧实现直接调用 ProcessInstructionAsync + SendResultWithPolicyAsync，
+    /// 漏掉了 Ack/Nack，导致 drain 期间处理的 Durable 指令 lease 过期后被 reaper 回滚重投递。
+    /// </remarks>
     private async ValueTask DrainInboxAsync(CancellationToken cancellationToken)
     {
         while (_inbox.Reader.TryRead(out var instruction))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // 跳过重复 Shutdown 指令
+            // 跳过重复 Shutdown 指令（首个 Shutdown 已在 RunAsync 处理）
             if (instruction.Kind == AgentKernelInstructionKind.Shutdown)
             {
                 continue;
@@ -376,63 +353,278 @@ public sealed class DefaultAgentKernel : IAgentKernel
 
             try
             {
-                var result = await ProcessInstructionAsync(instruction, cancellationToken).ConfigureAwait(false);
-                // R28-C WP-D：排空期间同样按策略发送（FailFast 下异常会跳出排空循环）
-                await SendResultWithPolicyAsync(result, cancellationToken).ConfigureAwait(false);
+                // P0-6-2：调用统一方法，含续租、outcome 决策、Ack/Nack/DeadLetter。
+                await ProcessLeasedInstructionAsync(instruction, cancellationToken).ConfigureAwait(false);
                 Interlocked.Increment(ref _processedCount);
                 _lastProcessedAt = DateTimeOffset.UtcNow;
             }
             catch (OperationCanceledException)
             {
-                // 排空期间取消；剩余指令丢弃
+                // 排空期间取消；剩余指令的 lease 由 reaper 回滚为 Pending。
                 break;
+            }
+            catch
+            {
+                // P0-6-2：处理/发送失败已由 ProcessLeasedInstructionAsync 内部 Nack；
+                // 此处不中断 drain，继续处理下一条（FailFast 策略下 SendResult 异常会向上传播跳出循环）。
+                // 注意：FailFast 策略下 SendResultWithPolicyAsync 抛异常会终止 drain（与旧行为一致）。
+                throw;
             }
         }
     }
 
-    /// <summary>处理单条指令（Execute / Checkpoint / BuildContext / Acknowledge / Reject / Query）；
-    /// Shutdown 由 RunAsync 直接处理。</summary>
-    private async ValueTask<AgentKernelResult> ProcessInstructionAsync(
+    /// <summary>处理单条指令（Execute / Checkpoint / BuildContext / Acknowledge / Reject / Query / Shutdown）。
+    /// 返回结果与 outcome 分类；outcome 决定外层对 Durable lease 的 Ack/Nack/DeadLetter 行为。</summary>
+    /// <remarks>
+    /// P0-6-3：不再吞掉异常。业务错误（tool 不支持、参数缺失等）由各 Process*Async 返回
+    /// <c>Succeeded=false</c> 结果，此处标记 <see cref="InstructionProcessingOutcome.BusinessRejected"/>，
+    /// 外层 Ack 不重试。基础设施故障（DB/transport 临时不可用）由 Process*Async 抛异常，
+    /// 由外层 <see cref="ProcessLeasedInstructionAsync"/> 捕获并标记
+    /// <see cref="InstructionProcessingOutcome.TransientInfrastructure"/> 后 Nack 重试。
+    /// <see cref="OperationCanceledException"/> 透传给外层（取消语义，不视为故障）。
+    /// </remarks>
+    private async ValueTask<(AgentKernelResult Result, InstructionProcessingOutcome Outcome)> ProcessInstructionAsync(
         AgentKernelInstruction instruction,
         CancellationToken cancellationToken)
     {
-        try
+        AgentKernelResult result = instruction.Kind switch
         {
-            return instruction.Kind switch
+            AgentKernelInstructionKind.Execute => await ProcessExecuteAsync(instruction, cancellationToken).ConfigureAwait(false),
+            AgentKernelInstructionKind.Checkpoint => await ProcessCheckpointAsync(instruction, cancellationToken).ConfigureAwait(false),
+            AgentKernelInstructionKind.BuildContext => await ProcessBuildContextAsync(instruction, cancellationToken).ConfigureAwait(false),
+            AgentKernelInstructionKind.AcknowledgeToolResult => await ProcessAcknowledgeToolResultAsync(instruction, cancellationToken).ConfigureAwait(false),
+            AgentKernelInstructionKind.RejectToolResult => await ProcessRejectToolResultAsync(instruction, cancellationToken).ConfigureAwait(false),
+            AgentKernelInstructionKind.QueryToolDispatchState => await ProcessQueryToolDispatchStateAsync(instruction, cancellationToken).ConfigureAwait(false),
+            AgentKernelInstructionKind.Shutdown => new AgentKernelResult
             {
-                AgentKernelInstructionKind.Execute => await ProcessExecuteAsync(instruction, cancellationToken).ConfigureAwait(false),
-                AgentKernelInstructionKind.Checkpoint => await ProcessCheckpointAsync(instruction, cancellationToken).ConfigureAwait(false),
-                AgentKernelInstructionKind.BuildContext => await ProcessBuildContextAsync(instruction, cancellationToken).ConfigureAwait(false),
-                AgentKernelInstructionKind.AcknowledgeToolResult => await ProcessAcknowledgeToolResultAsync(instruction, cancellationToken).ConfigureAwait(false),
-                AgentKernelInstructionKind.RejectToolResult => await ProcessRejectToolResultAsync(instruction, cancellationToken).ConfigureAwait(false),
-                AgentKernelInstructionKind.QueryToolDispatchState => await ProcessQueryToolDispatchStateAsync(instruction, cancellationToken).ConfigureAwait(false),
-                AgentKernelInstructionKind.Shutdown => new AgentKernelResult
-                {
-                    InstructionId = instruction.InstructionId,
-                    Succeeded = true,
-                    Output = "shutdown"
-                },
-                _ => new AgentKernelResult
-                {
-                    InstructionId = instruction.InstructionId,
-                    Succeeded = false,
-                    Error = $"未知指令类型: {instruction.Kind}"
-                }
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return new AgentKernelResult
+                InstructionId = instruction.InstructionId,
+                Succeeded = true,
+                Output = "shutdown"
+            },
+            _ => new AgentKernelResult
             {
                 InstructionId = instruction.InstructionId,
                 Succeeded = false,
-                Error = ex.Message
-            };
+                Error = $"未知指令类型: {instruction.Kind}"
+            }
+        };
+
+        // 业务错误（Succeeded=false）已确定性地产出失败结果，Ack 不重试；
+        // 成功（Succeeded=true）正常 Ack。
+        // 抛异常的路径不会走到这里，由外层 ProcessLeasedInstructionAsync 捕获并标记 TransientInfrastructure。
+        var outcome = result.Succeeded
+            ? InstructionProcessingOutcome.Succeeded
+            : InstructionProcessingOutcome.BusinessRejected;
+        return (result, outcome);
+    }
+
+    /// <summary>
+    /// P0-6-2/5/6：统一处理一条（可能来自 Durable Transport 的）指令，覆盖续租、outcome 决策、Ack/Nack/DeadLetter。
+    /// 正常循环、Shutdown drain、取消 drain 共用此方法，保证 Durable lease 生命周期一致。
+    /// </summary>
+    /// <remarks>
+    /// <b>不变量</b>（P0-6-4）：Input can be Acked IFF Result is durably persisted OR durably delivered。
+    /// 因此 <see cref="SendResultWithPolicyAsync"/> 失败时必须抛异常阻止 Ack（由本方法捕获后 Nack）。
+    ///
+    /// <b>Outcome 决策</b>（P0-6-3）：
+    /// <list type="bullet">
+    ///   <item><see cref="InstructionProcessingOutcome.Succeeded"/>/<see cref="InstructionProcessingOutcome.BusinessRejected"/> → SendResult → Ack。</item>
+    ///   <item><see cref="InstructionProcessingOutcome.PermanentFault"/> → SendResult（标记 PermanentFault）→ Ack（死信对账）。</item>
+    ///   <item><see cref="InstructionProcessingOutcome.TransientInfrastructure"/> → Nack + 抛异常（让外层终止/重试）。</item>
+    /// </list>
+    ///
+    /// <b>续租</b>（P0-6-5）：若指令含 Durable lease token，处理期间启动后台 Task 按
+    /// <see cref="KernelTransportOptions.DurableLeaseRenewalInterval"/> 续租；处理完成或异常后取消续租。
+    /// 超过 <see cref="KernelTransportOptions.DurableMaxProcessingTime"/> 未完成则视为 PermanentFault。
+    /// </remarks>
+    private async ValueTask ProcessLeasedInstructionAsync(
+        AgentKernelInstruction instruction,
+        CancellationToken cancellationToken)
+    {
+        var durable = _transport as IDurableTransport;
+        string? leaseToken = null;
+        var hasLease = durable is not null
+            && instruction.Metadata.TryGetValue(DurableTransportMetadataKeys.LeaseToken, out leaseToken)
+            && !string.IsNullOrEmpty(leaseToken);
+
+        // P0-6-5：续租 Task（仅 Durable lease 启动）。处理完成后通过 cts 取消。
+        var renewalCts = hasLease ? new CancellationTokenSource() : null;
+        var renewalTask = hasLease
+            ? Task.Run(() => RenewLeaseLoopAsync(
+                durable!, instruction.InstructionId, leaseToken!, renewalCts!.Token, cancellationToken),
+                CancellationToken.None)
+            : null;
+
+        // P0-6-5：MaxProcessingTime 超时（仅 Durable lease 启用；非 Durable 无 lease 概念）。
+        var maxProcessing = hasLease ? _transportOptions.DurableMaxProcessingTime : Timeout.InfiniteTimeSpan;
+        using var timeoutCts = maxProcessing == Timeout.InfiniteTimeSpan
+            ? new CancellationTokenSource()
+            : new CancellationTokenSource(maxProcessing);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var processingCt = linkedCts.Token;
+
+        AgentKernelResult result;
+        InstructionProcessingOutcome outcome;
+
+        try
+        {
+            try
+            {
+                (result, outcome) = await ProcessInstructionAsync(instruction, processingCt).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 外部取消：不视为故障，Nack 让 lease 回滚供恢复时重试。
+                await NackDurableLeaseIfPresentAsync(instruction, new OperationCanceledException("外部取消"), cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                // P0-6-5：处理超时 → PermanentFault（不再续租，Ack 进入死信对账）。
+                // P0-6-6：在 result.Metadata 标记 PermanentFault 供下游 reconciliation。
+                result = new AgentKernelResult
+                {
+                    InstructionId = instruction.InstructionId,
+                    Succeeded = false,
+                    Error = $"指令处理超时（超过 {_transportOptions.DurableMaxProcessingTime.TotalSeconds:F0}s）",
+                    Metadata = WithDurableStatus(
+                        new Dictionary<string, string>(StringComparer.Ordinal),
+                        DurableDeliveryStatus.PermanentFault,
+                        "处理阶段超时")
+                };
+                outcome = InstructionProcessingOutcome.PermanentFault;
+            }
+            catch (Exception ex)
+            {
+                // P0-6-3：基础设施临时故障 → Nack 让 lease 回滚为 Pending 供重试。
+                await NackDurableLeaseIfPresentAsync(instruction, ex, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+
+            // P0-6-4：发送结果。SendResultWithPolicyAsync 失败时抛异常阻止 Ack（不变量：Ack IFF Result persisted/delivered）。
+            try
+            {
+                await SendResultWithPolicyAsync(result, processingCt).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await NackDurableLeaseIfPresentAsync(instruction, new OperationCanceledException("发送时外部取消"), cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                // 发送阶段超时也视为 PermanentFault，Ack 进入死信（结果可能已持久化到 outbox）。
+                outcome = InstructionProcessingOutcome.PermanentFault;
+                result = result with
+                {
+                    Metadata = WithDurableStatus(result.Metadata, DurableDeliveryStatus.PermanentFault, "发送阶段超时")
+                };
+            }
+            catch (Exception ex)
+            {
+                // 发送失败：Nack 让 lease 回滚（结果可能已写入 outbox，重试时会重新处理）。
+                await NackDurableLeaseIfPresentAsync(instruction, ex, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+
+            // P0-6-3：根据 outcome 决定 Ack 行为。
+            // TransientInfrastructure 不应走到这里（异常路径已 return/throw），防御性 Nack。
+            if (outcome == InstructionProcessingOutcome.TransientInfrastructure)
+            {
+                await NackDurableLeaseIfPresentAsync(instruction, new InvalidOperationException("TransientInfrastructure outcome 不应到达 Ack"), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            // P0-6-6：Ack，并在结果 Metadata 标记 DurableDeliveryStatus。
+            await AckDurableLeaseIfPresentAsync(instruction, outcome, result, cancellationToken).ConfigureAwait(false);
         }
+        finally
+        {
+            // 停止续租 Task
+            if (renewalCts is not null)
+            {
+                renewalCts.Cancel();
+                if (renewalTask is not null)
+                {
+                    try { await renewalTask.ConfigureAwait(false); }
+                    catch { /* 续租 Task 异常不掩盖主流程 */ }
+                }
+                renewalCts.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// P0-6-5：后台续租循环。按 <see cref="KernelTransportOptions.DurableLeaseRenewalInterval"/> 周期性续租。
+    /// 主流程取消（renewalCts）或外部取消（externalCt）时退出。
+    /// </summary>
+    private async Task RenewLeaseLoopAsync(
+        IDurableTransport durable,
+        string instructionId,
+        string leaseToken,
+        CancellationToken renewalCt,
+        CancellationToken externalCt)
+    {
+        var interval = _transportOptions.DurableLeaseRenewalInterval;
+        if (interval <= TimeSpan.Zero || interval == Timeout.InfiniteTimeSpan)
+        {
+            return; // 禁用续租
+        }
+
+        // 续租 extension = InstructionLeaseDuration（与 pump 租约时长一致，保持 lease 不过期）。
+        // 从 KernelTransportOptions 无法直接读取 InstructionLeaseDuration（在 DurableTransportHostingOptions），
+        // 此处用 DurableMaxProcessingTime 作为续租时长上限的安全余量（续租到 MaxProcessingTime 仍有余量）。
+        var extension = _transportOptions.DurableMaxProcessingTime;
+
+        try
+        {
+            while (!renewalCt.IsCancellationRequested && !externalCt.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(interval, renewalCt).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await durable.RenewLeaseAsync(instructionId, leaseToken, extension, externalCt).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (externalCt.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch
+                {
+                    // 续租失败（token 不匹配/已过期）不中断主流程；lease 过期后由 reaper 回滚，dedup 保证不重复执行。
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常退出路径
+        }
+    }
+
+    /// <summary>P0-6-6：在结果 Metadata 中追加 DurableDeliveryStatus 键值（返回新字典，不修改原字典）。</summary>
+    private static IReadOnlyDictionary<string, string> WithDurableStatus(
+        IReadOnlyDictionary<string, string> metadata,
+        DurableDeliveryStatus status,
+        string? diagnostic)
+    {
+        var dict = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
+        {
+            [DurableDeliveryStatusKeys.DurableDeliveryStatus] = ((byte)status).ToString(CultureInfo.InvariantCulture)
+        };
+        if (!string.IsNullOrEmpty(diagnostic))
+        {
+            dict[DurableDeliveryStatusKeys.AckFailureDiagnostic] = diagnostic!;
+        }
+        return dict;
     }
 
     /// <summary>处理 Execute 指令：通过 IToolDispatcher 分派 tool。</summary>
@@ -485,13 +677,20 @@ public sealed class DefaultAgentKernel : IAgentKernel
 
         if (_dispatchJournal is not null)
         {
+            // P0-3 CAS-2：携带 payload 摘要与 workspace/run 作用域，供 PrepareAsync 语义等价校验。
+            var runId = instruction.Metadata.TryGetValue("runId", out var rid) && !string.IsNullOrWhiteSpace(rid)
+                ? rid
+                : null;
             await _dispatchJournal.PrepareAsync(new ToolDispatchJournalEntry
             {
                 RequestId = instruction.InstructionId,
                 ToolName = toolName,
                 State = ToolDispatchState.Prepared,
                 IdempotencyKey = idempotencyKey,
-                UpdatedAt = DateTimeOffset.UtcNow
+                UpdatedAt = DateTimeOffset.UtcNow,
+                PayloadDigest = ToolDispatchJournalEntry.ComputePayloadDigest(payload),
+                WorkspaceId = _lastWorkspaceId,
+                RunId = runId
             }, cancellationToken).ConfigureAwait(false);
         }
 
@@ -931,20 +1130,33 @@ public sealed class DefaultAgentKernel : IAgentKernel
                     {
                         throw;
                     }
-                    catch (Exception)
+                    catch (Exception transportEx)
                     {
-                        // Transport 不可用：尝试写入 outbox 持久化（若注入）
-                        // 否则静默降级，不中断 Kernel 循环。
+                        // P0-6-4：Transport 不可用 → 尝试写入 outbox 持久化（若注入）。
+                        // 不变量：Input can be Acked IFF Result is durably persisted OR durably delivered。
+                        // Outbox 写入失败必须抛异常阻止 Ack（结果未持久化也未投递，必须 Nack 重试）。
                         if (_resultOutbox is not null && _transportOptions.EnableResultOutbox)
                         {
                             try
                             {
                                 await _resultOutbox.EnqueueAsync(result, cancellationToken).ConfigureAwait(false);
+                                // Outbox 写入成功：结果已持久化，可 Ack（待 outbox 重放时真正发送）。
+                                // sent 保持 false，MarkResultDelivered 不调用（结果未真正送达 transport）。
                             }
-                            catch
+                            catch (Exception outboxEx)
                             {
-                                // outbox 写入失败也不中断 Kernel 循环
+                                // P0-6-4：Transport + Outbox 都失败 → 抛异常阻止 Ack，指令 Nack 重试。
+                                throw new InvalidOperationException(
+                                    "Transport SendResultAsync 失败且 Outbox 写入失败；结果未持久化也未投递，阻止 Ack 以触发 Nack 重试。",
+                                    new AggregateException(transportEx, outboxEx));
                             }
+                        }
+                        else
+                        {
+                            // P0-6-4：未注入 outbox 或禁用 outbox → Transport 失败即结果丢失，抛异常阻止 Ack。
+                            throw new InvalidOperationException(
+                                "Transport SendResultAsync 失败且未配置 outbox；结果未持久化也未投递，阻止 Ack 以触发 Nack 重试。",
+                                transportEx);
                         }
                     }
                     return;
@@ -981,30 +1193,101 @@ public sealed class DefaultAgentKernel : IAgentKernel
     // =======================================================================
 
     /// <summary>
-    /// P0-4：若指令来自 Durable Transport pump（Metadata 含 lease token），在处理 + 发送成功后调用 AckAsync 确认。
+    /// P0-4/P0-6-6：若指令来自 Durable Transport pump（Metadata 含 lease token），在处理 + 发送成功后调用 AckAsync 确认。
     /// Ack 失败（token 不匹配/已过期回滚/已确认）不抛异常——best-effort，过期行由 reaper 回滚后 pump 重新租约。
     /// </summary>
-    private async ValueTask AckDurableLeaseIfPresentAsync(AgentKernelInstruction instruction, CancellationToken cancellationToken)
+    /// <remarks>
+    /// P0-6-6：返回 <see cref="DurableDeliveryStatus"/> 供调用方记录诊断。Ack 失败时根据异常类型区分：
+    /// <list type="bullet">
+    ///   <item><see cref="InvalidOperationException"/>（token 不匹配/已过期回滚）→ <see cref="DurableDeliveryStatus.LeaseExpiredBeforeAck"/>。</item>
+    ///   <item>其他异常 → <see cref="DurableDeliveryStatus.AckFailed"/>。</item>
+    /// </list>
+    /// 若注入了 <see cref="IInstructionReconciliation"/>，调用 <see cref="IInstructionReconciliation.ReconcileAsync"/>
+    /// 让 Journal/Result Store 判断应返回缓存结果、继续恢复还是进入人工处理。
+    /// </remarks>
+    private async ValueTask<DurableDeliveryStatus> AckDurableLeaseIfPresentAsync(
+        AgentKernelInstruction instruction,
+        InstructionProcessingOutcome outcome,
+        AgentKernelResult? result,
+        CancellationToken cancellationToken)
     {
-        if (_transport is not IDurableTransport durable) return;
-        if (!instruction.Metadata.TryGetValue(DurableTransportMetadataKeys.LeaseToken, out var token) || string.IsNullOrEmpty(token)) return;
+        // P0-6-6：PermanentFault outcome 优先返回（无论 Ack 成功/失败，outcome 已判定为永久故障）。
+        if (outcome == InstructionProcessingOutcome.PermanentFault)
+        {
+            // 仍尝试 Ack 删除指令（避免 lease 过期重投递）；Ack 失败也不影响 PermanentFault 判定。
+            if (_transport is IDurableTransport durable
+                && instruction.Metadata.TryGetValue(DurableTransportMetadataKeys.LeaseToken, out var pToken)
+                && !string.IsNullOrEmpty(pToken))
+            {
+                try
+                {
+                    await durable.AckAsync(instruction.InstructionId, pToken, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // PermanentFault 下 Ack 失败由 reaper 兜底回滚；status 仍为 PermanentFault。
+                }
+            }
 
+            await InvokeReconciliationAsync(instruction.InstructionId, result?.Metadata?.GetValueOrDefault(DurableTransportMetadataKeys.LeaseToken), DurableDeliveryStatus.PermanentFault, cancellationToken).ConfigureAwait(false);
+            return DurableDeliveryStatus.PermanentFault;
+        }
+
+        if (_transport is not IDurableTransport durable2) return DurableDeliveryStatus.NotDurable;
+        if (!instruction.Metadata.TryGetValue(DurableTransportMetadataKeys.LeaseToken, out var token) || string.IsNullOrEmpty(token))
+        {
+            return DurableDeliveryStatus.NotDurable;
+        }
+
+        DurableDeliveryStatus status;
         try
         {
-            await durable.AckAsync(instruction.InstructionId, token, cancellationToken).ConfigureAwait(false);
+            await durable2.AckAsync(instruction.InstructionId, token, cancellationToken).ConfigureAwait(false);
+            status = DurableDeliveryStatus.Acked;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (InvalidOperationException)
         {
-            // best-effort：Ack 失败不中断 Kernel 循环。可能原因：
-            //   - 租约已过期被 reaper 回滚为 Pending（pump 会重新租约 + Submit，dedup 保证不重复执行）
-            //   - 已被其他 worker 接管（不应发生，pump 是单实例）
-            //   - 已调用过 Ack（不应发生）
-            // 记录警告但不抛出，避免 Kernel 循环因 Ack 竞态而终止。
-            _ = ex; // suppress
+            // token 不匹配/已过期回滚/已确认 → lease 已过期，pump 会重新租约 + Submit，dedup 保证不重复执行。
+            status = DurableDeliveryStatus.LeaseExpiredBeforeAck;
+        }
+        catch (Exception)
+        {
+            // 其他 Ack 失败（如 DB 临时不可用）→ AckFailed，lease 过期后由 reaper 回滚。
+            status = DurableDeliveryStatus.AckFailed;
+        }
+
+        // P0-6-6：调用 reconciliation（若注入），让下游判断重复投递/恢复/人工介入。
+        await InvokeReconciliationAsync(instruction.InstructionId, token, status, cancellationToken).ConfigureAwait(false);
+        return status;
+    }
+
+    /// <summary>P0-6-6：调用 IInstructionReconciliation（若注入），best-effort 不抛异常。</summary>
+    private async ValueTask InvokeReconciliationAsync(
+        string instructionId,
+        string? leaseToken,
+        DurableDeliveryStatus status,
+        CancellationToken cancellationToken)
+    {
+        if (_reconciliation is null) return;
+        try
+        {
+            await _reconciliation.ReconcileAsync(instructionId, leaseToken, status, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // reconciliation 失败不影响主流程；下游可从 result.Metadata 读取 status。
         }
     }
 

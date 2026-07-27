@@ -1,10 +1,13 @@
 using System.Diagnostics;
+using ContextCore.Abstractions;
 
 namespace ContextCore.Service.Infrastructure;
 
 /// <summary>
 /// 请求级审计日志中间件，记录 requestId、caller、endpoint、workspaceId、operationKind、statusCode、duration 等。
 /// 不记录请求/响应正文，不记录 API Key 内容。
+/// workspaceId 优先从 IWorkspaceContextAccessor（由 WorkspaceContextMiddleware 填充）读取，
+/// 回退到查询字符串 workspaceId 参数（向后兼容）。
 /// </summary>
 public sealed class AuditLogMiddleware
 {
@@ -22,17 +25,20 @@ public sealed class AuditLogMiddleware
     private readonly SecurityOptions _security;
     private readonly ILogger<AuditLogMiddleware> _logger;
     private readonly ContextCoreMetrics _metrics;
+    private readonly IWorkspaceContextAccessor? _workspaceContextAccessor;
 
     public AuditLogMiddleware(
         RequestDelegate next,
         SecurityOptions security,
         ILogger<AuditLogMiddleware> logger,
-        ContextCoreMetrics metrics)
+        ContextCoreMetrics metrics,
+        IWorkspaceContextAccessor? workspaceContextAccessor = null)
     {
         _next = next;
         _security = security;
         _logger = logger;
         _metrics = metrics;
+        _workspaceContextAccessor = workspaceContextAccessor;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -72,30 +78,33 @@ public sealed class AuditLogMiddleware
             var statusCode = context.Response.StatusCode;
             var workspaceId = ExtractWorkspaceId(context);
             var caller = GetCaller(context);
+            var apiKeyName = ExtractApiKeyName(context);
 
             if (statusCode >= 400)
             {
                 _logger.LogWarning(
-                    "[审计] {Method} {Path} → {StatusCode} | reqId={RequestId} | caller={Caller} | workspace={WorkspaceId} | duration={Duration}ms | error={Error}",
+                    "[审计] {Method} {Path} → {StatusCode} | reqId={RequestId} | caller={Caller} | workspace={WorkspaceId} | apiKey={ApiKeyName} | duration={Duration}ms | error={Error}",
                     context.Request.Method,
                     path,
                     statusCode,
                     requestId,
                     caller,
                     workspaceId ?? "-",
+                    apiKeyName ?? "-",
                     sw.ElapsedMilliseconds,
                     errorMessage ?? "-");
             }
             else
             {
                 _logger.LogInformation(
-                    "[审计] {Method} {Path} → {StatusCode} | reqId={RequestId} | caller={Caller} | workspace={WorkspaceId} | duration={Duration}ms",
+                    "[审计] {Method} {Path} → {StatusCode} | reqId={RequestId} | caller={Caller} | workspace={WorkspaceId} | apiKey={ApiKeyName} | duration={Duration}ms",
                     context.Request.Method,
                     path,
                     statusCode,
                     requestId,
                     caller,
                     workspaceId ?? "-",
+                    apiKeyName ?? "-",
                     sw.ElapsedMilliseconds);
             }
 
@@ -103,15 +112,32 @@ public sealed class AuditLogMiddleware
         }
     }
 
-    /// <summary>从查询字符串中提取 workspaceId（对 GET 请求有效；POST 请求暂不解析 body 避免破坏读流）。</summary>
-    private static string? ExtractWorkspaceId(HttpContext context)
+    /// <summary>
+    /// 提取 workspaceId：优先从 IWorkspaceContextAccessor（已由 WorkspaceContextMiddleware 填充）读取，
+    /// 回退到查询字符串 workspaceId 参数（向后兼容旧实现）。
+    /// </summary>
+    private string? ExtractWorkspaceId(HttpContext context)
     {
+        // 优先从 WorkspaceContext 读取（包含 header / API Key 元数据 / 查询字符串解析结果）
+        if (_workspaceContextAccessor?.Current is { } workspaceContext
+            && !string.IsNullOrWhiteSpace(workspaceContext.WorkspaceId))
+        {
+            return workspaceContext.WorkspaceId;
+        }
+
+        // 回退：查询字符串 workspaceId 参数
         if (context.Request.Query.TryGetValue("workspaceId", out var ws))
         {
             return ws.FirstOrDefault();
         }
 
         return null;
+    }
+
+    /// <summary>从 WorkspaceContext 提取 API Key 显示名（不暴露 key 本身）。</summary>
+    private string? ExtractApiKeyName(HttpContext context)
+    {
+        return _workspaceContextAccessor?.Current?.ApiKeyName;
     }
 
     /// <summary>返回调用方标识，优先取 RemoteIp；不暴露 API Key 内容。</summary>

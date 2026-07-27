@@ -26,7 +26,7 @@ namespace ContextCore.Benchmarks;
 /// 待补充域指标（需自定义 EventCounter 或手动埋点）：
 /// File I/O bytes、DB query count、Cache hit/miss、trace write amplification。
 /// </remarks>
-public sealed class BenchmarkOutputConfig : ManualConfig
+public class BenchmarkOutputConfig : ManualConfig
 {
     public BenchmarkOutputConfig()
     {

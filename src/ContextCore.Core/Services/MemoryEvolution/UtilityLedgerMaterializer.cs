@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -27,17 +29,37 @@ public sealed class UtilityLedgerMaterializer
 {
     private readonly IUtilityLedger _ledgerStore;
     private readonly IConflictSetLedger _conflictSetStore;
+    private readonly IWriteTransactionScopeFactory? _transactionScopeFactory;
     private readonly TimeProvider? _timeProvider;
 
     public UtilityLedgerMaterializer(
         IUtilityLedger ledgerStore,
         IConflictSetLedger conflictSetStore,
         TimeProvider? timeProvider = null)
+        : this(ledgerStore, conflictSetStore, transactionScopeFactory: null, timeProvider)
+    {
+    }
+
+    /// <summary>
+    /// 构造 Materializer，可选注入 <paramref name="transactionScopeFactory"/>。
+    /// 当 factory 非 null 且两个 store 均实现事务能力接口时，<see cref="MaterializeAsync"/>
+    /// 会在同一事务内提交 ledger + ConflictSet，避免一边成功、一边失败。
+    /// </summary>
+    /// <param name="ledgerStore">Utility Ledger 写入边界。</param>
+    /// <param name="conflictSetStore">ConflictSet 写入边界。</param>
+    /// <param name="transactionScopeFactory">跨 store 事务作用域工厂（null = 非事务回退路径）。</param>
+    /// <param name="timeProvider">时间提供者（测试可注入；null = <see cref="DateTimeOffset.UtcNow"/>）。</param>
+    public UtilityLedgerMaterializer(
+        IUtilityLedger ledgerStore,
+        IConflictSetLedger conflictSetStore,
+        IWriteTransactionScopeFactory? transactionScopeFactory,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(ledgerStore);
         ArgumentNullException.ThrowIfNull(conflictSetStore);
         _ledgerStore = ledgerStore;
         _conflictSetStore = conflictSetStore;
+        _transactionScopeFactory = transactionScopeFactory;
         _timeProvider = timeProvider;
     }
 
@@ -84,11 +106,35 @@ public sealed class UtilityLedgerMaterializer
             envelopes.Add((envelope, false));
         }
 
-        await _ledgerStore.AppendEntriesAsync(entries, cancellationToken).ConfigureAwait(false);
-
-        // 检测 ConflictSet
+        // 检测 ConflictSet（先构建，便于事务路径一并提交）
         var conflictSets = DetectConflictSets(envelopes, decisionId, workspaceId, collectionId, now, batchId);
-        await _conflictSetStore.AppendConflictSetsAsync(conflictSets, cancellationToken).ConfigureAwait(false);
+
+        // 事务路径：当两个 store 均实现 ITransactionalUtilityLedger / ITransactionalConflictSetLedger
+        // 且注入了 IWriteTransactionScopeFactory 时，在同一事务内提交 ledger + ConflictSet，
+        // 避免一边成功、一边失败导致的数据不一致。
+        if (_transactionScopeFactory is not null
+            && _ledgerStore is ITransactionalUtilityLedger txLedger
+            && _conflictSetStore is ITransactionalConflictSetLedger txConflict)
+        {
+            await using var scope = await _transactionScopeFactory.BeginAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await txLedger.AppendEntriesAsync(entries, scope, cancellationToken).ConfigureAwait(false);
+                await txConflict.AppendConflictSetsAsync(conflictSets, scope, cancellationToken).ConfigureAwait(false);
+                await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await scope.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+        }
+        else
+        {
+            // 回退路径：非事务（InMemory/FileSystem 或未注入工厂）—— 保持原语义。
+            await _ledgerStore.AppendEntriesAsync(entries, cancellationToken).ConfigureAwait(false);
+            await _conflictSetStore.AppendConflictSetsAsync(conflictSets, cancellationToken).ConfigureAwait(false);
+        }
 
         return new UtilityLedgerMaterializationResult(
             LedgerEntryCount: entries.Count,
@@ -114,9 +160,14 @@ public sealed class UtilityLedgerMaterializer
                 ? envelope.Safety.BlockReasonCode.ToString()
                 : null);
 
+        // 稳定幂等键：hash(decision_id + candidate_id + expert + materialization_version)。
+        // materialization_version = PolicyVersion（每次策略升级产生新条目，同版本内重试幂等）。
+        // ON CONFLICT(entry_id) DO UPDATE 在重试 / 重复物化时覆盖而非插入重复行。
+        var entryId = BuildStableEntryId(decisionId, envelope.CandidateId, expert, policyVersion);
+
         return new UtilityLedgerEntry
         {
-            EntryId = "ledger-" + Guid.NewGuid().ToString("N"),
+            EntryId = entryId,
             WorkspaceId = workspaceId ?? envelope.WorkspaceId,
             CollectionId = collectionId ?? envelope.CollectionId,
             CandidateItemId = envelope.CandidateId,
@@ -133,6 +184,38 @@ public sealed class UtilityLedgerMaterializer
             MaterializedAt = materializedAt,
             MaterializationBatchId = batchId
         };
+    }
+
+    /// <summary>
+    /// 计算稳定的 ledger EntryId：基于 (decisionId, candidateId, expert, policyVersion) 的 SHA-256 哈希。
+    /// 相同 Decision 重试 / 重复物化时产生相同 EntryId，配合 ON CONFLICT(entry_id) 实现业务幂等。
+    /// </summary>
+    private static string BuildStableEntryId(
+        string decisionId,
+        string candidateId,
+        RetrievalExpert expert,
+        string policyVersion)
+    {
+        // 使用 '|' 分隔避免字段拼接歧义（与 PackageRequestFingerprintBuilder 一致）。
+        var canonical = $"{decisionId}|{candidateId}|{expert}|{policyVersion}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return "ledger-" + Convert.ToHexString(bytes);
+    }
+
+    /// <summary>
+    /// 计算稳定的 ConflictSetId：基于 (decisionId, kind, 排序后的 candidateIds) 的 SHA-256 哈希。
+    /// 同一 Decision 内同 kind 的候选组重试时产生相同 ConflictSetId，配合 ON CONFLICT(conflict_set_id) 实现幂等。
+    /// </summary>
+    private static string BuildStableConflictSetId(
+        string decisionId,
+        ConflictSetKind kind,
+        IReadOnlyList<string> candidateItemIds)
+    {
+        // 排序后拼接，避免候选顺序差异导致不同 ID。
+        var sortedIds = candidateItemIds.OrderBy(id => id, StringComparer.Ordinal);
+        var canonical = $"{decisionId}|{kind}|{string.Join(",", sortedIds)}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return "conflict-" + Convert.ToHexString(bytes);
     }
 
     /// <summary>
@@ -251,9 +334,14 @@ public sealed class UtilityLedgerMaterializer
             ? "highest-score"
             : null;
 
+        // 稳定幂等键：hash(decision_id + kind + 排序后的 candidate_ids)。
+        // 相同 Decision 重试 / 重复物化时产生相同 ConflictSetId，配合 ON CONFLICT(conflict_set_id) 实现业务幂等。
+        var candidateItemIds = entries.Select(e => e.CandidateItemId).ToList();
+        var conflictSetId = BuildStableConflictSetId(decisionId, kind, candidateItemIds);
+
         return new ConflictSet
         {
-            ConflictSetId = "conflict-" + Guid.NewGuid().ToString("N"),
+            ConflictSetId = conflictSetId,
             WorkspaceId = workspaceId,
             CollectionId = collectionId,
             Kind = kind,

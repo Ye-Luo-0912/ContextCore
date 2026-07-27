@@ -473,10 +473,10 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         }
 
         // 阶段 3：UtilityScorer — R28-D：ScoreAsync 返回新列表（immutable record 友好）
-        // P5：用 Stopwatch 拆分 scoring_ms（含 Inference；Inference 是 Scoring 的子集），记录到 IComponentHealthRegistry。
-        // 注：inference_ms 单独记录为 scoring_ms 的代理值（IBatchInferenceEngine 在 IUtilityScorer 内部调用，
-        // 无法从 Engine 层直接拆分；当 EnableModelScoring=true 时记录 inference_ms，否则不记录）。
-        var modelPathEnabled = snapshot.Routing.EnableModelScoring;
+        // P5：用 Stopwatch 拆分 scoring_ms，记录到 IComponentHealthRegistry。
+        // 注：inference_ms 不再使用 scoring_ms 作为代理值——Inference 各阶段耗时由
+        // OnnxInferenceEngine 通过 RecordInferencePhaseTime 直接上报（queue/copy/run/parse），
+        // 避免用整体 Scoring 耗时代替 Inference 耗时导致归因失真。
         var scoringSw = componentRegistry is not null ? Stopwatch.StartNew() : null;
         bool scoringSucceeded = false;
         try
@@ -498,12 +498,8 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
                 var scoringMs = scoringSw.Elapsed.TotalMilliseconds;
                 componentRegistry!.RecordComponentTime(
                     ComponentKind.Scoring, scoringMs, scoringSucceeded, scopeKey, cancellationToken);
-                // inference_ms 作为 scoring_ms 的代理：仅当模型路径启用时记录（inference 是 scoring 的主要开销）
-                if (modelPathEnabled)
-                {
-                    componentRegistry.RecordComponentTime(
-                        ComponentKind.Inference, scoringMs, scoringSucceeded, scopeKey, cancellationToken);
-                }
+                // Inference 耗时不再用 scoringMs 代理：由 OnnxInferenceEngine 通过
+                // RecordInferencePhaseTime(InferencePhaseKind.Run, ...) 直接上报真实推理耗时。
             }
         }
 

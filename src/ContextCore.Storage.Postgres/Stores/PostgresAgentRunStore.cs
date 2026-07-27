@@ -112,19 +112,28 @@ LIMIT 1;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         // 1. expected-state CAS：UPDATE WHERE workspace_id AND run_id AND state = expected
+        // P0-3 修复双真源：同一 UPDATE 语句中同步更新 state 列与 data JSON 中的
+        // State / UpdatedAt / FinishedAt 字段，消除"state 列 ≠ data JSON.State"的不一致。
+        // data JSON 的 State 字段使用枚举名字符串（与 PostgresJsonSerializer 的 JsonStringEnumConverter 一致）。
+        // 使用 jsonb || jsonb_build_object 合并覆盖（原子操作，无 read-before-write）。
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
             var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
+            // 终态时同步更新 data JSON 中的 FinishedAt 字段；非终态不覆盖（保留原值）
+            var dataMerge = isTerminal
+                ? "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))"
+                : "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))";
             updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}
-SET state = @new_state, updated_at = @updated_at{setFinished}
+SET state = @new_state, updated_at = @updated_at{setFinished}, {dataMerge}
 WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state;
 """;
             updateCommand.Parameters.AddWithValue("workspace_id", workspaceId);
             updateCommand.Parameters.AddWithValue("run_id", runId);
             updateCommand.Parameters.AddWithValue("expected_state", (byte)expectedCurrentState);
             updateCommand.Parameters.AddWithValue("new_state", (byte)newState);
+            updateCommand.Parameters.AddWithValue("new_state_name", newState.ToString());
             updateCommand.Parameters.AddWithValue("updated_at", now);
             if (isTerminal)
             {

@@ -427,6 +427,15 @@ internal static class StorageExtensions
 		// Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 写入。
 		services.AddSingleton<InMemoryUserFeedbackLedgerStore>();
 		services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<InMemoryUserFeedbackLedgerStore>());
+
+		// P0-6：Model Control Plane — FileSystem 模式回退到 InMemory 实现。
+		// Service API 端点 /api/models/* 通过 IModelArtifactRegistry / IModelActivationAuditStore
+		// 注册与查询模型工件描述符及激活审计记录。FileSystem 当前未提供持久化实现，使用 InMemory
+		// 让本地开发 / 单元测试场景仍可运行 Model Control Plane API（数据在进程重启后丢失）。
+		services.AddSingleton<InMemoryModelArtifactRegistry>();
+		services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<InMemoryModelArtifactRegistry>());
+		services.AddSingleton<InMemoryModelActivationAuditStore>();
+		services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<InMemoryModelActivationAuditStore>());
 	}
 
 	private static void RegisterScopedRelationGovernancePostgresSupport(IServiceCollection services, StorageOptions options)
@@ -508,6 +517,14 @@ internal static class StorageExtensions
 		// R29 WP-E-5：User Feedback Ledger（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
 		services.AddSingleton<InMemoryUserFeedbackLedgerStore>();
 		services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<InMemoryUserFeedbackLedgerStore>());
+
+		// P0-6：Model Control Plane（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// Service API 端点 /api/models/* 通过 IModelArtifactRegistry / IModelActivationAuditStore
+		// 注册与查询模型工件描述符及激活审计记录。
+		services.AddSingleton<InMemoryModelArtifactRegistry>();
+		services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<InMemoryModelArtifactRegistry>());
+		services.AddSingleton<InMemoryModelActivationAuditStore>();
+		services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<InMemoryModelActivationAuditStore>());
 	}
 }
 

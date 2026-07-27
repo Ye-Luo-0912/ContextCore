@@ -24,7 +24,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///      PostgresJsonSerializer 默认序列化），由 GIN 索引加速。
 ///   5. QueryAsync 按 created_at DESC 排序（created_at 列对应 record 的 MaterializedAt，与 InMemory 语义一致）。
 /// </remarks>
-public sealed class PostgresConflictSetStore : PostgresStoreBase, IConflictSetLedger
+public sealed class PostgresConflictSetStore : PostgresStoreBase, IConflictSetLedger, ITransactionalConflictSetLedger
 {
     public PostgresConflictSetStore(
         PostgresConnectionFactory connectionFactory,
@@ -191,15 +191,61 @@ ORDER BY created_at DESC;
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            foreach (var set in conflictSets)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ArgumentNullException.ThrowIfNull(set);
+            await AppendConflictSetsCoreAsync(conflictSets, connection, transaction, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch { /* 不掩盖原始异常 */ }
+            throw;
+        }
+    }
 
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-                command.CommandTimeout = Options.CommandTimeoutSeconds;
-                command.CommandText = $"""
+    /// <summary>
+    /// 事务作用域内批量写入 ConflictSet（实现 <see cref="ITransactionalConflictSetLedger.AppendConflictSetsAsync"/>）。
+    /// 复用 scope 持有的连接与事务，不开启新连接/事务——与 ledger 写入共享同一事务，
+    /// 保证 ledger + ConflictSet 原子提交（避免一边成功、一边失败）。
+    /// </summary>
+    public async Task AppendConflictSetsAsync(
+        IReadOnlyList<ConflictSet> conflictSets,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(conflictSets);
+        ArgumentNullException.ThrowIfNull(scope);
+        if (conflictSets.Count == 0) return;
+
+        if (scope is not PostgresWriteTransactionScope pgScope)
+        {
+            throw new InvalidOperationException(
+                "PostgresConflictSetStore 仅支持 PostgresWriteTransactionScope；请通过 PostgresWriteTransactionScopeFactory 创建事务作用域。");
+        }
+        if (!scope.IsActive)
+        {
+            throw new InvalidOperationException("事务作用域已结束（Commit/Rollback），无法继续写入。");
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await AppendConflictSetsCoreAsync(conflictSets, pgScope.Connection, pgScope.Transaction, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>共享的 INSERT/ON CONFLICT 逻辑，由无事务与事务重载复用。</summary>
+    private async Task AppendConflictSetsCoreAsync(
+        IReadOnlyList<ConflictSet> conflictSets,
+        NpgsqlConnection connection,
+        NpgsqlTransaction? transaction,
+        CancellationToken cancellationToken)
+    {
+        foreach (var set in conflictSets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(set);
+
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
+            command.CommandText = $"""
 INSERT INTO {Table("conflict_sets")} (
     conflict_set_id, workspace_id, collection_id, kind, decision_id,
     resolved_item_id, resolution_status, chosen_authority, resolved_at, resolver,
@@ -223,31 +269,22 @@ ON CONFLICT (conflict_set_id) DO UPDATE SET
     created_at = EXCLUDED.created_at,
     data = EXCLUDED.data;
 """;
-                command.Parameters.AddWithValue("conflict_set_id", set.ConflictSetId);
-                command.Parameters.AddWithValue("workspace_id", set.WorkspaceId);
-                command.Parameters.AddWithValue("collection_id", set.CollectionId);
-                command.Parameters.AddWithValue("kind", set.Kind.ToString());
-                command.Parameters.AddWithValue("decision_id", (object?)set.DecisionId ?? DBNull.Value);
-                command.Parameters.AddWithValue("resolved_item_id", (object?)set.ResolvedItemId ?? DBNull.Value);
-                command.Parameters.AddWithValue("resolution_status", set.ResolutionStatus.ToString());
-                command.Parameters.AddWithValue("chosen_authority", (object?)set.ChosenAuthority ?? DBNull.Value);
-                command.Parameters.AddWithValue("resolved_at", (object?)set.ResolvedAt ?? DBNull.Value);
-                command.Parameters.AddWithValue("resolver", (object?)set.Resolver ?? DBNull.Value);
-                command.Parameters.AddWithValue("memory_state_event_id", (object?)set.MemoryStateEventId ?? DBNull.Value);
-                command.Parameters.AddWithValue("relation_id", (object?)set.RelationId ?? DBNull.Value);
-                // created_at 列对应 record 的 MaterializedAt（排序键）。
-                command.Parameters.AddWithValue("created_at", set.MaterializedAt);
-                AddJson(command, "data", set);
-                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch { /* 不掩盖原始异常 */ }
-            throw;
+            command.Parameters.AddWithValue("conflict_set_id", set.ConflictSetId);
+            command.Parameters.AddWithValue("workspace_id", set.WorkspaceId);
+            command.Parameters.AddWithValue("collection_id", set.CollectionId);
+            command.Parameters.AddWithValue("kind", set.Kind.ToString());
+            command.Parameters.AddWithValue("decision_id", (object?)set.DecisionId ?? DBNull.Value);
+            command.Parameters.AddWithValue("resolved_item_id", (object?)set.ResolvedItemId ?? DBNull.Value);
+            command.Parameters.AddWithValue("resolution_status", set.ResolutionStatus.ToString());
+            command.Parameters.AddWithValue("chosen_authority", (object?)set.ChosenAuthority ?? DBNull.Value);
+            command.Parameters.AddWithValue("resolved_at", (object?)set.ResolvedAt ?? DBNull.Value);
+            command.Parameters.AddWithValue("resolver", (object?)set.Resolver ?? DBNull.Value);
+            command.Parameters.AddWithValue("memory_state_event_id", (object?)set.MemoryStateEventId ?? DBNull.Value);
+            command.Parameters.AddWithValue("relation_id", (object?)set.RelationId ?? DBNull.Value);
+            // created_at 列对应 record 的 MaterializedAt（排序键）。
+            command.Parameters.AddWithValue("created_at", set.MaterializedAt);
+            AddJson(command, "data", set);
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 }

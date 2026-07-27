@@ -86,7 +86,15 @@ public sealed class BoundedChannelContextEventSink : IContextEventSink, IAsyncDi
     /// <summary>已成功提交的批量写入次数。</summary>
     public long BatchEmitCount => Interlocked.Read(ref _batchEmitCount);
 
-    /// <summary>当前通道中尚未消费的事件数（仅 BestEffort 路径）。</summary>
+    /// <summary>
+    /// 当前通道中尚未消费的事件数（仅 BestEffort 路径）——<b>本进程 channel 计数</b>，
+    /// 仅反映 <see cref="EmitAsync"/> / <see cref="EmitBatchAsync"/> 写入但尚未被后台消费者 flush 的事件，
+    /// <b>不是</b>全局视图。
+    /// </summary>
+    /// <remarks>
+    /// 返回进程内 bounded Channel 的 <c>Reader.Count</c>；不反映已 flush 到 inner sink 的状态，
+    /// 也不反映其他实例的 sink。<b>不可用于调度或安全判断</b>；仅用于本实例背压诊断。
+    /// </remarks>
     public int PendingCount => _channel?.Reader.Count ?? 0;
 
     public Task EmitAsync(

@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
@@ -141,7 +144,16 @@ public sealed record AgentKernelStatus
     /// <summary>已处理指令数（Execute + Checkpoint；不含 Shutdown）。</summary>
     public required int ProcessedCount { get; init; }
 
-    /// <summary>当前 inbox 中待处理指令数。</summary>
+    /// <summary>
+    /// 当前 inbox 中待处理指令数——<b>本进程 channel 计数</b>，仅反映 <see cref="IAgentKernel.SubmitAsync"/>
+    /// 写入但尚未被 <see cref="IAgentKernel.RunAsync"/> 处理的指令，<b>不是</b>全局 Transport 视图。
+    /// </summary>
+    /// <remarks>
+    /// 对 <see cref="ContextCore.Core.Services.AgentKernel.DefaultAgentKernel"/>，此值为进程内 bounded Channel 的 Reader.Count；
+    /// 不反映远程 Transport（如 <see cref="IDurableTransport"/>）中持久化的 backlog。
+    /// <b>不可用于调度或安全判断</b>（如 shutdown、限流、拒绝请求）；生产指标应使用 DurableTransport.GetPendingInstructionCountAsync
+    /// 或后台聚合服务导出的 global_pending_count。
+    /// </remarks>
     public required int PendingCount { get; init; }
 
     /// <summary>上次处理指令的时间（UTC）；未处理过时为 null。</summary>
@@ -227,6 +239,31 @@ public sealed record KernelTransportOptions
     public bool UseDurableTransport { get; init; }
 
     /// <summary>
+    /// P0-6-5：Durable Transport 指令租约自动续租间隔（默认 1 分钟）。
+    /// 仅在 <see cref="UseDurableTransport"/> = true 时生效。Kernel 处理指令期间启动后台 Task
+    /// 按此间隔调用 <see cref="IDurableTransport.RenewLeaseAsync"/>，避免长耗时处理在 lease
+    /// 过期前被 reaper 回滚导致重复执行。
+    /// </summary>
+    /// <remarks>
+    /// 默认 1 分钟对应 <see cref="DurableTransportHostingOptions.InstructionLeaseDuration"/> 默认 5 分钟的 1/3。
+    /// 设为 <see cref="Timeout.InfiniteTimeSpan"/> 或 ≤ 0 时禁用续租（仅靠 lease 时长覆盖，不推荐长耗时场景）。
+    /// DI 注册时应与 <see cref="DurableTransportHostingOptions.LeaseRenewalInterval"/> 同步。
+    /// </remarks>
+    public TimeSpan DurableLeaseRenewalInterval { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// P0-6-5：Durable Transport 单条指令最大处理时长（默认 10 分钟）。
+    /// 超过此时长未完成的指令视为永久故障，outcome 标记为
+    /// <see cref="InstructionProcessingOutcome.PermanentFault"/>，
+    /// 结果 Metadata 标记 <see cref="DurableDeliveryStatus.PermanentFault"/>，指令 Ack 删除进入死信对账。
+    /// </summary>
+    /// <remarks>
+    /// 此上限防止僵尸指令无限续租占用 lease。应大于预期最长处理时长，但小于人工介入阈值。
+    /// DI 注册时应与 <see cref="DurableTransportHostingOptions.MaxProcessingTime"/> 同步。
+    /// </remarks>
+    public TimeSpan DurableMaxProcessingTime { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
     /// 默认选项（FailFast 策略，与 R28-C 之前行为一致）。
     /// </summary>
     public static KernelTransportOptions Default { get; } = new();
@@ -253,15 +290,25 @@ public interface IKernelResultOutbox
     /// <returns>待重放的结果；outbox 为空时返回 null。</returns>
     ValueTask<AgentKernelResult?> DequeueAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>当前 outbox 中待重放的结果数量。</summary>
+    /// <summary>
+    /// 当前 outbox 中待重放的结果数量。
+    /// </summary>
+    /// <remarks>
+    /// <b>语义因实现而异</b>：
+    /// <list type="bullet">
+    ///   <item><see cref="ContextCore.Core.Services.AgentKernel.InMemoryKernelResultOutbox"/>：返回进程内 Channel 的 Reader.Count（<b>本进程计数</b>，单实例语义）。</item>
+    ///   <item><c>PostgresKernelResultOutbox</c>：同步执行 DB COUNT(*) 查询，返回<b>全局精确值</b>（跨实例）；同步阻塞调用线程，<b>避免热路径</b>。</item>
+    /// </list>
+    /// <b>不可用于调度或安全判断</b>；推荐使用 <see cref="GetPendingCountAsync"/> 或后台聚合服务导出的 global_pending_count 指标。
+    /// </remarks>
     int PendingCount { get; }
 
     /// <summary>
     /// P2：异步获取 pending 数量（推荐用于热路径）。
-    /// 同步属性 <see cref="PendingCount"/> 保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// 同步属性 <see cref="PendingCount"/> 保留向后兼容，但 Postgres 实现内部走 COUNT(*) 同步阻塞，应避免热路径调用。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>当前 outbox 中 state='Pending' 的结果数（不含 Leased）。</returns>
+    /// <returns>当前 outbox 中 state='Pending' 的结果数（不含 Leased）；持久化实现返回<b>DB 精确值（全局，跨实例）</b>。</returns>
     ValueTask<int> GetPendingCountAsync(CancellationToken cancellationToken = default);
 }
 
@@ -377,6 +424,13 @@ public sealed record ToolDispatchResult
     /// Tool 实现应显式声明副作用类型。EchoToolDispatcher 声明 None。
     /// </summary>
     public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.Unknown;
+
+    /// <summary>
+    /// 子问题 5：外部操作 ID（tool 实际执行后返回的外部系统 ID，可用于查询/对账）。
+    /// 默认 null；Tool 实现可选填充（如外部系统的 transaction ID / job ID）。
+    /// 由 <see cref="IDurableToolExecutor"/> 透传到 journal 与 <see cref="ToolExecutionResult"/>。
+    /// </summary>
+    public string? ExternalOperationId { get; init; }
 }
 
 /// <summary>
@@ -436,6 +490,39 @@ public sealed record ToolDispatchJournalEntry
 
     /// <summary>失败/模糊状态原因诊断（如 Dispatched 但未 Committed 时的说明）。</summary>
     public string? DiagnosticNote { get; init; }
+
+    /// <summary>
+    /// P0-3 CAS-2：tool 调用 payload 的 SHA-256 摘要（小写 hex）。
+    /// 用于 <see cref="IToolDispatchJournal.PrepareAsync"/> 在同一 RequestId 已存在时验证语义等价，
+    /// 防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
+    /// 调用方应使用 <see cref="ComputePayloadDigest"/> 计算；未设置时为 null（参与比较时两侧须同为 null）。
+    /// </summary>
+    public string? PayloadDigest { get; init; }
+
+    /// <summary>
+    /// P0-3 CAS-2：workspace 作用域标识。
+    /// 用于 PrepareAsync 语义等价校验，确保同一 RequestId 不跨 workspace 复用。
+    /// </summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>
+    /// P0-3 CAS-2：run 作用域标识。
+    /// 用于 PrepareAsync 语义等价校验，确保同一 RequestId 不跨 run 复用。
+    /// </summary>
+    public string? RunId { get; init; }
+
+    /// <summary>
+    /// 计算 tool 调用 payload 的 SHA-256 摘要（小写 hex 字符串）。
+    /// 调用方在构造 <see cref="ToolDispatchJournalEntry"/> 时应调用此方法设置 <see cref="PayloadDigest"/>。
+    /// </summary>
+    /// <param name="payload">tool 调用 payload（可为 null，按空字符串处理）。</param>
+    /// <returns>SHA-256 摘要的小写 hex 字符串。</returns>
+    public static string ComputePayloadDigest(string? payload)
+    {
+        var bytes = Encoding.UTF8.GetBytes(payload ?? string.Empty);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
 }
 
 /// <summary>
@@ -452,13 +539,26 @@ public sealed record ToolDispatchJournalEntry
 ///   3. <see cref="MarkCommittedAsync"/>：结果写入 _committedToolResults 后。
 ///   4. <see cref="MarkResultDeliveredAsync"/>：Transport.SendResultAsync 成功后。
 ///
-/// <b>P0-3：expected-state CAS 语义</b>。
-/// Mark* 方法使用 expected-state CAS 推进状态机，<b>不自动创建 stub 条目</b>：
+/// <b>P0-3 CAS-1：expected-state 精确匹配（state = @expected）</b>。
+/// Mark* 方法使用精确前驱状态 CAS 推进状态机（而非旧版 <c>state &lt; @target</c> 宽松匹配），
+/// <b>不自动创建 stub 条目</b>，且<b>禁止跨级跳跃</b>（如 Prepared → Committed）：
 /// <list type="bullet">
-///   <item>若 request_id 不存在（缺失 Prepared 前驱） → 抛 <see cref="InvalidOperationException"/>，
+///   <item>当前 state = expected（精确前驱） → 成功前向推进（Applied）。</item>
+///   <item>当前 state = target（已到达目标） → 幂等成功（AlreadyApplied），不报错。</item>
+///   <item>当前 state &gt; target（已超过目标） → 幂等成功（AlreadyAdvanced），不报错。</item>
+///   <item>当前 state &lt; expected（缺失中间状态，跨级跳跃） → 抛 <see cref="InvalidOperationException"/>（InvalidTransition）。</item>
+///   <item>request_id 不存在（缺失前驱记录） → 抛 <see cref="InvalidOperationException"/>（MissingPredecessor），
 ///     而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
-///   <item>若 request_id 存在但 state ≥ target（逆退） → 抛 <see cref="InvalidOperationException"/>。</item>
 /// </list>
+///
+/// <b>P0-3 CAS-2：PrepareAsync 语义等价校验</b>。
+/// <see cref="PrepareAsync"/> 对同一 request_id 重复写入时不再静默沿用旧记录：
+/// 既有行必须与新条目在 <see cref="ToolDispatchJournalEntry.ToolName"/> /
+/// <see cref="ToolDispatchJournalEntry.IdempotencyKey"/> /
+/// <see cref="ToolDispatchJournalEntry.PayloadDigest"/> /
+/// <see cref="ToolDispatchJournalEntry.WorkspaceId"/> /
+/// <see cref="ToolDispatchJournalEntry.RunId"/> 上语义等价；
+/// 否则抛 <see cref="InvalidOperationException"/>（RequestIdReuseDetected）。
 ///
 /// <b>外部副作用 exactly-once 边界（P0-3）</b>。
 /// Journal 仅保证 ContextCore 内部的"恰好一次编排记录"——同一 request_id 的状态机只向前推进一次。
@@ -710,6 +810,16 @@ public interface IDurableTransport : IAgentKernelTransport
     ValueTask NackAsync(string instructionId, string leaseToken, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// P2：批量拒绝（与 <see cref="AckBatchAsync"/> 对称，单次 SQL 事务内批量 UPDATE Leased → Pending）。
+    /// 部分成功不抛异常，返回失败的 instruction_id 列表（token 不匹配、租约已过期回滚或已确认）。
+    /// 用于配合 <see cref="LeaseBatchAsync"/> 批量消费后批量拒绝；失败的 nack 不抛异常，调用方可根据返回的失败列表决定后续处理。
+    /// </summary>
+    /// <param name="nacks">待拒绝的 (InstructionId, LeaseToken) 元组列表。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>失败的 instruction_id 列表（token 不匹配或状态非 Leased）；全部成功时为空列表。</returns>
+    ValueTask<IReadOnlyList<string>> NackBatchAsync(IReadOnlyList<(string InstructionId, string LeaseToken)> nacks, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// P0-1：续租约（延长 lease_expires_at）。适用于长耗时处理需要更多时间。
     /// 必须提供正确的 <paramref name="leaseToken"/>；token 不匹配时抛 <see cref="InvalidOperationException"/>。
     /// </summary>
@@ -718,6 +828,17 @@ public interface IDurableTransport : IAgentKernelTransport
     /// <param name="extension">延长的时间量（从当前 UTC 时间开始计算新的 expires_at）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     ValueTask RenewLeaseAsync(string instructionId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P2：批量续租约（与 <see cref="AckBatchAsync"/> 对称，单次 SQL 事务内批量 UPDATE lease_expires_at）。
+    /// 所有续租使用相同的 <paramref name="extension"/> 时长；部分成功不抛异常，返回失败的 instruction_id 列表。
+    /// 用于配合 <see cref="LeaseBatchAsync"/> 批量消费后批量续租，减少高并发下的网络往返。
+    /// </summary>
+    /// <param name="renewals">待续租的 (InstructionId, LeaseToken) 元组列表。</param>
+    /// <param name="extension">延长的时间量（从当前 UTC 时间开始计算新的 expires_at，所有续租共用此值）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>失败的 instruction_id 列表（token 不匹配或状态非 Leased）；全部成功时为空列表。</returns>
+    ValueTask<IReadOnlyList<string>> RenewLeaseBatchAsync(IReadOnlyList<(string InstructionId, string LeaseToken)> renewals, TimeSpan extension, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// P0-1：扫描并回滚所有过期的 Leased 行（lease_expires_at &lt; now → state = Pending）。
@@ -761,12 +882,34 @@ public interface IDurableTransport : IAgentKernelTransport
     /// <summary>P0-1：拒绝结果（Leased → Pending），立即回滚为 Pending 供重新租约。</summary>
     ValueTask NackResultAsync(string resultId, string leaseToken, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// P2：批量拒绝结果（与 <see cref="NackBatchAsync"/> 对称，单次 SQL 事务内批量 UPDATE Leased → Pending）。
+    /// 部分成功不抛异常，返回失败的 result_id 列表。用于配合 <see cref="LeaseResultBatchAsync"/> 批量消费后批量拒绝。
+    /// </summary>
+    /// <param name="nacks">待拒绝的 (ResultId, LeaseToken) 元组列表。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>失败的 result_id 列表（token 不匹配或状态非 Leased）；全部成功时为空列表。</returns>
+    ValueTask<IReadOnlyList<string>> NackResultBatchAsync(IReadOnlyList<(string ResultId, string LeaseToken)> nacks, CancellationToken cancellationToken = default);
+
     /// <summary>P0-1：续结果租约（延长 lease_expires_at）。</summary>
     ValueTask RenewResultLeaseAsync(string resultId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// P2：批量续结果租约（与 <see cref="RenewLeaseBatchAsync"/> 对称，单次 SQL 事务内批量 UPDATE lease_expires_at）。
+    /// 所有续租使用相同的 <paramref name="extension"/> 时长；部分成功不抛异常，返回失败的 result_id 列表。
+    /// 用于配合 <see cref="LeaseResultBatchAsync"/> 批量消费后批量续租。
+    /// </summary>
+    /// <param name="renewals">待续租的 (ResultId, LeaseToken) 元组列表。</param>
+    /// <param name="extension">延长的时间量（从当前 UTC 时间开始计算新的 expires_at，所有续租共用此值）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>失败的 result_id 列表（token 不匹配或状态非 Leased）；全部成功时为空列表。</returns>
+    ValueTask<IReadOnlyList<string>> RenewResultLeaseBatchAsync(IReadOnlyList<(string ResultId, string LeaseToken)> renewals, TimeSpan extension, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// P2：异步获取 inbox 中 Pending 指令数（推荐用于热路径）。
-    /// 同步属性 <c>PendingInstructionCount</c>（具体实现上）保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// 持久化实现（如 <c>PostgresDurableTransport</c>）返回<b>DB 精确值（全局，跨实例）</b>——
+    /// 反映所有实例的累积 Pending 行数，可用于调度/安全判断。
+    /// 同步属性 <c>PendingInstructionCount</c>（具体实现上）仅返回<b>本实例趋势值</b>，<b>不可用于调度/安全判断</b>。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>当前 inbox 中 state='Pending' 的指令数（不含 Leased）。</returns>
@@ -774,7 +917,9 @@ public interface IDurableTransport : IAgentKernelTransport
 
     /// <summary>
     /// P2：异步获取 outbox 中 Pending 结果数（推荐用于热路径）。
-    /// 同步属性 <c>PendingResultCount</c>（具体实现上）保留向后兼容，但 Postgres 实现内部走 COUNT(*) 应避免热路径调用。
+    /// 持久化实现（如 <c>PostgresDurableTransport</c>）返回<b>DB 精确值（全局，跨实例）</b>——
+    /// 反映所有实例的累积 Pending 行数，可用于调度/安全判断。
+    /// 同步属性 <c>PendingResultCount</c>（具体实现上）仅返回<b>本实例趋势值</b>，<b>不可用于调度/安全判断</b>。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>当前 outbox 中 state='Pending' 的结果数（不含 Leased）。</returns>
@@ -929,4 +1074,119 @@ public sealed record AgentKernelResult
     /// 用于调用方关联被确认/拒绝的 tool 结果。
     /// </summary>
     public string? AffectedRequestId { get; init; }
+
+    /// <summary>
+    /// P0-6：结果元数据（键值对，与 <see cref="AgentKernelInstruction.Metadata"/> 对称）。
+    /// 用于携带 Durable Transport 投递状态（<see cref="DurableDeliveryStatusKeys"/>）等诊断信息，
+    /// 供下游 reconciliation 消费。空字典表示无附加元数据（兼容旧行为）。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Metadata { get; init; }
+        = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>
+/// P0-6-3：指令处理结果分类。决定外层对 Durable lease 的 Ack/Nack/DeadLetter 行为。
+/// </summary>
+/// <remarks>
+/// Kernel 的 ProcessInstructionAsync 内部不再吞掉异常，
+/// 而是返回此枚举让外层统一决策：
+/// <list type="bullet">
+///   <item><see cref="Succeeded"/> → 返回成功结果并 Ack。</item>
+///   <item><see cref="BusinessRejected"/> → 返回失败结果并 Ack（业务拒绝，不需重试）。</item>
+///   <item><see cref="TransientInfrastructure"/> → Nack / Retry（基础设施临时故障，应重试）。</item>
+///   <item><see cref="PermanentFault"/> → Ack + 在结果 Metadata 标记死信（永久故障，进入死信）。</item>
+/// </list>
+/// </remarks>
+public enum InstructionProcessingOutcome : byte
+{
+    /// <summary>处理成功：返回成功结果并 Ack 输入 lease。</summary>
+    Succeeded = 0,
+
+    /// <summary>业务拒绝：返回失败结果并 Ack（不重试，结果已确定性地产出）。</summary>
+    BusinessRejected = 1,
+
+    /// <summary>基础设施临时故障：Nack 让 lease 回滚为 Pending 供重试（transport/DB 临时不可用）。</summary>
+    TransientInfrastructure = 2,
+
+    /// <summary>永久故障：Ack 删除指令，但在结果 Metadata 标记 DurableDeliveryStatus=PermanentFault 供死信对账。</summary>
+    PermanentFault = 3
+}
+
+/// <summary>
+/// P0-6-6：Durable Transport 投递状态。标记在 <see cref="AgentKernelResult.Metadata"/> 中
+/// （键 <see cref="DurableDeliveryStatusKeys.DurableDeliveryStatus"/>），供下游 reconciliation 消费。
+/// </summary>
+public enum DurableDeliveryStatus : byte
+{
+    /// <summary>非 Durable 路径（InProcessTransport），无 lease 概念。</summary>
+    NotDurable = 0,
+
+    /// <summary>已成功 Ack 输入 lease（正常路径）。</summary>
+    Acked = 1,
+
+    /// <summary>Ack 操作本身失败（token 不匹配/已被接管/已确认）；指令 lease 已过期会由 reaper 回滚。</summary>
+    AckFailed = 2,
+
+    /// <summary>Ack 前租约已过期被 reaper 回滚为 Pending；pump 会重新租约 + Submit，dedup 保证不重复执行。</summary>
+    LeaseExpiredBeforeAck = 3,
+
+    /// <summary>同一指令被重复投递（已被处理过）；本次返回缓存结果，Ack 幂等。</summary>
+    DuplicateRedelivery = 4,
+
+    /// <summary>永久故障（处理超时/PermanentFault outcome）：指令已 Ack 删除，结果标记供死信对账。</summary>
+    PermanentFault = 5
+}
+
+/// <summary>
+/// P0-6-6：Durable Transport 投递状态元数据键约定。
+/// 写入 <see cref="AgentKernelResult.Metadata"/>，供下游 reconciliation 消费。
+/// </summary>
+public static class DurableDeliveryStatusKeys
+{
+    /// <summary>Durable 投递状态（值为 <see cref="DurableDeliveryStatus"/> 的数字字符串）。</summary>
+    public const string DurableDeliveryStatus = "durable-delivery-status";
+
+    /// <summary>Ack 失败原因诊断（自由文本，仅当 status=AckFailed/LeaseExpiredBeforeAck 时填充）。</summary>
+    public const string AckFailureDiagnostic = "durable-ack-failure-diagnostic";
+}
+
+/// <summary>
+/// P0-6-6：指令对账抽象。由 Journal/Result Store 实现，用于在重复投递或 Ack 失败时判断
+/// 应返回缓存结果、继续恢复还是进入人工处理。
+/// </summary>
+/// <remarks>
+/// <b>可选依赖</b>：未注入时 Kernel 仅在结果 Metadata 中标记 <see cref="DurableDeliveryStatus"/>，
+/// 不执行主动对账。生产部署应注入持久化实现（如基于 DB 的 reconciliation service）。
+/// </remarks>
+public interface IInstructionReconciliation
+{
+    /// <summary>对账指定指令的投递状态。</summary>
+    /// <param name="instructionId">指令 ID。</param>
+    /// <param name="leaseToken">当前投递的 lease token（可能为空）。</param>
+    /// <param name="status">当前投递状态（来自 <see cref="DurableDeliveryStatus"/>）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>对账建议：CachedResult（返回缓存结果）/ Resume（继续恢复）/ ManualIntervention（进入人工处理）。</returns>
+    ValueTask<InstructionReconciliationAction> ReconcileAsync(
+        string instructionId,
+        string? leaseToken,
+        DurableDeliveryStatus status,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P0-6-6：对账建议动作。
+/// </summary>
+public enum InstructionReconciliationAction : byte
+{
+    /// <summary>无可用对账信息（如未注入实现）；Kernel 按默认路径处理。</summary>
+    None = 0,
+
+    /// <summary>指令已处理过，应返回缓存结果（不重新执行）。</summary>
+    ReturnCachedResult = 1,
+
+    /// <summary>指令处理中断，应继续恢复（如从 checkpoint 恢复）。</summary>
+    ResumeProcessing = 2,
+
+    /// <summary>指令进入永久故障，需人工介入（如 Dispatched 但未 Committed 的模糊状态）。</summary>
+    ManualIntervention = 3
 }

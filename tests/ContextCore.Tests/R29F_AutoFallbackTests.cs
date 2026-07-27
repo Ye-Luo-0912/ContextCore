@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Policy;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -325,7 +326,7 @@ public sealed class R29F_AutoFallbackTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: baseAllocator,
             allocatorV2_1: spy ?? new SpyAllocatorV2_1(baseAllocator),
             performanceMonitor: monitor);
@@ -344,7 +345,7 @@ public sealed class R29F_AutoFallbackTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator(),
             allocatorV2_1: spy);
 

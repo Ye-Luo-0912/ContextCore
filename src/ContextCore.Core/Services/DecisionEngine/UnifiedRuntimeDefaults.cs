@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -82,6 +83,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     private readonly IRequestSemanticHasher _requestSemanticHasher;
     private readonly IExecutionArtifactFactory _executionArtifactFactory;
     private readonly UtilityLedgerMaterializer? _utilityLedgerMaterializer;
+    private readonly LearningMaterializationDispatcher? _materializationDispatcher;
     private readonly IComponentHealthRegistry? _componentHealthRegistry;
 
     /// <summary>构造 pure Runtime。</summary>
@@ -89,8 +91,14 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// <param name="requestNormalizer">R28-B.7-Final：请求标准化器（null 时使用默认实现）。</param>
     /// <param name="requestSemanticHasher">R28-B.7-Final：请求语义哈希器（null 时使用默认实现）。</param>
     /// <param name="executionArtifactFactory">R28-B.7-Final：执行结果工厂（null 时使用默认实现）。</param>
-    /// <param name="utilityLedgerMaterializer">R29 WP-E-2：Utility Ledger 物化器（null 时跳过物化；生产路径注入）。</param>
+    /// <param name="utilityLedgerMaterializer">R29 WP-E-2：Utility Ledger 物化器（null 时跳过物化；生产路径注入）。
+    /// 注意：生产路径应注入 <paramref name="materializationDispatcher"/> 而非直接注入 materializer——
+    /// dispatcher 使用 Durable Outbox / bounded Channel 替代每请求 Task.Run fire-and-forget。
+    /// 此参数保留用于未注入 dispatcher 时的测试/兼容路径。</param>
     /// <param name="componentHealthRegistry">P5：组件健康注册表（null 时跳过组件级归因与回退，向后兼容 P5 之前的行为）。</param>
+    /// <param name="materializationDispatcher">Learning Loop Durable Outbox 调度器。
+    /// 非空时优先使用——通过 bounded Channel + 固定 worker 或 Durable Outbox 替代 Task.Run，
+    /// 消除进程崩溃静默丢训练数据、Task 风暴、无背压等问题。null 时回退到 materializer 直接调用路径。</param>
     public DefaultContextDecisionRuntime(
         IContextDecisionEngine engine,
         IResolvedPolicyProvider policyProvider,
@@ -108,7 +116,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         IRequestSemanticHasher? requestSemanticHasher = null,
         IExecutionArtifactFactory? executionArtifactFactory = null,
         UtilityLedgerMaterializer? utilityLedgerMaterializer = null,
-        IComponentHealthRegistry? componentHealthRegistry = null)
+        IComponentHealthRegistry? componentHealthRegistry = null,
+        LearningMaterializationDispatcher? materializationDispatcher = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _policyProvider = policyProvider ?? throw new ArgumentNullException(nameof(policyProvider));
@@ -130,6 +139,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         _utilityLedgerMaterializer = utilityLedgerMaterializer;
         // P5：组件健康注册表（可选；未注入时不归因、不回退）
         _componentHealthRegistry = componentHealthRegistry;
+        // Learning Loop Durable Outbox：注入 dispatcher 后，主决策流通过 bounded Channel / outbox
+        // 触发物化，消除每请求 Task.Run（生产热路径）。null 时回退到 materializer 直接路径（测试用）。
+        _materializationDispatcher = materializationDispatcher;
     }
 
     /// <summary>
@@ -184,8 +196,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var routingDecisions = await _router.RouteAsync(request, snapshot, cancellationToken).ConfigureAwait(false);
 
         // P5：组件级回退查询 — Provider 组件回退时，按 provider kind 切换到 fallback provider
-        //（Semantic → Lexical；Graph → 跳过/disabled）。具体 provider 子组件回退在
-        // InvokeEnabledProvidersWithDagAsync 内部根据 ShouldFallbackComponent(Provider) 判断。
+        //（Semantic → Lexical；Graph → 跳过/disabled）。
+        // 细化到 ProviderKind 粒度：Semantic 慢不会导致 Graph 被关闭。
+        // InvokeEnabledProvidersWithDagAsync 内部根据 ShouldFallbackProvider(ProviderKind, ...) 逐个判断。
         var providerFallbackActive = componentRegistry is not null
             && componentRegistry.ShouldFallbackComponent(ComponentKind.Provider, componentScopeKey);
 
@@ -193,12 +206,14 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Phase 1：执行 Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory
         // Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
         // P5：用 Stopwatch 拆分 provider_ms（聚合所有 Provider 调用总耗时），记录到 IComponentHealthRegistry
+        // 注：per-provider 耗时由 InvokeProviderBatchAsync 内部通过 RecordProviderTime 单独记录。
         var providerSw = componentRegistry is not null ? Stopwatch.StartNew() : null;
         bool providerSucceeded = false;
         try
         {
             var (expertOutputs, providerReports) = await InvokeEnabledProvidersWithDagAsync(
-                request, snapshot, routingDecisions, cancellationToken, providerFallbackActive).ConfigureAwait(false);
+                request, snapshot, routingDecisions, cancellationToken,
+                providerFallbackActive, componentScopeKey).ConfigureAwait(false);
             providerSucceeded = providerReports.Count == 0 || providerReports.All(r => r.Succeeded);
 
             // R28-B.7-Final：从 expertOutputs + providerReports 构建 ProviderExecutionArtifact[]，
@@ -485,17 +500,44 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// <remarks>
     /// 设计原则：
     ///   1. 学习闭环物化不阻塞主决策流 — 主决策已返回，物化在后台异步执行。
-    ///   2. 物化失败不影响主决策正确性 — 异常被静默捕获（tracing 通过 IUtilityLedger 的状态间接触发；
-    ///      若 ILogger 未注入则不记录；后续可补 ILogger 实现接入）。
+    ///   2. 物化失败不影响主决策正确性 — 异常被静默捕获（dispatcher / fallback 路径均内部处理）。
     ///   3. 使用 CancellationToken.None — 决策请求的取消不应中断物化（数据已生成，需写入 ledger）。
-    ///   4. materializer 为 null 时（开发 / 测试路径未注入），直接跳过。
+    ///   4. dispatcher 为 null 且 materializer 为 null 时（开发 / 测试路径未注入），直接跳过。
     /// </remarks>
+    /// <para>
+    /// 路径选择（消除热路径 Task.Run）：
+    /// <list type="bullet">
+    /// <item>
+    /// <b>dispatcher 已注入（生产路径）</b>：通过 <see cref="LearningMaterializationDispatcher.EnqueueAsync"/>
+    /// 入队。dispatcher 内部根据是否注册 <c>ILearningEventOutboxStore</c> 选择 Durable Outbox（Postgres）
+    /// 或 in-memory bounded Channel 路径，由固定 worker 池消费——消除每请求 Task.Run / Task 风暴 /
+    /// 进程崩溃静默丢数据等问题。dispatcher 内部捕获所有异常并降级处理。
+    /// </item>
+    /// <item>
+    /// <b>dispatcher 未注入但 materializer 已注入（兼容/测试路径）</b>：保留旧 Task.Run fire-and-forget
+    /// 行为。此路径不是生产热路径，仅为未升级到 dispatcher 的旧测试保持向后兼容。
+    /// </item>
+    /// </list>
+    /// </para>
     /// <param name="decision">决策结果（已构建完成，含 SelectedEnvelopes + DroppedEnvelopes）。</param>
     /// <param name="request">原始请求（用于提取 WorkspaceId / CollectionId）。</param>
     private void TriggerUtilityLedgerMaterialization(
         ContextDecisionResult decision,
         ContextDecisionRuntimeRequest request)
     {
+        var workspaceId = request.Scope.WorkspaceId;
+        var collectionId = request.Scope.CollectionId;
+
+        // 生产路径：dispatcher 已注入 → 通过 bounded Channel / Durable Outbox 入队（消除 Task.Run）。
+        if (_materializationDispatcher is not null)
+        {
+            // fire-and-forget：dispatcher 内部捕获所有异常并降级（fallback direct materialize / metrics increment）。
+            // 不 await —— 主决策流不等待物化完成。
+            _ = _materializationDispatcher.EnqueueAsync(decision, workspaceId, collectionId, CancellationToken.None);
+            return;
+        }
+
+        // 兼容/测试路径：未注入 dispatcher 但注入了 materializer → 保留旧 Task.Run 行为。
         if (_utilityLedgerMaterializer is null)
         {
             return;
@@ -503,8 +545,6 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
         // 捕获 materializer 引用避免闭包捕获 this（防止潜在的对象生命周期问题）。
         var materializer = _utilityLedgerMaterializer;
-        var workspaceId = request.Scope.WorkspaceId;
-        var collectionId = request.Scope.CollectionId;
         var decisionSnapshot = decision;
 
         // fire-and-forget：后台执行，主决策流不等待。
@@ -529,16 +569,18 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// Canonical Merge Phase 1 结果
     /// Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
     /// Final Merge：合并 Phase 1 + Phase 2 结果
-    /// P5：当 <paramref name="providerFallbackActive" /> 为 true 时，跳过慢组件对应的 Provider
-    ///（Semantic → 切换到 Lexical 兜底；Graph → 跳过该 provider，仅用其他 provider 候选）。
+    /// P5：当 <paramref name="providerFallbackActive" /> 为 true 时，按 ProviderKind 粒度逐个检查
+    /// ShouldFallbackProvider — Semantic 慢不会导致 Graph 被跳过（仅跳过实际 Open 的 Provider）。
     /// </summary>
-    /// <param name="providerFallbackActive">P5：Provider 组件是否处于回退激活态（来自 IComponentHealthRegistry）。</param>
+    /// <param name="providerFallbackActive">P5：Provider 组件是否处于聚合回退激活态（来自 IComponentHealthRegistry）。</param>
+    /// <param name="componentScopeKey">P5：组件归因 scopeKey（用于 per-provider ShouldFallbackProvider 查询）。</param>
     private async Task<(IReadOnlyList<ExpertExecutionResult> Outputs, IReadOnlyList<ProviderExecutionReport> Reports)> InvokeEnabledProvidersWithDagAsync(
         ContextDecisionRuntimeRequest request,
         EffectivePolicySnapshot snapshot,
         ExpertRoutingDecisionSet routingDecisions,
         CancellationToken cancellationToken,
-        bool providerFallbackActive = false)
+        bool providerFallbackActive = false,
+        string componentScopeKey = "")
     {
         if (_candidateProviders.Count == 0)
         {
@@ -562,17 +604,18 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             .Where(p => executedKinds.Add(p.Kind))
             .ToList();
 
-        // P5：Provider 子组件回退 — 当 Provider 组件 P95 超阈值时：
-        //   - Semantic Provider：跳过（依赖 Lexical Provider 兜底，若 Lexical 未启用则该路径无候选）
-        //   - Graph Provider：跳过（仅用其他 Provider 候选，不进行关系扩展）
+        // P5：Provider 子组件回退 — 细化到 ProviderKind 粒度：
+        //   - Semantic Provider：ShouldFallbackProvider(Semantic) 为 true 时跳过（依赖 Lexical 兜底）
+        //   - Graph Provider：ShouldFallbackProvider(Graph) 为 true 时跳过（不进行关系扩展）
         //   - Mandatory / Constraint / Lexical / WorkingMemory / StableMemory：保留（关键路径，不可跳过）
+        // 细化目的：Semantic 慢不会导致 Graph 被误关闭——两者独立熔断。
         // 注：provider 级回退需要 IRouter 配合（路由到 fallback provider）。
         //     此处实现为"跳过慢 provider"的最简形式；后续可扩展为切换到 fallback provider 实例。
         //     若 Semantic 被跳过且 Lexical 也未启用，结果候选可能不足 — 由 EarlyGate / Engine 兜底。
-        if (providerFallbackActive)
+        if (providerFallbackActive && _componentHealthRegistry is not null)
         {
             allEnabledProviders = allEnabledProviders
-                .Where(p => p.Kind != ExpertKind.Semantic && p.Kind != ExpertKind.Graph)
+                .Where(p => !ShouldSkipProvider(p.Kind, _componentHealthRegistry, componentScopeKey))
                 .ToList();
         }
 
@@ -608,7 +651,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         {
             var phase1Results = await InvokeProviderBatchAsync(
                 phase1Providers, request, snapshot, routingByExpert,
-                adaptationContext, seedEnvelopes: null, cancellationToken).ConfigureAwait(false);
+                adaptationContext, seedEnvelopes: null, cancellationToken,
+                componentScopeKey).ConfigureAwait(false);
             allOutputs.AddRange(phase1Results.Outputs);
             allReports.AddRange(phase1Results.Reports);
         }
@@ -639,7 +683,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
             var phase2Results = await InvokeProviderBatchAsync(
                 phase2Providers, phase2Request, snapshot, routingByExpert,
-                adaptationContext, seedEnvelopes: phase2Seeds, cancellationToken).ConfigureAwait(false);
+                adaptationContext, seedEnvelopes: phase2Seeds, cancellationToken,
+                componentScopeKey).ConfigureAwait(false);
             allOutputs.AddRange(phase2Results.Outputs);
             allReports.AddRange(phase2Results.Reports);
         }
@@ -650,12 +695,15 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// <summary>
     /// R28-B.6 Blocker-5：批量执行一组 Provider，bounded parallel + 超时保护 + 执行报告。
     /// R28-B.6 Impl-3：为每个 Provider 单独创建 timeout CTS（一个 Provider 超时不取消其他 Provider）。
+    /// P5：per-provider 耗时记录——每个 Provider 执行后通过 RecordProviderTime 上报到
+    /// DefaultComponentHealthRegistry，细化到 ProviderKind 粒度（Semantic 慢不影响 Graph 熔断）。
     /// 专家故障等级：
     ///   - Mandatory / Constraint 失败或超时 → fail-closed（抛异常，整个请求失败）；
     ///   - Semantic / Graph / Recency 失败或超时 → degraded result（返回空结果 + diagnostic）；
     ///   - Lexical / WorkingMemory / StableMemory 失败或超时 → degraded result（默认）。
     /// </summary>
     /// <param name="cancellationToken">原始调用方 cancellationToken（用于区分超时 vs 用户取消）。</param>
+    /// <param name="componentScopeKey">P5：组件归因 scopeKey（用于 per-provider RecordProviderTime）。</param>
     private async Task<(IReadOnlyList<ExpertExecutionResult> Outputs, IReadOnlyList<ProviderExecutionReport> Reports)> InvokeProviderBatchAsync(
         IReadOnlyList<ICandidateProvider> providers,
         ContextDecisionRuntimeRequest request,
@@ -663,7 +711,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         IReadOnlyDictionary<RetrievalExpert, ExpertRoutingDecision> routingByExpert,
         CandidateAdaptationContext adaptationContext,
         IReadOnlyList<ContextCandidateEnvelope>? seedEnvelopes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string componentScopeKey = "")
     {
         using var semaphore = new SemaphoreSlim(Math.Min(8, providers.Count));
         var tasks = providers.Select(async provider =>
@@ -694,10 +743,17 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             using var perProviderCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             perProviderCts.CancelAfter(_providerTimeout);
 
+            // P5：per-provider 耗时记录变量（finally 块统一上报到 RecordProviderTime）
+            TimeSpan elapsed = TimeSpan.Zero;
+            bool providerSucceeded = false;
+            var shouldRecordTiming = false;
+
             try
             {
                 var result = await provider.ExecuteAsync(context, perProviderCts.Token).ConfigureAwait(false);
-                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                elapsed = Stopwatch.GetElapsedTime(startedAt);
+                providerSucceeded = true;
+                shouldRecordTiming = true;
                 var report = new ProviderExecutionReport
                 {
                     Kind = expertKind,
@@ -711,7 +767,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             catch (OperationCanceledException) when (perProviderCts.IsCancellationRequested
                 && !cancellationToken.IsCancellationRequested)
             {
-                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                elapsed = Stopwatch.GetElapsedTime(startedAt);
+                providerSucceeded = false;
+                shouldRecordTiming = true;
                 var emptyResult = CandidateProviderHelpers.Empty();
                 var report = new ProviderExecutionReport
                 {
@@ -737,12 +795,14 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
             catch (OperationCanceledException)
             {
-                // 用户取消（原始 cancellationToken 被取消）→ 传播
+                // 用户取消（原始 cancellationToken 被取消）→ 传播，不记录 timing
                 throw;
             }
             catch (Exception ex)
             {
-                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                elapsed = Stopwatch.GetElapsedTime(startedAt);
+                providerSucceeded = false;
+                shouldRecordTiming = true;
                 var emptyResult = CandidateProviderHelpers.Empty();
                 var report = new ProviderExecutionReport
                 {
@@ -767,6 +827,17 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
             finally
             {
+                // P5：per-provider 耗时记录（细化到 ProviderKind 粒度）
+                // 通过 cast 访问 DefaultComponentHealthRegistry 的新方法，不修改 IComponentHealthRegistry 接口契约。
+                if (shouldRecordTiming && _componentHealthRegistry is DefaultComponentHealthRegistry concreteRegistry)
+                {
+                    concreteRegistry.RecordProviderTime(
+                        MapExpertKindToProviderKind(expertKind),
+                        elapsed.TotalMilliseconds,
+                        providerSucceeded,
+                        componentScopeKey,
+                        cancellationToken);
+                }
                 semaphore.Release();
             }
         });
@@ -1072,6 +1143,40 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         _ => RetrievalExpert.Lexical
     };
 
+    /// <summary>
+    /// P5：将 ExpertKind 映射到 ProviderKind（用于 per-provider Circuit Breaker）。
+    /// Mandatory / Constraint / Recency 映射到 Other（不参与 per-provider 熔断）。
+    /// </summary>
+    private static ProviderKind MapExpertKindToProviderKind(ExpertKind kind) => kind switch
+    {
+        ExpertKind.Semantic => ProviderKind.Semantic,
+        ExpertKind.Graph => ProviderKind.Graph,
+        ExpertKind.Lexical => ProviderKind.Lexical,
+        ExpertKind.WorkingMemory => ProviderKind.WorkingMemory,
+        ExpertKind.StableMemory => ProviderKind.StableMemory,
+        _ => ProviderKind.Other
+    };
+
+    /// <summary>
+    /// P5：查询单个 Provider 是否应被跳过（per-ProviderKind Circuit Breaker）。
+    /// 仅 Semantic / Graph 可被跳过（Mandatory / Constraint / Lexical 等关键路径不可跳过）。
+    /// 通过 cast 访问 DefaultComponentHealthRegistry.ShouldFallbackProvider，不修改接口契约。
+    /// </summary>
+    private static bool ShouldSkipProvider(
+        ExpertKind kind,
+        IComponentHealthRegistry? registry,
+        string scopeKey)
+    {
+        // 仅 Semantic / Graph 可跳过；其他 Provider 为关键路径
+        if (kind != ExpertKind.Semantic && kind != ExpertKind.Graph)
+            return false;
+
+        if (registry is not DefaultComponentHealthRegistry concreteRegistry)
+            return false;
+
+        return concreteRegistry.ShouldFallbackProvider(MapExpertKindToProviderKind(kind), scopeKey);
+    }
+
     private static ContextDecisionResult EmptyResult(
         ContextDecisionRuntimeRequest request,
         EffectivePolicySnapshot snapshot)
@@ -1306,8 +1411,9 @@ public sealed class DefaultRuntimeRequestNormalizer : IRuntimeRequestNormalizer
 ///   - 含 Scope / Purpose / QueryText / TokenBudget / TopK
 ///   - 含 RetrievalInput 关键字段（RequiredIds/RequiredTags/RequiredTypes/QueryVector 哈希/Include* 开关等）
 ///   - 含 PackageInput 关键字段（Mode/Policy/IncludeRecent/IsAuditMode 等）
-///   - 含 SeedCandidates/SeedWorkingSet 的存在性与数量
-/// 哈希跨进程/跨平台稳定（使用 invariant culture 格式化数值；无序集合排序后拼接）。
+///   - 含 SeedCandidates 数量 + SeedWorkingSet 内容 digest（CanonicalKey/Material ContentHash/TokenizerVersion/PolicyReference）
+/// 哈希跨进程/跨平台稳定（使用 invariant culture 格式化数值；无序集合排序后拼接；
+/// QueryVector 直接哈希 IEEE-754 little-endian bytes，不经字符串中间表示）。
 /// </remarks>
 public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
 {
@@ -1370,12 +1476,15 @@ public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
             sb.Append("|pi.irecent=").Append(pi.IncludeRecent);
         }
 
-        // --- SeedCandidates / SeedWorkingSet 存在性与数量 ---
+        // --- SeedCandidates 数量 + SeedWorkingSet 内容 digest ---
+        // R28-D P0-7 修复：原实现只写入 sws.envs / sws.mats 计数，不同 Seed 内容
+        // 但数量相同的请求会得到同一 SemanticHash。现改为对规范化 SeedWorkingSet
+        // 计算 digest，覆盖每个 seed 的 CanonicalKey / Material ContentHash /
+        // TokenizerVersion / PolicyReference，按 CanonicalKey 排序后顺序 SHA256。
         sb.Append("|seeds.count=").Append(request.SeedCandidates.Count);
         if (request.SeedWorkingSet is { } sws)
         {
-            sb.Append("|sws.envs=").Append(sws.Envelopes?.Count ?? 0);
-            sb.Append("|sws.mats=").Append(sws.Materials?.Count ?? 0);
+            sb.Append("|sws.digest=").Append(HashSeedWorkingSet(sws));
         }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
@@ -1392,18 +1501,142 @@ public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
         return string.Join(",", arr);
     }
 
+    /// <summary>
+    /// R28-D P0-7 修复：计算 SeedWorkingSet 的内容 digest。
+    /// 按 CanonicalKey 排序后，将每个 seed 的 CanonicalKey / Material ContentHash /
+    /// TokenizerVersion / PolicyReference 顺序写入 SHA256 流。不同 Seed 内容但数量相同
+    /// 的请求不会得到同一 digest。集合顺序不影响结果（排序后哈希）。
+    /// </summary>
+    private static string HashSeedWorkingSet(CandidateWorkingSet sws)
+    {
+        var envelopes = sws.Envelopes;
+        var materials = sws.Materials;
+
+        if (envelopes is null || envelopes.Count == 0)
+        {
+            // 无 envelope：仅 material 字典内容参与（极少见路径，但仍需稳定）
+            if (materials is null || materials.Count == 0) return "empty";
+            return HashMaterialsOnly(materials);
+        }
+
+        // 按 CanonicalKey 排序（ordinal 字段依次比较），保证集合顺序不变性
+        var sorted = envelopes.ToArray();
+        Array.Sort(sorted, CompareEnvelopeByKey);
+
+        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> epochBytes = stackalloc byte[8]; // ActivationEpoch (int64 LE)
+        foreach (var env in sorted)
+        {
+            // CanonicalKey（5 字段）
+            AppendUtf8(hasher, env.CanonicalKey.WorkspaceId);
+            AppendUtf8(hasher, env.CanonicalKey.CollectionId);
+            AppendUtf8(hasher, env.CanonicalKey.EntityKind);
+            AppendUtf8(hasher, env.CanonicalKey.EntityId);
+            AppendUtf8(hasher, env.CanonicalKey.EntityVersion);
+
+            // Material ContentHash（按 CanonicalKey 在 sidecar 中查找；缺失则写空标记）
+            if (materials is not null && materials.TryGetValue(env.CanonicalKey, out var mat))
+            {
+                AppendUtf8(hasher, mat.ContentHash ?? string.Empty);
+            }
+            else
+            {
+                AppendUtf8(hasher, "\0no-material");
+            }
+
+            // TokenizerVersion（来自 envelope.TokenCost?.TokenizerId）
+            AppendUtf8(hasher, env.TokenCost?.TokenizerId ?? "\0no-tokenizer");
+
+            // PolicyReference（BundleId / BundleVersion / BundleContentHash / ActivationEpoch）
+            if (env.PolicyReference is { } pr)
+            {
+                AppendUtf8(hasher, pr.BundleId);
+                AppendUtf8(hasher, pr.BundleVersion);
+                AppendUtf8(hasher, pr.BundleContentHash);
+                BinaryPrimitives.WriteInt64LittleEndian(epochBytes, pr.ActivationEpoch);
+                hasher.AppendData(epochBytes);
+            }
+            else
+            {
+                AppendUtf8(hasher, "\0no-policy");
+            }
+
+            // 字段间分隔符避免拼接歧义
+            hasher.AppendData([(byte)'|']);
+        }
+
+        var hash = hasher.GetHashAndReset();
+        return Convert.ToHexString(hash).AsSpan(0, 16).ToString(); // 取前 16 hex 字符作摘要
+    }
+
+    /// <summary>无 envelope 但 material 非空的极少见路径：按 key 排序后哈希 ContentHash。</summary>
+    private static string HashMaterialsOnly(IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> materials)
+    {
+        var pairs = materials.ToArray();
+        Array.Sort(pairs, (a, b) => CompareKey(a.Key, b.Key));
+
+        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var kv in pairs)
+        {
+            AppendUtf8(hasher, kv.Key.WorkspaceId);
+            AppendUtf8(hasher, kv.Key.CollectionId);
+            AppendUtf8(hasher, kv.Key.EntityKind);
+            AppendUtf8(hasher, kv.Key.EntityId);
+            AppendUtf8(hasher, kv.Key.EntityVersion);
+            AppendUtf8(hasher, kv.Value.ContentHash ?? string.Empty);
+            hasher.AppendData([(byte)'|']);
+        }
+
+        var hash = hasher.GetHashAndReset();
+        return Convert.ToHexString(hash).AsSpan(0, 16).ToString();
+    }
+
+    /// <summary>将字符串以 UTF-8 字节追加到 IncrementalHash；短串走 stackalloc 避免分配。</summary>
+    private static void AppendUtf8(IncrementalHash hasher, string value)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        if (byteCount <= 256)
+        {
+            Span<byte> buf = stackalloc byte[byteCount];
+            Encoding.UTF8.GetBytes(value, buf);
+            hasher.AppendData(buf);
+        }
+        else
+        {
+            hasher.AppendData(Encoding.UTF8.GetBytes(value));
+        }
+    }
+
+    private static int CompareEnvelopeByKey(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
+        => CompareKey(a.CanonicalKey, b.CanonicalKey);
+
+    private static int CompareKey(CanonicalCandidateKey a, CanonicalCandidateKey b)
+    {
+        var c = string.CompareOrdinal(a.WorkspaceId, b.WorkspaceId);
+        if (c != 0) return c;
+        c = string.CompareOrdinal(a.CollectionId, b.CollectionId);
+        if (c != 0) return c;
+        c = string.CompareOrdinal(a.EntityKind, b.EntityKind);
+        if (c != 0) return c;
+        c = string.CompareOrdinal(a.EntityId, b.EntityId);
+        if (c != 0) return c;
+        return string.CompareOrdinal(a.EntityVersion, b.EntityVersion);
+    }
+
     private static string HashFloats(IReadOnlyList<float> values)
     {
         if (values is null || values.Count == 0) return "empty";
-        // 向量内容哈希：避免长向量拼入 hash 输入，同时区分不同向量
-        var sb = new StringBuilder(values.Count * 4);
+        // R28-D P0-7 修复：直接哈希 IEEE-754 little-endian bytes，避免逐 float ToString("R")
+        // 造成的字符串分配与 StringBuilder 开销。BinaryPrimitives.WriteSingleLittleEndian
+        // 保证跨平台字节序稳定（不依赖 BitConverter.IsLittleEndian）。
+        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> floatBytes = stackalloc byte[4];
         for (var i = 0; i < values.Count; i++)
         {
-            if (i > 0) sb.Append(',');
-            sb.Append(values[i].ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+            BinaryPrimitives.WriteSingleLittleEndian(floatBytes, values[i]);
+            hasher.AppendData(floatBytes);
         }
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        var hash = SHA256.HashData(bytes);
+        var hash = hasher.GetHashAndReset();
         return Convert.ToHexString(hash).AsSpan(0, 16).ToString(); // 取前 16 hex 字符作摘要
     }
 }
@@ -2952,9 +3185,14 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     private readonly IFeatureRegistry? _featureRegistry;
     private readonly IInferenceResultValidator? _inferenceValidator;
 
+    // 子问题6：特征 schema 验证器（必须，非 null）。
+    // 在推理前对输入特征与 FeatureSchema 执行严格匹配验证，防止 schema drift。
+    private readonly IFeatureSchemaValidator _featureSchemaValidator;
+
     /// <summary>
     /// 构造 Utility Scorer。
     /// </summary>
+    /// <param name="featureSchemaValidator">子问题6：特征 schema 验证器（必须，非 null）。推理前验证输入特征与 schema 一致性。</param>
     /// <param name="inferenceEngine">R28-D：模型批量推理引擎（null 时强制 rule-only）。</param>
     /// <param name="calibrationService">R28-D：分数校准服务（null 时使用原始模型分数）。</param>
     /// <param name="featureRegistry">R28-D：特征 schema 注册表（null 时无法构造 FeatureVector，强制 rule-only）。</param>
@@ -2963,11 +3201,15 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     /// 验证失败时降级到 deterministic（不抛异常，fail-safe）。
     /// </param>
     public DefaultUtilityScorer(
+        IFeatureSchemaValidator featureSchemaValidator,
         IBatchInferenceEngine? inferenceEngine = null,
         ICalibrationService? calibrationService = null,
         IFeatureRegistry? featureRegistry = null,
         IInferenceResultValidator? inferenceValidator = null)
     {
+        ArgumentNullException.ThrowIfNull(featureSchemaValidator);
+
+        _featureSchemaValidator = featureSchemaValidator;
         _inferenceEngine = inferenceEngine;
         _calibrationService = calibrationService;
         _featureRegistry = featureRegistry;
@@ -3103,6 +3345,17 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
             if (TryBuildFeatureBatch(envelopes, featureSchema, out var featureBatch))
             {
                 inferenceBatch = featureBatch;
+
+                // 子问题6：推理前强制调用 IFeatureSchemaValidator.Validate(FeatureSchema, FeatureBatch)，
+                // 验证 SchemaVersion / FeatureCount / FeatureNames 顺序 / Values 长度 / 值有限性。
+                // 验证失败时 fail-safe 降级到 deterministic（不抛异常，避免 schema drift 污染模型输出）。
+                var schemaValidation = _featureSchemaValidator.Validate(featureSchema, featureBatch);
+                if (!schemaValidation.IsValid)
+                {
+                    return MarkModelAttempted(envelopes, applied: false,
+                        fallbackReason: $"schema-validation-failed: {schemaValidation.Error}");
+                }
+
                 try
                 {
                     inferenceResult = await _inferenceEngine.InferBatchAsync(featureBatch, cancellationToken).ConfigureAwait(false);
@@ -3112,6 +3365,15 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                     // 引擎不支持 InferBatchAsync → 降级到字典路径（向后兼容）
                     inferenceBatch = null;
                     inferenceRequest = BuildDictionaryRequest(envelopes, featureSchema);
+
+                    // 子问题6：字典路径同样强制 schema 验证（ValidateBatch 校验每行 FeatureVector）。
+                    var dictSchemaValidation = _featureSchemaValidator.ValidateBatch(featureSchema, inferenceRequest.Inputs);
+                    if (!dictSchemaValidation.IsValid)
+                    {
+                        return MarkModelAttempted(envelopes, applied: false,
+                            fallbackReason: $"schema-validation-failed: {dictSchemaValidation.Error}");
+                    }
+
                     inferenceResult = await _inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -3119,6 +3381,15 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
             {
                 // schema 无特征列或 envelopes 为空（理论不可达，前面已过滤）→ 降级字典路径
                 inferenceRequest = BuildDictionaryRequest(envelopes, featureSchema);
+
+                // 子问题6：字典路径强制 schema 验证。
+                var dictSchemaValidation = _featureSchemaValidator.ValidateBatch(featureSchema, inferenceRequest.Inputs);
+                if (!dictSchemaValidation.IsValid)
+                {
+                    return MarkModelAttempted(envelopes, applied: false,
+                        fallbackReason: $"schema-validation-failed: {dictSchemaValidation.Error}");
+                }
+
                 inferenceResult = await _inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -3196,11 +3467,30 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
             }
 
             // 模型加权：FinalScore = w_d * Det + w_m * Model
-            // R28-F P3-2：若 weights 验证未通过，仍计算加权但 ReasonCode 标记 weights-invalid。
+            // 子问题3：若 weights 验证未通过（w_d/w_m 非有限、负数、或和≠1.0），
+            // 不再计算加权分数（避免 FinalScore 被错误缩放），直接 fallback 到 deterministic score。
+            // ModelApplied=false 表示模型分数未实际应用；ModelFallbackReason 记录降级原因。
+            var weightsInvalid = weightsValidation is not null && !weightsValidation.IsValid;
+            if (weightsInvalid)
+            {
+                result.Add(envelope with
+                {
+                    Utility = envelope.Utility with
+                    {
+                        ModelScore = calibratedScore,
+                        ModelConfidence = confidence,
+                        FinalScore = envelope.Utility.DeterministicScore,
+                        ReasonCode = "model-weighted-weights-invalid",
+                        ModelArtifactRef = modelArtifactId,
+                        ModelAttempted = true,
+                        ModelApplied = false,
+                        ModelFallbackReason = $"weights-validation-failed: {weightsValidation!.Error}"
+                    }
+                });
+                continue;
+            }
+
             var finalScore = w_d * envelope.Utility.DeterministicScore + w_m * calibratedScore;
-            var reasonCode = weightsValidation is not null && !weightsValidation.IsValid
-                ? "model-weighted-weights-invalid"
-                : "model-weighted";
             result.Add(envelope with
             {
                 Utility = envelope.Utility with
@@ -3208,7 +3498,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                     ModelScore = calibratedScore,
                     ModelConfidence = confidence,
                     FinalScore = finalScore,
-                    ReasonCode = reasonCode,
+                    ReasonCode = "model-weighted",
                     ModelArtifactRef = modelArtifactId,
                     ModelAttempted = true,
                     ModelApplied = true,

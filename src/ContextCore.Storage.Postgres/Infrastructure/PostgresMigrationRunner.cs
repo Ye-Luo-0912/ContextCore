@@ -44,8 +44,33 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// 任务 F：v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
     /// 任务 D：v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
     ///       （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
+    /// P0-3 CAS-2：v32 → v33，tool_dispatch_journal_entries 追加 payload_digest / workspace_id / run_id 列，
+    ///       支持 PrepareAsync 语义等价校验，防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
+    /// Learning Loop Durable Outbox：v33 → v34，新增 learning_event_outbox 表与索引。
+    ///       将 Utility Ledger 物化从 fire-and-forget Task.Run 改为 Durable Outbox 模式：
+    ///       Decision committed → learning_event_outbox (持久化) → bounded batch worker → MaterializeAsync → Ack/Retry/DeadLetter。
+    ///       消除进程崩溃时静默丢训练数据、DB 瞬时失败不重试、无死信/可观测性等问题。
+    /// Canary HA 聚合修复：v35 → v36，canary_metrics_samples 表改为最新快照模型：
+    ///       - 新增 stage_epoch 列，PK 由 (sample_id) 改为 (run_id, stage_epoch, instance_id)
+    ///       - 新增 canary_run_epochs 表（per-run 单调递增 epoch，Leader 推进时递增）
+    ///       - 每次 UPSERT 覆盖该实例最新累计值（不再追加行），聚合时只汇总当前 epoch 的最新快照
+    ///       - 修复 SUM(total_observations) 重复累计、InstanceCount=COUNT(*) 误算样本行数、
+    ///         旧 Canary 阶段数据污染新阶段、表无限增长等问题。
+    /// Durable Delivery 剩余修复：v36 → v37，为 kernel_transport_inbox / kernel_transport_outbox /
+    ///   kernel_result_outbox 追加重试与死信列（attempt_count / max_attempts / next_attempt_at /
+    ///   last_error / dead_letter_reason），新增 kernel_transport_dead_letter 表，并为
+    ///   kernel_transport_outbox.instruction_id 添加 UNIQUE 约束（让 SendResultAsync 幂等，
+    ///   result_id 改为基于 instruction_id 的稳定值，避免 Replayer 重发产生重复投递）。
+    /// P0-6：v37 → v38，新增 model_activation_audit 表与索引（Model Control Plane 激活审计持久化，
+    ///   记录 Activate/Rollback/Retire/Shadow/Warmup 等模型生命周期事件，含 previous_model_id /
+    ///   operator / reason / node_id 等业务字段，支持 HA 多节点对账与 Champion/Challenger 推进追溯）。
+    /// 运行时能力补齐：v38 → v39，新增 agent_run_approvals + agent_run_leases 表与索引：
+    ///   - agent_run_approvals：durable approval 持久化（Pending/Approved/Rejected 状态机 + CAS 裁决），
+    ///     让进程崩溃恢复后可重新加载未决审批，外部审批系统通过 approval_id 提交决策。
+    ///   - agent_run_leases：HA Run Owner Lease（PostgreSQL-backed CAS 租约），
+    ///     确保同一时刻仅一个 Host 实例处理同一 Run，复用 canary_leader_leases 模式。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v32";
+    public const string SchemaVersion = "cc-schema-v39";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -132,9 +157,19 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // 任务 F：Agent Run 状态机 + 事件流哈希链持久化
         "agent_runs",
         "agent_run_events",
-        // 任务 D：Canary HA 聚合（跨实例指标样本 + Leader 租约）
+        // 任务 D：Canary HA 聚合（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
         "canary_metrics_samples",
-        "canary_leader_leases"
+        "canary_leader_leases",
+        "canary_run_epochs",
+        // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
+        "learning_event_outbox",
+        // Durable Delivery v37：Durable Transport Dead Letter Queue（超过 max_attempts 的指令/结果）
+        "kernel_transport_dead_letter",
+        // P0-6：Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
+        "model_activation_audit",
+        // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化
+        "agent_run_approvals",
+        "agent_run_leases"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -304,7 +339,29 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("canary_metrics_samples", "run_recorded"),
         ("canary_metrics_samples", "run_instance"),
         // canary_leader_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
-        ("canary_leader_leases", "expires")
+        ("canary_leader_leases", "expires"),
+        // Learning Loop Durable Outbox 索引（按 state + created_at 拉 Pending + 按租约过期重试 + 按 workspace 查）
+        ("learning_event_outbox", "state"),
+        ("learning_event_outbox", "lease"),
+        ("learning_event_outbox", "workspace"),
+        // Durable Delivery v37：重试与死信索引
+        // inbox/outbox 按 next_attempt_at 取可重试的 Pending 行（LeaseAsync WHERE next_attempt_at <= now）
+        ("kernel_transport_inbox", "retry"),
+        ("kernel_transport_outbox", "retry"),
+        ("kernel_result_outbox", "retry"),
+        // DLQ 按 source + created_at 列举（GetDeadLetterEntriesAsync）
+        ("kernel_transport_dead_letter", "source"),
+        ("kernel_transport_dead_letter", "created"),
+        // P0-6：model_activation_audit 索引（按 model_artifact_id 查历史 + 按 operation 过滤 + 按时间倒序列举）
+        ("model_activation_audit", "model"),
+        ("model_activation_audit", "operation"),
+        ("model_activation_audit", "timestamp"),
+        // 运行时能力补齐：durable approval + HA Run Owner Lease 索引
+        // agent_run_approvals：按 run + pending 状态列举未决审批 + 按 run 列举全部审批历史
+        ("agent_run_approvals", "run_pending"),
+        ("agent_run_approvals", "run"),
+        // agent_run_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
+        ("agent_run_leases", "expires")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -414,9 +471,18 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // 任务 F：Agent Run 状态机 + 事件流哈希链持久化表
         var agentRuns = Infrastructure.PostgresNames.Table(options, "agent_runs");
         var agentRunEvents = Infrastructure.PostgresNames.Table(options, "agent_run_events");
-        // 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约）
+        // 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
         var canaryMetricsSamples = Infrastructure.PostgresNames.Table(options, "canary_metrics_samples");
         var canaryLeaderLeases = Infrastructure.PostgresNames.Table(options, "canary_leader_leases");
+        var canaryRunEpochs = Infrastructure.PostgresNames.Table(options, "canary_run_epochs");
+        var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
+        // Durable Delivery v37：Durable Transport Dead Letter Queue 表
+        var kernelTransportDeadLetter = Infrastructure.PostgresNames.Table(options, "kernel_transport_dead_letter");
+        // P0-6：Model Control Plane 激活审计持久化表
+        var modelActivationAudit = Infrastructure.PostgresNames.Table(options, "model_activation_audit");
+        // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化表
+        var agentRunApprovals = Infrastructure.PostgresNames.Table(options, "agent_run_approvals");
+        var agentRunLeases = Infrastructure.PostgresNames.Table(options, "agent_run_leases");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1558,7 +1624,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflic
 -- R29 WP-B-1：Tool Dispatch Journal 持久化表（HA 崩溃恢复 exactly-once）
 -- tool_dispatch_journal_entries: request_id 主键 — 每个 tool 调用一条 journal 条目
 -- state 为 smallint（ToolDispatchState byte 枚举：0=Prepared, 1=Dispatched, 2=Committed, 3=ResultDelivered）
--- 前向推进由 UPDATE ... WHERE state < :target 保证原子性
+-- P0-3 CAS-1：前向推进由 UPDATE ... WHERE state = :expected_state 保证原子性（精确前驱匹配，禁止跨级跳跃）
 CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
     request_id text NOT NULL,
     tool_name text NOT NULL DEFAULT '',
@@ -1567,8 +1633,17 @@ CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
     external_operation_id text,
     updated_at timestamptz NOT NULL,
     diagnostic_note text,
+    payload_digest text,
+    workspace_id text,
+    run_id text,
     PRIMARY KEY (request_id)
 );
+
+-- P0-3 CAS-2：为已有数据库（v32 及更早）补加 payload_digest / workspace_id / run_id 列。
+-- 新数据库由上方 CREATE TABLE 直接创建；ALTER ... ADD COLUMN IF NOT EXISTS 保证幂等。
+ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS payload_digest text;
+ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS workspace_id text;
+ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS run_id text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
 -- P0-3：idempotency_key 升级为 UNIQUE partial index。
@@ -1658,6 +1733,70 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "pending")} ON {kernelTransportOutbox} (created_at ASC) WHERE state = 'Pending';
 -- P0-1：按 lease_expires_at 查过期 Leased 行
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "expired")} ON {kernelTransportOutbox} (lease_expires_at ASC) WHERE state = 'Leased';
+
+-- Durable Delivery v37：重试与死信支持
+-- 1) kernel_transport_inbox / kernel_transport_outbox / kernel_result_outbox 追加重试列（幂等）：
+--    attempt_count：累计失败次数（Nack / lease 过期回滚 +1）；max_attempts：上限，超过移入 DLQ；
+--    next_attempt_at：指数退避后的下次可重试时间（NULL 表示立即可重试）；
+--    last_error：最近一次失败原因（截断到合理长度）；dead_letter_reason：进入 DLQ 时的归档原因。
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NULL;
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS last_error text NULL;
+ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS dead_letter_reason text NULL;
+
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NULL;
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS last_error text NULL;
+ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS dead_letter_reason text NULL;
+
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NULL;
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS last_error text NULL;
+ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS dead_letter_reason text NULL;
+
+-- 2) 按 next_attempt_at 取可重试的 Pending 行（LeaseAsync WHERE next_attempt_at IS NULL OR next_attempt_at <= now）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "retry")} ON {kernelTransportInbox} (next_attempt_at ASC) WHERE state = 'Pending';
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "retry")} ON {kernelTransportOutbox} (next_attempt_at ASC) WHERE state = 'Pending';
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "retry")} ON {kernelResultOutbox} (next_attempt_at ASC) WHERE state = 'Pending';
+
+-- 3) kernel_transport_outbox.instruction_id UNIQUE 约束：让 SendResultAsync 用
+--    result_id = 'result-' || instruction_id + ON CONFLICT (instruction_id) DO NOTHING 实现幂等，
+--    避免 Replayer 在 Ack 失败后重发产生重复投递（消费者侧也可基于 instruction_id 去重）。
+--    预清理：删除同一 instruction_id 的重复旧行（保留最新一行），保证 UNIQUE 约束创建成功。
+DELETE FROM {kernelTransportOutbox} o
+WHERE result_id NOT IN (
+    SELECT result_id FROM (
+        SELECT result_id, instruction_id,
+               ROW_NUMBER() OVER (PARTITION BY instruction_id ORDER BY created_at DESC, result_id DESC) AS rn
+        FROM {kernelTransportOutbox}
+    ) ranked WHERE rn = 1
+) AND instruction_id <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "instruction_unique")}
+    ON {kernelTransportOutbox} (instruction_id) WHERE instruction_id <> '';
+
+-- 4) kernel_transport_dead_letter：Durable Transport Dead Letter Queue 表
+--    超过 max_attempts 的指令/结果从原表归档到此表，保留原始 data 与失败诊断供人工介入/重投。
+--    source：'inbox' / 'outbox' / 'result_outbox'，标识来源表；
+--    original_id：原表主键（instruction_id / result_id / outbox_id）；
+--    attempt_count：归档时的累计失败次数；last_error / dead_letter_reason：失败诊断；
+--    original_data：原行完整 data jsonb，便于诊断或重投回原队列。
+CREATE TABLE IF NOT EXISTS {kernelTransportDeadLetter} (
+    dead_letter_id text NOT NULL,
+    source text NOT NULL,
+    original_id text NOT NULL,
+    attempt_count integer NOT NULL DEFAULT 0,
+    last_error text NULL,
+    dead_letter_reason text NULL,
+    original_data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (dead_letter_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_dead_letter", "source")} ON {kernelTransportDeadLetter} (source, created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_dead_letter", "created")} ON {kernelTransportDeadLetter} (created_at ASC);
 
 -- R29 WP-A-1：Model Artifact Registry 持久化表
 -- model_artifacts: model_artifact_id 主键 — 每个已注册模型工件描述符一行
@@ -1822,9 +1961,16 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
     final_answer text NULL,
     turn_budget_json text NULL,
     cost_budget_json text NULL,
+    last_checkpoint_id text NULL,
+    last_checkpoint_sequence integer NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (workspace_id, run_id)
 );
+
+-- G4：v34 → v35 迁移：为已有 agent_runs 表补充 last_checkpoint_id / last_checkpoint_sequence 列
+-- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_id text NULL;
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_sequence integer NULL;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);
@@ -1849,15 +1995,16 @@ CREATE TABLE IF NOT EXISTS {agentRunEvents} (
     PRIMARY KEY (workspace_id, run_id, sequence)
 );
 
--- 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约）
--- canary_metrics_samples：各实例定期写入本地 CanaryObservationMetrics 快照（含外部指标），
---   聚合器通过 SUM/AVG 合并跨实例视图。sample_id 主键（GUID），幂等写入由调用方保证。
---   反规范化 run_id / instance_id / recorded_at 字段以便索引查询；
---   外部指标 nullable（未采集时为 NULL，聚合用 AVG 跳过 NULL）。
+-- 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
+-- canary_metrics_samples：各实例定期 UPSERT 本地 CanaryObservationMetrics 快照（含外部指标）。
+--   v36 最新快照模型：PK = (run_id, stage_epoch, instance_id)，每次 UPSERT 覆盖该实例最新累计值，
+--   不再追加行。聚合时只汇总 WHERE stage_epoch = current_epoch 的行，避免重复累计。
+--   反规范化 recorded_at 字段以便索引查询；外部指标 nullable（未采集时为 NULL，聚合用 AVG 跳过 NULL）。
 CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
-    sample_id text NOT NULL,
+    sample_id text NOT NULL DEFAULT '',
     run_id text NOT NULL,
     instance_id text NOT NULL,
+    stage_epoch bigint NOT NULL DEFAULT 0,
     recorded_at timestamptz NOT NULL,
     total_observations integer NOT NULL DEFAULT 0,
     divergent_count integer NOT NULL DEFAULT 0,
@@ -1879,11 +2026,48 @@ CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
     external_sample_count integer NOT NULL DEFAULT 0,
     external_window_start timestamptz,
     external_window_end timestamptz,
-    PRIMARY KEY (sample_id)
+    PRIMARY KEY (run_id, stage_epoch, instance_id)
 );
 
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_metrics_samples", "run_recorded")} ON {canaryMetricsSamples} (run_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_metrics_samples", "run_instance")} ON {canaryMetricsSamples} (run_id, instance_id, recorded_at DESC);
+-- v36 迁移：为已有数据库（v32-v35 创建的旧表）补加 stage_epoch 列并迁移 PK。
+-- 新数据库由上方 CREATE TABLE 直接创建新结构；ALTER 仅对已存在的旧表生效（幂等）。
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS stage_epoch bigint NOT NULL DEFAULT 0;
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS sample_id text NOT NULL DEFAULT '';
+-- 旧表 PK 为 (sample_id)；新表 PK 为 (run_id, stage_epoch, instance_id)。
+-- 使用 DO 块幂等切换：先去重（保留每实例最新行），再 drop 旧 PK，再加新 PK。
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = '{canaryMetricsSamples}'::regclass
+          AND contype = 'p'
+          AND conname = 'canary_metrics_samples_pkey'
+    ) THEN
+        -- 检查旧 PK 是否仅含 sample_id（v32-v35 结构）
+        IF EXISTS (
+            SELECT 1 FROM pg_index
+            WHERE indrelid = '{canaryMetricsSamples}'::regclass
+              AND indexname = 'canary_metrics_samples_pkey'
+              AND array_length(indkey::smallint[], 1) = 1
+        ) THEN
+            -- 去重：同一 (run_id, stage_epoch, instance_id) 保留 recorded_at 最新的一行
+            DELETE FROM {canaryMetricsSamples} a
+            USING {canaryMetricsSamples} b
+            WHERE a.run_id = b.run_id
+              AND COALESCE(a.stage_epoch, 0) = COALESCE(b.stage_epoch, 0)
+              AND a.instance_id = b.instance_id
+              AND a.ctid < b.ctid;
+            ALTER TABLE {canaryMetricsSamples} DROP CONSTRAINT canary_metrics_samples_pkey;
+            ALTER TABLE {canaryMetricsSamples} ADD PRIMARY KEY (run_id, stage_epoch, instance_id);
+        END IF;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    -- 防御性：若 PK 切换失败（如存在重复行无法去重），不阻塞迁移，下次启动重试。
+    RAISE NOTICE 'canary_metrics_samples PK 迁移跳过: %', SQLERRM;
+END $$;
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_metrics_samples", "run_recorded")} ON {canaryMetricsSamples} (run_id, stage_epoch, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_metrics_samples", "run_instance")} ON {canaryMetricsSamples} (run_id, stage_epoch, instance_id, recorded_at DESC);
 
 -- canary_leader_leases：Leader 租约表（每个 run_id 至多一条行）。
 -- TryAcquireAsync 使用 INSERT ... ON CONFLICT (run_id) DO UPDATE WHERE lease_expires_at < now
@@ -1900,6 +2084,109 @@ CREATE TABLE IF NOT EXISTS {canaryLeaderLeases} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_leader_leases", "expires")} ON {canaryLeaderLeases} (lease_expires_at ASC);
+
+-- canary_run_epochs：per-run 单调递增 stage epoch 跟踪表（v36 新增）。
+-- Leader 推进百分比档时调用 AdvanceEpochAsync 递增 current_epoch；
+-- 所有实例在下一次轮询时读取 current_epoch，若发现变化则 Reset 本地 Collector。
+-- 聚合器只汇总 WHERE stage_epoch = current_epoch 的快照行，旧 epoch 数据不参与聚合。
+CREATE TABLE IF NOT EXISTS {canaryRunEpochs} (
+    run_id text NOT NULL,
+    current_epoch bigint NOT NULL DEFAULT 0,
+    advanced_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id)
+);
+
+-- Learning Loop Durable Outbox：Decision 物化事件持久化表。
+-- 替代 fire-and-forget Task.Run → MaterializeAsync → catch-all 模式，消除进程崩溃时静默丢训练数据。
+-- 生命周期：Pending → Processing(Leased) → Acked / DeadLettered（超过 max_retry_count）。
+-- AcquirePendingAsync 使用 SELECT ... FOR UPDATE SKIP LOCKED（与 relation_outbox / context_jobs 一致）。
+CREATE TABLE IF NOT EXISTS {learningEventOutbox} (
+    event_id text NOT NULL,
+    workspace_id text NOT NULL DEFAULT '',
+    collection_id text NOT NULL DEFAULT '',
+    decision_id text NOT NULL,
+    payload jsonb NOT NULL,
+    state text NOT NULL DEFAULT 'Pending',
+    retry_count integer NOT NULL DEFAULT 0,
+    max_retry_count integer NOT NULL DEFAULT 5,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    processed_at timestamptz NULL,
+    lease_owner text NULL,
+    lease_expires_at timestamptz NULL,
+    last_error text NULL,
+    dead_letter_reason text NULL,
+    PRIMARY KEY (event_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "state")} ON {learningEventOutbox} (state, created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "lease")} ON {learningEventOutbox} (state, lease_expires_at);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "workspace")} ON {learningEventOutbox} (workspace_id, collection_id);
+
+-- P0-6：Model Control Plane 激活审计持久化表
+-- model_activation_audit: append-only 审计表，记录 Activate / Rollback / Retire / Shadow / Warmup /
+--   Validate / Register 等模型生命周期事件，含 previous_model_id / operator / reason / node_id 业务字段。
+-- 反规范化 model_artifact_id / model_name / operation / timestamp 字段以便索引查询；
+-- 完整 ModelActivationAuditEntry 对象保存在 data jsonb，由 store 反序列化。
+-- 不可变语义：审计记录一旦写入不可修改（无 ON CONFLICT 子句，重复写入由调用方保证幂等）。
+CREATE TABLE IF NOT EXISTS {modelActivationAudit} (
+    audit_id text NOT NULL,
+    model_artifact_id text NOT NULL,
+    model_name text NOT NULL,
+    operation smallint NOT NULL,
+    succeeded boolean NOT NULL,
+    timestamp timestamptz NOT NULL,
+    previous_model_artifact_id text,
+    operator text,
+    reason text,
+    error_message text,
+    node_id text,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (audit_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_activation_audit", "model")} ON {modelActivationAudit} (model_artifact_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_activation_audit", "operation")} ON {modelActivationAudit} (operation, timestamp DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_activation_audit", "timestamp")} ON {modelActivationAudit} (timestamp DESC);
+
+-- 运行时能力补齐：durable approval 持久化表
+-- 反规范化 workspace_id / approval_id / run_id / tool_call_id / tool_name / status 字段以便索引查询；
+-- 完整 AgentApproval 对象保存在 data jsonb，由 store 反序列化。
+-- CreateAsync 使用 ON CONFLICT (workspace_id, approval_id) DO NOTHING（幂等）。
+-- ResolveAsync 使用 expected-state CAS：UPDATE WHERE status = Pending（0 行抛异常）。
+CREATE TABLE IF NOT EXISTS {agentRunApprovals} (
+    workspace_id text NOT NULL,
+    approval_id text NOT NULL,
+    run_id text NOT NULL,
+    tool_call_id text NOT NULL DEFAULT '',
+    tool_name text NOT NULL DEFAULT '',
+    status smallint NOT NULL DEFAULT 0,
+    reason text NULL,
+    rejection_reason text NULL,
+    approver_id text NULL,
+    created_at timestamptz NOT NULL,
+    resolved_at timestamptz NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (workspace_id, approval_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_approvals", "run_pending")} ON {agentRunApprovals} (workspace_id, run_id, status, created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_approvals", "run")} ON {agentRunApprovals} (workspace_id, run_id, created_at ASC);
+
+-- 运行时能力补齐：HA Run Owner Lease 持久化表
+-- 复用 canary_leader_leases 模式：每个 run_id 至多一条行，
+-- TryAcquireAsync 使用 INSERT ... ON CONFLICT DO UPDATE WHERE lease_expires_at < now（CAS 抢占过期租约）。
+-- RenewAsync / ReleaseAsync / ReapExpiredAsync 基于 lease_token 匹配。
+CREATE TABLE IF NOT EXISTS {agentRunLeases} (
+    run_id text NOT NULL,
+    owner text NOT NULL,
+    lease_token text NOT NULL,
+    acquired_at timestamptz NOT NULL,
+    lease_expires_at timestamptz NOT NULL,
+    PRIMARY KEY (run_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_leases", "expires")} ON {agentRunLeases} (lease_expires_at);
 """;
     }
 

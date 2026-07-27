@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Tests;
@@ -227,7 +228,7 @@ public sealed class RequestSemanticsAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -241,7 +242,7 @@ public sealed class RequestSemanticsAcceptanceTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakeExpertResult(string entityId)
@@ -530,7 +531,7 @@ public sealed class ReplayAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         var integration = new DecisionExperimentPlaneIntegration(
@@ -577,7 +578,7 @@ public sealed class ReplayAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         var integration = new DecisionExperimentPlaneIntegration(
@@ -826,7 +827,7 @@ public sealed class OtherAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         var integration = new DecisionExperimentPlaneIntegration(

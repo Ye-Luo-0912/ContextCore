@@ -128,11 +128,17 @@ public sealed record CanaryAggregatedMetrics
     /// <summary>V2 P95 延迟（跨实例取 max 或合并 DDSketch 后查询）。</summary>
     public required double V2P95LatencyMs { get; init; }
 
+    /// <summary>Legacy P95 延迟（跨实例加权平均；用于 latency multiplier 回滚门）。</summary>
+    public required double LegacyP95LatencyMs { get; init; }
+
     /// <summary>进程内质量分（token budget + FinalScore；诊断用）。</summary>
     public required double AverageQualityScore { get; init; }
 
     /// <summary>外部结果指标（ground truth；null = 未采集）。</summary>
     public ExternalResultMetrics? ExternalMetrics { get; init; }
+
+    /// <summary>聚合时使用的 stage epoch（用于诊断与过滤确认）。</summary>
+    public required long CurrentStageEpoch { get; init; }
 
     /// <summary>聚合窗口起止时间（UTC）。</summary>
     public required DateTimeOffset WindowStart { get; init; }
@@ -150,6 +156,16 @@ public sealed record CanaryAggregatedMetrics
 /// - Redis/stream：各节点上报到 stream，聚合器消费合并。
 ///
 /// 单节点部署时实现层可直接返回进程内 CanaryMetricsCollector 的快照（InstanceCount=1）。
+///
+/// <b>Stage Epoch 模型</b>（修复 HA 聚合数据重复累计问题）：
+/// <list type="bullet">
+/// <item>每个 Canary run 维护一个单调递增的 <c>stage_epoch</c>，存储在 <c>canary_run_epochs</c> 表。</item>
+/// <item>各实例 UPSERT 本地快照到 <c>canary_metrics_samples</c>，PK = (run_id, stage_epoch, instance_id)，
+///   即每个 epoch 内每实例只保留最新一条快照。</item>
+/// <item>Leader 推进百分比档时调用 <see cref="AdvanceEpochAsync"/> 递增 epoch，
+///   随后所有实例在下一次轮询时检测到 epoch 变化并 Reset 本地 Collector，从 0 开始新 epoch 累计。</item>
+/// <item>聚合时只汇总 <c>WHERE stage_epoch = current_epoch</c> 的行，旧 epoch 数据不参与聚合。</item>
+/// </list>
 /// </remarks>
 public interface ICanaryMetricsAggregator
 {
@@ -160,10 +176,43 @@ public interface ICanaryMetricsAggregator
     /// <param name="externalMetricsSource">外部指标源（可选；为 null 时 ExternalMetrics=null）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>全局聚合指标。</returns>
+    /// <remarks>
+    /// 聚合自动使用当前 stage epoch（从 <see cref="GetCurrentEpochAsync"/> 读取），
+    /// 仅汇总 <c>stage_epoch = current_epoch</c> 的最新快照行。
+    /// </remarks>
     ValueTask<CanaryAggregatedMetrics> AggregateAsync(
         string runId,
         ICanaryExternalMetricsSource? externalMetricsSource = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 递增指定 run 的 stage epoch（Leader 推进百分比档时调用）。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>递增后的新 epoch 值。</returns>
+    /// <remarks>
+    /// 递增后，所有实例在下一次轮询时应检测到 epoch 变化并 Reset 本地 Collector。
+    /// 旧 epoch 的快照行不再参与聚合（但保留在表中供审计，由 <see cref="PruneOldEpochsAsync"/> 清理）。
+    /// </remarks>
+    ValueTask<long> AdvanceEpochAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取指定 run 的当前 stage epoch。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 epoch（未初始化时为 0）。</returns>
+    ValueTask<long> GetCurrentEpochAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 清理旧 epoch 的快照行（控制表增长）。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="keepEpochCount">保留最近 N 个 epoch 的数据（默认 2）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>删除的行数。</returns>
+    ValueTask<int> PruneOldEpochsAsync(string runId, int keepEpochCount = 2, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

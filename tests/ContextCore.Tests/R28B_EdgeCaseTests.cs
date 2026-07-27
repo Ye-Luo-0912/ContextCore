@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Tests;
@@ -157,7 +158,7 @@ public sealed class TokenBudgetZeroEdgeCaseTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
     }
 
@@ -359,7 +360,7 @@ public sealed class AllCandidatesBlockedEdgeCaseTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
     }
 
@@ -401,7 +402,7 @@ public sealed class CancellationEdgeCaseTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Lexical, 0.5, 100);
@@ -431,7 +432,7 @@ public sealed class CancellationEdgeCaseTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         // Provider 在执行时检查 cancellation token 并抛出 OperationCanceledException
@@ -447,7 +448,7 @@ public sealed class CancellationEdgeCaseTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
 
         var request = new ContextDecisionRuntimeRequest
         {
@@ -505,7 +506,7 @@ public sealed class CancellationEdgeCaseTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Lexical, 0.5, 100);

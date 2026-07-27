@@ -69,10 +69,25 @@ public sealed class InMemoryKernelResultOutbox : IKernelResultOutbox
         return null;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 当前 outbox 中待重放的结果数——<b>本进程 channel 计数</b>，仅反映 <see cref="EnqueueAsync"/>
+    /// 写入但尚未被 <see cref="DequeueAsync"/> 读取的结果，<b>不是</b>全局视图。
+    /// </summary>
+    /// <remarks>
+    /// 返回进程内 bounded Channel 的 <c>Reader.Count</c>；不反映持久化 outbox（如 <c>PostgresKernelResultOutbox</c>）
+    /// 中跨实例累积的 backlog。<b>不可用于调度或安全判断</b>（如 shutdown、限流、拒绝请求）；
+    /// 生产指标应使用 <see cref="GetPendingCountAsync"/> 或后台聚合服务导出的 <c>global_pending_count</c>。
+    /// 仅适用于单进程部署/测试场景。
+    /// </remarks>
     public int PendingCount => _channel.Reader.Count;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 异步获取 pending 数量。
+    /// 对 <see cref="InMemoryKernelResultOutbox"/> 返回<b>本进程 channel 计数</b>（与 <see cref="PendingCount"/> 相同）；
+    /// 持久化实现（如 <c>PostgresKernelResultOutbox</c>）返回<b>DB 精确值（全局，跨实例）</b>。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 outbox 中 state='Pending' 的结果数。</returns>
     public ValueTask<int> GetPendingCountAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

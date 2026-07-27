@@ -110,10 +110,28 @@ public sealed class InProcessTransport : IAgentKernelTransport
         return null;
     }
 
-    /// <summary>当前 inbox 中待处理指令数。</summary>
+    /// <summary>
+    /// 当前 inbox 中待处理指令数——<b>本进程 channel 计数</b>，仅反映 <see cref="SubmitAsync"/>
+    /// 写入但尚未被 <see cref="ReceiveAsync"/> 读取的指令，<b>不是</b>全局 Transport 视图。
+    /// </summary>
+    /// <remarks>
+    /// 返回进程内 bounded Channel 的 <c>Reader.Count</c>；不反映远程 Transport（如 <see cref="IDurableTransport"/>）
+    /// 中持久化的 backlog。<b>不可用于调度或安全判断</b>（如 shutdown、限流、拒绝请求）；
+    /// 生产指标应使用 <c>IDurableTransport.GetPendingInstructionCountAsync</c> 或后台聚合服务导出的
+    /// <c>global_pending_count</c>。仅适用于单进程部署/测试场景。
+    /// </remarks>
     public int PendingInstructionCount => _inbox.Reader.Count;
 
-    /// <summary>当前 outbox 中待读取结果数。</summary>
+    /// <summary>
+    /// 当前 outbox 中待读取结果数——<b>本进程 channel 计数</b>，仅反映 <see cref="SendResultAsync"/>
+    /// 写入但尚未被 <see cref="ReceiveResultAsync"/> 读取的结果，<b>不是</b>全局 Transport 视图。
+    /// </summary>
+    /// <remarks>
+    /// 返回进程内 bounded Channel 的 <c>Reader.Count</c>；不反映远程 Transport（如 <see cref="IDurableTransport"/>）
+    /// 中持久化的 backlog。<b>不可用于调度或安全判断</b>（如 shutdown、限流、拒绝请求）；
+    /// 生产指标应使用 <c>IDurableTransport.GetPendingResultCountAsync</c> 或后台聚合服务导出的
+    /// <c>global_pending_count</c>。仅适用于单进程部署/测试场景。
+    /// </remarks>
     public int PendingResultCount => _outbox.Reader.Count;
 
     /// <summary>完成 inbox / outbox 写入端（不再接受新数据）。</summary>

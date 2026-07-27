@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Tests;
@@ -332,7 +333,7 @@ public sealed class ShadowDecisionRuntimeComponentTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -346,7 +347,7 @@ public sealed class ShadowDecisionRuntimeComponentTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakeExpertResultWithContent(string entityId, string content)

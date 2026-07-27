@@ -1,6 +1,8 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Service.Infrastructure;
+using ContextCore.Service.Security;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Service.Endpoints;
@@ -10,13 +12,25 @@ internal static class LearningEndpoints
 {
     public static IEndpointRouteBuilder MapLearningEndpoints(this IEndpointRouteBuilder app)
     {
+        // Learning 端点至少需要 Viewer 角色（含查询 / 反馈提交 / 案例管理）。
+        // RBAC 强制校验未启用时（Security:Rbac:Enforce=false）自动放行，仅记录审计日志。
         var group = app.MapGroup("/api/learning")
-            .WithTags("Learning");
+            .WithTags("Learning")
+            .RequireWorkspaceRole(WorkspaceRole.Viewer);
 
         group.MapPost("/feedback", SubmitRuntimeLearningFeedbackAsync)
             .WithName("SubmitRuntimeLearningFeedback")
             .WithSummary("提交运行时学习反馈事件；仅采集，不改变正式策略")
             .Produces<LearningFeedbackSubmitResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
+
+        // Delayed user feedback：用户对已完成的 AgentRun 提供反馈（评分 / 修正），
+        // 关联到原始 decision_id，作为 delayed learning event 写入 pipeline。
+        // 注：POST /api/learning/feedback 已被 runtime feedback 占用，故使用 /feedback/run 子路径。
+        group.MapPost("/feedback/run", SubmitDelayedUserFeedbackAsync)
+            .WithName("SubmitDelayedUserFeedback")
+            .WithSummary("提交针对已完成 AgentRun 的延迟用户反馈；写入反馈账本并入队 learning pipeline")
+            .Produces<DelayedUserFeedbackResult>(StatusCodes.Status200OK)
             .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapGet("/feedback", async Task<IResult> (
@@ -538,6 +552,44 @@ internal static class LearningEndpoints
         catch (Exception ex)
         {
             return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.runtime.submit");
+        }
+    }
+
+    // Delayed user feedback：用户对已完成 AgentRun 的延迟反馈。
+    // 写入 UserFeedbackLedger + 入队 learning pipeline（关联原始 decision_id 作为 lineage 锚点）。
+    private static async Task<IResult> SubmitDelayedUserFeedbackAsync(
+        DelayedUserFeedbackRequest request,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<DelayedUserFeedbackService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.delayed.submit",
+                "当前 provider 未注册延迟用户反馈服务（DelayedUserFeedbackService）。");
+        }
+
+        try
+        {
+            var result = await service.SubmitAsync(request, ct)
+                .ConfigureAwait(false);
+            return Results.Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.feedback.delayed.submit",
+                ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.delayed.submit");
         }
     }
 

@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Tests;
@@ -135,7 +136,7 @@ public sealed class ProviderNetworkAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -149,7 +150,7 @@ public sealed class ProviderNetworkAcceptanceTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static IReadOnlyList<ICandidateProvider> BuildDefaultProviders() =>
@@ -397,7 +398,7 @@ public sealed class EngineAllocationAcceptanceTests
         // Runtime 委托 Engine 执行分配；Runtime 不再二次 Allocate
         var engine = new DefaultContextDecisionEngine(
             null, new DefaultSafetyGate(), new DefaultLifecycleGate(),
-            new DefaultUtilityScorer(), new DefaultGlobalAllocator());
+            new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()), new DefaultGlobalAllocator());
 
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Semantic, 0.8, 100);
         var snapshot = MakeSnapshot();
@@ -426,7 +427,7 @@ public sealed class EngineAllocationAcceptanceTests
         // SafetyGate 拦截的候选必须出现在 DroppedEnvelopes 中，携带 BlockReasonCode
         var engine = new DefaultContextDecisionEngine(
             null, new DefaultSafetyGate(), new DefaultLifecycleGate(),
-            new DefaultUtilityScorer(), new DefaultGlobalAllocator());
+            new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()), new DefaultGlobalAllocator());
 
         var blockedEnvelope = R28BTestHelpers.MakeEnvelope("blocked-1", ContextCandidateSource.Lexical, 0.3, 100,
             safety: new CandidateSafetyState
@@ -460,7 +461,7 @@ public sealed class EngineAllocationAcceptanceTests
         // request.TokenBudget 覆盖 snapshot.Budget.DefaultTokenBudget
         var engine = new DefaultContextDecisionEngine(
             null, new DefaultSafetyGate(), new DefaultLifecycleGate(),
-            new DefaultUtilityScorer(), new DefaultGlobalAllocator());
+            new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()), new DefaultGlobalAllocator());
 
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Semantic, 0.8, 600);
         var snapshot = MakeSnapshot(); // DefaultTokenBudget from bundle (likely 8192)
@@ -487,7 +488,7 @@ public sealed class EngineAllocationAcceptanceTests
         // mandatory 候选超出 token budget 时仍被选入（AllowOverflowWithDiagnostic 语义）
         var engine = new DefaultContextDecisionEngine(
             null, new DefaultSafetyGate(), new DefaultLifecycleGate(),
-            new DefaultUtilityScorer(), new DefaultGlobalAllocator());
+            new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()), new DefaultGlobalAllocator());
 
         var mandatoryEnvelope = R28BTestHelpers.MakeEnvelope("mand-1", ContextCandidateSource.Mandatory, 1.0, 500,
             safety: new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true });
@@ -748,7 +749,7 @@ public sealed class CutoverAndDiAcceptanceTests
             policyRegistry: null,
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(),
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
             globalAllocator: new DefaultGlobalAllocator());
 
         return new DefaultContextDecisionRuntime(
@@ -762,7 +763,7 @@ public sealed class CutoverAndDiAcceptanceTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer());
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
     }
 
     private static ExpertExecutionResult MakeExpertResultWithContent(string entityId, string content)

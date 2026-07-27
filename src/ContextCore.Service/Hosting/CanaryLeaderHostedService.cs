@@ -44,6 +44,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     private readonly CanaryProgressionService _progressionService;
     private readonly ICanaryLeaderLease _leaderLease;
     private readonly ICanaryMetricsAggregator _metricsAggregator;
+    private readonly ICanaryExternalMetricsSource _externalMetricsSource;
     private readonly IOptions<CanaryLeaderOptions> _options;
     private readonly ILogger<CanaryLeaderHostedService> _logger;
     private readonly string _instanceId;
@@ -52,12 +53,17 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     // 当前持有的租约（runId → lease token），用于续租与释放
     private readonly Dictionary<string, string> _heldLeases = new(StringComparer.Ordinal);
 
+    // 本实例已知的最新 stage epoch（runId → lastKnownEpoch）。
+    // 每次轮询时与 DB 中的 current_epoch 比较；若 epoch 已推进，Reset 本地 Collector 从 0 开始新 epoch 累计。
+    private readonly Dictionary<string, long> _lastKnownEpoch = new(StringComparer.Ordinal);
+
     public CanaryLeaderHostedService(
         IServiceProvider services,
         ICanaryMetricsCollector metricsCollector,
         CanaryProgressionService progressionService,
         ICanaryLeaderLease leaderLease,
         ICanaryMetricsAggregator metricsAggregator,
+        ICanaryExternalMetricsSource externalMetricsSource,
         IOptions<CanaryLeaderOptions> options,
         ILogger<CanaryLeaderHostedService> logger)
     {
@@ -66,6 +72,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         _progressionService = progressionService;
         _leaderLease = leaderLease;
         _metricsAggregator = metricsAggregator;
+        _externalMetricsSource = externalMetricsSource;
         _options = options;
         _logger = logger;
         _timeProvider = TimeProvider.System;
@@ -179,7 +186,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     }
 
     /// <summary>
-    /// 处理单个 canary run：记录本地样本 + 尝试获取/续租 leader 租约 + 聚合评估。
+    /// 处理单个 canary run：检测 epoch 变化 + 记录本地样本 + 尝试获取/续租 leader 租约 + 聚合评估。
     /// </summary>
     private async Task ProcessRunAsync(
         string runId,
@@ -187,6 +194,18 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         CancellationToken cancellationToken)
     {
         var options = _options.Value;
+
+        // 0. 检测 stage epoch 变化：若 DB 中的 current_epoch 已推进（Leader 推进了百分比档），
+        //    Reset 本地 Collector 从 0 开始新 epoch 累计，避免旧累计值污染新阶段聚合。
+        var dbEpoch = await _metricsAggregator.GetCurrentEpochAsync(runId, cancellationToken).ConfigureAwait(false);
+        if (_lastKnownEpoch.TryGetValue(runId, out var localEpoch) && localEpoch != dbEpoch && dbEpoch > 0)
+        {
+            _metricsCollector.Reset(runId);
+            _logger.LogInformation(
+                "Canary run {RunId} 检测到 stage epoch 推进（{OldEpoch} → {NewEpoch}）；已 Reset 本地 Collector。",
+                runId, localEpoch, dbEpoch);
+        }
+        _lastKnownEpoch[runId] = dbEpoch;
 
         // 1. 所有实例都记录本地指标样本（供 leader 聚合）
         var localMetrics = _metricsCollector.GetAggregatedMetrics(runId);
@@ -196,7 +215,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             try
             {
                 await postgresAggregator.RecordSampleAsync(
-                    runId, _instanceId, sample, cancellationToken).ConfigureAwait(false);
+                    runId, _instanceId, dbEpoch, sample, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -214,8 +233,9 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         // 3. Leader：聚合跨实例指标 + 评估 + 推进/回滚
         try
         {
+            // v36 修复：传入有效的 ExternalMetricsSource（替代原来的 null），让聚合器优先使用新鲜外部指标
             var aggregated = await _metricsAggregator.AggregateAsync(
-                runId, externalMetricsSource: null, cancellationToken).ConfigureAwait(false);
+                runId, _externalMetricsSource, cancellationToken).ConfigureAwait(false);
 
             // 聚合指标为 0 样本时（无实例上报），跳过评估避免误判
             if (aggregated.InstanceCount == 0 || aggregated.TotalObservations == 0)
@@ -241,10 +261,19 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
 
                     if (result.Applied)
                     {
+                        // v36 修复：Leader 推进百分比档后递增 stage epoch，
+                        // 通知所有实例（含本实例）在下一次轮询时 Reset 本地 Collector 从 0 开始新 epoch 累计。
+                        // 这是"全实例 Reset"机制：通过 DB epoch flag 推送，所有实例 pull 检测。
+                        var newEpoch = await _metricsAggregator.AdvanceEpochAsync(runId, cancellationToken).ConfigureAwait(false);
                         _metricsCollector.Reset(runId);
+                        _lastKnownEpoch[runId] = newEpoch;
+
+                        // 周期性清理旧 epoch 数据，控制表增长
+                        _ = _metricsAggregator.PruneOldEpochsAsync(runId, cancellationToken: cancellationToken).AsTask();
+
                         _logger.LogInformation(
-                            "Canary run {RunId} 推进（leader={Owner}）：{Prev}% → {Curr}%。",
-                            runId, _instanceId, result.PreviousPercentage, result.CurrentPercentage);
+                            "Canary run {RunId} 推进（leader={Owner}）：{Prev}% → {Curr}%，stage_epoch → {Epoch}。",
+                            runId, _instanceId, result.PreviousPercentage, result.CurrentPercentage, newEpoch);
                     }
                     break;
                 }
@@ -391,16 +420,15 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
 
     /// <summary>将聚合指标转换为基线（Legacy 路径）指标字典。</summary>
     /// <remarks>
-    /// <see cref="CanaryAggregatedMetrics"/> 合约未包含 LegacyP95LatencyMs 字段（仅含 V2P95LatencyMs）。
-    /// 此处 baseline p95 用 0.0 占位：CanaryProgressionService 的 latency multiplier 比较时
-    /// V2 p95 / 0 会触发除零保护（通常回退到 1.0 倍率），不会误触发回滚。
-    /// 若未来合约补充 LegacyP95LatencyMs，应替换为真实值。
+    /// v36 修复：使用真实的 <see cref="CanaryAggregatedMetrics.LegacyP95LatencyMs"/>（跨实例加权平均）
+    /// 作为 baseline p95，让 CanaryProgressionService 的 latency multiplier 回滚门生效。
+    /// 之前固定为 0.0 会导致除零保护回退到 1.0 倍率，延迟回归无法触发回滚。
     /// </remarks>
     private static IReadOnlyDictionary<string, double> ToBaselineMetrics(CanaryAggregatedMetrics m)
         => new Dictionary<string, double>
         {
             ["error_rate"] = m.LegacyErrorRate,
-            ["p95_latency_ms"] = 0.0
+            ["p95_latency_ms"] = m.LegacyP95LatencyMs
         };
 
     /// <summary>将聚合指标转换为实验路径（V2 路径）指标字典。</summary>

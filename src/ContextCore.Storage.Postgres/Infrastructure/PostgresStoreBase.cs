@@ -69,6 +69,45 @@ public abstract class PostgresStoreBase
         return parameter;
     }
 
+    /// <summary>
+    /// 添加一个强类型数组参数（用于 unnest 批量插入）。调用方负责选择与列类型匹配的 <paramref name="npgsqlDbType"/>。
+    /// </summary>
+    /// <typeparam name="T">数组元素类型（如 int / short / DateTimeOffset / string）。</typeparam>
+    /// <param name="command">目标命令。</param>
+    /// <param name="name">参数名（不含 @）。</param>
+    /// <param name="npgsqlDbType">Npgsql 数组类型（如 <c>NpgsqlDbType.Array | NpgsqlDbType.Integer</c>）。</param>
+    /// <param name="values">数组值。</param>
+    protected static NpgsqlParameter AddArrayParameter<T>(NpgsqlCommand command, string name, NpgsqlDbType npgsqlDbType, T values)
+        where T : notnull
+    {
+        var parameter = command.Parameters.Add(name, npgsqlDbType);
+        parameter.Value = values;
+        return parameter;
+    }
+
+    /// <summary>
+    /// 添加一个可为 null 元素的 text[] 参数（用于 unnest 批量插入中允许 NULL 的列）。
+    /// Npgsql 对 string?[] 中的 null 元素会发送 SQL NULL。
+    /// </summary>
+    protected static NpgsqlParameter AddNullableTextArray(NpgsqlCommand command, string name, IReadOnlyList<string?> values)
+    {
+        var parameter = command.Parameters.Add(name, NpgsqlDbType.Array | NpgsqlDbType.Text);
+        // Npgsql 要求 string?[] 的 Value 类型；ToArray 保留 null 元素。
+        parameter.Value = values.ToArray();
+        return parameter;
+    }
+
+    /// <summary>
+    /// 添加一个可为 null 元素的 double[] 参数（用于 unnest 批量插入中允许 NULL 的列）。
+    /// Npgsql 对 double?[] 中的 null 元素会发送 SQL NULL。
+    /// </summary>
+    protected static NpgsqlParameter AddNullableDoubleArray(NpgsqlCommand command, string name, IReadOnlyList<double?> values)
+    {
+        var parameter = command.Parameters.Add(name, NpgsqlDbType.Array | NpgsqlDbType.Double);
+        parameter.Value = values.ToArray();
+        return parameter;
+    }
+
     protected static int TakeOrDefault(int take) => take > 0 ? take : 50;
 
     /// <summary>

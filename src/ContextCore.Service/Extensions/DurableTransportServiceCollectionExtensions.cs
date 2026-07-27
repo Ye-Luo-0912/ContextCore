@@ -12,6 +12,7 @@ namespace ContextCore.Service.Extensions;
 ///   - <see cref="DurableTransportInstructionPumpService"/>：从 PG inbox 租约指令 → SubmitAsync
 ///   - <see cref="ResultOutboxReplayService"/>：从 outbox 租约结果 → SendResultAsync → Ack
 ///   - <see cref="LeaseReaperService"/>：定时回滚过期 Leased 行
+///   - <see cref="PendingCountMetricsService"/>：定时查询 DB 精确 pending count 并更新 OTel 指标
 ///
 /// 通常由 <c>AddContextCorePostgresStorage(options, transportOptions)</c> 在
 /// <see cref="KernelTransportOptions.UseDurableTransport"/> = true 时自动调用。
@@ -20,7 +21,7 @@ namespace ContextCore.Service.Extensions;
 public static class DurableTransportServiceCollectionExtensions
 {
     /// <summary>
-    /// 注册 Durable Transport 后台托管服务（pump / replayer / reaper）。
+    /// 注册 Durable Transport 后台托管服务（pump / replayer / reaper / metrics）。
     /// 仅当 <see cref="IAgentKernelTransport"/> 运行时实现为 <see cref="IDurableTransport"/> 时生效。
     /// </summary>
     /// <param name="services">服务集合。</param>
@@ -40,6 +41,7 @@ public static class DurableTransportServiceCollectionExtensions
         services.AddHostedService<DurableTransportInstructionPumpService>();
         services.AddHostedService<ResultOutboxReplayService>();
         services.AddHostedService<LeaseReaperService>();
+        services.AddHostedService<PendingCountMetricsService>();
         return services;
     }
 }

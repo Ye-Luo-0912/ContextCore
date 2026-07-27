@@ -1,0 +1,263 @@
+name: Benchmark (main baseline)
+
+# main 分支完整基准：在固定 self-hosted runner 上运行全量 benchmark，
+# 使用生产 steady-state JIT 配置（Tiered Compilation + Tiered PGO + ReadyToRun 开启），
+# 完整迭代次数区间（Min=15 / Max=25 自适应），更新 baseline cache 供 benchmark-pr.yml 引用。
+#
+# 与 benchmark-pr.yml 区别：
+#   - self-hosted runner（固定硬件 → 跨 run 噪声更小，绝对值更可比）
+#   - 全量 benchmark filter（PR 仅跑稳定子集）
+#   - 更新 baseline cache（PR 仅读取）
+#   - REQUIRE_BASELINE=0：首次运行无基线时跳过对比并建立首版基线
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'benchmarks/**'
+      - '.github/workflows/benchmark-main.yml'
+      - 'scripts/benchmark-compare.sh'
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'BenchmarkDotNet filter (default: * for all)'
+        required: false
+        default: '*'
+
+concurrency:
+  group: benchmark-main
+  cancel-in-progress: false
+
+# 生产 steady-state JIT 配置：与生产部署一致，确保基线测量反映生产真实 JIT 行为。
+# 注意：原 benchmark.yml 关闭 TieredCompilation/TieredPGO 是为降低 CI 噪声，但与生产不符，
+# 导致 PR 基线测量在生产环境不成立。本 workflow 显式开启以建立"生产可用"基线。
+env:
+  DOTNET_TieredCompilation: 'true'
+  DOTNET_TieredPGO: 'true'
+  DOTNET_ReadyToRun: 'true'
+  DOTNET_gcServer: '1'
+  DOTNET_gcConcurrent: '1'
+  # main 完整基准阈值（与 PR 一致，确保跨 workflow 可比）
+  LATENCY_THRESHOLD_PCT: '10'
+  P95_THRESHOLD_PCT: '15'
+  ALLOCATION_THRESHOLD_PCT: '5'
+  # main 首次运行允许跳过对比（无基线），由本 workflow 建立首版
+  REQUIRE_BASELINE: '0'
+
+jobs:
+  benchmark:
+    name: Run full benchmarks & update baseline
+    # 固定 self-hosted runner：跨 run 硬件一致 → 基线绝对值可比。
+    # 若 self-hosted 不可用，可改为 ubuntu-latest（但跨 run 噪声会增大，基线置信度降低）。
+    runs-on: [ self-hosted, benchmark ]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      regression_found: ${{ steps.compare.outputs.regression_found }}
+      compare_rc: ${{ steps.compare.outputs.compare_rc }}
+      baseline_updated: ${{ steps.update-baseline.outputs.baseline_updated }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # 恢复基线（main 上既能读也能写）。首次运行无缓存 → cache miss 是预期行为。
+      - name: Restore benchmark baseline
+        id: baseline-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: benchmarks/baseline
+          key: benchmark-baseline-restore-${{ github.run_id }}
+          restore-keys: |
+            benchmark-baseline-main-
+
+      # 校验基线完整性（若存在）。cache miss 时跳过校验（首次运行建立基线）。
+      - name: Verify baseline integrity (if present)
+        id: baseline-verify
+        run: |
+          if [ ! -d benchmarks/baseline ] || [ -z "$(ls -A benchmarks/baseline 2>/dev/null)" ]; then
+            echo "baseline_present=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Baseline not found — first run will establish initial baseline (REQUIRE_BASELINE=0 allows this)."
+            exit 0
+          fi
+          found=0
+          for f in benchmarks/baseline/*-report-full.json; do
+            [ -f "$f" ] || continue
+            found=1
+            if [ ! -s "$f" ]; then
+              echo "::error::Baseline file is empty: $f"
+              exit 1
+            fi
+            if ! jq empty "$f" >/dev/null 2>&1; then
+              echo "::error::Baseline file is not valid JSON: $f"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "baseline_present=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Baseline directory exists but no *-report-full.json files — first run will establish baseline."
+            exit 0
+          fi
+          echo "baseline_present=true" >> $GITHUB_OUTPUT
+          echo "✅ Baseline integrity verified: $found file(s) present and valid JSON."
+        shell: bash
+
+      # P0-9 新增：环境指纹记录 CPU / Runner / Runtime / JIT 配置，附加到 baseline 报告。
+      # 这些信息让下游分析能解释跨 run 测量值差异（self-hosted runner 硬件变化时尤为重要）。
+      - name: Record environment fingerprint
+        run: |
+          mkdir -p benchmarks/results/results
+          if [ -f /proc/cpuinfo ]; then
+            CPU=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)
+          else
+            CPU=$(powershell -NoProfile -Command '(Get-CimInstance Win32_Processor).Name' 2>/dev/null | tr -d '\r' || echo "unknown")
+          fi
+          DOTNET_VER=$(dotnet --version)
+          {
+            echo "{"
+            echo "  \"runner\": \"${{ runner.name }}\","
+            echo "  \"os\": \"${{ runner.os }}\","
+            echo "  \"arch\": \"${{ runner.arch }}\","
+            echo "  \"cpu\": \"$CPU\","
+            echo "  \"dotnet\": \"$DOTNET_VER\","
+            echo "  \"tieredCompilation\": \"${DOTNET_TieredCompilation}\","
+            echo "  \"tieredPGO\": \"${DOTNET_TieredPGO}\","
+            echo "  \"readyToRun\": \"${DOTNET_ReadyToRun}\""
+            echo "}"
+          } > benchmarks/results/results/environment.json
+          echo "## Benchmark Environment Fingerprint" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: ${{ runner.name }} (${{ runner.os }} ${{ runner.arch }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **CPU**: $CPU" >> $GITHUB_STEP_SUMMARY
+          echo "- **.NET SDK**: $DOTNET_VER" >> $GITHUB_STEP_SUMMARY
+          echo "- **DOTNET_TieredCompilation**: ${DOTNET_TieredCompilation}" >> $GITHUB_STEP_SUMMARY
+          echo "- **DOTNET_TieredPGO**: ${DOTNET_TieredPGO}" >> $GITHUB_STEP_SUMMARY
+          echo "- **DOTNET_ReadyToRun**: ${DOTNET_ReadyToRun}" >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+      - name: Restore benchmark project
+        run: dotnet restore benchmarks/ContextCore.Benchmarks/ContextCore.Benchmarks.csproj
+
+      - name: Build benchmark project (Release)
+        run: dotnet build benchmarks/ContextCore.Benchmarks/ContextCore.Benchmarks.csproj -c Release --no-restore
+
+      # self-hosted runner 上运行全量 benchmark（filter 默认 *，由 workflow_dispatch 可覆盖）。
+      # BenchmarkOutputConfig 集中配置 Min=15 / Max=25 自适应迭代次数。
+      - name: Run benchmarks (full filter, production JIT)
+        run: |
+          cd benchmarks/ContextCore.Benchmarks
+          FILTER="${{ github.event.inputs.filter }}"
+          if [ -z "$FILTER" ]; then
+            FILTER="*"
+          fi
+          dotnet run -c Release --no-build -- \
+            --filter "$FILTER" \
+            --launchCount 1 \
+            --exporters json,csv
+        shell: bash
+
+      # P0-9 修复：传播脚本返回码（与 benchmark-pr.yml 一致）。
+      # main 上若检测到回归，Job 失败但不更新基线（保留好的基线供后续 PR 对比）。
+      - name: Compare with baseline
+        id: compare
+        if: success()
+        run: |
+          set +e
+          bash scripts/benchmark-compare.sh benchmarks/results/results benchmarks/baseline > /tmp/compare.out 2>&1
+          rc=$?
+          cat /tmp/compare.out
+          echo "compare_rc=$rc" >> $GITHUB_OUTPUT
+          if grep -q 'regression_found=true' /tmp/compare.out; then
+            echo "regression_found=true" >> $GITHUB_OUTPUT
+          elif [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then
+            # rc=3（基线缺失）在 main 上是预期行为（首次运行），不视为失败。
+            # rc=2/4 仍视为失败。
+            echo "regression_found=unknown" >> $GITHUB_OUTPUT
+          else
+            echo "regression_found=false" >> $GITHUB_OUTPUT
+          fi
+          {
+            echo "DETAIL<<EOF"
+            cat /tmp/compare.out
+            echo "EOF"
+          } >> $GITHUB_ENV
+          # 传播返回码：rc=3（基线缺失）在 main 上允许通过（首次运行建立基线），其他非零码导致 Job 失败
+          if [ "$rc" -eq 3 ]; then
+            echo "ℹ️ Baseline missing (rc=3) — allowed on main to establish initial baseline."
+            exit 0
+          fi
+          exit $rc
+        shell: bash
+
+      # 仅在 main push 且无回归时更新基线（回归时不覆盖好的基线）。
+      - name: Update baseline (main, no regression)
+        id: update-baseline
+        if: success() && (steps.compare.outputs.regression_found == 'false' || steps.baseline-verify.outputs.baseline_present == 'false')
+        run: |
+          mkdir -p benchmarks/baseline
+          cp benchmarks/results/results/*-report-full.json benchmarks/baseline/ 2>/dev/null || true
+          # 同时保存环境指纹，便于后续对比
+          if [ -f benchmarks/results/results/environment.json ]; then
+            cp benchmarks/results/results/environment.json benchmarks/baseline/environment.json
+          fi
+          echo "baseline_updated=true" >> $GITHUB_OUTPUT
+          echo "✅ Baseline updated: $(ls benchmarks/baseline/*-report-full.json 2>/dev/null | wc -l) file(s)."
+        shell: bash
+
+      - name: Save benchmark baseline (main only)
+        if: success() && steps.update-baseline.outputs.baseline_updated == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: benchmarks/baseline
+          key: benchmark-baseline-main-${{ github.sha }}
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-main-results-${{ github.run_id }}
+          path: |
+            benchmarks/results/results/
+            benchmarks/baseline/
+          retention-days: 90
+
+  summary:
+    name: Benchmark Summary
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: always()
+    steps:
+      - name: Summarize benchmark-main run
+        run: |
+          echo "## Benchmark (main) Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          reg="${{ needs.benchmark.outputs.regression_found }}"
+          rc="${{ needs.benchmark.outputs.compare_rc }}"
+          updated="${{ needs.benchmark.outputs.baseline_updated }}"
+          status="${{ needs.benchmark.result }}"
+          if [ "$reg" = "true" ]; then
+            echo "⛔ **Regression detected** — baseline NOT updated. See benchmark job logs." >> $GITHUB_STEP_SUMMARY
+          elif [ "$updated" = "true" ]; then
+            echo "✅ **Baseline updated** — no regression. Cache key: benchmark-baseline-main-\${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          elif [ "$status" = "success" ]; then
+            echo "ℹ️ **Baseline not updated** (compare rc=$rc, regression_found=$reg). See logs for details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Benchmark job $status** (compare rc=$rc) — may be infrastructure failure, baseline NOT updated." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "JIT config: TieredCompilation=${DOTNET_TieredCompilation:-<env>} TieredPGO=${DOTNET_TieredPGO:-<env>} ReadyToRun=${DOTNET_ReadyToRun:-<env>}" >> $GITHUB_STEP_SUMMARY
+        shell: bash

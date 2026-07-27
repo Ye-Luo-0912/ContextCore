@@ -52,6 +52,31 @@ public sealed class DurableTransportHostingOptions
     /// <summary>指令租约有效期（默认 5 分钟）。覆盖 Kernel 处理一条指令的预期时长；过期后由 reaper 回滚为 Pending。</summary>
     public TimeSpan InstructionLeaseDuration { get; set; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// P0-6-5：指令租约自动续租间隔（默认 <see cref="InstructionLeaseDuration"/> / 3）。
+    /// Kernel 处理指令期间启动后台 Task 按此间隔调用 <see cref="IDurableTransport.RenewLeaseAsync"/>，
+    /// 避免长耗时处理在 lease 过期前被 reaper 回滚导致重复执行。
+    /// </summary>
+    /// <remarks>
+    /// 必须小于 <see cref="InstructionLeaseDuration"/> / 2 才能在过期前续租；
+    /// 默认值为 LeaseDuration / 3 提供安全余量。设为 ≤ 0 时禁用续租（仅靠 lease 时长覆盖）。
+    /// 实际生效值由 <see cref="ContextCore.Core.Services.AgentKernel.DefaultAgentKernel"/> 读取
+    /// <see cref="KernelTransportOptions.DurableLeaseRenewalInterval"/>，DI 注册时应同步两者。
+    /// </remarks>
+    public TimeSpan LeaseRenewalInterval { get; set; } = TimeSpan.FromMinutes(5) / 3;
+
+    /// <summary>
+    /// P0-6-5：单条指令最大处理时长（默认 10 分钟）。超过此时长未完成的指令视为永久故障，
+    /// outcome 标记为 <see cref="InstructionProcessingOutcome.PermanentFault"/>，
+    /// 结果 Metadata 标记 <see cref="DurableDeliveryStatus.PermanentFault"/>，指令 Ack 删除进入死信对账。
+    /// </summary>
+    /// <remarks>
+    /// 此上限防止僵尸指令无限续租占用 lease。应大于预期最长处理时长，但小于人工介入阈值。
+    /// 实际生效值由 <see cref="ContextCore.Core.Services.AgentKernel.DefaultAgentKernel"/> 读取
+    /// <see cref="KernelTransportOptions.DurableMaxProcessingTime"/>，DI 注册时应同步两者。
+    /// </remarks>
+    public TimeSpan MaxProcessingTime { get; set; } = TimeSpan.FromMinutes(10);
+
     /// <summary>结果 outbox 重放轮询间隔（默认 500ms）。outbox 为空时 replayer 休眠此时长后重试。</summary>
     public TimeSpan OutboxPollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
 
@@ -60,6 +85,18 @@ public sealed class DurableTransportHostingOptions
 
     /// <summary>过期租约清理间隔（默认 30 秒）。reaper 周期性扫描并回滚过期 Leased 行。</summary>
     public TimeSpan ReaperInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// P2：Pending 计数 OTel 指标采样间隔（默认 30 秒）。
+    /// <see cref="ContextCore.Service.Hosting.PendingCountMetricsService"/> 按此间隔查询 DB 精确值（global_pending_count）
+    /// 并采样本实例趋势值（local_pending_count），更新 <see cref="ContextCore.Core.CoreMetrics"/> 共享状态。
+    /// </summary>
+    /// <remarks>
+    /// 间隔过短会增加 DB COUNT(*) 查询频率（每次 2 条 SELECT：inbox + outbox + result_outbox）；
+    /// 间隔过长会导致 OTel 指标滞后于实际 backlog。30 秒为常见 production 折中值。
+    /// 设为 <see cref="TimeSpan.Zero"/> 或负值时禁用指标采样服务（指标不更新，保留初始值 0）。
+    /// </remarks>
+    public TimeSpan MetricsInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>结果重放失败后的退避时长（默认 1 秒）。避免 SendResultAsync 持续失败时 tight-loop。</summary>
     public TimeSpan OutboxRetryBackoff { get; set; } = TimeSpan.FromSeconds(1);

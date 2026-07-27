@@ -212,6 +212,32 @@ public interface IUtilityLedger : IUtilityLedgerStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// R29 WP-E-2：IUtilityLedger 的可选事务能力接口。
+/// 实现 <see cref="IUtilityLedger"/> 的 store 若同时实现此接口，表示可在 <see cref="IWriteTransactionScope"/>
+/// 内执行写入——与 <see cref="ITransactionalConflictSetLedger"/> 共享同一事务，保证 ledger + ConflictSet
+/// 原子提交（避免一边成功、一边失败导致数据不一致）。
+/// </summary>
+/// <remarks>
+/// 检测模式：<c>ledger is ITransactionalUtilityLedger</c>。未实现此接口的 store（InMemory / FileSystem）
+/// 走 <see cref="IUtilityLedger.AppendEntriesAsync"/> 无事务回退路径。
+/// </remarks>
+public interface ITransactionalUtilityLedger
+{
+    /// <summary>
+    /// 在指定事务作用域内批量追加 ledger 条目。复用 scope 持有的连接与事务，不开启新连接/事务。
+    /// scope 必须由调用方通过 <see cref="IWriteTransactionScopeFactory.BeginAsync"/> 创建并负责 Dispose。
+    /// </summary>
+    /// <param name="entries">待写入的条目列表（不可为 null；空列表为 no-op）。</param>
+    /// <param name="scope">事务作用域（必须 IsActive）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task AppendEntriesAsync(
+        IReadOnlyList<UtilityLedgerEntry> entries,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default);
+}
+
 // ---------------------------------------------------------------------------
 // ConflictSet（冲突集合）
 // ---------------------------------------------------------------------------
@@ -442,6 +468,30 @@ public interface IConflictSetLedger : IConflictSetStore
     [StoreOperation(StoreOperationKind.Write)]
     Task AppendConflictSetsAsync(
         IReadOnlyList<ConflictSet> conflictSets,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R29 WP-E-2：IConflictSetLedger 的可选事务能力接口。
+/// 实现 <see cref="IConflictSetLedger"/> 的 store 若同时实现此接口，表示可在 <see cref="IWriteTransactionScope"/>
+/// 内执行写入——与 <see cref="ITransactionalUtilityLedger"/> 共享同一事务，保证 ledger + ConflictSet 原子提交。
+/// </summary>
+/// <remarks>
+/// 检测模式：<c>conflictStore is ITransactionalConflictSetLedger</c>。未实现此接口的 store 走无事务回退路径。
+/// </remarks>
+public interface ITransactionalConflictSetLedger
+{
+    /// <summary>
+    /// 在指定事务作用域内批量追加 ConflictSet。复用 scope 持有的连接与事务，不开启新连接/事务。
+    /// scope 必须由调用方通过 <see cref="IWriteTransactionScopeFactory.BeginAsync"/> 创建并负责 Dispose。
+    /// </summary>
+    /// <param name="conflictSets">待写入的冲突集合列表（不可为 null；空列表为 no-op）。</param>
+    /// <param name="scope">事务作用域（必须 IsActive）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task AppendConflictSetsAsync(
+        IReadOnlyList<ConflictSet> conflictSets,
+        IWriteTransactionScope scope,
         CancellationToken cancellationToken = default);
 }
 
