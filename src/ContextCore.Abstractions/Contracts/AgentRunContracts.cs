@@ -77,7 +77,54 @@ public enum AgentRunState : byte
     Failed = 8,
 
     /// <summary>已取消（用户或超时触发）。</summary>
-    Cancelled = 9
+    Cancelled = 9,
+
+    /// <summary>
+    /// P0-5：租约丢失（lease 续约失败被其他实例抢占，或 heartbeat 连续异常触发本地 watchdog）。
+    /// 区别于用户主动取消的 <see cref="Cancelled"/>：LeaseLost 表示运行时检测到自身不再持有租约，
+    /// 可能已有其他实例接管处理；应立即停止副作用操作。
+    /// </summary>
+    LeaseLost = 10,
+
+    /// <summary>
+    /// P0-2：审批通过后待执行原 Tool。
+    /// Actor 从 AwaitingApproval 恢复时进入此状态，直接执行 ApprovalRequested 事件中保存的
+    /// <see cref="PendingToolCommand"/>（不重新调用模型），执行完成后进入 Observing 继续循环。
+    /// 确保被批准的 Tool 确定性执行，不依赖模型重生成。
+    /// </summary>
+    PendingToolExecution = 11
+}
+
+/// <summary>
+/// P0-2：待执行的 Tool 命令（审批恢复用）。
+/// </summary>
+/// <remarks>
+/// 当 Actor 遇到需审批的 Tool 时，将完整 Tool 调用信息持久化到 ApprovalRequested 事件 payload。
+/// 审批通过后恢复时，Actor 从事件流重建 <see cref="PendingToolCommand"/> 并直接执行，
+/// 不重置为 ContextBuilding 重新调用模型——确保被批准的 Tool 确定性执行。
+/// </remarks>
+public sealed record PendingToolCommand
+{
+    /// <summary>Tool 调用 ID（与 ToolCallStarted/Completed 事件一致；由 Actor 在 DispatchToolsAsync 中生成）。</summary>
+    public required string ToolCallId { get; init; }
+
+    /// <summary>Tool 名称。</summary>
+    public required string ToolName { get; init; }
+
+    /// <summary>Tool 参数（JSON 字符串）。</summary>
+    public required string ArgumentsJson { get; init; }
+
+    /// <summary>
+    /// 调用方提供的幂等键（可选；用于外部系统去重）。
+    /// 透传到 <see cref="IDurableToolExecutor"/> 与 Journal，配合 exactly-once 语义。
+    /// </summary>
+    public string? IdempotencyKey { get; init; }
+
+    /// <summary>
+    /// 模型第几轮生成的此 Tool 调用（从 Actor._modelCallsUsed 写入）。
+    /// 用于审计追踪与恢复时校验模型轮次一致性。
+    /// </summary>
+    public int ModelTurnRevision { get; init; }
 }
 
 /// <summary>
@@ -351,6 +398,93 @@ public sealed record AgentToolCallRequest
 
     /// <summary>调用方提供的幂等键（可选；用于外部系统去重）。</summary>
     public string? IdempotencyKey { get; init; }
+
+    /// <summary>
+    /// P0-1：模型返回的 Tool 调用 ID（可选）。
+    /// 真实 LLM function calling 路径下由模型分配（如 OpenAI 的 tool_call_id），
+    /// 用于将后续 Tool 观察结果与本次调用关联。确定性 fallback 路径可留空。
+    /// </summary>
+    public string? ToolCallId { get; init; }
+}
+
+/// <summary>
+/// P0-1：Agent Tool 定义（用于向模型声明可调用的 Tool 及其参数 schema）。
+/// </summary>
+/// <remarks>
+/// 由调用方（AgentRunActor / RealToolDispatcher）从已注册的 IToolHandler 集合
+/// 构造，通过 <see cref="AgentModelRequest.Tools"/> 传给 IAgentModelTransport，
+/// 再由 transport 转换为 IModelGateway.ChatWithToolsAsync 所需的 ModelToolDefinition。
+/// ParametersJsonSchema 为 OpenAI / Anthropic function calling 兼容的 JSON Schema 字符串。
+/// </remarks>
+public sealed record AgentToolDefinition
+{
+    /// <summary>Tool 名称（与 IToolHandler.ToolName 对应，用作分派键）。</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Tool 描述（向模型说明何时调用此 Tool）。</summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Tool 参数的 JSON Schema 字符串（OpenAI / Anthropic function calling 兼容）。
+    /// 例如：<c>{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}</c>。
+    /// </summary>
+    public required string ParametersJsonSchema { get; init; }
+}
+
+/// <summary>
+/// P0-1：Agent 模型调用请求（携带原生 messages + Tool 定义 + 模型工件 + 截止时间）。
+/// </summary>
+/// <remarks>
+/// 替代旧路径 <see cref="IAgentModelTransport.CallAsync(string, IReadOnlyList{AgentMessage}, CancellationToken)"/>
+/// 仅传 messages 的局限：本 record 同时携带 Tool 定义（让模型可发起 function calling）、
+/// 模型工件 ID（让 transport 选择特定模型）与截止时间（让 transport 在 LLM 长耗时场景主动取消）。
+/// </remarks>
+public sealed record AgentModelRequest
+{
+    /// <summary>Agent Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>
+    /// 模型工件 ID（从 <see cref="AgentRun.ModelArtifactId"/> 透传）。
+    /// null = 未限定，由 IAgentModelTransport 自行选择（Gateway Fallback）。
+    /// </summary>
+    public string? ModelArtifactId { get; init; }
+
+    /// <summary>已构建的结构化消息列表（System/User/Assistant/Tool 角色）。</summary>
+    public required IReadOnlyList<AgentMessage> Messages { get; init; }
+
+    /// <summary>
+    /// 本次模型调用可见的 Tool 定义集合。
+    /// 空集合 = 无 Tool（模型应直接产出最终答案）。
+    /// </summary>
+    public required IReadOnlyList<AgentToolDefinition> Tools { get; init; }
+
+    /// <summary>本次调用的截止时间（UTC）；transport 应在此时间前完成调用，否则取消。</summary>
+    public required DateTimeOffset DeadlineAt { get; init; }
+}
+
+/// <summary>
+/// P0-4：Agent Run 租约围栏（Lease Fence）。
+/// 携带 lease token + fencing token，用于 Tool 执行期间的 fencing 校验，
+/// 确保仅持有最新租约的实例能执行副作用 Tool 调用。
+/// </summary>
+/// <remarks>
+/// 字段语义与 <see cref="LeasedAgentRun"/> 对齐：LeaseToken 标识当前持有者，
+/// FencingToken 单调递增，每次租约被重新获取时递增。
+/// </remarks>
+public sealed record AgentLeaseFence
+{
+    /// <summary>租约 token（标识当前持有者）。</summary>
+    public required string LeaseToken { get; init; }
+
+    /// <summary>
+    /// Fencing token（单调递增，从 1 开始）。
+    /// 每次 TryAcquireAsync 成功获取（含抢占过期租约）时递增；RenewAsync 不递增。
+    /// </summary>
+    public required long FencingToken { get; init; }
+
+    /// <summary>租约过期时间（UTC）。</summary>
+    public required DateTimeOffset ExpiresAt { get; init; }
 }
 
 // ── AgentMessage：结构化上下文消息（G1：替代 string _accumulatedContext）────────
@@ -911,6 +1045,28 @@ public interface IAgentModelTransport
     ValueTask<AgentModelResponse> CallAsync(
         string runId,
         IReadOnlyList<AgentMessage> messages,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1：以完整 AgentModelRequest 调用模型（携带原生 messages + Tool 定义 + 模型工件 + 截止时间）。
+    /// </summary>
+    /// <param name="request">模型调用请求（含 messages / tools / modelArtifactId / deadlineAt）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>模型响应（含文本、Tool 调用、是否最终答案、Token 消耗）。</returns>
+    /// <remarks>
+    /// <b>设计目的</b>：旧路径 <see cref="CallAsync(string, IReadOnlyList{AgentMessage}, CancellationToken)"/>
+    /// 仅传 messages，无法向模型声明 Tool（function calling）也无法选择特定模型工件。
+    /// 本重载让真实 LLM transport（如 <c>ModelGatewayAgentModelTransport</c>）能：
+    /// <list type="bullet">
+    ///   <item>将 <paramref name="request"/>.Tools 转换为 IModelGateway 的 Tool JSON Schema 传入。</item>
+    ///   <item>按 <paramref name="request"/>.ModelArtifactId 选择模型（非 null 时），否则用 Gateway Fallback。</item>
+    ///   <item>在 <paramref name="request"/>.DeadlineAt 前完成调用，超时则取消。</item>
+    ///   <item>解析模型返回的结构化 Tool Call（ToolCallId / ToolName / Arguments JSON）。</item>
+    /// </list>
+    /// 确性 fallback 实现可委托到 <see cref="CallAsync(string, IReadOnlyList{AgentMessage}, CancellationToken)"/>。
+    /// </remarks>
+    ValueTask<AgentModelResponse> CallAsync(
+        AgentModelRequest request,
         CancellationToken cancellationToken = default);
 }
 

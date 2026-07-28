@@ -4853,6 +4853,38 @@ public sealed class ContextCoreMvpTests
             LastRequest = request;
             return _handler(request, cancellationToken);
         }
+
+        public Task<ModelChatResponse> ChatWithToolsAsync(
+            ModelChatRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            // 测试 stub：委托到 CompleteAsync（将 messages 拼接为 prompt），并将响应转换为 ModelChatResponse。
+            var prompt = request.Messages.Count > 0
+                ? string.Join("\n---\n", request.Messages.Select(m => $"[{m.Role}]\n{m.Content}"))
+                : string.Empty;
+            var modelRequest = new ModelRequest
+            {
+                OperationId = request.OperationId,
+                Role = request.Role,
+                Prompt = prompt
+            };
+            return CompleteAsync(modelRequest, cancellationToken).ContinueWith(t =>
+            {
+                var r = t.Result;
+                return new ModelChatResponse
+                {
+                    OperationId = r.OperationId,
+                    Content = r.Content,
+                    ToolCalls = Array.Empty<ModelToolCall>(),
+                    FinishReason = r.Succeeded ? ModelChatFinishReason.Stop : ModelChatFinishReason.Error,
+                    InputTokens = r.InputTokens,
+                    OutputTokens = r.OutputTokens,
+                    Succeeded = r.Succeeded,
+                    ErrorMessage = r.ErrorMessage,
+                    Metadata = r.Metadata
+                };
+            }, cancellationToken, TaskContinuationOptions.None, TaskScheduler.Default);
+        }
     }
 
     private sealed class TestModelAdapter : IModelAdapter

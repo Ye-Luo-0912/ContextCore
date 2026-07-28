@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.ModelGateway.Infrastructure;
 
 namespace ContextCore.ModelGateway;
 
@@ -52,6 +53,17 @@ public sealed class BasicModelGateway : IModelGateway
             ContextCoreDiagnostics.SetStatus(activity, succeeded: false, ex.Message);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public Task<ModelChatResponse> ChatWithToolsAsync(
+        ModelChatRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        // BasicModelGateway 底层适配器不原生支持 function calling，
+        // 通过降级辅助器将 messages + tools 序列化为 prompt 调用 CompleteAsync，再解析 JSON 格式的 Tool 调用。
+        return ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken);
     }
 
     private IModelAdapter ResolveAdapter(ModelRequest request)

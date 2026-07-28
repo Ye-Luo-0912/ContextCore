@@ -227,13 +227,25 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         // P4：IncludeContent=false 时只投影 metadata 列，避免读取/反序列化完整 jsonb 正文。
         // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方走 BatchGetAsync 二次读取。
         // P3：有 QueryText 时按 ts_rank_cd DESC 排序，否则保持 importance DESC, updated_at DESC。
+        // P0-10：必须返回 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
+        // 否则 ReadMetadataRow 构造的 ContextItem 作用域为空，Provider 用空作用域构造 CanonicalKey
+        // 会导致 Lexical/Semantic 无法 Canonical Merge（且 CanonicalCandidateKey.Create 会抛 ArgumentException）。
         if (!query.IncludeContent)
         {
             var orderClause = hasQueryText && rankExpression is not null
                 ? $"{rankExpression} DESC, importance DESC, updated_at DESC"
                 : "importance DESC, updated_at DESC";
+            // P0-10：ts_rank 列仅在 hasQueryText 时追加（与排序条件一致）。
+            // 列顺序固定为：workspace_id(0), collection_id(1), id(2), type(3), title(4),
+            //   importance(5), version(6), updated_at(7), created_at(8), content_hash(9),
+            //   content_token_cost(10), tags(11), refs(12), source_refs(13), ts_rank?(14)
+            var tsRankColumn = hasQueryText && rankExpression is not null
+                ? $", {rankExpression} AS ts_rank"
+                : string.Empty;
             command.CommandText = $"""
-SELECT id, type, title, importance, version, updated_at, content_hash, content_token_cost
+SELECT workspace_id, collection_id, id, type, title, importance, version,
+       updated_at, created_at, content_hash, content_token_cost,
+       tags, refs, source_refs{tsRankColumn}
 FROM {Table("context_items")}
 WHERE {string.Join(" AND ", filters)}
 ORDER BY {orderClause}
@@ -242,9 +254,10 @@ LIMIT @take;
 """;
             var metadataResults = new List<ContextItem>();
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            var tsRankColumnIndex = hasQueryText && rankExpression is not null ? 14 : -1;
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                metadataResults.Add(ReadMetadataRow(reader));
+                metadataResults.Add(ReadMetadataRow(reader, tsRankColumnIndex));
             }
             return metadataResults;
         }
@@ -283,19 +296,33 @@ LIMIT @take;
 
     /// <summary>
     /// P4：从 metadata-only 行构造 <see cref="ContextItem"/>（Content 为空，不触发 jsonb 反序列化）。
-    /// 列顺序与 QueryAsync 中 IncludeContent=false 的 SELECT 子句一一对应：
-    /// id(0), type(1), title(2), importance(3), version(4), updated_at(5), content_hash(6), content_token_cost(7)。
+    /// P0-10：解析 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
+    /// 确保构造的 ContextItem 携带完整作用域与检索评分，Provider 可正确构造 CanonicalKey 与 score。
     /// </summary>
-    private static ContextItem ReadMetadataRow(System.Data.Common.DbDataReader reader)
+    /// <param name="reader">数据读取器（已定位到当前行）。</param>
+    /// <param name="tsRankColumnIndex">ts_rank 列索引；-1 表示该列不存在（无 QueryText 路径）。</param>
+    /// <remarks>
+    /// 列顺序与 QueryAsync 中 IncludeContent=false 的 SELECT 子句一一对应：
+    /// workspace_id(0), collection_id(1), id(2), type(3), title(4), importance(5), version(6),
+    /// updated_at(7), created_at(8), content_hash(9), content_token_cost(10),
+    /// tags(11), refs(12), source_refs(13), ts_rank?(14)。
+    /// </remarks>
+    private static ContextItem ReadMetadataRow(System.Data.Common.DbDataReader reader, int tsRankColumnIndex = -1)
     {
-        var id = reader.GetString(0);
-        var type = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-        var title = reader.IsDBNull(2) ? null : reader.GetString(2);
-        var importance = reader.IsDBNull(3) ? 0.0 : reader.GetDouble(3);
-        var version = reader.IsDBNull(4) ? 0L : reader.GetInt64(4);
-        var updatedAt = reader.IsDBNull(5) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(5);
-        var contentHash = reader.IsDBNull(6) ? null : reader.GetString(6);
-        var contentTokenCost = reader.IsDBNull(7) ? (int?)null : reader.GetInt32(7);
+        var workspaceId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+        var collectionId = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        var id = reader.GetString(2);
+        var type = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+        var title = reader.IsDBNull(4) ? null : reader.GetString(4);
+        var importance = reader.IsDBNull(5) ? 0.0 : reader.GetDouble(5);
+        var version = reader.IsDBNull(6) ? 0L : reader.GetInt64(6);
+        var updatedAt = reader.IsDBNull(7) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(7);
+        var createdAt = reader.IsDBNull(8) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(8);
+        var contentHash = reader.IsDBNull(9) ? null : reader.GetString(9);
+        var contentTokenCost = reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10);
+        var tags = reader.IsDBNull(11) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(11);
+        var refs = reader.IsDBNull(12) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(12);
+        var sourceRefs = reader.IsDBNull(13) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(13);
 
         // P6：把持久化的 content_hash / content_token_cost 写入 Metadata，
         // Provider 在 BuildFromContextItem 中读取后跳过在线 SHA-256 + tokenizer 调用。
@@ -308,17 +335,34 @@ LIMIT @take;
         {
             metadata[ContentMetadataKeys.ContentTokenCost] = contentTokenCost.Value.ToString(CultureInfo.InvariantCulture);
         }
+        // P0-10：IncludeContent=false 路径下，ts_rank 仍需写入 Metadata——
+        // LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
+        if (tsRankColumnIndex >= 0 && !reader.IsDBNull(tsRankColumnIndex))
+        {
+            var rank = reader.GetDouble(tsRankColumnIndex);
+            metadata[ContentMetadataKeys.TsRank] = (rank * 100.0).ToString(CultureInfo.InvariantCulture);
+        }
 
         return new ContextItem
         {
             Id = id,
+            // P0-10：填充作用域——BuildFromContextItem 用这两个字段构造 CanonicalKey，
+            // 空值会导致 CanonicalCandidateKey.Create 抛 ArgumentException，破坏 Canonical Merge。
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
             Type = type,
             Title = title,
             // P4：IncludeContent=false → Content 必须为空字符串（与既有 WithoutContent 契约一致）
             Content = string.Empty,
+            // P0-10：填充 tags/refs/source_refs——BuildFromContextItem 用 SourceRefs+Refs 构造 Material.SourceRefs。
+            Tags = tags,
+            Refs = refs,
+            SourceRefs = sourceRefs,
             Importance = importance,
             Version = version,
             Checksum = contentHash,
+            // P0-10：填充 created_at——Provider 派生 EntityVersion 时可能用到。
+            CreatedAt = createdAt,
             UpdatedAt = updatedAt,
             Metadata = metadata
         };
@@ -488,4 +532,55 @@ ON CONFLICT (workspace_id, id) DO UPDATE SET
             UpdatedAt = item.UpdatedAt
         };
     }
+}
+
+/// <summary>
+/// P0-10：metadata-only 查询路径的候选投影 DTO。
+/// </summary>
+/// <remarks>
+/// <para>
+/// 设计动机：原 <c>PostgresContextStore.QueryAsync</c> 的 <c>IncludeContent=false</c> 路径
+/// 直接构造 <see cref="ContextItem"/>，但 SELECT 列表缺失 workspace_id/collection_id/tags/refs/
+/// source_refs/created_at/ts_rank 等字段，导致 ContextItem 作用域为空、Provider 用空作用域构造
+/// <see cref="ContextCore.Abstractions.CanonicalCandidateKey"/> 时抛 <see cref="ArgumentException"/>
+/// 或产生错误 key 破坏 Canonical Merge。
+/// </para>
+/// <para>
+/// 此 DTO 显式声明 metadata-only 路径必须返回的字段集合，作为存储层与 Provider 之间的契约。
+/// 当前实现仍将字段填充到 <see cref="ContextItem"/> 以保持向后兼容；此 DTO 为未来重构（直接返回
+/// 投影而非 ContextItem）保留类型签名。
+/// </para>
+/// </remarks>
+public sealed record ContextCandidateProjection
+{
+    /// <summary>所属 workspace 作用域（不可空，<see cref="CanonicalCandidateKey"/> 必需）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>所属 collection 作用域（不可空，<see cref="CanonicalCandidateKey"/> 必需）。</summary>
+    public required string CollectionId { get; init; }
+
+    /// <summary>条目 ID（<see cref="CanonicalCandidateKey"/> 的 EntityId）。</summary>
+    public required string Id { get; init; }
+
+    /// <summary>
+    /// 持久化的 content hash（来自 metadata）。Provider 派生 EntityVersion 时复用，
+    /// 避免在线 SHA-256 重复计算。
+    /// </summary>
+    public string? ContentHash { get; init; }
+
+    /// <summary>
+    /// 持久化的 content token count（来自 metadata）。Provider 跳过在线 tokenizer 调用。
+    /// </summary>
+    public int? ContentTokenCount { get; init; }
+
+    /// <summary>
+    /// 检索评分（来自 PostgreSQL ts_rank_cd × 100，或 importance / 关键词匹配的回退分）。
+    /// Provider 读取后作为 Provider score。
+    /// </summary>
+    public double RetrievalScore { get; init; }
+
+    /// <summary>
+    /// SourceRefs 列表（PostgreSQL source_refs 列）。Provider 用于构造 Material.SourceRefs。
+    /// </summary>
+    public IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
 }

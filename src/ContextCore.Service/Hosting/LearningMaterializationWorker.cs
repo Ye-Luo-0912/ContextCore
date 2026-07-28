@@ -88,7 +88,9 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
         // bounded Channel：poller → workers 之间的背压控制。
         var channelCapacity = Math.Max(workerCount * 2, batchSize);
-        var channel = Channel.CreateBounded<LearningEventOutboxRecord>(
+        // P0-9：Channel 携带 (record, heartbeatCts) 对——Acquire 后立即启动 heartbeat，
+        // 排队期间 lease 也会被续约，避免 record 在 Channel 中停留超过 leaseDuration 被抢占。
+        var channel = Channel.CreateBounded<LearningMaterializationQueueItem>(
             new BoundedChannelOptions(channelCapacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
@@ -117,7 +119,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
         {
             if (options.RunOnStartup)
             {
-                await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, stoppingToken)
+                await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
                     .ConfigureAwait(false);
             }
 
@@ -132,7 +134,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                     break;
                 }
 
-                await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, stoppingToken)
+                await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
                     .ConfigureAwait(false);
             }
         }
@@ -166,13 +168,16 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
     /// <summary>
     /// 从 outbox 拉取一批 pending 记录并写入 bounded Channel。
+    /// P0-9：每个 record 入 Channel 前立即启动 heartbeat 续约任务，与 record 一起通过 Channel 传递。
+    /// 这样 record 在 Channel 排队期间 lease 也会被续约，避免被其他 worker 抢占。
     /// </summary>
     private async Task PollAndDispatchAsync(
         ILearningEventOutboxStore outboxStore,
-        ChannelWriter<LearningEventOutboxRecord> writer,
+        ChannelWriter<LearningMaterializationQueueItem> writer,
         int batchSize,
         string owner,
         TimeSpan leaseDuration,
+        TimeSpan heartbeatInterval,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<LearningEventOutboxRecord> batch;
@@ -199,12 +204,26 @@ public sealed class LearningMaterializationWorker : BackgroundService
         {
             if (cancellationToken.IsCancellationRequested) break;
 
+            // P0-9：Acquire 后立即启动 heartbeat 续约任务——不等到 worker 从 Channel 取出才启动。
+            // heartbeat 与 worker 主循环解耦：worker 接管 queueItem 后复用此 heartbeatCts，
+            // 处理完成或异常时 cancel。如果 record 未被消费（Channel 关闭/异常），heartbeatCts 也会
+            // 在下面的 try-catch 中被 cancel，避免泄漏。
+            var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var heartbeatTask = RunHeartbeatAsync(
+                outboxStore, record.EventId, record.LeaseToken, leaseDuration, heartbeatInterval, heartbeatCts);
+
             try
             {
-                await writer.WriteAsync(record, cancellationToken).ConfigureAwait(false);
+                await writer.WriteAsync(new LearningMaterializationQueueItem(record, heartbeatCts, heartbeatTask), cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (ChannelClosedException)
             {
+                // Channel 已关闭——取消 heartbeat 防止泄漏。
+                heartbeatCts.Cancel();
+                try { await heartbeatTask.ConfigureAwait(false); }
+                catch { /* heartbeat 异常已在内部记录 */ }
+                heartbeatCts.Dispose();
                 break;
             }
         }
@@ -212,9 +231,11 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
     /// <summary>
     /// 固定 worker：从 Channel 读取 outbox 记录，反序列化 payload，调用 MaterializeAsync，Ack/DeadLetter。
+    /// P0-9：heartbeat 任务已在 <see cref="PollAndDispatchAsync"/> 中启动并通过 Channel 传递——
+    /// worker 复用 queueItem 中的 heartbeatCts，处理完成或异常时 cancel 停止 heartbeat。
     /// </summary>
     private async Task RunMaterializationWorkerAsync(
-        ChannelReader<LearningEventOutboxRecord> reader,
+        ChannelReader<LearningMaterializationQueueItem> reader,
         ILearningEventOutboxStore outboxStore,
         string owner,
         TimeSpan leaseDuration,
@@ -233,16 +254,25 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
         try
         {
-            await foreach (var record in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var queueItem in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    // 主循环取消——取消未处理 item 的 heartbeat 防止泄漏。
+                    queueItem.HeartbeatCts.Cancel();
+                    try { await queueItem.HeartbeatTask.ConfigureAwait(false); }
+                    catch { /* heartbeat 异常已在内部记录 */ }
+                    queueItem.HeartbeatCts.Dispose();
+                    break;
+                }
+
+                var record = queueItem.Record;
+                // P0-9：复用 PollAndDispatchAsync 已启动的 heartbeatCts/heartbeatTask——
+                // 不再自行创建 leaseCts。处理完成或异常时通过 heartbeatCts.Cancel() 停止 heartbeat。
+                var heartbeatCts = queueItem.HeartbeatCts;
+                var heartbeatTask = queueItem.HeartbeatTask;
 
                 _metrics.IncrementProcessing();
-
-                // P0-8：保留 record.LeaseToken 用于 Ack/Nack/Renew 校验，防止旧 Worker 越权 Ack 新 Worker 的 lease。
-                // 启动 heartbeat 续约任务。
-                using var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var heartbeatTask = RunHeartbeatAsync(outboxStore, record.EventId, record.LeaseToken, leaseDuration, heartbeatInterval, leaseCts);
 
                 try
                 {
@@ -277,7 +307,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                             record.EventId, workerId);
                     }
                 }
-                catch (OperationCanceledException) when (leaseCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (heartbeatCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                 {
                     // 租约丢失——保留 state='Processing'，lease_expires_at 已过期或即将过期，
                     // 其他 worker 通过 AcquirePendingAsync 抢占。不调用 MarkAcked/MarkFailed。
@@ -324,9 +354,10 @@ public sealed class LearningMaterializationWorker : BackgroundService
                 finally
                 {
                     _metrics.DecrementProcessing();
-                    leaseCts.Cancel();
+                    heartbeatCts.Cancel();
                     try { await heartbeatTask.ConfigureAwait(false); }
                     catch { /* heartbeat 异常已在内部记录 */ }
+                    heartbeatCts.Dispose();
                 }
             }
         }
@@ -435,4 +466,17 @@ public sealed class LearningMaterializationWorker : BackgroundService
             return $"learn-{Guid.NewGuid():N}";
         }
     }
+
+    /// <summary>
+    /// P0-9：Channel 传递的队列项——携带 record 与已在 Acquire 后启动的 heartbeat 任务。
+    /// </summary>
+    /// <remarks>
+    /// 设计动机：原实现中 worker 从 Channel 取出 record 后才启动 heartbeat，导致排队期间的 record
+    /// 可能因 lease 过期被其他 worker 抢占。此类型将 heartbeat 任务的 CTS 与 Task 与 record 绑定，
+    /// Acquire 后立即启动 heartbeat，worker 接管后复用——排队期间 lease 也会被续约。
+    /// </remarks>
+    private sealed record LearningMaterializationQueueItem(
+        LearningEventOutboxRecord Record,
+        CancellationTokenSource HeartbeatCts,
+        Task HeartbeatTask);
 }

@@ -298,21 +298,24 @@ public sealed class R29H_ModelActivationAcceptanceTests
         var resultB = await manager.ActivateAsync("old-engine-b", options);
         Assert.IsTrue(resultB.Success, $"模型 B 激活应成功：{resultB.Error}");
 
-        // P1 重构后用 _previousHandle（ActiveModelHandle）替代 _previousEngine
-        var previousHandleField = typeof(ModelActivationManager)
-            .GetField("_previousHandle", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.IsNotNull(previousHandleField, "_previousHandle 字段应存在");
+        // P0-8：_previousHandle 已升级为 _retiredHandles（List<ActiveModelHandle>），
+        // 每个 Retired handle 独立等待引用归零后 Dispose。
+        var retiredHandlesField = typeof(ModelActivationManager)
+            .GetField("_retiredHandles", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(retiredHandlesField, "_retiredHandles 字段应存在");
 
-        var previousRightAfter = previousHandleField!.GetValue(manager);
-        Assert.IsNotNull(previousRightAfter, "热切换后 _previousHandle 应引用旧引擎 A 的 handle");
+        var retiredRightAfter = retiredHandlesField!.GetValue(manager) as System.Collections.IList;
+        Assert.IsNotNull(retiredRightAfter, "热切换后 _retiredHandles 应非 null");
+        Assert.IsTrue(retiredRightAfter!.Count > 0, "热切换后 _retiredHandles 应包含旧引擎 A 的 handle");
 
         // 等待 grace period 过期 + 后台清理任务执行
         await Task.Delay(800);
 
-        // 验证 _previousHandle 已被清理（不再引用旧引擎）
-        var previousAfterGrace = previousHandleField.GetValue(manager);
-        Assert.IsNull(previousAfterGrace,
-            "grace period 过期后 _previousHandle 应被清理为 null，避免引擎泄漏");
+        // 验证 _retiredHandles 已被清理（列表为空，旧引擎已 Dispose）
+        var retiredAfterGrace = retiredHandlesField.GetValue(manager) as System.Collections.IList;
+        Assert.IsNotNull(retiredAfterGrace, "_retiredHandles 列表本身不应为 null");
+        Assert.AreEqual(0, retiredAfterGrace!.Count,
+            "grace period 过期后 _retiredHandles 应被清空，避免引擎泄漏");
     }
 
     // ===========================================================================

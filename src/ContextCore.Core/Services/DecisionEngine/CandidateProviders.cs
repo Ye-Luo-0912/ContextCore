@@ -92,6 +92,23 @@ internal static class CandidateProviderHelpers
         return tokens;
     }
 
+    /// <summary>
+    /// P0-10：从 ContextItem.Metadata 读取 PostgreSQL ts_rank_cd 派生的检索评分（× 100）。
+    /// 返回 null 表示未持久化（无 QueryText 路径 / 非 Postgres provider）——调用方回退到默认评分逻辑。
+    /// </summary>
+    /// <remarks>
+    /// PostgresContextStore.QueryAsync 在 IncludeContent=false 与 IncludeContent=true 两条路径下
+    /// 都会把 ts_rank_cd × 100 写入 <see cref="ContentMetadataKeys.TsRank"/>。LexicalCandidateProvider
+    /// 读取后作为基础 score，确保 IncludeContent=false 时 ts_rank 仍进入评分（P0-10 修复要求）。
+    /// </remarks>
+    internal static double? ReadPersistedTsRank(ContextItem item)
+    {
+        if (item.Metadata is null) return null;
+        if (!item.Metadata.TryGetValue(ContentMetadataKeys.TsRank, out var rankStr)) return null;
+        if (!double.TryParse(rankStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var rank)) return null;
+        return rank;
+    }
+
     /// <summary>粗略估算 token 数（~4 chars/token，最小 1）。</summary>
     internal static int EstimateTokens(string content)
     {
@@ -860,8 +877,10 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
 
         foreach (var item in items)
         {
-            // 简单关键词评分：查询文本出现在 Title 中加分
-            var score = 10.0;
+            // P0-10：优先读取 PostgreSQL ts_rank_cd 派生的检索评分（写入 Metadata["__ts_rank"]）。
+            // IncludeContent=false 路径下 PostgresContextStore 也会写入此键——确保 ts_rank 仍进入评分。
+            // 未持久化时（非 Postgres provider / 无 QueryText 路径）回退到固定 10.0 基础分。
+            var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 10.0;
             if (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(effectiveQueryText) &&
                 item.Title.Contains(effectiveQueryText, StringComparison.OrdinalIgnoreCase))
             {

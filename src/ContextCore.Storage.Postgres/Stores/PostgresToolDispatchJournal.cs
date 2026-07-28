@@ -50,7 +50,7 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
     }
 
     /// <inheritdoc />
-    public async ValueTask PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
+    public async ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
         if (entry.State != ToolDispatchState.Prepared)
@@ -88,15 +88,24 @@ ON CONFLICT (request_id) DO NOTHING;
         var affected = await insertCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (affected > 0)
         {
-            return; // 成功插入新条目
+            // 成功插入新条目 → ShouldDispatch = true
+            return new ToolDispatchPrepareResult
+            {
+                CurrentState = ToolDispatchState.Prepared,
+                ShouldDispatch = true,
+                NeedsReconciliation = false,
+                ExternalOperationId = null,
+                CachedResult = null
+            };
         }
 
         // P0-3 CAS-2：0 行插入意味着 request_id 已存在——读取既有行并验证语义等价，
         // 防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
+        // 同时读取 state + external_operation_id 用于构建 Prepare 结果。
         await using var selectCommand = connection.CreateCommand();
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
-SELECT tool_name, idempotency_key, payload_digest, workspace_id, run_id
+SELECT tool_name, state, idempotency_key, external_operation_id, payload_digest, workspace_id, run_id
 FROM {Table("tool_dispatch_journal_entries")}
 WHERE request_id = @request_id
 LIMIT 1;
@@ -111,10 +120,12 @@ LIMIT 1;
         }
 
         var existingToolName = reader.GetString(0);
-        var existingIdempotencyKey = reader.IsDBNull(1) ? null : reader.GetString(1);
-        var existingPayloadDigest = reader.IsDBNull(2) ? null : reader.GetString(2);
-        var existingWorkspaceId = reader.IsDBNull(3) ? null : reader.GetString(3);
-        var existingRunId = reader.IsDBNull(4) ? null : reader.GetString(4);
+        var existingState = (ToolDispatchState)reader.GetByte(1);
+        var existingIdempotencyKey = reader.IsDBNull(2) ? null : reader.GetString(2);
+        var existingExternalOperationId = reader.IsDBNull(3) ? null : reader.GetString(3);
+        var existingPayloadDigest = reader.IsDBNull(4) ? null : reader.GetString(4);
+        var existingWorkspaceId = reader.IsDBNull(5) ? null : reader.GetString(5);
+        var existingRunId = reader.IsDBNull(6) ? null : reader.GetString(6);
 
         var mismatches = new List<string>(5);
         if (!string.Equals(existingToolName, entry.ToolName, StringComparison.Ordinal))
@@ -145,7 +156,15 @@ LIMIT 1;
                 $"同一 RequestId 不能复用为另一项操作。差异：{string.Join("；", mismatches)}。");
         }
 
-        // 语义等价：幂等成功（重复 Prepare 同一操作），不报错。
+        // 语义等价：幂等成功（重复 Prepare 同一操作）。根据当前状态构建 Prepare 结果。
+        return new ToolDispatchPrepareResult
+        {
+            CurrentState = existingState,
+            ShouldDispatch = existingState == ToolDispatchState.Prepared,
+            NeedsReconciliation = existingState == ToolDispatchState.Dispatched,
+            ExternalOperationId = existingExternalOperationId,
+            CachedResult = null // Postgres 结果缓存由调用方管理
+        };
     }
 
     /// <inheritdoc />
@@ -178,6 +197,26 @@ LIMIT 1;
             targetState: ToolDispatchState.Committed,
             externalOperationId: null,
             cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask MarkCommittedWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
+        }
+        ArgumentNullException.ThrowIfNull(result);
+
+        // P0-3：推进状态机到 Committed（复用 MarkCommittedAsync 的 CAS 逻辑）
+        await TransitionStateAsync(
+            requestId,
+            expectedState: ToolDispatchState.Dispatched,
+            targetState: ToolDispatchState.Committed,
+            externalOperationId: null,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        // 结果缓存由调用方（IDurableToolExecutor）管理；
+        // 持久化实现可在同事务内 INSERT 结果到 tool_dispatch_results 表（未来扩展）。
     }
 
     /// <inheritdoc />

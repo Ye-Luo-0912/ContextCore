@@ -56,10 +56,13 @@ public static class AgentRunStateMachine
             return;
         }
 
-        // 任意状态可跳转到 Failed / Cancelled（终态短路）
-        if (to == AgentRunState.Failed || to == AgentRunState.Cancelled)
+        // 任意状态可跳转到 Failed / Cancelled / LeaseLost（终态短路）
+        // P0-5：LeaseLost 表示丢租（区别于用户主动 Cancelled）
+        if (to == AgentRunState.Failed
+            || to == AgentRunState.Cancelled
+            || to == AgentRunState.LeaseLost)
         {
-            // 已终态再跳 Failed/Cancelled 仍允许（幂等收尾），但不会改变事实
+            // 已终态再跳 Failed/Cancelled/LeaseLost 仍允许（幂等收尾），但不会改变事实
             return;
         }
 
@@ -68,7 +71,7 @@ public static class AgentRunStateMachine
         {
             throw new InvalidOperationException(
                 $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
-                $"终态（Completed/Failed/Cancelled）不可再推进。");
+                $"终态（Completed/Failed/Cancelled/LeaseLost）不可再推进。");
         }
 
         if (!IsValidForwardTransition(from, to))
@@ -77,19 +80,20 @@ public static class AgentRunStateMachine
                 $"Agent Run 状态机非法转换：{from} → {to} 不在合法流转图中。" +
                 $"合法流转：Created → ContextBuilding → ModelCalling → AwaitingApproval → " +
                 $"ToolDispatching → Observing → Checkpointing → ContextBuilding（下一轮）/ Completed；" +
-                $"任意状态可跳转到 Failed/Cancelled。");
+                $"任意状态可跳转到 Failed/Cancelled/LeaseLost。");
         }
     }
 
     /// <summary>
-    /// 判断指定状态是否为终态（Completed / Failed / Cancelled）。
+    /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost）。
     /// </summary>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
     public static bool IsTerminalState(AgentRunState state)
         => state == AgentRunState.Completed
            || state == AgentRunState.Failed
-           || state == AgentRunState.Cancelled;
+           || state == AgentRunState.Cancelled
+           || state == AgentRunState.LeaseLost;
 
     /// <summary>
     /// 判断 from → to 是否为合法前向推进（不含 Failed/Cancelled 短路；调用方已先短路）。
@@ -109,10 +113,17 @@ public static class AgentRunStateMachine
                                           || to == AgentRunState.Completed
                                           || to == AgentRunState.ContextBuilding,
 
-            // AwaitingApproval → ToolDispatching（批准后继续分派）/ ContextBuilding（拒绝后回到上下文构建重试）/ Completed（拒绝且无法继续则完成）
-            AgentRunState.AwaitingApproval => to == AgentRunState.ToolDispatching
+            // AwaitingApproval → PendingToolExecution（P0-2：审批通过后直接执行原 Tool，不重新调用模型）
+            //                    / ToolDispatching（旧路径兼容：批准后继续分派）
+            //                    / ContextBuilding（拒绝后回到上下文构建重试）/ Completed（拒绝且无法继续则完成）
+            AgentRunState.AwaitingApproval => to == AgentRunState.PendingToolExecution
+                                              || to == AgentRunState.ToolDispatching
                                               || to == AgentRunState.ContextBuilding
                                               || to == AgentRunState.Completed,
+
+            // PendingToolExecution → Observing（P0-2：原 Tool 执行完成后观察结果，继续 Observation→Model 循环）
+            //                        / Failed（执行异常）/ Cancelled（外部取消，由短路处理）
+            AgentRunState.PendingToolExecution => to == AgentRunState.Observing,
 
             // ToolDispatching → AwaitingApproval（P0-6：Tool 分派中需审批时挂起等待人工裁决）/ Observing（观察结果）
             AgentRunState.ToolDispatching => to == AgentRunState.AwaitingApproval

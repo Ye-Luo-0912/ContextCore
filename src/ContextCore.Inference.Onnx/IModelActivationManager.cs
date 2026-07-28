@@ -26,14 +26,22 @@ namespace ContextCore.Inference.Onnx;
 /// 同时实现 <see cref="IBatchInferenceEngine"/> 作为代理：
 /// 未激活时委托给 fallback（Deterministic），激活后委托给 OnnxInferenceEngine。
 /// 在 DI 中注册为 <see cref="IBatchInferenceEngine"/> 的实现，消费方无需感知激活状态。
+/// 继承 <see cref="IAsyncDisposable"/>：Dispose 时等待所有 Retired Handle 引用归零并取消后台 Dispose Task。
 /// </remarks>
-public interface IModelActivationManager : IBatchInferenceEngine
+public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposable
 {
     /// <summary>当前已激活的推理引擎（null = 未激活，使用 fallback）。</summary>
     IBatchInferenceEngine? ActiveEngine { get; }
 
     /// <summary>当前已激活的模型工件描述符（null = 未激活）。</summary>
     ModelArtifactDescriptor? ActiveDescriptor { get; }
+
+    /// <summary>
+    /// P0-7：当前 Active Handle 的世代号（每次激活自增；null = 未激活）。
+    /// 调用方（如 <see cref="InferenceScheduler"/>）据此感知模型热切换：
+    /// 世代号变化意味着底层引擎已替换，已攒批的请求不能与新请求合并到同一 BatchKey。
+    /// </summary>
+    long? ActiveGeneration { get; }
 
     /// <summary>
     /// 激活指定模型工件：读取 descriptor → 验证校准（ICalibrationValidator）→ 验证 schema 存在性（IFeatureRegistry）

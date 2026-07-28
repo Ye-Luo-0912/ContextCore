@@ -200,6 +200,13 @@ public sealed class R29H_HAConcurrencyAcceptanceTests
             return await CallAsyncCore(cancellationToken).ConfigureAwait(false);
         }
 
+        public async ValueTask<AgentModelResponse> CallAsync(
+            AgentModelRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return await CallAsyncCore(cancellationToken).ConfigureAwait(false);
+        }
+
         private async Task<AgentModelResponse> CallAsyncCore(CancellationToken ct)
         {
             Interlocked.Increment(ref _totalStarted);

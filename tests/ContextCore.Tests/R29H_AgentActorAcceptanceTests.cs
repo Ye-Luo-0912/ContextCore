@@ -518,6 +518,9 @@ public sealed class R29H_AgentActorAcceptanceTests
             CapturedCalls.Add((runId, messages.ToList()));
             return ValueTask.FromResult(_response);
         }
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsync(request.RunId, request.Messages, cancellationToken);
     }
 
     /// <summary>

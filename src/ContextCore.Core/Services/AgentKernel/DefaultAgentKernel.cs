@@ -681,7 +681,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
             var runId = instruction.Metadata.TryGetValue("runId", out var rid) && !string.IsNullOrWhiteSpace(rid)
                 ? rid
                 : null;
-            await _dispatchJournal.PrepareAsync(new ToolDispatchJournalEntry
+            var prepareResult = await _dispatchJournal.PrepareAsync(new ToolDispatchJournalEntry
             {
                 RequestId = instruction.InstructionId,
                 ToolName = toolName,
@@ -692,19 +692,61 @@ public sealed class DefaultAgentKernel : IAgentKernel
                 WorkspaceId = _lastWorkspaceId,
                 RunId = runId
             }, cancellationToken).ConfigureAwait(false);
+
+            // P0-3：根据 Prepare 结果决策是否 Dispatch
+            // 1. CachedResult 非空（Journal = Committed/ResultDelivered）→ 直接返回缓存，禁止重新 Dispatch
+            if (prepareResult.CachedResult is not null)
+            {
+                return new AgentKernelResult
+                {
+                    InstructionId = instruction.InstructionId,
+                    Succeeded = prepareResult.CachedResult.Succeeded,
+                    Output = prepareResult.CachedResult.Result,
+                    Error = prepareResult.CachedResult.Error
+                };
+            }
+
+            // 2. NeedsReconciliation=true（Journal = Dispatched）→ 返回对账结果，不重新 Dispatch
+            if (prepareResult.NeedsReconciliation)
+            {
+                return new AgentKernelResult
+                {
+                    InstructionId = instruction.InstructionId,
+                    Succeeded = false,
+                    Error = $"Tool dispatch 处于 Dispatched 模糊状态（外部副作用可能已执行但未提交）。" +
+                            $"ExternalOperationId={prepareResult.ExternalOperationId ?? "<null>"}，需对账后决定是否重新执行。"
+                };
+            }
+
+            // 3. ShouldDispatch=false 且无缓存（Postgres 路径：journal 已 Committed/ResultDelivered 但未缓存结果）
+            //    且进程内 _committedToolResults 也未命中（前面已检查）→ 模糊状态，返回对账结果
+            if (!prepareResult.ShouldDispatch)
+            {
+                return new AgentKernelResult
+                {
+                    InstructionId = instruction.InstructionId,
+                    Succeeded = false,
+                    Error = $"Tool dispatch journal 状态={prepareResult.CurrentState}（已超过 Prepared 但无缓存结果可用），需对账后决定是否重新执行。"
+                };
+            }
+
+            // 4. ShouldDispatch=true（Journal 不存在或 Prepared）→ 继续 Dispatch
         }
 
+        // P0-3：将 IdempotencyKey 加入 ToolDispatchRequest，让外部系统能基于此键去重
         var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
         {
             ToolName = toolName,
             Payload = payload,
-            RequestId = instruction.InstructionId
+            RequestId = instruction.InstructionId,
+            IdempotencyKey = idempotencyKey,
+            WorkspaceId = _lastWorkspaceId
         }, cancellationToken).ConfigureAwait(false);
 
         // R28-E P1-4：tool 返回后标记 Dispatched（若注入了 journal）
         if (_dispatchJournal is not null)
         {
-            await _dispatchJournal.MarkDispatchedAsync(instruction.InstructionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _dispatchJournal.MarkDispatchedAsync(instruction.InstructionId, dispatchResult.ExternalOperationId, cancellationToken).ConfigureAwait(false);
         }
 
         // R28-C WP-C：副作用分类决定是否自动提交
@@ -715,9 +757,39 @@ public sealed class DefaultAgentKernel : IAgentKernel
             AddCommittedResult(instruction.InstructionId, dispatchResult);
 
             // R28-E P1-4：标记 Committed（若注入了 journal）
+            // P0-3：使用 MarkCommittedWithResultAsync 原子提交 state + result，
+            // 让 InMemory journal 缓存结果供后续 PrepareAsync 查询
             if (_dispatchJournal is not null)
             {
-                await _dispatchJournal.MarkCommittedAsync(instruction.InstructionId, cancellationToken).ConfigureAwait(false);
+                var durableResult = new DurableToolResult
+                {
+                    ToolCallId = instruction.InstructionId, // Kernel 路径无独立 toolCallId，用 InstructionId
+                    RequestId = instruction.InstructionId,
+                    IdempotencyKey = idempotencyKey,
+                    SideEffect = dispatchResult.SideEffect,
+                    ExternalOperationId = dispatchResult.ExternalOperationId,
+                    Result = dispatchResult.Result,
+                    Succeeded = dispatchResult.Succeeded,
+                    Error = dispatchResult.Error,
+                    DurationMs = dispatchResult.Duration.TotalMilliseconds
+                };
+                try
+                {
+                    await _dispatchJournal.MarkCommittedWithResultAsync(
+                        instruction.InstructionId, durableResult, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException)
+                {
+                    // MarkCommitted 失败（如状态已被并发推进）→ 降级到 MarkCommittedAsync
+                    try
+                    {
+                        await _dispatchJournal.MarkCommittedAsync(instruction.InstructionId, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // 状态机已推进；_committedToolResults 已更新，继续
+                    }
+                }
             }
         }
         else

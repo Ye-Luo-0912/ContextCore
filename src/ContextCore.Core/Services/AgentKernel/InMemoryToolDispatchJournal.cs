@@ -37,9 +37,11 @@ namespace ContextCore.Core.Services.AgentKernel;
 public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
 {
     private readonly ConcurrentDictionary<string, ToolDispatchJournalEntry> _entries = new(StringComparer.Ordinal);
+    // P0-3：结果缓存（MarkCommittedWithResultAsync 写入，PrepareAsync 读取）
+    private readonly ConcurrentDictionary<string, DurableToolResult> _results = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    public ValueTask PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
+    public ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
         if (entry.State != ToolDispatchState.Prepared)
@@ -60,7 +62,23 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                 return existing; // 幂等：重复 Prepare 不覆盖已推进的状态
             });
 
-        return ValueTask.CompletedTask;
+        // P0-3：根据当前 journal 状态构建 Prepare 结果
+        _entries.TryGetValue(entry.RequestId, out var current);
+        var currentState = current?.State ?? entry.State;
+        DurableToolResult? cachedResult = null;
+        if (currentState >= ToolDispatchState.Committed)
+        {
+            _results.TryGetValue(entry.RequestId, out cachedResult);
+        }
+
+        return new ValueTask<ToolDispatchPrepareResult>(new ToolDispatchPrepareResult
+        {
+            CurrentState = currentState,
+            ShouldDispatch = currentState == ToolDispatchState.Prepared,
+            NeedsReconciliation = currentState == ToolDispatchState.Dispatched,
+            ExternalOperationId = current?.ExternalOperationId,
+            CachedResult = cachedResult
+        });
     }
 
     /// <inheritdoc />
@@ -109,6 +127,35 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
             },
             (_, existing) => ApplyTransition(
                 requestId, existing, ToolDispatchState.Dispatched, ToolDispatchState.Committed, null, now));
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public ValueTask MarkCommittedWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
+        }
+        ArgumentNullException.ThrowIfNull(result);
+
+        // 推进状态机到 Committed（复用 MarkCommittedAsync 的 CAS 逻辑）
+        var now = DateTimeOffset.UtcNow;
+        _entries.AddOrUpdate(
+            requestId,
+            _ =>
+            {
+                throw new InvalidOperationException(
+                    $"Tool dispatch journal 缺失前驱记录（MissingPredecessor）：request_id={requestId}，" +
+                    $"目标状态=Committed（期望前驱=Dispatched）。" +
+                    $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
+            },
+            (_, existing) => ApplyTransition(
+                requestId, existing, ToolDispatchState.Dispatched, ToolDispatchState.Committed, null, now));
+
+        // 同事务语义：原子写入结果缓存（InMemory 用 ConcurrentDictionary 模拟）
+        _results[requestId] = result;
 
         return ValueTask.CompletedTask;
     }

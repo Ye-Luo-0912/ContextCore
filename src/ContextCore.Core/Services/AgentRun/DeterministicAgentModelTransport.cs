@@ -113,6 +113,17 @@ public sealed class DeterministicAgentModelTransport : IAgentModelTransport
         return CallAsync(runId, context, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public ValueTask<AgentModelResponse> CallAsync(
+        AgentModelRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        // P0-1：确定性 fallback 不调用真实 LLM，忽略 Tools / ModelArtifactId / DeadlineAt，
+        // 委托到 CallAsync(runId, messages) 旧路径（基于关键词匹配产出确定性响应）。
+        return CallAsync(request.RunId, request.Messages, cancellationToken);
+    }
+
     /// <summary>匹配 context 中的 Tool 触发关键词。</summary>
     private string? MatchToolTrigger(string context)
     {

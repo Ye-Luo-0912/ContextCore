@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using Microsoft.Extensions.Logging;
@@ -9,31 +8,32 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 // ModelGatewayAgentModelTransport — IAgentModelTransport 的真实 LLM 实现
 //
-// 目标：
+// 目标（P0-1 修复）：
 //   替代 DeterministicAgentModelTransport 作为生产环境的 IAgentModelTransport 实现。
-//   通过 IModelGateway 调用真实 LLM（OpenAI / Anthropic / Mock 等，由 ModelGateway 配置决定），
-//   将 AgentMessage 列表转换为 ModelRequest，并将 ModelResponse 转换为 AgentModelResponse。
+//   通过 IModelGateway.ChatWithToolsAsync 调用真实 LLM，传入原生 messages + Tool JSON Schema，
+//   解析模型返回的结构化 Tool Call（ToolCallId / ToolName / Arguments JSON）。
 //
 // 设计原则：
-//   1. 真实调用：通过 IModelGateway.CompleteAsync 调用真实模型，不使用关键词匹配。
-//   2. 优雅降级：IModelGateway 未注册或调用失败时返回错误响应（IsFinalAnswer=true + 错误内容），
-//      不抛异常，让 Agent 循环能安全终止。
-//   3. Token 精确核算：从 ModelResponse 读取 InputTokens / OutputTokens，填充 AgentModelResponse，
-//      供 cost budget 校验使用（DeterministicAgentModelTransport 仅粗略估算）。
-//   4. 不解析 Tool 调用：本实现将模型输出作为最终答案返回（IsFinalAnswer=true）。
-//      真实 Tool 调用解析需 LLM 返回结构化 function_call / tool_call JSON，
-//      由调用方按自身协议解析——本 transport 不强制特定 Tool 调用格式，
-//      避免与 OpenAI / Anthropic 不同 function calling schema 耦合。
-//      后续可扩展为支持 OpenAI function calling 格式的子类。
+//   1. 真实调用：通过 IModelGateway.ChatWithToolsAsync 调用真实模型（function calling），
+//      不再硬编码 ToolCalls=[] IsFinalAnswer=true。
+//   2. 正确的 finish reason：
+//      - 模型返回 tool_calls → IsFinalAnswer=false, ToolCalls=解析结果（进入 Tool Validation → Approval → Dispatch → Observation 循环）。
+//      - 模型返回 stop → IsFinalAnswer=true, ToolCalls=[]（产出最终答案，循环终止）。
+//   3. 模型选择：使用 request.ModelArtifactId 选择模型（如果非 null），否则用 Gateway Fallback（ModelRole.Fallback）。
+//   4. 失败语义：IModelGateway 未注册或调用失败时抛出异常（不包装成最终文本），让 Agent Run 进入 Failed。
+//      这是 P0-1 关键修复点——旧实现将错误包装为 IsFinalAnswer=true 的文本响应，
+//      导致模型网关失败时 Run 错误地"成功完成"而非 Failed。
+//   5. Token / 费用核算：从 ModelChatResponse 读取 InputTokens / OutputTokens / CachedInputTokens /
+//      EstimatedCost / BilledCost，填充 AgentModelResponse 供 cost budget 校验使用。
 // ===========================================================================
 
 /// <summary>
-/// IAgentModelTransport 的真实 LLM 实现，通过 IModelGateway 调用真实模型。
+/// IAgentModelTransport 的真实 LLM 实现，通过 IModelGateway.ChatWithToolsAsync 调用真实模型。
 /// </summary>
 /// <remarks>
 /// 生产环境（Profile=ProductionHA 或 AgentModelMode=RealModel）应使用本实现替代
 /// <see cref="DeterministicAgentModelTransport"/>。本类依赖 <see cref="IModelGateway"/>，
-/// 若未注册则返回错误响应（不抛异常），让 Agent 循环安全终止。
+/// 若未注册或调用失败则抛出异常（让 Agent Run 进入 Failed，而非包装为最终文本误导调用方）。
 /// </remarks>
 public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
 {
@@ -44,9 +44,9 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
     /// <summary>
     /// 构造 ModelGatewayAgentModelTransport。
     /// </summary>
-    /// <param name="modelGateway">模型网关（null 时所有调用返回错误响应）。</param>
+    /// <param name="modelGateway">模型网关（null 时所有调用抛异常，让 Run 进入 Failed）。</param>
     /// <param name="logger">日志记录器（可选）。</param>
-    /// <param name="modelRole">模型角色（默认 <see cref="ModelRole.Fallback"/>）。</param>
+    /// <param name="modelRole">模型角色（默认 <see cref="ModelRole.Fallback"/>；当 ModelArtifactId 为 null 时生效）。</param>
     public ModelGatewayAgentModelTransport(
         IModelGateway? modelGateway,
         ILogger<ModelGatewayAgentModelTransport>? logger = null,
@@ -66,59 +66,21 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(context);
 
-        // IModelGateway 未注册 → 返回错误响应（不抛异常，让 Agent 循环安全终止）
-        if (_modelGateway is null)
+        // string context 旧路径：包装为单条 User 消息走 AgentModelRequest 重载（无 Tool 声明）。
+        // 真实 LLM 在无 Tool 时模型应直接产出 stop（IsFinalAnswer=true）。
+        var messages = new[]
         {
-            _logger?.LogError(
-                "ModelGatewayAgentModelTransport 调用失败：IModelGateway 未注册。runId={RunId}",
-                runId);
-            return BuildErrorResponse(context, "IModelGateway 未注册——生产环境需调用 AddContextModelGateway 配置模型网关。");
-        }
-
-        var sw = Stopwatch.StartNew();
-        try
+            new AgentMessage { Role = AgentMessageRole.User, Content = context }
+        };
+        var request = new AgentModelRequest
         {
-            var request = new ModelRequest
-            {
-                OperationId = $"agent-{runId}-{Guid.NewGuid():N}",
-                Role = _modelRole,
-                Prompt = context
-            };
-
-            var response = await _modelGateway.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
-            sw.Stop();
-
-            if (!response.Succeeded)
-            {
-                _logger?.LogWarning(
-                    "ModelGateway 调用失败：{Error}。runId={RunId}",
-                    response.ErrorMessage ?? "未知错误", runId);
-                return BuildErrorResponse(context, $"ModelGateway 调用失败：{response.ErrorMessage ?? "未知错误"}");
-            }
-
-            return new AgentModelResponse
-            {
-                Content = response.Content,
-                ToolCalls = Array.Empty<AgentToolCallRequest>(),
-                IsFinalAnswer = true,
-                TokensConsumed = response.InputTokens + response.OutputTokens,
-                Duration = sw.Elapsed,
-                InputTokens = response.InputTokens,
-                OutputTokens = response.OutputTokens,
-                ModelArtifactId = response.OperationId,
-                RawOutput = response.Content
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            _logger?.LogError(ex, "ModelGateway 调用异常。runId={RunId}", runId);
-            return BuildErrorResponse(context, $"ModelGateway 调用异常：{ex.Message}");
-        }
+            RunId = runId,
+            ModelArtifactId = null,
+            Messages = messages,
+            Tools = Array.Empty<AgentToolDefinition>(),
+            DeadlineAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        return await CallAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -130,27 +92,182 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(messages);
 
-        // 结构化消息 → 序列化为字符串，委托到 string context 重载。
-        // 真实 LLM adapter 可直接消费 AgentMessage[] 作为 chat completions，
-        // 但 ModelGateway 当前仅接受 string Prompt，故统一序列化。
-        var context = AgentMessage.Serialize(messages);
-        return await CallAsync(runId, context, cancellationToken).ConfigureAwait(false);
+        // 结构化消息旧路径：委托到 AgentModelRequest 重载（无 Tool 声明、无 ModelArtifactId、默认 5 分钟截止）。
+        // 真实 LLM 在无 Tool 时模型应直接产出 stop（IsFinalAnswer=true）。
+        var request = new AgentModelRequest
+        {
+            RunId = runId,
+            ModelArtifactId = null,
+            Messages = messages,
+            Tools = Array.Empty<AgentToolDefinition>(),
+            DeadlineAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        return await CallAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>构建错误响应（IsFinalAnswer=true，让 Agent 循环安全终止）。</summary>
-    private static AgentModelResponse BuildErrorResponse(string context, string errorMessage)
+    /// <inheritdoc />
+    public async ValueTask<AgentModelResponse> CallAsync(
+        AgentModelRequest request,
+        CancellationToken cancellationToken = default)
     {
-        return new AgentModelResponse
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RunId);
+        ArgumentNullException.ThrowIfNull(request.Messages);
+        ArgumentNullException.ThrowIfNull(request.Tools);
+
+        // P0-1 关键修复：IModelGateway 未注册 → 抛异常（让 Run 进入 Failed），不再包装为最终文本。
+        if (_modelGateway is null)
         {
-            Content = $"[ModelGateway Error] {errorMessage}",
-            ToolCalls = Array.Empty<AgentToolCallRequest>(),
-            IsFinalAnswer = true,
-            TokensConsumed = 0,
-            Duration = TimeSpan.Zero,
-            InputTokens = 0,
-            OutputTokens = 0,
-            ModelArtifactId = "model-gateway-error",
-            RawOutput = errorMessage
+            _logger?.LogError(
+                "ModelGatewayAgentModelTransport 调用失败：IModelGateway 未注册。runId={RunId}",
+                request.RunId);
+            throw new InvalidOperationException(
+                "ModelGatewayAgentModelTransport 要求 IModelGateway 已注册——生产环境需调用 AddContextModelGateway 配置模型网关。");
+        }
+
+        var sw = Stopwatch.StartNew();
+        var chatRequest = BuildChatRequest(request);
+        ModelChatResponse chatResponse;
+
+        try
+        {
+            chatResponse = await _modelGateway.ChatWithToolsAsync(chatRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            // P0-1 关键修复：模型网关调用异常 → 抛异常（让 Run 进入 Failed），不包装为最终文本。
+            _logger?.LogError(ex,
+                "ModelGateway ChatWithTools 调用异常。runId={RunId} modelArtifactId={ModelArtifactId}",
+                request.RunId, request.ModelArtifactId);
+            throw new InvalidOperationException(
+                $"ModelGateway ChatWithTools 调用异常：{ex.Message}", ex);
+        }
+        sw.Stop();
+
+        // 模型网关返回失败 → 抛异常（让 Run 进入 Failed）
+        if (!chatResponse.Succeeded)
+        {
+            _logger?.LogWarning(
+                "ModelGateway ChatWithTools 返回失败：{Error}。runId={RunId} modelArtifactId={ModelArtifactId}",
+                chatResponse.ErrorMessage ?? "未知错误", request.RunId, request.ModelArtifactId);
+            throw new InvalidOperationException(
+                $"ModelGateway ChatWithTools 调用失败：{chatResponse.ErrorMessage ?? "未知错误"}");
+        }
+
+        return BuildAgentResponse(chatResponse, sw.Elapsed);
+    }
+
+    /// <summary>
+    /// 将 <see cref="AgentModelRequest"/> 转换为 <see cref="ModelChatRequest"/>。
+    /// </summary>
+    /// <remarks>
+    /// 传入原生 messages（不拼接字符串）+ Tool JSON Schema（从 AgentToolDefinition 转换），
+    /// 按 ModelArtifactId 选择模型（非 null 时透传，否则用 Gateway Fallback/ModelRole）。
+    /// </remarks>
+    private ModelChatRequest BuildChatRequest(AgentModelRequest request)
+    {
+        var chatMessages = new ModelChatMessage[request.Messages.Count];
+        for (var i = 0; i < request.Messages.Count; i++)
+        {
+            var msg = request.Messages[i];
+            chatMessages[i] = new ModelChatMessage
+            {
+                Role = ToModelChatRole(msg.Role),
+                Content = msg.Content,
+                ToolName = msg.ToolName,
+                ToolCallId = null
+            };
+        }
+
+        var tools = new ModelToolDefinition[request.Tools.Count];
+        for (var i = 0; i < request.Tools.Count; i++)
+        {
+            var tool = request.Tools[i];
+            tools[i] = new ModelToolDefinition
+            {
+                Name = tool.Name,
+                Description = tool.Description,
+                ParametersJsonSchema = tool.ParametersJsonSchema
+            };
+        }
+
+        return new ModelChatRequest
+        {
+            OperationId = $"agent-{request.RunId}-{Guid.NewGuid():N}",
+            ModelArtifactId = request.ModelArtifactId,
+            Role = _modelRole,
+            Messages = chatMessages,
+            Tools = tools,
+            DeadlineAt = request.DeadlineAt
         };
     }
+
+    /// <summary>
+    /// 将 <see cref="ModelChatResponse"/> 转换为 <see cref="AgentModelResponse"/>。
+    /// </summary>
+    /// <remarks>
+    /// 按 finish reason 设置 IsFinalAnswer 与 ToolCalls：
+    /// <list type="bullet">
+    ///   <item><see cref="ModelChatFinishReason.ToolCalls"/> → IsFinalAnswer=false, ToolCalls=解析结果。</item>
+    ///   <item><see cref="ModelChatFinishReason.Stop"/> → IsFinalAnswer=true, ToolCalls=[]。</item>
+    ///   <item>其他 finish reason（Length / ContentFilter / Error）→ IsFinalAnswer=true（保守终止循环）。</item>
+    /// </list>
+    /// </remarks>
+    private static AgentModelResponse BuildAgentResponse(ModelChatResponse chatResponse, TimeSpan duration)
+    {
+        var isToolCalls = chatResponse.FinishReason == ModelChatFinishReason.ToolCalls
+            && chatResponse.ToolCalls.Count > 0;
+
+        var toolCalls = isToolCalls
+            ? BuildToolCalls(chatResponse.ToolCalls)
+            : Array.Empty<AgentToolCallRequest>();
+
+        return new AgentModelResponse
+        {
+            Content = chatResponse.Content,
+            ToolCalls = toolCalls,
+            IsFinalAnswer = !isToolCalls,
+            TokensConsumed = chatResponse.InputTokens + chatResponse.OutputTokens,
+            Duration = duration,
+            InputTokens = chatResponse.InputTokens,
+            OutputTokens = chatResponse.OutputTokens,
+            CachedInputTokens = chatResponse.CachedInputTokens,
+            ModelArtifactId = chatResponse.ModelId,
+            ModelId = chatResponse.ModelId,
+            EstimatedCost = chatResponse.EstimatedCost,
+            BilledCost = chatResponse.BilledCost,
+            RawOutput = chatResponse.Content
+        };
+    }
+
+    /// <summary>将 <see cref="ModelToolCall"/> 列表转换为 <see cref="AgentToolCallRequest"/> 列表。</summary>
+    private static AgentToolCallRequest[] BuildToolCalls(IReadOnlyList<ModelToolCall> toolCalls)
+    {
+        var result = new AgentToolCallRequest[toolCalls.Count];
+        for (var i = 0; i < toolCalls.Count; i++)
+        {
+            var call = toolCalls[i];
+            result[i] = new AgentToolCallRequest
+            {
+                ToolName = call.Name,
+                Arguments = call.ArgumentsJson,
+                ToolCallId = call.Id
+            };
+        }
+        return result;
+    }
+
+    private static ModelChatRole ToModelChatRole(AgentMessageRole role) => role switch
+    {
+        AgentMessageRole.System => ModelChatRole.System,
+        AgentMessageRole.User => ModelChatRole.User,
+        AgentMessageRole.Assistant => ModelChatRole.Assistant,
+        AgentMessageRole.Tool => ModelChatRole.Tool,
+        _ => ModelChatRole.User
+    };
 }

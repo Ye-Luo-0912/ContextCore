@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Diagnostics;
 using ContextCore.Abstractions;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,14 @@ namespace ContextCore.Core.Services.AgentKernel;
 //      所有 Tool 调用返回 "tool not registered" 错误。
 //      生产部署应通过 DI 工厂注册所需 Handler（如 search / read_file / calculator）。
 //   4. 线程安全：ConcurrentDictionary + 不可变 ToolHandler 注册后不替换。
+//
+// P0-4 修复：
+//   - IToolHandler.HandleAsync 改为接收 ToolExecutionContext（携带 WorkspaceId/RunId/
+//     RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence），而非仅裸 JSON Payload。
+//   - 注册表冻结：Freeze() 后禁止 AddHandler；DI 工厂在注册完所有 Handler 后调用 Freeze()。
+//   - fail-fast 重复注册：构造函数与 AddHandler 遇到重复 ToolName 抛
+//     InvalidOperationException，不再静默覆盖（避免注册顺序依赖导致的隐蔽 bug）。
+//   - 缓存 SupportedTools：首次读取后缓存为不可变 FrozenSet，避免每次读取创建新 HashSet。
 // ===========================================================================
 
 /// <summary>
@@ -36,11 +45,13 @@ public interface IToolHandler
     /// <summary>Tool 名称（唯一标识，用于分派）。</summary>
     string ToolName { get; }
 
-    /// <summary>处理 Tool 调用。</summary>
-    /// <param name="payload">Tool 调用负载（自由文本；语义由 Tool 实现约定）。</param>
+    /// <summary>
+    /// 处理 Tool 调用。
+    /// </summary>
+    /// <param name="context">Tool 执行上下文（携带 WorkspaceId/RunId/RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>Tool 调用结果（成功/失败 + 输出/错误）。</returns>
-    ValueTask<ToolHandlerResult> HandleAsync(string payload, CancellationToken cancellationToken = default);
+    ValueTask<ToolHandlerResult> HandleAsync(ToolExecutionContext context, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -74,12 +85,20 @@ public sealed class RealToolDispatcher : IToolDispatcher
     private readonly ConcurrentDictionary<string, IToolHandler> _handlers =
         new(StringComparer.Ordinal);
     private readonly ILogger<RealToolDispatcher>? _logger;
+    private readonly object _freezeGate = new();
+    // P0-4：冻结标志。Freeze() 后 AddHandler 抛 InvalidOperationException，防止运行时变更注册表。
+    private bool _isFrozen;
+    // P0-4：SupportedTools 缓存。首次读取后冻结为不可变集合，避免每次读取创建新 HashSet。
+    private IReadOnlySet<string>? _supportedToolsCache;
 
     /// <summary>
     /// 构造 RealToolDispatcher。
     /// </summary>
     /// <param name="handlers">初始 Tool 处理器集合（可选）。</param>
     /// <param name="logger">日志记录器（可选）。</param>
+    /// <exception cref="InvalidOperationException">
+    /// P0-4：handlers 中存在重复 ToolName（fail-fast，不再静默覆盖）。
+    /// </exception>
     public RealToolDispatcher(
         IEnumerable<IToolHandler>? handlers = null,
         ILogger<RealToolDispatcher>? logger = null)
@@ -89,7 +108,13 @@ public sealed class RealToolDispatcher : IToolDispatcher
         {
             foreach (var handler in handlers)
             {
-                _handlers[handler.ToolName] = handler;
+                ArgumentNullException.ThrowIfNull(handler);
+                if (!_handlers.TryAdd(handler.ToolName, handler))
+                {
+                    throw new InvalidOperationException(
+                        $"重复注册 Tool Handler：ToolName='{handler.ToolName}' 已存在。" +
+                        "RealToolDispatcher 禁止静默覆盖 Handler（P0-4 fail-fast）。");
+                }
             }
         }
     }
@@ -98,15 +123,78 @@ public sealed class RealToolDispatcher : IToolDispatcher
     /// 注册一个 Tool 处理器（线程安全）。
     /// </summary>
     /// <param name="handler">Tool 处理器。</param>
+    /// <exception cref="InvalidOperationException">
+    /// P0-4：ToolName 已存在（fail-fast 重复注册）或注册表已冻结（<see cref="Freeze"/>）。
+    /// </exception>
     public void AddHandler(IToolHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
-        _handlers[handler.ToolName] = handler;
+        lock (_freezeGate)
+        {
+            if (_isFrozen)
+            {
+                throw new InvalidOperationException(
+                    "RealToolDispatcher 注册表已冻结，禁止 AddHandler。" +
+                    "DI 工厂应在注册完所有 Handler 后调用 Freeze()（P0-4）。");
+            }
+            if (!_handlers.TryAdd(handler.ToolName, handler))
+            {
+                throw new InvalidOperationException(
+                    $"重复注册 Tool Handler：ToolName='{handler.ToolName}' 已存在。" +
+                    "RealToolDispatcher 禁止静默覆盖 Handler（P0-4 fail-fast）。");
+            }
+            // 注册表变更后使缓存失效
+            _supportedToolsCache = null;
+        }
+    }
+
+    /// <summary>
+    /// P0-4：冻结注册表。调用后 <see cref="AddHandler"/> 抛异常，<see cref="SupportedTools"/> 缓存为不可变集合。
+    /// DI 工厂应在注册完所有 Handler 后调用此方法，防止运行时变更注册表。
+    /// </summary>
+    public void Freeze()
+    {
+        lock (_freezeGate)
+        {
+            _isFrozen = true;
+            // 冻结时立即物化缓存
+            _supportedToolsCache ??= BuildSupportedTools();
+        }
     }
 
     /// <inheritdoc />
-    public IReadOnlySet<string> SupportedTools =>
-        new HashSet<string>(_handlers.Keys, StringComparer.Ordinal);
+    public IReadOnlySet<string> SupportedTools
+    {
+        get
+        {
+            // P0-4：缓存 SupportedTools，避免每次读取创建新 HashSet。
+            // 未冻结时延迟物化并缓存；冻结后缓存永不变更。
+            if (_supportedToolsCache is { } cached)
+            {
+                return cached;
+            }
+            lock (_freezeGate)
+            {
+                if (_supportedToolsCache is { } cached2)
+                {
+                    return cached2;
+                }
+                _supportedToolsCache = BuildSupportedTools();
+                return _supportedToolsCache;
+            }
+        }
+    }
+
+    /// <summary>构建当前注册表快照为不可变集合。</summary>
+    private IReadOnlySet<string> BuildSupportedTools()
+    {
+        // 冻结后用 FrozenSet 提供真正的不可变性；未冻结时用 HashSet 快照（值可能随后续注册变更）。
+        if (_isFrozen)
+        {
+            return _handlers.Keys.ToFrozenSet(StringComparer.Ordinal);
+        }
+        return new HashSet<string>(_handlers.Keys, StringComparer.Ordinal);
+    }
 
     /// <inheritdoc />
     public async ValueTask<ToolDispatchResult> DispatchAsync(
@@ -131,10 +219,23 @@ public sealed class RealToolDispatcher : IToolDispatcher
             };
         }
 
+        // P0-4：从 ToolDispatchRequest 构造 ToolExecutionContext，让 Handler 能访问
+        // WorkspaceId/RunId/RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence。
+        var context = new ToolExecutionContext
+        {
+            WorkspaceId = request.WorkspaceId ?? string.Empty,
+            RunId = request.RunId ?? string.Empty,
+            RequestId = request.RequestId,
+            IdempotencyKey = request.IdempotencyKey,
+            Payload = request.Payload,
+            DeadlineAt = request.DeadlineAt,
+            LeaseFence = request.LeaseFence
+        };
+
         var sw = Stopwatch.StartNew();
         try
         {
-            var handlerResult = await handler.HandleAsync(request.Payload, cancellationToken).ConfigureAwait(false);
+            var handlerResult = await handler.HandleAsync(context, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
             return new ToolDispatchResult

@@ -493,6 +493,9 @@ public sealed class R29H_AgentRunFullLoopTests
             CapturedCalls.Add((runId, messages.ToList()));
             return ValueTask.FromResult(_response);
         }
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsync(request.RunId, request.Messages, cancellationToken);
     }
 
     /// <summary>
@@ -519,6 +522,9 @@ public sealed class R29H_AgentRunFullLoopTests
             var response = index < _responses.Length ? _responses[index] : _responses[^1];
             return ValueTask.FromResult(response);
         }
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsync(request.RunId, request.Messages, cancellationToken);
     }
 
     /// <summary>

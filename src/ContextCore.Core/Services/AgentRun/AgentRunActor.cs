@@ -54,6 +54,7 @@ public sealed class AgentRunActor
     private readonly IToolDispatcher _toolDispatcher;
     private readonly IAgentToolCallValidator? _toolCallValidator;
     private readonly IAgentApprovalGate? _approvalGate;
+    private readonly IAgentApprovalStore? _approvalStore;
     private readonly IAgentCheckpointFactory? _checkpointFactory;
     private readonly IContextDecisionRuntime? _decisionRuntime;
     // 子问题 4：Checkpoint Store（保存 checkpoint 持久化）
@@ -120,6 +121,14 @@ public sealed class AgentRunActor
 
         /// <summary>最近一个事件的 ContentHash（哈希链；链头为 null）。</summary>
         public string? EventChainHash { get; init; }
+
+        /// <summary>
+        /// P0-2：待执行的 Tool 命令（审批恢复用）。
+        /// 当 Run 从 AwaitingApproval 恢复（审批通过 → PendingToolExecution）时，
+        /// 从 ApprovalRequested 事件 payload 重建此字段，Actor 据此直接执行原 Tool。
+        /// 非 PendingToolExecution 状态时为 null。
+        /// </summary>
+        public PendingToolCommand? PendingToolCommand { get; init; }
     }
 
     /// <summary>
@@ -137,6 +146,7 @@ public sealed class AgentRunActor
     /// <param name="checkpointStore">子问题 4：Checkpoint Store（null 时跳过 SaveAsync）。</param>
     /// <param name="durableToolExecutor">子问题 5：Durable Tool Executor（null 时回退到 IToolDispatcher）。</param>
     /// <param name="modelContextProjector">P0-3：模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
+    /// <param name="approvalStore">P0-2：审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -145,6 +155,7 @@ public sealed class AgentRunActor
         IToolDispatcher toolDispatcher,
         IAgentToolCallValidator? toolCallValidator = null,
         IAgentApprovalGate? approvalGate = null,
+        IAgentApprovalStore? approvalStore = null,
         IAgentCheckpointFactory? checkpointFactory = null,
         IContextDecisionRuntime? decisionRuntime = null,
         IAgentCheckpointStore? checkpointStore = null,
@@ -158,6 +169,7 @@ public sealed class AgentRunActor
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
         _toolCallValidator = toolCallValidator;
         _approvalGate = approvalGate;
+        _approvalStore = approvalStore;
         _checkpointFactory = checkpointFactory;
         _decisionRuntime = decisionRuntime;
         _checkpointStore = checkpointStore;
@@ -260,6 +272,19 @@ public sealed class AgentRunActor
             // 主循环
             while (!AgentRunStateMachine.IsTerminalState(state.Run.State) && !cancellationToken.IsCancellationRequested)
             {
+                // P0-2：审批通过后从 PendingToolExecution 状态恢复——直接执行原 Tool，不重新调用模型。
+                // 确保 ApprovalRequested 事件中保存的 PendingToolCommand 确定性执行。
+                if (state.Run.State == AgentRunState.PendingToolExecution && state.PendingToolCommand is not null)
+                {
+                    state = await ExecutePendingToolAsync(state, cancellationToken).ConfigureAwait(false);
+                    // G4：mid-turn 缓冲超过阈值时强制 flush
+                    if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
+                    {
+                        await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+                    }
+                    continue;
+                }
+
                 // 重新读取最新 Run 状态（TransitionStateLocal 已推进本地副本）
                 var decision = await _loopPolicy.DecideAsync(state.Run, state.LastModelResponse, cancellationToken).ConfigureAwait(false);
 
@@ -434,6 +459,38 @@ public sealed class AgentRunActor
         // 从最后一个事件恢复 EventSequence / EventChainHash（保证哈希链连续）
         var lastEvent = events[events.Count - 1];
 
+        // P0-2：审批通过后从 PendingToolExecution 状态恢复——不规范化为 ContextBuilding，
+        // 而是从最后一个 ApprovalRequested 事件提取 PendingToolCommand，让主循环直接执行原 Tool。
+        // 审批 API 在裁决时将 Run 状态推进到 PendingToolExecution（批准）或 Failed（拒绝）；
+        // 此处仅处理 PendingToolExecution（Failed 已是终态，不会进入 resume）。
+        if (state.Run.State == AgentRunState.PendingToolExecution)
+        {
+            var pendingCommand = ExtractPendingToolCommand(events);
+            if (pendingCommand is not null)
+            {
+                // 保持 PendingToolExecution 状态（主循环检测后直接执行原 Tool）
+                var pendingRun = state.Run with { State = AgentRunState.PendingToolExecution };
+                return state with
+                {
+                    Run = pendingRun,
+                    Context = new AgentContextState
+                    {
+                        CurrentTask = state.Run.Task,
+                        Messages = new List<AgentMessage>(),
+                        ToolObservations = toolObservations,
+                        StableMemoryReferences = new List<MemoryReference>(),
+                        LastModelTurn = null
+                    },
+                    LastModelResponse = null,
+                    LastDecisionResult = null,
+                    EventSequence = lastEvent.Sequence + 1,
+                    EventChainHash = lastEvent.ContentHash,
+                    PendingToolCommand = pendingCommand
+                };
+            }
+            // PendingToolCommand 提取失败（事件 payload 损坏/缺失）→ 降级为 ContextBuilding 重新调用模型
+        }
+
         // 本地状态规范化为 ContextBuilding：
         // - LoopPolicy 在 lastModelResponse=null 时返回 CallModel
         // - CallModelAsync 的 TransitionStateLocal(ContextBuilding, ModelCalling) 合法
@@ -455,6 +512,183 @@ public sealed class AgentRunActor
             EventSequence = lastEvent.Sequence + 1,
             EventChainHash = lastEvent.ContentHash
         };
+    }
+
+    /// <summary>
+    /// P0-2：从事件流中提取最后一个 ApprovalRequested 事件的 PendingToolCommand。
+    /// 审批通过后恢复时，Actor 据此直接执行原 Tool（不依赖模型重生成）。
+    /// </summary>
+    /// <param name="events">Run 的完整事件流（按 Sequence 升序）。</param>
+    /// <returns>提取的 PendingToolCommand；事件 payload 损坏/无 ApprovalRequested 事件时返回 null。</returns>
+    private static PendingToolCommand? ExtractPendingToolCommand(IReadOnlyList<AgentRunEvent> events)
+    {
+        // 从后往前找最后一个 ApprovalRequested 事件
+        for (var i = events.Count - 1; i >= 0; i--)
+        {
+            var evt = events[i];
+            if (evt.EventType != AgentRunEventType.ApprovalRequested)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(evt.Payload);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("pendingToolCommand", out var ptcProp))
+                {
+                    // 旧版事件 payload 未携带 pendingToolCommand（P0-2 之前）→ 无法恢复
+                    return null;
+                }
+
+                var ptc = ptcProp;
+                var toolCallId = ptc.TryGetProperty("toolCallId", out var tciProp) ? tciProp.GetString() ?? string.Empty : string.Empty;
+                var toolName = ptc.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
+                var argumentsJson = ptc.TryGetProperty("argumentsJson", out var ajProp) ? ajProp.GetString() ?? string.Empty : string.Empty;
+                var idempotencyKey = ptc.TryGetProperty("idempotencyKey", out var ikProp) ? ikProp.GetString() : null;
+                var modelTurnRevision = ptc.TryGetProperty("modelTurnRevision", out var mtrProp) ? mtrProp.GetInt32() : 0;
+
+                return new PendingToolCommand
+                {
+                    ToolCallId = toolCallId,
+                    ToolName = toolName,
+                    ArgumentsJson = argumentsJson,
+                    IdempotencyKey = idempotencyKey,
+                    ModelTurnRevision = modelTurnRevision
+                };
+            }
+            catch
+            {
+                // 解析失败 → 继续找更早的 ApprovalRequested 事件
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// P0-2：直接执行审批通过后的原 Tool（不重新调用模型）。
+    /// 从 <see cref="AgentRunExecutionState.PendingToolCommand"/> 提取完整 Tool 调用信息，
+    /// 通过 <see cref="IDurableToolExecutor"/>（或回退到 <see cref="IToolDispatcher"/>）执行，
+    /// 记录 ToolCallStarted/Completed/ObservationAppended 事件，然后进入 Observing 继续循环。
+    /// </summary>
+    /// <remarks>
+    /// 确保被批准的 Tool 确定性执行：审批前 Actor 已退出，模型上下文已丢失；
+    /// 此处不重置为 ContextBuilding 重新调用模型，而是直接执行 ApprovalRequested 事件中保存的 Tool。
+    /// </remarks>
+    private async Task<AgentRunExecutionState> ExecutePendingToolAsync(
+        AgentRunExecutionState state,
+        CancellationToken cancellationToken)
+    {
+        var pendingCommand = state.PendingToolCommand
+            ?? throw new InvalidOperationException(
+                "PendingToolExecution 状态下 PendingToolCommand 为 null（状态不一致）。");
+
+        // 从 PendingToolCommand 重建 AgentToolCallRequest
+        var toolCall = new AgentToolCallRequest
+        {
+            ToolName = pendingCommand.ToolName,
+            Arguments = pendingCommand.ArgumentsJson,
+            IdempotencyKey = pendingCommand.IdempotencyKey,
+            ToolCallId = pendingCommand.ToolCallId
+        };
+
+        // 执行 Tool（复用 DurableToolExecutor 或回退到直接 Dispatcher）
+        ToolExecutionResult? toolResult = null;
+        if (_durableToolExecutor is not null)
+        {
+            toolResult = await _durableToolExecutor.ExecuteAsync(
+                state.Run.RunId, state.Run.WorkspaceId, toolCall, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            // 回退路径：直接调 IToolDispatcher（无 journal，无 durable 保证）
+            var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
+            {
+                ToolName = toolCall.ToolName,
+                Payload = toolCall.Arguments,
+                RequestId = pendingCommand.ToolCallId,
+                IdempotencyKey = toolCall.IdempotencyKey,
+                WorkspaceId = state.Run.WorkspaceId,
+                RunId = state.Run.RunId
+            }, cancellationToken).ConfigureAwait(false);
+
+            toolResult = new ToolExecutionResult
+            {
+                RequestId = pendingCommand.ToolCallId,
+                IdempotencyKey = toolCall.IdempotencyKey,
+                SideEffect = dispatchResult.SideEffect,
+                ExternalOperationId = dispatchResult.ExternalOperationId,
+                JournalState = ToolDispatchState.Committed,
+                Result = dispatchResult.Result,
+                Succeeded = dispatchResult.Succeeded,
+                Error = dispatchResult.Error,
+                Duration = dispatchResult.Duration
+            };
+        }
+
+        // 记录 ToolCallStarted
+        state = BufferEvent(state, AgentRunEventType.ToolCallStarted, JsonSerializer.Serialize(new
+        {
+            toolName = pendingCommand.ToolName,
+            toolCallId = pendingCommand.ToolCallId,
+            requestId = toolResult.RequestId,
+            idempotencyKey = toolResult.IdempotencyKey,
+            resumedFromApproval = true
+        }));
+
+        // 记录 ToolCallCompleted
+        state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
+            toolCallId: pendingCommand.ToolCallId,
+            requestId: toolResult.RequestId,
+            toolName: pendingCommand.ToolName,
+            idempotencyKey: toolResult.IdempotencyKey,
+            sideEffect: toolResult.SideEffect.ToString(),
+            externalOperationId: toolResult.ExternalOperationId,
+            journalState: toolResult.JournalState.ToString(),
+            succeeded: toolResult.Succeeded,
+            output: toolResult.Result,
+            error: toolResult.Error,
+            durationMs: toolResult.Duration.TotalMilliseconds)));
+
+        // 观察结果
+        var observation = toolResult.Succeeded
+            ? $"{toolResult.Result}"
+            : $"[ERROR] {toolResult.Error}";
+
+        state.Context.ToolObservations.Add(new ToolObservation
+        {
+            ToolName = pendingCommand.ToolName,
+            ToolCallId = pendingCommand.ToolCallId,
+            Result = toolResult.Result,
+            Error = toolResult.Error,
+            Succeeded = toolResult.Succeeded
+        });
+
+        state = BufferEvent(state, AgentRunEventType.ObservationAppended, JsonSerializer.Serialize(new
+        {
+            toolName = pendingCommand.ToolName,
+            observationLength = observation.Length
+        }));
+
+        // Tool 执行完成 → Observing（G4：本地推进）
+        state = TransitionStateLocal(state, AgentRunState.Observing);
+
+        // Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        if (_checkpointFactory is not null)
+        {
+            state = await PersistCheckpointAsync(state, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
+        }
+
+        // G4：Turn 结束 → 批量提交所有缓冲事件 + state CAS（单事务）
+        await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+
+        // 清除 PendingToolCommand（已执行完成）
+        return state with { PendingToolCommand = null };
     }
 
     /// <summary>
@@ -791,28 +1025,71 @@ public sealed class AgentRunActor
                 {
                     state = TransitionStateLocal(state, AgentRunState.AwaitingApproval);
 
+                    // P0-2：持久化完整 PendingToolCommand 到 ApprovalRequested 事件 payload，
+                    // 让审批通过后恢复时可直接执行原 Tool（不依赖模型重生成）。
+                    // 包含 ToolCallId / ToolName / ArgumentsJson / IdempotencyKey / ModelTurnRevision。
+                    var pendingCommand = new PendingToolCommand
+                    {
+                        ToolCallId = toolCallId,
+                        ToolName = toolCall.ToolName ?? string.Empty,
+                        ArgumentsJson = toolCall.Arguments ?? string.Empty,
+                        IdempotencyKey = toolCall.IdempotencyKey,
+                        ModelTurnRevision = _modelCallsUsed
+                    };
+
                     state = BufferEvent(state, AgentRunEventType.ApprovalRequested, JsonSerializer.Serialize(new
                     {
                         toolName = toolCall.ToolName,
-                        reason = validation.ApprovalReason
+                        reason = validation.ApprovalReason,
+                        pendingToolCommand = pendingCommand
                     }));
+
+                    // P0-2：若注入 IAgentApprovalStore，Actor 用正确 workspaceId 创建审批记录，
+                    // 而非依赖 Gate 内部用 "default" workspace 创建。
+                    // 使用 Actor 生成的 toolCallId 作为 ApprovalId，确保事件流与审批记录一致。
+                    if (_approvalStore is not null)
+                    {
+                        try
+                        {
+                            await _approvalStore.CreateAsync(new AgentApproval
+                            {
+                                ApprovalId = toolCallId,
+                                RunId = state.Run.RunId,
+                                WorkspaceId = state.Run.WorkspaceId,
+                                ToolCallId = toolCallId,
+                                ToolName = toolCall.ToolName ?? string.Empty,
+                                Status = AgentApprovalStatus.Pending,
+                                Reason = validation.ApprovalReason,
+                                CreatedAt = DateTimeOffset.UtcNow,
+                                ResolvedAt = null
+                            }, cancellationToken).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            // 创建失败不阻断流程（Gate 内部会再次尝试创建，或降级为无持久化模式）
+                        }
+                    }
 
                     var approval = await _approvalGate.RequestApprovalAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
 
                     // P0-6：区分三种审批结果——PendingApproval（挂起等待人工）/ Approved（批准）/ Rejected（拒绝）
                     if (approval.PendingApproval)
                     {
+                        // P0-2：使用 Actor 的 toolCallId 作为 approvalId（而非 Gate 的 ApprovalId），
+                        // 确保审批记录（已由 Actor 用正确 workspaceId 创建）与外部 POST 端点一致。
+                        var effectiveApprovalId = toolCallId;
+
                         // P0-6：审批挂起 — 记录 ApprovalResolved(pending) 事件 + approvalId，
                         // flush 持久化 AwaitingApproval 状态，然后退出执行槽（释放 Worker/Semaphore）。
                         // 旧路径返回 Approved=false 导致 Actor 跳过 Tool 继续执行——不是真正的 Human-in-the-loop。
                         // 外部通过 POST /approvals/{approvalId} 端点提交决策；
-                        // 决策后 Run 状态推进到 ToolDispatching（批准）或 Failed（拒绝），
+                        // 决策后 Run 状态推进到 PendingToolExecution（批准）或 Failed（拒绝），
                         // RecoveryWorker 会重新入队执行。
                         state = BufferEvent(state, AgentRunEventType.ApprovalResolved, JsonSerializer.Serialize(new
                         {
                             approved = false,
                             pending = true,
-                            approvalId = approval.ApprovalId,
+                            approvalId = effectiveApprovalId,
                             approverId = (string?)null,
                             rejectionReason = (string?)null
                         }));

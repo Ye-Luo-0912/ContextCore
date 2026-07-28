@@ -136,7 +136,8 @@ LIMIT 1;
         var now = DateTimeOffset.UtcNow;
         var isTerminal = newState == AgentRunState.Completed
                          || newState == AgentRunState.Failed
-                         || newState == AgentRunState.Cancelled;
+                         || newState == AgentRunState.Cancelled
+                         || newState == AgentRunState.LeaseLost;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -156,9 +157,11 @@ LIMIT 1;
             var dataMerge = isTerminal
                 ? "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))"
                 : "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))";
-            // P0-4：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+            // P0-4 + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+            // P0-5：同时校验 lease_expires_at > clock_timestamp()，防止已过期但未被 reaper 清理的租约
+            // 仍能通过 fencing 校验（fencing_token 匹配但租约实际已过期 → 仍应拒绝写入）。
             var leaseClause = leaseValidated
-                ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token)"
+                ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
                 : string.Empty;
             updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}

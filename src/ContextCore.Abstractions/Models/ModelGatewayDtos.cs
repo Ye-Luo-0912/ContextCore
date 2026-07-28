@@ -329,6 +329,178 @@ public interface IModelGateway
     Task<ModelResponse> CompleteAsync(
         ModelRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1：带 Tool 定义的结构化对话调用（function calling）。
+    /// </summary>
+    /// <param name="request">结构化对话请求（原生 messages + tool 定义 + 模型工件）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>结构化对话响应（含文本 / Tool 调用 / finish reason / token 用量 / 计费）。</returns>
+    /// <remarks>
+    /// <b>引入背景</b>：<see cref="CompleteAsync"/> 仅接受拼接的 <see cref="ModelRequest.Prompt"/> 字符串，
+    /// 不支持原生 chat completions 消息序列与 OpenAI / Anthropic function calling。
+    /// 本方法让 Agent 模型 transport 能传入原生 messages + Tool JSON Schema，
+    /// 并接收结构化 Tool 调用结果（ToolCallId / ToolName / Arguments JSON）。
+    ///
+    /// <b>降级策略</b>：实现若底层适配器不支持 function calling，可在响应中：
+    /// <list type="bullet">
+    ///   <item>将 Tools 拼接到 SystemPrompt 中作为提示。</item>
+    ///   <item>尝试从 <see cref="ModelChatResponse.Content"/> 解析 JSON 格式的 Tool 调用。</item>
+    ///   <item>解析失败时返回 <see cref="ModelChatFinishReason.Stop"/> + 原始文本。</item>
+    /// </list>
+    /// </remarks>
+    Task<ModelChatResponse> ChatWithToolsAsync(
+        ModelChatRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>P0-1：结构化对话消息角色（与 OpenAI / Anthropic chat completions 对齐）。</summary>
+public enum ModelChatRole : byte
+{
+    /// <summary>系统指令。</summary>
+    System = 0,
+    /// <summary>用户输入。</summary>
+    User = 1,
+    /// <summary>模型输出（assistant 文本或 Tool 调用）。</summary>
+    Assistant = 2,
+    /// <summary>Tool 观察结果（function/tool response）。</summary>
+    Tool = 3
+}
+
+/// <summary>P0-1：结构化对话消息（chat completions 单条消息）。</summary>
+public sealed record ModelChatMessage
+{
+    /// <summary>消息角色。</summary>
+    public required ModelChatRole Role { get; init; }
+
+    /// <summary>消息内容（System/User/Assistant 文本，或 Tool 观察结果）。</summary>
+    public required string Content { get; init; }
+
+    /// <summary>Tool 名称（仅 Role=Tool 时填充；用于审计与 ToolCall 关联）。</summary>
+    public string? ToolName { get; init; }
+
+    /// <summary>Tool 调用 ID（仅 Role=Tool 时填充；与引发本次观察的 ModelToolCall.Id 对应）。</summary>
+    public string? ToolCallId { get; init; }
+}
+
+/// <summary>P0-1：向模型声明的 Tool 定义（OpenAI / Anthropic function calling 兼容）。</summary>
+public sealed record ModelToolDefinition
+{
+    /// <summary>Tool 名称。</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Tool 描述（向模型说明何时调用此 Tool）。</summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Tool 参数的 JSON Schema 字符串（OpenAI / Anthropic function calling 兼容）。
+    /// 例如：<c>{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}</c>。
+    /// </summary>
+    public required string ParametersJsonSchema { get; init; }
+}
+
+/// <summary>P0-1：模型返回的结构化 Tool 调用。</summary>
+public sealed record ModelToolCall
+{
+    /// <summary>
+    /// Tool 调用 ID（由模型分配，如 OpenAI 的 tool_call_id）。
+    /// 调用方在后续 Tool 观察消息中回填此 ID 以关联调用与结果。
+    /// </summary>
+    public required string Id { get; init; }
+
+    /// <summary>Tool 名称（与 <see cref="ModelToolDefinition.Name"/> 对应）。</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Tool 参数（JSON 字符串；语义由 Tool 实现约定）。</summary>
+    public required string ArgumentsJson { get; init; }
+}
+
+/// <summary>P0-1：模型对话 finish reason（与 OpenAI / Anthropic 对齐）。</summary>
+public enum ModelChatFinishReason : byte
+{
+    /// <summary>模型自然停止（产出最终答案；无 Tool 调用）。</summary>
+    Stop = 0,
+    /// <summary>模型请求调用 Tool（finish_reason=tool_calls）。</summary>
+    ToolCalls = 1,
+    /// <summary>达到最大 token 上限。</summary>
+    Length = 2,
+    /// <summary>被内容过滤器终止。</summary>
+    ContentFilter = 3,
+    /// <summary>调用失败（参见 <see cref="ModelChatResponse.ErrorMessage"/>）。</summary>
+    Error = 4
+}
+
+/// <summary>P0-1：带 Tool 定义的结构化对话请求。</summary>
+public sealed record ModelChatRequest
+{
+    /// <summary>请求唯一标识符。</summary>
+    public string OperationId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 模型工件 ID（指定具体模型；null = 由网关按 <see cref="Role"/> 路由）。
+    /// </summary>
+    public string? ModelArtifactId { get; init; }
+
+    /// <summary>使用的模型角色（ModelArtifactId 为 null 时生效）。</summary>
+    public ModelRole Role { get; init; } = ModelRole.Fallback;
+
+    /// <summary>结构化消息列表（按时间顺序）。</summary>
+    public required IReadOnlyList<ModelChatMessage> Messages { get; init; }
+
+    /// <summary>本次调用可见的 Tool 定义集合（空 = 无 function calling）。</summary>
+    public IReadOnlyList<ModelToolDefinition> Tools { get; init; } = Array.Empty<ModelToolDefinition>();
+
+    /// <summary>期望的响应格式（可选，如 "json"）。</summary>
+    public string? ResponseFormat { get; init; }
+
+    /// <summary>调用截止时间（UTC）；网关应在此时间前完成调用。</summary>
+    public DateTimeOffset? DeadlineAt { get; init; }
+
+    /// <summary>附加元数据。</summary>
+    public Dictionary<string, string> Metadata { get; init; } = new();
+}
+
+/// <summary>P0-1：带 Tool 定义的结构化对话响应。</summary>
+public sealed record ModelChatResponse
+{
+    /// <summary>对应请求的操作 ID。</summary>
+    public string OperationId { get; init; } = string.Empty;
+
+    /// <summary>模型生成的文本内容（可能为空，当模型直接产出 Tool 调用时）。</summary>
+    public string Content { get; init; } = string.Empty;
+
+    /// <summary>模型请求的 Tool 调用列表（空 = 无 Tool 调用）。</summary>
+    public IReadOnlyList<ModelToolCall> ToolCalls { get; init; } = Array.Empty<ModelToolCall>();
+
+    /// <summary>finish reason（stop / tool_calls / length / content_filter / error）。</summary>
+    public ModelChatFinishReason FinishReason { get; init; } = ModelChatFinishReason.Stop;
+
+    /// <summary>输入 Token 数量。</summary>
+    public int InputTokens { get; init; }
+
+    /// <summary>输出 Token 数量。</summary>
+    public int OutputTokens { get; init; }
+
+    /// <summary>命中缓存的输入 Token 数量（prompt caching）。</summary>
+    public int CachedInputTokens { get; init; }
+
+    /// <summary>是否成功完成。</summary>
+    public bool Succeeded { get; init; }
+
+    /// <summary>失败时的错误信息（可选）。</summary>
+    public string? ErrorMessage { get; init; }
+
+    /// <summary>实际调用的模型标识（如 "gpt-4o-2024-08-06"）。</summary>
+    public string? ModelId { get; init; }
+
+    /// <summary>估算费用（美元）。</summary>
+    public double EstimatedCost { get; init; }
+
+    /// <summary>实际计费费用（美元；考虑缓存折扣）。</summary>
+    public double BilledCost { get; init; }
+
+    /// <summary>附加元数据。</summary>
+    public Dictionary<string, string> Metadata { get; init; } = new();
 }
 
 /// <summary>模型健康检测服务接口。</summary>

@@ -539,7 +539,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         {
             // P0-9：await EnqueueDurablyAsync——等待 PostgreSQL durable append 完成（不等待后续 Materialize）。
             // 防止进程在 EnqueueAsync 完成 INSERT 前退出导致 Learning Event 丢失。
-            // dispatcher 内部捕获所有异常并降级（fallback direct materialize / metrics increment）。
+            // P0-9：EnqueueDurablyAsync 失败时直接抛出异常（不 FallbackDirectMaterialize）——
+            // 此处 try/catch 兜底忽略以防影响主决策流；Learning Event 持久化失败可观测性由 metrics 暴露。
+            // 非关键路径（如后台导入）应改用 EnqueueBestEffortAsync 以保留 fallback 降级行为。
             try
             {
                 await _materializationDispatcher.EnqueueDurablyAsync(decision, workspaceId, collectionId, CancellationToken.None)
@@ -547,7 +549,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
             catch
             {
-                // dispatcher 入队失败已被内部降级处理（fallback direct materialize）；此处兜底忽略以防影响主决策流。
+                // P0-9：EnqueueDurablyAsync 不再内部降级——异常向上抛到此处的 catch。
+                // 主决策流不应被 Learning Event 持久化失败中断；静默忽略以保持原有契约。
+                // 注：fallback direct materialize 已迁移到 EnqueueBestEffortAsync（非关键路径专用）。
             }
             return;
         }

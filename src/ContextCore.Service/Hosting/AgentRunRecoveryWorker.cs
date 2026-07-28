@@ -43,15 +43,21 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// <summary>
     /// 需要扫描恢复的非终态状态列表。
     /// </summary>
+    /// <remarks>
+    /// P0-2：AwaitingApproval 不在此列表中——等待审批的 Run 不应被 Recovery Worker 周期性重启。
+    /// 审批决策由外部 POST /approvals/{approvalId} 端点提交，端点将状态推进到
+    /// PendingToolExecution（批准）或 Failed（拒绝）后才由 Recovery Worker 重新入队执行。
+    /// 周期性重启 AwaitingApproval 会导致 Actor 重复加载审批状态、重复持久化 ApprovalRequested 事件。
+    /// </remarks>
     private static readonly AgentRunState[] RecoverableStates =
     [
         AgentRunState.Created,
         AgentRunState.ContextBuilding,
         AgentRunState.ModelCalling,
-        AgentRunState.AwaitingApproval,
         AgentRunState.ToolDispatching,
         AgentRunState.Observing,
-        AgentRunState.Checkpointing
+        AgentRunState.Checkpointing,
+        AgentRunState.PendingToolExecution
     ];
 
     public AgentRunRecoveryWorker(

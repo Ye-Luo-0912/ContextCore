@@ -49,8 +49,11 @@ public sealed class AgentKernelHost : IAsyncDisposable
     private readonly AgentHostOptions _options;
     private readonly ILogger<AgentKernelHost>? _logger;
     private readonly ConcurrentDictionary<string, ActiveRun> _activeRuns = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _workspaceSemaphores = new(StringComparer.Ordinal);
+    // P0-5：workspace 信号量改为 LRU 条目（含信号量 + 最后访问时间 + MaxCount），避免无界增长
+    private readonly ConcurrentDictionary<string, WorkspaceSemaphoreEntry> _workspaceSemaphores = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _globalSemaphore;
+    // P0-5：workspace 信号量 LRU 最大条目数（超过时淘汰空闲条目）
+    private const int WorkspaceSemaphoreMaxEntries = 128;
 
     // bounded Channel + 固定 worker 池（替代 Task.Factory.StartNew）
     private readonly Channel<RunWorkItem> _channel;
@@ -190,81 +193,97 @@ public sealed class AgentKernelHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子问题 9 + P0-4：带租约心跳 + 并发上限的 Run 执行包装。
+    /// 子问题 9 + P0-4 + P0-5：带租约心跳 + 并发上限的 Run 执行包装。
     /// </summary>
     /// <remarks>
     /// P0-4 方案 A：Worker 从 Channel 取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，
     /// 然后立即启动 heartbeat。避免排队期间 lease 过期导致 heartbeat 无法续租。
     /// heartbeat 续租失败时通过 <see cref="CancellationTokenSource.Cancel"/> 取消 Actor，
     /// 防止 lease 被抢占后当前实例继续执行副作用（双执行）。
+    /// P0-5：所有 permit acquisition 用标志位包在一个 try/finally 中，
+    /// 确保任何步骤取消或抛异常时已获取的 permit 都能被释放（避免 permit 泄漏）。
     /// </remarks>
     private async Task RunWithLeaseAndConcurrencyAsync(AgentRun run, string key, ActiveRun activeRun)
     {
-        // 子问题 9：全局并发上限
-        await _globalSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
-        // 子问题 9：Workspace 级并发上限
-        var workspaceSemaphore = _workspaceSemaphores.GetOrAdd(
-            run.WorkspaceId,
-            _ => new SemaphoreSlim(
-                _options.MaxWorkspaceRuns > 0 ? _options.MaxWorkspaceRuns : 10,
-                _options.MaxWorkspaceRuns > 0 ? _options.MaxWorkspaceRuns : 10));
-        await workspaceSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
-
-        // P0-4 方案 A：获得执行槽之后再 Acquire Lease（入队前不获取，避免排队期间过期）
+        // P0-5：标志位跟踪每个 permit 是否已获取，finally 中按标志位释放
+        var globalAcquired = false;
+        var workspaceAcquired = false;
+        SemaphoreSlim? workspaceSemaphore = null;
         LeasedAgentRun? lease = null;
-        if (_options.LeaseEnabled && _runLease is not null)
-        {
-            var owner = _options.Owner ?? BuildDefaultOwner();
-            lease = await _runLease.TryAcquireAsync(
-                run.RunId, _options.LeaseDuration, owner, activeRun.Cts.Token).ConfigureAwait(false);
-            if (lease is null)
-            {
-                // 租约被其他实例持有 → 释放执行槽并退出（其他实例正在处理）
-                workspaceSemaphore.Release();
-                _globalSemaphore.Release();
-                if (_activeRuns.TryRemove(key, out var removed))
-                {
-                    removed.Cts.Dispose();
-                }
-                _logger?.LogDebug("Run {RunId} 租约被其他实例持有，跳过执行。", run.RunId);
-                return;
-            }
-        }
-
-        // 子问题 9：启动 heartbeat 续租（若启用租约）
-        // P0-4：传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
-        using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(activeRun.Cts.Token);
         Task? heartbeatTask = null;
-        if (lease is not null && _runLease is not null)
-        {
-            heartbeatTask = RunHeartbeatAsync(run.RunId, lease.LeaseToken, activeRun.Cts, heartbeatCts.Token);
-        }
+        CancellationTokenSource? heartbeatCts = null;
 
         try
         {
+            // 子问题 9：全局并发上限
+            await _globalSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
+            globalAcquired = true;
+
+            // 子问题 9：Workspace 级并发上限
+            // P0-5：通过 GetOrCreateWorkspaceSemaphore 支持潜在 LRU 淘汰避免无界增长
+            workspaceSemaphore = GetOrCreateWorkspaceSemaphore(run.WorkspaceId);
+            await workspaceSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
+            workspaceAcquired = true;
+
+            // P0-4 方案 A：获得执行槽之后再 Acquire Lease（入队前不获取，避免排队期间过期）
+            if (_options.LeaseEnabled && _runLease is not null)
+            {
+                var owner = _options.Owner ?? BuildDefaultOwner();
+                lease = await _runLease.TryAcquireAsync(
+                    run.RunId, _options.LeaseDuration, owner, activeRun.Cts.Token).ConfigureAwait(false);
+                if (lease is null)
+                {
+                    // 租约被其他实例持有 → 释放执行槽并退出（其他实例正在处理）
+                    // P0-5：释放由 finally 块按标志位处理，此处只需 return
+                    _logger?.LogDebug("Run {RunId} 租约被其他实例持有，跳过执行。", run.RunId);
+                    return;
+                }
+            }
+
+            // 子问题 9：启动 heartbeat 续租（若启用租约）
+            // P0-4：传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
+            if (lease is not null && _runLease is not null)
+            {
+                heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(activeRun.Cts.Token);
+                // P0-5：传入 workspaceId 以便丢租时推进到 LeaseLost 状态
+                heartbeatTask = RunHeartbeatAsync(
+                    run.WorkspaceId, run.RunId, lease.LeaseToken, activeRun.Cts, heartbeatCts.Token);
+            }
+
             // P0-4：将 leaseToken + fencingToken 传给 Actor，Actor 在每次副作用操作（FlushPendingEventsAsync）
             // 时带上，Postgres 实现在 WHERE 子句中校验 lease 仍由当前实例持有。
-            await activeRun.Actor.ExecuteAsync(
-                run, activeRun.Cts.Token,
-                lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Actor 内部已处理异常并记录 RunFailed；此处仅兜底防吞异常
+            try
+            {
+                await activeRun.Actor.ExecuteAsync(
+                    run, activeRun.Cts.Token,
+                    lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Actor 内部已处理异常并记录 RunFailed；此处仅兜底防吞异常
+            }
         }
         finally
         {
             // 停止 heartbeat
             if (heartbeatTask is not null)
             {
-                heartbeatCts.Cancel();
+                heartbeatCts?.Cancel();
                 try { await heartbeatTask.ConfigureAwait(false); }
                 catch { /* heartbeat 取消异常忽略 */ }
             }
+            heartbeatCts?.Dispose();
 
-            // 释放并发槽位
-            workspaceSemaphore.Release();
-            _globalSemaphore.Release();
+            // P0-5：按标志位释放 permit，确保任何路径下已获取的 permit 都被释放
+            // workspaceAcquired 为 true 时 workspaceSemaphore 必不为 null
+            if (workspaceAcquired)
+            {
+                workspaceSemaphore!.Release();
+            }
+            if (globalAcquired)
+            {
+                _globalSemaphore.Release();
+            }
 
             // 释放租约
             await TryReleaseLeaseAsync(lease, CancellationToken.None).ConfigureAwait(false);
@@ -278,8 +297,9 @@ public sealed class AgentKernelHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子问题 9 + P0-4：后台 heartbeat 续租（直到 cancellationToken 取消）。
+    /// 子问题 9 + P0-4 + P0-5：后台 heartbeat 续租（直到 cancellationToken 取消）。
     /// </summary>
+    /// <param name="workspaceId">Workspace ID（P0-5：丢租时推进 LeaseLost 状态需要）。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="leaseToken">租约 token（来自 TryAcquireAsync）。</param>
     /// <param name="actorCts">
@@ -288,6 +308,7 @@ public sealed class AgentKernelHost : IAsyncDisposable
     /// </param>
     /// <param name="cancellationToken">heartbeat 自身的取消令牌（Actor 结束后由 heartbeatCts 取消）。</param>
     private async Task RunHeartbeatAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         CancellationTokenSource actorCts,
@@ -304,6 +325,11 @@ public sealed class AgentKernelHost : IAsyncDisposable
         var extension = _options.LeaseDuration > TimeSpan.Zero
             ? _options.LeaseDuration
             : TimeSpan.FromMinutes(10);
+
+        // P0-5：本地 watchdog — 连续续约异常超过阈值时取消 Actor
+        // （防止数据库不可达时租约已过期但 Actor 继续执行副作用的双执行风险）
+        var consecutiveFailures = 0;
+        const int MaxConsecutiveFailures = 3;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -322,9 +348,37 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 if (!renewed)
                 {
                     // P0-4：租约丢失 → 其他实例已接管，立即取消 Actor 防止双执行。
-                    // Actor 收到取消后会走 TryTransitionToCancelledAsync 路径（CAS 失败因 lease 已被抢占，
-                    // 但 Run 状态仍会尝试推进；即便 CAS 失败也不影响正确性——新持有者会重新执行）。
+                    // P0-5：丢租时使用 LeaseLost 状态（区别于用户主动 Cancelled）。
                     _logger?.LogWarning("Run {RunId} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", runId);
+                    await TryTransitionToLeaseLostAsync(workspaceId, runId, CancellationToken.None).ConfigureAwait(false);
+                    try
+                    {
+                        actorCts.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // Actor 已结束，CTS 已释放 — 无需处理
+                    }
+                    break;
+                }
+                // 续约成功 → 重置连续异常计数
+                consecutiveFailures = 0;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch
+            {
+                // P0-5：连续异常 watchdog — 超过阈值后取消 Actor 防止无 lease 的副作用
+                consecutiveFailures++;
+                _logger?.LogWarning("Run {RunId} heartbeat 续约异常（连续 {Count}/{Max}）。",
+                    runId, consecutiveFailures, MaxConsecutiveFailures);
+                if (consecutiveFailures >= MaxConsecutiveFailures)
+                {
+                    _logger?.LogError("Run {RunId} heartbeat 连续 {Count} 次异常，触发本地 watchdog 取消 Actor。",
+                        runId, consecutiveFailures);
+                    await TryTransitionToLeaseLostAsync(workspaceId, runId, CancellationToken.None).ConfigureAwait(false);
                     try
                     {
                         actorCts.Cancel();
@@ -336,10 +390,83 @@ public sealed class AgentKernelHost : IAsyncDisposable
                     break;
                 }
             }
-            catch
+        }
+    }
+
+    /// <summary>
+    /// P0-5：尝试将 Run 状态推进到 LeaseLost（丢租时使用，区别于用户主动取消的 Cancelled）。
+    /// CAS 失败或 Run 已终态时静默忽略（其他实例可能已推进状态）。
+    /// </summary>
+    private async Task TryTransitionToLeaseLostAsync(string workspaceId, string runId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var run = await _runStore.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null || AgentRunStateMachine.IsTerminalState(run.State))
             {
-                // 续约异常忽略（下次重试）
+                return;
             }
+            await _runStore.TransitionStateAsync(
+                workspaceId, runId, run.State, AgentRunState.LeaseLost, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // CAS 失败 = 状态已被其他实例推进 → 非致命
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Run {RunId} 推进到 LeaseLost 状态失败。", runId);
+        }
+    }
+
+    /// <summary>
+    /// P0-5：获取或创建 workspace 级信号量，并在字典超阈值时触发 LRU 淘汰避免无界增长。
+    /// </summary>
+    private SemaphoreSlim GetOrCreateWorkspaceSemaphore(string workspaceId)
+    {
+        var maxWs = _options.MaxWorkspaceRuns > 0 ? _options.MaxWorkspaceRuns : 10;
+        var entry = _workspaceSemaphores.GetOrAdd(workspaceId, _ => new WorkspaceSemaphoreEntry
+        {
+            Semaphore = new SemaphoreSlim(maxWs, maxWs),
+            MaxCount = maxWs,
+            LastAccessTicks = DateTimeOffset.UtcNow.Ticks
+        });
+        Interlocked.Exchange(ref entry.LastAccessTicks, DateTimeOffset.UtcNow.Ticks);
+
+        // P0-5：LRU 淘汰 — 字典超过阈值时清理空闲信号量
+        if (_workspaceSemaphores.Count > WorkspaceSemaphoreMaxEntries)
+        {
+            EvictIdleWorkspaceSemaphores();
+        }
+
+        return entry.Semaphore;
+    }
+
+    /// <summary>
+    /// P0-5：LRU 淘汰空闲 workspace 信号量。
+    /// 仅移除 CurrentCount == MaxCount（无人等待）的最旧条目，避免无界增长。
+    /// 不立即 Dispose 移除的 SemaphoreSlim — 可能有线程刚拿到引用尚未 WaitAsync，
+    /// 由 GC 回收避免 ObjectDisposedException 竞态。
+    /// </summary>
+    private void EvictIdleWorkspaceSemaphores()
+    {
+        if (_workspaceSemaphores.Count <= WorkspaceSemaphoreMaxEntries)
+        {
+            return;
+        }
+
+        var toEvict = _workspaceSemaphores.Count - WorkspaceSemaphoreMaxEntries;
+        // 物化候选列表避免在枚举期间修改字典抛 InvalidOperationException
+        var candidates = _workspaceSemaphores
+            .Where(x => x.Value.Semaphore.CurrentCount == x.Value.MaxCount)
+            .OrderBy(x => Interlocked.Read(ref x.Value.LastAccessTicks))
+            .Take(toEvict)
+            .Select(x => x.Key)
+            .ToList();
+
+        foreach (var key in candidates)
+        {
+            _workspaceSemaphores.TryRemove(key, out _);
         }
     }
 
@@ -464,6 +591,8 @@ public sealed class AgentKernelHost : IAsyncDisposable
         var modelTransport = _serviceProvider.GetService(typeof(IAgentModelTransport)) as IAgentModelTransport;
         var toolCallValidator = _serviceProvider.GetService(typeof(IAgentToolCallValidator)) as IAgentToolCallValidator;
         var approvalGate = _serviceProvider.GetService(typeof(IAgentApprovalGate)) as IAgentApprovalGate;
+        // P0-2：解析 IAgentApprovalStore（让 Actor 用正确 workspaceId 创建审批记录，而非 Gate 内部的 "default"）
+        var approvalStore = _serviceProvider.GetService(typeof(IAgentApprovalStore)) as IAgentApprovalStore;
         var checkpointFactory = _serviceProvider.GetService(typeof(IAgentCheckpointFactory)) as IAgentCheckpointFactory;
         var decisionRuntime = _serviceProvider.GetService(typeof(IContextDecisionRuntime)) as IContextDecisionRuntime;
         // 子问题 4：解析 IAgentCheckpointStore
@@ -481,6 +610,7 @@ public sealed class AgentKernelHost : IAsyncDisposable
             toolDispatcher,
             toolCallValidator,
             approvalGate,
+            approvalStore,
             checkpointFactory,
             decisionRuntime,
             checkpointStore,
@@ -541,4 +671,14 @@ public sealed class AgentKernelHost : IAsyncDisposable
 
     /// <summary>Channel work item（Run + key + ActiveRun）。</summary>
     private sealed record RunWorkItem(AgentRun Run, string Key, ActiveRun ActiveRun);
+
+    /// <summary>
+    /// P0-5：workspace 信号量 LRU 条目（含信号量与最后访问时间，用于淘汰空闲条目）。
+    /// </summary>
+    private sealed class WorkspaceSemaphoreEntry
+    {
+        public required SemaphoreSlim Semaphore { get; init; }
+        public required int MaxCount { get; init; }
+        public long LastAccessTicks;
+    }
 }

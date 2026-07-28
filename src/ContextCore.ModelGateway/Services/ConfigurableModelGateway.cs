@@ -152,6 +152,18 @@ public sealed class ConfigurableModelGateway : IModelGateway
         return finalResponse;
     }
 
+    /// <inheritdoc />
+    public Task<ModelChatResponse> ChatWithToolsAsync(
+        ModelChatRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        // ConfigurableModelGateway 底层适配器不原生支持 function calling，
+        // 通过降级辅助器将 messages + tools 序列化为 prompt 调用 CompleteAsync，再解析 JSON 格式的 Tool 调用。
+        // ModelArtifactId 通过 metadata 传递，路由层可据此选择特定模型（若配置了对应路由规则）。
+        return ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken);
+    }
+
     private async Task<ModelAttemptResult> ExecuteWithRetryAsync(
         string modelName,
         ModelRequest request,

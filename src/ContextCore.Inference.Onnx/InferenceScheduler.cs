@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Threading.Channels;
 using ContextCore.Abstractions;
 
@@ -154,9 +155,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     private readonly CancellationTokenSource _stopCts;
     private int _disposed;
 
-    // BatchKey 的常量分量：调度器包裹单一内部引擎，模型代际与 EP 在其生命周期内不变，
-    // 故作为常量参与分组（不影响分组正确性，正确性由 SchemaVersion/FeatureNamesHash/FeatureCount 保证）。
-    private readonly long _modelGeneration = 0L;
+    // P0-7：ModelGeneration 不再缓存为常量 —— 每次执行时从 IModelActivationManager 获取当前 Active Generation，
+    // 以感知模型热切换。世代号变化时新请求会进入新的 BatchKey，自然与旧世代已攒批的请求分离。
+    // _executionProvider 仍为常量（IBatchInferenceEngine 接口未暴露 EP，调度器层无法动态获取）。
     private readonly string _executionProvider = string.Empty;
 
     // 在飞 Execution Worker 任务追踪：Dispose 时 await 全部完成，避免请求泄漏。
@@ -182,7 +183,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         {
             _channel = Channel.CreateBounded<InferenceRequest>(new BoundedChannelOptions(options.MaxQueueLength)
             {
-                FullMode = BoundedChannelFullMode.DropWrite,
+                FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
                 SingleWriter = false
             });
@@ -267,31 +268,48 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         }
 
         // 构造请求并写入 channel。
+        // P0-7：deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移导致
+        // 请求被错误地判定为未过期/已过期。Deadline (DateTimeOffset) 仅保留用于错误消息显示。
+        var nowTimestamp = Stopwatch.GetTimestamp();
         var deadline = DateTimeOffset.UtcNow + _options.RequestDeadline;
+        var deadlineTimestamp = nowTimestamp + (long)(_options.RequestDeadline.TotalSeconds * Stopwatch.Frequency);
         var request = new InferenceRequest
         {
             Batch = batch,
+            DeadlineTimestamp = deadlineTimestamp,
             Deadline = deadline,
             CancellationToken = ct,
             Completion = new TaskCompletionSource<BatchInferenceResult>(
                 TaskCreationOptions.RunContinuationsAsynchronously)
         };
 
+        // P0-7：注册外部取消 —— 保存 CancellationTokenRegistration 以便请求完成后 Dispose，
+        // 避免 ct 长期存活时回调注册泄漏。即使 TryWrite 失败也要正确清理。
+        if (ct.CanBeCanceled)
+        {
+            request.CancellationRegistration = ct.Register(static state =>
+            {
+                var req = (InferenceRequest)state!;
+                req.Completion.TrySetCanceled(req.CancellationToken);
+            }, request);
+        }
+
         // 写入 bounded channel：满时 TryWrite 返回 false，立即返回 QueueFull 失败（backpressure）。
+        // P0-7：Wait 模式下 TryWrite 满时返回 false（不阻塞），由这里返回 QueueFull，
+        // 保证请求不会因 DropWrite 被静默丢弃导致 TaskCompletionSource 永久挂起。
         if (!_channel.Writer.TryWrite(request))
         {
+            request.CancellationRegistration.Dispose();
             return new ValueTask<BatchInferenceResult>(BuildQueueFullResult());
         }
 
-        // 注册外部取消：把 ct 取消信号转译为 TrySetCanceled，让 awaiter 收到 OperationCanceledException。
-        // 同时也防止 ct 已取消但请求已在 worker 中执行的场景。
-        if (ct.CanBeCanceled)
-        {
-            ct.Register(() =>
-            {
-                request.Completion.TrySetCanceled(ct);
-            });
-        }
+        // P0-7：请求完成时 Dispose 取消注册，避免 ct 长期存活时回调注册泄漏。
+        // ContinueWith 在 Completion 完成后执行（无论成功/失败/取消），清理 CancellationRegistration。
+        _ = request.Completion.Task.ContinueWith(
+            _ => request.CancellationRegistration.Dispose(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
         return new ValueTask<BatchInferenceResult>(request.Completion.Task);
     }
@@ -432,7 +450,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         }
 
         // 已过 deadline：立即失败通知，不进入微批。
-        if (DateTimeOffset.UtcNow > req.Deadline)
+        // P0-7：使用 Stopwatch 单调时钟判断过期，避免 wall clock 漂移。
+        if (Stopwatch.GetTimestamp() >= req.DeadlineTimestamp)
         {
             req.Completion.TrySetResult(BuildExpiredResult(req));
             return;
@@ -589,12 +608,13 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         var featureCount = group[0].Batch.FeatureCount;
 
         // 二次检查 deadline：在等待并发槽位期间可能已有请求过期；同时丢弃已被外部 ct 取消的请求。
-        var now = DateTimeOffset.UtcNow;
+        // P0-7：使用 Stopwatch 单调时钟判断过期。
+        var nowTimestamp = Stopwatch.GetTimestamp();
         var active = new List<InferenceRequest>(group.Count);
         for (var i = 0; i < group.Count; i++)
         {
             var req = group[i];
-            if (now > req.Deadline)
+            if (nowTimestamp >= req.DeadlineTimestamp)
             {
                 req.Completion.TrySetResult(BuildExpiredResult(req));
             }
@@ -623,9 +643,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         var rowOffsets = new int[active.Count + 1];
         try
         {
-            // ArrayPool 安全：租借数组可能含上次使用的脏数据，写入前清零有效区域。
-            Array.Clear(buffer, 0, requiredLength);
-
+            // P0-7：ArrayPool 安全 —— 后续 CopyTo 会完整覆盖 [0, requiredLength) 区域，
+            // 无需预先 Clear（原先整段 Clear 后又完整覆盖是冗余操作）。
             // 合并为连续 float 内存：[totalRows × featureCount] row-major。
             var offset = 0;
             for (var i = 0; i < active.Count; i++)
@@ -650,25 +669,37 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
             // deadline 贯穿推理：以最早 deadline 构造 CTS，与 stopToken 链接后传入内部引擎。
             // 微批内请求均在 BatchWaitWindow 内到达、共享同一 RequestDeadline，最早到期≈全员到期。
-            var earliest = active[0].Deadline;
+            // P0-7：使用 Stopwatch 单调时钟计算 dueIn，避免 wall clock 漂移。
+            var earliest = active[0].DeadlineTimestamp;
             for (var i = 1; i < active.Count; i++)
             {
-                if (active[i].Deadline < earliest) earliest = active[i].Deadline;
+                if (active[i].DeadlineTimestamp < earliest) earliest = active[i].DeadlineTimestamp;
             }
-            var dueIn = earliest - DateTimeOffset.UtcNow;
-            if (dueIn <= TimeSpan.Zero)
+            var nowTicks = Stopwatch.GetTimestamp();
+            var dueInTicks = earliest - nowTicks;
+            if (dueInTicks <= 0)
             {
                 // 全部已过期（防御性）：直接失败。
                 FailAll(active, BuildExpiredResult(null));
                 return;
             }
+            var dueIn = TimeSpan.FromSeconds((double)dueInTicks / Stopwatch.Frequency);
 
             using var deadlineCts = new CancellationTokenSource(dueIn);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopToken, deadlineCts.Token);
             BatchInferenceResult result;
             try
             {
-                result = await _inner.InferBatchAsync(combined, linked.Token).ConfigureAwait(false);
+                // P0-7：单请求/合并后总行数 > MaxBatchSize 时分片调用内部引擎，避免单次推理超过引擎分片上限。
+                // 每个 shard 行数 ≤ MaxBatchSize；结果按行顺序合并为一个 BatchInferenceResult。
+                if (_options.MaxBatchSize > 0 && totalRows > _options.MaxBatchSize)
+                {
+                    result = await InferWithShardingAsync(combined, totalRows, featureCount, linked.Token).ConfigureAwait(false);
+                }
+                else
+                {
+                    result = await _inner.InferBatchAsync(combined, linked.Token).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -704,10 +735,10 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             }
 
             // 推理成功：按 rowOffsets 拆分 Outputs 给各请求。
-            // 防御性：若引擎返回的 Outputs 数量与 totalRows 不一致，按比例分发失败。
-            if (result.Outputs.Count < totalRows)
+            // P0-7：严格相等验证 —— 引擎返回的 Outputs 数量必须 == totalRows，否则视为异常（不只是 < totalRows）。
+            if (result.Outputs.Count != totalRows)
             {
-                var mismatchError = $"微批推理输出数量({result.Outputs.Count}) < 请求总行数({totalRows})，无法拆分。";
+                var mismatchError = $"微批推理输出数量({result.Outputs.Count}) != 请求总行数({totalRows})，无法拆分。";
                 var mismatchResult = new BatchInferenceResult
                 {
                     Outputs = Array.Empty<InferenceOutput>(),
@@ -746,13 +777,109 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     /// <summary>
+    /// P0-7：分片推理 —— 当合并后总行数超过 MaxBatchSize 时，按 MaxBatchSize 拆分为多个子 batch，
+    /// 依次调用内部引擎，按行顺序合并所有 shard 的 Outputs 为单个 BatchInferenceResult。
+    /// 任一 shard 失败/抛异常即返回失败（已执行的 shard 结果丢弃）。
+    /// </summary>
+    /// <param name="combined">合并后的完整 batch（RowCount > MaxBatchSize）。</param>
+    /// <param name="totalRows">总行数（= combined.RowCount）。</param>
+    /// <param name="featureCount">每行特征数。</param>
+    /// <param name="ct">取消令牌（已链接 stopToken + deadline）。</param>
+    private async ValueTask<BatchInferenceResult> InferWithShardingAsync(
+        FeatureBatch combined,
+        int totalRows,
+        int featureCount,
+        CancellationToken ct)
+    {
+        var maxBatchSize = _options.MaxBatchSize;
+        var allOutputs = new List<InferenceOutput>(totalRows);
+        var totalDuration = TimeSpan.Zero;
+
+        for (var rowStart = 0; rowStart < totalRows; rowStart += maxBatchSize)
+        {
+            var shardRows = Math.Min(maxBatchSize, totalRows - rowStart);
+            var shardBuffer = ArrayPool<float>.Shared.Rent(shardRows * featureCount);
+            try
+            {
+                // 复制 shard 行到独立 buffer。
+                // srcSpan 在循环内获取，避免 ReadOnlySpan<float> 跨 await 边界（CS4007）。
+                var srcSpan = combined.Values.Span;
+                var srcOffset = rowStart * featureCount;
+                var srcSlice = srcSpan.Slice(srcOffset, shardRows * featureCount);
+                srcSlice.CopyTo(shardBuffer);
+
+                var shardBatch = new FeatureBatch
+                {
+                    SchemaVersion = combined.SchemaVersion,
+                    Values = shardBuffer.AsMemory(0, shardRows * featureCount),
+                    RowCount = shardRows,
+                    FeatureCount = featureCount,
+                    FeatureNames = combined.FeatureNames
+                };
+
+                var shardResult = await _inner.InferBatchAsync(shardBatch, ct).ConfigureAwait(false);
+                if (!shardResult.Succeeded)
+                {
+                    // shard 失败：返回失败（携带 shard 错误信息）。
+                    return new BatchInferenceResult
+                    {
+                        Outputs = Array.Empty<InferenceOutput>(),
+                        Succeeded = false,
+                        Error = $"分片推理 shard[rowStart={rowStart},rows={shardRows}] 失败：{shardResult.Error}",
+                        Duration = totalDuration + shardResult.Duration
+                    };
+                }
+
+                // P0-7：严格相等验证 —— shard 输出行数必须 == shardRows。
+                if (shardResult.Outputs.Count != shardRows)
+                {
+                    return new BatchInferenceResult
+                    {
+                        Outputs = Array.Empty<InferenceOutput>(),
+                        Succeeded = false,
+                        Error = $"分片推理 shard[rowStart={rowStart},rows={shardRows}] 输出数量" +
+                                $"({shardResult.Outputs.Count}) != shard 行数({shardRows})",
+                        Duration = totalDuration + shardResult.Duration
+                    };
+                }
+
+                allOutputs.AddRange(shardResult.Outputs);
+                totalDuration += shardResult.Duration;
+            }
+            finally
+            {
+                ArrayPool<float>.Shared.Return(shardBuffer);
+            }
+        }
+
+        return new BatchInferenceResult
+        {
+            Outputs = allOutputs,
+            Succeeded = true,
+            Error = null,
+            Duration = totalDuration
+        };
+    }
+
+    /// <summary>
     /// 计算 FeatureBatch 的 BatchKey。
     /// FeatureNamesHash 为顺序敏感哈希；NamesEqual 在加入分组时二次校验防止碰撞误合并。
+    /// P0-7：ModelGeneration 每次从 IModelActivationManager 动态获取（若 inner 实现该接口），
+    /// 以感知模型热切换；非 IModelActivationManager 的 inner 使用 0L（行为不变）。
     /// </summary>
     private InferenceBatchKey ComputeBatchKey(FeatureBatch batch)
     {
+        // P0-7：动态获取当前 Active Generation。
+        // inner 为 IModelActivationManager 时，世代号随激活切换自增；
+        // 无激活（ActiveGeneration==null）时用 -1L 哨兵值（与有激活的 0 区分）。
+        long modelGeneration = 0L;
+        if (_inner is IModelActivationManager activationManager)
+        {
+            modelGeneration = activationManager.ActiveGeneration ?? -1L;
+        }
+
         return new InferenceBatchKey(
-            ModelGeneration: _modelGeneration,
+            ModelGeneration: modelGeneration,
             SchemaVersion: batch.SchemaVersion,
             FeatureNamesHash: ComputeFeatureNamesHash(batch.FeatureNames),
             FeatureCount: batch.FeatureCount,
@@ -980,12 +1107,22 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
     /// <summary>
     /// 内部推理请求载体：携带 FeatureBatch、deadline 与 TaskCompletionSource。
+    /// P0-7：deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移；
+    /// 保留 Deadline (DateTimeOffset) 仅用于错误消息显示。
     /// </summary>
     private sealed class InferenceRequest
     {
         public required FeatureBatch Batch { get; init; }
+        /// <summary>请求截止时间（Stopwatch 时间戳，单调时钟）。Stopwatch.GetTimestamp() ≥ 此值即过期。</summary>
+        public required long DeadlineTimestamp { get; init; }
+        /// <summary>请求截止时间（wall clock，仅用于错误消息显示，不参与判断）。</summary>
         public required DateTimeOffset Deadline { get; init; }
         public required CancellationToken CancellationToken { get; init; }
         public required TaskCompletionSource<BatchInferenceResult> Completion { get; init; }
+        /// <summary>
+        /// P0-7：外部 ct 取消注册句柄。请求完成（成功/失败/取消）后必须 Dispose，
+        /// 否则 ct 永远存活时注册回调也永远存活（内存泄漏）。
+        /// </summary>
+        public CancellationTokenRegistration CancellationRegistration;
     }
 }

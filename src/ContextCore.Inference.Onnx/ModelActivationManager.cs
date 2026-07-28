@@ -37,15 +37,109 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 
 /// <summary>
-/// P1：原子 Active Handle — 把引擎、descriptor、引用计数器与世代号绑定为单个不可变 record。
+/// P0-8：模型槽状态机。
+/// Loading → Staged → Active → Retired → Draining → Disposed
+///   - Loading：session 创建中（瞬时，构造完成即离开）
+///   - Staged：已 warmup 但未发布为 Active（由 LoadAndWarmupAsync 产生）
+///   - Active：已发布为当前推理引擎，新请求可 Increment counter
+///   - Retired：已被新 Active 替换，counter 仍可能有 in-flight 请求递减
+///   - Draining：等待 counter 归零的过渡态（延迟 Dispose 任务进入）
+///   - Disposed：引擎已 Dispose，不可再使用
+/// </summary>
+internal enum ModelSlotState : byte
+{
+    Loading = 0,
+    Staged = 1,
+    Active = 2,
+    Retired = 3,
+    Draining = 4,
+    Disposed = 5
+}
+
+/// <summary>
+/// P1：原子 Active Handle — 把引擎、descriptor、引用计数器、世代号与槽状态绑定为单个可变对象。
 /// 推理路径通过 Volatile.Read 一次性读取整个 handle，确保 engine 与 counter 始终来自同一世代，
 /// 避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter（进而让旧 Session 被提前释放）。
 /// </summary>
-internal sealed record ActiveModelHandle(
-    IBatchInferenceEngine Engine,
-    ModelArtifactDescriptor Descriptor,
-    ModelReferenceCounter Counter,
-    long Generation);
+/// <remarks>
+/// P0-8：State 字段使用 <see cref="Interlocked"/> 原子更新，实现 Loading → Staged → Active →
+/// Retired → Draining → Disposed 状态机。TransitionTo 仅允许合法转换，非法转换返回 false。
+/// </remarks>
+internal sealed class ActiveModelHandle
+{
+    /// <summary>引擎实例。</summary>
+    public IBatchInferenceEngine Engine { get; }
+
+    /// <summary>模型工件描述符。</summary>
+    public ModelArtifactDescriptor Descriptor { get; }
+
+    /// <summary>引用计数器（跟踪 in-flight 请求数）。</summary>
+    public ModelReferenceCounter Counter { get; }
+
+    /// <summary>世代号（每次激活自增）。</summary>
+    public long Generation { get; }
+
+    private int _state;
+    /// <summary>当前槽状态（原子读写）。</summary>
+    public ModelSlotState State => (ModelSlotState)Volatile.Read(ref _state);
+
+    /// <summary>构造 handle，初始状态为 <see cref="ModelSlotState.Loading"/>。</summary>
+    public ActiveModelHandle(
+        IBatchInferenceEngine engine,
+        ModelArtifactDescriptor descriptor,
+        ModelReferenceCounter counter,
+        long generation)
+    {
+        Engine = engine;
+        Descriptor = descriptor;
+        Counter = counter;
+        Generation = generation;
+        Volatile.Write(ref _state, (int)ModelSlotState.Loading);
+    }
+
+    /// <summary>
+    /// 原子状态转换。仅允许合法转换：
+    /// Loading → Staged / Active；Staged → Active / Retired / Disposed；
+    /// Active → Retired；Retired → Draining；Draining → Disposed。
+    /// 非法转换返回 false（调用方据此处理并发冲突）。
+    /// </summary>
+    public bool TransitionTo(ModelSlotState newState)
+    {
+        while (true)
+        {
+            var oldState = (ModelSlotState)Volatile.Read(ref _state);
+            if (!IsValidTransition(oldState, newState))
+            {
+                return false;
+            }
+            if (Interlocked.CompareExchange(ref _state, (int)newState, (int)oldState) == (int)oldState)
+            {
+                return true;
+            }
+            // CAS 失败：其他线程已修改状态，重试。
+        }
+    }
+
+    private static bool IsValidTransition(ModelSlotState from, ModelSlotState to)
+    {
+        // 同状态不算转换（幂等）
+        if (from == to) return true;
+        return (from, to) switch
+        {
+            (ModelSlotState.Loading, ModelSlotState.Staged) => true,
+            (ModelSlotState.Loading, ModelSlotState.Active) => true,
+            (ModelSlotState.Loading, ModelSlotState.Disposed) => true,
+            (ModelSlotState.Staged, ModelSlotState.Active) => true,
+            (ModelSlotState.Staged, ModelSlotState.Retired) => true,
+            (ModelSlotState.Staged, ModelSlotState.Disposed) => true,
+            (ModelSlotState.Active, ModelSlotState.Retired) => true,
+            (ModelSlotState.Retired, ModelSlotState.Draining) => true,
+            (ModelSlotState.Retired, ModelSlotState.Disposed) => true,
+            (ModelSlotState.Draining, ModelSlotState.Disposed) => true,
+            _ => false
+        };
+    }
+}
 
 /// <summary>
 /// P1：引用计数器 — 跟踪某个引擎实例上的 in-flight 推理请求数。
@@ -90,15 +184,31 @@ public sealed class ModelActivationManager : IModelActivationManager
     private volatile ActiveModelHandle? _activeHandle;
     private long _generation;
 
-    // 子问题3：热切换时旧 handle 放入 _previousHandle，后台延迟 Dispose（等待 in-flight 请求完成）。
-    // 同一时间至多一个 _previousHandle；新的激活会把当前 _activeHandle 移到 _previousHandle，
-    // 并立即 Dispose 更早的 _previousHandle（其 grace period 已超过）。
-    private volatile ActiveModelHandle? _previousHandle;
+    // P0-8：Retired Handle 列表 — 所有已被新 Active 替换但仍在等待 in-flight 引用归零的旧 handle。
+    // 替代原先的单一 _previousHandle：快速连续激活时更早的 oldPrevious 不再被立即 Dispose，
+    // 而是加入此列表，由各自独立的延迟 Dispose 任务等待 counter 归零后再清理。
+    private readonly List<ActiveModelHandle> _retiredHandles = new();
+    private readonly object _retiredLock = new();
+
     private readonly object _activationLock = new();
+
+    // P0-8：统一追踪后台 Dispose Task。DisposeAsync 时 await 全部完成，避免请求泄漏。
+    private readonly List<Task> _backgroundDisposeTasks = new();
+    private readonly object _backgroundTasksLock = new();
+
+    // P0-8：Dispose 取消令牌 — 用于取消所有后台 Dispose 任务的等待循环。
+    private readonly CancellationTokenSource _disposedCts = new();
+    private int _disposed;
+
+    // P0-8：Staged Handle 配置。
+    //   - MaxStagedHandles：暂存表容量上限（防止 warmup 端点被滥用导致 OOM）。
+    //   - StagedHandleTtl：Staged Handle 生存时间；超过后自动从暂存表移除并 Dispose。
+    private const int MaxStagedHandles = 2;
+    private static readonly TimeSpan StagedHandleTtl = TimeSpan.FromMinutes(5);
 
     // P15：Staged Handle 暂存表 — LoadAndWarmupAsync 把已 warmup 的 handle 存入此表，
     // 调用方可通过 PromoteStagedAsync(handleId) 原子发布为 active。
-    // 失败 / 丢弃的 Staged Handle 由调用方负责 Dispose（不会自动清理）。
+    // P0-8：包含容量上限与 TTL 自动清理。
     private readonly ConcurrentDictionary<string, StagedModelHandle> _stagedHandles = new();
 
     /// <summary>
@@ -139,6 +249,13 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <inheritdoc />
     public ModelArtifactDescriptor? ActiveDescriptor => _activeHandle?.Descriptor;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-7：暴露当前 Active Handle 的世代号，让 <see cref="InferenceScheduler"/> 等上层组件
+    /// 感知模型热切换。世代号变化时，已攒批的请求不应与新请求合并到同一 BatchKey。
+    /// </remarks>
+    public long? ActiveGeneration => _activeHandle?.Generation;
 
     /// <inheritdoc />
     public string ModelVersion => (_activeHandle?.Engine ?? _fallbackEngine).ModelVersion;
@@ -199,6 +316,15 @@ public sealed class ModelActivationManager : IModelActivationManager
         ArgumentException.ThrowIfNullOrWhiteSpace(modelArtifactId);
         ArgumentNullException.ThrowIfNull(options);
 
+        // P0-8：Dispose 后拒绝新请求。
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return StagedModelHandle.Failed(
+                Guid.NewGuid().ToString("N"),
+                descriptor: null,
+                "ModelActivationManagerDisposed：管理器已 Dispose，拒绝新的 warmup 请求。");
+        }
+
         var handleId = Guid.NewGuid().ToString("N");
 
         var descriptor = await _registry.GetAsync(modelArtifactId, cancellationToken).ConfigureAwait(false);
@@ -223,6 +349,19 @@ public sealed class ModelActivationManager : IModelActivationManager
             descriptor,
             loaded.CalibrationValidation);
 
+        // P0-8：容量限制 + TTL 清理后再插入。
+        // 先清理过期 Staged Handle（释放槽位），再检查容量；超出上限时 Dispose 新加载的引擎并返回失败。
+        EvictExpiredStagedHandles();
+        if (_stagedHandles.Count >= MaxStagedHandles)
+        {
+            await SafeDisposeEngineAsync(loaded.Engine!).ConfigureAwait(false);
+            return StagedModelHandle.Failed(
+                handleId,
+                descriptor,
+                $"StagedHandleCapacityExceeded：暂存表已满（上限 {MaxStagedHandles}），" +
+                "请先 Promote 或丢弃现有 Staged Handle。");
+        }
+
         // 存入暂存表，调用方可通过 PromoteStagedAsync(handleId) 提升为 active。
         _stagedHandles[handleId] = staged;
         return staged;
@@ -235,19 +374,46 @@ public sealed class ModelActivationManager : IModelActivationManager
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stagedHandleId);
 
-        if (!_stagedHandles.TryGetValue(stagedHandleId, out var staged) || !staged.Success || staged.Engine is null)
+        // P0-8：原子移除 —— 使用 TryRemove 返回值确保并发 Promote 只有一个成功。
+        // 两个并发 PromoteStagedAsync 都可能先 TryGetValue 读到同一个 staged，
+        // 但 TryRemove 是原子的：只有一个返回 true，另一个返回 false 后立即失败返回。
+        if (!_stagedHandles.TryRemove(stagedHandleId, out var staged) || !staged.Success || staged.Engine is null)
         {
             return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
-                $"未找到 Staged Handle '{stagedHandleId}' 或该 handle 已失效。"));
+                $"未找到 Staged Handle '{stagedHandleId}'、该 handle 已失效或已被并发 Promote 取走。"));
         }
-
-        // 从暂存表移除（原子发布后不再允许重复 promote）。
-        _stagedHandles.TryRemove(stagedHandleId, out _);
 
         // 原子发布：复用 PublishAtomic 把已 warmup 的引擎切到 active。
         // PromoteStaged 路径使用默认 grace period（无 options 上下文）。
+        // staged.Descriptor 在 Success=true 时由 LoadAndWarmupAsync 保证非空，这里防御性校验。
+        if (staged.Descriptor is null)
+        {
+            return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
+                $"Staged Handle '{stagedHandleId}' 的 Descriptor 为 null，无法发布。"));
+        }
         var published = PublishAtomicWithGracePeriod(staged.Engine, staged.Descriptor, staged.CalibrationValidation, 30000);
         return new ValueTask<ModelActivationResult>(published);
+    }
+
+    /// <summary>
+    /// P0-8：清理过期的 Staged Handle（StagedAt + TTL 已过）。
+    /// 移除后 best-effort Dispose 其引擎，避免资源泄漏。
+    /// </summary>
+    private void EvictExpiredStagedHandles()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var kv in _stagedHandles)
+        {
+            if (now - kv.Value.StagedAt > StagedHandleTtl)
+            {
+                if (_stagedHandles.TryRemove(kv.Key, out var removed) && removed.Success && removed.Engine is not null)
+                {
+                    var engineRef = removed.Engine;
+                    var task = Task.Run(() => SafeDisposeEngineAsync(engineRef));
+                    TrackBackgroundDisposeTask(task);
+                }
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -452,19 +618,17 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <summary>
     /// WP-5：校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
-    /// 返回 null 表示无需校验（default-v1 兼容路径且无 calibrationService）；
     /// 返回 Failed=true 表示校准失败（应拒绝激活）；
     /// 返回 Failed=false + Result 非空表示校验通过（含 Warning/Info 级违规但仍允许激活）。
     /// </summary>
     /// <remarks>
-    /// 绑定策略：
+    /// P0-8：真正 fail-closed —— 不再做 default-v1 例外。
     /// <list type="bullet">
-    /// <item>descriptor.CalibrationVersion == "default-v1"：保留兼容路径。calibrationService 为 null 或参数未注册时返回 null（跳过校验）；
-    ///   参数已注册则正常校验。</item>
-    /// <item>descriptor.CalibrationVersion 为非 default-v1 的非空字符串：fail-closed。
-    ///   calibrationService 为 null → 失败；GetParametersForVersion 未命中 → 失败；Version 不匹配 → 失败。</item>
-    /// <item>descriptor.CalibrationVersion 为空/空白：按 default-v1 处理（向后兼容旧 descriptor）。</item>
+    /// <item>calibrationService 为 null → 拒绝激活（不再因 default-v1 跳过）。</item>
+    /// <item>GetParametersForVersion 未命中 → 拒绝激活（不再因 default-v1 跳过）。</item>
+    /// <item>命中精确版本：执行统计有效性校验，不通过则拒绝激活。</item>
     /// </list>
+    /// descriptor.CalibrationVersion 为空/空白时按 default-v1 处理（向后兼容旧 descriptor 的版本解析）。
     /// </remarks>
     private CalibrationValidationOutcome? ValidateCalibrationForDescriptor(ModelArtifactDescriptor descriptor)
     {
@@ -472,19 +636,14 @@ public sealed class ModelActivationManager : IModelActivationManager
         var expectedVersion = string.IsNullOrWhiteSpace(descriptor.CalibrationVersion)
             ? defaultVersion
             : descriptor.CalibrationVersion;
-        var isDefaultVersion = string.Equals(expectedVersion, defaultVersion, StringComparison.Ordinal);
 
-        // calibrationService 缺失时的处理
+        // P0-8：fail-closed —— calibrationService 缺失即拒绝激活，不再为 default-v1 开例外。
         if (_calibrationService is null)
         {
-            if (isDefaultVersion)
-            {
-                // 兼容路径：default-v1 + 无 calibrationService → 跳过校验
-                return null;
-            }
             return CalibrationValidationOutcome.Failed(
-                $"校准验证失败：descriptor.CalibrationVersion='{expectedVersion}' 非 default-v1，" +
-                "但 ICalibrationService 未注册；fail-closed 拒绝激活。",
+                $"校准验证失败：ICalibrationService 未注册；fail-closed 拒绝激活" +
+                $"（expectedVersion='{expectedVersion}'）。" +
+                "请在 DI 中注册 ICalibrationService，或显式注册匹配版本的校准参数。",
                 calResult: null);
         }
 
@@ -492,18 +651,13 @@ public sealed class ModelActivationManager : IModelActivationManager
         var parameters = _calibrationService.GetParametersForVersion(descriptor.ModelArtifactId, expectedVersion)
             ?? _calibrationService.GetParametersForVersion(descriptor.ModelName, expectedVersion);
 
+        // P0-8：fail-closed —— 参数未命中即拒绝激活，不再为 default-v1 开例外。
         if (parameters is null)
         {
-            if (isDefaultVersion)
-            {
-                // 兼容路径：default-v1 + 参数未注册 → 跳过校验（calibrationService 内部已注册全局 identity 默认参数，
-                // 但 GetParametersForVersion 严格匹配 Version，未显式注册 default-v1 时不命中）
-                return null;
-            }
             return CalibrationValidationOutcome.Failed(
                 $"校准验证失败：未找到 ModelArtifactId='{descriptor.ModelArtifactId}' / ModelName='{descriptor.ModelName}' " +
                 $"且 Version='{expectedVersion}' 精确匹配的校准参数；fail-closed 拒绝激活。" +
-                "请在 ICalibrationService 中注册匹配版本的参数，或将 descriptor.CalibrationVersion 设置为 'default-v1'。",
+                "请在 ICalibrationService 中注册匹配版本的参数。",
                 calResult: null);
         }
 
@@ -534,7 +688,7 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <summary>
     /// P1：原子发布 — 把已 warmup 的引擎切到 _activeHandle（Generation+1），
-    /// 旧 handle 移到 _previousHandle，调度延迟 Dispose（等待 in-flight 引用归零）。
+    /// 旧 handle 加入 <see cref="_retiredHandles"/> 并标记 Retired，调度延迟 Dispose（等待 in-flight 引用归零）。
     /// </summary>
     private ModelActivationResult PublishAtomic(
         IBatchInferenceEngine engine,
@@ -546,80 +700,122 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>P1：原子发布的内部实现，直接传入 gracePeriodMs。</summary>
+    /// <remarks>
+    /// P0-8：使用 <see cref="_retiredHandles"/> 列表管理所有被替换的旧 handle，
+    /// 每个 handle 独立等待其 counter 归零后再 Dispose。快速连续激活时更早的 oldPrevious
+    /// 不再被立即 Dispose，而是各自走自己的 drain 流程，避免误删仍有 in-flight 请求的引擎。
+    /// </remarks>
     private ModelActivationResult PublishAtomicWithGracePeriod(
         IBatchInferenceEngine engine,
         ModelArtifactDescriptor descriptor,
         CalibrationValidationResult? calResult,
         int gracePeriodMs)
     {
-        // P1：在 lock 内创建新 handle（Generation+1），把旧 handle 移到 _previousHandle。
-        // 不在激活时立即 Dispose 旧引擎；旧引擎由延迟清理任务在引用归零后 Dispose。
+        // P0-8：Dispose 后拒绝激活。
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return ModelActivationResult.Failed(
+                "ModelActivationManagerDisposed：管理器已 Dispose，拒绝激活。",
+                descriptor,
+                calResult);
+        }
+
         ActiveModelHandle? oldActive;
-        ActiveModelHandle? oldPrevious;
+        var newGeneration = unchecked(Interlocked.Increment(ref _generation));
+        var newHandle = new ActiveModelHandle(
+            engine,
+            descriptor,
+            new ModelReferenceCounter(),
+            newGeneration);
+
+        // P1：在 lock 内原子切换 _activeHandle 并把 oldActive 加入 Retired 列表。
         lock (_activationLock)
         {
             oldActive = _activeHandle;
-            oldPrevious = _previousHandle;
 
-            var newGeneration = unchecked(Interlocked.Increment(ref _generation));
-            var newHandle = new ActiveModelHandle(
-                engine,
-                descriptor,
-                new ModelReferenceCounter(),
-                newGeneration);
-
-            // 用 Interlocked.Exchange 保证 _activeHandle 的写入对其他线程可见顺序：
-            // 先写 _activeHandle，再写 _previousHandle。Volatile.Read 在读取侧保证可见性。
+            // P0-8：新 handle 转为 Active（从 Loading）。
+            newHandle.TransitionTo(ModelSlotState.Active);
+            // 用 volatile 写保证 _activeHandle 的写入对其他线程可见：
+            // _activeHandle 字段本身已声明 volatile，赋值即 release 屏障。
             _activeHandle = newHandle;
-            _previousHandle = oldActive;
+
+            // P0-8：把 oldActive 加入 Retired 列表并标记 Retired 状态。
+            // 每个 Retired handle 独立 drain，不再用单一 _previousHandle 互相覆盖。
+            if (oldActive is not null)
+            {
+                oldActive.TransitionTo(ModelSlotState.Retired);
+                lock (_retiredLock)
+                {
+                    _retiredHandles.Add(oldActive);
+                }
+            }
         }
 
-        // 立即 Dispose 更早的 _previousHandle（其 grace period 已超过至少一个激活周期）。
-        // 该 handle 上的 in-flight 请求早已完成（至少经过一次完整激活周期）。
-        if (oldPrevious is not null && !ReferenceEquals(oldPrevious.Engine, _fallbackEngine))
-        {
-            _ = Task.Run(() => SafeDisposeHandleAsync(oldPrevious));
-        }
-
-        // 调度延迟 Dispose 刚被替换的 oldActive（等待 in-flight 引用归零 + grace period）。
+        // P0-8：调度延迟 Dispose oldActive（等待 in-flight 引用归零 + grace period）。
+        // fallback engine 由外部 DI 容器管理，这里不 Dispose。
         if (oldActive is not null && !ReferenceEquals(oldActive.Engine, _fallbackEngine))
         {
             var oldHandleForClosure = oldActive;
-            _ = Task.Run(async () =>
+            var drainTask = Task.Run(async () =>
             {
                 try
                 {
+                    // P0-8：若已 Dispose，立即 best-effort 清理（不再等待 grace period）。
+                    var disposedToken = _disposedCts.Token;
+
                     // P1：先等待 grace period（时间兜底），再检查旧 handle 引用计数。
                     // 引用计数（oldHandle.Counter）精确跟踪旧引擎上的 in-flight 请求数；
                     // 即使新引擎持续接收新请求（新 counter），旧 counter 仍只递减不递增，能精确归零。
-                    await Task.Delay(gracePeriodMs, CancellationToken.None).ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(gracePeriodMs, disposedToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (disposedToken.IsCancellationRequested)
+                    {
+                        // Manager 已 Dispose：跳过 grace 等待，进入 drain。
+                    }
+
+                    // P0-8：状态机进入 Draining（Retired → Draining）。
+                    if (!oldHandleForClosure.TransitionTo(ModelSlotState.Draining))
+                    {
+                        // 已被其他流程处理（如 DisposeAsync 直接 Dispose）。
+                        return;
+                    }
 
                     // 自旋等待旧 counter 归零（最多再等 gracePeriodMs，避免无限等待）。
+                    // DisposeAsync 取消时会跳出循环由 DisposeAsync 接管。
                     var drainDeadline = Stopwatch.GetTimestamp();
                     var drainTimeoutTicks = TimeSpan.FromMilliseconds(gracePeriodMs).Ticks;
                     while (oldHandleForClosure.Counter.Count > 0)
                     {
+                        if (disposedToken.IsCancellationRequested)
+                        {
+                            break;
+                        }
                         if (Stopwatch.GetElapsedTime(drainDeadline).Ticks > drainTimeoutTicks)
                         {
                             // 超时仍有 in-flight：best-effort Dispose（极端场景可能触发 ORT 内部异常）。
                             break;
                         }
-                        await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
+                        try
+                        {
+                            await Task.Delay(10, disposedToken).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (disposedToken.IsCancellationRequested)
+                        {
+                            break;
+                        }
                     }
 
-                    // 仅当 oldHandleForClosure 仍是 _previousHandle 时 Dispose（避免误删正在使用的引擎）。
-                    var currentPrevious = _previousHandle;
-                    if (ReferenceEquals(currentPrevious, oldHandleForClosure))
-                    {
-                        Interlocked.CompareExchange(ref _previousHandle, null, oldHandleForClosure);
-                        await SafeDisposeHandleAsync(oldHandleForClosure).ConfigureAwait(false);
-                    }
+                    // P0-8：从 _retiredHandles 移除并 Dispose（Draining → Disposed）。
+                    await RetireAndDisposeHandleAsync(oldHandleForClosure).ConfigureAwait(false);
                 }
                 catch
                 {
                     // best-effort：调度失败不影响激活流程。
                 }
             });
+            TrackBackgroundDisposeTask(drainTask);
         }
 
         return ModelActivationResult.Succeeded(descriptor, engine, calResult ?? new CalibrationValidationResult
@@ -628,6 +824,52 @@ public sealed class ModelActivationManager : IModelActivationManager
             Error = null,
             Violations = Array.Empty<CalibrationViolation>()
         });
+    }
+
+    /// <summary>
+    /// P0-8：从 <see cref="_retiredHandles"/> 移除指定 handle 并 Dispose 其引擎（Draining → Disposed）。
+    /// 幂等：若 handle 已 Disposed 则直接返回。
+    /// </summary>
+    private async ValueTask RetireAndDisposeHandleAsync(ActiveModelHandle handle)
+    {
+        lock (_retiredLock)
+        {
+            _retiredHandles.Remove(handle);
+        }
+        // Draining → Disposed（或 Retired → Disposed 兜底）。
+        if (!handle.TransitionTo(ModelSlotState.Disposed))
+        {
+            // 已 Disposed：幂等返回。
+            return;
+        }
+        await SafeDisposeHandleAsync(handle).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P0-8：追踪后台 Dispose Task，DisposeAsync 时统一 await。
+    /// 清理已完成任务，防止列表无界增长。
+    /// </summary>
+    private void TrackBackgroundDisposeTask(Task t)
+    {
+        lock (_backgroundTasksLock)
+        {
+            for (var i = _backgroundDisposeTasks.Count - 1; i >= 0; i--)
+            {
+                if (_backgroundDisposeTasks[i].IsCompleted)
+                {
+                    _backgroundDisposeTasks.RemoveAt(i);
+                }
+            }
+            _backgroundDisposeTasks.Add(t);
+        }
+    }
+
+    private Task[] SnapshotBackgroundDisposeTasks()
+    {
+        lock (_backgroundTasksLock)
+        {
+            return _backgroundDisposeTasks.ToArray();
+        }
     }
 
     /// <summary>
@@ -755,4 +997,104 @@ public sealed class ModelActivationManager : IModelActivationManager
     /// </summary>
     private static ValueTask SafeDisposeHandleAsync(ActiveModelHandle handle)
         => SafeDisposeEngineAsync(handle.Engine);
+
+    /// <summary>
+    /// P0-8：Dispose ModelActivationManager。
+    /// 取消所有后台 Dispose Task 的等待，等待所有 Retired Handle 引用归零后 Dispose，
+    /// 最后 Dispose 当前 Active Handle 与 fallback（若可 Dispose）。
+    /// 幂等：多次调用安全。
+    /// </summary>
+    /// <remarks>
+    /// 实现步骤：
+    /// 1. 标记 _disposed=1，拒绝后续激活/warmup 请求。
+    /// 2. 触发 _disposedCts 取消所有后台 drain 任务的 grace 等待。
+    /// 3. 快照当前 Active Handle 与所有 Retired Handle，逐一等待 counter 归零（带超时）后 Dispose。
+    /// 4. await 所有后台 Dispose Task 完成（已被取消的任务会快速结束）。
+    /// 5. 清理 Staged Handles（Dispose 其引擎）。
+    /// 6. Dispose _disposedCts。
+    /// </remarks>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        // 1. 取消所有后台 drain 任务的 grace 等待。
+        _disposedCts.Cancel();
+
+        // 2. 快照需要清理的 handles。
+        ActiveModelHandle? activeSnapshot;
+        List<ActiveModelHandle> retiredSnapshot;
+        lock (_activationLock)
+        {
+            activeSnapshot = _activeHandle;
+            _activeHandle = null;
+        }
+        lock (_retiredLock)
+        {
+            retiredSnapshot = new List<ActiveModelHandle>(_retiredHandles);
+            _retiredHandles.Clear();
+        }
+
+        // 3. 逐一等待 counter 归零（带超时）后 Dispose。
+        //    Active handle 上的 in-flight 请求需要先完成；Retired handles 同理。
+        var allHandles = new List<ActiveModelHandle>(retiredSnapshot.Count + 1);
+        if (activeSnapshot is not null && !ReferenceEquals(activeSnapshot.Engine, _fallbackEngine))
+        {
+            allHandles.Add(activeSnapshot);
+        }
+        foreach (var h in retiredSnapshot)
+        {
+            if (!ReferenceEquals(h.Engine, _fallbackEngine))
+            {
+                allHandles.Add(h);
+            }
+        }
+
+        foreach (var handle in allHandles)
+        {
+            // 等待引用归零（最多 30s，避免无限挂起）。
+            var drainDeadline = Stopwatch.GetTimestamp();
+            var drainTimeoutTicks = TimeSpan.FromSeconds(30).Ticks;
+            while (handle.Counter.Count > 0)
+            {
+                if (Stopwatch.GetElapsedTime(drainDeadline).Ticks > drainTimeoutTicks)
+                {
+                    break; // 超时：best-effort Dispose。
+                }
+                await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
+            }
+            // 任意状态 → Disposed（幂等）。
+            handle.TransitionTo(ModelSlotState.Disposed);
+            await SafeDisposeHandleAsync(handle).ConfigureAwait(false);
+        }
+
+        // 4. await 所有后台 Dispose Task 完成。
+        var bgTasks = SnapshotBackgroundDisposeTasks();
+        if (bgTasks.Length > 0)
+        {
+            try
+            {
+                await Task.WhenAll(bgTasks).ConfigureAwait(false);
+            }
+            catch
+            {
+                // best-effort：各任务内部已吞异常。
+            }
+        }
+
+        // 5. 清理 Staged Handles（Dispose 其引擎）。
+        foreach (var kv in _stagedHandles)
+        {
+            if (kv.Value.Success && kv.Value.Engine is not null)
+            {
+                await SafeDisposeEngineAsync(kv.Value.Engine).ConfigureAwait(false);
+            }
+        }
+        _stagedHandles.Clear();
+
+        // 6. Dispose _disposedCts。
+        _disposedCts.Dispose();
+    }
 }

@@ -1075,6 +1075,9 @@ public sealed class R29H_LedgerShutdownFlushTests
 
         public ValueTask<AgentModelResponse> CallAsync(string runId, IReadOnlyList<AgentMessage> messages, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(_response);
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsync(request.RunId, request.Messages, cancellationToken);
     }
 
     /// <summary>
@@ -1100,6 +1103,9 @@ public sealed class R29H_LedgerShutdownFlushTests
             var response = index < _responses.Length ? _responses[index] : _responses[^1];
             return ValueTask.FromResult(response);
         }
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsync(request.RunId, request.Messages, cancellationToken);
     }
 
     /// <summary>
@@ -1133,6 +1139,9 @@ public sealed class R29H_LedgerShutdownFlushTests
             return new ValueTask<AgentModelResponse>(WaitUntilCancelled(cancellationToken));
         }
 
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsync(request.RunId, request.Messages, cancellationToken);
+
         private static async Task<AgentModelResponse> WaitUntilCancelled(CancellationToken cancellationToken)
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
@@ -1157,6 +1166,9 @@ public sealed class R29H_LedgerShutdownFlushTests
             => throw _exception;
 
         public ValueTask<AgentModelResponse> CallAsync(string runId, IReadOnlyList<AgentMessage> messages, CancellationToken cancellationToken = default)
+            => throw _exception;
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
             => throw _exception;
     }
 }

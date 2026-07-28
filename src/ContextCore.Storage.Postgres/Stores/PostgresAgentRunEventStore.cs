@@ -56,11 +56,12 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
 
         // 单条 SQL：CTE 读取 last_event；WHERE 校验 sequence 连续性 + prev_hash 链接；
         // ON CONFLICT DO NOTHING 兜底；RETURNING 用于判断是否插入成功。
-        // P0-4：leaseValidated 时 WHERE 追加 lease EXISTS 子句。
+        // P0-4 + P0-5：leaseValidated 时 WHERE 追加 lease EXISTS 子句，
+        // 同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能写入。
         await using var insertCommand = connection.CreateCommand();
         insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         var leaseClause = leaseValidated
-            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token)"
+            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
             : string.Empty;
         insertCommand.CommandText = $"""
 WITH last_event AS (
@@ -123,6 +124,7 @@ RETURNING sequence;
             leaseCheckCommand.CommandText = $"""
 SELECT 1 FROM {Table("agent_run_leases")}
 WHERE run_id = @run_id AND lease_token = @lease_token AND fencing_token = @fencing_token
+  AND lease_expires_at > clock_timestamp()
 LIMIT 1;
 """;
             leaseCheckCommand.Parameters.AddWithValue("run_id", @event.RunId);
@@ -352,16 +354,18 @@ RETURNING sequence;
                 var now = DateTimeOffset.UtcNow;
                 var isTerminal = runStateUpdate.NewState == AgentRunState.Completed
                                  || runStateUpdate.NewState == AgentRunState.Failed
-                                 || runStateUpdate.NewState == AgentRunState.Cancelled;
+                                 || runStateUpdate.NewState == AgentRunState.Cancelled
+                                 || runStateUpdate.NewState == AgentRunState.LeaseLost;
                 var leaseValidated = runStateUpdate.LeaseToken is not null && runStateUpdate.FencingToken is not null;
 
                 await using var updateCommand = connection.CreateCommand();
                 updateCommand.Transaction = transaction;
                 updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
                 var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
-                // P0-4：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+                // P0-4 + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+                // P0-5：同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能通过 CAS
                 var leaseClause = leaseValidated
-                    ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token)"
+                    ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
                     : string.Empty;
                 updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}

@@ -475,7 +475,11 @@ internal static class ProductionRuntimeExtensions
         {
             var handlers = sp.GetServices<IToolHandler>();
             var logger = sp.GetService<ILogger<RealToolDispatcher>>();
-            return new RealToolDispatcher(handlers, logger);
+            // P0-4：构造后立即冻结注册表，禁止运行时 AddHandler；
+            // 同时物化 SupportedTools 缓存为不可变 FrozenSet。
+            var dispatcher = new RealToolDispatcher(handlers, logger);
+            dispatcher.Freeze();
+            return dispatcher;
         });
     }
 

@@ -316,10 +316,10 @@ internal static class AgentExecutionEndpoints
             // SSE 轮询循环：读取新事件 → 推送 → 检查终态 → 等待 → 重复
             while (!streamCt.IsCancellationRequested)
             {
-                int eventsSent;
+                int lastSentSequence;
                 try
                 {
-                    eventsSent = await StreamNewEventsAsync(
+                    lastSentSequence = await StreamNewEventsAsync(
                         writer, eventStore, workspaceId, id,
                         lastEventSequence, streamCt).ConfigureAwait(false);
                 }
@@ -333,12 +333,11 @@ internal static class AgentExecutionEndpoints
                     break;
                 }
 
-                // 更新已推送的最新 sequence
-                if (eventsSent > 0)
+                // P0-6：cursor 推进到本轮实际发送的最后一条 Sequence
+                // （不是 DB 最新 sequence，否则会跳过未发送的事件导致永久丢失）
+                if (lastSentSequence >= 0)
                 {
-                    var lastSeq = await eventStore.GetLastSequenceAsync(workspaceId, id, streamCt)
-                        .ConfigureAwait(false);
-                    lastEventSequence = lastSeq;
+                    lastEventSequence = lastSentSequence;
                 }
 
                 // 检查 Run 是否已进入终态 → 关闭连接
@@ -377,6 +376,7 @@ internal static class AgentExecutionEndpoints
             IAgentRunStore runStore,
             IAgentRunEventStore eventStore,
             [FromServices] IAgentApprovalGate? approvalGate,
+            [FromServices] IAgentApprovalStore? approvalStore,
             IWorkspaceContextAccessor workspaceContextAccessor,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -399,9 +399,33 @@ internal static class AgentExecutionEndpoints
                     statusCode: StatusCodes.Status409Conflict);
             }
 
+            var isReject = string.Equals(request.Decision, "reject", StringComparison.OrdinalIgnoreCase);
+            var approver = request.Approver ?? httpContext.User?.Identity?.Name;
+
+            // P0-2：调用 IAgentApprovalStore.ResolveAsync 持久化审批决策（CAS：Pending → Approved/Rejected）。
+            // 旧路径只追加事件 + 修改 Run 状态，未调用 ResolveAsync——审批记录永久滞留在 Pending 状态。
+            if (approvalStore is not null)
+            {
+                try
+                {
+                    var decision = isReject
+                        ? AgentApprovalStatus.Rejected
+                        : AgentApprovalStatus.Approved;
+                    await approvalStore.ResolveAsync(
+                        workspaceId, approvalId, decision, approver, request.Reason, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // 审批不存在或已裁决（CAS 失败）→ 返回 409
+                    return ContextCoreHttpResultMapper.InvalidRequest(
+                        httpContext, string.Empty, "agents.runs.approvals",
+                        $"审批裁决失败：{ex.Message}",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+            }
+
             // 记录 ApprovalResolved 事件到事件流（哈希链）
-            // 当前 IAgentApprovalGate 为同步自动审批，不支持 pending approval 提交；
-            // 此端点记录人工决策事件，供审计追踪与未来异步审批门使用。
             var lastSequence = await eventStore.GetLastSequenceAsync(workspaceId, id, ct)
                 .ConfigureAwait(false);
             var lastEvent = lastSequence >= 0
@@ -414,7 +438,7 @@ internal static class AgentExecutionEndpoints
                 approvalId,
                 decision = request.Decision,
                 reason = request.Reason,
-                approver = request.Approver ?? httpContext.User?.Identity?.Name,
+                approver,
                 runState = run.State.ToString()
             });
 
@@ -435,13 +459,15 @@ internal static class AgentExecutionEndpoints
                     $"记录 approval 事件失败：{ex.Message}");
             }
 
-            // 若 Run 处于 AwaitingApproval 且决策为拒绝 → 推进到 Failed（无法继续）
-            // 若批准 → 推进到 ToolDispatching（Actor 会感知并继续执行）
+            // P0-2：若 Run 处于 AwaitingApproval：
+            //   决策为拒绝 → 推进到 Failed（无法继续）
+            //   决策为批准 → 推进到 PendingToolExecution（Actor 恢复时直接执行原 Tool，不重新调用模型）
+            // 旧路径批准后推进到 ToolDispatching，导致 Actor 重新调用模型、被批准的原 Tool 不会直接执行。
             if (run.State == AgentRunState.AwaitingApproval)
             {
-                var targetState = string.Equals(request.Decision, "reject", StringComparison.OrdinalIgnoreCase)
+                var targetState = isReject
                     ? AgentRunState.Failed
-                    : AgentRunState.ToolDispatching;
+                    : AgentRunState.PendingToolExecution;
                 try
                 {
                     await runStore.TransitionStateAsync(
@@ -449,7 +475,7 @@ internal static class AgentExecutionEndpoints
                 }
                 catch (InvalidOperationException)
                 {
-                    // CAS 失败 = 状态已被 Actor 推进 → 非致命（决策已记录到事件流）
+                    // CAS 失败 = 状态已被 Actor 推进 → 非致命（决策已记录到事件流 + 已 ResolveAsync）
                 }
             }
 
@@ -504,7 +530,7 @@ internal static class AgentExecutionEndpoints
     /// <summary>
     /// 从事件存储读取新事件并推送为 SSE 格式。
     /// </summary>
-    /// <returns>本次推送的事件数量。</returns>
+    /// <returns>本轮实际发送的最后一条事件的 Sequence（无事件时返回 -1）。</returns>
     private static async Task<int> StreamNewEventsAsync(
         StreamWriter writer,
         IAgentRunEventStore eventStore,
@@ -517,6 +543,8 @@ internal static class AgentExecutionEndpoints
         var events = await eventStore.ReadAsync(workspaceId, runId, fromSequence, 100, ct)
             .ConfigureAwait(false);
 
+        // P0-6：本轮最后一条事件 Sequence（用于推进 cursor，而非 DB 最新 sequence）
+        var lastSentSequence = -1;
         foreach (var evt in events)
         {
             // SSE 格式：
@@ -528,10 +556,16 @@ internal static class AgentExecutionEndpoints
             await writer.WriteLineAsync($"event: {evt.EventType}").ConfigureAwait(false);
             await writer.WriteLineAsync($"data: {JsonSerializer.Serialize(evt)}").ConfigureAwait(false);
             await writer.WriteLineAsync().ConfigureAwait(false);
+            lastSentSequence = evt.Sequence;
+        }
+
+        // P0-6：每批次 Flush 一次（而非每条事件 Flush），减少系统调用开销
+        if (events.Count > 0)
+        {
             await writer.FlushAsync(ct).ConfigureAwait(false);
         }
 
-        return events.Count;
+        return lastSentSequence;
     }
 
     /// <summary>
