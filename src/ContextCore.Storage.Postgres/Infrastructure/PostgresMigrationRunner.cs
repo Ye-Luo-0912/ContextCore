@@ -94,8 +94,22 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL，
     ///   让 POST /api/agents/runs 在提供 IdempotencyKey 时返回已有 Run（200 OK）而非创建重复 Run，
     ///   防止客户端重试/网络抖动导致同一业务意图被多次执行。
+    /// Perf-7：v44 → v45，新增 canary_pipelines + canary_transition_audit 表与索引：
+    ///   - canary_pipelines：per-run pipeline 状态表（percentage + status + revision），
+    ///     ApplyCanaryDecisionAsync 在单一事务内通过 revision CAS 原子更新，替代旧路径
+    ///     AdvanceAsync（修改 in-memory）+ AdvanceEpochAsync（fencing 校验）的两步模式。
+    ///   - canary_transition_audit：append-only 审计表，记录每次决策的 from/to/decision/
+    ///     fencing_token/new_epoch，与 canary_pipelines UPDATE 同事务写入，确保审计与状态强一致。
+    ///   修复 HA 正确性：旧 Leader 在 lease 失效后无法再修改 rollout（fencing 校验在事务内首先执行）；
+    ///   Rollback 路径也经过 fencing 校验（旧路径完全无校验）。
+    /// Perf-2：v45 → v46，memory_items / constraints 追加 content_hash / content_length /
+    ///   tokenizer_id / tokenizer_version / token_count / counted_at 列，Memory/Constraint
+    ///   摄取阶段持久化完整 tokenization metadata，Provider 读取后跳过在线 SHA-256 + tokenize。
+    /// Perf-5：v45 → v46，context_items 启用 pg_trgm 扩展；search_vector 改为 CJK 预分词
+    ///   （regexp_replace 在每个 CJK 字符后插入空格，simple 配置即可按字符切分）；
+    ///   新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v44";
+    public const string SchemaVersion = "cc-schema-v46";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -186,6 +200,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "canary_metrics_samples",
         "canary_leader_leases",
         "canary_run_epochs",
+        // Perf-7：Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
+        "canary_pipelines",
+        "canary_transition_audit",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
         "learning_event_outbox",
         // Durable Delivery v37：Durable Transport Dead Letter Queue（超过 max_attempts 的指令/结果）
@@ -368,6 +385,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("canary_metrics_samples", "run_instance"),
         // canary_leader_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
         ("canary_leader_leases", "expires"),
+        // Perf-7：canary_transition_audit 按 run + transitioned_at 查历史
+        ("canary_transition_audit", "run"),
+        ("canary_transition_audit", "transition"),
         // Learning Loop Durable Outbox 索引（按 state + created_at 拉 Pending + 按租约过期重试 + 按 workspace 查）
         ("learning_event_outbox", "state"),
         ("learning_event_outbox", "lease"),
@@ -503,6 +523,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var canaryMetricsSamples = Infrastructure.PostgresNames.Table(options, "canary_metrics_samples");
         var canaryLeaderLeases = Infrastructure.PostgresNames.Table(options, "canary_leader_leases");
         var canaryRunEpochs = Infrastructure.PostgresNames.Table(options, "canary_run_epochs");
+        // Perf-7：Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
+        var canaryPipelines = Infrastructure.PostgresNames.Table(options, "canary_pipelines");
+        var canaryTransitionAudit = Infrastructure.PostgresNames.Table(options, "canary_transition_audit");
         var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
         // Durable Delivery v37：Durable Transport Dead Letter Queue 表
         var kernelTransportDeadLetter = Infrastructure.PostgresNames.Table(options, "kernel_transport_dead_letter");
@@ -521,6 +544,22 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         return $"""
 {schemaSql}
 {extensionSql}
+
+-- Perf-5：pg_trgm 扩展用于 id / title 的 ILIKE 中文/前缀检索（gin_trgm_ops GIN 索引）。
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Perf-5：CJK 预分词 IMMUTABLE 函数。在每个 CJK 字符后插入空格，
+-- 让 to_tsvector('simple', ...) 能按字符切分，避免中文整段被当作单一 token。
+-- 覆盖 CJK Unified Ideographs 主块 (U+4E00..U+9FFF) 与扩展 A 区 (U+3400..U+4DBF)，
+-- 这两块覆盖了绝大多数现代中文用字。函数标记 IMMUTABLE 以便在 GENERATED 列中使用。
+CREATE OR REPLACE FUNCTION cjk_pre_tokenize(input text) RETURNS text AS $$
+BEGIN
+    IF input IS NULL THEN
+        RETURN '';
+    END IF;
+    RETURN regexp_replace(regexp_replace(input, '([一-鿿㐀-䶿])', '\1 ', 'g'), '\s+', ' ', 'g');
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE TABLE IF NOT EXISTS {contextSchemaMigrations} (
     migration_id text NOT NULL,
@@ -600,12 +639,21 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context
 -- P3：Lexical 检索 tsvector 生成列 + GIN 索引。
 -- Title 加权 A（高），Content 加权 B；simple 配置避免词典依赖，对中英文/代码/JSON 均可分词。
 -- STORED 生成列随 data jsonb 一起写入，无需触发器；GIN 索引让 websearch_to_tsquery 走索引而非全表扫描。
+-- Perf-5：CJK 预分词——cjk_pre_tokenize 在每个 CJK 字符后插入空格，
+-- simple 配置即可按字符切分，避免中文整段被当作单一 token。
+-- 仅修改 search_vector 表达式时需先 DROP 旧生成列再 ADD 新列（PostgreSQL 不支持 ALTER COLUMN 表达式）。
+ALTER TABLE {contextItems} DROP COLUMN IF EXISTS search_vector;
 ALTER TABLE {contextItems} ADD COLUMN IF NOT EXISTS search_vector tsvector
     GENERATED ALWAYS AS (
-        setweight(to_tsvector('simple', coalesce(data->>'Title', '')), 'A') ||
-        setweight(to_tsvector('simple', coalesce(data->>'Content', '')), 'B')
+        setweight(to_tsvector('simple', cjk_pre_tokenize(coalesce(data->>'Title', ''))), 'A') ||
+        setweight(to_tsvector('simple', cjk_pre_tokenize(coalesce(data->>'Content', ''))), 'B')
     ) STORED;
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "search_vector")} ON {contextItems} USING gin (search_vector);
+
+-- Perf-5：id / title 的 trigram GIN 索引，支持 ILIKE 中文/前缀检索（gin_trgm_ops）。
+-- id 列直接索引；title 是 data jsonb 字段，用表达式索引 (data->>'Title') gin_trgm_ops。
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "id_trgm")} ON {contextItems} USING gin (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "title_trgm")} ON {contextItems} USING gin ((data->>'Title') gin_trgm_ops);
 
 -- P6：摄取阶段持久化 content_hash / content_token_cost，Provider 直接读取不再在线重复计算。
 -- content_hash 为 SHA-256 小写 hex（与 ContextItem.Checksum 一致），content_token_cost 为精确 token 数。
@@ -635,6 +683,16 @@ CREATE TABLE IF NOT EXISTS {memoryItems} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "memory_items", "layer")} ON {memoryItems} (workspace_id, collection_id, layer, status);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "memory_items", "tags")} ON {memoryItems} USING gin (tags);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "memory_items", "importance")} ON {memoryItems} (workspace_id, collection_id, importance DESC, updated_at DESC);
+
+-- Perf-2：memory_items 持久化 tokenization metadata。Memory 摄取阶段计算 content_hash /
+-- content_length / tokenizer_id / tokenizer_version / token_count / counted_at 并写入专用列，
+-- Provider 读取后跳过在线 SHA-256 + tokenizer 调用。所有列均可 NULL（兼容历史数据与无 tokenizer 部署）。
+ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS content_hash text NULL;
+ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS content_length integer NULL;
+ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS tokenizer_id text NULL;
+ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS tokenizer_version text NULL;
+ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS token_count integer NULL;
+ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS counted_at timestamptz NULL;
 
 CREATE TABLE IF NOT EXISTS {relations} (
     workspace_id text NOT NULL,
@@ -1035,6 +1093,16 @@ CREATE TABLE IF NOT EXISTS {constraints} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraints", "coll")} ON {constraints} (workspace_id, collection_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraints", "level")} ON {constraints} (workspace_id, level);
+
+-- Perf-2：constraints 持久化 tokenization metadata。Constraint 摄取阶段计算 content_hash /
+-- content_length / tokenizer_id / tokenizer_version / token_count / counted_at 并写入专用列，
+-- Provider 读取后跳过在线 SHA-256 + tokenizer 调用。所有列均可 NULL（兼容历史数据与无 tokenizer 部署）。
+ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS content_hash text NULL;
+ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS content_length integer NULL;
+ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS tokenizer_id text NULL;
+ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS tokenizer_version text NULL;
+ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS token_count integer NULL;
+ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS counted_at timestamptz NULL;
 
 CREATE TABLE IF NOT EXISTS {globalContextItems} (
     workspace_id text NOT NULL,
@@ -2169,6 +2237,47 @@ CREATE TABLE IF NOT EXISTS {canaryRunEpochs} (
     advanced_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (run_id)
 );
+
+-- Perf-7：Canary 严格 HA 单事务接口持久化表（v45 新增）。
+-- canary_pipelines：per-run pipeline 状态表，revision 列用于 CAS 原子更新。
+--   ApplyCanaryDecisionAsync 在单一事务内：
+--     1. SELECT fencing_token FROM canary_leader_leases WHERE ...（lease 校验）
+--     2. UPDATE canary_pipelines SET percentage=@new WHERE run_id=@runId AND revision=@expected（CAS）
+--     3. INSERT canary_transition_audit ...（审计，同事务）
+--     4. UPSERT canary_run_epochs ...（epoch 递增，同事务）
+--   任一步骤失败则整个事务 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
+--   首次初始化时通过 ON CONFLICT DO UPDATE WHERE revision = 0 完成 INSERT。
+CREATE TABLE IF NOT EXISTS {canaryPipelines} (
+    run_id text NOT NULL,
+    percentage integer NOT NULL DEFAULT 0,
+    status text NOT NULL DEFAULT 'Active',
+    revision bigint NOT NULL DEFAULT 1,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id)
+);
+
+-- canary_transition_audit：append-only 审计表，记录每次 Canary 决策（Promote/Rollback/Hold）。
+-- 与 canary_pipelines UPDATE 同事务写入，确保审计与状态强一致（旧路径分两步写可能丢失审计）。
+-- transition_id 用于幂等去重（同 transitionId 重复调用不产生重复审计）。
+CREATE TABLE IF NOT EXISTS {canaryTransitionAudit} (
+    audit_id text NOT NULL,
+    run_id text NOT NULL,
+    transition_id text NOT NULL,
+    from_percentage integer NOT NULL,
+    to_percentage integer NOT NULL,
+    decision text NOT NULL,
+    rationale text NOT NULL DEFAULT '',
+    transition text NOT NULL DEFAULT '',
+    fencing_token bigint NOT NULL,
+    new_epoch bigint NOT NULL,
+    transitioned_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (audit_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_transition_audit", "run")} ON {canaryTransitionAudit} (run_id, transitioned_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_transition_audit", "transition")} ON {canaryTransitionAudit} (run_id, transition_id);
 
 -- Learning Loop Durable Outbox：Decision 物化事件持久化表。
 -- 替代 fire-and-forget Task.Run → MaterializeAsync → catch-all 模式，消除进程崩溃时静默丢训练数据。

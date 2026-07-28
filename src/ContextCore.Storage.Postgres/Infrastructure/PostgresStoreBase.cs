@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using ContextCore.Abstractions;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
 using NpgsqlTypes;
@@ -27,6 +31,136 @@ public abstract class PostgresStoreBase
     protected PostgresMigrationRunner MigrationRunner { get; }
 
     protected PostgresOptions Options => ConnectionFactory.Options;
+
+    /// <summary>
+    /// Perf-2：可选 tokenizer 解析器与模型名。Memory/Constraint 子类在 SaveAsync 时调用
+    /// <see cref="ComputeTokenizationMetadata"/> 计算 SHA-256 + token 数，持久化到专用列；
+    /// 读取时 Provider 直接复用持久化值，跳过在线 SHA-256 + tokenizer 调用。
+    /// null 时仅持久化 content_hash / content_length，token_count 等列保持 NULL。
+    /// </summary>
+    protected IContextTokenizerResolver? TokenizerResolver { get; init; }
+
+    protected string? TokenizerModelName { get; init; }
+
+    /// <summary>
+    /// Perf-2：计算内容的 tokenization metadata。SHA-256 总是计算（无外部依赖）；
+    /// token_count 在 tokenizer 可用时计算，否则返回 null（Provider 回退到在线 fail-fast 路径）。
+    /// </summary>
+    protected TokenizationMetadata ComputeTokenizationMetadata(string content)
+    {
+        var contentBytes = Encoding.UTF8.GetBytes(content ?? string.Empty);
+        var hashHex = Convert.ToHexString(SHA256.HashData(contentBytes)).ToLowerInvariant();
+        var contentLength = contentBytes.Length;
+
+        string? tokenizerId = null;
+        string? tokenizerVersion = null;
+        int? tokenCount = null;
+        var countedAt = (DateTimeOffset?)null;
+
+        if (TokenizerResolver is not null)
+        {
+            var estimate = TokenizerResolver.Estimate(content, TokenizerModelName);
+            tokenCount = Math.Max(0, estimate.TokenCount);
+            tokenizerId = estimate.Source;
+            tokenizerVersion = string.IsNullOrWhiteSpace(TokenizerModelName)
+                ? estimate.ModelName
+                : TokenizerModelName;
+            countedAt = DateTimeOffset.UtcNow;
+        }
+
+        return new TokenizationMetadata
+        {
+            ContentHash = hashHex,
+            ContentLength = contentLength,
+            TokenizerId = tokenizerId,
+            TokenizerVersion = tokenizerVersion,
+            TokenCount = tokenCount ?? 0,
+            CountedAt = countedAt
+        };
+    }
+
+    /// <summary>
+    /// Perf-2：把 tokenization metadata 注入到 Metadata 字典（供 Provider 读取复用）。
+    /// 调用方应使用返回的字典替换原 Metadata（避免修改原集合）。
+    /// </summary>
+    protected static Dictionary<string, string> WithTokenizationMetadata(
+        IReadOnlyDictionary<string, string> baseMetadata,
+        TokenizationMetadata metadata)
+    {
+        var result = new Dictionary<string, string>(baseMetadata)
+        {
+            [ContentMetadataKeys.ContentHash] = metadata.ContentHash,
+            [ContentMetadataKeys.ContentLength] = metadata.ContentLength.ToString(CultureInfo.InvariantCulture)
+        };
+
+        if (metadata.TokenizerId is not null)
+        {
+            result[ContentMetadataKeys.TokenizerId] = metadata.TokenizerId;
+        }
+        if (metadata.TokenizerVersion is not null)
+        {
+            result[ContentMetadataKeys.TokenizerVersion] = metadata.TokenizerVersion;
+        }
+        if (metadata.TokenCount >= 0 && metadata.CountedAt.HasValue)
+        {
+            result[ContentMetadataKeys.ContentTokenCost] = metadata.TokenCount.ToString(CultureInfo.InvariantCulture);
+            result[ContentMetadataKeys.CountedAt] = metadata.CountedAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Perf-2：从数据库列读取 tokenization metadata，写入 Metadata 字典（供 Provider 读取复用）。
+    /// 调用方应在反序列化 jsonb 后调用本方法，把专用列的值合并到 Metadata。
+    /// 所有参数为 null 时直接返回原字典（不复制）。
+    /// </summary>
+    protected static Dictionary<string, string> MergePersistedTokenizationColumns(
+        IReadOnlyDictionary<string, string> baseMetadata,
+        string? contentHash,
+        int? contentLength,
+        string? tokenizerId,
+        string? tokenizerVersion,
+        int? tokenCount,
+        DateTimeOffset? countedAt)
+    {
+        if (string.IsNullOrEmpty(contentHash)
+            && !contentLength.HasValue
+            && string.IsNullOrEmpty(tokenizerId)
+            && string.IsNullOrEmpty(tokenizerVersion)
+            && !tokenCount.HasValue
+            && !countedAt.HasValue)
+        {
+            return baseMetadata as Dictionary<string, string> ?? new Dictionary<string, string>(baseMetadata);
+        }
+
+        var result = new Dictionary<string, string>(baseMetadata);
+        if (!string.IsNullOrEmpty(contentHash))
+        {
+            result[ContentMetadataKeys.ContentHash] = contentHash!;
+        }
+        if (contentLength.HasValue)
+        {
+            result[ContentMetadataKeys.ContentLength] = contentLength.Value.ToString(CultureInfo.InvariantCulture);
+        }
+        if (!string.IsNullOrEmpty(tokenizerId))
+        {
+            result[ContentMetadataKeys.TokenizerId] = tokenizerId!;
+        }
+        if (!string.IsNullOrEmpty(tokenizerVersion))
+        {
+            result[ContentMetadataKeys.TokenizerVersion] = tokenizerVersion!;
+        }
+        if (tokenCount.HasValue)
+        {
+            result[ContentMetadataKeys.ContentTokenCost] = tokenCount.Value.ToString(CultureInfo.InvariantCulture);
+        }
+        if (countedAt.HasValue)
+        {
+            result[ContentMetadataKeys.CountedAt] = countedAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+        return result;
+    }
 
     /// <summary>首次访问时执行一次幂等迁移；关闭 AutoMigrate 时不执行。</summary>
     protected async Task EnsureMigratedAsync(CancellationToken cancellationToken)

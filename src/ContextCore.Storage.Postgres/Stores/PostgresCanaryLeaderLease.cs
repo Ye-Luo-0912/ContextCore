@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Storage.Postgres.Infrastructure;
+using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -30,8 +31,13 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///
 /// 复用 P0-1/P0-2 的租约模式（CAS + token 匹配），但状态机更简单：
 /// leader 租约无需 Pending → Leased → Acked 流转，只有 "持有" 与 "未持有" 两个状态。
+///
+/// <b>Perf-7 严格 HA 单事务接口</b>：本类同时实现 <see cref="ICanaryDecisionApplier"/>，
+/// 将 lease/fencing 校验 + pipeline revision CAS + transition audit 写入 + epoch 递增
+/// 合并为单一 PostgreSQL 事务，修复旧路径 <c>AdvanceAsync</c> → <c>AdvanceEpochAsync</c>
+/// 分两步导致的 HA 正确性问题（旧 Leader 可能已推进 rollout 后 fencing 才失败）。
 /// </remarks>
-public sealed class PostgresCanaryLeaderLease : PostgresStoreBase, ICanaryLeaderLease
+public sealed class PostgresCanaryLeaderLease : PostgresStoreBase, ICanaryLeaderLease, ICanaryDecisionApplier
 {
     /// <summary>初始化 PostgreSQL Canary Leader 租约存储。</summary>
     public PostgresCanaryLeaderLease(
@@ -200,5 +206,353 @@ WHERE lease_expires_at < @now;
         command.Parameters.AddWithValue("now", now);
 
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    // -----------------------------------------------------------------------
+    // Perf-7：ICanaryDecisionApplier 实现（单一 PostgreSQL 事务）
+    // -----------------------------------------------------------------------
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <b>事务流程</b>：
+    /// <code>
+    /// BEGIN;
+    /// -- 1. lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行，防止并发续约/释放）
+    /// SELECT 1 FROM canary_leader_leases
+    ///   WHERE run_id = @runId AND fencing_token = @fencingToken
+    ///     AND lease_expires_at > clock_timestamp()
+    ///   FOR UPDATE;
+    /// -- 无行 → ROLLBACK，返回 LeaseLost
+    ///
+    /// -- 2. 读取当前 pipeline 状态（percentage + revision）
+    /// SELECT percentage, revision FROM canary_pipelines WHERE run_id = @runId;
+    /// -- revision != @expectedRevision → ROLLBACK，返回 RevisionMismatch
+    ///
+    /// -- 3. pipeline revision CAS（UPSERT 处理首次初始化 + 后续更新）
+    /// INSERT INTO canary_pipelines (run_id, percentage, status, revision, ...)
+    ///   VALUES (@runId, @newPct, @newStatus, 1, ...)
+    ///   ON CONFLICT (run_id) DO UPDATE SET
+    ///     percentage = EXCLUDED.percentage,
+    ///     status = EXCLUDED.status,
+    ///     revision = canary_pipelines.revision + 1,
+    ///     updated_at = now()
+    ///   WHERE canary_pipelines.revision = @expectedRevision
+    ///   RETURNING revision;
+    /// -- 0 行 → ROLLBACK，返回 RevisionMismatch
+    ///
+    /// -- 4. transition audit 写入（同事务）
+    /// INSERT INTO canary_transition_audit (...) VALUES (...);
+    ///
+    /// -- 5. epoch 更新（UPSERT，同事务）
+    /// INSERT INTO canary_run_epochs (run_id, current_epoch, advanced_at)
+    ///   VALUES (@runId, @newEpoch, now())
+    ///   ON CONFLICT (run_id) DO UPDATE SET
+    ///     current_epoch = EXCLUDED.current_epoch,
+    ///     advanced_at = EXCLUDED.advanced_at;
+    /// COMMIT;
+    /// </code>
+    /// 任一步骤失败则整个事务 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
+    /// </remarks>
+    public async ValueTask<CanaryDecisionResult> ApplyCanaryDecisionAsync(
+        CanaryDecisionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RunId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.FencingToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        // 解析 fencing token（字符串 → long，与 canary_leader_leases.fencing_token bigint 列匹配）
+        if (!long.TryParse(request.FencingToken, out var fencingTokenLong) || fencingTokenLong <= 0)
+        {
+            return new CanaryDecisionResult
+            {
+                Applied = false,
+                PreviousPercentage = 0,
+                CurrentPercentage = 0,
+                NewRevision = 0,
+                NewEpoch = 0,
+                FailureReason = "LeaseLost"
+            };
+        }
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        int previousPercentage = 0;
+        int newRevision = 0;
+
+        try
+        {
+            // 步骤 1：lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行）
+            // 使用 clock_timestamp() 而非 now()，确保 lease 过期判断基于真实当前时间而非事务开始时间。
+            await using (var leaseCommand = connection.CreateCommand())
+            {
+                leaseCommand.Transaction = transaction;
+                leaseCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                leaseCommand.CommandText = $"""
+SELECT 1 FROM {Table("canary_leader_leases")}
+WHERE run_id = @run_id
+  AND fencing_token = @fencing_token
+  AND lease_expires_at > clock_timestamp()
+FOR UPDATE;
+""";
+                leaseCommand.Parameters.AddWithValue("run_id", request.RunId);
+                leaseCommand.Parameters.AddWithValue("fencing_token", fencingTokenLong);
+
+                var leaseResult = await leaseCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (leaseResult is null)
+                {
+                    // lease 不存在 / fencing token 不匹配 / lease 已过期 → 放弃事务
+                    await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    return new CanaryDecisionResult
+                    {
+                        Applied = false,
+                        PreviousPercentage = 0,
+                        CurrentPercentage = (int)request.NewPercentage,
+                        NewRevision = 0,
+                        NewEpoch = 0,
+                        FailureReason = "LeaseLost"
+                    };
+                }
+            }
+
+            // 步骤 2：读取当前 pipeline 状态（percentage + revision），用于 CAS 校验与审计的 from_percentage
+            await using (var stateCommand = connection.CreateCommand())
+            {
+                stateCommand.Transaction = transaction;
+                stateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                stateCommand.CommandText = $"""
+SELECT percentage, revision FROM {Table("canary_pipelines")}
+WHERE run_id = @run_id;
+""";
+                stateCommand.Parameters.AddWithValue("run_id", request.RunId);
+
+                await using var reader = await stateCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    previousPercentage = reader.GetInt32(reader.GetOrdinal("percentage"));
+                    var currentRevision = reader.GetInt32(reader.GetOrdinal("revision"));
+                    if (currentRevision != request.ExpectedRevision)
+                    {
+                        // revision 不匹配 → 已被其他 Leader 推进，放弃事务
+                        await reader.CloseAsync().ConfigureAwait(false);
+                        await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                        return new CanaryDecisionResult
+                        {
+                            Applied = false,
+                            PreviousPercentage = previousPercentage,
+                            CurrentPercentage = previousPercentage,
+                            NewRevision = currentRevision,
+                            NewEpoch = 0,
+                            FailureReason = "RevisionMismatch"
+                        };
+                    }
+                }
+                else
+                {
+                    // 行不存在 → ExpectedRevision 必须为 0（首次初始化）
+                    if (request.ExpectedRevision != 0)
+                    {
+                        await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                        return new CanaryDecisionResult
+                        {
+                            Applied = false,
+                            PreviousPercentage = 0,
+                            CurrentPercentage = 0,
+                            NewRevision = 0,
+                            NewEpoch = 0,
+                            FailureReason = "RevisionMismatch"
+                        };
+                    }
+                }
+            }
+
+            // 步骤 3：pipeline revision CAS（UPSERT 处理首次初始化 + 后续更新）
+            // ON CONFLICT WHERE revision = @expectedRevision 实现 CAS：
+            //   - 首次（expected=0，行不存在）→ INSERT 成功，revision=1
+            //   - 后续（expected=N，行存在且 revision=N）→ UPDATE 成功，revision=N+1
+            //   - 冲突（expected=N，行存在但 revision≠N）→ ON CONFLICT WHERE 不命中，0 行返回
+            var newStatus = request.Decision switch
+            {
+                CanaryDecision.Rollback => "RolledBack",
+                CanaryDecision.Promote when (int)request.NewPercentage >= 100 => "Promoted",
+                _ => "Active"
+            };
+
+            await using (var casCommand = connection.CreateCommand())
+            {
+                casCommand.Transaction = transaction;
+                casCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                casCommand.CommandText = $"""
+INSERT INTO {Table("canary_pipelines")} (run_id, percentage, status, revision, created_at, updated_at)
+VALUES (@run_id, @new_percentage, @new_status, 1, now(), now())
+ON CONFLICT (run_id) DO UPDATE SET
+    percentage = EXCLUDED.percentage,
+    status = EXCLUDED.status,
+    revision = {Table("canary_pipelines")}.revision + 1,
+    updated_at = now()
+WHERE {Table("canary_pipelines")}.revision = @expected_revision
+RETURNING revision;
+""";
+                casCommand.Parameters.AddWithValue("run_id", request.RunId);
+                casCommand.Parameters.AddWithValue("new_percentage", (int)request.NewPercentage);
+                casCommand.Parameters.AddWithValue("new_status", newStatus);
+                casCommand.Parameters.AddWithValue("expected_revision", request.ExpectedRevision);
+
+                var casResult = await casCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (casResult is not long rev || rev <= 0)
+                {
+                    // 0 行 → CAS 失败（revision 已被其他 Leader 推进）
+                    await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    return new CanaryDecisionResult
+                    {
+                        Applied = false,
+                        PreviousPercentage = previousPercentage,
+                        CurrentPercentage = previousPercentage,
+                        NewRevision = 0,
+                        NewEpoch = 0,
+                        FailureReason = "RevisionMismatch"
+                    };
+                }
+                newRevision = checked((int)rev);
+            }
+
+            // 步骤 4：transition audit 写入（同事务，确保审计与状态强一致）
+            var auditId = Guid.NewGuid().ToString("N");
+            var transitionId = string.IsNullOrWhiteSpace(request.TransitionId)
+                ? $"t-{request.RunId}-{auditId.Substring(0, 12)}"
+                : request.TransitionId;
+            var decisionText = request.Decision.ToString();
+            var transitionedAt = DateTimeOffset.UtcNow;
+
+            await using (var auditCommand = connection.CreateCommand())
+            {
+                auditCommand.Transaction = transaction;
+                auditCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                auditCommand.CommandText = $"""
+INSERT INTO {Table("canary_transition_audit")} (
+    audit_id, run_id, transition_id, from_percentage, to_percentage,
+    decision, rationale, transition, fencing_token, new_epoch, transitioned_at, data
+) VALUES (
+    @audit_id, @run_id, @transition_id, @from_percentage, @to_percentage,
+    @decision, @rationale, @transition, @fencing_token, @new_epoch, @transitioned_at, @data
+)
+ON CONFLICT (audit_id) DO NOTHING;
+""";
+                auditCommand.Parameters.AddWithValue("audit_id", auditId);
+                auditCommand.Parameters.AddWithValue("run_id", request.RunId);
+                auditCommand.Parameters.AddWithValue("transition_id", transitionId);
+                auditCommand.Parameters.AddWithValue("from_percentage", previousPercentage);
+                auditCommand.Parameters.AddWithValue("to_percentage", (int)request.NewPercentage);
+                auditCommand.Parameters.AddWithValue("decision", decisionText);
+                auditCommand.Parameters.AddWithValue("rationale", request.Rationale ?? string.Empty);
+                auditCommand.Parameters.AddWithValue("transition", request.Transition ?? string.Empty);
+                auditCommand.Parameters.AddWithValue("fencing_token", fencingTokenLong);
+                auditCommand.Parameters.AddWithValue("new_epoch", request.NewEpoch);
+                auditCommand.Parameters.AddWithValue("transitioned_at", transitionedAt);
+                AddJson(auditCommand, "data", new
+                {
+                    audit_id = auditId,
+                    run_id = request.RunId,
+                    transition_id = transitionId,
+                    from_percentage = previousPercentage,
+                    to_percentage = (int)request.NewPercentage,
+                    decision = decisionText,
+                    rationale = request.Rationale ?? string.Empty,
+                    transition = request.Transition ?? string.Empty,
+                    fencing_token = fencingTokenLong,
+                    new_epoch = request.NewEpoch,
+                    transitioned_at = transitionedAt
+                });
+
+                await auditCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // 步骤 5：epoch 更新（UPSERT，同事务）
+            // 使用 EXCLUDED.current_epoch 直接覆盖为调用方传入的 NewEpoch
+            // （调用方应传入 current_epoch + 1，事务内不再自增，确保与请求一致）
+            await using (var epochCommand = connection.CreateCommand())
+            {
+                epochCommand.Transaction = transaction;
+                epochCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                epochCommand.CommandText = $"""
+INSERT INTO {Table("canary_run_epochs")} (run_id, current_epoch, advanced_at)
+VALUES (@run_id, @new_epoch, now())
+ON CONFLICT (run_id) DO UPDATE SET
+    current_epoch = EXCLUDED.current_epoch,
+    advanced_at = EXCLUDED.advanced_at;
+""";
+                epochCommand.Parameters.AddWithValue("run_id", request.RunId);
+                epochCommand.Parameters.AddWithValue("new_epoch", request.NewEpoch);
+
+                await epochCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // 提交事务（所有 4 步成功）
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            return new CanaryDecisionResult
+            {
+                Applied = true,
+                PreviousPercentage = previousPercentage,
+                CurrentPercentage = (int)request.NewPercentage,
+                NewRevision = newRevision,
+                NewEpoch = request.NewEpoch,
+                FailureReason = "Success"
+            };
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch { /* 不掩盖原始异常 */ }
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<CanaryPipelineState> GetCanaryPipelineStateAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT percentage, revision, status FROM {Table("canary_pipelines")}
+WHERE run_id = @run_id;
+""";
+        command.Parameters.AddWithValue("run_id", runId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            // 行不存在 → 返回 Revision=0, Percentage=0（调用方可据此判断需要首次初始化）
+            return new CanaryPipelineState
+            {
+                RunId = runId,
+                Revision = 0,
+                Percentage = 0,
+                Status = null
+            };
+        }
+
+        var percentage = reader.GetInt32(reader.GetOrdinal("percentage"));
+        var revision = reader.GetInt32(reader.GetOrdinal("revision"));
+        var statusOrdinal = reader.GetOrdinal("status");
+        var status = reader.IsDBNull(statusOrdinal) ? null : reader.GetString(statusOrdinal);
+
+        return new CanaryPipelineState
+        {
+            RunId = runId,
+            Revision = revision,
+            Percentage = percentage,
+            Status = status
+        };
     }
 }

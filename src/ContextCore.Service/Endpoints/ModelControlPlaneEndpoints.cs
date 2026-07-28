@@ -7,6 +7,7 @@ using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Service.Endpoints;
 
@@ -156,6 +157,7 @@ internal static class ModelControlPlaneEndpoints
             ICalibrationValidator calibrationValidator,
             [FromServices] ICalibrationService? calibrationService,
             [FromServices] IOnnxInferenceSessionFactory? sessionFactory,
+            IConfiguration configuration,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -202,12 +204,9 @@ internal static class ModelControlPlaneEndpoints
             {
                 try
                 {
-                    var validateOptions = new OnnxInferenceEngineOptions
-                    {
-                        InputTensorName = "input",
-                        ScoreOutputName = "score",
-                        EnableWarmup = false
-                    };
+                    // Perf-8：tensor 名从配置读取（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName），
+                    // 避免硬编码 "input" / "score" 与不同模型 schema 不匹配。
+                    var validateOptions = CreateDefaultOnnxOptions(configuration, enableWarmup: false);
                     var session = await sessionFactory.CreateAsync(validateOptions, descriptor, ct).ConfigureAwait(false);
                     // 加载成功即视为 ONNX 格式有效；session 立即 Dispose 释放资源。
                     await session.DisposeAsync().ConfigureAwait(false);
@@ -250,6 +249,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("ValidateModel")
+        .RequireWorkspacePermission(WorkspacePermission.ModelRegister)
         .WithSummary("验证模型（schema 存在性 / calibration 参数 / ONNX 格式）")
         .Produces<ValidateModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
@@ -259,6 +259,7 @@ internal static class ModelControlPlaneEndpoints
             string id,
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
+            IConfiguration configuration,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -281,12 +282,8 @@ internal static class ModelControlPlaneEndpoints
             // P15：warmup 不再调用 ActivateAsync（会替换 ActiveEngine），改为 LoadAndWarmupAsync。
             // LoadAndWarmupAsync 加载模型并执行 Golden Probe warmup，但不发布为 active；
             // 返回 Staged Handle 供后续 /activate 端点（接受 stagedHandleId）原子发布。
-            var options = new OnnxInferenceEngineOptions
-            {
-                InputTensorName = "input",
-                ScoreOutputName = "score",
-                EnableWarmup = true
-            };
+            // Perf-8：tensor 名从配置读取，避免硬编码 "input" / "score"。
+            var options = CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var staged = await activationManager.LoadAndWarmupAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Warmup,
                 staged.Success, activationManager.ActiveDescriptor?.ModelArtifactId,
@@ -310,6 +307,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("WarmupModel")
+        .RequireWorkspacePermission(WorkspacePermission.ModelActivate)
         .WithSummary("预热模型（加载并执行 Golden Probe warmup，不替换 active；返回 Staged Handle）")
         .Produces<WarmupModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
@@ -322,6 +320,7 @@ internal static class ModelControlPlaneEndpoints
             ShadowModelRequest request,
             IModelArtifactRegistry registry,
             [FromServices] ShadowModelManager? shadowManager,
+            IConfiguration configuration,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -341,12 +340,8 @@ internal static class ModelControlPlaneEndpoints
                     $"未找到 ModelArtifactId='{id}'。");
             }
 
-            var options = request.Options ?? new OnnxInferenceEngineOptions
-            {
-                InputTensorName = "input",
-                ScoreOutputName = "score",
-                EnableWarmup = true
-            };
+            // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
+            var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var result = await shadowManager.ActivateShadowAsync(descriptor, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Shadow,
                 result.Success, previousModelArtifactId: null,
@@ -368,6 +363,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("ShadowModel")
+        .RequireWorkspacePermission(WorkspacePermission.ModelActivate)
         .WithSummary("加载 Challenger 模型到影子模式（不替换 active；推理结果仅用于对比）")
         .Produces<ShadowModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
@@ -380,6 +376,7 @@ internal static class ModelControlPlaneEndpoints
             ActivateModelRequest request,
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
+            IConfiguration configuration,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -411,12 +408,8 @@ internal static class ModelControlPlaneEndpoints
             }
             else
             {
-                var options = request.Options ?? new OnnxInferenceEngineOptions
-                {
-                    InputTensorName = "input",
-                    ScoreOutputName = "score",
-                    EnableWarmup = true
-                };
+                // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
+                var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
                 result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
             }
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Activate,
@@ -453,6 +446,7 @@ internal static class ModelControlPlaneEndpoints
             RollbackModelRequest request,
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
+            IConfiguration configuration,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -476,12 +470,8 @@ internal static class ModelControlPlaneEndpoints
             }
 
             var previousActiveId = activationManager.ActiveDescriptor?.ModelArtifactId;
-            var options = request.Options ?? new OnnxInferenceEngineOptions
-            {
-                InputTensorName = "input",
-                ScoreOutputName = "score",
-                EnableWarmup = true
-            };
+            // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
+            var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Rollback,
                 result.Success, previousActiveId,
@@ -503,6 +493,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("RollbackModel")
+        .RequireWorkspacePermission(WorkspacePermission.ModelActivate)
         .WithSummary("回滚到指定模型（重新激活为 active）")
         .Produces<RollbackModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
@@ -673,6 +664,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("GetNodeConsistency")
+        .RequireWorkspacePermission(WorkspacePermission.ModelActivate)
         .WithSummary("节点一致性报告：本节点当前 active 模型（HA 多节点对账用）")
         .Produces<NodeConsistencyResponse>(StatusCodes.Status200OK);
 
@@ -691,6 +683,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("GetModelAuditHistory")
+        .RequireWorkspacePermission(WorkspacePermission.ModelActivate)
         .WithSummary("查询模型激活审计历史")
         .Produces<ModelAuditHistoryResponse>(StatusCodes.Status200OK);
 
@@ -712,7 +705,12 @@ internal static class ModelControlPlaneEndpoints
         HttpContext httpContext,
         string? errorMessage = null)
     {
-        // 契约"不抛异常"：审计失败仅记录到日志，不影响主流程。
+        // 契约"不抛异常"：审计失败不中断激活主流程，但 Perf-8 要求不再静默吞掉。
+        // 此处把写入失败记录到 ILogger，便于运维发现审计存储故障（如 Postgres 不可达）。
+        // 注：ModelControlPlaneEndpoints 是静态类，不能用作 ILogger<T> 的类型参数，
+        // 改用 ILoggerFactory.CreateLogger(categoryName) 获取具名 logger。
+        var loggerFactory = httpContext.RequestServices.GetService<ILoggerFactory>();
+        var logger = loggerFactory?.CreateLogger("ContextCore.Service.Endpoints.ModelControlPlaneEndpoints");
         try
         {
             await auditStore.AppendAsync(new ModelActivationAuditEntry
@@ -730,9 +728,15 @@ internal static class ModelControlPlaneEndpoints
                 NodeId = ResolveNodeId()
             }, CancellationToken.None).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // best-effort：审计写入失败不影响激活主流程。
+            // 不静默吞掉：记录到日志便于运维发现审计存储故障；仍不影响激活主流程。
+            logger?.LogError(ex,
+                "ModelActivationAuditWriteFailed: operation={Operation} modelArtifactId={ModelArtifactId} succeeded={Succeeded} errorMessage={ErrorMessage}",
+                operation,
+                descriptor.ModelArtifactId,
+                succeeded,
+                errorMessage);
         }
     }
 
@@ -779,6 +783,37 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
+    /// Perf-8：从 IConfiguration 构造默认 OnnxInferenceEngineOptions。
+    /// tensor 名从配置读取（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName），
+    /// 缺省时回退到 "input" / "score"，与历史行为保持向后兼容。
+    /// 替换原本散落在多个端点中的硬编码字面量。
+    /// </summary>
+    /// <param name="configuration">IConfiguration 实例。</param>
+    /// <param name="enableWarmup">是否在加载后执行 warmup。</param>
+    /// <returns>填充了配置默认 tensor 名的 OnnxInferenceEngineOptions。</returns>
+    private static OnnxInferenceEngineOptions CreateDefaultOnnxOptions(IConfiguration configuration, bool enableWarmup)
+    {
+        var inputTensorName = configuration["ModelArtifact:DefaultInputTensorName"];
+        if (string.IsNullOrWhiteSpace(inputTensorName))
+        {
+            inputTensorName = "input";
+        }
+
+        var scoreOutputName = configuration["ModelArtifact:DefaultScoreOutputName"];
+        if (string.IsNullOrWhiteSpace(scoreOutputName))
+        {
+            scoreOutputName = "score";
+        }
+
+        return new OnnxInferenceEngineOptions
+        {
+            InputTensorName = inputTensorName,
+            ScoreOutputName = scoreOutputName,
+            EnableWarmup = enableWarmup
+        };
+    }
+
+    /// <summary>
     /// P13：校验客户端提交的 ArtifactPath 是否合法。
     /// 合法路径需满足以下条件之一：
     ///   1. 对象存储 URI（s3:// / gs:// / az:// / abfs:// / abfss:// / https:// / http://）
@@ -786,6 +821,7 @@ internal static class ModelControlPlaneEndpoints
     /// 拒绝：
     ///   - 包含 ".." 的路径（防止路径穿越）
     ///   - 非配置根目录的绝对路径
+    ///   - Perf-8：路径中存在 symlink 指向 ArtifactRoot 之外（防止 symlink 穿越攻击）
     /// </summary>
     /// <param name="artifactPath">客户端提交的路径。</param>
     /// <param name="artifactRoot">配置的 ArtifactRoot（绝对路径）。</param>
@@ -814,7 +850,7 @@ internal static class ModelControlPlaneEndpoints
             return false;
         }
 
-        // 3. 解析为完整路径。
+        // 3. 解析为完整路径（Path.GetFullPath 会规范化 .. 与 . 但不解析 symlink）。
         string fullPath;
         try
         {
@@ -826,7 +862,7 @@ internal static class ModelControlPlaneEndpoints
             return false;
         }
 
-        // 4. 校验完整路径是否位于配置的 ArtifactRoot 目录内。
+        // 4. 校验规范化后的路径是否位于配置的 ArtifactRoot 目录内。
         // 使用 OrdinalIgnoreCase 以兼容 Windows 大小写不敏感的文件系统；
         // 同时确保 ArtifactRoot 以目录分隔符结尾，避免 "model-artifacts-evil" 这样的兄弟目录被误判。
         var rootWithSeparator = artifactRoot.EndsWith(Path.DirectorySeparatorChar)
@@ -841,8 +877,90 @@ internal static class ModelControlPlaneEndpoints
             return false;
         }
 
+        // 5. Perf-8：解析 symlink，防止 ArtifactRoot 内的 symlink 指向外部路径。
+        // Path.GetFullPath 仅规范化 .. 与 . ，不解析 symlink；攻击者可在 ArtifactRoot 内
+        // 创建指向外部目录的 symlink，绕过 StartsWith 校验读取服务器任意文件。
+        // 这里逐级解析路径上每个已存在的组件的 symlink，得到真实路径后再校验是否仍在 ArtifactRoot 内。
+        var resolvedPath = ResolveSymlinks(fullPath);
+        if (!resolvedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(resolvedPath, artifactRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"ArtifactPath '{artifactPath}' 解析 symlink 后的真实路径 " +
+                    $"'{resolvedPath}' 不在配置的 ArtifactRoot '{artifactRoot}' 内（防止 symlink 穿越）。";
+            return false;
+        }
+
         error = string.Empty;
         return true;
+    }
+
+    /// <summary>
+    /// Perf-8：逐级解析路径上已存在组件的 symlink，返回最终真实路径。
+    /// Path.GetFullPath 仅规范化 ".." 与 "."，不解析 symlink；本方法补充此缺失。
+    /// 对不存在的路径组件（如待上传的目标文件）跳过解析，仅解析已存在的父目录链。
+    /// </summary>
+    /// <param name="fullPath">已通过 Path.GetFullPath 规范化的绝对路径。</param>
+    /// <returns>解析 symlink 后的真实路径（再经 Path.GetFullPath 规范化）。</returns>
+    private static string ResolveSymlinks(string fullPath)
+    {
+        if (string.IsNullOrEmpty(fullPath))
+        {
+            return fullPath;
+        }
+
+        var root = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var rest = fullPath.Substring(root.Length);
+        var segments = rest.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var current = root;
+        foreach (var segment in segments)
+        {
+            current = Path.Combine(current, segment);
+            current = ResolveLinkIfExists(current);
+        }
+
+        // 最终再规范化一次（symlink 目标可能是相对路径或包含 .. ）
+        try
+        {
+            return Path.GetFullPath(current);
+        }
+        catch (Exception)
+        {
+            return current;
+        }
+    }
+
+    /// <summary>
+    /// Perf-8：若指定路径是 symlink，返回其最终目标的真实路径；否则原样返回。
+    /// 同时处理文件与目录 symlink；对不存在的路径或解析失败的情况原样返回。
+    /// </summary>
+    private static string ResolveLinkIfExists(string path)
+    {
+        try
+        {
+            // FileInfo.ResolveLinkTarget / DirectoryInfo.ResolveLinkTarget 在路径不是 symlink 时返回 null；
+            // 在路径不存在时抛异常（由 catch 兜底）。
+            // 第二个参数 true 表示解析整条 symlink 链（A -> B -> C 时直接返回 C 的真实路径）。
+            if (File.Exists(path))
+            {
+                var target = new FileInfo(path).ResolveLinkTarget(true);
+                return target?.FullName ?? path;
+            }
+
+            if (Directory.Exists(path))
+            {
+                var target = new DirectoryInfo(path).ResolveLinkTarget(true);
+                return target?.FullName ?? path;
+            }
+        }
+        catch
+        {
+            // 路径不存在、不可访问或不是 symlink：原样返回，由后续组件继续解析。
+        }
+
+        return path;
     }
 
     /// <summary>
@@ -876,10 +994,41 @@ internal static class ModelControlPlaneEndpoints
             CalibrationVersion = descriptor.CalibrationVersion,
             EngineKind = descriptor.EngineKind.ToString(),
             ContentHash = descriptor.ContentHash,
-            ArtifactPath = descriptor.ArtifactPath,
+            // Perf-8：不返回服务器本地 ArtifactPath，仅暴露安全信息。
+            // 对象存储 URI（s3:// / https:// 等）可直接返回；本地路径仅返回文件名。
+            ArtifactName = ResolveSafeArtifactName(descriptor.ArtifactPath),
             Description = descriptor.Description,
             RegisteredAt = descriptor.RegisteredAt
         };
+
+    /// <summary>
+    /// Perf-8：把 ArtifactPath 转换为不暴露服务器目录结构的安全表示。
+    /// 对象存储 URI 直接返回（不涉及服务器文件系统路径）；本地路径仅返回文件名。
+    /// </summary>
+    private static string? ResolveSafeArtifactName(string? artifactPath)
+    {
+        if (string.IsNullOrWhiteSpace(artifactPath))
+        {
+            return null;
+        }
+
+        // 对象存储 URI 与 HTTP(S) URL 不暴露服务器路径，可安全返回
+        if (IsObjectStorageUri(artifactPath))
+        {
+            return artifactPath;
+        }
+
+        // 本地路径仅返回文件名，避免泄露服务器目录结构
+        try
+        {
+            var fileName = Path.GetFileName(artifactPath);
+            return string.IsNullOrEmpty(fileName) ? "<invalid>" : fileName;
+        }
+        catch
+        {
+            return "<invalid>";
+        }
+    }
 
     private static ModelActivationAuditEntryResponse ToAuditResponse(ModelActivationAuditEntry entry)
         => new()
@@ -949,7 +1098,8 @@ public sealed class ModelArtifactDescriptorResponse
     public string CalibrationVersion { get; init; } = string.Empty;
     public string EngineKind { get; init; } = string.Empty;
     public string ContentHash { get; init; } = string.Empty;
-    public string? ArtifactPath { get; init; }
+    /// <summary>Perf-8：安全的工件名（对象存储 URI 或本地文件名，不暴露服务器目录结构）。</summary>
+    public string? ArtifactName { get; init; }
     public string? Description { get; init; }
     public DateTimeOffset RegisteredAt { get; init; }
 }
@@ -988,7 +1138,7 @@ public sealed class WarmupModelResponse
 /// <summary>影子模式请求。</summary>
 public sealed class ShadowModelRequest
 {
-    /// <summary>可选的 ONNX 推理配置；为 null 时使用默认（InputTensorName="input", ScoreOutputName="score"）。</summary>
+    /// <summary>可选的 ONNX 推理配置；为 null 时使用配置默认（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName，缺省 "input" / "score"）。</summary>
     public OnnxInferenceEngineOptions? Options { get; init; }
 
     /// <summary>操作发起者（用于审计）。</summary>

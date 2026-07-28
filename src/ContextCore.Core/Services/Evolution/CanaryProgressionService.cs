@@ -526,6 +526,30 @@ public sealed class CanaryProgressionService
         return _runStates.TryGetValue(runId, out var state) ? state.Percentage : 0;
     }
 
+    /// <summary>
+    /// Perf-7：在 HA 单事务提交后同步更新 in-memory 状态（CutoverController + _runStates）。
+    /// </summary>
+    /// <remarks>
+    /// <b>背景</b>：<see cref="CanaryLeaderHostedService"/> 在 Perf-7 后改用
+    /// <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionAsync"/> 单一事务完成 DB 状态变更
+    /// （pipeline revision CAS + transition audit + epoch 递增）。
+    /// 但 <see cref="CutoverController"/> 的进程内路由百分比与本服务的 <c>_runStates</c> 字典
+    /// 仍是进程本地状态，需在事务提交后由调用方显式同步，确保后续请求路由与持久化状态一致。
+    /// 本方法仅更新 in-memory 状态，不写入任何 DB 表（DB 写入已由事务完成）。
+    /// </remarks>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="newPercentage">推进/回滚后的新百分比档（0-100）。</param>
+    public void UpdateInMemoryPercentage(string runId, int newPercentage)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        if (newPercentage < 0) newPercentage = 0;
+        if (newPercentage > 100) newPercentage = 100;
+
+        // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+        GetController(runId).SetCutoverPercentage(newPercentage);
+        _runStates[runId] = new CanaryRunState(newPercentage, _timeProvider.GetUtcNow());
+    }
+
     /// <summary>获取指定 run 的所有 stage transition 审计记录（按时间升序）。</summary>
     /// <remarks>R28-B.8 持久化：直接从 store 查询（权威来源），不再读取 in-memory 字典。</remarks>
     public async Task<IReadOnlyList<StageTransitionRecord>> ListStageTransitionsAsync(string runId)

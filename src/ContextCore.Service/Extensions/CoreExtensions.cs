@@ -532,7 +532,14 @@ internal static class CoreExtensions
 		services.AddHostedService<LearningMaterializationDispatcher>(sp => sp.GetRequiredService<LearningMaterializationDispatcher>());
 
 		// DefaultContextDecisionRuntime 注册改为工厂：注入 LearningMaterializationDispatcher（替代 Task.Run 热路径）。
-		// dispatcher null 时（测试容器未注册）回退到 materializer 直接调用路径（保持向后兼容）。
+	// dispatcher null 时（测试容器未注册）回退到 materializer 直接调用路径（保持向后兼容）。
+	// Perf-1：注入 ISelectedCandidateHydrator（Late Hydration）。
+	// hydrator 依赖 IContextStoreBatchLookup / IMemoryStoreBatchLookup（均由 storage provider 可选注册）。
+	// 两个 batch lookup 都未注册时 hydrator 退化为 no-op，Runtime 保持旧行为（IncludeContent=true）。
+		services.AddSingleton<DefaultSelectedCandidateHydrator>(sp => new DefaultSelectedCandidateHydrator(
+			sp.GetService<IContextStoreBatchLookup>(),
+			sp.GetService<IMemoryStoreBatchLookup>()));
+		services.AddSingleton<ISelectedCandidateHydrator>(sp => sp.GetRequiredService<DefaultSelectedCandidateHydrator>());
 		services.AddSingleton<IContextDecisionRuntime>(sp =>
 		{
 			var engine = sp.GetRequiredService<IContextDecisionEngine>();
@@ -552,6 +559,7 @@ internal static class CoreExtensions
 			var utilityLedgerMaterializer = sp.GetService<UtilityLedgerMaterializer>();
 			var componentHealthRegistry = sp.GetService<IComponentHealthRegistry>();
 			var materializationDispatcher = sp.GetService<LearningMaterializationDispatcher>();
+			var selectedCandidateHydrator = sp.GetService<ISelectedCandidateHydrator>();
 			return new DefaultContextDecisionRuntime(
 				engine, policyProvider, router, expertCatalog, candidateProviders,
 				canonicalMerger, earlyAdmissionGate, featurePipeline, safetyGate, lifecycleGate,
@@ -561,7 +569,8 @@ internal static class CoreExtensions
 				executionArtifactFactory: executionArtifactFactory,
 				utilityLedgerMaterializer: utilityLedgerMaterializer,
 				componentHealthRegistry: componentHealthRegistry,
-				materializationDispatcher: materializationDispatcher);
+				materializationDispatcher: materializationDispatcher,
+				selectedCandidateHydrator: selectedCandidateHydrator);
 		});
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();

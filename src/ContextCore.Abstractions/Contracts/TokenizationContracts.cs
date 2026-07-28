@@ -88,4 +88,42 @@ public static class ContentMetadataKeys
 
     /// <summary>P3：Postgres ts_rank_cd 返回的相关度分数 × 100。Lexical Provider 读取后作为 Provider score。</summary>
     public const string TsRank = "__ts_rank";
+
+    /// <summary>Perf-2：内容字节长度（UTF-8）。Store 写入专用列，Provider 读取后用于诊断与回退估算。</summary>
+    public const string ContentLength = "__content_length";
+
+    /// <summary>Perf-2：Tokenizer 标识符（如 unicode-cjk-v1）。Store 写入专用列，Provider 读取后验证 tokenizer 一致性。</summary>
+    public const string TokenizerId = "__tokenizer_id";
+
+    /// <summary>Perf-2：Tokenizer 版本 / 模型名称。Store 写入专用列，Provider 读取后验证模型兼容性。</summary>
+    public const string TokenizerVersion = "__tokenizer_version";
+
+    /// <summary>Perf-2：Token 计算时间（ISO 8601）。Store 写入专用列，用于判断是否需要重新计算。</summary>
+    public const string CountedAt = "__counted_at";
+}
+
+/// <summary>
+/// Perf-2：内容的 tokenization metadata 中间表示。
+/// 由 PostgresStoreBase.ComputeTokenizationMetadata 产出，写入 ContextItem.Metadata（专用列）。
+/// SHA-256 总是计算（无外部依赖）；token_count 在 tokenizer 可用时计算，否则为 0。
+/// </summary>
+public sealed class TokenizationMetadata
+{
+    /// <summary>内容的 SHA-256 小写 hex（与 ContentMetadataKeys.ContentHash 一致）。</summary>
+    public string ContentHash { get; init; } = string.Empty;
+
+    /// <summary>内容字节长度（UTF-8）。</summary>
+    public int ContentLength { get; init; }
+
+    /// <summary>Tokenizer 标识符（如 unicode-cjk-v1）；tokenizer 不可用时为 null。</summary>
+    public string? TokenizerId { get; init; }
+
+    /// <summary>Tokenizer 版本 / 模型名称；tokenizer 不可用时为 null。</summary>
+    public string? TokenizerVersion { get; init; }
+
+    /// <summary>精确 token 数（tokenizer 可用时）；不可用时为 0。</summary>
+    public int TokenCount { get; init; }
+
+    /// <summary>Token 计算时间（UTC）；tokenizer 不可用时为 null。</summary>
+    public DateTimeOffset? CountedAt { get; init; }
 }

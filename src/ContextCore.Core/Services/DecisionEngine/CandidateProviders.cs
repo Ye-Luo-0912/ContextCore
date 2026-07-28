@@ -109,6 +109,38 @@ internal static class CandidateProviderHelpers
         return rank;
     }
 
+    /// <summary>
+    /// Perf-2：从 Metadata 派生 stable content hash，避免 Memory/Constraint 在线重复 SHA-256 计算。
+    /// Memory/Constraint 摄取阶段已持久化 content_hash（Metadata["__content_hash"]），此处直接复用。
+    /// 仅当未持久化时才回退到 <see cref="ComputeContentHash(string)"/> 在线计算。
+    /// </summary>
+    internal static string ResolveContentHashFromMetadata(
+        IReadOnlyDictionary<string, string>? metadata,
+        string content)
+    {
+        if (metadata is not null
+            && metadata.TryGetValue(ContentMetadataKeys.ContentHash, out var persistedHash)
+            && !string.IsNullOrWhiteSpace(persistedHash))
+        {
+            return DeriveContentHashFromChecksum(persistedHash);
+        }
+
+        return ComputeContentHash(content);
+    }
+
+    /// <summary>
+    /// Perf-2：从 Metadata 读取摄取阶段持久化的精确 token cost（Memory/Constraint）。
+    /// 返回 null 表示未持久化（Provider 回退到 <see cref="EnrichTokenCost"/> fail-fast 路径）。
+    /// </summary>
+    internal static int? ReadPersistedTokenCostFromMetadata(
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is null) return null;
+        if (!metadata.TryGetValue(ContentMetadataKeys.ContentTokenCost, out var tokenStr)) return null;
+        if (!int.TryParse(tokenStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokens) || tokens < 0) return null;
+        return tokens;
+    }
+
     /// <summary>粗略估算 token 数（~4 chars/token，最小 1）。</summary>
     internal static int EstimateTokens(string content)
     {
@@ -339,7 +371,8 @@ internal static class CandidateProviderHelpers
         IContextTokenizerResolver? tokenizerResolver = null,
         string? tokenizerModelName = null)
     {
-        var contentHash = ComputeContentHash(memory.Content);
+        // Perf-2：优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
+        var contentHash = ResolveContentHashFromMetadata(memory.Metadata, memory.Content);
         var key = CanonicalCandidateKey.Create(
             workspaceId: memory.WorkspaceId,
             collectionId: memory.CollectionId,
@@ -385,8 +418,26 @@ internal static class CandidateProviderHelpers
             SourceRefs = memory.SourceRefs
         };
 
-        // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
-        envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+        // Perf-2：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
+        // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        var persistedTokenCost = ReadPersistedTokenCostFromMetadata(memory.Metadata);
+        if (persistedTokenCost.HasValue)
+        {
+            envelope = envelope with
+            {
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = persistedTokenCost.Value,
+                    TokenizerId = tokenizerModelName ?? "persisted",
+                    IsEstimated = false
+                }
+            };
+        }
+        else
+        {
+            // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+            envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+        }
 
         return (envelope, material);
     }
@@ -400,7 +451,8 @@ internal static class CandidateProviderHelpers
         IContextTokenizerResolver? tokenizerResolver = null,
         string? tokenizerModelName = null)
     {
-        var contentHash = ComputeContentHash(constraint.Content);
+        // Perf-2：优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
+        var contentHash = ResolveContentHashFromMetadata(constraint.Metadata, constraint.Content);
         var collectionId = constraint.CollectionId ?? string.Empty;
         var key = CanonicalCandidateKey.Create(
             workspaceId: constraint.WorkspaceId,
@@ -451,8 +503,26 @@ internal static class CandidateProviderHelpers
             SourceRefs = constraint.SourceRefs
         };
 
-        // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
-        envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+        // Perf-2：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
+        // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        var persistedTokenCost = ReadPersistedTokenCostFromMetadata(constraint.Metadata);
+        if (persistedTokenCost.HasValue)
+        {
+            envelope = envelope with
+            {
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = persistedTokenCost.Value,
+                    TokenizerId = tokenizerModelName ?? "persisted",
+                    IsEstimated = false
+                }
+            };
+        }
+        else
+        {
+            // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+            envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+        }
 
         return (envelope, material);
     }

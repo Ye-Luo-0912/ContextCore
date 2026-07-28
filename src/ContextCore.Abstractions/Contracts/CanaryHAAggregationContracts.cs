@@ -316,6 +316,173 @@ public sealed record LeasedLeadership
 }
 
 /// <summary>
+/// Perf-7：Canary 决策类型（用于严格 HA 单事务推进）。
+/// </summary>
+/// <remarks>
+/// 与 <see cref="CanaryProgressionDecision"/> 的差异：本枚举仅用于 <see cref="ICanaryDecisionApplier"/>
+/// 单一事务接口，将"推进/回滚/保持"三种动作统一纳入 fencing 校验，避免旧 Leader 在 lease 失效后
+/// 仍能修改 rollout 状态。<see cref="CanaryProgressionDecision.Promoted"/> 在本接口中映射为 <see cref="Promote"/>。
+/// </remarks>
+public enum CanaryDecision
+{
+    /// <summary>推进到下一档百分比（含 100% 晋升）。</summary>
+    Promote,
+
+    /// <summary>触发自动回滚（百分比归零）。</summary>
+    Rollback,
+
+    /// <summary>保持当前档位（仅写入审计，不修改 percentage）。</summary>
+    Hold
+}
+
+/// <summary>
+/// Perf-7：Canary 决策请求（单一事务接口入参）。
+/// </summary>
+/// <remarks>
+/// 调用方（<c>CanaryLeaderHostedService</c>）在评估完聚合指标后构造本请求，
+/// 由 <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionAsync"/> 在单一 PostgreSQL 事务内
+/// 完成 lease/fencing 校验 → pipeline revision CAS → transition audit 写入 → epoch 递增四步。
+/// 任一步骤失败则整个事务回滚，确保 HA 推进的严格一致性。
+/// </remarks>
+public sealed record CanaryDecisionRequest
+{
+    /// <summary>Canary run ID（同时作为 canary_pipelines 主键）。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>
+    /// 调用方已知的 pipeline 修订号（CAS 预期值）。
+    /// 首次初始化时传 0（表示行尚不存在，事务内会 INSERT 初始行 revision=1）。
+    /// 后续推进时传当前 revision，事务内 UPDATE 校验 <c>WHERE revision = @expectedRevision</c>。
+    /// </summary>
+    public required int ExpectedRevision { get; init; }
+
+    /// <summary>
+    /// Leader 租约的 fencing token（字符串形式，与 <see cref="LeasedLeadership.FencingToken"/> 对应）。
+    /// 事务内 SELECT 校验 <c>canary_leader_leases.fencing_token = @fencingToken AND lease_expires_at > clock_timestamp()</c>，
+    /// 确保只有当前持有有效 lease 的 Leader 能修改 pipeline 状态。
+    /// </summary>
+    public required string FencingToken { get; init; }
+
+    /// <summary>决策类型（Promote/Rollback/Hold）。</summary>
+    public required CanaryDecision Decision { get; init; }
+
+    /// <summary>
+    /// 新的百分比档（0-100）。Promote 时为下一档；Rollback 时为 0；Hold 时等于当前档。
+    /// </summary>
+    public required double NewPercentage { get; init; }
+
+    /// <summary>
+    /// 转换描述（人类可读，写入审计），例如 "5→10" 或 "shadow→canary" 或 "10→0(rollback)"。
+    /// </summary>
+    public required string Transition { get; init; }
+
+    /// <summary>
+    /// 新的 stage epoch 值（事务内 UPSERT 到 <c>canary_run_epochs</c>）。
+    /// 调用方应传入 <c>当前 epoch + 1</c>；事务内 UPSERT <c>current_epoch = @newEpoch</c>。
+    /// </summary>
+    public required long NewEpoch { get; init; }
+
+    /// <summary>可选的 transition ID（用于审计幂等去重，默认生成新 GUID）。</summary>
+    public string? TransitionId { get; init; }
+
+    /// <summary>决策理由（写入审计）。</summary>
+    public required string Rationale { get; init; }
+}
+
+/// <summary>
+/// Perf-7：Canary 决策执行结果。
+/// </summary>
+public sealed record CanaryDecisionResult
+{
+    /// <summary>是否成功应用（事务提交）。</summary>
+    public required bool Applied { get; init; }
+
+    /// <summary>推进前的百分比档（事务内 SELECT 得到）。</summary>
+    public required int PreviousPercentage { get; init; }
+
+    /// <summary>推进后的百分比档（= <see cref="CanaryDecisionRequest.NewPercentage"/>）。</summary>
+    public required int CurrentPercentage { get; init; }
+
+    /// <summary>推进后的新 revision（成功时 = expectedRevision + 1 或 1 首次初始化）。</summary>
+    public required int NewRevision { get; init; }
+
+    /// <summary>推进后的新 stage epoch（成功时 = <see cref="CanaryDecisionRequest.NewEpoch"/>）。</summary>
+    public required long NewEpoch { get; init; }
+
+    /// <summary>
+    /// 失败原因代码（Applied=false 时有值）：
+    /// <list type="bullet">
+    /// <item><c>LeaseLost</c>：fencing token 不匹配或 lease 已过期。</item>
+    /// <item><c>RevisionMismatch</c>：pipeline revision CAS 失败（已被其他 Leader 推进）。</item>
+    /// <item><c>Success</c>：成功（Applied=true 时）。</item>
+    /// </list>
+    /// </summary>
+    public required string FailureReason { get; init; }
+}
+
+/// <summary>
+/// Perf-7：Canary 决策原子应用器（单一 PostgreSQL 事务接口）。
+/// </summary>
+/// <remarks>
+/// <b>背景</b>：旧路径 <c>ProgressionService.AdvanceAsync</c> → <c>AdvanceEpochAsync(fencingToken)</c>
+/// 分两步执行，旧 Leader 可能在 <c>AdvanceAsync</c> 已修改 rollout 后 <c>AdvanceEpochAsync</c> 才因
+/// fencing 失败；Rollback 路径完全无 fencing 校验。本接口将四步操作合并为单一事务：
+/// <code>
+/// BEGIN;
+/// -- 1. lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行）
+/// -- 2. pipeline revision CAS（UPDATE WHERE revision = @expectedRevision）
+/// -- 3. transition audit 写入（INSERT canary_transition_audit）
+/// -- 4. epoch 更新（UPSERT canary_run_epochs）
+/// COMMIT;
+/// </code>
+/// 任一步骤失败则 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
+/// </remarks>
+public interface ICanaryDecisionApplier
+{
+    /// <summary>
+    /// 在单一事务中原子应用 Canary 决策（推进/回滚/保持）。
+    /// </summary>
+    /// <param name="request">决策请求（含 fencing token、CAS 预期 revision、新百分比等）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>执行结果（Applied=true 时事务已提交；Applied=false 时事务已回滚）。</returns>
+    ValueTask<CanaryDecisionResult> ApplyCanaryDecisionAsync(
+        CanaryDecisionRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 查询指定 run 的当前 pipeline 状态（percentage + revision）。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 revision 与 percentage；行不存在时返回 Revision=0, Percentage=0。</returns>
+    /// <remarks>
+    /// Leader 在调用 <see cref="ApplyCanaryDecisionAsync"/> 前应先调用本方法获取 <c>ExpectedRevision</c>，
+    /// 避免 CAS 失败。本方法不持有事务，调用方应在获取状态后尽快提交决策以减少冲突窗口。
+    /// </remarks>
+    ValueTask<CanaryPipelineState> GetCanaryPipelineStateAsync(
+        string runId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Perf-7：Canary pipeline 当前状态（revision + percentage）。
+/// </summary>
+public sealed record CanaryPipelineState
+{
+    /// <summary>Canary run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>当前 revision（行不存在时为 0）。</summary>
+    public required int Revision { get; init; }
+
+    /// <summary>当前百分比档（行不存在时为 0）。</summary>
+    public required int Percentage { get; init; }
+
+    /// <summary>当前状态文本（如 "Active"/"RolledBack"/"Promoted"；行不存在时为 null）。</summary>
+    public string? Status { get; init; }
+}
+
+/// <summary>
 /// Canary Leader HostedService 配置。
 /// </summary>
 public sealed class CanaryLeaderOptions

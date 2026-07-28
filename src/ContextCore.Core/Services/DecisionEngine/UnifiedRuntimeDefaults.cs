@@ -85,6 +85,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     private readonly UtilityLedgerMaterializer? _utilityLedgerMaterializer;
     private readonly LearningMaterializationDispatcher? _materializationDispatcher;
     private readonly IComponentHealthRegistry? _componentHealthRegistry;
+    // Perf-1：Selected 候选正文批量 hydrator（可选）。未注入时保持旧行为（IncludeContent=true）。
+    private readonly ISelectedCandidateHydrator? _selectedCandidateHydrator;
 
     /// <summary>构造 pure Runtime。</summary>
     /// <param name="providerTimeout">R28-B.6：单个 Provider 调用超时（默认 30s）。</param>
@@ -117,7 +119,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         IExecutionArtifactFactory? executionArtifactFactory = null,
         UtilityLedgerMaterializer? utilityLedgerMaterializer = null,
         IComponentHealthRegistry? componentHealthRegistry = null,
-        LearningMaterializationDispatcher? materializationDispatcher = null)
+        LearningMaterializationDispatcher? materializationDispatcher = null,
+        ISelectedCandidateHydrator? selectedCandidateHydrator = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _policyProvider = policyProvider ?? throw new ArgumentNullException(nameof(policyProvider));
@@ -142,6 +145,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Learning Loop Durable Outbox：注入 dispatcher 后，主决策流通过 bounded Channel / outbox
         // 触发物化，消除每请求 Task.Run（生产热路径）。null 时回退到 materializer 直接路径（测试用）。
         _materializationDispatcher = materializationDispatcher;
+        // Perf-1：Selected 候选正文批量 hydrator（可选；未注入时保持旧行为）
+        _selectedCandidateHydrator = selectedCandidateHydrator;
     }
 
     /// <summary>
@@ -414,6 +419,16 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
         var engineResult = await DecideWithFailClosedPropagationAsync(
             decisionRequest, cancellationToken).ConfigureAwait(false);
+
+        // Perf-1：Late Hydration — Engine 选出 SelectedEnvelopes 后，对 Selected IDs 批量 hydrate 正文。
+        // 仅在 hydrator 注入且 SelectedEnvelopes 非空时调用；未注入时保持旧行为（Provider 已加载所有正文）。
+        // hydrator 内部跳过已 hydrate 的 Material（Content 非空），避免重复 I/O；
+        // 失败时降级为 no-op（Material.Content 保持空，Projector 降级为摘要），不阻塞主决策流。
+        if (_selectedCandidateHydrator is not null && engineResult.SelectedEnvelopes.Count > 0)
+        {
+            completeWorkingSet = await _selectedCandidateHydrator.HydrateAsync(
+                engineResult.SelectedEnvelopes, completeWorkingSet, cancellationToken).ConfigureAwait(false);
+        }
 
         // P0-6：直接使用 Engine 结果，不再二次 Allocate。
         // R28-B.6：V2 路径下 Engine 已通过 IGlobalAllocator 产出 AllocationDecisions。

@@ -33,9 +33,17 @@ namespace ContextCore.Service.Hosting;
 /// Release(runId, token) → run 终态时主动释放
 /// </code>
 ///
+/// <b>Perf-7 严格 HA 单事务推进</b>：
+/// 推进/回滚不再调用 <see cref="CanaryProgressionService.AdvanceAsync"/> +
+/// <see cref="ICanaryMetricsAggregator.AdvanceEpochAsync"/> 两步，而是调用
+/// <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionAsync"/> 单一 PostgreSQL 事务，
+/// 在事务内完成 lease/fencing 校验 → pipeline revision CAS → transition audit 写入 →
+/// epoch 递增四步。任一步骤失败则整个事务回滚，确保旧 Leader 在 lease 失效后无法修改 rollout。
+/// Rollback 路径也经过同一事务接口（旧路径完全无 fencing 校验）。
+///
 /// <b>与 <see cref="CanaryProgressionHostedService"/> 的关系</b>：
 /// 两者互斥注册。HA 部署注册本服务；单节点部署注册 <see cref="CanaryProgressionHostedService"/>。
-/// 本服务复用 <see cref="CanaryProgressionService"/> 做评估与推进，仅在外层添加租约与聚合。
+/// 本服务复用 <see cref="CanaryProgressionService"/> 做评估（EvaluateAsync），推进/回滚改走单事务接口。
 /// </remarks>
 internal sealed class CanaryLeaderHostedService : BackgroundService
 {
@@ -45,6 +53,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     private readonly ICanaryLeaderLease _leaderLease;
     private readonly ICanaryMetricsAggregator _metricsAggregator;
     private readonly ICanaryExternalMetricsSource _externalMetricsSource;
+    private readonly ICanaryDecisionApplier _decisionApplier;
     private readonly IOptionsMonitor<CanaryLeaderOptions> _options;
     private readonly ILogger<CanaryLeaderHostedService> _logger;
     private readonly string _instanceId;
@@ -57,6 +66,11 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     // 每次轮询时与 DB 中的 current_epoch 比较；若 epoch 已推进，Reset 本地 Collector 从 0 开始新 epoch 累计。
     private readonly Dictionary<string, long> _lastKnownEpoch = new(StringComparer.Ordinal);
 
+    // Perf-7：本实例已知的 canary_pipelines 修订号（runId → lastKnownRevision）。
+    // Leader 在调用 ApplyCanaryDecisionAsync 前先查询当前 revision，作为 CAS 预期值；
+    // 调用成功后更新为 NewRevision；调用失败（RevisionMismatch）时清除缓存强制下次重新查询。
+    private readonly Dictionary<string, int> _pipelineRevisions = new(StringComparer.Ordinal);
+
     public CanaryLeaderHostedService(
         IServiceProvider services,
         ICanaryMetricsCollector metricsCollector,
@@ -64,6 +78,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         ICanaryLeaderLease leaderLease,
         ICanaryMetricsAggregator metricsAggregator,
         ICanaryExternalMetricsSource externalMetricsSource,
+        ICanaryDecisionApplier decisionApplier,
         IOptionsMonitor<CanaryLeaderOptions> options,
         ILogger<CanaryLeaderHostedService> logger)
     {
@@ -73,6 +88,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         _leaderLease = leaderLease;
         _metricsAggregator = metricsAggregator;
         _externalMetricsSource = externalMetricsSource;
+        _decisionApplier = decisionApplier;
         _options = options;
         _logger = logger;
         _timeProvider = TimeProvider.System;
@@ -261,52 +277,100 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             switch (evaluation.Decision)
             {
                 case CanaryProgressionDecision.Advance:
+                case CanaryProgressionDecision.Rollback:
                 {
-                    var transitionId = $"adv-{runId}-{_timeProvider.GetUtcNow().UtcDateTime.Ticks}";
-                    var result = await _progressionService.AdvanceAsync(
-                        runId, transitionId, idempotencyKey: null,
-                        baselineMetrics, experimentMetrics, cancellationToken).ConfigureAwait(false);
+                    // Perf-7：单一事务路径，替代旧的 AdvanceAsync + AdvanceEpochAsync 两步调用。
+                    // 在一个 PostgreSQL 事务内完成：lease/fencing 校验 → pipeline revision CAS →
+                    // transition audit 写入 → epoch 递增。任一步骤失败则整个事务回滚，
+                    // 确保旧 Leader 在 lease 失效后无法修改 rollout（fencing 在事务内首先执行）。
+                    // Rollback 路径也经过同一事务接口（旧路径完全无 fencing 校验）。
+                    var decision = evaluation.Decision == CanaryProgressionDecision.Rollback
+                        ? CanaryDecision.Rollback
+                        : CanaryDecision.Promote;
+                    var newPercentage = evaluation.Decision == CanaryProgressionDecision.Rollback
+                        ? 0
+                        : evaluation.NextPercentage ?? 0;
 
-                    if (result.Applied)
+                    // 查询当前 pipeline 状态获取 CAS 预期 revision
+                    var pipelineState = await _decisionApplier.GetCanaryPipelineStateAsync(
+                        runId, cancellationToken).ConfigureAwait(false);
+                    var currentPercentage = pipelineState.Revision == 0
+                        ? _progressionService.GetCurrentPercentage(runId)
+                        : pipelineState.Percentage;
+                    var expectedRevision = pipelineState.Revision;
+                    var currentEpoch = aggregated.CurrentStageEpoch;
+                    var newEpoch = currentEpoch + 1;
+
+                    var transition = evaluation.Decision == CanaryProgressionDecision.Rollback
+                        ? $"{currentPercentage}→0(rollback)"
+                        : $"{currentPercentage}→{newPercentage}";
+
+                    var fencingToken = _heldLeases.TryGetValue(runId, out var held)
+                        ? held.FencingToken.ToString()
+                        : "0";
+
+                    var request = new CanaryDecisionRequest
                     {
-                        // v36 修复：Leader 推进百分比档后递增 stage epoch，
-                        // 通知所有实例（含本实例）在下一次轮询时 Reset 本地 Collector 从 0 开始新 epoch 累计。
-                        // 这是"全实例 Reset"机制：通过 DB epoch flag 推送，所有实例 pull 检测。
-                        // P12：携带 fencing token 校验 lease 仍由当前 Leader 持有；旧 Leader 推进失败（返回 0）。
-                        var fencingToken = _heldLeases.TryGetValue(runId, out var held) ? held.FencingToken : 0L;
-                        var newEpoch = await _metricsAggregator.AdvanceEpochAsync(
-                            runId, cancellationToken, fencingToken).ConfigureAwait(false);
-                        if (newEpoch == 0)
-                        {
-                            // P12：fencing 校验失败 → lease 已被抢占，停止推进并放弃 leader 身份
-                            _heldLeases.Remove(runId);
-                            _logger.LogWarning(
-                                "Canary run {RunId} AdvanceEpoch fencing 校验失败（leader={Owner}）；放弃 leader 身份。",
-                                runId, _instanceId);
-                            break;
-                        }
+                        RunId = runId,
+                        ExpectedRevision = expectedRevision,
+                        FencingToken = fencingToken,
+                        Decision = decision,
+                        NewPercentage = newPercentage,
+                        Transition = transition,
+                        NewEpoch = newEpoch,
+                        TransitionId = $"{(evaluation.Decision == CanaryProgressionDecision.Rollback ? "rb" : "adv")}-{runId}-{_timeProvider.GetUtcNow().UtcDateTime.Ticks}",
+                        Rationale = evaluation.Rationale
+                    };
+
+                    var decisionResult = await _decisionApplier.ApplyCanaryDecisionAsync(
+                        request, cancellationToken).ConfigureAwait(false);
+
+                    if (decisionResult.Applied)
+                    {
+                        // 推进/回滚成功：更新本地缓存 + Reset 本地 Collector（开始新 epoch 累计）
+                        _pipelineRevisions[runId] = decisionResult.NewRevision;
                         _metricsCollector.Reset(runId);
-                        _lastKnownEpoch[runId] = newEpoch;
+                        _lastKnownEpoch[runId] = decisionResult.NewEpoch;
+
+                        // Perf-7：同步 in-memory CutoverController + _runStates（保持进程内路由状态一致）
+                        // DB 状态已由事务原子更新（canary_pipelines + canary_transition_audit + canary_run_epochs），
+                        // 此处仅更新进程本地状态，不重复写入 DB。
+                        _progressionService.UpdateInMemoryPercentage(runId, newPercentage);
 
                         // 周期性清理旧 epoch 数据，控制表增长
                         _ = _metricsAggregator.PruneOldEpochsAsync(runId, cancellationToken: cancellationToken).AsTask();
 
-                        _logger.LogInformation(
-                            "Canary run {RunId} 推进（leader={Owner}）：{Prev}% → {Curr}%，stage_epoch → {Epoch}。",
-                            runId, _instanceId, result.PreviousPercentage, result.CurrentPercentage, newEpoch);
+                        if (evaluation.Decision == CanaryProgressionDecision.Rollback)
+                        {
+                            _logger.LogWarning(
+                                "Canary run {RunId} 自动回滚（leader={Owner}）：{Prev}% → 0%，stage_epoch → {Epoch}（fencing={Fencing}）。",
+                                runId, _instanceId, decisionResult.PreviousPercentage, decisionResult.NewEpoch, fencingToken);
+                        }
+                        else
+                        {
+                            _logger.LogInformation(
+                                "Canary run {RunId} 推进（leader={Owner}）：{Prev}% → {Curr}%，stage_epoch → {Epoch}（fencing={Fencing}）。",
+                                runId, _instanceId, decisionResult.PreviousPercentage, decisionResult.CurrentPercentage,
+                                decisionResult.NewEpoch, fencingToken);
+                        }
                     }
-                    break;
-                }
-
-                case CanaryProgressionDecision.Rollback:
-                {
-                    await _progressionService.RollbackAsync(
-                        runId,
-                        evaluation.RollbackReason ?? RollbackReason.ModelPerformanceRegression,
-                        cancellationToken).ConfigureAwait(false);
-                    _logger.LogWarning(
-                        "Canary run {RunId} 自动回滚（leader={Owner}）：{Reason}（{Rationale}）。",
-                        runId, _instanceId, evaluation.RollbackReason, evaluation.Rationale);
+                    else if (decisionResult.FailureReason == "LeaseLost")
+                    {
+                        // lease 已被抢占或过期 → 放弃 leader 身份
+                        _heldLeases.Remove(runId);
+                        _pipelineRevisions.Remove(runId);
+                        _logger.LogWarning(
+                            "Canary run {RunId} ApplyCanaryDecision fencing 校验失败（leader={Owner}）；放弃 leader 身份。",
+                            runId, _instanceId);
+                    }
+                    else if (decisionResult.FailureReason == "RevisionMismatch")
+                    {
+                        // revision CAS 失败 → 已被其他 Leader 推进，清除缓存强制下次重新查询
+                        _pipelineRevisions.Remove(runId);
+                        _logger.LogWarning(
+                            "Canary run {RunId} ApplyCanaryDecision CAS 失败（leader={Owner}）：expected revision={Expected}。",
+                            runId, _instanceId, expectedRevision);
+                    }
                     break;
                 }
 

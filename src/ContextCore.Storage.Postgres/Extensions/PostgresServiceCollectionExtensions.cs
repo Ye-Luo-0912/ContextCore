@@ -43,7 +43,13 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IContextIndex>(sp => sp.GetRequiredService<PostgresContextIndex>());
 
         // MemoryStore
-        services.AddSingleton<PostgresMemoryStore>();
+        // Perf-2：注入 IContextTokenizerResolver（可选），让 SaveAsync 在摄取阶段计算并持久化 tokenization metadata。
+        // GetService 返回 null 时不影响 Store 基本读写（仅 token_count 列保持 NULL）。
+        services.AddSingleton<PostgresMemoryStore>(sp => new PostgresMemoryStore(
+            sp.GetRequiredService<PostgresConnectionFactory>(),
+            sp.GetRequiredService<PostgresJsonSerializer>(),
+            sp.GetRequiredService<PostgresMigrationRunner>(),
+            sp.GetService<IContextTokenizerResolver>()));
         services.AddSingleton<IMemoryStore>(sp => sp.GetRequiredService<PostgresMemoryStore>());
 
         // WorkingMemoryStore (IWorkingMemoryService + IPromotionRecordStore + IPromotionCandidateStore)
@@ -75,7 +81,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresLearningFeatureCandidateStore>();
 
         // ConstraintStore
-        services.AddSingleton<PostgresConstraintStore>();
+        // Perf-2：注入 IContextTokenizerResolver（可选），让 SaveAsync 在摄取阶段计算并持久化 tokenization metadata。
+        services.AddSingleton<PostgresConstraintStore>(sp => new PostgresConstraintStore(
+            sp.GetRequiredService<PostgresConnectionFactory>(),
+            sp.GetRequiredService<PostgresJsonSerializer>(),
+            sp.GetRequiredService<PostgresMigrationRunner>(),
+            sp.GetService<IContextTokenizerResolver>()));
         services.AddSingleton<IConstraintStore>(sp => sp.GetRequiredService<PostgresConstraintStore>());
 
         // GlobalContextStore
@@ -270,12 +281,16 @@ public static class PostgresServiceCollectionExtensions
         //   竞争 per-run leader 租约（复用 P0-1/P0-2 租约模式，但状态机简化为"持有/未持有"两态）。
         // - ICanaryMetricsAggregator：各实例将本地 CanaryObservationMetrics 快照写入 canary_metrics_samples 表，
         //   leader 实例通过 SQL SUM/AVG/MAX 合并跨实例视图，产出 CanaryAggregatedMetrics 供 CanaryProgressionService 评估。
+        // - ICanaryDecisionApplier（Perf-7）：将 lease/fencing 校验 + pipeline revision CAS + transition audit
+        //   写入 + epoch 递增合并为单一 PostgreSQL 事务，修复旧路径 AdvanceAsync → AdvanceEpochAsync 分两步
+        //   导致的 HA 正确性问题。由 PostgresCanaryLeaderLease 同时实现（共享 lease 表与连接工厂）。
         // 注意：CanaryLeaderHostedService 自身在 ContextCore.Service 项目中注册（依赖方向约束），
         //       Storage.Postgres 不引用 Service；调用方应在 Service 层调用
         //       <c>AddCanaryLeaderHostedService()</c>（若已提供）或 <c>services.AddHostedService&lt;CanaryLeaderHostedService&gt;()</c>
         //       并配置 <see cref="CanaryLeaderOptions"/>（Enabled=true 启用 HA 模式）。
         services.AddSingleton<PostgresCanaryLeaderLease>();
         services.AddSingleton<ICanaryLeaderLease>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
+        services.AddSingleton<ICanaryDecisionApplier>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
         services.AddSingleton<PostgresCanaryMetricsAggregator>();
         services.AddSingleton<ICanaryMetricsAggregator>(sp => sp.GetRequiredService<PostgresCanaryMetricsAggregator>());
 
