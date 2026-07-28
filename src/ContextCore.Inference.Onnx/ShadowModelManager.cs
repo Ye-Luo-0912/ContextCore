@@ -85,24 +85,13 @@ public sealed class ShadowModelManager
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(options);
 
-        // 校准验证（与 ModelActivationManager.ActivateCoreAsync 路径一致）
-        CalibrationValidationResult? calResult = null;
-        if (_calibrationService is not null)
+        // WP-5：校准验证（与 ModelActivationManager.ActivateCoreAsync 路径一致 — 精确 CalibrationVersion 绑定 + fail-closed）
+        var calValidation = ValidateCalibrationForDescriptor(descriptor);
+        if (calValidation is { IsFailed: true } failed)
         {
-            var parameters = _calibrationService.GetParameters(descriptor.ModelArtifactId)
-                ?? _calibrationService.GetParameters(descriptor.ModelName);
-            if (parameters is not null)
-            {
-                calResult = _calibrationValidator.Validate(parameters, descriptor.ModelArtifactId);
-                if (!calResult.IsValid)
-                {
-                    return ShadowActivationResult.Failed(
-                        $"校准验证失败：{calResult.Error}",
-                        descriptor,
-                        calResult);
-                }
-            }
+            return ShadowActivationResult.Failed(failed.Error!, descriptor, failed.Result);
         }
+        var calResult = calValidation?.Result;
 
         // schema 存在性验证
         var schema = _featureRegistry.Get(descriptor.FeatureSchemaVersion);
@@ -214,6 +203,61 @@ public sealed class ShadowModelManager
         {
             await SafeDisposeEngineAsync(oldShadow).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// WP-5：校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
+    /// 与 ModelActivationManager.ValidateCalibrationForDescriptor 行为一致。
+    /// </summary>
+    private CalibrationValidationOutcome? ValidateCalibrationForDescriptor(ModelArtifactDescriptor descriptor)
+    {
+        const string defaultVersion = "default-v1";
+        var expectedVersion = string.IsNullOrWhiteSpace(descriptor.CalibrationVersion)
+            ? defaultVersion
+            : descriptor.CalibrationVersion;
+        var isDefaultVersion = string.Equals(expectedVersion, defaultVersion, StringComparison.Ordinal);
+
+        if (_calibrationService is null)
+        {
+            if (isDefaultVersion) return null;
+            return CalibrationValidationOutcome.Failed(
+                $"校准验证失败：descriptor.CalibrationVersion='{expectedVersion}' 非 default-v1，" +
+                "但 ICalibrationService 未注册；fail-closed 拒绝激活 Challenger。",
+                calResult: null);
+        }
+
+        var parameters = _calibrationService.GetParametersForVersion(descriptor.ModelArtifactId, expectedVersion)
+            ?? _calibrationService.GetParametersForVersion(descriptor.ModelName, expectedVersion);
+
+        if (parameters is null)
+        {
+            if (isDefaultVersion) return null;
+            return CalibrationValidationOutcome.Failed(
+                $"校准验证失败：未找到 ModelArtifactId='{descriptor.ModelArtifactId}' / ModelName='{descriptor.ModelName}' " +
+                $"且 Version='{expectedVersion}' 精确匹配的校准参数；fail-closed 拒绝激活 Challenger。",
+                calResult: null);
+        }
+
+        var calResult = _calibrationValidator.Validate(parameters, descriptor.ModelArtifactId);
+        if (!calResult.IsValid)
+        {
+            return CalibrationValidationOutcome.Failed($"校准验证失败：{calResult.Error}", calResult);
+        }
+        return CalibrationValidationOutcome.Succeeded(calResult);
+    }
+
+    /// <summary>WP-5：校准验证结果容器。</summary>
+    private sealed class CalibrationValidationOutcome
+    {
+        public bool IsFailed { get; init; }
+        public string? Error { get; init; }
+        public CalibrationValidationResult? Result { get; init; }
+
+        public static CalibrationValidationOutcome Failed(string error, CalibrationValidationResult? calResult)
+            => new() { IsFailed = true, Error = error, Result = calResult };
+
+        public static CalibrationValidationOutcome Succeeded(CalibrationValidationResult calResult)
+            => new() { IsFailed = false, Error = null, Result = calResult };
     }
 
     private static async ValueTask SafeDisposeEngineAsync(IBatchInferenceEngine engine)

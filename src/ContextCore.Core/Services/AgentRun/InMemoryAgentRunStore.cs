@@ -51,6 +51,31 @@ public sealed class InMemoryAgentRunStore : IAgentRunStore
     }
 
     /// <inheritdoc />
+    public ValueTask<AgentRun?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        // null/空 idempotencyKey 不参与查询（与 partial UNIQUE 索引 WHERE idempotency_key IS NOT NULL 语义一致）
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            return ValueTask.FromResult<AgentRun?>(null);
+        }
+
+        // 线性扫描：InMemory 实现不维护 idempotency_key 索引（dev/test 场景 Run 数有限）
+        AgentRun? match = null;
+        foreach (var kvp in _runs)
+        {
+            var r = kvp.Value;
+            if (r.WorkspaceId == workspaceId
+                && string.Equals(r.IdempotencyKey, idempotencyKey, StringComparison.Ordinal))
+            {
+                match = r;
+                break;
+            }
+        }
+        return ValueTask.FromResult(match);
+    }
+
+    /// <inheritdoc />
     public ValueTask TransitionStateAsync(
         string workspaceId,
         string runId,

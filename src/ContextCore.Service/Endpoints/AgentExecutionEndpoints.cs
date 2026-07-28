@@ -63,6 +63,31 @@ internal static class AgentExecutionEndpoints
 
             // 解析 workspaceId：优先认证上下文，回退请求体，再回退默认值
             var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, request.WorkspaceId);
+
+            // WP-2：幂等去重。客户端提供 IdempotencyKey 时，先查询是否已有同 key 的 Run；
+            // 命中则直接返回 200 OK（而非 201 Created），不重复启动 Actor。
+            // 防止客户端重试/网络抖动导致同一业务意图被多次执行。
+            var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey;
+            if (idempotencyKey is not null)
+            {
+                AgentRun? existing;
+                try
+                {
+                    existing = await runStore.GetByIdempotencyKeyAsync(workspaceId, idempotencyKey, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
+                }
+
+                if (existing is not null)
+                {
+                    // 幂等命中：返回已有 Run（200 OK，不重复创建/启动）
+                    return Results.Ok(ToRunResponse(existing));
+                }
+            }
+
             var runId = Guid.NewGuid().ToString("N");
             var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
                 ? $"session-{runId}"
@@ -112,7 +137,7 @@ internal static class AgentExecutionEndpoints
                 AllowedToolIds = allowedToolIds,
                 DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
                 ModelContextTokenBudget = 8192, // 默认 8192；0 或负数 = 不限制
-                IdempotencyKey = null
+                IdempotencyKey = idempotencyKey
             };
 
             try
@@ -148,6 +173,7 @@ internal static class AgentExecutionEndpoints
         .RequireWorkspacePermission(WorkspacePermission.AgentRun)
         .WithSummary("创建并启动 Agent Run")
         .Produces<RunResponse>(StatusCodes.Status201Created)
+        .Produces<RunResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status500InternalServerError);
 
@@ -592,6 +618,9 @@ public sealed class CreateRunRequest
 
     /// <summary>允许调用的 Tool ID 列表（可选）。</summary>
     public IReadOnlyList<string>? ToolIds { get; init; }
+
+    /// <summary>WP-2：幂等键（可选；客户端提供用于去重，防止重试导致重复执行）。</summary>
+    public string? IdempotencyKey { get; init; }
 
     /// <summary>Cost 预算限制（可选；未提供时使用默认值）。</summary>
     public CostBudgetRequest? CostBudget { get; init; }

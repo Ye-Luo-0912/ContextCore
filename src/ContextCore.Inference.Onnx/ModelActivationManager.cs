@@ -307,25 +307,20 @@ public sealed class ModelActivationManager : IModelActivationManager
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken)
     {
-        // P0-8 Step 1：校准验证（仅当 ICalibrationService 可用且 descriptor 引用了校准版本时）
-        CalibrationValidationResult? calResult = null;
-        if (_calibrationService is not null)
+        // P0-8 Step 1：校准验证
+        // WP-5：精确 CalibrationVersion 绑定 + fail-closed。
+        //   - descriptor.CalibrationVersion == "default-v1"：保留兼容路径（calibrationService 缺失或参数未注册时跳过严格校验）
+        //   - 非 default-v1：必须找到 Version 精确匹配的参数；未命中即拒绝激活（fail-closed）
+        var calValidation = ValidateCalibrationForDescriptor(descriptor);
+        if (calValidation is { IsFailed: true } failed)
         {
-            var parameters = _calibrationService.GetParameters(descriptor.ModelArtifactId)
-                ?? _calibrationService.GetParameters(descriptor.ModelName);
-            if (parameters is not null)
-            {
-                calResult = _calibrationValidator.Validate(parameters, descriptor.ModelArtifactId);
-                if (!calResult.IsValid)
-                {
-                    return ModelActivationResult.Failed(
-                        $"校准验证失败：{calResult.Error}",
-                        descriptor,
-                        calResult,
-                        schemaError: null);
-                }
-            }
+            return ModelActivationResult.Failed(
+                failed.Error!,
+                descriptor,
+                failed.Result,
+                schemaError: null);
         }
+        var calResult = calValidation?.Result;
 
         // P0-8 Step 2：schema 存在性验证（descriptor.FeatureSchemaVersion 必须在 IFeatureRegistry 中已注册）
         var schema = _featureRegistry.Get(descriptor.FeatureSchemaVersion);
@@ -403,21 +398,13 @@ public sealed class ModelActivationManager : IModelActivationManager
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken)
     {
-        // P0-8 Step 1：校准验证
-        CalibrationValidationResult? calResult = null;
-        if (_calibrationService is not null)
+        // P0-8 Step 1：校准验证（WP-5：精确 CalibrationVersion 绑定 + fail-closed）
+        var calValidation = ValidateCalibrationForDescriptor(descriptor);
+        if (calValidation is { IsFailed: true } failed)
         {
-            var parameters = _calibrationService.GetParameters(descriptor.ModelArtifactId)
-                ?? _calibrationService.GetParameters(descriptor.ModelName);
-            if (parameters is not null)
-            {
-                calResult = _calibrationValidator.Validate(parameters, descriptor.ModelArtifactId);
-                if (!calResult.IsValid)
-                {
-                    return (false, null, $"校准验证失败：{calResult.Error}", calResult);
-                }
-            }
+            return (false, null, failed.Error!, failed.Result);
         }
+        var calResult = calValidation?.Result;
 
         // P0-8 Step 2：schema 存在性验证
         var schema = _featureRegistry.Get(descriptor.FeatureSchemaVersion);
@@ -461,6 +448,88 @@ public sealed class ModelActivationManager : IModelActivationManager
         }
 
         return (true, engine, null, calResult);
+    }
+
+    /// <summary>
+    /// WP-5：校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
+    /// 返回 null 表示无需校验（default-v1 兼容路径且无 calibrationService）；
+    /// 返回 Failed=true 表示校准失败（应拒绝激活）；
+    /// 返回 Failed=false + Result 非空表示校验通过（含 Warning/Info 级违规但仍允许激活）。
+    /// </summary>
+    /// <remarks>
+    /// 绑定策略：
+    /// <list type="bullet">
+    /// <item>descriptor.CalibrationVersion == "default-v1"：保留兼容路径。calibrationService 为 null 或参数未注册时返回 null（跳过校验）；
+    ///   参数已注册则正常校验。</item>
+    /// <item>descriptor.CalibrationVersion 为非 default-v1 的非空字符串：fail-closed。
+    ///   calibrationService 为 null → 失败；GetParametersForVersion 未命中 → 失败；Version 不匹配 → 失败。</item>
+    /// <item>descriptor.CalibrationVersion 为空/空白：按 default-v1 处理（向后兼容旧 descriptor）。</item>
+    /// </list>
+    /// </remarks>
+    private CalibrationValidationOutcome? ValidateCalibrationForDescriptor(ModelArtifactDescriptor descriptor)
+    {
+        const string defaultVersion = "default-v1";
+        var expectedVersion = string.IsNullOrWhiteSpace(descriptor.CalibrationVersion)
+            ? defaultVersion
+            : descriptor.CalibrationVersion;
+        var isDefaultVersion = string.Equals(expectedVersion, defaultVersion, StringComparison.Ordinal);
+
+        // calibrationService 缺失时的处理
+        if (_calibrationService is null)
+        {
+            if (isDefaultVersion)
+            {
+                // 兼容路径：default-v1 + 无 calibrationService → 跳过校验
+                return null;
+            }
+            return CalibrationValidationOutcome.Failed(
+                $"校准验证失败：descriptor.CalibrationVersion='{expectedVersion}' 非 default-v1，" +
+                "但 ICalibrationService 未注册；fail-closed 拒绝激活。",
+                calResult: null);
+        }
+
+        // WP-5：精确版本绑定 — 通过 GetParametersForVersion 按 modelName + version 精确查找
+        var parameters = _calibrationService.GetParametersForVersion(descriptor.ModelArtifactId, expectedVersion)
+            ?? _calibrationService.GetParametersForVersion(descriptor.ModelName, expectedVersion);
+
+        if (parameters is null)
+        {
+            if (isDefaultVersion)
+            {
+                // 兼容路径：default-v1 + 参数未注册 → 跳过校验（calibrationService 内部已注册全局 identity 默认参数，
+                // 但 GetParametersForVersion 严格匹配 Version，未显式注册 default-v1 时不命中）
+                return null;
+            }
+            return CalibrationValidationOutcome.Failed(
+                $"校准验证失败：未找到 ModelArtifactId='{descriptor.ModelArtifactId}' / ModelName='{descriptor.ModelName}' " +
+                $"且 Version='{expectedVersion}' 精确匹配的校准参数；fail-closed 拒绝激活。" +
+                "请在 ICalibrationService 中注册匹配版本的参数，或将 descriptor.CalibrationVersion 设置为 'default-v1'。",
+                calResult: null);
+        }
+
+        // 命中精确版本：执行统计有效性校验
+        var calResult = _calibrationValidator.Validate(parameters, descriptor.ModelArtifactId);
+        if (!calResult.IsValid)
+        {
+            return CalibrationValidationOutcome.Failed(
+                $"校准验证失败：{calResult.Error}",
+                calResult);
+        }
+        return CalibrationValidationOutcome.Succeeded(calResult);
+    }
+
+    /// <summary>WP-5：校准验证结果容器。</summary>
+    private sealed class CalibrationValidationOutcome
+    {
+        public bool IsFailed { get; init; }
+        public string? Error { get; init; }
+        public CalibrationValidationResult? Result { get; init; }
+
+        public static CalibrationValidationOutcome Failed(string error, CalibrationValidationResult? calResult)
+            => new() { IsFailed = true, Error = error, Result = calResult };
+
+        public static CalibrationValidationOutcome Succeeded(CalibrationValidationResult calResult)
+            => new() { IsFailed = false, Error = null, Result = calResult };
     }
 
     /// <summary>

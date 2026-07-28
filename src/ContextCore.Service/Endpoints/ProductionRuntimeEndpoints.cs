@@ -41,12 +41,15 @@ internal static class ProductionRuntimeEndpoints
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         // ── /api/runtime/status：当前激活组件报告 ────────────────────────
-        // 返回当前 Profile、已注册的 Worker 列表及状态、Model Activation 信息、Durable Transport 状态、Canary 状态。
+        // 返回当前 Profile、已注册的 Worker 列表及状态、Model Activation 信息、
+        // Durable Transport 状态、Agent Model Transport 状态、Tool Dispatcher 状态、Canary 状态。
         app.MapGet("/api/runtime/status", (ProductionRuntimeReadinessService readinessService) =>
         {
             var workers = readinessService.GetRegisteredWorkers();
             var durableTransport = readinessService.GetDurableTransportStatus();
             var modelActivation = readinessService.GetModelActivationStatus();
+            var agentModelTransport = readinessService.GetAgentModelTransportStatus();
+            var toolDispatcher = readinessService.GetToolDispatcherStatus();
             var canary = readinessService.GetCanaryStatus();
 
             return Results.Ok(new ProductionRuntimeStatusResponse
@@ -56,6 +59,8 @@ internal static class ProductionRuntimeEndpoints
                 Workers = workers,
                 DurableTransport = durableTransport,
                 ModelActivation = modelActivation,
+                AgentModelTransport = agentModelTransport,
+                ToolDispatcher = toolDispatcher,
                 Canary = canary,
                 CheckedAt = DateTimeOffset.UtcNow
             });
@@ -89,6 +94,12 @@ internal sealed class ProductionRuntimeStatusResponse
 
     /// <summary>Model Activation 状态（null = 未启用）。</summary>
     public ModelActivationStatus? ModelActivation { get; init; }
+
+    /// <summary>P0-3：Agent Model Transport 状态（Deterministic vs Real，null = 未注册）。</summary>
+    public AgentModelTransportStatus? AgentModelTransport { get; init; }
+
+    /// <summary>P0-3：Tool Dispatcher 状态（Echo vs Real，null = 未注册）。</summary>
+    public ToolDispatcherStatus? ToolDispatcher { get; init; }
 
     /// <summary>Canary 状态。</summary>
     public required CanaryStatus Canary { get; init; }

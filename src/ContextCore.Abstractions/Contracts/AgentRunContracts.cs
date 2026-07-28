@@ -955,6 +955,16 @@ public interface IAgentRunStore
     /// <summary>按 RunId 获取 Run 元数据。</summary>
     ValueTask<AgentRun?> GetAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// WP-2：按 IdempotencyKey 获取 Run 元数据。
+    /// 仅当 <see cref="AgentRun.IdempotencyKey"/> 非空时匹配；null 键不参与查询。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID（隔离边界）。</param>
+    /// <param name="idempotencyKey">幂等键（客户端提供，用于去重）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>匹配的 Run；未提供幂等键或未匹配时返回 null。</returns>
+    ValueTask<AgentRun?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey, CancellationToken cancellationToken = default);
+
     /// <summary>更新 Run 状态（expected-state CAS：state 只能向前推进）。</summary>
     /// <param name="workspaceId">Workspace ID。</param>
     /// <param name="runId">Run ID。</param>

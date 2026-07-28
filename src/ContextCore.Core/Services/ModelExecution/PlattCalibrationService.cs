@@ -99,11 +99,25 @@ public sealed class PlattCalibrationService : ICalibrationService
         return _parameters.TryGetValue(key, out var entry) ? entry : null;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// WP-5：精确版本匹配。先按 modelName 查找参数，再校验 Version 与传入 version 精确一致；
+    /// 不一致或未命中时返回 null（fail-closed 由调用方处理，不在此处 fallback）。
+    /// </remarks>
+    public CalibrationParameters? GetParametersForVersion(string? modelName, string version)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        var key = NormalizeKey(modelName);
+        if (!_parameters.TryGetValue(key, out var entry)) return null;
+        return string.Equals(entry.Version, version, StringComparison.Ordinal) ? entry : null;
+    }
+
     /// <summary>
     /// R28-F P3-3：注册 Platt (A, B) 参数。null modelName 表示更新全局默认。
     /// 已存在同名模型参数时覆盖（与 FeatureRegistry 不同——校准参数允许 refit）。
     /// </summary>
-    public void RegisterPlattParameters(double a, double b, string? modelName = null, DateTimeOffset? fittedAt = null)
+    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    public void RegisterPlattParameters(double a, double b, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         var key = NormalizeKey(modelName);
         var parameters = new CalibrationParameters
@@ -113,7 +127,8 @@ public sealed class PlattCalibrationService : ICalibrationService
             ParameterA = a,
             ParameterB = b,
             Parameter = a, // 兼容别名
-            FittedAt = fittedAt ?? DateTimeOffset.UtcNow
+            FittedAt = fittedAt ?? DateTimeOffset.UtcNow,
+            Version = string.IsNullOrWhiteSpace(version) ? "default-v1" : version
         };
         _parameters[key] = parameters;
     }
@@ -121,7 +136,8 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// <summary>
     /// R28-F P3-3：注册 Temperature T 参数。T 必须 > 0。
     /// </summary>
-    public void RegisterTemperatureParameters(double t, string? modelName = null, DateTimeOffset? fittedAt = null)
+    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    public void RegisterTemperatureParameters(double t, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         if (t <= 0.0 || double.IsNaN(t) || double.IsInfinity(t))
         {
@@ -134,7 +150,8 @@ public sealed class PlattCalibrationService : ICalibrationService
             Kind = CalibrationMethodKind.Temperature,
             Temperature = t,
             Parameter = t, // 兼容别名（旧字段语义不严格，存 T 以保留信息）
-            FittedAt = fittedAt ?? DateTimeOffset.UtcNow
+            FittedAt = fittedAt ?? DateTimeOffset.UtcNow,
+            Version = string.IsNullOrWhiteSpace(version) ? "default-v1" : version
         };
         _parameters[key] = parameters;
     }
@@ -142,7 +159,8 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// <summary>
     /// R28-F P3-3：注册 Isotonic 回归点。points 必须按 Input 升序，否则抛 ArgumentException。
     /// </summary>
-    public void RegisterIsotonicParameters(IReadOnlyList<IsotonicPoint> points, string? modelName = null, DateTimeOffset? fittedAt = null)
+    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    public void RegisterIsotonicParameters(IReadOnlyList<IsotonicPoint> points, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         ArgumentNullException.ThrowIfNull(points);
         if (points.Count > 1)
@@ -163,7 +181,8 @@ public sealed class PlattCalibrationService : ICalibrationService
             Method = "isotonic",
             Kind = CalibrationMethodKind.Isotonic,
             IsotonicPoints = points,
-            FittedAt = fittedAt ?? DateTimeOffset.UtcNow
+            FittedAt = fittedAt ?? DateTimeOffset.UtcNow,
+            Version = string.IsNullOrWhiteSpace(version) ? "default-v1" : version
         };
         _parameters[key] = parameters;
     }
@@ -171,23 +190,25 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// <summary>
     /// 注册 Identity 参数（重置某模型为恒等变换）。
     /// </summary>
-    public void RegisterIdentityParameters(string? modelName = null, DateTimeOffset? fittedAt = null)
+    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    public void RegisterIdentityParameters(string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         var key = NormalizeKey(modelName);
         var parameters = new CalibrationParameters
         {
             Method = "identity",
             Kind = CalibrationMethodKind.Identity,
-            FittedAt = fittedAt ?? DateTimeOffset.UtcNow
+            FittedAt = fittedAt ?? DateTimeOffset.UtcNow,
+            Version = string.IsNullOrWhiteSpace(version) ? "default-v1" : version
         };
         _parameters[key] = parameters;
     }
 
     /// <summary>
-    /// R28-D 兼容入口：等价于 RegisterPlattParameters(a, b, modelName, fittedAt)。
+    /// R28-D 兼容入口：等价于 RegisterPlattParameters(a, b, modelName, fittedAt, version)。
     /// </summary>
-    public void RegisterParameters(double a, double b, string? modelName = null, DateTimeOffset? fittedAt = null)
-        => RegisterPlattParameters(a, b, modelName, fittedAt);
+    public void RegisterParameters(double a, double b, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
+        => RegisterPlattParameters(a, b, modelName, fittedAt, version);
 
     private CalibrationParameters ResolveParameters(string? modelName)
     {

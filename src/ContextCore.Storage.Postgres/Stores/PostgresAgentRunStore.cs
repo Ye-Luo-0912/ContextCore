@@ -44,11 +44,11 @@ public sealed class PostgresAgentRunStore : PostgresStoreBase, IAgentRunStore, I
 INSERT INTO {Table("agent_runs")} (
     workspace_id, run_id, session_id, task, state, turn,
     created_at, updated_at, finished_at, failure_reason, final_answer,
-    turn_budget_json, cost_budget_json, data)
+    turn_budget_json, cost_budget_json, idempotency_key, data)
 VALUES (
     @workspace_id, @run_id, @session_id, @task, @state, @turn,
     @created_at, @updated_at, @finished_at, @failure_reason, @final_answer,
-    @turn_budget_json, @cost_budget_json, @data)
+    @turn_budget_json, @cost_budget_json, @idempotency_key, @data)
 ON CONFLICT (workspace_id, run_id) DO NOTHING;
 """;
         command.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
@@ -68,6 +68,7 @@ ON CONFLICT (workspace_id, run_id) DO NOTHING;
         command.Parameters.AddWithValue("cost_budget_json", run.CostBudget is null
             ? DBNull.Value
             : JsonSerializer.Serialize(run.CostBudget));
+        command.Parameters.AddWithValue("idempotency_key", (object?)run.IdempotencyKey ?? DBNull.Value);
         AddJson(command, "data", run);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -89,6 +90,31 @@ LIMIT 1;
 """;
         command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
+        return await ExecuteScalarJsonAsync<AgentRun>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<AgentRun?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        // null/空 idempotencyKey 不参与查询（与 partial UNIQUE 索引 WHERE idempotency_key IS NOT NULL 语义一致）
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            return null;
+        }
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 走 (workspace_id, idempotency_key) partial UNIQUE 索引点查
+        command.CommandText = $"""
+SELECT data
+FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND idempotency_key = @idempotency_key
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("idempotency_key", idempotencyKey);
         return await ExecuteScalarJsonAsync<AgentRun>(command, cancellationToken).ConfigureAwait(false);
     }
 

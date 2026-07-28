@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using ContextCore.Abstractions;
+using ContextCore.Core.Services.AgentKernel;
+using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Inference.Onnx;
 using ContextCore.Service.Extensions;
@@ -252,6 +254,55 @@ public sealed class ProductionRuntimeReadinessService
     }
 
     /// <summary>
+    /// P0-3：获取 Agent Model Transport 状态（Deterministic vs Real）。
+    /// 用于 readiness 端点输出能力矩阵，标识当前 IAgentModelTransport 实现类型。
+    /// </summary>
+    /// <returns>Transport 状态信息（null = 未注册）。</returns>
+    public AgentModelTransportStatus? GetAgentModelTransportStatus()
+    {
+        var transport = _services.GetService<IAgentModelTransport>();
+        if (transport is null)
+        {
+            return null;
+        }
+
+        var typeName = transport.GetType().Name;
+        // 判定是否为真实实现（非 Deterministic fallback）
+        var isReal = !typeName.Equals(nameof(DeterministicAgentModelTransport), StringComparison.Ordinal);
+
+        return new AgentModelTransportStatus(
+            IsRegistered: true,
+            ImplementationType: typeName,
+            IsReal: isReal,
+            Mode: isReal ? "Real" : "Deterministic");
+    }
+
+    /// <summary>
+    /// P0-3：获取 Tool Dispatcher 状态（Echo vs Real）。
+    /// 用于 readiness 端点输出能力矩阵，标识当前 IToolDispatcher 实现类型。
+    /// </summary>
+    /// <returns>Dispatcher 状态信息（null = 未注册）。</returns>
+    public ToolDispatcherStatus? GetToolDispatcherStatus()
+    {
+        var dispatcher = _services.GetService<IToolDispatcher>();
+        if (dispatcher is null)
+        {
+            return null;
+        }
+
+        var typeName = dispatcher.GetType().Name;
+        // 判定是否为真实实现（非 Echo fallback）
+        var isReal = !typeName.Equals(nameof(EchoToolDispatcher), StringComparison.Ordinal);
+
+        return new ToolDispatcherStatus(
+            IsRegistered: true,
+            ImplementationType: typeName,
+            IsReal: isReal,
+            Mode: isReal ? "Real" : "Echo",
+            SupportedToolCount: dispatcher.SupportedTools.Count);
+    }
+
+    /// <summary>
     /// 获取 Canary 状态。
     /// </summary>
     /// <returns>Canary 状态信息。</returns>
@@ -339,3 +390,33 @@ public sealed record ModelActivationStatus(
 /// <param name="LeaderEnabled">CanaryLeaderHostedService 是否启用（HA 模式）。</param>
 /// <param name="Mode">当前 Canary 模式（Single-Node-Progression / HA-Leader）。</param>
 public sealed record CanaryStatus(bool ProgressionEnabled, bool LeaderEnabled, string Mode);
+
+/// <summary>
+/// P0-3：Agent Model Transport 状态信息（能力矩阵组件）。
+/// 标识当前 IAgentModelTransport 实现类型（Deterministic vs Real）。
+/// </summary>
+/// <param name="IsRegistered">是否已注册。</param>
+/// <param name="ImplementationType">实现类型名称（如 DeterministicAgentModelTransport / ModelGatewayAgentModelTransport）。</param>
+/// <param name="IsReal">是否为真实实现（非 Deterministic fallback）。</param>
+/// <param name="Mode">模式标识（"Real" / "Deterministic"）。</param>
+public sealed record AgentModelTransportStatus(
+    bool IsRegistered,
+    string ImplementationType,
+    bool IsReal,
+    string Mode);
+
+/// <summary>
+/// P0-3：Tool Dispatcher 状态信息（能力矩阵组件）。
+/// 标识当前 IToolDispatcher 实现类型（Echo vs Real）。
+/// </summary>
+/// <param name="IsRegistered">是否已注册。</param>
+/// <param name="ImplementationType">实现类型名称（如 EchoToolDispatcher / RealToolDispatcher）。</param>
+/// <param name="IsReal">是否为真实实现（非 Echo fallback）。</param>
+/// <param name="Mode">模式标识（"Real" / "Echo"）。</param>
+/// <param name="SupportedToolCount">支持的 Tool 数量。</param>
+public sealed record ToolDispatcherStatus(
+    bool IsRegistered,
+    string ImplementationType,
+    bool IsReal,
+    string Mode,
+    int SupportedToolCount);

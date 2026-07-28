@@ -113,7 +113,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
 
         var options = new OnnxInferenceEngineOptions
         {
@@ -154,7 +154,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
 
         var managerBad = new ModelActivationManager(
             badRegistry, new DefaultCalibrationValidator(), featureRegistry,
-            badFactory, new DeterministicBatchInferenceEngine());
+            badFactory, new DeterministicBatchInferenceEngine(), BuildCalibrationService());
 
         var options = new OnnxInferenceEngineOptions
         {
@@ -182,7 +182,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
 
         var managerGood = new ModelActivationManager(
             goodRegistry, new DefaultCalibrationValidator(), featureRegistry,
-            goodFactory, new DeterministicBatchInferenceEngine());
+            goodFactory, new DeterministicBatchInferenceEngine(), BuildCalibrationService());
 
         var goodResult = await managerGood.ActivateAsync("probe-pass", options);
 
@@ -212,7 +212,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
 
         var manager = new ModelActivationManager(
             registry, new DefaultCalibrationValidator(), featureRegistry,
-            factory, fallback);
+            factory, fallback, BuildCalibrationService());
 
         var options = new OnnxInferenceEngineOptions
         {
@@ -280,7 +280,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
 
         var manager = new ModelActivationManager(
             registry, new DefaultCalibrationValidator(), featureRegistry,
-            factory, fallback);
+            factory, fallback, BuildCalibrationService());
 
         var options = new OnnxInferenceEngineOptions
         {
@@ -422,9 +422,16 @@ public sealed class R29H_ModelActivationAcceptanceTests
         await registry.RegisterAsync(descriptor);
         var manager = new ModelActivationManager(
             registry, new DefaultCalibrationValidator(), BuildFeatureRegistry(2),
-            factory, new DeterministicBatchInferenceEngine());
+            factory, new DeterministicBatchInferenceEngine(), BuildCalibrationService());
         return await manager.ActivateAsync(descriptor.ModelArtifactId, options);
     }
+
+    /// <summary>
+    /// 构建测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
+    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// 本 helper 让校准验证通过，使测试聚焦于 warmup/probe/hotswap 等被测逻辑。
+    /// </summary>
+    private static ICalibrationService BuildCalibrationService() => new TestCalibrationService();
 
     // ===========================================================================
     // 私有 Mock：SimpleModelArtifactRegistry
@@ -653,5 +660,37 @@ public sealed class R29H_ModelActivationAcceptanceTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    // ===========================================================================
+    // 测试辅助：TestCalibrationService（对任意 modelName + version 返回有效 Identity 参数）
+    // ===========================================================================
+
+    /// <summary>
+    /// 测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
+    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// 此实现让校准验证始终通过，使测试聚焦于 warmup/probe/hotswap 等被测逻辑。
+    /// </summary>
+    private sealed class TestCalibrationService : ICalibrationService
+    {
+        private static readonly CalibrationParameters IdentityParams = new()
+        {
+            Method = "identity",
+            Kind = CalibrationMethodKind.Identity,
+            ParameterA = 1.0,
+            ParameterB = 0.0,
+            Parameter = 1.0,
+            FittedAt = DateTimeOffset.UtcNow,
+            Version = "any"
+        };
+
+        public double Calibrate(double rawScore, string? modelName = null) => rawScore;
+
+        public IReadOnlyList<double> CalibrateBatch(IReadOnlyList<double> rawScores, string? modelName = null)
+            => rawScores as IReadOnlyList<double> ?? rawScores.ToArray();
+
+        public CalibrationParameters? GetParameters(string? modelName = null) => IdentityParams;
+
+        public CalibrationParameters? GetParametersForVersion(string? modelName, string version) => IdentityParams;
     }
 }

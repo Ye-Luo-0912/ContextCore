@@ -86,7 +86,7 @@ public sealed class R29H_ModelActivationProductionTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
 
         var options = BuildEmbeddingOptions(modelPath);
         var result = await manager.ActivateAsync(descriptor.ModelArtifactId, options);
@@ -156,7 +156,7 @@ public sealed class R29H_ModelActivationProductionTests
         var calValidator = new DefaultCalibrationValidator();
 
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
 
         var options = BuildOptions();
         var result = await manager.ActivateAsync("unknown-schema-model", options);
@@ -241,7 +241,7 @@ public sealed class R29H_ModelActivationProductionTests
         var calValidator = new DefaultCalibrationValidator();
 
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
 
         var options = BuildOptions();
         var result = await manager.ActivateLatestAsync(ModelName, options);
@@ -280,7 +280,7 @@ public sealed class R29H_ModelActivationProductionTests
         var calValidator = new DefaultCalibrationValidator();
 
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
 
         var options = BuildOptions();
         var result = await manager.ActivateAsync(ModelArtifactId, options);
@@ -356,7 +356,7 @@ public sealed class R29H_ModelActivationProductionTests
         });
 
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
 
         var options = BuildOptions();
 
@@ -555,6 +555,13 @@ public sealed class R29H_ModelActivationProductionTests
         return registry;
     }
 
+    /// <summary>
+    /// 构建测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
+    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// 本 helper 让校准验证通过，使测试聚焦于 schema/session/并发等被测逻辑。
+    /// </summary>
+    private static ICalibrationService BuildCalibrationService() => new TestCalibrationService();
+
     private static ModelActivationManager BuildManagerWithMockSession(
         out MockOnnxInferenceSession mockSession)
     {
@@ -574,7 +581,7 @@ public sealed class R29H_ModelActivationProductionTests
         var calValidator = new DefaultCalibrationValidator();
 
         return new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildCalibrationService());
     }
 
     private static string ComputeSha256(string path)
@@ -628,5 +635,37 @@ public sealed class R29H_ModelActivationProductionTests
         {
             return ValueTask.FromResult(_provider(options));
         }
+    }
+
+    // ===========================================================================
+    // 测试辅助：TestCalibrationService（对任意 modelName + version 返回有效 Identity 参数）
+    // ===========================================================================
+
+    /// <summary>
+    /// 测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
+    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// 此实现让校准验证始终通过，使测试聚焦于 schema/session/并发等被测逻辑。
+    /// </summary>
+    private sealed class TestCalibrationService : ICalibrationService
+    {
+        private static readonly CalibrationParameters IdentityParams = new()
+        {
+            Method = "identity",
+            Kind = CalibrationMethodKind.Identity,
+            ParameterA = 1.0,
+            ParameterB = 0.0,
+            Parameter = 1.0,
+            FittedAt = DateTimeOffset.UtcNow,
+            Version = "any"
+        };
+
+        public double Calibrate(double rawScore, string? modelName = null) => rawScore;
+
+        public IReadOnlyList<double> CalibrateBatch(IReadOnlyList<double> rawScores, string? modelName = null)
+            => rawScores as IReadOnlyList<double> ?? rawScores.ToArray();
+
+        public CalibrationParameters? GetParameters(string? modelName = null) => IdentityParams;
+
+        public CalibrationParameters? GetParametersForVersion(string? modelName, string version) => IdentityParams;
     }
 }

@@ -90,8 +90,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   - P12：canary_leader_leases 追加 fencing_token bigint 列（单调递增），
     ///     每次 TryAcquireAsync 成功获取（含抢占过期）时递增；AdvanceEpochAsync 的 UPDATE
     ///     校验 WHERE fencing_token <= @fencingToken，旧 Leader（fencing token 较小）推进失败。
+    /// WP-2：v43 → v44，agent_runs 追加 idempotency_key text 列与 partial UNIQUE 索引
+    ///   (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL，
+    ///   让 POST /api/agents/runs 在提供 IdempotencyKey 时返回已有 Run（200 OK）而非创建重复 Run，
+    ///   防止客户端重试/网络抖动导致同一业务意图被多次执行。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v43";
+    public const string SchemaVersion = "cc-schema-v44";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -356,6 +360,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // 任务 F：Agent Run 索引（按 session 列举 + 按 state 拉取待处理；events 主键已覆盖按 run 查询）
         ("agent_runs", "session"),
         ("agent_runs", "state"),
+        // WP-2：idempotency_key partial UNIQUE 索引（按 workspace + idempotency_key 点查 + 去重）
+        ("agent_runs", "idempotency"),
         // 任务 D：Canary HA 聚合索引
         // canary_metrics_samples：按 run + recorded_at 查最新样本（聚合器 SELECT）+ 按 run + instance 去重
         ("canary_metrics_samples", "run_recorded"),
@@ -2001,6 +2007,7 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
     cost_budget_json text NULL,
     last_checkpoint_id text NULL,
     last_checkpoint_sequence integer NULL,
+    idempotency_key text NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (workspace_id, run_id)
 );
@@ -2010,8 +2017,15 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_id text NULL;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_sequence integer NULL;
 
+-- WP-2：v43 → v44 迁移：为已有 agent_runs 表补充 idempotency_key 列
+-- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效，幂等）
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS idempotency_key text NULL;
+
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);
+-- WP-2：partial UNIQUE 索引让同一 workspace 内 idempotency_key 全局唯一（NULL 不参与唯一约束），
+-- 防止客户端重试/网络抖动产生重复 Run； GetByIdempotencyKeyAsync 走此索引点查。
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "idempotency")} ON {agentRuns} (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- 任务 F：Agent Run 事件流哈希链持久化表
 -- 主键 (workspace_id, run_id, sequence)：UNIQUE 约束防重序列号，保证事件流单调递增。

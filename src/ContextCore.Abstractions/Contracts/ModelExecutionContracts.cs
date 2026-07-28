@@ -229,6 +229,19 @@ public interface ICalibrationService
 
     /// <summary>获取校准参数。</summary>
     CalibrationParameters? GetParameters(string? modelName = null);
+
+    /// <summary>
+    /// WP-5：按 modelName + version 精确查找校准参数。
+    /// 用于 ModelActivationManager 激活时按 descriptor.CalibrationVersion 精确绑定校准参数。
+    /// </summary>
+    /// <param name="modelName">模型名（或 ModelArtifactId）；null 表示全局默认。</param>
+    /// <param name="version">期望的校准版本号（对应 ModelArtifactDescriptor.CalibrationVersion）。</param>
+    /// <returns>匹配 modelName 且 Version 与 <paramref name="version"/> 精确一致的参数；未命中时返回 null。</returns>
+    /// <remarks>
+    /// 实现应保证 Version 精确匹配（区分大小写、不裁剪空白），不进行任何 fallback。
+    /// 调用方（ModelActivationManager）依赖此语义实现 fail-closed：未命中即拒绝激活。
+    /// </remarks>
+    CalibrationParameters? GetParametersForVersion(string? modelName, string version);
 }
 
 /// <summary>
@@ -287,6 +300,17 @@ public sealed record CalibrationParameters
 
     /// <summary>参数拟合时间戳。</summary>
     public required DateTimeOffset FittedAt { get; init; }
+
+    /// <summary>
+    /// WP-5：校准参数版本号。用于 ModelActivationManager 激活时与
+    /// <see cref="ModelArtifactDescriptor.CalibrationVersion"/> 精确匹配。
+    /// 默认 "default-v1"（与 OnnxInferenceEngine 默认值对齐）。
+    /// </summary>
+    /// <remarks>
+    /// RegisterXxxParameters 未显式传入 version 时使用此默认值；
+    /// 生产路径注册真实校准时应传入与 descriptor.CalibrationVersion 一致的版本号。
+    /// </remarks>
+    public string Version { get; init; } = "default-v1";
 }
 
 /// <summary>

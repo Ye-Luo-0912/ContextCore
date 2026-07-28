@@ -1,10 +1,14 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.AgentKernel;
+using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.Postgres.Extensions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ContextCore.Service.Extensions;
@@ -119,6 +123,18 @@ internal static class ProductionRuntimeExtensions
         // 绑定 ContextCoreRuntimeOptions（优先从 ContextCoreRuntime 节，回退到 ProductionRuntime 节）
         var runtimeOptions = BindContextCoreRuntimeOptions(configuration, sectionName);
 
+        // P0-3：ProductionHA 强制真实运行模式（AgentModelMode=RealModel, ToolMode=RealDispatch）。
+        // ProductionHA 不允许 DeterministicAgentModelTransport / EchoToolDispatcher 静默生效——
+        // 这些是测试/开发用 fallback，生产 HA 必须使用真实 transport / dispatcher。
+        if (runtimeOptions.Profile == RuntimeProfile.ProductionHA)
+        {
+            runtimeOptions = runtimeOptions with
+            {
+                AgentModelMode = AgentModelMode.RealModel,
+                ToolMode = ToolExecutionMode.RealDispatch
+            };
+        }
+
         // 按ModelMode 选择 ModelExecutionOptions，调用 AddContextCore 注册 Core 服务。
         // P0-1 核心修复：不再使用无参数 AddContextCore()（强制 Deterministic），
         // 而是根据 ContextCoreRuntime:ModelMode 显式选择 RealModel / Deterministic。
@@ -134,6 +150,13 @@ internal static class ProductionRuntimeExtensions
 
         // 执行共享的 Profile 注册逻辑
         AddProductionRuntimeProfileServices(services, legacyOptions, configuration);
+
+        // P0-3：按 AgentModelMode / ToolMode 覆盖 AddContextCore 的默认注册。
+        // AddContextCore 使用 TryAddSingleton 注册 DeterministicAgentModelTransport / EchoToolDispatcher，
+        // 此处按运行配置覆盖为真实实现（RealModel → ModelGatewayAgentModelTransport，
+        // RealDispatch → RealToolDispatcher）。
+        ApplyAgentModelModeOverride(services, runtimeOptions.AgentModelMode);
+        ApplyToolModeOverride(services, runtimeOptions.ToolMode);
 
         return services;
     }
@@ -403,6 +426,57 @@ internal static class ProductionRuntimeExtensions
         {
             Mode = useRealModel ? ModelExecutionMode.RealModel : ModelExecutionMode.Deterministic
         };
+    }
+
+    /// <summary>
+    /// P0-3：按 <see cref="AgentModelMode"/> 覆盖 IAgentModelTransport 注册。
+    /// AddContextCore 默认注册 DeterministicAgentModelTransport（TryAddSingleton），
+    /// RealModel 模式下移除默认注册并注册 ModelGatewayAgentModelTransport（真实 LLM transport）。
+    /// </summary>
+    private static void ApplyAgentModelModeOverride(IServiceCollection services, AgentModelMode mode)
+    {
+        if (mode != AgentModelMode.RealModel)
+        {
+            return;
+        }
+
+        // 移除 AddContextCore 注册的 DeterministicAgentModelTransport
+        RemoveService(services, typeof(IAgentModelTransport));
+
+        // 注册 ModelGatewayAgentModelTransport：通过 IModelGateway 调用真实 LLM。
+        // IModelGateway 未注册时（测试场景）transport 返回错误响应（不抛异常）。
+        services.AddSingleton<IAgentModelTransport>(sp =>
+        {
+            var gateway = sp.GetService<IModelGateway>();
+            var logger = sp.GetService<ILogger<ModelGatewayAgentModelTransport>>();
+            return new ModelGatewayAgentModelTransport(gateway, logger);
+        });
+    }
+
+    /// <summary>
+    /// P0-3：按 <see cref="ToolExecutionMode"/> 覆盖 IToolDispatcher 注册。
+    /// AddContextCore 默认注册 EchoToolDispatcher（TryAddSingleton），
+    /// RealDispatch 模式下移除默认注册并注册 RealToolDispatcher（真实分派器）。
+    /// </summary>
+    private static void ApplyToolModeOverride(IServiceCollection services, ToolExecutionMode mode)
+    {
+        if (mode != ToolExecutionMode.RealDispatch)
+        {
+            return;
+        }
+
+        // 移除 AddContextCore 注册的 EchoToolDispatcher
+        RemoveService(services, typeof(IToolDispatcher));
+
+        // 注册 RealToolDispatcher：通过 IToolHandler 注册表分派 Tool 调用。
+        // 默认无注册 Handler——生产部署应通过 DI 注册所需 IToolHandler 实现。
+        // 已注册的 IToolHandler 实例会通过 IEnumerable<IToolHandler> 自动注入。
+        services.AddSingleton<IToolDispatcher>(sp =>
+        {
+            var handlers = sp.GetServices<IToolHandler>();
+            var logger = sp.GetService<ILogger<RealToolDispatcher>>();
+            return new RealToolDispatcher(handlers, logger);
+        });
     }
 
     /// <summary>
