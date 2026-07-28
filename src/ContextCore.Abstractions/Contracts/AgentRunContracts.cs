@@ -152,6 +152,39 @@ public sealed record AgentRun
 
     /// <summary>Cost 预算限制。</summary>
     public AgentCostBudget? CostBudget { get; init; }
+
+    /// <summary>
+    /// P0-5：模型工件 ID（从 API 入参写入 Run，Actor 按此限定模型）。
+    /// null = 未限定（由 IAgentModelTransport 自行决定）。
+    /// </summary>
+    public string? ModelArtifactId { get; init; }
+
+    /// <summary>
+    /// P0-5：允许调用的 Tool ID 集合（从 API 入参写入 Run）。
+    /// 空集合 = 未限定（允许所有 Tool）；非空集合 = 仅允许集合中的 Tool。
+    /// Actor 在 DispatchToolsAsync 中对每个 ToolCall 检查是否在集合中。
+    /// </summary>
+    public HashSet<string> AllowedToolIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// P0-5：Run 执行截止时间（UTC）。
+    /// 从 API 入参 TimeoutSeconds 计算（DeadlineAt = CreatedAt + TimeoutSeconds）。
+    /// Actor 在每次模型调用前检查；超过则 Fail。
+    /// 替代旧路径中 StartRunAsync 返回后立即 Dispose 的 linked CTS。
+    /// </summary>
+    public DateTimeOffset? DeadlineAt { get; init; }
+
+    /// <summary>
+    /// P0-5：模型上下文 Token 预算上限。
+    /// IAgentModelContextProjector.Project 按此截断投影后的消息列表。
+    /// 默认 8192；0 或负数 = 不限制（兼容旧路径）。
+    /// </summary>
+    public int ModelContextTokenBudget { get; init; } = 8192;
+
+    /// <summary>
+    /// P0-5：幂等键（从 API 入参写入 Run，用于外部系统去重）。
+    /// </summary>
+    public string? IdempotencyKey { get; init; }
 }
 
 /// <summary>
@@ -699,6 +732,21 @@ public sealed record AgentApprovalResult
 
     /// <summary>审批时间（UTC）。</summary>
     public required DateTimeOffset DecidedAt { get; init; }
+
+    /// <summary>
+    /// P0-6：是否为"等待审批"结果（Pending）。
+    /// true = 审批已持久化为 Pending 状态，等待外部 ResolveAsync；
+    ///        Actor 应转入 AwaitingApproval 状态并退出执行槽（释放 Worker/Semaphore）。
+    /// false = 已有决策（Approved=true 或 Approved=false 的拒绝）。
+    /// 默认 false（兼容旧路径：自动审批直接返回决策）。
+    /// </summary>
+    public bool PendingApproval { get; init; }
+
+    /// <summary>
+    /// P0-6：审批记录 ID（PendingApproval=true 时填充，供外部 POST approval 端点定位审批记录）。
+    /// 由 IAgentApprovalGate 生成并持久化到 IAgentApprovalStore。
+    /// </summary>
+    public string? ApprovalId { get; init; }
 }
 
 /// <summary>
@@ -760,6 +808,66 @@ public sealed record AgentCostBudget
 }
 
 // ── 6 个核心接口 ────────────────────────────────────────────────────────────
+
+/// <summary>
+/// P0-3：Agent 模型上下文投影器抽象。
+/// 将 AgentRun + ContextDecisionExecutionResult + AgentContextState 投影为
+/// 最终发送给模型的消息列表，确保从 WorkingSet.Materials 取出正文（不只是 ID）。
+/// </summary>
+/// <remarks>
+/// <b>引入背景</b>：旧路径中 Actor 调用 IContextDecisionRuntime 后仅将
+/// CandidateId/Type/FinalScore 摘要追加为 System 消息，模型拿不到材料正文。
+/// 此外 ProjectForModel(tokenBudget: 0) 等价于关闭预算控制。
+/// 本投影器在投影阶段从 ContextDecisionExecutionResult.WorkingSet.Materials
+/// 取出候选正文内容，并按 Run.ModelContextTokenBudget 截断。
+///
+/// <b>投影顺序</b>（高优先级在前，截断从最旧开始）：
+/// <list type="number">
+///   <item>System Prompt</item>
+///   <item>Hard Constraints</item>
+///   <item>Current Task</item>
+///   <item>Working Memory（短期工作集）</item>
+///   <item>Retrieved Materials（从 WorkingSet.Materials 取正文）</item>
+///   <item>Tool Observations</item>
+///   <item>Recent Assistant Turns</item>
+/// </list>
+/// </remarks>
+public interface IAgentModelContextProjector
+{
+    /// <summary>
+    /// 投影模型上下文。
+    /// </summary>
+    /// <param name="run">当前 Agent Run（含 ModelContextTokenBudget / DeadlineAt 等约束）。</param>
+    /// <param name="decisionResult">
+    /// IContextDecisionRuntime 的执行结果（含 WorkingSet.Materials）；null = 未注入决策运行时或本轮未调用。
+    /// </param>
+    /// <param name="context">当前 Agent 上下文状态（SystemPrompt / Constraints / CurrentTask / Messages / ToolObservations 等）。</param>
+    /// <param name="modelContextTokenBudget">模型上下文 Token 预算上限（&lt;=0 表示不限制）。</param>
+    /// <returns>投影结果（消息列表 + 总 Token 数 + 选中的 Material ID 集合 + 截断诊断）。</returns>
+    AgentModelContextProjection Project(
+        AgentRun run,
+        ContextDecisionExecutionResult? decisionResult,
+        AgentContextState context,
+        int modelContextTokenBudget);
+}
+
+/// <summary>
+/// P0-3：模型上下文投影结果。
+/// </summary>
+public sealed record AgentModelContextProjection
+{
+    /// <summary>投影后的消息列表（按投影顺序排列，已按预算截断）。</summary>
+    public IReadOnlyList<AgentMessage> Messages { get; init; } = Array.Empty<AgentMessage>();
+
+    /// <summary>投影后消息列表的总 Token 估算数。</summary>
+    public int TotalTokens { get; init; }
+
+    /// <summary>选中的 Material ID 集合（从 WorkingSet.Materials 取出正文的候选 ID）。</summary>
+    public HashSet<string> SelectedMaterialIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>截断诊断信息（如有截断则填充，null = 未截断）。</summary>
+    public string? TruncationDiagnostics { get; init; }
+}
 
 /// <summary>
 /// 模型调用传输抽象。替代直接调用 IContextDecisionRuntime，
@@ -853,13 +961,21 @@ public interface IAgentRunStore
     /// <param name="expectedCurrentState">期望的当前状态（CAS 前件）。</param>
     /// <param name="newState">目标状态。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="InvalidOperationException">当前状态与 expectedCurrentState 不匹配（逆退或已被其他实例推进）。</exception>
+    /// <param name="leaseToken">
+    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
+    /// UPDATE 的 WHERE 子句追加 lease_token + fencing_token 校验；lease 已被抢占时 0 行受影响，
+    /// 抛 <see cref="InvalidOperationException"/>（与 CAS 失败语义一致）。null = 不校验（外部取消/恢复 Worker 等无 lease 路径）。
+    /// </param>
+    /// <param name="fencingToken">P0-4：可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
+    /// <exception cref="InvalidOperationException">当前状态与 expectedCurrentState 不匹配（逆退或已被其他实例推进），或 lease 校验失败。</exception>
     ValueTask TransitionStateAsync(
         string workspaceId,
         string runId,
         AgentRunState expectedCurrentState,
         AgentRunState newState,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null);
 
     /// <summary>更新 Run 的可变字段（Turn / FinalAnswer / FailureReason 等）。</summary>
     ValueTask UpdateAsync(AgentRun run, CancellationToken cancellationToken = default);
@@ -948,8 +1064,18 @@ public interface IAgentRunEventStore
     /// </summary>
     /// <param name="event">事件（ContentHash 应已计算填入）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="InvalidOperationException">Sequence 不连续或 PrevChainHash 不匹配。</exception>
-    ValueTask AppendAsync(AgentRunEvent @event, CancellationToken cancellationToken = default);
+    /// <param name="leaseToken">
+    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
+    /// 追加事件前校验 lease 仍由当前实例持有；lease 已被抢占时抛 <see cref="InvalidOperationException"/>。
+    /// null = 不校验（无 lease 路径）。
+    /// </param>
+    /// <param name="fencingToken">P0-4：可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
+    /// <exception cref="InvalidOperationException">Sequence 不连续或 PrevChainHash 不匹配，或 lease 校验失败。</exception>
+    ValueTask AppendAsync(
+        AgentRunEvent @event,
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null);
 
     /// <summary>
     /// G4：批量追加事件 + 可选 Run 状态 CAS + 可选 Checkpoint 游标，单事务提交。
@@ -1010,6 +1136,8 @@ public interface IAgentRunEventStore
 /// <remarks>
 /// 将原本由 <see cref="IAgentRunStore.TransitionStateAsync"/> + <see cref="IAgentRunStore.UpdateAsync"/>
 /// 分两次网络往返完成的操作合并到事件批量提交的同一事务内，Postgres 实现走单事务。
+/// P0-4 修复双执行：新增 <see cref="LeaseToken"/> + <see cref="FencingToken"/> 可选字段，
+/// 提供时 AppendBatchAsync 在事件追加与状态 CAS 的 WHERE 子句中追加 lease 校验。
 /// </remarks>
 public sealed record AgentRunStateUpdate
 {
@@ -1030,6 +1158,16 @@ public sealed record AgentRunStateUpdate
     /// Postgres 实现将这些字段一并 UPDATE 到 agent_runs 行（与 state CAS 同事务）。
     /// </summary>
     public required AgentRun RunSnapshot { get; init; }
+
+    /// <summary>
+    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <see cref="FencingToken"/> 同时提供），
+    /// AppendBatchAsync 在事件追加与状态 CAS 的 WHERE 子句追加 lease 校验；lease 已被抢占时
+    /// 事务回滚并抛 <see cref="InvalidOperationException"/>。null = 不校验（无 lease 路径）。
+    /// </summary>
+    public string? LeaseToken { get; init; }
+
+    /// <summary>P0-4：可选 fencing token，与 <see cref="LeaseToken"/> 配合使用。</summary>
+    public long? FencingToken { get; init; }
 }
 
 /// <summary>
@@ -1195,6 +1333,12 @@ public interface IAgentRunLease
 /// <summary>
 /// 子问题 9：Agent Run 租约信息（TryAcquireAsync 返回值）。
 /// </summary>
+/// <remarks>
+/// P0-4 修复双执行：新增 <see cref="FencingToken"/>（单调递增），用于所有副作用操作
+/// （状态转换 / 事件追加 / Tool dispatch）的 lease 校验。每次租约被重新获取（新持有者或过期抢占）
+/// 时 fencing_token 递增；续约不递增。调用方在每次副作用 UPDATE 时带上 lease_token + fencing_token，
+/// lease 已被抢占时 UPDATE 影响 0 行，调用方检测并中止。
+/// </remarks>
 public sealed record LeasedAgentRun
 {
     /// <summary>Agent Run ID。</summary>
@@ -1208,6 +1352,14 @@ public sealed record LeasedAgentRun
 
     /// <summary>租约过期时间（UTC）。</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>
+    /// P0-4：Fencing token（单调递增，从 1 开始）。
+    /// 每次 TryAcquireAsync 成功获取（含抢占过期租约）时递增；RenewAsync 不递增。
+    /// 用于副作用操作的 lease 校验：UPDATE WHERE lease_token + fencing_token 匹配，
+    /// lease 被抢占时 0 行受影响，调用方检测并中止。
+    /// </summary>
+    public required long FencingToken { get; init; }
 }
 
 /// <summary>

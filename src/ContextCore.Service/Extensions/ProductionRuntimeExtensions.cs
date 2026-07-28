@@ -13,57 +13,35 @@ namespace ContextCore.Service.Extensions;
 // 生产 Composition Root — 统一所有生产服务的注册入口
 //
 // 目标：
-//   1. 提供 AddContextCoreProductionRuntime 扩展方法，作为生产服务的唯一显式入口。
-//   2. 根据 RuntimeProfile（Development / SingleNode / ProductionHA）一次性完成
-//      所有生产服务注册（Durable Transport hosted services、AgentKernel loop、
-//      Run Recovery worker、Canary Leader 模式切换等）。
-//   3. 启动时验证配置组合，不允许出现静默半配置状态（如 ProductionHA 未配置 postgres、
-//      Durable Transport 启用但 pump 未注册等）。
+//   1. 提供 AddContextCoreRuntime 扩展方法（P0-1 新入口），作为生产服务的唯一显式入口。
+//      该方法一次性决定 ModelMode / AgentModelMode / ToolMode / Store / Transport /
+//      Canary / HostedServices，避免 AddContextCore() 无参数重载强制 Deterministic
+//      导致的 Profile 与真实运行模式分裂。
+//   2. 提供 AddContextCoreProductionRuntime 扩展方法（[Obsolete] 向后兼容），
+//      委托到共享的 Profile 注册逻辑。旧调用方（测试）需先调用 AddContextCore()。
+//   3. 根据 RuntimeProfile（Development / SingleNode / ProductionHA）完成所有生产服务
+//      注册（Durable Transport hosted services、AgentKernel loop、Run Recovery worker、
+//      Canary Progression / Leader 模式切换等）。
+//   4. 启动时验证配置组合，不允许出现静默半配置状态。
 //
 // 调用顺序（Program.cs）：
-//   AddContextStorage → AddContextCore → AddContextModelGateway → AddEmbeddingProviders
-//   → AddContextCoreProductionRuntime（本方法在最后调用，覆盖 profile 专属注册）
+//   AddContextStorage → AddContextModelGateway → AddEmbeddingProviders
+//   → AddContextCoreRuntime（唯一入口，按 Profile + ModelMode 分发）
 //
-// 设计原则：
-//   1. 本方法不重复注册基础服务（Storage / Core 业务服务）；仅注册 profile 专属的
-//      托管服务与覆盖项。
-//   2. 配置验证在方法体顶部完成（fail-fast）：不合法的组合直接抛异常，阻止服务启动。
-//   3. Development profile 保持最小依赖（InMemory / FileSystem + InProcessTransport）；
-//      ProductionHA profile 启用 Durable Transport + HA 模式。
+// P0-2 修复：
+//   CanarySchedulerOptions / CanaryLeaderOptions 统一通过 IOptionsMonitor<T> 消费。
+//   ProductionHA 模式通过 PostConfigure 覆盖 Enabled 标志，而非 RemoveService + AddSingleton
+//   （后者不进入 Options Pipeline，IOptionsMonitor 读不到覆盖值）。
 // ===========================================================================
-
-/// <summary>
-/// 运行时配置文件（profile）。决定生产服务注册组合。
-/// </summary>
-public enum RuntimeProfile
-{
-    /// <summary>
-    /// 开发环境：InMemory/FileSystem 存储 + InProcessTransport + Deterministic 推理。
-    /// 不启用 Durable Transport hosted services；不启用 Run Recovery（InMemory store 无需恢复）。
-    /// Canary 走单节点 CanaryProgressionHostedService（CanarySchedulerOptions.Enabled 默认 true）。
-    /// </summary>
-    Development = 0,
-
-    /// <summary>
-    /// 单节点生产：Postgres 存储 + InProcessTransport（非 durable）。
-    /// 不启用 Durable Transport（单实例无需跨进程持久化指令）。
-    /// 启用 Run Recovery（Postgres 持久化 IAgentRunStore，崩溃后可恢复未完成 Run）。
-    /// Canary 走单节点 CanaryProgressionHostedService。
-    /// </summary>
-    SingleNode = 1,
-
-    /// <summary>
-    /// 生产 HA：Postgres 存储 + Durable Transport + HA Leader 模式。
-    /// 启用 Durable Transport hosted services（pump / replay / reaper / metrics）。
-    /// 启用 Run Recovery + Agent Run Lease（多实例竞争租约，单 leader 处理）。
-    /// Canary 走 CanaryLeaderHostedService（CanarySchedulerOptions.Enabled 强制 false）。
-    /// </summary>
-    ProductionHA = 2
-}
 
 /// <summary>
 /// 生产 Composition Root 配置选项，对应 appsettings.json 中的 <c>ProductionRuntime</c> 节。
 /// </summary>
+/// <remarks>
+/// P0-1：本类型保留用于向后兼容旧 <c>ProductionRuntime</c> 配置节及
+/// <see cref="ProductionRuntimeReadinessService"/> 注入。新配置应使用
+/// <see cref="ContextCoreRuntimeOptions"/> + <c>ContextCoreRuntime</c> 节。
+/// </remarks>
 public sealed class ProductionRuntimeOptions
 {
     /// <summary>
@@ -92,15 +70,12 @@ public sealed class ProductionRuntimeOptions
     /// <summary>
     /// Run 最大执行时长（超时后 RecoveryWorker 将其标记为 Failed）。
     /// 默认 1 小时；&lt;= TimeSpan.Zero 表示不启用超时检测。
-    /// 用于处理进程崩溃后 Run 卡在非终态的情况（CTS 随进程消失，Run 永远不会自动取消）。
     /// </summary>
     public TimeSpan RunExecutionTimeout { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
     /// 是否启用 Model Activation（权威模型推理激活）。
-    /// 默认 false。设为 true 时启动验证会检查 IModelArtifactRegistry 已注册
-    /// （需 Postgres provider 或显式注册），readiness 端点会报告激活状态。
-    /// 实际激活仍需调用方通过 AddContextCore(ModelExecutionMode.RealModel) 注册 ModelActivationManager。
+    /// 默认 false。设为 true 时等效于 ModelMode=RealModel。
     /// </summary>
     public bool EnableModelActivation { get; set; } = false;
 }
@@ -110,6 +85,61 @@ public sealed class ProductionRuntimeOptions
 /// </summary>
 internal static class ProductionRuntimeExtensions
 {
+    // ── P0-1：统一入口 ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// P0-1：统一注册 Core 服务 + 生产 Runtime 服务，作为生产 Composition Root 的唯一入口。
+    /// </summary>
+    /// <param name="services">DI 容器。</param>
+    /// <param name="configuration">应用配置（读取 <c>ContextCoreRuntime</c> 节）。</param>
+    /// <param name="sectionName">配置节名（默认 <c>ContextCoreRuntime</c>）。</param>
+    /// <returns>DI 容器（链式调用）。</returns>
+    /// <exception cref="InvalidOperationException">配置组合不合法时抛出（fail-fast）。</exception>
+    /// <remarks>
+    /// 此方法替代旧 <see cref="AddContextCoreProductionRuntime"/> + <c>AddContextCore()</c> 双步调用。
+    /// 它一次性完成：
+    /// <list type="bullet">
+    /// <item>绑定 <see cref="ContextCoreRuntimeOptions"/>（Profile / ModelMode / AgentModelMode / ToolMode）。</item>
+    /// <item>按 <see cref="ContextCoreRuntimeOptions.ModelMode"/> 选择 <see cref="ModelExecutionOptions"/>，
+    ///   调用 <c>AddContextCore(services, modelExecutionOptions)</c> 注册 Core 服务。</item>
+    /// <item>按 <see cref="RuntimeProfile"/> 注册 Profile 专属 HostedService / Transport / Canary 模式。</item>
+    /// <item>验证配置组合合法性（fail-fast）。</item>
+    /// </list>
+    /// 向后兼容：若配置中存在旧 <c>ProductionRuntime</c> 节但无 <c>ContextCoreRuntime</c> 节，
+    /// 自动从 <c>ProductionRuntime</c> 节读取。
+    /// </remarks>
+    public static IServiceCollection AddContextCoreRuntime(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string sectionName = "ContextCoreRuntime")
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // 绑定 ContextCoreRuntimeOptions（优先从 ContextCoreRuntime 节，回退到 ProductionRuntime 节）
+        var runtimeOptions = BindContextCoreRuntimeOptions(configuration, sectionName);
+
+        // 按ModelMode 选择 ModelExecutionOptions，调用 AddContextCore 注册 Core 服务。
+        // P0-1 核心修复：不再使用无参数 AddContextCore()（强制 Deterministic），
+        // 而是根据 ContextCoreRuntime:ModelMode 显式选择 RealModel / Deterministic。
+        var modelExecutionOptions = BuildModelExecutionOptions(runtimeOptions);
+        CoreExtensions.AddContextCore(services, modelExecutionOptions);
+
+        // 注册 ContextCoreRuntimeOptions 单例（供诊断端点 / HostedService 查询当前运行模式）
+        services.AddSingleton(runtimeOptions);
+
+        // 创建向后兼容的 ProductionRuntimeOptions（供 ProductionRuntimeReadinessService 注入）
+        var legacyOptions = ToProductionRuntimeOptions(runtimeOptions);
+        services.AddSingleton(legacyOptions);
+
+        // 执行共享的 Profile 注册逻辑
+        AddProductionRuntimeProfileServices(services, legacyOptions, configuration);
+
+        return services;
+    }
+
+    // ── P0-1：旧入口（[Obsolete]，委托到共享逻辑）──────────────────────
+
     /// <summary>
     /// 统一注册所有生产服务，按 <see cref="RuntimeProfile"/> 一次性完成。
     /// </summary>
@@ -117,6 +147,11 @@ internal static class ProductionRuntimeExtensions
     /// <param name="configuration">应用配置（读取 <c>ProductionRuntime</c> 节）。</param>
     /// <returns>DI 容器（链式调用）。</returns>
     /// <exception cref="InvalidOperationException">配置组合不合法时抛出（fail-fast）。</exception>
+    /// <remarks>
+    /// P0-1：[Obsolete] 此方法不调用 AddContextCore，需调用方先调用 <c>AddContextCore()</c>。
+    /// 新代码应使用 <see cref="AddContextCoreRuntime"/> 单一入口，它内部完成 AddContextCore + Profile 注册。
+    /// </remarks>
+    [Obsolete("P0-1: 此方法不调用 AddContextCore，需调用方先调用。新代码应使用 AddContextCoreRuntime(IConfiguration)。")]
     public static IServiceCollection AddContextCoreProductionRuntime(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -124,13 +159,28 @@ internal static class ProductionRuntimeExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // 绑定 ProductionRuntimeOptions
+        // 绑定 ProductionRuntimeOptions（旧配置节）
         var runtimeOptions = new ProductionRuntimeOptions();
         configuration.GetSection("ProductionRuntime").Bind(runtimeOptions);
-
-        // 注册 ProductionRuntimeOptions 单例（供 HostedService / 诊断端点查询当前 profile）
         services.AddSingleton(runtimeOptions);
 
+        // 执行共享的 Profile 注册逻辑
+        AddProductionRuntimeProfileServices(services, runtimeOptions, configuration);
+
+        return services;
+    }
+
+    // ── 共享 Profile 注册逻辑 ───────────────────────────────────────────
+
+    /// <summary>
+    /// 按 <see cref="RuntimeProfile"/> 注册 Profile 专属服务（HostedService / Transport / Canary）。
+    /// 由 <see cref="AddContextCoreRuntime"/> 和 <see cref="AddContextCoreProductionRuntime"/> 共享。
+    /// </summary>
+    private static void AddProductionRuntimeProfileServices(
+        IServiceCollection services,
+        ProductionRuntimeOptions runtimeOptions,
+        IConfiguration configuration)
+    {
         // 绑定 LearningMaterializationOptions（LearningMaterializationWorker 依赖）
         services.Configure<LearningMaterializationOptions>(configuration.GetSection("LearningMaterialization"));
 
@@ -140,7 +190,7 @@ internal static class ProductionRuntimeExtensions
             .Bind(configuration.GetSection("ProductionRuntime"))
             .ValidateOnStart();
 
-        // 读取 Storage provider 用于跨配置验证（Storage:Provider 必须与 profile 一致）
+        // 读取 Storage provider 用于跨配置验证
         var storageProvider = configuration["Storage:Provider"] ?? "filesystem";
         var storageIsPostgres = string.Equals(storageProvider, "postgres", StringComparison.OrdinalIgnoreCase)
             || string.Equals(storageProvider, "postgresql", StringComparison.OrdinalIgnoreCase);
@@ -148,7 +198,7 @@ internal static class ProductionRuntimeExtensions
         // ── 配置组合验证（fail-fast）─────────────────────────────────────
         ValidateConfigurationCombination(runtimeOptions, storageIsPostgres, configuration, services);
 
-        // 创建 Worker 注册表（在注册阶段捕获已注册的 Worker 类型名，供 readiness 端点查询）
+        // 创建 Worker 注册表
         var workerRegistry = new ProductionRuntimeWorkerRegistry();
 
         // ── Profile 专属注册 ──────────────────────────────────────────────
@@ -169,17 +219,14 @@ internal static class ProductionRuntimeExtensions
                     $"支持的值：Development, SingleNode, ProductionHA。");
         }
 
-        // CanaryProgressionHostedService 和 CanaryLeaderHostedService 由 AddContextCore 注册（所有 profile）
-        // 此处仅记录到 registry 供 readiness 端点查询（实际启用由 options 控制）。
+        // CanaryProgressionHostedService 和 CanaryLeaderHostedService 记录到 registry 供 readiness 端点查询。
+        // 实际 HostedService 注册按 Profile 互斥（避免单节点 + HA 双推进器）。
         workerRegistry.Add<CanaryProgressionHostedService>();
         workerRegistry.Add<CanaryLeaderHostedService>();
 
         // 注册 ProductionRuntimeWorkerRegistry 和 ProductionRuntimeReadinessService
-        // （供 /health/ready 和 /api/runtime/status 端点查询）
         services.AddSingleton(workerRegistry);
         services.TryAddSingleton<ProductionRuntimeReadinessService>();
-
-        return services;
     }
 
     // ── Development profile ─────────────────────────────────────────────
@@ -190,10 +237,8 @@ internal static class ProductionRuntimeExtensions
         ProductionRuntimeWorkerRegistry workerRegistry)
     {
         // Development：InMemory/FileSystem + InProcessTransport + Deterministic 推理。
-        // 不启用 Durable Transport hosted services（InProcessTransport 无需 pump/replay/reaper）。
-        // 不强制 Run Recovery（InMemory store 无持久化数据可恢复；FileSystem 也无 IAgentRunStore 持久化实现）。
         // Canary 走单节点 CanaryProgressionHostedService（CanarySchedulerOptions.Enabled 默认 true）。
-        // CanaryLeaderHostedService 已由 AddContextCore 注册（Enabled 默认 false，不启动）。
+        // CanaryLeaderHostedService 不注册（依赖 Postgres-only 的 ICanaryLeaderLease / ICanaryMetricsAggregator）。
 
         if (options.EnableAgentKernelLoop)
         {
@@ -203,13 +248,16 @@ internal static class ProductionRuntimeExtensions
 
         if (options.EnableRunRecovery)
         {
-            // Recovery worker 会自检 IAgentRunStore 是否持久化；非持久化时退出（no-op）。
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
+        // P0-2：单节点 Canary Progression HostedService 注册。
+        // CanaryProgressionHostedService 通过 IOptionsMonitor<CanarySchedulerOptions> 读取 Enabled 标志，
+        // ProductionHA 模式的 PostConfigure(Enabled=false) 能被正确感知。
+        services.AddHostedService<CanaryProgressionHostedService>();
+
         // LearningMaterializationWorker：profile-agnostic worker（非 Postgres 时自退出 no-op）。
-        // 统一在 ProductionRuntimeExtensions 注册，避免分散在 Program.cs。
         services.AddHostedService<LearningMaterializationWorker>();
         workerRegistry.Add<LearningMaterializationWorker>();
     }
@@ -222,8 +270,7 @@ internal static class ProductionRuntimeExtensions
         ProductionRuntimeWorkerRegistry workerRegistry)
     {
         // SingleNode：Postgres 存储 + InProcessTransport（非 durable）。
-        // 启用 Run Recovery（Postgres IAgentRunStore 持久化，崩溃后可恢复未完成 Run）。
-        // 不启用 Durable Transport hosted services（单实例无需跨进程持久化指令）。
+        // 启用 Run Recovery（Postgres IAgentRunStore 持久化）。
         // Canary 走单节点 CanaryProgressionHostedService。
         // AgentHostOptions.LeaseEnabled 保持默认 false（单实例无需租约竞争）。
 
@@ -238,6 +285,9 @@ internal static class ProductionRuntimeExtensions
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
+
+        // P0-2：单节点 Canary Progression HostedService 注册。
+        services.AddHostedService<CanaryProgressionHostedService>();
 
         // LearningMaterializationWorker：Postgres provider 时激活 durable outbox 物化。
         services.AddHostedService<LearningMaterializationWorker>();
@@ -256,19 +306,19 @@ internal static class ProductionRuntimeExtensions
         // 1. 启用 Durable Transport（替换 IAgentKernelTransport 绑定为 PostgresDurableTransport）。
         // 2. 注册 Durable Transport hosted services（pump / replay / reaper / metrics）。
         // 3. 启用 Run Recovery + Agent Run Lease（多实例竞争租约）。
-        // 4. Canary 切换到 HA 模式（CanaryLeaderHostedService Enabled=true，CanaryProgressionHostedService Enabled=false）。
+        // 4. Canary 切换到 HA 模式：
+        //    P0-2：通过 PostConfigure 覆盖 Enabled 标志（进入 Options Pipeline），
+        //    让 IOptionsMonitor<CanarySchedulerOptions> / IOptionsMonitor<CanaryLeaderOptions>
+        //    消费者能读到覆盖值。原 RemoveService + AddSingleton 不进入 Options Pipeline。
+        // 5. 注册 CanaryLeaderHostedService（HA 模式），不注册 CanaryProgressionHostedService。
 
         // 1. 启用 Durable Transport：替换 IAgentKernelTransport 绑定
-        // UsePostgresDurableTransport 会移除 InProcessTransport 默认绑定并替换为 PostgresDurableTransport。
-        // 前置条件：AddContextStorage(postgres) 已注册 PostgresDurableTransport 为 IDurableTransport。
         services.UsePostgresDurableTransport();
 
         // 2. 注册 Durable Transport hosted services
-        // DurableTransportHostingOptions 从 "DurableTransport" 配置节绑定（未配置时使用默认值）。
         services.AddDurableTransportHostedServices(opts =>
         {
             configuration.GetSection("DurableTransport").Bind(opts);
-            // ProductionHA 强制启用 hosted services
             opts.Enabled = true;
         });
         workerRegistry.Add<DurableTransportInstructionPumpService>();
@@ -277,8 +327,8 @@ internal static class ProductionRuntimeExtensions
         workerRegistry.Add<PendingCountMetricsService>();
 
         // 3. 覆盖 AgentHostOptions：启用 Run Lease
-        // AddContextCore 已通过 TryAddSingleton 注册 AgentHostOptions（从 "AgentHost" 配置节绑定）。
-        // 这里移除并重新注册，强制 LeaseEnabled=true（HA 多实例需要租约竞争）。
+        // AgentHostOptions 通过 TryAddSingleton 注册为 POCO（非 Options Pipeline），
+        // 故仍使用 RemoveService + AddSingleton 覆盖（仅 Canary options 改用 PostConfigure）。
         RemoveService(services, typeof(ContextCore.Abstractions.AgentHostOptions));
         services.AddSingleton(sp =>
         {
@@ -288,26 +338,12 @@ internal static class ProductionRuntimeExtensions
             return opts;
         });
 
-        // 4. Canary 模式切换：
-        // - CanarySchedulerOptions.Enabled = false（禁用单节点 CanaryProgressionHostedService）
-        // - CanaryLeaderOptions.Enabled = true（启用 HA CanaryLeaderHostedService）
-        RemoveService(services, typeof(CanarySchedulerOptions));
-        services.AddSingleton(sp =>
-        {
-            var opts = new CanarySchedulerOptions();
-            sp.GetService<IConfiguration>()?.GetSection("CanaryScheduler").Bind(opts);
-            opts.Enabled = false; // ProductionHA: 禁用单节点 progression
-            return opts;
-        });
-
-        RemoveService(services, typeof(IOptions<CanaryLeaderOptions>));
-        services.AddSingleton<IOptions<CanaryLeaderOptions>>(sp =>
-        {
-            var opts = new CanaryLeaderOptions();
-            sp.GetService<IConfiguration>()?.GetSection("CanaryLeader").Bind(opts);
-            opts.Enabled = true; // ProductionHA: 强制启用 HA leader
-            return Options.Create(opts);
-        });
+        // 4. P0-2：Canary 模式切换——通过 PostConfigure 覆盖 Enabled 标志。
+        // PostConfigure 在 Configure 之后执行，IOptionsMonitor<T>.CurrentValue 会反映覆盖值。
+        // CanarySchedulerOptions.Enabled = false（禁用单节点 CanaryProgressionHostedService）
+        services.PostConfigure<CanarySchedulerOptions>(o => o.Enabled = false);
+        // CanaryLeaderOptions.Enabled = true（启用 HA CanaryLeaderHostedService）
+        services.PostConfigure<CanaryLeaderOptions>(o => o.Enabled = true);
 
         if (options.EnableAgentKernelLoop)
         {
@@ -321,10 +357,83 @@ internal static class ProductionRuntimeExtensions
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
+        // 5. P0-2：HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
+        // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。
+        services.AddHostedService<CanaryLeaderHostedService>();
+
         // LearningMaterializationWorker：HA 模式下多实例竞争 durable outbox 物化。
         services.AddHostedService<LearningMaterializationWorker>();
         workerRegistry.Add<LearningMaterializationWorker>();
     }
+
+    // ── P0-1 辅助方法 ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// 绑定 <see cref="ContextCoreRuntimeOptions"/>，优先从 <paramref name="sectionName"/> 节读取，
+    /// 若该节不存在则回退到旧 <c>ProductionRuntime</c> 节（向后兼容）。
+    /// </summary>
+    private static ContextCoreRuntimeOptions BindContextCoreRuntimeOptions(
+        IConfiguration configuration,
+        string sectionName)
+    {
+        var section = configuration.GetSection(sectionName);
+        if (section.Exists())
+        {
+            var options = new ContextCoreRuntimeOptions();
+            section.Bind(options);
+            return options;
+        }
+
+        // 回退：从旧 ProductionRuntime 节读取并映射到 ContextCoreRuntimeOptions
+        var legacy = new ProductionRuntimeOptions();
+        configuration.GetSection("ProductionRuntime").Bind(legacy);
+        return ToContextCoreRuntimeOptions(legacy);
+    }
+
+    /// <summary>
+    /// 根据 <see cref="ContextCoreRuntimeOptions.ModelMode"/> 和 <see cref="ContextCoreRuntimeOptions.EnableModelActivation"/>
+    /// 构建 <see cref="ModelExecutionOptions"/>。
+    /// </summary>
+    private static ModelExecutionOptions BuildModelExecutionOptions(ContextCoreRuntimeOptions runtimeOptions)
+    {
+        // EnableModelActivation=true 等效于 ModelMode=RealModel（向后兼容旧 ProductionRuntime:EnableModelActivation）
+        var useRealModel = runtimeOptions.ModelMode == ModelExecutionMode.RealModel
+            || runtimeOptions.EnableModelActivation;
+        return new ModelExecutionOptions
+        {
+            Mode = useRealModel ? ModelExecutionMode.RealModel : ModelExecutionMode.Deterministic
+        };
+    }
+
+    /// <summary>
+    /// 将 <see cref="ContextCoreRuntimeOptions"/> 映射为向后兼容的 <see cref="ProductionRuntimeOptions"/>。
+    /// </summary>
+    private static ProductionRuntimeOptions ToProductionRuntimeOptions(ContextCoreRuntimeOptions runtime)
+        => new()
+        {
+            Profile = runtime.Profile,
+            EnableAgentKernelLoop = runtime.EnableAgentKernelLoop,
+            EnableRunRecovery = runtime.EnableAgentRunRecovery,
+            RunRecoveryInterval = runtime.RunRecoveryInterval,
+            RunExecutionTimeout = runtime.RunExecutionTimeout,
+            EnableModelActivation = runtime.EnableModelActivation
+                || runtime.ModelMode == ModelExecutionMode.RealModel
+        };
+
+    /// <summary>
+    /// 将旧 <see cref="ProductionRuntimeOptions"/> 映射为 <see cref="ContextCoreRuntimeOptions"/>。
+    /// </summary>
+    private static ContextCoreRuntimeOptions ToContextCoreRuntimeOptions(ProductionRuntimeOptions legacy)
+        => new()
+        {
+            Profile = legacy.Profile,
+            EnableAgentKernelLoop = legacy.EnableAgentKernelLoop,
+            EnableAgentRunRecovery = legacy.EnableRunRecovery,
+            RunRecoveryInterval = legacy.RunRecoveryInterval,
+            RunExecutionTimeout = legacy.RunExecutionTimeout,
+            EnableModelActivation = legacy.EnableModelActivation,
+            ModelMode = legacy.EnableModelActivation ? ModelExecutionMode.RealModel : ModelExecutionMode.Deterministic
+        };
 
     // ── 配置组合验证 ─────────────────────────────────────────────────────
 
@@ -332,10 +441,6 @@ internal static class ProductionRuntimeExtensions
     /// 验证 RuntimeProfile 与其他配置项的组合合法性。
     /// 不合法时抛 <see cref="InvalidOperationException"/>（fail-fast，阻止服务启动）。
     /// </summary>
-    /// <param name="options">已绑定的 ProductionRuntimeOptions（含 EnableAgentKernelLoop / EnableModelActivation 等）。</param>
-    /// <param name="storageIsPostgres">Storage:Provider 是否为 postgres。</param>
-    /// <param name="configuration">应用配置（读取连接字符串等）。</param>
-    /// <param name="services">DI 容器（检查服务是否已注册，如 IModelArtifactRegistry）。</param>
     private static void ValidateConfigurationCombination(
         ProductionRuntimeOptions options,
         bool storageIsPostgres,
@@ -369,7 +474,6 @@ internal static class ProductionRuntimeExtensions
                     "但当前为空。请配置连接字符串（支持 env:VAR_NAME 格式）。");
             }
 
-            // ProductionHA 要求 EnableAgentKernelLoop=true（HA 模式下 Kernel 循环是核心组件）
             if (!options.EnableAgentKernelLoop)
             {
                 throw new InvalidOperationException(
@@ -380,7 +484,6 @@ internal static class ProductionRuntimeExtensions
         }
 
         // EnableModelActivation=true 时要求 IModelArtifactRegistry 已注册
-        // （IModelArtifactRegistry 由 PostgresServiceCollectionExtensions 或调用方显式注册）
         if (options.EnableModelActivation)
         {
             var hasRegistry = services.Any(s => s.ServiceType == typeof(IModelArtifactRegistry));
@@ -410,11 +513,6 @@ internal static class ProductionRuntimeExtensions
 
 // ===========================================================================
 // ProductionRuntimeOptions 启动验证器（ValidateOnStart 二次防线）
-//
-// AddContextCoreProductionRuntime 中的 ValidateConfigurationCombination 已在注册阶段
-// 完成 fail-fast 验证（跨配置组合：Profile vs Storage vs IModelArtifactRegistry）。
-// 本验证器作为 ValidateOnStart 二次防线，验证 ProductionRuntimeOptions 自身的
-// 字段级约束（如未知 Profile 值），防止通过 options pattern 延迟绑定绕过注册阶段验证。
 // ===========================================================================
 
 /// <summary>
@@ -425,7 +523,6 @@ internal sealed class ProductionRuntimeOptionsValidator : IValidateOptions<Produ
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, ProductionRuntimeOptions options)
     {
-        // 验证 Profile 为已知枚举值
         if (!Enum.IsDefined(options.Profile))
         {
             return ValidateOptionsResult.Fail(
@@ -433,7 +530,6 @@ internal sealed class ProductionRuntimeOptionsValidator : IValidateOptions<Produ
                 "支持的值：Development (0), SingleNode (1), ProductionHA (2)。");
         }
 
-        // ProductionHA 要求 EnableAgentKernelLoop=true（与注册阶段验证一致）
         if (options.Profile == RuntimeProfile.ProductionHA && !options.EnableAgentKernelLoop)
         {
             return ValidateOptionsResult.Fail(

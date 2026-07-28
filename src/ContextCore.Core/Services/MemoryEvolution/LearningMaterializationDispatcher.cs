@@ -121,6 +121,37 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
         }
     }
 
+    /// <summary>
+    /// P0-9：入队一次 Decision 物化事件并<b>等待持久化完成</b>（Durable Outbox 路径下等待 PostgreSQL INSERT 完成）。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="EnqueueAsync"/> 的关键差异：
+    /// <list type="bullet">
+    /// <item>Durable Outbox 路径：等待 <c>learning_event_outbox</c> 表 INSERT 完成才返回，
+    /// 保证调用方返回前 Learning Event 已持久化到 PostgreSQL——进程退出/崩溃时不丢数据。
+    /// 仅等待入队持久化，不等待后续 Materialize（worker 异步消费）。</item>
+    /// <item>In-Memory Channel 路径：与 <see cref="EnqueueAsync"/> 行为一致——
+    /// 等待 Channel.Writer.WriteAsync 完成（非持久，进程崩溃会丢失；与原 Task.Run 行为一致）。</item>
+    /// </list>
+    /// 主决策路径必须使用此方法而非 fire-and-forget <c>_ = dispatcher.EnqueueAsync(...)</c>，
+    /// 否则进程可能在 EnqueueAsync 完成 PostgreSQL INSERT 前退出，导致 Learning Event 丢失。
+    /// </remarks>
+    /// <param name="decision">决策结果（含 SelectedEnvelopes + DroppedEnvelopes）。</param>
+    /// <param name="workspaceId">workspace 作用域。</param>
+    /// <param name="collectionId">collection 作用域。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async Task EnqueueDurablyAsync(
+        ContextDecisionResult decision,
+        string? workspaceId = null,
+        string? collectionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 与 EnqueueAsync 行为一致——EnqueueToOutboxAsync 内部已 await _outboxStore.EnqueueAsync
+        // （即等待 PostgreSQL durable append 完成），调用方仅需 await 本方法即可保证持久化。
+        // 此处显式分离方法名以表达语义，便于代码审查与防止后续误改为 fire-and-forget。
+        await EnqueueAsync(decision, workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Durable Outbox 路径：序列化 decision 并写入 outbox 表。</summary>
     private async Task EnqueueToOutboxAsync(
         ContextDecisionResult decision,

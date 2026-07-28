@@ -69,8 +69,29 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///     让进程崩溃恢复后可重新加载未决审批，外部审批系统通过 approval_id 提交决策。
     ///   - agent_run_leases：HA Run Owner Lease（PostgreSQL-backed CAS 租约），
     ///     确保同一时刻仅一个 Host 实例处理同一 Run，复用 canary_leader_leases 模式。
+    /// P0-8：v39 → v40，learning_event_outbox 追加 lease_token 列。AcquirePendingAsync 生成唯一 token
+    ///   并写入数据库；MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 lease_token CAS 校验
+    ///   仅持有者可 Ack/Nack/Renew——修复旧 Worker lease 过期被抢占后越权 Ack 新 Worker lease 的问题。
+    /// P0-4：v40 → v41，agent_run_leases 追加 fencing_token bigint 列（单调递增），用于 Agent Run
+    ///   副作用操作（状态转换 / 事件追加 / Tool dispatch）的 lease fencing 校验，修复 HA Lease 无法
+    ///   防止双执行的问题（旧 lease 被抢占后，过期持有者的 UPDATE 因 fencing_token 不匹配而影响 0 行）。
+    /// P3：v41 → v42，context_items 追加 search_vector tsvector 生成列 + GIN 索引，
+    ///   Lexical 检索由 (data->>'Content') ILIKE '%query%' 全表扫描改为
+    ///   websearch_to_tsquery + ts_rank_cd 走 GIN 索引。
+    /// P6：v41 → v42，context_items 追加 content_hash / content_token_cost 列，
+    ///   摄取阶段持久化 SHA-256 与精确 token cost，Provider 直接读取不再在线重复计算。
+    /// P10/P11/P12：v42 → v43，Canary 与性能真相三项修复：
+    ///   - P10：canary_metrics_samples 追加 v2_latency_sketch / legacy_latency_sketch bytea 列，
+    ///     各实例持久化 DDSketch 字节，Leader 聚合时 MergeFrom 合并后查询总体 P95，
+    ///     替代对单实例 P95 加权平均（加权平均会低估尾延迟）。
+    ///   - P11：canary_metrics_samples 追加 task_success_sum / task_success_count /
+    ///     tool_success_sum / tool_success_count 列，聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)，
+    ///     避免 10 样本实例与 10000 样本实例权重相同。
+    ///   - P12：canary_leader_leases 追加 fencing_token bigint 列（单调递增），
+    ///     每次 TryAcquireAsync 成功获取（含抢占过期）时递增；AdvanceEpochAsync 的 UPDATE
+    ///     校验 WHERE fencing_token <= @fencingToken，旧 Leader（fencing token 较小）推进失败。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v39";
+    public const string SchemaVersion = "cc-schema-v43";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -178,6 +199,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("context_items", "type"),
         ("context_items", "tags"),
         ("context_items", "updated"),
+        ("context_items", "search_vector"),
         ("memory_items", "layer"),
         ("memory_items", "tags"),
         ("memory_items", "importance"),
@@ -568,6 +590,22 @@ CREATE TABLE IF NOT EXISTS {contextItems} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "type")} ON {contextItems} (workspace_id, collection_id, type);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "tags")} ON {contextItems} USING gin (tags);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "updated")} ON {contextItems} (workspace_id, collection_id, updated_at DESC);
+
+-- P3：Lexical 检索 tsvector 生成列 + GIN 索引。
+-- Title 加权 A（高），Content 加权 B；simple 配置避免词典依赖，对中英文/代码/JSON 均可分词。
+-- STORED 生成列随 data jsonb 一起写入，无需触发器；GIN 索引让 websearch_to_tsquery 走索引而非全表扫描。
+ALTER TABLE {contextItems} ADD COLUMN IF NOT EXISTS search_vector tsvector
+    GENERATED ALWAYS AS (
+        setweight(to_tsvector('simple', coalesce(data->>'Title', '')), 'A') ||
+        setweight(to_tsvector('simple', coalesce(data->>'Content', '')), 'B')
+    ) STORED;
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "search_vector")} ON {contextItems} USING gin (search_vector);
+
+-- P6：摄取阶段持久化 content_hash / content_token_cost，Provider 直接读取不再在线重复计算。
+-- content_hash 为 SHA-256 小写 hex（与 ContextItem.Checksum 一致），content_token_cost 为精确 token 数。
+-- 两列均可 NULL（兼容历史数据与无 tokenizer 的部署），Provider 读取时 NULL 表示未持久化、回退到在线计算。
+ALTER TABLE {contextItems} ADD COLUMN IF NOT EXISTS content_hash text NULL;
+ALTER TABLE {contextItems} ADD COLUMN IF NOT EXISTS content_token_cost integer NULL;
 
 CREATE TABLE IF NOT EXISTS {memoryItems} (
     workspace_id text NOT NULL,
@@ -2026,8 +2064,24 @@ CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
     external_sample_count integer NOT NULL DEFAULT 0,
     external_window_start timestamptz,
     external_window_end timestamptz,
+    -- P10：DDSketch 二进制字节（各实例持久化，Leader 聚合时 MergeFrom 合并查询总体 P95）
+    v2_latency_sketch bytea,
+    legacy_latency_sketch bytea,
+    -- P11：成功率分子/分母（聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)）
+    task_success_sum double precision,
+    task_success_count bigint,
+    tool_success_sum double precision,
+    tool_success_count bigint,
     PRIMARY KEY (run_id, stage_epoch, instance_id)
 );
+
+-- P10/P11 迁移：为已有数据库（v32-v42 创建的旧表）补加 sketch 与 success sum/count 列（幂等）。
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS v2_latency_sketch bytea;
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS legacy_latency_sketch bytea;
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS task_success_sum double precision;
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS task_success_count bigint;
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS tool_success_sum double precision;
+ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS tool_success_count bigint;
 
 -- v36 迁移：为已有数据库（v32-v35 创建的旧表）补加 stage_epoch 列并迁移 PK。
 -- 新数据库由上方 CREATE TABLE 直接创建新结构；ALTER 仅对已存在的旧表生效（幂等）。
@@ -2074,14 +2128,20 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_
 --   原子获取租约：无现有行 → INSERT 成功；现有行过期 → ON CONFLICT 更新；现有行未过期 → 0 行返回 null。
 -- RenewAsync / ReleaseAsync 通过 lease_token CAS 保证只有持有者能操作。
 -- ReapExpiredAsync 删除 lease_expires_at < now 的行（崩溃 leader 持有的过期租约最终释放）。
+-- P12 修复：新增 fencing_token bigint 列（单调递增），用于 AdvanceEpochAsync 等 Progression
+--   更新的 lease 校验。每次 TryAcquireAsync 成功获取（含抢占过期）时递增；RenewAsync 不递增。
 CREATE TABLE IF NOT EXISTS {canaryLeaderLeases} (
     run_id text NOT NULL,
     owner text NOT NULL,
     lease_token text NOT NULL,
+    fencing_token bigint NOT NULL DEFAULT 1,
     acquired_at timestamptz NOT NULL,
     lease_expires_at timestamptz NOT NULL,
     PRIMARY KEY (run_id)
 );
+
+-- P12：为已有 canary_leader_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
+ALTER TABLE {canaryLeaderLeases} ADD COLUMN IF NOT EXISTS fencing_token bigint NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_leader_leases", "expires")} ON {canaryLeaderLeases} (lease_expires_at ASC);
 
@@ -2118,6 +2178,11 @@ CREATE TABLE IF NOT EXISTS {learningEventOutbox} (
     dead_letter_reason text NULL,
     PRIMARY KEY (event_id)
 );
+
+-- P0-8：租约 token 列追加（幂等）— AcquirePendingAsync 生成唯一 token 写入 lease_token，
+-- MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 WHERE lease_token = @token CAS 校验
+-- 仅持有者可 Ack/Nack/Renew。与 kernel_result_outbox / kernel_transport_* 对齐。
+ALTER TABLE {learningEventOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "state")} ON {learningEventOutbox} (state, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "lease")} ON {learningEventOutbox} (state, lease_expires_at);
@@ -2177,14 +2242,20 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_r
 -- 复用 canary_leader_leases 模式：每个 run_id 至多一条行，
 -- TryAcquireAsync 使用 INSERT ... ON CONFLICT DO UPDATE WHERE lease_expires_at < now（CAS 抢占过期租约）。
 -- RenewAsync / ReleaseAsync / ReapExpiredAsync 基于 lease_token 匹配。
+-- P0-4 修复双执行：新增 fencing_token bigint 列（单调递增），用于副作用 UPDATE 的 lease 校验。
+-- 每次 TryAcquireAsync 成功获取（含抢占过期）时 fencing_token = 旧值 + 1；RenewAsync 不递增。
 CREATE TABLE IF NOT EXISTS {agentRunLeases} (
     run_id text NOT NULL,
     owner text NOT NULL,
     lease_token text NOT NULL,
+    fencing_token bigint NOT NULL DEFAULT 1,
     acquired_at timestamptz NOT NULL,
     lease_expires_at timestamptz NOT NULL,
     PRIMARY KEY (run_id)
 );
+
+-- P0-4：为已有 agent_run_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
+ALTER TABLE {agentRunLeases} ADD COLUMN IF NOT EXISTS fencing_token bigint NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_leases", "expires")} ON {agentRunLeases} (lease_expires_at);
 """;

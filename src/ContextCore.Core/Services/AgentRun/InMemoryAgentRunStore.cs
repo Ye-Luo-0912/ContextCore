@@ -56,10 +56,17 @@ public sealed class InMemoryAgentRunStore : IAgentRunStore
         string runId,
         AgentRunState expectedCurrentState,
         AgentRunState newState,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        // P0-4：InMemory 实现不维护 lease 注册表（dev/test 场景下 lease 与 store 通常不共享实例），
+        // 故 leaseToken/fencingToken 参数仅用于接口对齐，实际校验由 Postgres 实现完成。
+        // 若需在测试中验证 fencing 行为，应直接使用 PostgresAgentRunStore + PostgresAgentRunLease。
+        _ = leaseToken;
+        _ = fencingToken;
 
         var key = Key(workspaceId, runId);
         // 循环 CAS：匹配 expectedCurrentState 时替换为 newState

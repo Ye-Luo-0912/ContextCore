@@ -52,9 +52,17 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
     }
 
     /// <inheritdoc />
-    public ValueTask AppendAsync(AgentRunEvent @event, CancellationToken cancellationToken = default)
+    public ValueTask AppendAsync(
+        AgentRunEvent @event,
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null)
     {
         ArgumentNullException.ThrowIfNull(@event);
+        // P0-4：InMemory 实现不维护 lease 注册表，leaseToken/fencingToken 仅用于接口对齐；
+        // 实际 fencing 校验由 Postgres 实现完成。
+        _ = leaseToken;
+        _ = fencingToken;
 
         var key = Key(@event.WorkspaceId, @event.RunId);
         var gate = _locks.GetOrAdd(key, _ => new object());
@@ -166,6 +174,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
 
         // 5. 委托 Run 状态 CAS + 字段更新到 IAgentRunStore（若注入）
         //    注意：InMemory 路径下事件追加与状态更新非原子（无共享事务）；仅供开发/测试。
+        //    P0-4：透传 leaseToken/fencingToken（InMemory store 接受但不强制校验）。
         if (runStateUpdate is not null && _runStore is not null)
         {
             await _runStore.TransitionStateAsync(
@@ -173,7 +182,9 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
                 runStateUpdate.RunId,
                 runStateUpdate.ExpectedCurrentState,
                 runStateUpdate.NewState,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                runStateUpdate.LeaseToken,
+                runStateUpdate.FencingToken).ConfigureAwait(false);
 
             await _runStore.UpdateAsync(runStateUpdate.RunSnapshot, cancellationToken).ConfigureAwait(false);
         }

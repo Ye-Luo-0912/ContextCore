@@ -92,12 +92,17 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
             await TryPersistApprovalAsync(runId, toolCall, toolCallId, AgentApprovalStatus.Pending,
                 approverId: null, rejectionReason: null, createdAt: now, cancellationToken).ConfigureAwait(false);
 
-            // 默认审批门不接入人工流程 → 返回拒绝（生产环境应替换为真实人工审批实现）
+            // P0-6：返回 PendingApproval=true + ApprovalId，让 Actor 进入 AwaitingApproval 状态并退出执行槽。
+            // 旧路径返回 Approved=false（等价于默认拒绝），导致 Actor 跳过 Tool 继续执行——这不是真正的 Human-in-the-loop。
+            // 外部通过 POST /approvals/{approvalId} 端点提交决策（approve/reject），
+            // 决策后 Run 状态推进到 ToolDispatching（批准）或 Failed（拒绝），由 RecoveryWorker 重新入队。
             return new AgentApprovalResult
             {
                 Approved = false,
-                RejectionReason = $"Tool '{toolCall.ToolName}' 需要人工审批（approval_id={toolCallId}），等待外部裁决。",
-                ApproverId = "auto-rule-pending",
+                PendingApproval = true,
+                ApprovalId = toolCallId,
+                RejectionReason = null,
+                ApproverId = null,
                 DecidedAt = now
             };
         }

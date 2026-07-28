@@ -378,11 +378,15 @@ WHERE NOT EXISTS (
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-1：Leased → Pending（立即回滚）。清除 lease_owner / lease_expires_at / lease_token，
+    /// P0-1：Leased → Pending（立即回滚）或 DeadLettered（超过 max_attempts）。清除 lease_owner / lease_expires_at / lease_token，
     /// 让该行可被其他 worker 重新 <see cref="LeaseAsync"/>。0 行受影响时抛 <see cref="InvalidOperationException"/>。
     /// P0-6-7：失败重试与死信。Nack 时 attempt_count + 1；若新 attempt_count &gt; max_attempts，将行
     /// 移入 <c>kernel_transport_dead_letter</c> 表 + DELETE 原行；否则 UPDATE state='Pending' +
     /// next_attempt_at = now + 指数退避，让 <see cref="LeaseAsync"/> 在退避时间后才重新租约。
+    /// P0-7：单事务原子状态转换。整个流程（attempt+1、lease 清理、state 决策、退避设置、DLQ INSERT、原表 DELETE）
+    /// 包裹在显式事务中；CTE 单条 SQL 完成 UPDATE + DLQ INSERT，随后在同一事务中 DELETE 原表 DeadLettered 行。
+    /// 消除原多步非事务实现的崩溃窗口：避免在 lease 字段清空后崩溃留下 state=Leased, lease_token=null, lease_expires_at=null
+    /// 的孤儿行（该行无法被 Ack/Nack/Reaper 回收）。单条与批量语义完全一致。
     /// </remarks>
     public async ValueTask NackAsync(string instructionId, string leaseToken, CancellationToken cancellationToken = default)
     {
@@ -391,119 +395,109 @@ WHERE NOT EXISTS (
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-
-        // P0-6-7：先 UPDATE 提升 attempt_count + 计算是否进入 DLQ。RETURNING 旧 attempt_count/max_attempts/data
-        // 用于决策：若新 attempt_count > max_attempts → 移入 DLQ；否则退避回滚为 Pending。
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
-        command.CommandText = $"""
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // P0-7：CTE 同时完成 attempt+1、lease 清理、state 决策（DeadLettered/Pending）、退避设置，以及 DLQ INSERT。
+            // 随后 DeadLettered 路径在同一事务中 DELETE 原表行。整个过程原子完成。
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
+            command.CommandText = $"""
 WITH bumped AS (
     UPDATE {Table("kernel_transport_inbox")}
     SET attempt_count = attempt_count + 1,
         last_error = @last_error,
         lease_owner = NULL,
         lease_expires_at = NULL,
-        lease_token = NULL
+        lease_token = NULL,
+        state = CASE WHEN attempt_count + 1 > max_attempts THEN 'DeadLettered' ELSE 'Pending' END,
+        next_attempt_at = CASE WHEN attempt_count + 1 > max_attempts THEN NULL
+                               ELSE now() + (interval '1 second' * least(power(2, attempt_count), 300)) END
     WHERE instruction_id = @instruction_id
       AND lease_token = @token
       AND state = 'Leased'
-    RETURNING instruction_id, attempt_count, max_attempts, data, created_at
+    RETURNING instruction_id, attempt_count, last_error, data, state
+),
+dlq_insert AS (
+    INSERT INTO {Table("kernel_transport_dead_letter")} (
+        dead_letter_id, source, original_id, attempt_count, last_error, dead_letter_reason, original_data, created_at)
+    SELECT
+        @dead_letter_id, 'inbox', bumped.instruction_id, bumped.attempt_count,
+        bumped.last_error, 'exceeded max_attempts', bumped.data, now()
+    FROM bumped
+    WHERE bumped.state = 'DeadLettered'
+    ON CONFLICT DO NOTHING
 )
-SELECT instruction_id, attempt_count, max_attempts, data, created_at FROM bumped;
+SELECT instruction_id, state FROM bumped;
 """;
-        command.Parameters.AddWithValue("instruction_id", instructionId);
-        command.Parameters.AddWithValue("token", leaseToken);
-        command.Parameters.AddWithValue("last_error", (object?)null ?? DBNull.Value);
+            command.Parameters.AddWithValue("instruction_id", instructionId);
+            command.Parameters.AddWithValue("token", leaseToken);
+            command.Parameters.AddWithValue("last_error", (object?)null ?? DBNull.Value);
+            command.Parameters.AddWithValue("dead_letter_id", Guid.NewGuid().ToString("N"));
 
-        string? rowData = null;
-        int newAttempt = 0;
-        int maxAttempts = DefaultMaxAttempts;
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
-        {
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            string? newState = null;
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
             {
-                throw new InvalidOperationException(
-                    $"Nack 失败：instruction_id={instructionId} 的租约不匹配、已过期回滚或已确认。");
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException(
+                        $"Nack 失败：instruction_id={instructionId} 的租约不匹配、已过期回滚或已确认。");
+                }
+                newState = reader.GetString(1);
             }
-            instructionId = reader.GetString(0);
-            newAttempt = reader.GetInt32(1);
-            maxAttempts = reader.GetInt32(2);
-            rowData = reader.GetString(3);
-        }
 
-        // P0-6-7：超过 max_attempts → 移入 DLQ + DELETE 原行
-        if (newAttempt > maxAttempts)
-        {
-            await MoveToDeadLetterAsync(connection, "inbox", instructionId, newAttempt, "exceeded max_attempts",
-                rowData, cancellationToken).ConfigureAwait(false);
-            await DeleteInboxRowAsync(connection, instructionId, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            // 退避回滚为 Pending；next_attempt_at = now + 指数退避
-            var backoff = ComputeBackoff(newAttempt, DefaultRetryBaseDelay, DefaultRetryMaxDelay);
-            var nextAttemptAt = DateTimeOffset.UtcNow.Add(backoff);
-            await using var updateCmd = connection.CreateCommand();
-            updateCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-            updateCmd.CommandText = $"""
-UPDATE {Table("kernel_transport_inbox")}
-SET state = 'Pending', next_attempt_at = @next_attempt_at
-WHERE instruction_id = @instruction_id;
+            // P0-7：DeadLettered 路径需在同一事务中 DELETE 原表行（PG CTE 同 snapshot 看不到 UPDATE 后状态，
+            // 因此 DELETE 不能与 UPDATE 同 CTE；放事务内独立命令即可原子完成）。
+            if (newState == "DeadLettered")
+            {
+                await using var deleteCmd = connection.CreateCommand();
+                deleteCmd.Transaction = transaction;
+                deleteCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                deleteCmd.CommandText = $"""
+DELETE FROM {Table("kernel_transport_inbox")}
+WHERE instruction_id = @instruction_id AND state = 'DeadLettered';
 """;
-            updateCmd.Parameters.AddWithValue("instruction_id", instructionId);
-            updateCmd.Parameters.AddWithValue("next_attempt_at", nextAttemptAt);
-            await updateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                deleteCmd.Parameters.AddWithValue("instruction_id", instructionId);
+                await deleteCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            // Pending 路径无需额外操作；UPDATE 已设置 state='Pending' + next_attempt_at
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            // P2：本地 counter 维护（Leased → Pending 才 +1；DeadLettered → 已 DELETE，不 +1）
+            if (newState == "Pending")
+            {
+                Interlocked.Increment(ref _pendingInstructionCountApprox);
+            }
         }
-        // P2：本地 counter 维护（Leased → Pending；Pending 行 +1）
-        Interlocked.Increment(ref _pendingInstructionCountApprox);
+        catch
+        {
+            await SafeRollbackAsync(transaction, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
-    /// <summary>P0-6-7：将一行写入 kernel_transport_dead_letter 表。</summary>
-    private async Task MoveToDeadLetterAsync(
-        NpgsqlConnection connection,
-        string source,
-        string originalId,
-        int attemptCount,
-        string deadLetterReason,
-        string originalDataJson,
-        CancellationToken cancellationToken)
+    /// <summary>P0-7：安全回滚事务（吞掉回滚异常，保留原始异常）。</summary>
+    private static async Task SafeRollbackAsync(NpgsqlTransaction transaction, CancellationToken cancellationToken)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
-        cmd.CommandText = $"""
-INSERT INTO {Table("kernel_transport_dead_letter")} (
-    dead_letter_id, source, original_id, attempt_count, last_error, dead_letter_reason, original_data, created_at)
-VALUES (
-    @dead_letter_id, @source, @original_id, @attempt_count, @last_error, @dead_letter_reason, @original_data, @created_at);
-""";
-        cmd.Parameters.AddWithValue("dead_letter_id", Guid.NewGuid().ToString("N"));
-        cmd.Parameters.AddWithValue("source", source);
-        cmd.Parameters.AddWithValue("original_id", originalId);
-        cmd.Parameters.AddWithValue("attempt_count", attemptCount);
-        cmd.Parameters.AddWithValue("last_error", (object?)null ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("dead_letter_reason", deadLetterReason);
-        // originalDataJson 来自 data 列（jsonb 读为 string），用 NpgsqlDbType.Jsonb 写回
-        cmd.Parameters.Add(new Npgsql.NpgsqlParameter("original_data", NpgsqlTypes.NpgsqlDbType.Jsonb) { Value = originalDataJson });
-        cmd.Parameters.AddWithValue("created_at", DateTimeOffset.UtcNow);
-        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>P0-6-7：DELETE inbox 行（用于将行移入 DLQ 后清理原表）。</summary>
-    private async Task DeleteInboxRowAsync(NpgsqlConnection connection, string instructionId, CancellationToken cancellationToken)
-    {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
-        cmd.CommandText = $"""DELETE FROM {Table("kernel_transport_inbox")} WHERE instruction_id = @instruction_id;""";
-        cmd.Parameters.AddWithValue("instruction_id", instructionId);
-        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 回滚失败时静默：原始异常更重要
+        }
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// P2：批量单事务 UPDATE（Leased → Pending）—— 使用 <c>unnest</c> 展开输入数组，单条 SQL 完成
-    /// 批量回滚并通过 CTE <c>RETURNING</c> + <c>NOT EXISTS</c> 计算未匹配的 instruction_id。
-    /// 相比循环逐条 UPDATE，减少 N 次网络往返为 1 次，且单条 SQL 天然原子（单事务）。
-    /// 部分成功不抛异常；调用方根据返回的失败列表决定后续处理。
+    /// P0-7：批量 Nack 与单条 <see cref="NackAsync"/> 语义完全一致——使用 <c>unnest</c> 展开输入数组，
+    /// 单条 CTE SQL 完成批量 UPDATE（attempt+1、lease 清理、state 决策、退避设置）+ DLQ INSERT；
+    /// 随后在同一显式事务中 DELETE 原表所有 DeadLettered 行。整个过程原子完成，部分成功不抛异常。
+    /// 修复原 NackBatchAsync 完全绕过 attempt_count/backoff/DLQ 的语义不一致问题。
+    /// 调用方根据返回的失败列表决定后续处理。
     /// </remarks>
     public async ValueTask<IReadOnlyList<string>> NackBatchAsync(IReadOnlyList<(string InstructionId, string LeaseToken)> nacks, CancellationToken cancellationToken = default)
     {
@@ -535,57 +529,106 @@ VALUES (
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
-
-        var ids = new string[valid.Count];
-        var tokens = new string[valid.Count];
-        for (var i = 0; i < valid.Count; i++)
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            ids[i] = valid[i].Id;
-            tokens[i] = valid[i].Token;
-        }
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
 
-        // CTE：input_rows 展开输入数组；updated 执行批量 UPDATE 并 RETURNING 已更新行；
-        // 最终 SELECT 返回未出现在 updated 中的输入 id（即 token 不匹配 / 状态非 Leased / 行不存在）。
-        command.CommandText = $"""
+            var ids = new string[valid.Count];
+            var tokens = new string[valid.Count];
+            var dlqIds = new string[valid.Count];
+            for (var i = 0; i < valid.Count; i++)
+            {
+                ids[i] = valid[i].Id;
+                tokens[i] = valid[i].Token;
+                // P0-7：每个潜在 DLQ 行预分配 dead_letter_id，避免依赖 PG 13+ 的 gen_random_uuid()
+                dlqIds[i] = Guid.NewGuid().ToString("N");
+            }
+
+            // CTE：input_rows 展开输入数组（含每行对应的 dlq_id）；bumped 执行批量 UPDATE 并 RETURNING 已更新行；
+            // dlq_insert 将 DeadLettered 行写入 DLQ 表；最终 SELECT 返回未出现在 bumped 中的输入 id
+            // （即 token 不匹配 / 状态非 Leased / 行不存在）。PG CTE 同 snapshot 看不到 UPDATE 后状态，
+            // 故 DeadLettered 行的 DELETE 不能与 UPDATE 同 CTE；放事务内独立命令即可原子完成。
+            command.CommandText = $"""
 WITH input_rows AS (
-    SELECT id, token FROM unnest(@ids::text[], @tokens::text[]) AS v(id, token)
+    SELECT id, token, dlq_id FROM unnest(@ids::text[], @tokens::text[], @dlq_ids::text[]) AS v(id, token, dlq_id)
 ),
-updated AS (
+bumped AS (
     UPDATE {Table("kernel_transport_inbox")} AS q
-    SET state = 'Pending',
+    SET attempt_count = attempt_count + 1,
+        last_error = NULL,
         lease_owner = NULL,
         lease_expires_at = NULL,
-        lease_token = NULL
+        lease_token = NULL,
+        state = CASE WHEN attempt_count + 1 > max_attempts THEN 'DeadLettered' ELSE 'Pending' END,
+        next_attempt_at = CASE WHEN attempt_count + 1 > max_attempts THEN NULL
+                               ELSE now() + (interval '1 second' * least(power(2, attempt_count), 300)) END
     FROM input_rows
     WHERE q.instruction_id = input_rows.id
       AND q.lease_token = input_rows.token
       AND q.state = 'Leased'
-    RETURNING q.instruction_id
+    RETURNING q.instruction_id, q.attempt_count, q.data, q.state
+),
+dlq_insert AS (
+    INSERT INTO {Table("kernel_transport_dead_letter")} (
+        dead_letter_id, source, original_id, attempt_count, last_error, dead_letter_reason, original_data, created_at)
+    SELECT
+        input_rows.dlq_id, 'inbox', bumped.instruction_id, bumped.attempt_count,
+        NULL, 'exceeded max_attempts', bumped.data, now()
+    FROM bumped
+    JOIN input_rows ON input_rows.id = bumped.instruction_id
+    WHERE bumped.state = 'DeadLettered'
+    ON CONFLICT DO NOTHING
 )
 SELECT i.id FROM input_rows i
 WHERE NOT EXISTS (
-    SELECT 1 FROM updated u WHERE u.instruction_id = i.id
+    SELECT 1 FROM bumped b WHERE b.instruction_id = i.id
 );
 """;
-        AddTextArray(command, "ids", ids);
-        AddTextArray(command, "tokens", tokens);
+            AddTextArray(command, "ids", ids);
+            AddTextArray(command, "tokens", tokens);
+            AddTextArray(command, "dlq_ids", dlqIds);
 
-        var sqlFailedCount = 0;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            failed.Add(reader.GetString(0));
-            sqlFailedCount++;
+            var sqlFailedCount = 0;
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    failed.Add(reader.GetString(0));
+                    sqlFailedCount++;
+                }
+            }
+
+            // P0-7：在同一事务中 DELETE 所有 DeadLettered 行（仅匹配本批次的 ids，避免误删其他批次）。
+            await using var deleteCmd = connection.CreateCommand();
+            deleteCmd.Transaction = transaction;
+            deleteCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+            deleteCmd.CommandText = $"""
+DELETE FROM {Table("kernel_transport_inbox")}
+WHERE state = 'DeadLettered'
+  AND instruction_id = ANY(@ids);
+""";
+            AddTextArray(deleteCmd, "ids", ids);
+            var deadLetteredCount = await deleteCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            // P2：本地 counter 维护——成功数 = 有效输入数 - SQL 失败数；其中 Pending 路径 +1，DeadLettered 路径不 +1（已 DELETE）
+            var successCount = valid.Count - sqlFailedCount;
+            var pendingCount = successCount - deadLetteredCount;
+            if (pendingCount > 0)
+            {
+                Interlocked.Add(ref _pendingInstructionCountApprox, pendingCount);
+            }
+            return failed;
         }
-        // 成功回滚数 = 有效输入数 - SQL 失败数；本地 counter 维护（Leased → Pending；Pending 行 +nackedCount）
-        var nackedCount = valid.Count - sqlFailedCount;
-        if (nackedCount > 0)
+        catch
         {
-            Interlocked.Add(ref _pendingInstructionCountApprox, nackedCount);
+            await SafeRollbackAsync(transaction, cancellationToken).ConfigureAwait(false);
+            throw;
         }
-        return failed;
     }
 
     /// <inheritdoc />
@@ -1004,6 +1047,8 @@ WHERE NOT EXISTS (
     /// 若新 attempt_count &gt; max_attempts，将行移入 <c>kernel_transport_dead_letter</c> 表 + DELETE 原行；
     /// 否则 UPDATE state='Pending' + next_attempt_at = now + 指数退避，让 <see cref="LeaseResultAsync"/>
     /// 在退避时间后才重新租约。
+    /// P0-7：单事务原子状态转换（与 <see cref="NackAsync"/> 对称）。CTE 单条 SQL 完成 UPDATE + DLQ INSERT，
+    /// 随后 DeadLettered 路径在同一事务中 DELETE 原表行；消除原多步非事务实现的崩溃窗口。
     /// </remarks>
     public async ValueTask NackResultAsync(string resultId, string leaseToken, CancellationToken cancellationToken = default)
     {
@@ -1012,89 +1057,93 @@ WHERE NOT EXISTS (
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-
-        // P0-6-7：先 UPDATE 提升 attempt_count + 计算是否进入 DLQ。RETURNING 旧 attempt_count/max_attempts/data
-        // 用于决策：若新 attempt_count > max_attempts → 移入 DLQ；否则退避回滚为 Pending。
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
-        command.CommandText = $"""
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // P0-7：与 NackAsync 对称——CTE 完成 UPDATE + DLQ INSERT，随后在同一事务中 DELETE 原表 DeadLettered 行。
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
+            command.CommandText = $"""
 WITH bumped AS (
     UPDATE {Table("kernel_transport_outbox")}
     SET attempt_count = attempt_count + 1,
         last_error = @last_error,
         lease_owner = NULL,
         lease_expires_at = NULL,
-        lease_token = NULL
+        lease_token = NULL,
+        state = CASE WHEN attempt_count + 1 > max_attempts THEN 'DeadLettered' ELSE 'Pending' END,
+        next_attempt_at = CASE WHEN attempt_count + 1 > max_attempts THEN NULL
+                               ELSE now() + (interval '1 second' * least(power(2, attempt_count), 300)) END
     WHERE result_id = @result_id
       AND lease_token = @token
       AND state = 'Leased'
-    RETURNING result_id, attempt_count, max_attempts, data, created_at
+    RETURNING result_id, attempt_count, last_error, data, state
+),
+dlq_insert AS (
+    INSERT INTO {Table("kernel_transport_dead_letter")} (
+        dead_letter_id, source, original_id, attempt_count, last_error, dead_letter_reason, original_data, created_at)
+    SELECT
+        @dead_letter_id, 'outbox', bumped.result_id, bumped.attempt_count,
+        bumped.last_error, 'exceeded max_attempts', bumped.data, now()
+    FROM bumped
+    WHERE bumped.state = 'DeadLettered'
+    ON CONFLICT DO NOTHING
 )
-SELECT result_id, attempt_count, max_attempts, data, created_at FROM bumped;
+SELECT result_id, state FROM bumped;
 """;
-        command.Parameters.AddWithValue("result_id", resultId);
-        command.Parameters.AddWithValue("token", leaseToken);
-        command.Parameters.AddWithValue("last_error", (object?)null ?? DBNull.Value);
+            command.Parameters.AddWithValue("result_id", resultId);
+            command.Parameters.AddWithValue("token", leaseToken);
+            command.Parameters.AddWithValue("last_error", (object?)null ?? DBNull.Value);
+            command.Parameters.AddWithValue("dead_letter_id", Guid.NewGuid().ToString("N"));
 
-        string? rowData = null;
-        int newAttempt = 0;
-        int maxAttempts = DefaultMaxAttempts;
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
-        {
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            string? newState = null;
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
             {
-                throw new InvalidOperationException(
-                    $"NackResult 失败：result_id={resultId} 的租约不匹配、已过期回滚或已确认。");
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException(
+                        $"NackResult 失败：result_id={resultId} 的租约不匹配、已过期回滚或已确认。");
+                }
+                newState = reader.GetString(1);
             }
-            resultId = reader.GetString(0);
-            newAttempt = reader.GetInt32(1);
-            maxAttempts = reader.GetInt32(2);
-            rowData = reader.GetString(3);
-        }
 
-        // P0-6-7：超过 max_attempts → 移入 DLQ + DELETE 原行
-        if (newAttempt > maxAttempts)
-        {
-            await MoveToDeadLetterAsync(connection, "outbox", resultId, newAttempt, "exceeded max_attempts",
-                rowData, cancellationToken).ConfigureAwait(false);
-            await DeleteOutboxRowAsync(connection, resultId, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            // 退避回滚为 Pending；next_attempt_at = now + 指数退避
-            var backoff = ComputeBackoff(newAttempt, DefaultRetryBaseDelay, DefaultRetryMaxDelay);
-            var nextAttemptAt = DateTimeOffset.UtcNow.Add(backoff);
-            await using var updateCmd = connection.CreateCommand();
-            updateCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-            updateCmd.CommandText = $"""
-UPDATE {Table("kernel_transport_outbox")}
-SET state = 'Pending', next_attempt_at = @next_attempt_at
-WHERE result_id = @result_id;
+            // P0-7：DeadLettered 路径需在同一事务中 DELETE 原表行
+            if (newState == "DeadLettered")
+            {
+                await using var deleteCmd = connection.CreateCommand();
+                deleteCmd.Transaction = transaction;
+                deleteCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                deleteCmd.CommandText = $"""
+DELETE FROM {Table("kernel_transport_outbox")}
+WHERE result_id = @result_id AND state = 'DeadLettered';
 """;
-            updateCmd.Parameters.AddWithValue("result_id", resultId);
-            updateCmd.Parameters.AddWithValue("next_attempt_at", nextAttemptAt);
-            await updateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            // P2：本地 counter 维护（Leased → Pending；Pending 行 +1）；DLQ 路径不 +1（行已删除）
-            Interlocked.Increment(ref _pendingResultCountApprox);
-        }
-    }
+                deleteCmd.Parameters.AddWithValue("result_id", resultId);
+                await deleteCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
 
-    /// <summary>P0-6-7：DELETE outbox 行（用于将行移入 DLQ 后清理原表）。</summary>
-    private async Task DeleteOutboxRowAsync(NpgsqlConnection connection, string resultId, CancellationToken cancellationToken)
-    {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
-        cmd.CommandText = $"""DELETE FROM {Table("kernel_transport_outbox")} WHERE result_id = @result_id;""";
-        cmd.Parameters.AddWithValue("result_id", resultId);
-        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            // P2：本地 counter 维护（Leased → Pending 才 +1；DeadLettered → 已 DELETE，不 +1）
+            if (newState == "Pending")
+            {
+                Interlocked.Increment(ref _pendingResultCountApprox);
+            }
+        }
+        catch
+        {
+            await SafeRollbackAsync(transaction, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// P2：批量单事务 UPDATE（Leased → Pending）—— 使用 <c>unnest</c> 展开输入数组，单条 SQL 完成
-    /// 批量回滚并通过 CTE <c>RETURNING</c> + <c>NOT EXISTS</c> 计算未匹配的 result_id。
-    /// 与 <see cref="NackBatchAsync"/> 对称，相比循环逐条 UPDATE 减少网络往返且天然原子。
-    /// 部分成功不抛异常；调用方根据返回的失败列表决定后续处理。
+    /// P0-7：批量 NackResult 与单条 <see cref="NackResultAsync"/> 语义完全一致——使用 <c>unnest</c> 展开输入数组，
+    /// 单条 CTE SQL 完成批量 UPDATE（attempt+1、lease 清理、state 决策、退避设置）+ DLQ INSERT；
+    /// 随后在同一显式事务中 DELETE 原表所有 DeadLettered 行。整个过程原子完成，部分成功不抛异常。
+    /// 修复原 NackResultBatchAsync 完全绕过 attempt_count/backoff/DLQ 的语义不一致问题。
+    /// 调用方根据返回的失败列表决定后续处理。
     /// </remarks>
     public async ValueTask<IReadOnlyList<string>> NackResultBatchAsync(IReadOnlyList<(string ResultId, string LeaseToken)> nacks, CancellationToken cancellationToken = default)
     {
@@ -1126,57 +1175,105 @@ WHERE result_id = @result_id;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
-
-        var ids = new string[valid.Count];
-        var tokens = new string[valid.Count];
-        for (var i = 0; i < valid.Count; i++)
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            ids[i] = valid[i].Id;
-            tokens[i] = valid[i].Token;
-        }
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
 
-        // CTE：input_rows 展开输入数组；updated 执行批量 UPDATE 并 RETURNING 已更新行；
-        // 最终 SELECT 返回未出现在 updated 中的输入 id（即 token 不匹配 / 状态非 Leased / 行不存在）。
-        command.CommandText = $"""
+            var ids = new string[valid.Count];
+            var tokens = new string[valid.Count];
+            var dlqIds = new string[valid.Count];
+            for (var i = 0; i < valid.Count; i++)
+            {
+                ids[i] = valid[i].Id;
+                tokens[i] = valid[i].Token;
+                // P0-7：每个潜在 DLQ 行预分配 dead_letter_id，避免依赖 PG 13+ 的 gen_random_uuid()
+                dlqIds[i] = Guid.NewGuid().ToString("N");
+            }
+
+            // CTE：与 NackBatchAsync 对称——input_rows 展开输入数组（含每行对应的 dlq_id）；
+            // bumped 执行批量 UPDATE 并 RETURNING 已更新行；dlq_insert 将 DeadLettered 行写入 DLQ 表；
+            // 最终 SELECT 返回未出现在 bumped 中的输入 id（即 token 不匹配 / 状态非 Leased / 行不存在）。
+            command.CommandText = $"""
 WITH input_rows AS (
-    SELECT id, token FROM unnest(@ids::text[], @tokens::text[]) AS v(id, token)
+    SELECT id, token, dlq_id FROM unnest(@ids::text[], @tokens::text[], @dlq_ids::text[]) AS v(id, token, dlq_id)
 ),
-updated AS (
+bumped AS (
     UPDATE {Table("kernel_transport_outbox")} AS q
-    SET state = 'Pending',
+    SET attempt_count = attempt_count + 1,
+        last_error = NULL,
         lease_owner = NULL,
         lease_expires_at = NULL,
-        lease_token = NULL
+        lease_token = NULL,
+        state = CASE WHEN attempt_count + 1 > max_attempts THEN 'DeadLettered' ELSE 'Pending' END,
+        next_attempt_at = CASE WHEN attempt_count + 1 > max_attempts THEN NULL
+                               ELSE now() + (interval '1 second' * least(power(2, attempt_count), 300)) END
     FROM input_rows
     WHERE q.result_id = input_rows.id
       AND q.lease_token = input_rows.token
       AND q.state = 'Leased'
-    RETURNING q.result_id
+    RETURNING q.result_id, q.attempt_count, q.data, q.state
+),
+dlq_insert AS (
+    INSERT INTO {Table("kernel_transport_dead_letter")} (
+        dead_letter_id, source, original_id, attempt_count, last_error, dead_letter_reason, original_data, created_at)
+    SELECT
+        input_rows.dlq_id, 'outbox', bumped.result_id, bumped.attempt_count,
+        NULL, 'exceeded max_attempts', bumped.data, now()
+    FROM bumped
+    JOIN input_rows ON input_rows.id = bumped.result_id
+    WHERE bumped.state = 'DeadLettered'
+    ON CONFLICT DO NOTHING
 )
 SELECT i.id FROM input_rows i
 WHERE NOT EXISTS (
-    SELECT 1 FROM updated u WHERE u.result_id = i.id
+    SELECT 1 FROM bumped b WHERE b.result_id = i.id
 );
 """;
-        AddTextArray(command, "ids", ids);
-        AddTextArray(command, "tokens", tokens);
+            AddTextArray(command, "ids", ids);
+            AddTextArray(command, "tokens", tokens);
+            AddTextArray(command, "dlq_ids", dlqIds);
 
-        var sqlFailedCount = 0;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            failed.Add(reader.GetString(0));
-            sqlFailedCount++;
+            var sqlFailedCount = 0;
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    failed.Add(reader.GetString(0));
+                    sqlFailedCount++;
+                }
+            }
+
+            // P0-7：在同一事务中 DELETE 所有 DeadLettered 行（仅匹配本批次的 ids）
+            await using var deleteCmd = connection.CreateCommand();
+            deleteCmd.Transaction = transaction;
+            deleteCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+            deleteCmd.CommandText = $"""
+DELETE FROM {Table("kernel_transport_outbox")}
+WHERE state = 'DeadLettered'
+  AND result_id = ANY(@ids);
+""";
+            AddTextArray(deleteCmd, "ids", ids);
+            var deadLetteredCount = await deleteCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            // P2：本地 counter 维护——成功数 = 有效输入数 - SQL 失败数；其中 Pending 路径 +1，DeadLettered 路径不 +1（已 DELETE）
+            var successCount = valid.Count - sqlFailedCount;
+            var pendingCount = successCount - deadLetteredCount;
+            if (pendingCount > 0)
+            {
+                Interlocked.Add(ref _pendingResultCountApprox, pendingCount);
+            }
+            return failed;
         }
-        // 成功回滚数 = 有效输入数 - SQL 失败数；本地 counter 维护（Leased → Pending；Pending 行 +nackedCount）
-        var nackedCount = valid.Count - sqlFailedCount;
-        if (nackedCount > 0)
+        catch
         {
-            Interlocked.Add(ref _pendingResultCountApprox, nackedCount);
+            await SafeRollbackAsync(transaction, cancellationToken).ConfigureAwait(false);
+            throw;
         }
-        return failed;
     }
 
     /// <inheritdoc />

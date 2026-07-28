@@ -45,13 +45,13 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     private readonly ICanaryLeaderLease _leaderLease;
     private readonly ICanaryMetricsAggregator _metricsAggregator;
     private readonly ICanaryExternalMetricsSource _externalMetricsSource;
-    private readonly IOptions<CanaryLeaderOptions> _options;
+    private readonly IOptionsMonitor<CanaryLeaderOptions> _options;
     private readonly ILogger<CanaryLeaderHostedService> _logger;
     private readonly string _instanceId;
     private readonly TimeProvider _timeProvider;
 
-    // 当前持有的租约（runId → lease token），用于续租与释放
-    private readonly Dictionary<string, string> _heldLeases = new(StringComparer.Ordinal);
+    // 当前持有的租约（runId → (lease token, fencing token)），用于续租、释放与 fencing 校验
+    private readonly Dictionary<string, (string LeaseToken, long FencingToken)> _heldLeases = new(StringComparer.Ordinal);
 
     // 本实例已知的最新 stage epoch（runId → lastKnownEpoch）。
     // 每次轮询时与 DB 中的 current_epoch 比较；若 epoch 已推进，Reset 本地 Collector 从 0 开始新 epoch 累计。
@@ -64,7 +64,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         ICanaryLeaderLease leaderLease,
         ICanaryMetricsAggregator metricsAggregator,
         ICanaryExternalMetricsSource externalMetricsSource,
-        IOptions<CanaryLeaderOptions> options,
+        IOptionsMonitor<CanaryLeaderOptions> options,
         ILogger<CanaryLeaderHostedService> logger)
     {
         _services = services;
@@ -77,7 +77,8 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         _logger = logger;
         _timeProvider = TimeProvider.System;
 
-        var owner = options.Value.Owner;
+        // P0-2：通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖。
+        var owner = options.CurrentValue.Owner;
         _instanceId = string.IsNullOrWhiteSpace(owner)
             ? $"host-{Environment.MachineName}-{Guid.NewGuid():N}".Substring(0, 48)
             : owner;
@@ -86,7 +87,9 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var options = _options.Value;
+        // P0-2：通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖
+        // （如 ProductionHA 强制 Enabled=true）。
+        var options = _options.CurrentValue;
         if (!options.Enabled)
         {
             _logger.LogInformation("CanaryLeaderHostedService 已禁用（CanaryLeaderOptions.Enabled=false）；单节点模式由 CanaryProgressionHostedService 处理。");
@@ -193,7 +196,8 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         PostgresCanaryMetricsAggregator? postgresAggregator,
         CancellationToken cancellationToken)
     {
-        var options = _options.Value;
+        // P0-2：每次轮询读取 CurrentValue，感知运行时配置变更。
+        var options = _options.CurrentValue;
 
         // 0. 检测 stage epoch 变化：若 DB 中的 current_epoch 已推进（Leader 推进了百分比档），
         //    Reset 本地 Collector 从 0 开始新 epoch 累计，避免旧累计值污染新阶段聚合。
@@ -244,6 +248,10 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                 return;
             }
 
+            // P10：若各实例上报了 DDSketch 字节，反序列化后 MergeFrom 合并，从合并后的 sketch 查询总体 P95，
+            // 覆盖加权平均近似值（加权平均会低估尾延迟）。无 sketch 数据时保持加权平均 fallback。
+            aggregated = MergeSketchLatencies(aggregated);
+
             var baselineMetrics = ToBaselineMetrics(aggregated);
             var experimentMetrics = ToExperimentMetrics(aggregated);
 
@@ -264,7 +272,19 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                         // v36 修复：Leader 推进百分比档后递增 stage epoch，
                         // 通知所有实例（含本实例）在下一次轮询时 Reset 本地 Collector 从 0 开始新 epoch 累计。
                         // 这是"全实例 Reset"机制：通过 DB epoch flag 推送，所有实例 pull 检测。
-                        var newEpoch = await _metricsAggregator.AdvanceEpochAsync(runId, cancellationToken).ConfigureAwait(false);
+                        // P12：携带 fencing token 校验 lease 仍由当前 Leader 持有；旧 Leader 推进失败（返回 0）。
+                        var fencingToken = _heldLeases.TryGetValue(runId, out var held) ? held.FencingToken : 0L;
+                        var newEpoch = await _metricsAggregator.AdvanceEpochAsync(
+                            runId, cancellationToken, fencingToken).ConfigureAwait(false);
+                        if (newEpoch == 0)
+                        {
+                            // P12：fencing 校验失败 → lease 已被抢占，停止推进并放弃 leader 身份
+                            _heldLeases.Remove(runId);
+                            _logger.LogWarning(
+                                "Canary run {RunId} AdvanceEpoch fencing 校验失败（leader={Owner}）；放弃 leader 身份。",
+                                runId, _instanceId);
+                            break;
+                        }
                         _metricsCollector.Reset(runId);
                         _lastKnownEpoch[runId] = newEpoch;
 
@@ -316,10 +336,10 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         CancellationToken cancellationToken)
     {
         // 已持有租约：尝试续租
-        if (_heldLeases.TryGetValue(runId, out var existingToken))
+        if (_heldLeases.TryGetValue(runId, out var existing))
         {
             var renewed = await _leaderLease.RenewAsync(
-                runId, existingToken, options.LeaseDuration, cancellationToken).ConfigureAwait(false);
+                runId, existing.LeaseToken, options.LeaseDuration, cancellationToken).ConfigureAwait(false);
             if (renewed)
             {
                 return true;
@@ -339,24 +359,25 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             return false; // 已被其他实例持有
         }
 
-        _heldLeases[runId] = leased.LeaseToken;
+        // P12：存储 fencing token，用于 AdvanceEpochAsync 等 Progression 更新的 lease 校验
+        _heldLeases[runId] = (leased.LeaseToken, leased.FencingToken);
         _logger.LogInformation(
-            "Canary run {RunId} 获取 leader 租约（owner={Owner}, expiresAt={ExpiresAt}）。",
-            runId, _instanceId, leased.ExpiresAt);
+            "Canary run {RunId} 获取 leader 租约（owner={Owner}, expiresAt={ExpiresAt}, fencingToken={FencingToken}）。",
+            runId, _instanceId, leased.ExpiresAt, leased.FencingToken);
         return true;
     }
 
     /// <summary>释放指定 run 的租约（若持有）。</summary>
     private async Task ReleaseLeaseIfHeldAsync(string runId, CancellationToken cancellationToken)
     {
-        if (!_heldLeases.TryGetValue(runId, out var token))
+        if (!_heldLeases.TryGetValue(runId, out var held))
         {
             return;
         }
 
         try
         {
-            await _leaderLease.ReleaseAsync(runId, token, cancellationToken).ConfigureAwait(false);
+            await _leaderLease.ReleaseAsync(runId, held.LeaseToken, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Canary run {RunId} 释放 leader 租约（owner={Owner}）。", runId, _instanceId);
         }
         catch (Exception ex)
@@ -414,9 +435,77 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         AnswerQuality = m.AnswerQuality,
         TokenCost = m.TokenCost,
         InferenceCost = m.InferenceCost,
+        // P10：透传 DDSketch 字节，供 Leader 聚合时 MergeFrom 合并
+        V2LatencySketch = m.V2LatencySketch,
+        LegacyLatencySketch = m.LegacyLatencySketch,
+        // P11：透传成功率分子/分母，供 Leader 聚合时 SUM(分子)/SUM(分母)
+        TaskSuccessSum = m.TaskSuccessSum,
+        TaskSuccessCount = m.TaskSuccessCount,
+        ToolSuccessSum = m.ToolSuccessSum,
+        ToolSuccessCount = m.ToolSuccessCount,
         WindowStart = m.WindowStart,
         WindowEnd = m.WindowEnd
     };
+
+    /// <summary>
+    /// P10：从各实例的 DDSketch 字节合并查询总体 P95，覆盖加权平均近似值。
+    /// 无 sketch 数据时（V2InstanceSketches/LegacyInstanceSketches 为 null/空）返回原值不变。
+    /// </summary>
+    /// <remarks>
+    /// 反序列化各实例的 DDSketch 字节，MergeFrom 合并到单一 sketch，再查询 P95 分位数。
+    /// 这是对所有请求的总体 P95，而非对单实例 P95 加权平均（加权平均会低估尾延迟）。
+    /// </remarks>
+    private static CanaryAggregatedMetrics MergeSketchLatencies(CanaryAggregatedMetrics m)
+    {
+        var mergedV2P95 = TryMergeSketchP95(m.V2InstanceSketches, 0.95);
+        var mergedLegacyP95 = TryMergeSketchP95(m.LegacyInstanceSketches, 0.95);
+
+        // 无 sketch 数据时保持原值（加权平均 fallback）
+        if (!mergedV2P95.HasValue && !mergedLegacyP95.HasValue)
+        {
+            return m;
+        }
+
+        return m with
+        {
+            V2P95LatencyMs = mergedV2P95 ?? m.V2P95LatencyMs,
+            LegacyP95LatencyMs = mergedLegacyP95 ?? m.LegacyP95LatencyMs
+        };
+    }
+
+    /// <summary>
+    /// P10：反序列化 sketch 字节列表，MergeFrom 合并后查询指定分位数。
+    /// </summary>
+    /// <returns>合并后的分位数值；无有效 sketch 时返回 null。</returns>
+    private static double? TryMergeSketchP95(IReadOnlyList<byte[]>? sketches, double quantile)
+    {
+        if (sketches is null || sketches.Count == 0)
+        {
+            return null;
+        }
+
+        DDSketch? merged = null;
+        foreach (var bytes in sketches)
+        {
+            var sketch = DDSketch.Deserialize(bytes);
+            if (sketch is null) continue;
+            if (merged is null)
+            {
+                merged = sketch;
+            }
+            else
+            {
+                merged.MergeFrom(sketch);
+            }
+        }
+
+        if (merged is null || merged.TotalCount == 0)
+        {
+            return null;
+        }
+
+        return merged.GetQuantile(quantile);
+    }
 
     /// <summary>将聚合指标转换为基线（Legacy 路径）指标字典。</summary>
     /// <remarks>

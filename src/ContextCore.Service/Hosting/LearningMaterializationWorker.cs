@@ -239,9 +239,10 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
                 _metrics.IncrementProcessing();
 
+                // P0-8：保留 record.LeaseToken 用于 Ack/Nack/Renew 校验，防止旧 Worker 越权 Ack 新 Worker 的 lease。
                 // 启动 heartbeat 续约任务。
                 using var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var heartbeatTask = RunHeartbeatAsync(outboxStore, record.EventId, owner, leaseDuration, heartbeatInterval, leaseCts);
+                var heartbeatTask = RunHeartbeatAsync(outboxStore, record.EventId, record.LeaseToken, leaseDuration, heartbeatInterval, leaseCts);
 
                 try
                 {
@@ -249,7 +250,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                     var decision = JsonSerializer.Deserialize<ContextDecisionResult>(record.Payload, PayloadSerializerOptions);
                     if (decision is null)
                     {
-                        await outboxStore.MarkFailedAsync(record.EventId, "Failed to deserialize payload: null result.", cancellationToken)
+                        await outboxStore.MarkFailedAsync(record.EventId, record.LeaseToken, "Failed to deserialize payload: null result.", cancellationToken)
                             .ConfigureAwait(false);
                         _metrics.IncrementFailed();
                         continue;
@@ -260,13 +261,20 @@ public sealed class LearningMaterializationWorker : BackgroundService
                         decision, record.WorkspaceId, record.CollectionId, cancellationToken)
                         .ConfigureAwait(false);
 
-                    // Ack。
-                    var acked = await outboxStore.MarkAckedAsync(record.EventId, cancellationToken).ConfigureAwait(false);
+                    // Ack（需 lease_token 匹配——若 lease 已被抢占则 acked=false，当前 worker 应放弃该记录）。
+                    var acked = await outboxStore.MarkAckedAsync(record.EventId, record.LeaseToken, cancellationToken).ConfigureAwait(false);
                     if (acked)
                     {
                         var lagMs = (DateTimeOffset.UtcNow - record.CreatedAt).TotalMilliseconds;
                         _metrics.RecordMaterializationLag(lagMs);
                         _metrics.RecordSuccess();
+                    }
+                    else
+                    {
+                        // lease 已被其他 worker 抢占——当前物化结果可能重复（新 worker 会重新物化），不记 success。
+                        _logger.LogWarning(
+                            "Outbox record {EventId} Ack 失败：lease 已被其他 worker 抢占（worker={WorkerId}）。",
+                            record.EventId, workerId);
                     }
                 }
                 catch (OperationCanceledException) when (leaseCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -292,10 +300,19 @@ public sealed class LearningMaterializationWorker : BackgroundService
                     try
                     {
                         var marked = await outboxStore.MarkFailedAsync(
-                            record.EventId, $"{ex.GetType().Name}: {ex.Message}", CancellationToken.None)
+                            record.EventId,
+                            record.LeaseToken,
+                            $"{ex.GetType().Name}: {ex.Message}", CancellationToken.None)
                             .ConfigureAwait(false);
                         // store 根据 retry_count 决定回退 Pending 或转 DeadLettered。
                         // 如果转为 DeadLettered，递增死信计数（通过 metrics updater 周期同步）。
+                        // P0-8：若 lease 已被抢占（marked=false），跳过 MarkFailed——新 worker 会重新处理。
+                        if (!marked)
+                        {
+                            _logger.LogWarning(
+                                "Outbox record {EventId} MarkFailed 失败：lease 已被其他 worker 抢占（worker={WorkerId}）。",
+                                record.EventId, workerId);
+                        }
                     }
                     catch (Exception markEx)
                     {
@@ -324,10 +341,11 @@ public sealed class LearningMaterializationWorker : BackgroundService
     }
 
     /// <summary>后台 heartbeat 续约（防止长物化任务租约过期）。</summary>
+    /// <param name="leaseToken">当前 worker 持有的 lease token；与 store CAS 校验仅持有者能续约。</param>
     private static async Task RunHeartbeatAsync(
         ILearningEventOutboxStore outboxStore,
         string eventId,
-        string owner,
+        string leaseToken,
         TimeSpan leaseDuration,
         TimeSpan heartbeatInterval,
         CancellationTokenSource leaseCts)
@@ -347,7 +365,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
             try
             {
-                var renewed = await outboxStore.RenewLeaseAsync(eventId, owner, leaseDuration, CancellationToken.None)
+                var renewed = await outboxStore.RenewLeaseAsync(eventId, leaseToken, leaseDuration, CancellationToken.None)
                     .ConfigureAwait(false);
                 if (!renewed)
                 {

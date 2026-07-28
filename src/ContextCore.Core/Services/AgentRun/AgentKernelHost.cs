@@ -17,8 +17,10 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   6. CancelRunAsync 取消指定 Run（TransitionState → Cancelled + CTS 触发）。
 //
 // 子问题 9 生产化增强：
-//   - HA Run Lease：先 IAgentRunLease.TryAcquireAsync 获取租约，失败则跳过（其他实例正在处理）；
-//   - 后台 heartbeat 续租（HeartbeatInterval）；处理完成后 Release；
+//   - HA Run Lease：P0-4 方案 A — Worker 从 Channel 取到 Run + 获得执行槽之后再
+//     IAgentRunLease.TryAcquireAsync 获取租约，然后立即启动 heartbeat；入队前不获取 lease。
+//     heartbeat 续租失败时 CancellationTokenSource.Cancel() 取消 Actor（防止双执行）；
+//     处理完成后 Release；
 //   - 全局并发上限：SemaphoreSlim(MaxGlobalRuns)；
 //   - Workspace 级并发上限：per-workspace SemaphoreSlim(MaxWorkspaceRuns)；
 //
@@ -107,6 +109,11 @@ public sealed class AgentKernelHost : IAsyncDisposable
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示入队完成的任务（不等待执行完成）。</returns>
     /// <exception cref="InvalidOperationException">Channel 已关闭（Host 已 Dispose）或队列已满（拒绝策略）。</exception>
+    /// <remarks>
+    /// P0-4 方案 A：入队前不获取 lease。Worker 从 Channel 取到 Run + 获得执行槽之后再
+    /// <see cref="RunWithLeaseAndConcurrencyAsync"/> 中 Acquire Lease，然后立即启动 heartbeat。
+    /// 避免排队期间 lease 过期导致 heartbeat 无法续租、双实例并发执行同一 Run。
+    /// </remarks>
     public async Task StartRunAsync(AgentRun run, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -119,30 +126,16 @@ public sealed class AgentKernelHost : IAsyncDisposable
             return;
         }
 
-        // 子问题 9：HA Run Lease（若启用 + 注入）
-        LeasedAgentRun? lease = null;
-        if (_options.LeaseEnabled && _runLease is not null)
-        {
-            var owner = _options.Owner ?? BuildDefaultOwner();
-            lease = await _runLease.TryAcquireAsync(
-                run.RunId, _options.LeaseDuration, owner, cancellationToken).ConfigureAwait(false);
-            if (lease is null)
-            {
-                // 租约被其他实例持有 → 跳过（其他实例正在处理）
-                _logger?.LogDebug("Run {RunId} 租约被其他实例持有，跳过启动。", run.RunId);
-                return;
-            }
-        }
-
+        // P0-4 方案 A：入队前不获取 lease；Worker 从 Channel 取到 Run + 获得执行槽之后再 Acquire Lease。
+        // 避免排队期间 lease 过期导致 heartbeat 无法续租、双实例并发执行同一 Run。
         var actor = CreateActor();
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var activeRun = new ActiveRun(actor, cts, lease);
+        var activeRun = new ActiveRun(actor, cts, Lease: null);
 
         if (!_activeRuns.TryAdd(key, activeRun))
         {
-            // 并发竞争：其他线程先添加 → 释放租约并退出
+            // 并发竞争：其他线程先添加 → 退出
             cts.Dispose();
-            await TryReleaseLeaseAsync(lease, CancellationToken.None).ConfigureAwait(false);
             return;
         }
 
@@ -159,7 +152,6 @@ public sealed class AgentKernelHost : IAsyncDisposable
             // Host 已 Dispose → 清理资源
             _activeRuns.TryRemove(key, out _);
             cts.Dispose();
-            await TryReleaseLeaseAsync(lease, CancellationToken.None).ConfigureAwait(false);
             throw new InvalidOperationException("AgentKernelHost 已关闭，无法入队新的 Run。");
         }
     }
@@ -198,8 +190,14 @@ public sealed class AgentKernelHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子问题 9：带租约心跳 + 并发上限的 Run 执行包装。
+    /// 子问题 9 + P0-4：带租约心跳 + 并发上限的 Run 执行包装。
     /// </summary>
+    /// <remarks>
+    /// P0-4 方案 A：Worker 从 Channel 取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，
+    /// 然后立即启动 heartbeat。避免排队期间 lease 过期导致 heartbeat 无法续租。
+    /// heartbeat 续租失败时通过 <see cref="CancellationTokenSource.Cancel"/> 取消 Actor，
+    /// 防止 lease 被抢占后当前实例继续执行副作用（双执行）。
+    /// </remarks>
     private async Task RunWithLeaseAndConcurrencyAsync(AgentRun run, string key, ActiveRun activeRun)
     {
         // 子问题 9：全局并发上限
@@ -212,17 +210,43 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 _options.MaxWorkspaceRuns > 0 ? _options.MaxWorkspaceRuns : 10));
         await workspaceSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
 
+        // P0-4 方案 A：获得执行槽之后再 Acquire Lease（入队前不获取，避免排队期间过期）
+        LeasedAgentRun? lease = null;
+        if (_options.LeaseEnabled && _runLease is not null)
+        {
+            var owner = _options.Owner ?? BuildDefaultOwner();
+            lease = await _runLease.TryAcquireAsync(
+                run.RunId, _options.LeaseDuration, owner, activeRun.Cts.Token).ConfigureAwait(false);
+            if (lease is null)
+            {
+                // 租约被其他实例持有 → 释放执行槽并退出（其他实例正在处理）
+                workspaceSemaphore.Release();
+                _globalSemaphore.Release();
+                if (_activeRuns.TryRemove(key, out var removed))
+                {
+                    removed.Cts.Dispose();
+                }
+                _logger?.LogDebug("Run {RunId} 租约被其他实例持有，跳过执行。", run.RunId);
+                return;
+            }
+        }
+
         // 子问题 9：启动 heartbeat 续租（若启用租约）
+        // P0-4：传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(activeRun.Cts.Token);
         Task? heartbeatTask = null;
-        if (activeRun.Lease is not null && _runLease is not null)
+        if (lease is not null && _runLease is not null)
         {
-            heartbeatTask = RunHeartbeatAsync(run.RunId, activeRun.Lease.LeaseToken, heartbeatCts.Token);
+            heartbeatTask = RunHeartbeatAsync(run.RunId, lease.LeaseToken, activeRun.Cts, heartbeatCts.Token);
         }
 
         try
         {
-            await activeRun.Actor.ExecuteAsync(run, activeRun.Cts.Token).ConfigureAwait(false);
+            // P0-4：将 leaseToken + fencingToken 传给 Actor，Actor 在每次副作用操作（FlushPendingEventsAsync）
+            // 时带上，Postgres 实现在 WHERE 子句中校验 lease 仍由当前实例持有。
+            await activeRun.Actor.ExecuteAsync(
+                run, activeRun.Cts.Token,
+                lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
         }
         catch
         {
@@ -243,7 +267,7 @@ public sealed class AgentKernelHost : IAsyncDisposable
             _globalSemaphore.Release();
 
             // 释放租约
-            await TryReleaseLeaseAsync(activeRun.Lease, CancellationToken.None).ConfigureAwait(false);
+            await TryReleaseLeaseAsync(lease, CancellationToken.None).ConfigureAwait(false);
 
             // 从活跃 Run 移除
             if (_activeRuns.TryRemove(key, out var removed))
@@ -254,9 +278,20 @@ public sealed class AgentKernelHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子问题 9：后台 heartbeat 续租（直到 cancellationToken 取消）。
+    /// 子问题 9 + P0-4：后台 heartbeat 续租（直到 cancellationToken 取消）。
     /// </summary>
-    private async Task RunHeartbeatAsync(string runId, string leaseToken, CancellationToken cancellationToken)
+    /// <param name="runId">Agent Run ID。</param>
+    /// <param name="leaseToken">租约 token（来自 TryAcquireAsync）。</param>
+    /// <param name="actorCts">
+    /// P0-4：Actor 的 CancellationTokenSource。续租失败时调用 <see cref="CancellationTokenSource.Cancel"/>
+    /// 取消 Actor 执行，防止 lease 被抢占后当前实例继续执行副作用（双执行）。
+    /// </param>
+    /// <param name="cancellationToken">heartbeat 自身的取消令牌（Actor 结束后由 heartbeatCts 取消）。</param>
+    private async Task RunHeartbeatAsync(
+        string runId,
+        string leaseToken,
+        CancellationTokenSource actorCts,
+        CancellationToken cancellationToken)
     {
         if (_runLease is null)
         {
@@ -286,8 +321,18 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 var renewed = await _runLease.RenewAsync(runId, leaseToken, extension, cancellationToken).ConfigureAwait(false);
                 if (!renewed)
                 {
-                    // 租约丢失 → 其他实例已接管，停止心跳
-                    _logger?.LogWarning("Run {RunId} 租约续约失败，其他实例可能已接管。", runId);
+                    // P0-4：租约丢失 → 其他实例已接管，立即取消 Actor 防止双执行。
+                    // Actor 收到取消后会走 TryTransitionToCancelledAsync 路径（CAS 失败因 lease 已被抢占，
+                    // 但 Run 状态仍会尝试推进；即便 CAS 失败也不影响正确性——新持有者会重新执行）。
+                    _logger?.LogWarning("Run {RunId} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", runId);
+                    try
+                    {
+                        actorCts.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // Actor 已结束，CTS 已释放 — 无需处理
+                    }
                     break;
                 }
             }
@@ -425,6 +470,8 @@ public sealed class AgentKernelHost : IAsyncDisposable
         var checkpointStore = _serviceProvider.GetService(typeof(IAgentCheckpointStore)) as IAgentCheckpointStore;
         // 子问题 5：解析 IDurableToolExecutor
         var durableToolExecutor = _serviceProvider.GetService(typeof(IDurableToolExecutor)) as IDurableToolExecutor;
+        // P0-3：解析 IAgentModelContextProjector
+        var modelContextProjector = _serviceProvider.GetService(typeof(IAgentModelContextProjector)) as IAgentModelContextProjector;
 
         return new AgentRunActor(
             _runStore,
@@ -437,7 +484,8 @@ public sealed class AgentKernelHost : IAsyncDisposable
             checkpointFactory,
             decisionRuntime,
             checkpointStore,
-            durableToolExecutor);
+            durableToolExecutor,
+            modelContextProjector);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

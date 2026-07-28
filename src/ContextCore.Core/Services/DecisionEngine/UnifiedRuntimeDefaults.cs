@@ -303,7 +303,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             // R29 WP-E-2：空结果路径无 SelectedEnvelopes + DroppedEnvelopes 可物化（materializer 内部为 no-op），
             // 但仍触发以保持 DecisionId 审计链（即便 0 条 entry 也可追踪决策执行）。
             var emptyExecutionResult = EmptyExecutionResult(request, requestSemanticHash, providerArtifacts, snapshot, routingDecisions, completeWorkingSet);
-            TriggerUtilityLedgerMaterialization(emptyExecutionResult.Decision, request);
+            // P0-9：await 等待 Learning Event 持久化到 outbox 表完成（与主决策路径一致）。
+            await TriggerUtilityLedgerMaterializationAsync(emptyExecutionResult.Decision, request);
             return emptyExecutionResult;
         }
 
@@ -320,7 +321,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 request, requestSemanticHash, emptyDecision, completeWorkingSet,
                 snapshot, routingDecisions, providerArtifacts);
             // R29 WP-E-2：EarlyRejected 候选作为 DroppedEnvelopes 物化到 ledger（P8 硬边界：所有 candidate 都写入）
-            TriggerUtilityLedgerMaterialization(earlyRejectedExecutionResult.Decision, request);
+            // P0-9：await 等待 Learning Event 持久化到 outbox 表完成（与主决策路径一致）。
+            await TriggerUtilityLedgerMaterializationAsync(earlyRejectedExecutionResult.Decision, request);
             return earlyRejectedExecutionResult;
         }
 
@@ -490,28 +492,32 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             request, requestSemanticHash, decision, completeWorkingSet,
             snapshot, routingDecisions, providerArtifacts);
         // R29 WP-E-2：主决策路径触发物化（SelectedEnvelopes + DroppedEnvelopes 全部写入 ledger）
-        TriggerUtilityLedgerMaterialization(mainExecutionResult.Decision, request);
+        // P0-9：await 等待 Learning Event 持久化到 outbox 表完成，防止进程退出导致 fire-and-forget 入队丢失数据。
+        await TriggerUtilityLedgerMaterializationAsync(mainExecutionResult.Decision, request);
         return mainExecutionResult;
     }
 
     /// <summary>
-    /// R29 WP-E-2：触发 Utility Ledger 物化（fire-and-forget）。
+    /// R29 WP-E-2：触发 Utility Ledger 物化。
     /// </summary>
     /// <remarks>
     /// 设计原则：
-    ///   1. 学习闭环物化不阻塞主决策流 — 主决策已返回，物化在后台异步执行。
-    ///   2. 物化失败不影响主决策正确性 — 异常被静默捕获（dispatcher / fallback 路径均内部处理）。
-    ///   3. 使用 CancellationToken.None — 决策请求的取消不应中断物化（数据已生成，需写入 ledger）。
-    ///   4. dispatcher 为 null 且 materializer 为 null 时（开发 / 测试路径未注入），直接跳过。
+    ///   1. 学习闭环物化不阻塞主决策流的<b>最终决策结果</b>——主决策已构建完成，
+    ///      物化在后台异步执行（worker 池消费 outbox 表）。
+    ///   2. P0-9：但调用方必须等待 Learning Event <b>入队到 outbox 表</b>完成（PostgreSQL INSERT），
+    ///      否则进程退出/崩溃会导致 fire-and-forget 入队丢失数据。等待入队持久化，不等待 Materialize。
+    ///   3. 物化失败不影响主决策正确性——dispatcher 内部捕获所有异常并降级（fallback direct materialize）。
+    ///   4. 使用 CancellationToken.None——决策请求的取消不应中断物化（数据已生成，需写入 ledger）。
+    ///   5. dispatcher 为 null 且 materializer 为 null 时（开发 / 测试路径未注入），直接跳过。
     /// </remarks>
     /// <para>
     /// 路径选择（消除热路径 Task.Run）：
     /// <list type="bullet">
     /// <item>
-    /// <b>dispatcher 已注入（生产路径）</b>：通过 <see cref="LearningMaterializationDispatcher.EnqueueAsync"/>
-    /// 入队。dispatcher 内部根据是否注册 <c>ILearningEventOutboxStore</c> 选择 Durable Outbox（Postgres）
-    /// 或 in-memory bounded Channel 路径，由固定 worker 池消费——消除每请求 Task.Run / Task 风暴 /
-    /// 进程崩溃静默丢数据等问题。dispatcher 内部捕获所有异常并降级处理。
+    /// <b>dispatcher 已注入（生产路径）</b>：通过 <see cref="LearningMaterializationDispatcher.EnqueueDurablyAsync"/>
+    /// 入队并等待 PostgreSQL INSERT 完成。dispatcher 内部根据是否注册 <c>ILearningEventOutboxStore</c>
+    /// 选择 Durable Outbox（Postgres）或 in-memory bounded Channel 路径，由固定 worker 池消费——
+    /// 消除每请求 Task.Run / Task 风暴 / 进程崩溃静默丢数据等问题。
     /// </item>
     /// <item>
     /// <b>dispatcher 未注入但 materializer 已注入（兼容/测试路径）</b>：保留旧 Task.Run fire-and-forget
@@ -521,7 +527,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// </para>
     /// <param name="decision">决策结果（已构建完成，含 SelectedEnvelopes + DroppedEnvelopes）。</param>
     /// <param name="request">原始请求（用于提取 WorkspaceId / CollectionId）。</param>
-    private void TriggerUtilityLedgerMaterialization(
+    private async ValueTask TriggerUtilityLedgerMaterializationAsync(
         ContextDecisionResult decision,
         ContextDecisionRuntimeRequest request)
     {
@@ -531,9 +537,18 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // 生产路径：dispatcher 已注入 → 通过 bounded Channel / Durable Outbox 入队（消除 Task.Run）。
         if (_materializationDispatcher is not null)
         {
-            // fire-and-forget：dispatcher 内部捕获所有异常并降级（fallback direct materialize / metrics increment）。
-            // 不 await —— 主决策流不等待物化完成。
-            _ = _materializationDispatcher.EnqueueAsync(decision, workspaceId, collectionId, CancellationToken.None);
+            // P0-9：await EnqueueDurablyAsync——等待 PostgreSQL durable append 完成（不等待后续 Materialize）。
+            // 防止进程在 EnqueueAsync 完成 INSERT 前退出导致 Learning Event 丢失。
+            // dispatcher 内部捕获所有异常并降级（fallback direct materialize / metrics increment）。
+            try
+            {
+                await _materializationDispatcher.EnqueueDurablyAsync(decision, workspaceId, collectionId, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // dispatcher 入队失败已被内部降级处理（fallback direct materialize）；此处兜底忽略以防影响主决策流。
+            }
             return;
         }
 
@@ -735,15 +750,20 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 },
                 AdaptationContext: adaptationContext);
 
-            var startedAt = Stopwatch.GetTimestamp();
+            // P8：拆分 queue_ms 与 execution_ms —— 排队耗时只作诊断指标，不参与熔断判定，
+            // 避免本地并发饱和时 Circuit Breaker 误判 Semantic/Graph Store 变慢。
+            var queueStartedAt = Stopwatch.GetTimestamp();
             await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var executionStartedAt = Stopwatch.GetTimestamp();
+            var queueElapsed = Stopwatch.GetElapsedTime(queueStartedAt);
 
             // R28-B.6 Impl-3：为每个 Provider 单独创建 linked CTS with timeout。
             // 一个 Provider 超时只取消自身，不影响其他 Provider。
             using var perProviderCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             perProviderCts.CancelAfter(_providerTimeout);
 
-            // P5：per-provider 耗时记录变量（finally 块统一上报到 RecordProviderTime）
+            // P5/P8：per-provider 耗时记录变量（finally 块统一上报到 RecordProviderTime）
+            // elapsed 仅含 execution（获取 semaphore 之后的真实调用时间），不含 queue wait。
             TimeSpan elapsed = TimeSpan.Zero;
             bool providerSucceeded = false;
             var shouldRecordTiming = false;
@@ -751,7 +771,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             try
             {
                 var result = await provider.ExecuteAsync(context, perProviderCts.Token).ConfigureAwait(false);
-                elapsed = Stopwatch.GetElapsedTime(startedAt);
+                elapsed = Stopwatch.GetElapsedTime(executionStartedAt);
                 providerSucceeded = true;
                 shouldRecordTiming = true;
                 var report = new ProviderExecutionReport
@@ -767,7 +787,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             catch (OperationCanceledException) when (perProviderCts.IsCancellationRequested
                 && !cancellationToken.IsCancellationRequested)
             {
-                elapsed = Stopwatch.GetElapsedTime(startedAt);
+                elapsed = Stopwatch.GetElapsedTime(executionStartedAt);
                 providerSucceeded = false;
                 shouldRecordTiming = true;
                 var emptyResult = CandidateProviderHelpers.Empty();
@@ -800,7 +820,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
             catch (Exception ex)
             {
-                elapsed = Stopwatch.GetElapsedTime(startedAt);
+                elapsed = Stopwatch.GetElapsedTime(executionStartedAt);
                 providerSucceeded = false;
                 shouldRecordTiming = true;
                 var emptyResult = CandidateProviderHelpers.Empty();
@@ -827,8 +847,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
             finally
             {
-                // P5：per-provider 耗时记录（细化到 ProviderKind 粒度）
+                // P5/P8：per-provider 耗时记录（细化到 ProviderKind 粒度）
                 // 通过 cast 访问 DefaultComponentHealthRegistry 的新方法，不修改 IComponentHealthRegistry 接口契约。
+                // P8 关键修复：只把 execution（不含 queue wait）上报到 Circuit Breaker，
+                // queue_ms 单独走 CoreMetrics.ProviderQueueDuration 直方图（诊断用，不影响熔断）。
                 if (shouldRecordTiming && _componentHealthRegistry is DefaultComponentHealthRegistry concreteRegistry)
                 {
                     concreteRegistry.RecordProviderTime(
@@ -838,6 +860,16 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                         componentScopeKey,
                         cancellationToken);
                 }
+
+                // P8：queue_ms 与 execution_ms 单独上报到 OTel 直方图（诊断用）
+                CoreMetrics.ProviderQueueDuration.Record(queueElapsed.TotalMilliseconds,
+                    new KeyValuePair<string, object?>("provider_kind", expertKind.ToString()));
+                if (shouldRecordTiming)
+                {
+                    CoreMetrics.ProviderExecutionDuration.Record(elapsed.TotalMilliseconds,
+                        new KeyValuePair<string, object?>("provider_kind", expertKind.ToString()));
+                }
+
                 semaphore.Release();
             }
         });
@@ -1414,6 +1446,8 @@ public sealed class DefaultRuntimeRequestNormalizer : IRuntimeRequestNormalizer
 ///   - 含 SeedCandidates 数量 + SeedWorkingSet 内容 digest（CanonicalKey/Material ContentHash/TokenizerVersion/PolicyReference）
 /// 哈希跨进程/跨平台稳定（使用 invariant culture 格式化数值；无序集合排序后拼接；
 /// QueryVector 直接哈希 IEEE-754 little-endian bytes，不经字符串中间表示）。
+/// P9 优化：仅在 Replay/Experiment/Audit 模式计算完整 Hash；普通在线请求走轻量 fingerprint，
+/// 跳过 QueryVector 哈希、SeedWorkingSet digest 等重型操作（每请求节省大量 StringBuilder/排序/SHA256 开销）。
 /// </remarks>
 public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
 {
@@ -1425,6 +1459,66 @@ public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // P9：请求模式判断 —— 只有 Replay / Experiment / Audit 模式计算完整 Hash。
+        // 普通在线请求计算轻量 Request Fingerprint，跳过 QueryVector 哈希、Seed 排序、
+        // Material digest 等重型操作。Seed Material 在完整 Hash 路径中直接使用
+        // CandidateMaterial.ContentHash（摄取阶段已计算），不重算 SHA256。
+        if (RequiresFullSemanticHash(request))
+        {
+            return ComputeFullHash(request);
+        }
+
+        return ComputeLightweightFingerprint(request);
+    }
+
+    /// <summary>
+    /// P9：判断是否需要计算完整语义哈希。
+    /// 触发条件（任一即走完整路径）：
+    ///   1. Replay / 测试 / 显式注入：SeedWorkingSet 非 null（携带完整 Envelopes + Materials）
+    ///   2. Audit 模式：PackageInput.IsAuditMode == true
+    ///   3. Experiment 场景：SeedCandidates 非空（外部种子注入，需可重放比对）
+    /// 普通在线生产路径（无种子、非审计）走轻量 fingerprint。
+    /// </summary>
+    private static bool RequiresFullSemanticHash(ContextDecisionRuntimeRequest request)
+    {
+        if (request.SeedWorkingSet is not null) return true;
+        if (request.PackageInput?.IsAuditMode == true) return true;
+        if (request.SeedCandidates.Count > 0) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// P9：轻量 Request Fingerprint —— 普通在线请求专用。
+    /// 只覆盖核心标识字段（RequestId + Scope + Purpose + 基础预算），跳过：
+    ///   - QueryVector 哈希（每向量分配 IncrementalHash + 逐 float 字节写入）
+    ///   - 多组 JoinSorted（复制 + 排序 RequiredTags/Types/Ids/Refs/AllowedRelationTypes）
+    ///   - SeedWorkingSet digest（envelopes 排序 + 逐 envelope 字段写入 SHA256 流）
+    ///   - 大容量 StringBuilder（512+ 字符）一次性 SHA256
+    /// RequestId 保证在线请求指纹唯一性（在线路径无需跨请求语义比对）。
+    /// 跨 culture 不变（仅使用字符串与 int.ToString(InvariantCulture)）。
+    /// </summary>
+    private static string ComputeLightweightFingerprint(ContextDecisionRuntimeRequest request)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new StringBuilder(128);
+        sb.Append("rid=").Append(request.RequestId);
+        sb.Append("|scope=").Append(request.Scope.WorkspaceId).Append(':').Append(request.Scope.CollectionId);
+        sb.Append("|purpose=").Append(((int)request.Purpose).ToString(inv));
+        sb.Append("|query=").Append(request.QueryText ?? string.Empty);
+        sb.Append("|budget=").Append(request.TokenBudget.ToString(inv));
+        sb.Append("|topK=").Append(request.TopK.ToString(inv));
+
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
+
+    /// <summary>
+    /// P9：完整语义哈希 —— Replay / Experiment / Audit 模式专用。
+    /// 保留原有完整业务语义哈希逻辑，供离线 replay 匹配与审计比对使用。
+    /// </summary>
+    private static string ComputeFullHash(ContextDecisionRuntimeRequest request)
+    {
         var sb = new StringBuilder(512);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -1481,6 +1575,8 @@ public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
         // 但数量相同的请求会得到同一 SemanticHash。现改为对规范化 SeedWorkingSet
         // 计算 digest，覆盖每个 seed 的 CanonicalKey / Material ContentHash /
         // TokenizerVersion / PolicyReference，按 CanonicalKey 排序后顺序 SHA256。
+        // P9：Material ContentHash 直接使用 CandidateMaterial.ContentHash（摄取阶段已计算），
+        // 不在此处重算 SHA256。
         sb.Append("|seeds.count=").Append(request.SeedCandidates.Count);
         if (request.SeedWorkingSet is { } sws)
         {

@@ -257,8 +257,10 @@ public sealed class ProductionRuntimeReadinessService
     /// <returns>Canary 状态信息。</returns>
     public CanaryStatus GetCanaryStatus()
     {
-        var schedulerOptions = _services.GetService<CanarySchedulerOptions>();
-        var canaryLeaderOptions = _services.GetService<IOptions<CanaryLeaderOptions>>()?.Value;
+        // P0-2：通过 IOptionsMonitor<T> 读取 Canary 配置，感知 PostConfigure 覆盖
+        // （如 ProductionHA 强制 CanarySchedulerOptions.Enabled=false / CanaryLeaderOptions.Enabled=true）。
+        var schedulerOptions = _services.GetService<IOptionsMonitor<CanarySchedulerOptions>>()?.CurrentValue;
+        var canaryLeaderOptions = _services.GetService<IOptionsMonitor<CanaryLeaderOptions>>()?.CurrentValue;
 
         return new CanaryStatus(
             ProgressionEnabled: schedulerOptions?.Enabled ?? false,

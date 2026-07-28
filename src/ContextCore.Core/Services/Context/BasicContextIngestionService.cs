@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
@@ -16,6 +17,8 @@ namespace ContextCore.Core;
 /// 将 ContextStore 写入、RelationProjectionWriter 写入、RelationStore 查询与删除全部包裹在单个事务作用域中，
 /// 任一步失败则整体回滚，避免出现"item 已写入但 related_to 边未写入/未删除"的脏数据。
 /// 不满足任一条件时回退到原有无事务路径（行为不变）。
+/// P5/P6：摄取阶段持久化 content_hash（SHA-256）与 content_token_cost（精确 token 数）到 Metadata，
+/// Provider 召回时直接读取、跳过在线 SHA-256 + tokenizer 调用。
 /// </remarks>
 public sealed class BasicContextIngestionService
 {
@@ -24,19 +27,25 @@ public sealed class BasicContextIngestionService
     private readonly IRelationStore? _relationStore;
     private readonly IRelationProjectionWriter? _projectionWriter;
     private readonly IWriteTransactionScopeFactory? _transactionScopeFactory;
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    private readonly string? _tokenizerModelName;
 
     public BasicContextIngestionService(
         IContextStore store,
         IRelationProjector? relationProjector = null,
         IRelationStore? relationStore = null,
         IRelationProjectionWriter? projectionWriter = null,
-        IWriteTransactionScopeFactory? transactionScopeFactory = null)
+        IWriteTransactionScopeFactory? transactionScopeFactory = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         _store = store;
         _relationProjector = relationProjector;
         _relationStore = relationStore;
         _projectionWriter = projectionWriter;
         _transactionScopeFactory = transactionScopeFactory;
+        _tokenizerResolver = tokenizerResolver;
+        _tokenizerModelName = tokenizerModelName;
     }
 
     /// <summary>规范化并保存一个上下文条目，若未提供 ID 则自动生成。</summary>
@@ -57,6 +66,30 @@ public sealed class BasicContextIngestionService
         }
 
         var now = DateTimeOffset.UtcNow;
+        // P6：摄取阶段计算 content_hash（SHA-256 小写 hex），与 ContextItem.Checksum 一致。
+        // Provider 召回时从 Metadata["__content_hash"] 读取，跳过在线 SHA-256 重复计算。
+        var contentHash = string.IsNullOrWhiteSpace(item.Checksum)
+            ? ComputeChecksum(item.Content)
+            : item.Checksum;
+
+        // P5：摄取阶段计算精确 token cost（若注入了 tokenizer），Provider 召回时直接读取跳过在线 tokenize。
+        // 未注入 tokenizer 时 content_token_cost 不写入 Metadata，Provider 回退到 fail-fast（R29 WP-D-3 不变）。
+        int? contentTokenCost = null;
+        if (_tokenizerResolver is not null)
+        {
+            var estimate = _tokenizerResolver.Estimate(item.Content, _tokenizerModelName);
+            contentTokenCost = Math.Max(0, estimate.TokenCount);
+        }
+
+        var metadata = new Dictionary<string, string>(item.Metadata)
+        {
+            [ContentMetadataKeys.ContentHash] = contentHash
+        };
+        if (contentTokenCost.HasValue)
+        {
+            metadata[ContentMetadataKeys.ContentTokenCost] = contentTokenCost.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
         var normalized = new ContextItem
         {
             Id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString("N") : item.Id,
@@ -69,12 +102,10 @@ public sealed class BasicContextIngestionService
             Tags = item.Tags.ToArray(),
             Refs = item.Refs.ToArray(),
             SourceRefs = item.SourceRefs.ToArray(),
-            Metadata = new Dictionary<string, string>(item.Metadata),
+            Metadata = metadata,
             Importance = item.Importance,
             Version = item.Version <= 0 ? 1 : item.Version,
-            Checksum = string.IsNullOrWhiteSpace(item.Checksum)
-                ? ComputeChecksum(item.Content)
-                : item.Checksum,
+            Checksum = contentHash,
             CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
             UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
         };

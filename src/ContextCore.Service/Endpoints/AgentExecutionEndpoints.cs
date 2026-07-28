@@ -88,6 +88,12 @@ internal static class AgentExecutionEndpoints
                     CostUsedUsd = 0.0
                 };
 
+            // P0-5：从 API 入参写入 Run 约束（ModelArtifactId / AllowedToolIds / DeadlineAt）
+            var timeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : 300;
+            var allowedToolIds = request.ToolIds is { Count: > 0 } toolIds
+                ? new HashSet<string>(toolIds, StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
+
             var run = new AgentRun
             {
                 RunId = runId,
@@ -100,7 +106,13 @@ internal static class AgentExecutionEndpoints
                 CreatedAt = now,
                 UpdatedAt = now,
                 TurnBudget = turnBudget,
-                CostBudget = costBudget
+                CostBudget = costBudget,
+                // P0-5：写入约束字段（Actor 在执行时强制校验）
+                ModelArtifactId = string.IsNullOrWhiteSpace(request.ModelId) ? null : request.ModelId,
+                AllowedToolIds = allowedToolIds,
+                DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
+                ModelContextTokenBudget = 8192, // 默认 8192；0 或负数 = 不限制
+                IdempotencyKey = null
             };
 
             try
@@ -112,15 +124,14 @@ internal static class AgentExecutionEndpoints
                 return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
             }
 
-            // 启动执行（fire-and-forget；AgentKernelHost 内部通过 Channel 入队）
-            // 应用超时（若配置）：通过 linked CTS 在超时后触发取消
-            var timeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : 300;
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-
+            // P0-5 修复 CTS 释放问题：不再创建 linked timeout CTS（它在请求结束时被 Dispose，
+            // 导致 Actor 收到 ObjectDisposedException）。
+            // 超时控制改由 Run.DeadlineAt 字段承载，Actor 在每次模型调用前检查。
+            // 传入 CancellationToken.None 让 Actor 不受 HTTP 请求生命周期影响（fire-and-forget）。
+            // Run 可通过 POST /cancel 端点显式取消。
             try
             {
-                await host.StartRunAsync(run, timeoutCts.Token).ConfigureAwait(false);
+                await host.StartRunAsync(run, CancellationToken.None).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {

@@ -144,6 +144,19 @@ public sealed record CanaryAggregatedMetrics
     public required DateTimeOffset WindowStart { get; init; }
 
     public required DateTimeOffset WindowEnd { get; init; }
+
+    /// <summary>
+    /// P10：各实例 V2 延迟 DDSketch 的二进制字节列表（来自 canary_metrics_samples.v2_latency_sketch bytea 列）。
+    /// 由 PostgresCanaryMetricsAggregator.AggregateAsync 读取所有实例的 sketch 字节填充；
+    /// CanaryLeaderHostedService 消费时反序列化并 MergeFrom 合并，从合并后的 sketch 查询总体 P95，
+    /// 覆盖 V2P95LatencyMs（加权平均值的近似）。null/空 = 无 sketch 数据，保持 V2P95LatencyMs 原值。
+    /// </summary>
+    public IReadOnlyList<byte[]>? V2InstanceSketches { get; init; }
+
+    /// <summary>
+    /// P10：各实例 Legacy 延迟 DDSketch 的二进制字节列表。语义同 <see cref="V2InstanceSketches"/>。
+    /// </summary>
+    public IReadOnlyList<byte[]>? LegacyInstanceSketches { get; init; }
 }
 
 /// <summary>
@@ -190,12 +203,18 @@ public interface ICanaryMetricsAggregator
     /// </summary>
     /// <param name="runId">Canary run ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>递增后的新 epoch 值。</returns>
+    /// <param name="fencingToken">
+    /// P12：Leader 租约的 fencing token（单调递增）。非 0 时，数据库 UPDATE 校验
+    /// <c>WHERE fencing_token &lt;= @fencingToken</c>，确保只有当前持有 lease 的 Leader 能推进 epoch。
+    /// 旧 Leader（fencing token 较小）的 UPDATE 影响 0 行，返回 0 表示推进失败。
+    /// 默认 0 = 不做 fencing 校验（向后兼容单节点模式与测试）。
+    /// </param>
+    /// <returns>递增后的新 epoch 值；fencing 校验失败时返回 0。</returns>
     /// <remarks>
     /// 递增后，所有实例在下一次轮询时应检测到 epoch 变化并 Reset 本地 Collector。
     /// 旧 epoch 的快照行不再参与聚合（但保留在表中供审计，由 <see cref="PruneOldEpochsAsync"/> 清理）。
     /// </remarks>
-    ValueTask<long> AdvanceEpochAsync(string runId, CancellationToken cancellationToken = default);
+    ValueTask<long> AdvanceEpochAsync(string runId, CancellationToken cancellationToken = default, long fencingToken = 0);
 
     /// <summary>
     /// 获取指定 run 的当前 stage epoch。
@@ -285,6 +304,15 @@ public sealed record LeasedLeadership
 
     /// <summary>租约过期时间（UTC）。</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>
+    /// P12：Fencing token（单调递增，从 1 开始）。
+    /// 每次 TryAcquireAsync 成功获取（含抢占过期租约）时递增；RenewAsync 不递增。
+    /// 用于 Progression 更新（如 <see cref="ICanaryMetricsAggregator.AdvanceEpochAsync"/>）的 lease 校验：
+    /// 数据库 UPDATE 追加 <c>WHERE fencing_token &lt;= @fencingToken</c>，
+    /// lease 被抢占后旧 Leader 的 fencing token 较小，UPDATE 影响 0 行，推进失败。
+    /// </summary>
+    public long FencingToken { get; init; }
 }
 
 /// <summary>

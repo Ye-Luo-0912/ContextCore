@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -41,6 +42,54 @@ internal static class CandidateProviderHelpers
         Span<char> hex = stackalloc char[32];
         Convert.ToHexString(hash).AsSpan().ToLowerInvariant(hex);
         return string.Concat("sha256:", hex.Slice(0, 16));
+    }
+
+    /// <summary>
+    /// P6：从 ContextItem.Metadata / Checksum 派生 stable content hash，避免在线重复 SHA-256 计算。
+    /// 摄取阶段已持久化 content_hash（Metadata["__content_hash"] 或 Checksum 字段），此处直接复用。
+    /// 仅当未持久化时才回退到 <see cref="ComputeContentHash(string)"/> 在线计算。
+    /// </summary>
+    internal static string ResolveContentHash(ContextItem item)
+    {
+        // 优先读取 Metadata 中持久化的 content_hash（PostgresContextStore metadata-only 路径写入）
+        if (item.Metadata is not null
+            && item.Metadata.TryGetValue(ContentMetadataKeys.ContentHash, out var persistedHash)
+            && !string.IsNullOrWhiteSpace(persistedHash))
+        {
+            return DeriveContentHashFromChecksum(persistedHash);
+        }
+
+        // 回退到 Checksum 字段（BasicContextIngestionService 摄取时写入，全量 jsonb 路径保留）
+        if (!string.IsNullOrWhiteSpace(item.Checksum))
+        {
+            return DeriveContentHashFromChecksum(item.Checksum);
+        }
+
+        // 未持久化时在线计算（兼容旧数据 / 测试 stub）
+        return ComputeContentHash(item.Content);
+    }
+
+    /// <summary>
+    /// P6：从完整 SHA-256 hex（64 字符，小写）派生 "sha256:" + 前 16 字符形式的 content hash。
+    /// 输入可能短于 16 字符（异常情况），此时取 min(16, len) 字符。
+    /// </summary>
+    private static string DeriveContentHashFromChecksum(string checksum)
+    {
+        var span = checksum.AsSpan();
+        var take = Math.Min(16, span.Length);
+        return string.Concat("sha256:", span.Slice(0, take).ToString());
+    }
+
+    /// <summary>
+    /// P5：从 ContextItem.Metadata 读取摄取阶段持久化的精确 token cost。
+    /// 返回 null 表示未持久化（Provider 回退到 <see cref="EnrichTokenCost"/> fail-fast 路径）。
+    /// </summary>
+    internal static int? ReadPersistedTokenCost(ContextItem item)
+    {
+        if (item.Metadata is null) return null;
+        if (!item.Metadata.TryGetValue(ContentMetadataKeys.ContentTokenCost, out var tokenStr)) return null;
+        if (!int.TryParse(tokenStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokens) || tokens < 0) return null;
+        return tokens;
     }
 
     /// <summary>粗略估算 token 数（~4 chars/token，最小 1）。</summary>
@@ -189,7 +238,8 @@ internal static class CandidateProviderHelpers
         IContextTokenizerResolver? tokenizerResolver = null,
         string? tokenizerModelName = null)
     {
-        var contentHash = ComputeContentHash(item.Content);
+        // P6：优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
+        var contentHash = ResolveContentHash(item);
         var key = CanonicalCandidateKey.Create(
             workspaceId: item.WorkspaceId,
             collectionId: item.CollectionId,
@@ -236,8 +286,26 @@ internal static class CandidateProviderHelpers
             SourceRefs = item.SourceRefs.Concat(item.Refs).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
 
-        // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
-        envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+        // P5：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
+        // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        var persistedTokenCost = ReadPersistedTokenCost(item);
+        if (persistedTokenCost.HasValue)
+        {
+            envelope = envelope with
+            {
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = persistedTokenCost.Value,
+                    TokenizerId = tokenizerModelName ?? "persisted",
+                    IsEstimated = false
+                }
+            };
+        }
+        else
+        {
+            // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+            envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+        }
 
         return (envelope, material);
     }

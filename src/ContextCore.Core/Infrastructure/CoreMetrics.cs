@@ -25,6 +25,39 @@ public static class CoreMetrics
             unit: "ms",
             description: "HybridContextRetriever 检索端到端耗时");
 
+    // ── P8：Provider 性能计时拆分 ──────────────────────────────────────────
+    // 以下 Histogram 用于将 Provider 调用耗时拆分为 queue / execution / hydration /
+    // tokenization 四段。Circuit Breaker 仅依据 execution（RecordProviderTime）做熔断判定，
+    // queue_ms 仅作诊断指标，不参与熔断（避免本地并发饱和时误判 Semantic/Graph Store 变慢）。
+
+    /// <summary>Provider 等待 Semaphore 的排队耗时（毫秒，诊断用，不参与熔断）。</summary>
+    public static readonly Histogram<double> ProviderQueueDuration =
+        _meter.CreateHistogram<double>(
+            "contextcore.provider.queue.duration",
+            unit: "ms",
+            description: "Provider 等待调用方 SemaphoreSlim 的排队耗时；不参与 Circuit Breaker 熔断判定");
+
+    /// <summary>Provider 实际执行耗时（毫秒，参与熔断判定）。</summary>
+    public static readonly Histogram<double> ProviderExecutionDuration =
+        _meter.CreateHistogram<double>(
+            "contextcore.provider.execution.duration",
+            unit: "ms",
+            description: "Provider 实际执行耗时（不含 Semaphore 排队）；参与 Circuit Breaker 熔断判定");
+
+    /// <summary>Provider 正文 hydration 耗时（毫秒，诊断用）。</summary>
+    public static readonly Histogram<double> ProviderHydrationDuration =
+        _meter.CreateHistogram<double>(
+            "contextcore.provider.hydration.duration",
+            unit: "ms",
+            description: "Provider 正文 hydration（按 SourceKind 批量查询 store）耗时；诊断用");
+
+    /// <summary>Provider tokenize 耗时（毫秒，诊断用）。</summary>
+    public static readonly Histogram<double> ProviderTokenizationDuration =
+        _meter.CreateHistogram<double>(
+            "contextcore.provider.tokenization.duration",
+            unit: "ms",
+            description: "Provider 调用 tokenizer 计算 TokenCost 的耗时；诊断用");
+
     /// <summary>LLM 压缩耗时（毫秒）。</summary>
     public static readonly Histogram<double> CompressionDuration =
         _meter.CreateHistogram<double>(

@@ -100,6 +100,45 @@ public sealed record CanaryObservationMetrics
     /// <summary>推理成本（每千次请求的推理费用，单位美元；越低越好）；null = 未采集。</summary>
     public double? InferenceCost { get; init; }
 
+    /// <summary>
+    /// P10：V2 路径延迟 DDSketch 的二进制序列化字节。
+    /// 由 GetAggregatedMetrics 从本地 DDSketch.Serialize() 产出；CanaryLeaderHostedService.ToSample
+    /// 透传到 canary_metrics_samples.v2_latency_sketch bytea 列，供 Leader 聚合时 MergeFrom 合并。
+    /// null/空数组 = 无 sketch 数据（回退到加权平均 P95）。
+    /// </summary>
+    public byte[]? V2LatencySketch { get; init; }
+
+    /// <summary>
+    /// P10：Legacy 路径延迟 DDSketch 的二进制序列化字节。语义同 <see cref="V2LatencySketch"/>。
+    /// </summary>
+    public byte[]? LegacyLatencySketch { get; init; }
+
+    /// <summary>
+    /// P11：任务成功率分子（sum of TaskSuccessRate over non-null samples）。
+    /// 与 <see cref="TaskSuccessCount"/>（分母）配合，聚合时 SUM(分子) / SUM(分母) 替代 AVG(rate)。
+    /// null = 未采集（TaskSuccessRate 也为 null）。
+    /// </summary>
+    public double? TaskSuccessSum { get; init; }
+
+    /// <summary>
+    /// P11：任务成功率分母（count of non-null TaskSuccessRate samples）。
+    /// null = 未采集。
+    /// </summary>
+    public long? TaskSuccessCount { get; init; }
+
+    /// <summary>
+    /// P11：Tool 调用成功率分子（sum of ToolSuccessRate over non-null samples）。
+    /// 与 <see cref="ToolSuccessCount"/>（分母）配合，聚合时 SUM(分子) / SUM(分母) 替代 AVG(rate)。
+    /// null = 未采集。
+    /// </summary>
+    public double? ToolSuccessSum { get; init; }
+
+    /// <summary>
+    /// P11：Tool 调用成功率分母（count of non-null ToolSuccessRate samples）。
+    /// null = 未采集。
+    /// </summary>
+    public long? ToolSuccessCount { get; init; }
+
     /// <summary>观察窗口起始时间（UTC）。</summary>
     public required DateTimeOffset WindowStart { get; init; }
 
@@ -331,6 +370,12 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 AnswerQuality = null,
                 TokenCost = null,
                 InferenceCost = null,
+                V2LatencySketch = null,
+                LegacyLatencySketch = null,
+                TaskSuccessSum = null,
+                TaskSuccessCount = null,
+                ToolSuccessSum = null,
+                ToolSuccessCount = null,
                 WindowStart = now,
                 WindowEnd = now
             };
@@ -341,6 +386,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         double v2P95, legacyP95, qualityScoreSum;
         DateTimeOffset windowStart, windowEnd;
         ExternalAccumulator extSnapshot;
+        byte[]? v2SketchBytes;
+        byte[]? legacySketchBytes;
 
         lock (bucket)
         {
@@ -354,6 +401,9 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             windowStart = bucket.WindowStart;
             windowEnd = bucket.WindowEnd;
             extSnapshot = bucket.ExternalMetrics.Clone();
+            // P10：序列化 DDSketch 字节，供 Leader 跨实例合并
+            v2SketchBytes = bucket.V2LatencySketch.Serialize();
+            legacySketchBytes = bucket.LegacyLatencySketch.Serialize();
         }
 
         if (total == 0)
@@ -380,6 +430,12 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
                 AnswerQuality = null,
                 TokenCost = null,
                 InferenceCost = null,
+                V2LatencySketch = v2SketchBytes,
+                LegacyLatencySketch = legacySketchBytes,
+                TaskSuccessSum = extSnapshot.SumOf(FieldTaskSuccessRate),
+                TaskSuccessCount = extSnapshot.CountOf(FieldTaskSuccessRate),
+                ToolSuccessSum = extSnapshot.SumOf(FieldToolSuccessRate),
+                ToolSuccessCount = extSnapshot.CountOf(FieldToolSuccessRate),
                 WindowStart = windowStart,
                 WindowEnd = windowEnd
             };
@@ -409,6 +465,14 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             AnswerQuality = extSnapshot.MeanOf(FieldAnswerQuality),
             TokenCost = extSnapshot.MeanOf(FieldTokenCost),
             InferenceCost = extSnapshot.MeanOf(FieldInferenceCost),
+            // P10：DDSketch 序列化字节（供 Leader 跨实例 MergeFrom 合并查询 P95）
+            V2LatencySketch = v2SketchBytes,
+            LegacyLatencySketch = legacySketchBytes,
+            // P11：成功率分子/分母（供 Leader 跨实例 SUM(分子)/SUM(分母) 聚合）
+            TaskSuccessSum = extSnapshot.SumOf(FieldTaskSuccessRate),
+            TaskSuccessCount = extSnapshot.CountOf(FieldTaskSuccessRate),
+            ToolSuccessSum = extSnapshot.SumOf(FieldToolSuccessRate),
+            ToolSuccessCount = extSnapshot.CountOf(FieldToolSuccessRate),
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
@@ -491,6 +555,14 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
 
         public double? MeanOf(int field)
             => _count[field] > 0 ? _sum[field] / _count[field] : null;
+
+        /// <summary>P11：返回指定字段的分子（sum of non-null values）；无样本时返回 null。</summary>
+        public double? SumOf(int field)
+            => _count[field] > 0 ? _sum[field] : null;
+
+        /// <summary>P11：返回指定字段的分母（count of non-null samples）；无样本时返回 null。</summary>
+        public long? CountOf(int field)
+            => _count[field] > 0 ? _count[field] : null;
 
         public ExternalAccumulator Clone()
         {

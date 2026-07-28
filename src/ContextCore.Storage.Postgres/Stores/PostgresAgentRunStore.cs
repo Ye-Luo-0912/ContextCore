@@ -98,10 +98,14 @@ LIMIT 1;
         string runId,
         AgentRunState expectedCurrentState,
         AgentRunState newState,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        // P0-4：lease 校验要求 leaseToken + fencingToken 同时提供（或同时为 null）
+        var leaseValidated = leaseToken is not null && fencingToken is not null;
 
         var now = DateTimeOffset.UtcNow;
         var isTerminal = newState == AgentRunState.Completed
@@ -116,6 +120,8 @@ LIMIT 1;
         // State / UpdatedAt / FinishedAt 字段，消除"state 列 ≠ data JSON.State"的不一致。
         // data JSON 的 State 字段使用枚举名字符串（与 PostgresJsonSerializer 的 JsonStringEnumConverter 一致）。
         // 使用 jsonb || jsonb_build_object 合并覆盖（原子操作，无 read-before-write）。
+        // P0-4：当 leaseToken + fencingToken 提供时，WHERE 追加 EXISTS 子查询校验 agent_run_leases
+        // 中仍由当前实例持有该 lease；lease 被抢占后 fencing_token 不匹配 → 0 行受影响 → 抛异常。
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -124,10 +130,14 @@ LIMIT 1;
             var dataMerge = isTerminal
                 ? "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))"
                 : "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))";
+            // P0-4：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+            var leaseClause = leaseValidated
+                ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token)"
+                : string.Empty;
             updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}
 SET state = @new_state, updated_at = @updated_at{setFinished}, {dataMerge}
-WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state;
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state{leaseClause};
 """;
             updateCommand.Parameters.AddWithValue("workspace_id", workspaceId);
             updateCommand.Parameters.AddWithValue("run_id", runId);
@@ -139,6 +149,11 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             {
                 updateCommand.Parameters.AddWithValue("finished_at", now);
             }
+            if (leaseValidated)
+            {
+                updateCommand.Parameters.AddWithValue("lease_token", leaseToken!);
+                updateCommand.Parameters.AddWithValue("fencing_token", fencingToken!.Value);
+            }
 
             var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             if (affected > 0)
@@ -147,7 +162,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             }
         }
 
-        // 2. 0 行受影响：检查行是否存在以区分"逆退/已推进"与"Run 不存在"
+        // 2. 0 行受影响：检查行是否存在以区分"逆退/已推进/lease 失效"与"Run 不存在"
         await using var selectCommand = connection.CreateCommand();
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
@@ -161,6 +176,14 @@ LIMIT 1;
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var currentState = (AgentRunState)reader.GetByte(0);
+            // P0-4：lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
+            if (leaseValidated && currentState == expectedCurrentState)
+            {
+                throw new InvalidOperationException(
+                    $"Agent Run lease fencing 校验失败：workspace_id={workspaceId}, run_id={runId}。" +
+                    $"状态机前件匹配（{expectedCurrentState}），但 lease_token/fencing_token 不匹配——" +
+                    $"lease 已被其他实例抢占，应立即停止处理该 Run。");
+            }
             throw new InvalidOperationException(
                 $"Agent Run 状态机 CAS 失败：workspace_id={workspaceId}, run_id={runId}。" +
                 $"期望当前状态={expectedCurrentState}，实际={currentState}。" +

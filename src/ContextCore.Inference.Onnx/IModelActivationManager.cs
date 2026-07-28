@@ -59,6 +59,93 @@ public interface IModelActivationManager : IBatchInferenceEngine
         string modelName,
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P15：加载并预热模型，但不发布为 ActiveEngine。
+    /// 返回一个 Staged Handle，调用方可随后通过 <see cref="PromoteStagedAsync"/> 将其原子发布为 active，
+    /// 或直接丢弃（Dispose）。本方法用于 /warmup 端点：预热不应替换当前 active 模型。
+    /// </summary>
+    /// <param name="modelArtifactId">模型工件 ID（从 IModelArtifactRegistry 查询）。</param>
+    /// <param name="options">ONNX 推理配置。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Staged Handle（含已 warmup 的引擎、descriptor、handle id）。</returns>
+    ValueTask<StagedModelHandle> LoadAndWarmupAsync(
+        string modelArtifactId,
+        OnnxInferenceEngineOptions options,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P15：将先前 <see cref="LoadAndWarmupAsync"/> 产生的 Staged Handle 原子发布为 active。
+    /// 未找到 handleId 时返回 Failed。成功后 Staged Handle 从内部暂存表中移除。
+    /// </summary>
+    /// <param name="stagedHandleId">由 <see cref="LoadAndWarmupAsync"/> 返回的 handle id。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>激活结果（含已发布的引擎）。</returns>
+    ValueTask<ModelActivationResult> PromoteStagedAsync(
+        string stagedHandleId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P15：Staged Model Handle — 由 <see cref="IModelActivationManager.LoadAndWarmupAsync"/> 返回。
+/// 表示已加载并 warmup 但尚未发布为 active 的引擎。调用方应在使用完毕后 Dispose；
+/// 或通过 <see cref="IModelActivationManager.PromoteStagedAsync"/> 提升为 active。
+/// Success=false 时 Engine 为 null，调用方应检查 <see cref="Success"/> 后再使用 Engine。
+/// </summary>
+public sealed record StagedModelHandle
+{
+    /// <summary>Staged Handle 全局唯一标识（由 LoadAndWarmupAsync 生成）。</summary>
+    public required string HandleId { get; init; }
+
+    /// <summary>是否加载并 warmup 成功。false 时 Engine 为 null，参考 <see cref="Error"/>。</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>失败时的错误消息（Success=true 时为 null）。</summary>
+    public required string? Error { get; init; }
+
+    /// <summary>已加载并 warmup 的引擎（Success=false 时为 null）。</summary>
+    public required IBatchInferenceEngine? Engine { get; init; }
+
+    /// <summary>对应的模型工件描述符（descriptor 未找到时可能为 null）。</summary>
+    public required ModelArtifactDescriptor? Descriptor { get; init; }
+
+    /// <summary>校准验证结果（未执行时为 null）。</summary>
+    public required CalibrationValidationResult? CalibrationValidation { get; init; }
+
+    /// <summary>Staged 时间戳。</summary>
+    public required DateTimeOffset StagedAt { get; init; }
+
+    /// <summary>构造成功结果。</summary>
+    internal static StagedModelHandle Succeeded(
+        string handleId,
+        IBatchInferenceEngine engine,
+        ModelArtifactDescriptor descriptor,
+        CalibrationValidationResult? calResult) => new()
+    {
+        HandleId = handleId,
+        Success = true,
+        Error = null,
+        Engine = engine,
+        Descriptor = descriptor,
+        CalibrationValidation = calResult,
+        StagedAt = DateTimeOffset.UtcNow
+    };
+
+    /// <summary>构造失败结果（Engine 为 null，Success=false）。</summary>
+    internal static StagedModelHandle Failed(
+        string handleId,
+        ModelArtifactDescriptor? descriptor,
+        string error,
+        CalibrationValidationResult? calResult = null) => new()
+    {
+        HandleId = handleId,
+        Success = false,
+        Error = error,
+        Engine = null,
+        Descriptor = descriptor,
+        CalibrationValidation = calResult,
+        StagedAt = DateTimeOffset.UtcNow
+    };
 }
 
 /// <summary>

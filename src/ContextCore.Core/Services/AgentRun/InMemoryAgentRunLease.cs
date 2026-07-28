@@ -31,6 +31,8 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 {
     private readonly ConcurrentDictionary<string, LeaseEntry> _leases = new(StringComparer.Ordinal);
     private readonly object _reapLock = new();
+    // P0-4：全局 fencing token 计数器（单调递增）。每次成功获取租约（含抢占过期）时递增。
+    private long _globalFencingToken;
 
     /// <inheritdoc />
     public ValueTask<LeasedAgentRun?> TryAcquireAsync(
@@ -49,10 +51,19 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         var expiresAt = now + leaseDuration;
         var leaseToken = Guid.NewGuid().ToString("N");
 
-        var acquired = _leases.AddOrUpdate(
+        // P0-4：预分配 fencing token（仅当实际获取成功时才生效）。
+        // 使用 Interlocked.Increment 保证单调递增；即使并发获取失败也不会回退（可接受，fencing token 只需单调）。
+        var fencingToken = Interlocked.Increment(ref _globalFencingToken);
+        var acquired = false;
+
+        _leases.AddOrUpdate(
             runId,
             // 不存在 → 直接获取
-            _ => new LeaseEntry(leaseToken, owner, expiresAt),
+            _ =>
+            {
+                acquired = true;
+                return new LeaseEntry(leaseToken, owner, expiresAt, fencingToken);
+            },
             // 已存在 → 检查是否过期
             (_, existing) =>
             {
@@ -62,18 +73,20 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
                     return existing;
                 }
                 // 已过期 → 抢占
-                return new LeaseEntry(leaseToken, owner, expiresAt);
+                acquired = true;
+                return new LeaseEntry(leaseToken, owner, expiresAt, fencingToken);
             });
 
-        // 判断是否成功获取（leaseToken 匹配 = 新获取；不匹配 = 被其他实例持有）
-        if (acquired.LeaseToken == leaseToken)
+        // 判断是否成功获取（acquired 标志 = 新获取；false = 被其他实例持有）
+        if (acquired)
         {
             return ValueTask.FromResult<LeasedAgentRun?>(new LeasedAgentRun
             {
                 RunId = runId,
-                LeaseToken = acquired.LeaseToken,
-                Owner = acquired.Owner,
-                ExpiresAt = acquired.ExpiresAt
+                LeaseToken = leaseToken,
+                Owner = owner,
+                ExpiresAt = expiresAt,
+                FencingToken = fencingToken
             });
         }
 
@@ -100,12 +113,12 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         _leases.AddOrUpdate(
             runId,
             // 不存在 → 创建空条目（后续判断会失败）
-            _ => new LeaseEntry(string.Empty, string.Empty, now),
+            _ => new LeaseEntry(string.Empty, string.Empty, now, 0),
             (_, existing) =>
             {
                 if (existing.LeaseToken == leaseToken && existing.ExpiresAt > now)
                 {
-                    // token 匹配且未过期 → 续约
+                    // token 匹配且未过期 → 续约（fencing token 不变，lease 连续性保持）
                     success = true;
                     return existing with { ExpiresAt = now + extension };
                 }
@@ -161,6 +174,6 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     /// <summary>当前持有的租约数量（诊断/监控用）。</summary>
     public int ActiveLeaseCount => _leases.Count;
 
-    /// <summary>租约内部条目。</summary>
-    private sealed record LeaseEntry(string LeaseToken, string Owner, DateTimeOffset ExpiresAt);
+    /// <summary>租约内部条目（P0-4：含 FencingToken 用于副作用校验）。</summary>
+    private sealed record LeaseEntry(string LeaseToken, string Owner, DateTimeOffset ExpiresAt, long FencingToken);
 }

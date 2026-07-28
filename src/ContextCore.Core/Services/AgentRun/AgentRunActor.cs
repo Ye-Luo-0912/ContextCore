@@ -60,6 +60,8 @@ public sealed class AgentRunActor
     private readonly IAgentCheckpointStore? _checkpointStore;
     // 子问题 5：Durable Tool Executor（封装 journal + dispatch）
     private readonly IDurableToolExecutor? _durableToolExecutor;
+    // P0-3：模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
+    private readonly IAgentModelContextProjector? _modelContextProjector;
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
@@ -76,6 +78,13 @@ public sealed class AgentRunActor
     private AgentCheckpoint? _pendingTurnCheckpoint;
     // G4：批量提交阈值（超过则 mid-turn 强制 flush）
     private const int PendingEventsFlushThreshold = 32;
+
+    // P0-4：当前 Run 的 lease token 与 fencing token（由 AgentKernelHost 在 ExecuteAsync 时注入）。
+    // 非空时 FlushPendingEventsAsync 将它们写入 AgentRunStateUpdate，由 Postgres 实现在
+    // 状态 CAS + 事件追加的 WHERE 子句中校验 lease 仍由当前实例持有。
+    // null = 无 lease 路径（测试 / 外部取消 / 恢复 Worker 等不持有 lease 的调用方）。
+    private string? _leaseToken;
+    private long? _fencingToken;
 
     /// <summary>
     /// P0-2 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
@@ -95,6 +104,13 @@ public sealed class AgentRunActor
 
         /// <summary>最近一次模型响应（null = 首轮，尚未调用模型；与 Context.LastModelTurn 同步，保留供 IAgentLoopPolicy 使用）。</summary>
         public AgentModelResponse? LastModelResponse { get; init; }
+
+        /// <summary>
+        /// P0-3：最近一次 Context Decision Runtime 的执行结果（含 WorkingSet.Materials）。
+        /// null = 未注入决策运行时或本轮未调用。
+        /// 由 IAgentModelContextProjector 在投影时从 Materials 取出候选正文。
+        /// </summary>
+        public ContextDecisionExecutionResult? LastDecisionResult { get; init; }
 
         /// <summary>最近一次 checkpoint（null = 尚未创建 checkpoint）。</summary>
         public AgentCheckpoint? LastCheckpoint { get; init; }
@@ -120,6 +136,7 @@ public sealed class AgentRunActor
     /// <param name="decisionRuntime">Context Decision Runtime（null 时直接构造上下文）。</param>
     /// <param name="checkpointStore">子问题 4：Checkpoint Store（null 时跳过 SaveAsync）。</param>
     /// <param name="durableToolExecutor">子问题 5：Durable Tool Executor（null 时回退到 IToolDispatcher）。</param>
+    /// <param name="modelContextProjector">P0-3：模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -131,7 +148,8 @@ public sealed class AgentRunActor
         IAgentCheckpointFactory? checkpointFactory = null,
         IContextDecisionRuntime? decisionRuntime = null,
         IAgentCheckpointStore? checkpointStore = null,
-        IDurableToolExecutor? durableToolExecutor = null)
+        IDurableToolExecutor? durableToolExecutor = null,
+        IAgentModelContextProjector? modelContextProjector = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -144,6 +162,7 @@ public sealed class AgentRunActor
         _decisionRuntime = decisionRuntime;
         _checkpointStore = checkpointStore;
         _durableToolExecutor = durableToolExecutor;
+        _modelContextProjector = modelContextProjector;
         _modelCallsUsed = 0;
         _turnStartState = AgentRunState.Created;
     }
@@ -153,6 +172,12 @@ public sealed class AgentRunActor
     /// </summary>
     /// <param name="run">待执行的 Run 元数据。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="leaseToken">
+    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
+    /// 所有副作用操作（状态 CAS / 事件追加）的 WHERE 子句将追加 lease_token + fencing_token 校验；
+    /// lease 已被抢占时副作用失败，Actor 应中止。null = 无 lease 路径（测试 / 外部取消等）。
+    /// </param>
+    /// <param name="fencingToken">P0-4：可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
     /// <remarks>
     /// 运行时能力补齐 — Resume from checkpoint：
     ///   当 <paramref name="run"/>.State != Created 时判定为崩溃恢复场景。
@@ -161,9 +186,18 @@ public sealed class AgentRunActor
     ///   LastModelResponse 在 resume 时置为 null（事件流中不含完整模型响应内容），
     ///   强制重新调用模型以避免基于残缺状态做决策。durable journal 保证已分派 Tool 不会被重复执行。
     /// </remarks>
-    public async Task ExecuteAsync(AgentRun run, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(
+        AgentRun run,
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null)
     {
         ArgumentNullException.ThrowIfNull(run);
+
+        // P0-4：保存 lease token 与 fencing token，供 FlushPendingEventsAsync 在批量提交时校验。
+        // 两者必须同时为 null 或同时非 null（接口契约由调用方 AgentKernelHost 保证）。
+        _leaseToken = leaseToken;
+        _fencingToken = fencingToken;
 
         // 运行时能力补齐：检测 resume 场景
         // run.State != Created 表示 Run 之前已开始执行（崩溃/重启后由 RecoveryWorker 重新入队）
@@ -242,6 +276,14 @@ public sealed class AgentRunActor
 
                     case AgentLoopDecision.DispatchTool:
                         state = await DispatchToolsAsync(state, cancellationToken).ConfigureAwait(false);
+                        // P0-6：若审批挂起（DispatchToolsAsync 已 flush 并返回 AwaitingApproval 状态），
+                        // 退出执行槽（释放 Worker/Semaphore/Lease）。Run 已持久化为 AwaitingApproval；
+                        // 外部审批决策通过 POST /approvals/{approvalId} 端点提交，
+                        // RecoveryWorker 会重新入队执行。
+                        if (state.Run.State == AgentRunState.AwaitingApproval)
+                        {
+                            return;
+                        }
                         break;
 
                     case AgentLoopDecision.Checkpoint:
@@ -449,6 +491,17 @@ public sealed class AgentRunActor
     /// <summary>执行 CallModel 阶段。</summary>
     private async Task<AgentRunExecutionState> CallModelAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
+        // P0-5：在调用模型前检查 DeadlineAt（超时则 Fail，替代旧路径中 StartRunAsync 返回后立即 Dispose 的 linked CTS）。
+        // 旧路径 linked CTS 在 HTTP 请求结束时被 Dispose，导致 Actor 收到 ObjectDisposedException；
+        // 新路径由 Run.DeadlineAt 字段承载超时控制，Actor 在每次模型调用前检查。
+        if (state.Run.DeadlineAt is not null && DateTimeOffset.UtcNow > state.Run.DeadlineAt)
+        {
+            await FailAsync(state,
+                $"Run 超时：已超过执行截止时间（DeadlineAt={state.Run.DeadlineAt:O}）。",
+                cancellationToken).ConfigureAwait(false);
+            return state with { Run = state.Run with { State = AgentRunState.Failed } };
+        }
+
         // 进入 ModelCalling（G4：本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
         state = TransitionStateLocal(state, AgentRunState.ModelCalling);
 
@@ -483,10 +536,22 @@ public sealed class AgentRunActor
             return TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
 
-        // G5：由 ContextCore 投影最终模型输入（根据 TokenBudget；当前传 0 = 不限制，保持与旧路径等价）
-        // ProjectForModel 将 CurrentTask 投影为 User 消息、ToolObservations 投影为 Tool 消息，
-        // 替代旧路径直接传 state.Messages 的扁平方式
-        var projectedMessages = state.Context.ProjectForModel(tokenBudget: 0);
+        // P0-3：由 IAgentModelContextProjector 投影最终模型输入（从 WorkingSet.Materials 取正文 + Token 预算控制）。
+        // 未注入投影器时回退到 AgentContextState.ProjectForModel（旧路径，无 Material 正文）。
+        // tokenBudget 使用 Run.ModelContextTokenBudget（默认 8192）；0 或负数 = 不限制。
+        var tokenBudget = state.Run.ModelContextTokenBudget;
+        IReadOnlyList<AgentMessage> projectedMessages;
+        if (_modelContextProjector is not null)
+        {
+            var projection = _modelContextProjector.Project(
+                state.Run, state.LastDecisionResult, state.Context, tokenBudget);
+            projectedMessages = projection.Messages;
+        }
+        else
+        {
+            // 回退路径：旧 ProjectForModel（不含 Material 正文；传 0 = 不限制，保持向后兼容）
+            projectedMessages = state.Context.ProjectForModel(tokenBudget: 0);
+        }
 
         // G1：仅在事件 payload 中携带 contextLength（不再传字符串给 Transport）
         var contextLength = AgentMessage.Serialize(projectedMessages).Length;
@@ -581,7 +646,9 @@ public sealed class AgentRunActor
     /// G1/G5：构建结构化上下文。
     /// G5：User(run.Task) 不再追加到 Messages，而是由 AgentContextState.CurrentTask 持有，
     ///     ProjectForModel 投影时合成 User 消息（消除 hasUserMessage 去重检查）。
-    /// 若 IContextDecisionRuntime 注入，每次调用追加 System(retrievedContext) 到 Messages。
+    /// P0-3：若 IContextDecisionRuntime 注入，执行决策并存储 ContextDecisionExecutionResult 到
+    ///       state.LastDecisionResult，由 IAgentModelContextProjector 在投影时从 WorkingSet.Materials
+    ///       取出候选正文。不再每轮追加 System(retrievedContext) 消息（避免重复 + 让投影器统一管理）。
     /// </summary>
     /// <param name="state">当前执行状态。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -591,17 +658,19 @@ public sealed class AgentRunActor
         // ProjectForModel 会将其投影为 User 消息，无需在此追加。
         // 旧路径的 hasUserMessage 去重检查随之移除（CurrentTask 是单值字段，天然不会重复）。
 
-        // P0-2 Bug 2 修复：若 IContextDecisionRuntime 注入，调用它构建检索上下文
+        // P0-3：若 IContextDecisionRuntime 注入，执行决策获取 WorkingSet（含 Materials 正文）
         if (_decisionRuntime is not null)
         {
-            var decisionContext = await TryBuildDecisionContextAsync(state.Run, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(decisionContext))
+            var decisionResult = await TryExecuteDecisionAsync(state.Run, cancellationToken).ConfigureAwait(false);
+            if (decisionResult is not null)
             {
-                state.Context.Messages.Add(new AgentMessage
-                {
-                    Role = AgentMessageRole.System,
-                    Content = $"[RetrievedContext]\n{decisionContext}"
-                });
+                // P0-3：存储决策结果供投影器使用（不再追加 System 消息摘要到 Messages）
+                state = state with { LastDecisionResult = decisionResult };
+            }
+            else
+            {
+                // 决策失败或无选中候选 → 清空上轮的决策结果（避免投影器使用过期 Materials）
+                state = state with { LastDecisionResult = null };
             }
         }
 
@@ -609,10 +678,10 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// 子问题 1：调用 IContextDecisionRuntime 构建检索上下文。
-    /// 失败时返回 null（降级为仅 Task + History）。
+    /// P0-3：调用 IContextDecisionRuntime 执行决策，返回含 WorkingSet.Materials 的完整执行结果。
+    /// 失败时返回 null（降级为仅 Task + History，投影器不注入 Retrieved Materials）。
     /// </summary>
-    private async Task<string?> TryBuildDecisionContextAsync(AgentRun run, CancellationToken cancellationToken)
+    private async Task<ContextDecisionExecutionResult?> TryExecuteDecisionAsync(AgentRun run, CancellationToken cancellationToken)
     {
         if (_decisionRuntime is null)
         {
@@ -645,22 +714,9 @@ public sealed class AgentRunActor
                 }
             };
 
-            var execution = await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
-
-            // 序列化选中候选为可读上下文（CandidateId + Type + 评分摘要）
-            var selected = execution.Decision.SelectedEnvelopes;
-            if (selected.Count == 0)
-            {
-                return null;
-            }
-
-            var lines = new List<string>(selected.Count);
-            foreach (var env in selected)
-            {
-                var score = env.Utility?.FinalScore ?? 0;
-                lines.Add($"- [{env.Type}] {env.CandidateId} (score={score:F3})");
-            }
-            return string.Join("\n", lines);
+            // P0-3：使用 ExecuteWithWorkingSetAsync 获取完整 WorkingSet（Envelopes + Materials）
+            // 让投影器从 Materials 恢复候选正文，而不只是 CandidateId/Type/Score 摘要
+            return await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -686,6 +742,27 @@ public sealed class AgentRunActor
             // P0-2 Bug 5 修复：在循环开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
             // 确保 ToolCallStarted 事件和 ToolCallCompleted 事件的审计 ID 一致
             var toolCallId = Guid.NewGuid().ToString("N");
+
+            // P0-5：强制 Run 约束的 Tool 白名单（AllowedToolIds 非空时仅允许集合中的 Tool）。
+            // 旧路径未写入 AllowedToolIds，Actor 无法按 Run 限定 Tool 集；新路径从 API 入参写入并在此强制。
+            if (state.Run.AllowedToolIds.Count > 0
+                && !string.IsNullOrWhiteSpace(toolCall.ToolName)
+                && !state.Run.AllowedToolIds.Contains(toolCall.ToolName))
+            {
+                state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
+                    toolCallId: toolCallId,
+                    requestId: null,
+                    toolName: toolCall.ToolName,
+                    idempotencyKey: toolCall.IdempotencyKey,
+                    sideEffect: ToolSideEffect.Unknown.ToString(),
+                    externalOperationId: null,
+                    journalState: ToolDispatchState.Prepared.ToString(),
+                    succeeded: false,
+                    output: null,
+                    error: $"Tool '{toolCall.ToolName}' 不在 Run.AllowedToolIds 白名单中，已被 Run 约束拒绝。",
+                    durationMs: 0)));
+                continue;
+            }
 
             // 1. 校验
             if (_toolCallValidator is not null)
@@ -721,6 +798,31 @@ public sealed class AgentRunActor
                     }));
 
                     var approval = await _approvalGate.RequestApprovalAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
+
+                    // P0-6：区分三种审批结果——PendingApproval（挂起等待人工）/ Approved（批准）/ Rejected（拒绝）
+                    if (approval.PendingApproval)
+                    {
+                        // P0-6：审批挂起 — 记录 ApprovalResolved(pending) 事件 + approvalId，
+                        // flush 持久化 AwaitingApproval 状态，然后退出执行槽（释放 Worker/Semaphore）。
+                        // 旧路径返回 Approved=false 导致 Actor 跳过 Tool 继续执行——不是真正的 Human-in-the-loop。
+                        // 外部通过 POST /approvals/{approvalId} 端点提交决策；
+                        // 决策后 Run 状态推进到 ToolDispatching（批准）或 Failed（拒绝），
+                        // RecoveryWorker 会重新入队执行。
+                        state = BufferEvent(state, AgentRunEventType.ApprovalResolved, JsonSerializer.Serialize(new
+                        {
+                            approved = false,
+                            pending = true,
+                            approvalId = approval.ApprovalId,
+                            approverId = (string?)null,
+                            rejectionReason = (string?)null
+                        }));
+
+                        // 立即 flush：将 AwaitingApproval 状态 + 事件持久化（单事务）
+                        await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+
+                        // 退出执行槽：返回 AwaitingApproval 状态，主循环检测后 return
+                        return state;
+                    }
 
                     state = BufferEvent(state, AgentRunEventType.ApprovalResolved, JsonSerializer.Serialize(new
                     {
@@ -1076,7 +1178,11 @@ public sealed class AgentRunActor
             RunId = run.RunId,
             ExpectedCurrentState = _turnStartState,
             NewState = run.State,
-            RunSnapshot = run
+            RunSnapshot = run,
+            // P0-4：透传 lease token + fencing token，Postgres 实现在状态 CAS 与事件追加的
+            // WHERE 子句中校验 lease 仍由当前实例持有；lease 被抢占时事务回滚并抛异常。
+            LeaseToken = _leaseToken,
+            FencingToken = _fencingToken
         };
 
         AgentCheckpointCursor? checkpointCursor = null;

@@ -3,6 +3,7 @@ using ContextCore.Core.Services.DecisionEngine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ContextCore.Core.Services.Evolution;
 
@@ -48,42 +49,51 @@ public sealed class CanaryProgressionHostedService : BackgroundService
     private readonly ICanaryMetricsCollector _metricsCollector;
     private readonly CanaryProgressionService _progressionService;
     private readonly TimeProvider _timeProvider;
-    private readonly CanarySchedulerOptions _options;
+    private readonly IOptionsMonitor<CanarySchedulerOptions> _optionsMonitor;
     private readonly ILogger<CanaryProgressionHostedService> _logger;
 
     /// <summary>构造 Canary 渐进推进后台服务。</summary>
     /// <param name="scopeFactory">DI scope 工厂（用于解析 scoped 依赖）。</param>
     /// <param name="metricsCollector">Canary 指标采集器。</param>
     /// <param name="progressionService">Canary 渐进推进服务。</param>
+    /// <param name="optionsMonitor">调度器配置监视器（P0-2：替代直接 POCO 注入，感知 PostConfigure 覆盖）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 System）。</param>
-    /// <param name="options">调度器配置（可选，默认 <see cref="CanarySchedulerOptions"/>）。</param>
     /// <param name="logger">日志器。</param>
+    /// <remarks>
+    /// P0-2：构造函数改用 <see cref="IOptionsMonitor{T}"/> 注入 <see cref="CanarySchedulerOptions"/>，
+    /// 让 ProductionHA profile 的 <c>PostConfigure&lt;CanarySchedulerOptions&gt;(o => o.Enabled = false)</c>
+    /// 能被本服务感知。原直接 POCO 注入读取的是 Options Pipeline 之外的快照，导致
+    /// HA 模式下 Progression 仍 Enabled，与 Leader 推进器同时运行。
+    /// </remarks>
     public CanaryProgressionHostedService(
         IServiceScopeFactory scopeFactory,
         ICanaryMetricsCollector metricsCollector,
         CanaryProgressionService progressionService,
+        IOptionsMonitor<CanarySchedulerOptions> optionsMonitor,
         TimeProvider? timeProvider = null,
-        CanarySchedulerOptions? options = null,
         ILogger<CanaryProgressionHostedService>? logger = null)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _metricsCollector = metricsCollector ?? throw new ArgumentNullException(nameof(metricsCollector));
         _progressionService = progressionService ?? throw new ArgumentNullException(nameof(progressionService));
+        _optionsMonitor = optionsMonitor ?? throw new ArgumentNullException(nameof(optionsMonitor));
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _options = options ?? new CanarySchedulerOptions();
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CanaryProgressionHostedService>.Instance;
     }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled)
+        // P0-2：每次循环读取 IOptionsMonitor.CurrentValue 而非构造时快照，
+        // 让 PostConfigure 覆盖（如 ProductionHA 强制 Enabled=false）能即时生效。
+        var options = _optionsMonitor.CurrentValue;
+        if (!options.Enabled)
         {
             _logger.LogInformation("CanaryProgressionHostedService 已禁用（CanarySchedulerOptions.Enabled=false）；不启动轮询。");
             return;
         }
 
-        _logger.LogInformation("CanaryProgressionHostedService 启动：轮询间隔 {PollingInterval}。", _options.PollingInterval);
+        _logger.LogInformation("CanaryProgressionHostedService 启动：轮询间隔 {PollingInterval}。", options.PollingInterval);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -103,7 +113,8 @@ public sealed class CanaryProgressionHostedService : BackgroundService
 
             try
             {
-                await Task.Delay(_options.PollingInterval, stoppingToken).ConfigureAwait(false);
+                // P0-2：每次延迟前重新读取 CurrentValue，让运行时配置变更（如 PostConfigure）生效。
+                await Task.Delay(_optionsMonitor.CurrentValue.PollingInterval, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

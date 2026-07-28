@@ -88,20 +88,20 @@ builder.Services
 		});
 	})
 	.AddContextStorage(storageOptions)
-	.AddContextCore()
+	// P0-1：统一入口 AddContextCoreRuntime 替代旧 AddContextCore() + AddContextCoreProductionRuntime()。
+	// 该方法内部按 ContextCoreRuntime:ModelMode 选择 ModelExecutionOptions 调用 AddContextCore，
+	// 再按 ContextCoreRuntime:Profile 分发 HostedService / Transport / Canary 注册。
+	// 必须在 AddContextStorage 之后调用（依赖其注册的 IModelArtifactRegistry / PostgresDurableTransport 等）。
+	.AddContextCoreRuntime(builder.Configuration)
 	.AddContextModelGateway(builder.Configuration)
-        .AddEmbeddingProviders(embeddingProviderOptions)
-        // 生产 Composition Root：唯一显式入口，按 ProductionRuntime:Profile 分发注册
-        // Durable Transport hosted services / AgentKernel loop / Run Recovery / Canary Leader 等。
-        // 必须在 AddContextStorage / AddContextCore 之后调用（依赖其注册的 IAgentKernel / IAgentRunStore 等）。
-        .AddContextCoreProductionRuntime(builder.Configuration)
-        // 安全框架注册：WorkspaceContext / RBAC / API Key Store（含轮换）/ Tool Authorizer /
-        // Workspace Quota / Audit Retention。默认实现为进程内版本，生产应替换为持久化实现。
-        // 默认所有开关关闭（向后兼容），通过 appsettings.json Security:Rbac:Enforce /
-        // Security:RateLimit:Enabled / Security:ApiKeyRotation:EnableStaticKeyRotation 等显式启用。
-        .AddContextCoreSecurity(securityOptions)
-        .AddContextCoreRateLimiter(securityOptions)
-        .AddContextCoreApiKeyPurgeWorker(securityOptions);
+	.AddEmbeddingProviders(embeddingProviderOptions)
+	// 安全框架注册：WorkspaceContext / RBAC / API Key Store（含轮换）/ Tool Authorizer /
+	// Workspace Quota / Audit Retention。默认实现为进程内版本，生产应替换为持久化实现。
+	// 默认所有开关关闭（向后兼容），通过 appsettings.json Security:Rbac:Enforce /
+	// Security:RateLimit:Enabled / Security:ApiKeyRotation:EnableStaticKeyRotation 等显式启用。
+	.AddContextCoreSecurity(securityOptions)
+	.AddContextCoreRateLimiter(securityOptions)
+	.AddContextCoreApiKeyPurgeWorker(securityOptions);
 
 // ── 可观测性（OpenTelemetry，按 Observability:Enabled 条件启用）─────────
 var otlpEndpoint = builder.Configuration["Observability:OtlpEndpoint"];

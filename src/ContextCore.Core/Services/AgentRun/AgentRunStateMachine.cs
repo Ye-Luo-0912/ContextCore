@@ -23,7 +23,11 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 ///    ↓           ↓                ↓               ↓
 ///    └───────────┴────────────────┴───────────────┘
 ///                        ↓
-///               ToolDispatching → Observing → Checkpointing
+///               ToolDispatching → AwaitingApproval（P0-6：需审批时挂起）
+///                        ↓            ↓
+///                        └────────────┘
+///                                     ↓
+///                          Observing → Checkpointing
 ///                        ↓            ↓            ↓
 ///                        └────────────┴────────────┘
 ///                                     ↓
@@ -33,6 +37,8 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// </code>
 /// 任意状态可跳转到 Failed（异常）或 Cancelled（用户取消）。
 /// Checkpointing 后回到 ContextBuilding 开启下一轮循环。
+/// P0-6：ToolDispatching → AwaitingApproval 允许 Tool 分派中需审批时挂起，
+/// 等待外部 POST /approvals/{approvalId} 决策后回到 ToolDispatching 继续。
 /// </remarks>
 public static class AgentRunStateMachine
 {
@@ -108,8 +114,9 @@ public static class AgentRunStateMachine
                                               || to == AgentRunState.ContextBuilding
                                               || to == AgentRunState.Completed,
 
-            // ToolDispatching → Observing（观察结果）
-            AgentRunState.ToolDispatching => to == AgentRunState.Observing,
+            // ToolDispatching → AwaitingApproval（P0-6：Tool 分派中需审批时挂起等待人工裁决）/ Observing（观察结果）
+            AgentRunState.ToolDispatching => to == AgentRunState.AwaitingApproval
+                                              || to == AgentRunState.Observing,
 
             // Observing → Checkpointing（保存检查点）/ ContextBuilding（直接进入下一轮，跳过 checkpoint）/ Completed（无需继续则完成）
             AgentRunState.Observing => to == AgentRunState.Checkpointing

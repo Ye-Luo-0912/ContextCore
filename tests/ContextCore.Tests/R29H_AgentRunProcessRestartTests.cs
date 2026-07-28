@@ -541,8 +541,10 @@ public sealed class R29H_AgentRunProcessRestartTests
         public ValueTask TransitionStateAsync(
             string workspaceId, string runId,
             AgentRunState expectedCurrentState, AgentRunState newState,
-            CancellationToken cancellationToken = default)
-            => _inner.TransitionStateAsync(workspaceId, runId, expectedCurrentState, newState, cancellationToken);
+            CancellationToken cancellationToken = default,
+            string? leaseToken = null,
+            long? fencingToken = null)
+            => _inner.TransitionStateAsync(workspaceId, runId, expectedCurrentState, newState, cancellationToken, leaseToken, fencingToken);
 
         public ValueTask UpdateAsync(AgentRun run, CancellationToken cancellationToken = default)
             => _inner.UpdateAsync(run, cancellationToken);

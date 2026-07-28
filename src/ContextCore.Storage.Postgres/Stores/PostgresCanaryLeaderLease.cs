@@ -46,6 +46,8 @@ public sealed class PostgresCanaryLeaderLease : PostgresStoreBase, ICanaryLeader
     /// <remarks>
     /// 原子 CAS 获取租约：使用 <c>INSERT ... ON CONFLICT DO UPDATE WHERE lease_expires_at &lt; now</c>。
     /// 无现有行或现有行过期时获取成功；现有行未过期时返回 null（已被其他实例持有）。
+    /// P12：成功获取时 <c>fencing_token = 旧值 + 1</c>（新插入为 1），RETURNING 返回新的 fencing_token，
+    /// 供调用方在副作用 UPDATE（如 AdvanceEpochAsync）的 WHERE 子句中校验。续约（RenewAsync）不递增 fencing_token。
     /// </remarks>
     public async ValueTask<LeasedLeadership?> TryAcquireAsync(
         string runId,
@@ -69,16 +71,19 @@ public sealed class PostgresCanaryLeaderLease : PostgresStoreBase, ICanaryLeader
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // P12：fencing_token 在 ON CONFLICT DO UPDATE 时 = canary_leader_leases.fencing_token + 1（抢占过期），
+        // 新插入时 = 1（VALUES 中指定）。RETURNING 同时返回 lease_token 与 fencing_token 以便调用方使用。
         command.CommandText = $"""
-INSERT INTO {Table("canary_leader_leases")} (run_id, owner, lease_token, acquired_at, lease_expires_at)
-VALUES (@run_id, @owner, @token, @now, @expires_at)
+INSERT INTO {Table("canary_leader_leases")} (run_id, owner, lease_token, fencing_token, acquired_at, lease_expires_at)
+VALUES (@run_id, @owner, @token, 1, @now, @expires_at)
 ON CONFLICT (run_id) DO UPDATE
 SET owner = EXCLUDED.owner,
     lease_token = EXCLUDED.lease_token,
+    fencing_token = {Table("canary_leader_leases")}.fencing_token + 1,
     acquired_at = EXCLUDED.acquired_at,
     lease_expires_at = EXCLUDED.lease_expires_at
 WHERE {Table("canary_leader_leases")}.lease_expires_at < @now
-RETURNING lease_token;
+RETURNING lease_token, fencing_token;
 """;
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("owner", owner);
@@ -86,19 +91,23 @@ RETURNING lease_token;
         command.Parameters.AddWithValue("now", now);
         command.Parameters.AddWithValue("expires_at", expiresAt);
 
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        // 0 行返回（ON CONFLICT WHERE 不命中）→ 已被其他实例持有，返回 null
-        if (result is null or DBNull)
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            // 0 行返回（ON CONFLICT WHERE 不命中）→ 已被其他实例持有，返回 null
             return null;
         }
+
+        var returnedToken = reader.GetString(reader.GetOrdinal("lease_token"));
+        var fencingToken = reader.GetInt64(reader.GetOrdinal("fencing_token"));
 
         return new LeasedLeadership
         {
             RunId = runId,
-            LeaseToken = token,
+            LeaseToken = returnedToken,
             Owner = owner,
-            ExpiresAt = expiresAt
+            ExpiresAt = expiresAt,
+            FencingToken = fencingToken
         };
     }
 

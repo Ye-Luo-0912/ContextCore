@@ -72,3 +72,20 @@ public static class ContextTokenizationMetadataKeys
 
     public const string IsFallback = "tokenEstimate.isFallback";
 }
+
+/// <summary>
+/// P5/P6：ContextItem.Metadata 中用于在 Store 与 Provider 之间传递持久化内容指标的键名。
+/// 摄取阶段（BasicContextIngestionService）计算 content_hash / content_token_cost 并写入 Metadata，
+/// Store 提取到专用列；Provider 读取后跳过在线 SHA-256 + tokenizer 调用。
+/// </summary>
+public static class ContentMetadataKeys
+{
+    /// <summary>P6：SHA-256 小写 hex（与 ContextItem.Checksum 一致）。Provider 派生 EntityVersion 时复用。</summary>
+    public const string ContentHash = "__content_hash";
+
+    /// <summary>P5：精确 token 数（由 IContextTokenizer 在摄取时计算）。Provider 读取后跳过在线 tokenize。</summary>
+    public const string ContentTokenCost = "__content_token_cost";
+
+    /// <summary>P3：Postgres ts_rank_cd 返回的相关度分数 × 100。Lexical Provider 读取后作为 Provider score。</summary>
+    public const string TsRank = "__ts_rank";
+}

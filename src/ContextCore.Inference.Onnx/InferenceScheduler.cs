@@ -9,16 +9,24 @@ namespace ContextCore.Inference.Onnx;
 //
 // 目标：
 //   1. bounded inference queue：使用 Channel<InferenceRequest> 作为有界队列，
-//      队列满时执行 backpressure（等待或立即拒绝），避免过载场景下请求无限堆积。
-//   2. 最大并发数：通过 SemaphoreSlim 限制同时执行的微批数（MaxConcurrency），
-//      防止打满 ORT 线程池或 GPU 显存。
-//   3. micro-batching：在 BatchWaitWindow 内攒多个单条请求，达到 MaxBatchSize 或
-//      窗口到期后合并为一次 session.Run 调用，提升吞吐。
-//   4. 按模型分组：当前实现按 (SchemaVersion, FeatureCount) 分组执行；不同 schema
-//      的请求会落入不同的微批，避免特征列错位。
-//   5. batch wait window：BatchWaitWindow 控制最大攒批等待时间，平衡延迟与吞吐。
-//   6. queue timeout：RequestDeadline 限制单个请求在调度器内的总停留时间，
-//      超时返回失败，避免慢请求长期占用槽位。
+//      队列满时执行 backpressure（立即拒绝），避免过载场景下请求无限堆积。
+//   2. 最大并发数（真正生效）：Batch Coordinator 从 channel 读取并按 BatchKey 攒批，
+//      每个 Ready 批次以 fire-and-forget 方式派发到 Execution Worker；
+//      由 SemaphoreSlim(MaxConcurrency) 限制同时执行的批次数。
+//      Coordinator 派发后不 await 执行，因此 MaxConcurrency>1 时会形成多个并发微批。
+//   3. micro-batching：在 BatchWaitWindow 内攒多个单条请求，达到 MaxBatchSize（按 row 数）
+//      或窗口到期后合并为一次 session.Run 调用，提升吞吐。
+//   4. 按模型分组（BatchKey）：(ModelGeneration, SchemaVersion, FeatureNamesHash, FeatureCount,
+//      ExecutionProvider) 不同的请求不能合并到同一批，避免特征列错位。
+//      FeatureNamesHash 为顺序敏感哈希，并通过 NamesEqual 二次校验防止哈希碰撞误合并。
+//   5. ArrayPool 安全：租借的数组在写入前清零，且只把有效长度（recompute 后的 totalRows）
+//      送入模型，避免池化数组尾部脏数据污染推理输入。
+//   6. deadline 贯穿：攒批时跳过已过期请求；执行推理前再次检查；推理中以最早 deadline
+//      构造 CancellationTokenSource 并传入内部引擎，到期即取消推理。
+//   7. 过期请求清理：移除过期请求后重新计算 totalRows（避免脏数据送入模型），
+//      并通过 TrySetResult 返回超时错误通知等待方。
+//   8. worker 崩溃恢复：Coordinator 循环与 Execution 均用 try-catch 包裹；
+//      异常时将批次中所有未完成请求标记为失败；Coordinator 崩溃后自动重启。
 //
 // 设计原则：
 //   1. 透明代理：InferenceScheduler 实现 IBatchInferenceEngine，可包裹任何
@@ -66,8 +74,10 @@ public sealed class InferenceSchedulerOptions
     public int MaxConcurrency { get; set; } = 0;
 
     /// <summary>
-    /// 微批处理的最大大小（默认 32）。
+    /// 微批处理的最大大小（按 row 数，默认 32）。
+    /// 一个请求可能包含多行；批次大小 = 所有请求的行数总和。
     /// 攒到该行数后立即触发一次推理；不足则等待 BatchWaitWindow 到期。
+    /// 超过此值时会拆分为多个微批。&lt;=0 表示不限制（仅按窗口攒批）。
     /// 应与 OnnxInferenceEngineOptions.MaxBatchSize 协调（本值不应超过引擎层的分片上限）。
     /// </summary>
     public int MaxBatchSize { get; set; } = 32;
@@ -125,21 +135,33 @@ public sealed class InferenceSchedulerOptions
 /// </remarks>
 public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 {
+    // Coordinator 崩溃后重启的退避间隔，避免极端情况下死循环打满 CPU。
+    private static readonly TimeSpan CoordinatorRestartBackoff = TimeSpan.FromMilliseconds(100);
+
     private readonly IBatchInferenceEngine _inner;
     private readonly InferenceSchedulerOptions _options;
 
     // bounded queue：MaxQueueLength=0 时退化为无界（不推荐）。
     private readonly Channel<InferenceRequest> _channel;
 
-    // 并发治理：限制同时执行的微批数。
+    // 并发治理：限制同时执行的微批数（真正生效——Coordinator 派发后不 await 执行）。
     private readonly SemaphoreSlim _concurrencyLimiter;
 
-    // 后台 worker：从 channel 读取请求，攒批后调用内部引擎。
+    // 后台 Coordinator：从 channel 读取请求，按 BatchKey 攒批后 fire-and-forget 派发到 Execution Worker。
     private readonly Task _workerTask;
 
-    // 停止令牌：Dispose 时取消 worker 与所有 pending 请求。
+    // 停止令牌：Dispose 时取消 Coordinator 与所有 pending 请求。
     private readonly CancellationTokenSource _stopCts;
     private int _disposed;
+
+    // BatchKey 的常量分量：调度器包裹单一内部引擎，模型代际与 EP 在其生命周期内不变，
+    // 故作为常量参与分组（不影响分组正确性，正确性由 SchemaVersion/FeatureNamesHash/FeatureCount 保证）。
+    private readonly long _modelGeneration = 0L;
+    private readonly string _executionProvider = string.Empty;
+
+    // 在飞 Execution Worker 任务追踪：Dispose 时 await 全部完成，避免请求泄漏。
+    private readonly object _outstandingLock = new();
+    private readonly List<Task> _outstanding = new();
 
     /// <summary>
     /// 构造 InferenceScheduler。
@@ -179,7 +201,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             : Environment.ProcessorCount;
         _concurrencyLimiter = new SemaphoreSlim(Math.Max(1, concurrency), Math.Max(1, concurrency));
 
-        // EnableDynamicBatching=false 时不启动 worker，直接转发到内部引擎。
+        // EnableDynamicBatching=false 时不启动 Coordinator，直接转发到内部引擎。
         if (options.EnableDynamicBatching)
         {
             _workerTask = Task.Run(() => ProcessQueueAsync(_stopCts.Token));
@@ -275,127 +297,281 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     // -----------------------------------------------------------------------
-    // Worker 主循环：从 channel 读取请求，在 BatchWaitWindow 内攒批后调用内部引擎。
+    // Coordinator：从 channel 读取请求，按 BatchKey 攒批，fire-and-forget 派发到 Execution Worker。
+    // 派发后不 await 执行——这是 MaxConcurrency 真正生效的关键。
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// Coordinator 主循环（带崩溃自动重启）。
+    /// 每轮调用 <see cref="RunCoordinatorLoopAsync"/> 执行实际的读取/攒批/派发；
+    /// 抛出非取消异常时失败当前 pending 缓冲并重启下一轮。
+    /// </summary>
     private async Task ProcessQueueAsync(CancellationToken stopToken)
     {
-        var batchBuffer = new List<InferenceRequest>(_options.MaxBatchSize > 0 ? _options.MaxBatchSize : 32);
-
-        try
+        while (!stopToken.IsCancellationRequested)
         {
-            while (!stopToken.IsCancellationRequested)
+            var pending = new Dictionary<InferenceBatchKey, PendingGroup>();
+            try
             {
-                batchBuffer.Clear();
-
-                // 等待第一个请求到达。channel 关闭时退出循环。
-                if (!await _channel.Reader.WaitToReadAsync(stopToken).ConfigureAwait(false))
+                await RunCoordinatorLoopAsync(pending, stopToken).ConfigureAwait(false);
+                // 正常返回（channel 关闭）：失败剩余 pending 并退出。
+                FailPendingBuffer(pending, BuildShutdownResult());
+                break;
+            }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                FailPendingBuffer(pending, BuildShutdownResult());
+                break;
+            }
+            catch (Exception ex)
+            {
+                // Coordinator 崩溃：失败当前 pending 中所有请求，自动重启下一轮循环。
+                FailPendingBuffer(pending, BuildWorkerCrashResult(ex));
+                try
+                {
+                    await Task.Delay(CoordinatorRestartBackoff, stopToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
                 {
                     break;
                 }
-
-                // 攒批窗口：从首个请求到达开始计时，最多等待 BatchWaitWindow。
-                var windowDeadlineUtc = DateTimeOffset.UtcNow + _options.BatchWaitWindow;
-                var maxBatchSize = _options.MaxBatchSize > 0 ? _options.MaxBatchSize : 32;
-
-                while (batchBuffer.Count < maxBatchSize)
-                {
-                    if (_channel.Reader.TryRead(out var req))
-                    {
-                        // 已过 deadline 的请求立即失败，不进入微批。
-                        if (DateTimeOffset.UtcNow > req.Deadline)
-                        {
-                            req.Completion.TrySetResult(BuildExpiredResult(req));
-                            continue;
-                        }
-
-                        batchBuffer.Add(req);
-
-                        // 达到 MaxBatchSize：立即触发推理，不再等待。
-                        if (batchBuffer.Count >= maxBatchSize)
-                        {
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        // 暂无更多请求。若批次为空，回到外层循环等待首个请求；
-                        // 若已有请求，等待窗口到期或新请求到达。
-                        if (batchBuffer.Count == 0)
-                        {
-                            break;
-                        }
-
-                        var remainingMs = (windowDeadlineUtc - DateTimeOffset.UtcNow).TotalMilliseconds;
-                        if (remainingMs <= 0)
-                        {
-                            break;
-                        }
-
-                        using var windowCts = new CancellationTokenSource(
-                            (int)Math.Max(1, remainingMs));
-                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                            stopToken, windowCts.Token);
-
-                        try
-                        {
-                            var moreAvailable = await _channel.Reader.WaitToReadAsync(linked.Token)
-                                .ConfigureAwait(false);
-                            if (!moreAvailable)
-                            {
-                                // channel 已关闭：触发对当前 batch 的处理后退出外层循环。
-                                break;
-                            }
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            // 窗口到期：触发微批推理。
-                            break;
-                        }
-                    }
-                }
-
-                if (batchBuffer.Count > 0)
-                {
-                    await DispatchBatchAsync(batchBuffer, stopToken).ConfigureAwait(false);
-                }
+                // continue → 重启 Coordinator
             }
         }
-        catch (OperationCanceledException)
+
+        // Coordinator 退出时失败所有未处理的 pending 请求（防止泄漏）。
+        DrainPendingRequestsOnShutdown();
+    }
+
+    /// <summary>
+    /// 单轮 Coordinator 循环：阻塞等待首个请求 → 排空可读请求并按 BatchKey 攒批
+    /// → 派发窗口已到期的分组 → 等待到最早窗口到期或新请求到达。
+    /// 正常返回表示 channel 已关闭；stopToken 取消时抛出 OperationCanceledException。
+    /// </summary>
+    private async Task RunCoordinatorLoopAsync(
+        Dictionary<InferenceBatchKey, PendingGroup> pending,
+        CancellationToken stopToken)
+    {
+        while (!stopToken.IsCancellationRequested)
         {
-            // 正常停止路径：Dispose 触发 stopToken 取消。
-        }
-        catch (Exception)
-        {
-            // best-effort：worker 异常不应导致进程崩溃。
-            // pending 请求由 Dispose 路径统一失败。
-        }
-        finally
-        {
-            // worker 退出时失败所有未处理的 pending 请求（防止泄漏）。
-            DrainPendingRequestsOnShutdown();
+            // 若无 pending，阻塞等待首个请求到达。
+            if (pending.Count == 0)
+            {
+                if (!await _channel.Reader.WaitToReadAsync(stopToken).ConfigureAwait(false))
+                {
+                    // channel 已关闭：返回，由外层失败剩余 pending（此处 pending 为空）。
+                    return;
+                }
+            }
+
+            // 排空当前可读请求（非阻塞），按 BatchKey 攒批。
+            while (_channel.Reader.TryRead(out var req))
+            {
+                ProcessIncoming(req, pending, stopToken);
+            }
+
+            // 派发窗口已到期的分组。
+            DispatchExpiredGroups(pending, stopToken);
+
+            if (pending.Count == 0)
+            {
+                // 全部派发或全部过期：回到外层等待首个请求。
+                continue;
+            }
+
+            // 计算最早窗口到期时间。
+            var now = DateTimeOffset.UtcNow;
+            var earliest = DateTimeOffset.MaxValue;
+            foreach (var g in pending.Values)
+            {
+                if (g.WindowDeadline < earliest) earliest = g.WindowDeadline;
+            }
+
+            var dueIn = earliest - now;
+            if (dueIn <= TimeSpan.Zero)
+            {
+                // 已有窗口到期：下一轮循环派发。
+                continue;
+            }
+
+            // 等待到最早窗口到期或有新请求到达。
+            using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(stopToken);
+            delayCts.CancelAfter(dueIn);
+            try
+            {
+                var moreAvailable = await _channel.Reader.WaitToReadAsync(delayCts.Token).ConfigureAwait(false);
+                if (!moreAvailable)
+                {
+                    // channel 已关闭：立即派发所有 pending（不等窗口）并返回。
+                    DispatchAll(pending, stopToken);
+                    return;
+                }
+                // 有新请求可读：下一轮循环排空。
+            }
+            catch (OperationCanceledException)
+            {
+                // delay 到期或 stop：下一轮处理。
+                if (stopToken.IsCancellationRequested) return;
+            }
         }
     }
 
     /// <summary>
-    /// 分派一个微批到内部引擎：获取并发槽位、合并 batch、调用引擎、拆分结果。
-    /// 不同 (SchemaVersion, FeatureCount) 的请求会被分组独立执行，避免特征列错位。
+    /// 将单个请求加入对应的 pending 分组（按 BatchKey）。
+    /// 处理：已取消/已过期请求立即失败；FeatureNames 哈希碰撞时拆分；超过 MaxBatchSize（按 row 数）时拆分。
     /// </summary>
-    private async Task DispatchBatchAsync(List<InferenceRequest> batch, CancellationToken stopToken)
+    private void ProcessIncoming(
+        InferenceRequest req,
+        Dictionary<InferenceBatchKey, PendingGroup> pending,
+        CancellationToken stopToken)
     {
-        // 获取并发槽位：限制同时执行的微批数。
-        await _concurrencyLimiter.WaitAsync(stopToken).ConfigureAwait(false);
+        // 已被外部 ct 取消或已失败：跳过，避免无意义的攒批与推理。
+        if (req.Completion.Task.IsCompleted)
+        {
+            return;
+        }
 
+        // 已过 deadline：立即失败通知，不进入微批。
+        if (DateTimeOffset.UtcNow > req.Deadline)
+        {
+            req.Completion.TrySetResult(BuildExpiredResult(req));
+            return;
+        }
+
+        var key = ComputeBatchKey(req.Batch);
+        var rows = req.Batch.RowCount;
+
+        if (!pending.TryGetValue(key, out var group))
+        {
+            group = null;
+        }
+        else if (!NamesEqual(group.FeatureNames, req.Batch.FeatureNames))
+        {
+            // 哈希碰撞（同 key 不同 FeatureNames）：派发已有分组，重新开组。
+            pending.Remove(key);
+            DispatchGroup(group.Requests, stopToken);
+            group = null;
+        }
+        else if (_options.MaxBatchSize > 0
+            && group.TotalRows + rows > _options.MaxBatchSize
+            && group.TotalRows > 0)
+        {
+            // 加入后超过 MaxBatchSize（按 row 数）：先派发已有分组，再为新请求开新组。
+            pending.Remove(key);
+            DispatchGroup(group.Requests, stopToken);
+            group = null;
+        }
+
+        if (group is null)
+        {
+            group = new PendingGroup
+            {
+                Key = key,
+                FeatureNames = req.Batch.FeatureNames,
+                WindowDeadline = DateTimeOffset.UtcNow + _options.BatchWaitWindow
+            };
+            pending[key] = group;
+        }
+
+        group.Requests.Add(req);
+        group.TotalRows += rows;
+
+        // 单组攒满（按 row 数）立即派发。
+        if (_options.MaxBatchSize > 0 && group.TotalRows >= _options.MaxBatchSize)
+        {
+            pending.Remove(key);
+            DispatchGroup(group.Requests, stopToken);
+        }
+    }
+
+    /// <summary>
+    /// 派发所有窗口已到期的 pending 分组。
+    /// </summary>
+    private void DispatchExpiredGroups(
+        Dictionary<InferenceBatchKey, PendingGroup> pending,
+        CancellationToken stopToken)
+    {
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        List<PendingGroup>? toDispatch = null;
+        foreach (var g in pending.Values)
+        {
+            if (now >= g.WindowDeadline)
+            {
+                (toDispatch ??= new List<PendingGroup>()).Add(g);
+            }
+        }
+
+        if (toDispatch is null)
+        {
+            return;
+        }
+
+        foreach (var g in toDispatch)
+        {
+            pending.Remove(g.Key);
+            DispatchGroup(g.Requests, stopToken);
+        }
+    }
+
+    /// <summary>
+    /// 立即派发所有 pending 分组（不等窗口），用于 channel 关闭时的收尾。
+    /// </summary>
+    private void DispatchAll(
+        Dictionary<InferenceBatchKey, PendingGroup> pending,
+        CancellationToken stopToken)
+    {
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var snapshot = new List<PendingGroup>(pending.Values);
+        pending.Clear();
+        foreach (var g in snapshot)
+        {
+            DispatchGroup(g.Requests, stopToken);
+        }
+    }
+
+    /// <summary>
+    /// fire-and-forget 派发一个 Ready 批次到 Execution Worker，并追踪任务以便 Dispose 时等待。
+    /// 实际并发由 <see cref="_concurrencyLimiter"/> 限制。
+    /// </summary>
+    private void DispatchGroup(List<InferenceRequest> requests, CancellationToken stopToken)
+    {
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        var task = RunGroupExecutionAsync(requests, stopToken);
+        TrackOutstanding(task);
+    }
+
+    /// <summary>
+    /// 单个 Execution Worker：获取并发槽位后执行批次推理。
+    /// try-catch 包裹确保 worker 崩溃时批次中所有未完成请求被标记为失败（不永久等待）。
+    /// </summary>
+    private async Task RunGroupExecutionAsync(List<InferenceRequest> group, CancellationToken stopToken)
+    {
+        await _concurrencyLimiter.WaitAsync(stopToken).ConfigureAwait(false);
         try
         {
-            // 按分组执行：(SchemaVersion, FeatureCount) 不同的请求无法合并（特征列对齐会错位）。
-            // 多数生产场景下 batch 内所有请求 schema 一致，分组退化为单组。
-            var groups = GroupBySchema(batch);
-
-            foreach (var group in groups)
-            {
-                await ExecuteGroupAsync(group, stopToken).ConfigureAwait(false);
-            }
+            await ExecuteGroupAsync(group, stopToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+        {
+            FailAll(group, BuildShutdownResult());
+        }
+        catch (Exception ex)
+        {
+            // Execution Worker 崩溃：将批次中所有未完成请求标记为失败。
+            FailAll(group, BuildWorkerCrashResult(ex));
         }
         finally
         {
@@ -404,73 +580,29 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     /// <summary>
-    /// 按 (SchemaVersion, FeatureCount) 分组请求。
-    /// 同组内可安全合并为一个连续 FeatureBatch；不同组需独立调用引擎。
-    /// </summary>
-    private static List<List<InferenceRequest>> GroupBySchema(List<InferenceRequest> batch)
-    {
-        if (batch.Count <= 1)
-        {
-            return new List<List<InferenceRequest>> { batch };
-        }
-
-        var groups = new List<List<InferenceRequest>>();
-        var first = batch[0];
-        var current = new List<InferenceRequest> { first };
-        var currentKey = (first.Batch.SchemaVersion, first.Batch.FeatureCount);
-
-        for (var i = 1; i < batch.Count; i++)
-        {
-            var req = batch[i];
-            var key = (req.Batch.SchemaVersion, req.Batch.FeatureCount);
-            if (key == currentKey)
-            {
-                current.Add(req);
-            }
-            else
-            {
-                groups.Add(current);
-                current = new List<InferenceRequest> { req };
-                currentKey = key;
-            }
-        }
-
-        groups.Add(current);
-        return groups;
-    }
-
-    /// <summary>
-    /// 执行单个 schema 分组：合并所有请求的 FeatureBatch 为一个连续 batch，
-    /// 调用内部引擎推理，然后按行偏移拆分结果回各请求。
+    /// 执行单个 BatchKey 分组：二次检查 deadline、重新计算 totalRows、合并为连续 FeatureBatch、
+    /// 以最早 deadline 构造 CTS 调用内部引擎、按行偏移拆分结果回各请求。
+    /// 同组内所有请求 SchemaVersion/FeatureCount/FeatureNames 一致（由 BatchKey + NamesEqual 保证）。
     /// </summary>
     private async Task ExecuteGroupAsync(List<InferenceRequest> group, CancellationToken stopToken)
     {
         var featureCount = group[0].Batch.FeatureCount;
-        var totalRows = 0;
-        for (var i = 0; i < group.Count; i++)
-        {
-            totalRows += group[i].Batch.RowCount;
-        }
 
-        // 二次检查 deadline：在等待并发槽位期间可能已有请求过期。
+        // 二次检查 deadline：在等待并发槽位期间可能已有请求过期；同时丢弃已被外部 ct 取消的请求。
         var now = DateTimeOffset.UtcNow;
+        var active = new List<InferenceRequest>(group.Count);
         for (var i = 0; i < group.Count; i++)
         {
-            if (now > group[i].Deadline)
+            var req = group[i];
+            if (now > req.Deadline)
             {
-                group[i].Completion.TrySetResult(BuildExpiredResult(group[i]));
-                group[i] = null!; // 标记跳过
+                req.Completion.TrySetResult(BuildExpiredResult(req));
             }
-        }
-
-        // 过滤掉已过期/已处理的请求。
-        var active = new List<InferenceRequest>(group.Count);
-        foreach (var req in group)
-        {
-            if (req is not null)
+            else if (!req.Completion.Task.IsCompleted)
             {
                 active.Add(req);
             }
+            // 已被外部 ct 取消的请求（IsCompleted=true）直接丢弃，不参与合并。
         }
 
         if (active.Count == 0)
@@ -478,45 +610,76 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             return;
         }
 
-        // 合并为连续 float 内存：[totalRows × featureCount] row-major。
-        // 使用 ArrayPool 复用大 buffer，避免每次微批都分配大数组。
+        // 重新计算 totalRows（移除过期/取消请求后）——关键：避免脏数据送入模型，
+        // 也避免 ArrayPool 尾部未写入区域被当作有效输入。
+        var totalRows = 0;
+        for (var i = 0; i < active.Count; i++)
+        {
+            totalRows += active[i].Batch.RowCount;
+        }
+
         var requiredLength = totalRows * featureCount;
         var buffer = ArrayPool<float>.Shared.Rent(requiredLength);
         var rowOffsets = new int[active.Count + 1];
         try
         {
+            // ArrayPool 安全：租借数组可能含上次使用的脏数据，写入前清零有效区域。
+            Array.Clear(buffer, 0, requiredLength);
+
+            // 合并为连续 float 内存：[totalRows × featureCount] row-major。
             var offset = 0;
             for (var i = 0; i < active.Count; i++)
             {
                 rowOffsets[i] = offset;
+                var rows = active[i].Batch.RowCount;
                 var src = active[i].Batch.Values.Span;
-                var dst = buffer.AsSpan(offset * featureCount, active[i].Batch.RowCount * featureCount);
+                var dst = buffer.AsSpan(offset * featureCount, rows * featureCount);
                 src.CopyTo(dst);
-                offset += active[i].Batch.RowCount;
+                offset += rows;
             }
             rowOffsets[active.Count] = offset;
 
             var combined = new FeatureBatch
             {
                 SchemaVersion = active[0].Batch.SchemaVersion,
-                Values = buffer.AsMemory(0, requiredLength),
+                Values = buffer.AsMemory(0, requiredLength), // 仅有效长度送入模型
                 RowCount = totalRows,
                 FeatureCount = featureCount,
                 FeatureNames = active[0].Batch.FeatureNames
             };
 
-            // 调用内部引擎。stopToken 用于 Dispose 时中断；外部 ct 由各请求独立管理（无法合并）。
+            // deadline 贯穿推理：以最早 deadline 构造 CTS，与 stopToken 链接后传入内部引擎。
+            // 微批内请求均在 BatchWaitWindow 内到达、共享同一 RequestDeadline，最早到期≈全员到期。
+            var earliest = active[0].Deadline;
+            for (var i = 1; i < active.Count; i++)
+            {
+                if (active[i].Deadline < earliest) earliest = active[i].Deadline;
+            }
+            var dueIn = earliest - DateTimeOffset.UtcNow;
+            if (dueIn <= TimeSpan.Zero)
+            {
+                // 全部已过期（防御性）：直接失败。
+                FailAll(active, BuildExpiredResult(null));
+                return;
+            }
+
+            using var deadlineCts = new CancellationTokenSource(dueIn);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopToken, deadlineCts.Token);
             BatchInferenceResult result;
             try
             {
-                result = await _inner.InferBatchAsync(combined, stopToken).ConfigureAwait(false);
+                result = await _inner.InferBatchAsync(combined, linked.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                // Dispose 触发：失败所有 active 请求。
-                foreach (var req in active)
+                if (stopToken.IsCancellationRequested)
                 {
-                    req.Completion.TrySetResult(BuildShutdownResult());
+                    FailAll(active, BuildShutdownResult());
+                }
+                else
+                {
+                    // deadline 到期取消推理：批内所有请求视作超时。
+                    FailAll(active, BuildExpiredResult(null));
                 }
                 return;
             }
@@ -529,20 +692,14 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
                     Error = $"微批推理抛出异常：{ex.GetType().Name}: {ex.Message}",
                     Duration = TimeSpan.Zero
                 };
-                foreach (var req in active)
-                {
-                    req.Completion.TrySetResult(failed);
-                }
+                FailAll(active, failed);
                 return;
             }
 
             // 推理失败：所有请求共享失败结果。
             if (!result.Succeeded)
             {
-                foreach (var req in active)
-                {
-                    req.Completion.TrySetResult(result);
-                }
+                FailAll(active, result);
                 return;
             }
 
@@ -558,10 +715,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
                     Error = mismatchError,
                     Duration = result.Duration
                 };
-                foreach (var req in active)
-                {
-                    req.Completion.TrySetResult(mismatchResult);
-                }
+                FailAll(active, mismatchResult);
                 return;
             }
 
@@ -592,7 +746,112 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     /// <summary>
-    /// worker 退出时失败所有 pending 请求（防止泄漏）。
+    /// 计算 FeatureBatch 的 BatchKey。
+    /// FeatureNamesHash 为顺序敏感哈希；NamesEqual 在加入分组时二次校验防止碰撞误合并。
+    /// </summary>
+    private InferenceBatchKey ComputeBatchKey(FeatureBatch batch)
+    {
+        return new InferenceBatchKey(
+            ModelGeneration: _modelGeneration,
+            SchemaVersion: batch.SchemaVersion,
+            FeatureNamesHash: ComputeFeatureNamesHash(batch.FeatureNames),
+            FeatureCount: batch.FeatureCount,
+            ExecutionProvider: _executionProvider);
+    }
+
+    /// <summary>
+    /// 顺序敏感的 FeatureNames 哈希：HashCode 按添加顺序组合，
+    /// 故 ["a","b"] 与 ["b","a"] 产生不同哈希，避免列序错位的请求被合并。
+    /// </summary>
+    private static int ComputeFeatureNamesHash(IReadOnlyList<string> names)
+    {
+        var hash = new HashCode();
+        for (var i = 0; i < names.Count; i++)
+        {
+            hash.Add(names[i]);
+        }
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
+    /// 顺序敏感的 FeatureNames 相等性判断（防止哈希碰撞误合并）。
+    /// </summary>
+    private static bool NamesEqual(IReadOnlyList<string> a, IReadOnlyList<string> b)
+    {
+        if (ReferenceEquals(a, b))
+        {
+            return true;
+        }
+
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!string.Equals(a[i], b[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void TrackOutstanding(Task t)
+    {
+        lock (_outstandingLock)
+        {
+            // 清理已完成任务，防止列表无界增长。
+            for (var i = _outstanding.Count - 1; i >= 0; i--)
+            {
+                if (_outstanding[i].IsCompleted)
+                {
+                    _outstanding.RemoveAt(i);
+                }
+            }
+            _outstanding.Add(t);
+        }
+    }
+
+    private Task[] SnapshotOutstanding()
+    {
+        lock (_outstandingLock)
+        {
+            return _outstanding.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// 失败 pending 缓冲中所有请求（Coordinator 崩溃/停止时调用）。
+    /// </summary>
+    private static void FailPendingBuffer(
+        Dictionary<InferenceBatchKey, PendingGroup> pending,
+        BatchInferenceResult result)
+    {
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var g in pending.Values)
+        {
+            FailAll(g.Requests, result);
+        }
+        pending.Clear();
+    }
+
+    private static void FailAll(List<InferenceRequest> reqs, BatchInferenceResult result)
+    {
+        for (var i = 0; i < reqs.Count; i++)
+        {
+            reqs[i].Completion.TrySetResult(result);
+        }
+    }
+
+    /// <summary>
+    /// Coordinator 退出时失败所有 channel 中未读请求（防止泄漏）。
     /// </summary>
     private void DrainPendingRequestsOnShutdown()
     {
@@ -611,12 +870,14 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         Duration = TimeSpan.Zero
     };
 
-    private static BatchInferenceResult BuildExpiredResult(InferenceRequest req) => new()
+    private static BatchInferenceResult BuildExpiredResult(InferenceRequest? req) => new()
     {
         Outputs = Array.Empty<InferenceOutput>(),
         Succeeded = false,
-        Error = $"InferenceSchedulerRequestDeadline：请求在调度器内停留超过 deadline" +
-                $"（截止于 {req.Deadline:O}），未执行推理即超时。",
+        Error = req is null
+            ? "InferenceSchedulerRequestDeadline：请求在调度器内停留超过 deadline，未完成推理即超时。"
+            : $"InferenceSchedulerRequestDeadline：请求在调度器内停留超过 deadline" +
+              $"（截止于 {req.Deadline:O}），未执行推理即超时。",
         Duration = TimeSpan.Zero
     };
 
@@ -636,6 +897,14 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         Duration = TimeSpan.Zero
     };
 
+    private static BatchInferenceResult BuildWorkerCrashResult(Exception ex) => new()
+    {
+        Outputs = Array.Empty<InferenceOutput>(),
+        Succeeded = false,
+        Error = $"InferenceSchedulerWorkerCrash：执行 worker 异常：{ex.GetType().Name}: {ex.Message}",
+        Duration = TimeSpan.Zero
+    };
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
@@ -644,11 +913,11 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             return;
         }
 
-        // 通知 worker 停止。
+        // 通知 Coordinator 停止。
         _stopCts.Cancel();
         _channel.Writer.TryComplete();
 
-        // 等待 worker 退出（worker 退出时会失败所有 pending 请求）。
+        // 等待 Coordinator 退出（退出时会失败 channel 中剩余请求）。
         if (_workerTask is not null)
         {
             try
@@ -657,7 +926,21 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             }
             catch
             {
-                // best-effort：worker 异常已在其内部处理。
+                // best-effort：Coordinator 异常已在其内部处理。
+            }
+        }
+
+        // 等待所有在飞 Execution Worker 完成（stopToken 已取消，它们会失败各自批次）。
+        var outstanding = SnapshotOutstanding();
+        if (outstanding.Length > 0)
+        {
+            try
+            {
+                await Task.WhenAll(outstanding).ConfigureAwait(false);
+            }
+            catch
+            {
+                // best-effort：各 worker 异常已在其内部处理。
             }
         }
 
@@ -666,6 +949,33 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
         _concurrencyLimiter.Dispose();
         _stopCts.Dispose();
+    }
+
+    /// <summary>
+    /// BatchKey：判定请求能否合并到同一微批。不同 BatchKey 的请求不能合并（避免特征列错位）。
+    /// </summary>
+    /// <remarks>
+    /// ModelGeneration / ExecutionProvider 在调度器包裹单一内部引擎时为常量
+    /// （接口未暴露 EP，模型代际在调度器生命周期内不变），不影响分组正确性。
+    /// SchemaVersion 为 string（与 <see cref="FeatureBatch.SchemaVersion"/> 一致）。
+    /// </remarks>
+    private sealed record InferenceBatchKey(
+        long ModelGeneration,
+        string SchemaVersion,
+        int FeatureNamesHash,
+        int FeatureCount,
+        string ExecutionProvider);
+
+    /// <summary>
+    /// 攒批缓冲：同一 BatchKey 的请求聚合，按 row 数累计，窗口到期或攒满后派发。
+    /// </summary>
+    private sealed class PendingGroup
+    {
+        public required InferenceBatchKey Key { get; init; }
+        public IReadOnlyList<string> FeatureNames { get; init; } = Array.Empty<string>();
+        public List<InferenceRequest> Requests { get; } = new();
+        public int TotalRows;
+        public required DateTimeOffset WindowDeadline { get; init; }
     }
 
     /// <summary>

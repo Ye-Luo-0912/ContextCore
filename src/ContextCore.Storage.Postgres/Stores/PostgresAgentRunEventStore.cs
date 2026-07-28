@@ -40,17 +40,28 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
     /// 相比旧版 SELECT+INSERT 两次往返，成功路径降为 1 次往返；校验失败或并发冲突时（affected=0）
     /// 再回退到 SELECT 给出精确错误信息（错误路径 2 次往返，可接受）。
     /// ON CONFLICT DO NOTHING 兜底防并发重序列号。
+    /// P0-4：提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 agent_run_leases，
+    /// lease 被抢占后 0 行插入 → 抛 <see cref="InvalidOperationException"/>。
     /// </remarks>
-    public async ValueTask AppendAsync(AgentRunEvent @event, CancellationToken cancellationToken = default)
+    public async ValueTask AppendAsync(
+        AgentRunEvent @event,
+        CancellationToken cancellationToken = default,
+        string? leaseToken = null,
+        long? fencingToken = null)
     {
         ArgumentNullException.ThrowIfNull(@event);
+        var leaseValidated = leaseToken is not null && fencingToken is not null;
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         // 单条 SQL：CTE 读取 last_event；WHERE 校验 sequence 连续性 + prev_hash 链接；
         // ON CONFLICT DO NOTHING 兜底；RETURNING 用于判断是否插入成功。
+        // P0-4：leaseValidated 时 WHERE 追加 lease EXISTS 子句。
         await using var insertCommand = connection.CreateCommand();
         insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+        var leaseClause = leaseValidated
+            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token)"
+            : string.Empty;
         insertCommand.CommandText = $"""
 WITH last_event AS (
     SELECT sequence AS last_seq, content_hash AS last_hash
@@ -68,6 +79,7 @@ SELECT
     @event_type, @state, @payload, @content_hash, @prev_chain_hash,
     @occurred_at, @data
 WHERE
+    (
     -- 链头：last_event 不存在 AND sequence=0 AND prev_hash IS NULL
     (NOT EXISTS (SELECT 1 FROM last_event) AND @sequence = 0 AND @prev_chain_hash IS NULL)
     OR
@@ -75,6 +87,7 @@ WHERE
     (EXISTS (SELECT 1 FROM last_event)
         AND (SELECT last_seq + 1 FROM last_event) = @sequence
         AND (SELECT last_hash FROM last_event) IS NOT DISTINCT FROM @prev_chain_hash)
+    ){leaseClause}
 ON CONFLICT (workspace_id, run_id, sequence) DO NOTHING
 RETURNING sequence;
 """;
@@ -89,6 +102,11 @@ RETURNING sequence;
         insertCommand.Parameters.AddWithValue("prev_chain_hash", (object?)@event.PrevChainHash ?? DBNull.Value);
         insertCommand.Parameters.AddWithValue("occurred_at", @event.OccurredAt);
         AddJson(insertCommand, "data", @event);
+        if (leaseValidated)
+        {
+            insertCommand.Parameters.AddWithValue("lease_token", leaseToken!);
+            insertCommand.Parameters.AddWithValue("fencing_token", fencingToken!.Value);
+        }
 
         await using var reader = await insertCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -97,6 +115,28 @@ RETURNING sequence;
         }
 
         // affected=0：校验失败或并发冲突。执行 SELECT 给出精确错误信息。
+        // P0-4：若 lease 校验启用，优先检查 lease 是否已被抢占（这是最严重的双执行风险）。
+        if (leaseValidated)
+        {
+            await using var leaseCheckCommand = connection.CreateCommand();
+            leaseCheckCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            leaseCheckCommand.CommandText = $"""
+SELECT 1 FROM {Table("agent_run_leases")}
+WHERE run_id = @run_id AND lease_token = @lease_token AND fencing_token = @fencing_token
+LIMIT 1;
+""";
+            leaseCheckCommand.Parameters.AddWithValue("run_id", @event.RunId);
+            leaseCheckCommand.Parameters.AddWithValue("lease_token", leaseToken!);
+            leaseCheckCommand.Parameters.AddWithValue("fencing_token", fencingToken!.Value);
+            var leaseExists = await leaseCheckCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (leaseExists is null or DBNull)
+            {
+                throw new InvalidOperationException(
+                    $"事件追加 lease fencing 校验失败：workspace_id={@event.WorkspaceId}, run_id={@event.RunId}, sequence={@event.Sequence}。" +
+                    $"lease_token/fencing_token 不匹配——lease 已被其他实例抢占，应立即停止处理该 Run。");
+            }
+        }
+
         string? expectedPrevHash;
         int expectedSequence;
         await using (var selectCommand = connection.CreateCommand())
@@ -305,6 +345,7 @@ RETURNING sequence;
             }
 
             // 3. Run 状态 CAS + 可变字段更新（若提供）
+            //    P0-4：提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 lease 仍由当前实例持有。
             if (runStateUpdate is not null)
             {
                 var snapshot = runStateUpdate.RunSnapshot;
@@ -312,11 +353,16 @@ RETURNING sequence;
                 var isTerminal = runStateUpdate.NewState == AgentRunState.Completed
                                  || runStateUpdate.NewState == AgentRunState.Failed
                                  || runStateUpdate.NewState == AgentRunState.Cancelled;
+                var leaseValidated = runStateUpdate.LeaseToken is not null && runStateUpdate.FencingToken is not null;
 
                 await using var updateCommand = connection.CreateCommand();
                 updateCommand.Transaction = transaction;
                 updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
                 var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
+                // P0-4：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+                var leaseClause = leaseValidated
+                    ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token)"
+                    : string.Empty;
                 updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}
 SET state = @new_state,
@@ -327,7 +373,7 @@ SET state = @new_state,
     turn_budget_json = @turn_budget_json,
     cost_budget_json = @cost_budget_json,
     data = @data{setFinished}
-WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state;
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state{leaseClause};
 """;
                 updateCommand.Parameters.AddWithValue("workspace_id", runStateUpdate.WorkspaceId);
                 updateCommand.Parameters.AddWithValue("run_id", runStateUpdate.RunId);
@@ -348,11 +394,16 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
                 {
                     updateCommand.Parameters.AddWithValue("finished_at", now);
                 }
+                if (leaseValidated)
+                {
+                    updateCommand.Parameters.AddWithValue("lease_token", runStateUpdate.LeaseToken!);
+                    updateCommand.Parameters.AddWithValue("fencing_token", runStateUpdate.FencingToken!.Value);
+                }
 
                 var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 if (affected == 0)
                 {
-                    // CAS 失败：检查行是否存在以区分"逆退/已推进"与"Run 不存在"
+                    // CAS 失败：检查行是否存在以区分"逆退/已推进/lease 失效"与"Run 不存在"
                     await using var selectCommand = connection.CreateCommand();
                     selectCommand.Transaction = transaction;
                     selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -367,6 +418,14 @@ LIMIT 1;
                     if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     {
                         var currentState = (AgentRunState)reader.GetByte(0);
+                        // P0-4：lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
+                        if (leaseValidated && currentState == runStateUpdate.ExpectedCurrentState)
+                        {
+                            throw new InvalidOperationException(
+                                $"Agent Run lease fencing 校验失败（批量提交）：workspace_id={runStateUpdate.WorkspaceId}, run_id={runStateUpdate.RunId}。" +
+                                $"状态机前件匹配（{runStateUpdate.ExpectedCurrentState}），但 lease_token/fencing_token 不匹配——" +
+                                $"lease 已被其他实例抢占，应立即停止处理该 Run。");
+                        }
                         throw new InvalidOperationException(
                             $"Agent Run 状态机 CAS 失败（批量提交）：workspace_id={runStateUpdate.WorkspaceId}, run_id={runStateUpdate.RunId}。" +
                             $"期望当前状态={runStateUpdate.ExpectedCurrentState}，实际={currentState}。" +

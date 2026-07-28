@@ -73,12 +73,12 @@ INSERT INTO {Table("learning_event_outbox")} (
     event_id, workspace_id, collection_id, decision_id, payload,
     state, retry_count, max_retry_count,
     created_at, updated_at, processed_at,
-    lease_owner, lease_expires_at, last_error, dead_letter_reason)
+    lease_owner, lease_expires_at, lease_token, last_error, dead_letter_reason)
 VALUES (
     @event_id, @workspace_id, @collection_id, @decision_id, @payload,
     @state, @retry_count, @max_retry_count,
     @created_at, @updated_at, @processed_at,
-    @lease_owner, @lease_expires_at, @last_error, @dead_letter_reason)
+    @lease_owner, @lease_expires_at, @lease_token, @last_error, @dead_letter_reason)
 ON CONFLICT (event_id) DO NOTHING;
 """;
             command.Parameters.AddWithValue("event_id", normalized.EventId);
@@ -97,6 +97,7 @@ ON CONFLICT (event_id) DO NOTHING;
             command.Parameters.AddWithValue("processed_at", (object?)normalized.ProcessedAt ?? DBNull.Value);
             command.Parameters.AddWithValue("lease_owner", (object?)normalized.LeaseOwner ?? DBNull.Value);
             command.Parameters.AddWithValue("lease_expires_at", (object?)normalized.LeaseExpiresAt ?? DBNull.Value);
+            command.Parameters.AddWithValue("lease_token", (object?)normalized.LeaseToken ?? DBNull.Value);
             command.Parameters.AddWithValue("last_error", (object?)normalized.LastError ?? DBNull.Value);
             command.Parameters.AddWithValue("dead_letter_reason", (object?)normalized.DeadLetterReason ?? DBNull.Value);
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -145,6 +146,10 @@ ON CONFLICT (event_id) DO NOTHING;
 
         var now = DateTimeOffset.UtcNow;
         var leaseUntil = now.Add(leaseDuration);
+        // P0-8：每次 AcquirePending 生成唯一 lease_token，写入数据库并随记录返回。
+        // 后续 MarkAcked / MarkFailed / RenewLease 必须回传此 token，store 通过 CAS 校验
+        // 仅持有者可 Ack/Nack/Renew——防止旧 Worker 在 lease 过期被抢占后越权 Ack 新 Worker 的 lease。
+        var leaseToken = Guid.NewGuid().ToString("N");
 
         await using var selectCmd = connection.CreateCommand();
         selectCmd.Transaction = transaction;
@@ -152,6 +157,7 @@ ON CONFLICT (event_id) DO NOTHING;
         selectCmd.Parameters.AddWithValue("now", now);
         selectCmd.Parameters.AddWithValue("lease_owner", owner);
         selectCmd.Parameters.AddWithValue("lease_expires_at", leaseUntil);
+        selectCmd.Parameters.AddWithValue("lease_token", leaseToken);
         selectCmd.Parameters.AddWithValue("updated_at", now);
         selectCmd.Parameters.AddWithValue("limit", limit);
         selectCmd.CommandText = $$"""
@@ -167,6 +173,7 @@ UPDATE {{Table("learning_event_outbox")}}
 SET state = 'Processing',
     lease_owner = @lease_owner,
     lease_expires_at = @lease_expires_at,
+    lease_token = @lease_token,
     updated_at = @updated_at
 FROM pending
 WHERE {{Table("learning_event_outbox")}}.event_id = pending.event_id
@@ -174,7 +181,7 @@ RETURNING
     event_id, workspace_id, collection_id, decision_id, payload::text,
     state, retry_count, max_retry_count,
     created_at, updated_at, processed_at,
-    lease_owner, lease_expires_at, last_error, dead_letter_reason;
+    lease_owner, lease_expires_at, lease_token, last_error, dead_letter_reason;
 """;
 
         var results = new List<LearningEventOutboxRecord>();
@@ -193,26 +200,32 @@ RETURNING
     /// <inheritdoc />
     public async Task<bool> MarkAckedAsync(
         string eventId,
+        string leaseToken,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
 
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // CAS：仅当 state=Processing 时才转为 Acked。
+        // P0-8：CAS——仅当 state=Processing 且 lease_token 匹配时才转为 Acked。
+        // 0 行受影响表示 lease 已被其他 worker 抢占或已 Ack/Nack——调用方应放弃该记录。
         command.CommandText = $@"
 UPDATE {Table("learning_event_outbox")}
 SET state = 'Acked',
     lease_owner = NULL,
     lease_expires_at = NULL,
+    lease_token = NULL,
     processed_at = @processed_at,
     updated_at = @updated_at
 WHERE event_id = @event_id
+  AND lease_token = @lease_token
   AND state = 'Processing';";
         command.Parameters.AddWithValue("event_id", eventId);
+        command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("processed_at", now);
         command.Parameters.AddWithValue("updated_at", now);
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
@@ -221,30 +234,36 @@ WHERE event_id = @event_id
     /// <inheritdoc />
     public async Task<bool> MarkFailedAsync(
         string eventId,
+        string leaseToken,
         string errorMessage,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
 
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // CAS：仅当 state=Processing 时才转换为 DeadLettered 或 Pending。
+        // P0-8：CAS——仅当 state=Processing 且 lease_token 匹配时才转换为 DeadLettered 或 Pending。
         // 达到 max 时转 DeadLettered（retry_count + 1 >= max_retry_count），未达到则回退 Pending 等待重试。
+        // 0 行受影响表示 lease 已被其他 worker 抢占或已 Ack/Nack——调用方应放弃该记录。
         command.CommandText = $@"
 UPDATE {Table("learning_event_outbox")}
 SET retry_count = retry_count + 1,
     state = CASE WHEN retry_count + 1 >= max_retry_count THEN 'DeadLettered' ELSE 'Pending' END,
     lease_owner = NULL,
     lease_expires_at = NULL,
+    lease_token = NULL,
     updated_at = @updated_at,
     last_error = @error_message,
     dead_letter_reason = CASE WHEN retry_count + 1 >= max_retry_count THEN @error_message ELSE NULL END
 WHERE event_id = @event_id
+  AND lease_token = @lease_token
   AND state = 'Processing';";
         command.Parameters.AddWithValue("event_id", eventId);
+        command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("error_message", errorMessage ?? string.Empty);
         command.Parameters.AddWithValue("updated_at", now);
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
@@ -253,27 +272,29 @@ WHERE event_id = @event_id
     /// <inheritdoc />
     public async Task<bool> RenewLeaseAsync(
         string eventId,
-        string owner,
+        string leaseToken,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
 
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
+        // P0-8：CAS——仅当 lease_token 匹配且 state=Processing 时才续约。
+        // 用 lease_token 替代原 lease_owner 校验更严格（owner 名可能复用，token 全局唯一）。
         command.CommandText = $@"
 UPDATE {Table("learning_event_outbox")}
 SET lease_expires_at = @lease_expires_at,
     updated_at = @updated_at
 WHERE event_id = @event_id
-  AND lease_owner = @lease_owner
+  AND lease_token = @lease_token
   AND state = 'Processing';";
         command.Parameters.AddWithValue("event_id", eventId);
-        command.Parameters.AddWithValue("lease_owner", owner);
+        command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("lease_expires_at", now.Add(leaseDuration));
         command.Parameters.AddWithValue("updated_at", now);
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
@@ -337,6 +358,9 @@ WHERE state = 'Acked' AND processed_at IS NOT NULL;
             LeaseExpiresAt = reader.IsDBNull(reader.GetOrdinal("lease_expires_at"))
                 ? null
                 : reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("lease_expires_at")),
+            LeaseToken = reader.IsDBNull(reader.GetOrdinal("lease_token"))
+                ? null
+                : reader.GetString(reader.GetOrdinal("lease_token")),
             LastError = reader.IsDBNull(reader.GetOrdinal("last_error"))
                 ? null
                 : reader.GetString(reader.GetOrdinal("last_error")),
@@ -364,6 +388,7 @@ WHERE state = 'Acked' AND processed_at IS NOT NULL;
             ProcessedAt = record.ProcessedAt,
             LeaseOwner = record.LeaseOwner,
             LeaseExpiresAt = record.LeaseExpiresAt,
+            LeaseToken = record.LeaseToken,
             LastError = record.LastError,
             DeadLetterReason = record.DeadLetterReason
         };

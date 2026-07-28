@@ -438,9 +438,18 @@ LIMIT @take OFFSET @skip;
     }
 
     /// <summary>
-    /// P1-6：批量邻居查询。单条 SQL 用 = ANY(@item_ids) 一次性获取所有种子邻居，
-    /// 在 C# 端按种子分桶并应用 per-seed 排序 + MaxScan + Skip + Take。
+    /// P1-6 / P7：批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
+    /// 每个种子独立扫描 + 排序 + LIMIT @per_seed_scan，命中 (workspace_id, source_id) / (workspace_id, target_id) 索引。
     /// </summary>
+    /// <remarks>
+    /// P7 优化（替代 P1-6 的 ANY(@item_ids) OR ANY(@item_ids) 全局扫描方案）：
+    /// <list type="bullet">
+    /// <item>旧方案用 (source_id = ANY(@ids) OR target_id = ANY(@ids)) 削弱单侧索引，全局 LIMIT 上限 100K。</item>
+    /// <item>新方案 per-seed LIMIT @per_seed_scan，总返回行数 ≤ seeds.Count × MaxScan，避免一次拉回十万条完整 JSON。</item>
+    /// <item>Both 方向：(source_id = seed.id OR target_id = seed.id)。自环边（source == target == seed）只返回一次。</item>
+    /// <item>truncated 信号：bucket.Count &gt;= maxScan 表示 LATERAL LIMIT 命中，可能还有更多低权重行未读。</item>
+    /// </list>
+    /// </remarks>
     public async Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
         RelationNeighborBatchQuery query,
         CancellationToken cancellationToken = default)
@@ -467,6 +476,8 @@ LIMIT @take OFFSET @skip;
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
 
+        // P7：LATERAL 内部 WHERE 引用外层 seed.id（correlated subquery）。
+        // 过滤条件全部下推到 LATERAL 内，每个种子独立使用 (workspace_id, source_id) / (workspace_id, target_id) 索引。
         var filters = new List<string> { "workspace_id = @workspace_id" };
         command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
 
@@ -476,21 +487,21 @@ LIMIT @take OFFSET @skip;
             command.Parameters.AddWithValue("collection_id", query.CollectionId);
         }
 
-        // P1-6: 用 = ANY(@item_ids) 单次过滤；Both 方向取并集，C# 端再分桶去重。
-        var itemIdsParam = seeds.ToArray();
+        // P7：方向过滤改为与 seed.id 的等值比较（替代 ANY(@item_ids)），让 LATERAL 走索引。
         switch (query.Direction)
         {
             case RelationDirection.Outgoing:
-                filters.Add("source_id = ANY(@item_ids)");
+                filters.Add("source_id = seed.id");
                 break;
             case RelationDirection.Incoming:
-                filters.Add("target_id = ANY(@item_ids)");
+                filters.Add("target_id = seed.id");
                 break;
             default:
-                filters.Add("(source_id = ANY(@item_ids) OR target_id = ANY(@item_ids))");
+                // Both 方向：source 或 target 命中种子即可。PostgreSQL 优化器可用 BitmapOr 合并两侧索引扫描。
+                // 自环边（source == target == seed）只匹配一次（OR 不重复返回）。
+                filters.Add("(source_id = seed.id OR target_id = seed.id)");
                 break;
         }
-        command.Parameters.AddWithValue("item_ids", itemIdsParam);
 
         if (!string.IsNullOrWhiteSpace(query.RelationType))
         {
@@ -540,76 +551,58 @@ LIMIT @take OFFSET @skip;
             filters.Add($"(data ->> 'ReviewStatus' IS NULL OR data ->> 'ReviewStatus' NOT IN ({string.Join(", ", paramNames)}))");
         }
 
-        // P1-6: 不在 SQL 内做 per-seed LIMIT（LATERAL JOIN 复杂且收益有限）；
-        // 单条 SQL 一次性取回所有匹配行（受 max_scan × seeds 数量隐式约束），C# 端分桶 + per-seed 排序 + Skip/Take。
-        // 全局 LIMIT 设为 max_scan × seeds.Count（per-seed 上限 × 种子数），并加 10K 安全上限防止极端输入。
-        // P1-4：LIMIT 用 global_limit + 1 探测，避免"恰好等于上限"时的假阳性截断信号。
+        // P7：per-seed 扫描上限 = MaxScan（保留原语义：先按权重取 top MaxScan，再在 C# 端 Skip/Take 分页）。
+        // 总返回行数 ≤ seeds.Count × maxScan，远小于旧方案的 100K 全局上限。
         var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
-        var globalLimit = Math.Min((long)maxScan * seeds.Count, 100_000);
-        var globalLimitProbe = globalLimit + 1;
-        command.Parameters.AddWithValue("global_limit_probe", globalLimitProbe);
+        command.Parameters.AddWithValue("per_seed_scan", maxScan);
+        command.Parameters.AddWithValue("item_ids", seeds.ToArray());
 
         command.CommandText = $"""
-SELECT data
-FROM {Table("relations")}
-WHERE {string.Join(" AND ", filters)}
-ORDER BY weight DESC, confidence DESC, created_at DESC
-LIMIT @global_limit_probe;
+SELECT seed.id AS seed_id, r.data AS relation_data
+FROM unnest(@item_ids) AS seed(id)
+CROSS JOIN LATERAL (
+    SELECT data
+    FROM {Table("relations")}
+    WHERE {string.Join(" AND ", filters)}
+    ORDER BY weight DESC, confidence DESC, created_at DESC
+    LIMIT @per_seed_scan
+) r;
 """;
 
-        var allRelations = await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
-
-        // P1-4：检测 SQL 全局 LIMIT 是否命中。若 allRelations.Count > globalLimit，
-        // 说明 SQL 还有更多匹配行未读（保守标记所有非空桶为 Truncated）；
-        // 若 <= globalLimit，SQL 已读完全部匹配，per-seed Truncated 完全由 bucket.Count > maxScan 决定。
-        var sqlGloballyTruncated = allRelations.Count > globalLimit;
-
-        // C# 端分桶
-        var effectiveTake = query.Take > 0 ? query.Take : 100;
-        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
+        // P7：读取 (seed_id, relation_data) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
         var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var seed in seeds)
         {
             buckets[seed] = new List<ContextRelation>();
         }
 
-        // allRelations 已按 Weight DESC, Confidence DESC, CreatedAt DESC 排序，分桶时保持顺序
-        foreach (var relation in allRelations)
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var sourceIsSeed = seedSet.Contains(relation.SourceId);
-            var targetIsSeed = seedSet.Contains(relation.TargetId);
-            switch (query.Direction)
+            var seedId = reader.GetString(0);
+            var json = reader.GetString(1);
+            var relation = Serializer.Deserialize<ContextRelation>(json);
+            if (relation is null) continue;
+
+            if (buckets.TryGetValue(seedId, out var bucket))
             {
-                case RelationDirection.Outgoing:
-                    if (sourceIsSeed) { buckets[relation.SourceId].Add(relation); }
-                    break;
-                case RelationDirection.Incoming:
-                    if (targetIsSeed) { buckets[relation.TargetId].Add(relation); }
-                    break;
-                default:
-                    if (sourceIsSeed) { buckets[relation.SourceId].Add(relation); }
-                    if (targetIsSeed
-                        && !string.Equals(relation.SourceId, relation.TargetId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        buckets[relation.TargetId].Add(relation);
-                    }
-                    break;
+                bucket.Add(relation);
             }
         }
 
+        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         foreach (var seed in seeds)
         {
             var bucket = buckets[seed];
-            // P1-4：per-seed MaxScan 截断 + SQL 全局 LIMIT 截断（保守）
-            // - bucket.Count > maxScan：per-seed 截断
-            // - bucket.Count == maxScan && sqlGloballyTruncated：保守标记，可能有更多低权重行被 SQL 全局截断
-            // - bucket.Count < maxScan：数据已读全（按 Weight DESC 排序，SQL 截断的总是低权重，bucket 内前 maxScan 条已完整），不截断
-            var truncated = bucket.Count > maxScan
-                || (sqlGloballyTruncated && bucket.Count >= maxScan);
-            // 桶内已排序，直接 Take(MaxScan) + Skip + Take
+            // P7：truncated 信号来自 LATERAL LIMIT 命中。
+            // bucket.Count >= maxScan 表示 LATERAL 返回了 maxScan 行（达到 LIMIT 上限），可能还有更多低权重行未读。
+            // bucket.Count < maxScan 表示该种子所有匹配行已读全（无截断）。
+            // 相比旧方案，此信号精确到 per-seed，不再依赖 SQL 全局 LIMIT 命中的保守推断。
+            var truncated = bucket.Count >= maxScan;
+            // 桶内已排序（LATERAL 内 ORDER BY），直接 Skip + Take 完成分页。
             var seedRelations = bucket
-                .Take(maxScan)
                 .Skip(effectiveSkip)
                 .Take(effectiveTake)
                 .ToArray();

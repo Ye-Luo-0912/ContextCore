@@ -40,6 +40,18 @@ jobs:
       - name: Build (Release)
         run: dotnet build ContextCore.sln -c Release --no-restore -warnaserror
 
+      # P0-10 修复：upload bin/obj 产物供下游 test job 复用。
+      # 下游 job 在新 runner 上运行 --no-build --no-restore，若无此 artifact 将在资产解析阶段失败
+      # （obj/project.assets.json 缺失，NuGet cache 也不含该 runner 的 restore 产物）。
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            **/bin/
+            **/obj/
+          retention-days: 1
+
   unit:
     name: Unit tests
     needs: build
@@ -61,10 +73,16 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       # 排除 Integration（需 Postgres）、Architecture（独立 job）、Contract（public-api / openapi-snapshot 独立 job）
       - name: Run unit tests (non-Integration / non-Architecture / non-Contract)
         run: >
-          dotnet test ContextCore.sln -c Release --no-restore
+          dotnet test ContextCore.sln -c Release --no-build --no-restore
           --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
           -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
@@ -118,12 +136,18 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       - name: Run Postgres integration tests
         env:
           # Testcontainers 需要 Docker socket
           DOCKER_HOST: unix:///var/run/docker.sock
         run: >
-          dotnet test ContextCore.sln -c Release --no-restore
+          dotnet test ContextCore.sln -c Release --no-build --no-restore
           --filter "TestCategory=Integration"
           -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
@@ -158,10 +182,16 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       # ContextCoreDiArchitectureTests 验证 DI 注册不变量（Data/Control Plane 分离、无 Unsupported 占位等）
       - name: Run architecture tests
         run: >
-          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-restore
+          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
           --filter "TestCategory=Architecture"
           -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
@@ -196,10 +226,16 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       # PublicApiBaselineTests 反射枚举 ContextCore.Abstractions 公共 API 与签入 baseline 对比
       - name: Run public API baseline tests
         run: >
-          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-restore
+          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
           --filter "FullyQualifiedName~PublicApiBaselineTests"
           -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
@@ -234,10 +270,16 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       # OpenApiSnapshotDriftTests 启动服务拉取 /openapi/v1.json 与 service/openapi/service-api.openapi.json 对比
       - name: Run OpenAPI snapshot drift tests
         run: >
-          dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-restore
+          dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-build --no-restore
           --filter "FullyQualifiedName~OpenApiSnapshotDriftTests"
           -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"

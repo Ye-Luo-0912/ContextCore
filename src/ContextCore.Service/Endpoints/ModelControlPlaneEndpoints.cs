@@ -6,6 +6,7 @@ using ContextCore.Inference.Onnx;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace ContextCore.Service.Endpoints;
 
@@ -50,6 +51,7 @@ internal static class ModelControlPlaneEndpoints
             RegisterModelRequest request,
             IModelArtifactRegistry registry,
             IModelActivationAuditStore auditStore,
+            IConfiguration configuration,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -65,9 +67,24 @@ internal static class ModelControlPlaneEndpoints
                     field: "request");
             }
 
+            // P13：ArtifactPath 安全边界校验。
+            // 客户端提交的 ArtifactPath 必须解析为配置的 ArtifactRoot 内的路径，或为对象存储 URI。
+            // 拒绝包含 ".." 的路径、非配置根目录的绝对路径，防止路径穿越攻击读取服务器任意文件。
+            string? artifactPath = request.ArtifactPath;
+            if (!string.IsNullOrWhiteSpace(artifactPath))
+            {
+                var artifactRoot = ResolveArtifactRoot(configuration);
+                if (!TryValidateArtifactPath(artifactPath, artifactRoot, out var pathError))
+                {
+                    return ContextCoreHttpResultMapper.InvalidRequest(
+                        httpContext, string.Empty, "models.register",
+                        pathError,
+                        field: "artifact_path");
+                }
+            }
+
             // 计算 content_hash：调用方提供 ArtifactPath 时计算文件 SHA-256；否则使用请求提供的 ContentHash。
             string contentHash;
-            string? artifactPath = request.ArtifactPath;
             if (!string.IsNullOrWhiteSpace(request.ArtifactPath) && File.Exists(request.ArtifactPath))
             {
                 try
@@ -138,6 +155,7 @@ internal static class ModelControlPlaneEndpoints
             IFeatureRegistry featureRegistry,
             ICalibrationValidator calibrationValidator,
             [FromServices] ICalibrationService? calibrationService,
+            [FromServices] IOnnxInferenceSessionFactory? sessionFactory,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -175,27 +193,38 @@ internal static class ModelControlPlaneEndpoints
                 }
             }
 
-            // ONNX 格式验证：仅在 ArtifactPath 指向真实文件时尝试读取首字节 magic number
-            //（16 字节后跟 "ONNX" 标识）。失败时不阻止激活（ONNX session 创建时由工厂捕获）。
+            // P14：ONNX 格式验证 — 通过 ONNX Runtime 加载 metadata（InputMetadata / OutputMetadata），
+            // 验证输入输出 schema 后立即 Dispose。加载失败则验证失败。
+            // 不再使用不可靠的 magic byte 校验（ONNX 是 protobuf，没有可依赖的通用文件 magic）。
             var onnxFormatOk = true;
             string? onnxFormatError = null;
-            if (!string.IsNullOrWhiteSpace(descriptor.ArtifactPath) && File.Exists(descriptor.ArtifactPath))
+            if (!string.IsNullOrWhiteSpace(descriptor.ArtifactPath) && sessionFactory is not null)
             {
                 try
                 {
-                    onnxFormatOk = await CheckOnnxMagicAsync(descriptor.ArtifactPath, ct).ConfigureAwait(false);
-                    if (!onnxFormatOk)
+                    var validateOptions = new OnnxInferenceEngineOptions
                     {
-                        onnxFormatError = "ArtifactPath 指向的文件不是有效的 ONNX 格式（magic number 不匹配）。";
-                        errors.Add(onnxFormatError);
-                    }
+                        InputTensorName = "input",
+                        ScoreOutputName = "score",
+                        EnableWarmup = false
+                    };
+                    var session = await sessionFactory.CreateAsync(validateOptions, descriptor, ct).ConfigureAwait(false);
+                    // 加载成功即视为 ONNX 格式有效；session 立即 Dispose 释放资源。
+                    await session.DisposeAsync().ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    onnxFormatError = $"读取 ONNX 文件失败：{ex.GetType().Name}: {ex.Message}";
+                    onnxFormatError = $"ONNX 模型加载失败：{ex.GetType().Name}: {ex.Message}";
                     errors.Add(onnxFormatError);
                     onnxFormatOk = false;
                 }
+            }
+            else if (!string.IsNullOrWhiteSpace(descriptor.ArtifactPath) && sessionFactory is null)
+            {
+                // ArtifactPath 指向文件但 sessionFactory 未注册（非 RealModel 模式）：跳过 ONNX 验证。
+                onnxFormatOk = false;
+                onnxFormatError = "IOnnxInferenceSessionFactory 未注册（当前非 RealModel 模式）；无法执行 ONNX 格式验证。";
+                errors.Add(onnxFormatError);
             }
 
             var succeeded = errors.Count == 0;
@@ -249,37 +278,39 @@ internal static class ModelControlPlaneEndpoints
                     $"未找到 ModelArtifactId='{id}'。");
             }
 
-            // warmup 通过 ActivateAsync 实现：ActivateCoreAsync 内部会执行 Golden Probe warmup，
-            // 把引擎切换为 ActiveEngine。如果只想 warmup 而不切换 active，应使用 shadow 端点。
-            // 这里保留 activate 语义以让 warmup 端点真正触发加载（与 readiness 端点配合）。
+            // P15：warmup 不再调用 ActivateAsync（会替换 ActiveEngine），改为 LoadAndWarmupAsync。
+            // LoadAndWarmupAsync 加载模型并执行 Golden Probe warmup，但不发布为 active；
+            // 返回 Staged Handle 供后续 /activate 端点（接受 stagedHandleId）原子发布。
             var options = new OnnxInferenceEngineOptions
             {
                 InputTensorName = "input",
                 ScoreOutputName = "score",
                 EnableWarmup = true
             };
-            var result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
+            var staged = await activationManager.LoadAndWarmupAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Warmup,
-                result.Success, activationManager.ActiveDescriptor?.ModelArtifactId,
-                null, result.Error, httpContext, errorMessage: result.Error).ConfigureAwait(false);
+                staged.Success, activationManager.ActiveDescriptor?.ModelArtifactId,
+                null, staged.Error, httpContext, errorMessage: staged.Error).ConfigureAwait(false);
 
-            if (!result.Success)
+            if (!staged.Success)
             {
                 return ContextCoreHttpResultMapper.InvalidRequest(
                     httpContext, string.Empty, "models.warmup",
-                    $"warmup 失败：{result.Error}");
+                    $"warmup 失败：{staged.Error}");
             }
 
             return Results.Ok(new WarmupModelResponse
             {
                 ModelArtifactId = id,
                 Succeeded = true,
-                CalibrationValid = result.CalibrationValidation?.IsValid ?? true,
-                SchemaValid = result.SchemaValidationError is null
+                StagedHandleId = staged.HandleId,
+                CalibrationValid = staged.CalibrationValidation?.IsValid ?? true,
+                SchemaValid = true,
+                Note = "模型已加载并 warmup（Staged），未替换 active。调用 /activate 并提供 stagedHandleId 可原子发布为 active。"
             });
         })
         .WithName("WarmupModel")
-        .WithSummary("预热模型（执行 Golden Probe warmup，激活引擎）")
+        .WithSummary("预热模型（加载并执行 Golden Probe warmup，不替换 active；返回 Staged Handle）")
         .Produces<WarmupModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
@@ -371,13 +402,23 @@ internal static class ModelControlPlaneEndpoints
             // 记录 previous active（用于审计），必须在激活前捕获。
             var previousActiveId = activationManager.ActiveDescriptor?.ModelArtifactId;
 
-            var options = request.Options ?? new OnnxInferenceEngineOptions
+            // P15：若调用方提供 StagedHandleId（来自 /warmup 端点），优先从 Staged Handle 原子发布。
+            // 否则走 ActivateAsync（直接加载 + warmup + 发布）。
+            ModelActivationResult result;
+            if (!string.IsNullOrWhiteSpace(request.StagedHandleId))
             {
-                InputTensorName = "input",
-                ScoreOutputName = "score",
-                EnableWarmup = true
-            };
-            var result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
+                result = await activationManager.PromoteStagedAsync(request.StagedHandleId, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                var options = request.Options ?? new OnnxInferenceEngineOptions
+                {
+                    InputTensorName = "input",
+                    ScoreOutputName = "score",
+                    EnableWarmup = true
+                };
+                result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
+            }
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Activate,
                 result.Success, previousActiveId,
                 request.Operator, request.Reason, httpContext, errorMessage: result.Error).ConfigureAwait(false);
@@ -400,7 +441,7 @@ internal static class ModelControlPlaneEndpoints
         })
         .WithName("ActivateModel")
         .RequireWorkspacePermission(WorkspacePermission.ModelActivate)
-        .WithSummary("激活模型（热切换，替换当前 active）")
+        .WithSummary("激活模型（热切换，替换当前 active；可传入 stagedHandleId 从 warmup 缓存发布）")
         .Produces<ActivateModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
@@ -709,27 +750,115 @@ internal static class ModelControlPlaneEndpoints
         return "sha256:" + Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
+    // -----------------------------------------------------------------------
+    // P13：ArtifactPath 安全边界
+    // -----------------------------------------------------------------------
+
     /// <summary>
-    /// 校验 ONNX 文件 magic number：前 4 字节应为 0x08，随后是 4 字节长度，再后是 "ONNX\0"。
-    /// 这里采用宽松校验：在文件前 32 字节中查找 ASCII "ONNX" 子串。
+    /// 从 IConfiguration 解析 ArtifactRoot 配置（ModelArtifact:ArtifactRoot）。
+    /// 空值时回退到 ./model-artifacts（与 appsettings.json 默认值一致）。
+    /// 返回值始终为绝对路径（基于当前工作目录展开相对路径）。
     /// </summary>
-    private static async ValueTask<bool> CheckOnnxMagicAsync(string filePath, CancellationToken cancellationToken)
+    private static string ResolveArtifactRoot(IConfiguration configuration)
     {
-        var buffer = new byte[32];
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-            bufferSize: 4096, useAsync: true);
-        var read = await stream.ReadAsync(buffer.AsMemory(0, 32), cancellationToken).ConfigureAwait(false);
-        if (read < 8)
+        var configured = configuration["ModelArtifact:ArtifactRoot"];
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            configured = "./model-artifacts";
+        }
+
+        try
+        {
+            return Path.GetFullPath(configured);
+        }
+        catch
+        {
+            // 配置异常时回退到默认相对路径，确保校验逻辑不会因配置错误而放行任意路径。
+            return Path.GetFullPath("./model-artifacts");
+        }
+    }
+
+    /// <summary>
+    /// P13：校验客户端提交的 ArtifactPath 是否合法。
+    /// 合法路径需满足以下条件之一：
+    ///   1. 对象存储 URI（s3:// / gs:// / az:// / abfs:// / abfss:// / https:// / http://）
+    ///   2. 解析为完整路径后位于配置的 ArtifactRoot 目录内
+    /// 拒绝：
+    ///   - 包含 ".." 的路径（防止路径穿越）
+    ///   - 非配置根目录的绝对路径
+    /// </summary>
+    /// <param name="artifactPath">客户端提交的路径。</param>
+    /// <param name="artifactRoot">配置的 ArtifactRoot（绝对路径）。</param>
+    /// <param name="error">校验失败时的错误消息。</param>
+    /// <returns>合法返回 true；非法返回 false 并通过 <paramref name="error"/> 输出错误消息。</returns>
+    private static bool TryValidateArtifactPath(string artifactPath, string artifactRoot, out string error)
+    {
+        // 空路径视为未提供（合法）；调用方应在调用前判断是否需要校验。
+        if (string.IsNullOrWhiteSpace(artifactPath))
+        {
+            error = string.Empty;
+            return true;
+        }
+
+        // 1. 允许对象存储 URI 与 HTTP(S) URL（非本地文件路径，无需路径穿越校验）。
+        if (IsObjectStorageUri(artifactPath))
+        {
+            error = string.Empty;
+            return true;
+        }
+
+        // 2. 拒绝包含 ".." 的路径（防止路径穿越攻击绕过 StartsWith 校验）。
+        if (artifactPath.Contains("..", StringComparison.Ordinal))
+        {
+            error = "ArtifactPath 不能包含 '..' 路径段（防止路径穿越）。";
+            return false;
+        }
+
+        // 3. 解析为完整路径。
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(artifactPath);
+        }
+        catch (Exception)
+        {
+            error = $"ArtifactPath '{artifactPath}' 不是有效路径。";
+            return false;
+        }
+
+        // 4. 校验完整路径是否位于配置的 ArtifactRoot 目录内。
+        // 使用 OrdinalIgnoreCase 以兼容 Windows 大小写不敏感的文件系统；
+        // 同时确保 ArtifactRoot 以目录分隔符结尾，避免 "model-artifacts-evil" 这样的兄弟目录被误判。
+        var rootWithSeparator = artifactRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? artifactRoot
+            : artifactRoot + Path.DirectorySeparatorChar;
+
+        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(fullPath, artifactRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"ArtifactPath '{artifactPath}' 不在配置的 ArtifactRoot '{artifactRoot}' 内。" +
+                    "请将模型文件放置于配置的 ArtifactRoot 目录下，或使用对象存储 URI（s3:// / gs:// / az:// 等）。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    /// <summary>
+    /// 判断路径是否为对象存储 URI 或 HTTP(S) URL（非本地文件路径）。
+    /// </summary>
+    private static bool IsObjectStorageUri(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
         {
             return false;
         }
 
-        // ONNX 文件以 protobuf message 包装：[0]=8 (field 1 varint length), [1..4]=长度小端，
-        // 随后是 "ONNX\0" 5 字节字符串（0x4F 0x4E 0x58 0x00 在 buffer[5..8] 区域）。
-        // 宽松匹配：搜索 buffer 中的 "ONNX"（0x4F 0x4E 0x58 0x00）。
-        for (var i = 0; i <= read - 4; i++)
+        var schemes = new[] { "s3://", "gs://", "az://", "abfs://", "abfss://", "https://", "http://" };
+        foreach (var scheme in schemes)
         {
-            if (buffer[i] == 0x4F && buffer[i + 1] == 0x4E && buffer[i + 2] == 0x58 && buffer[i + 3] == 0x00)
+            if (path.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -852,6 +981,8 @@ public sealed class WarmupModelResponse
     public bool Succeeded { get; init; }
     public bool CalibrationValid { get; init; }
     public bool SchemaValid { get; init; }
+    public string? StagedHandleId { get; init; }
+    public string? Note { get; init; }
 }
 
 /// <summary>影子模式请求。</summary>
@@ -882,6 +1013,7 @@ public sealed class ActivateModelRequest
     public OnnxInferenceEngineOptions? Options { get; init; }
     public string? Operator { get; init; }
     public string? Reason { get; init; }
+    public string? StagedHandleId { get; init; }
 }
 
 /// <summary>激活模型响应。</summary>

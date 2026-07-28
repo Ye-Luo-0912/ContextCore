@@ -1,3 +1,4 @@
+using System.Globalization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
@@ -60,13 +61,20 @@ public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, ICo
     /// <summary>共享的 INSERT/ON CONFLICT 逻辑，由无事务与事务重载复用。</summary>
     private async Task ExecuteSaveAsync(NpgsqlCommand command, ContextItem normalized, CancellationToken cancellationToken)
     {
+        // P6：从 Metadata 读取摄取阶段已持久化的 content_hash / content_token_cost。
+        // BasicContextIngestionService 在摄取时把这两个值写入 Metadata 字典（键见 ContentMetadataKeys），
+        // Store 在写入时提取到专用列，Provider 读取时直接命中列而无需在线重算或解析 jsonb。
+        var (contentHash, contentTokenCost) = ReadPersistedContentMetrics(normalized);
+
         command.CommandText = $"""
 INSERT INTO {Table("context_items")} (
     workspace_id, collection_id, id, type, title, tags, refs, source_refs,
-    importance, version, created_at, updated_at, data)
+    importance, version, created_at, updated_at, data,
+    content_hash, content_token_cost)
 VALUES (
     @workspace_id, @collection_id, @id, @type, @title, @tags, @refs, @source_refs,
-    @importance, @version, @created_at, @updated_at, @data)
+    @importance, @version, @created_at, @updated_at, @data,
+    @content_hash, @content_token_cost)
 ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     type = EXCLUDED.type,
     title = EXCLUDED.title,
@@ -76,7 +84,9 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     importance = EXCLUDED.importance,
     version = EXCLUDED.version,
     updated_at = EXCLUDED.updated_at,
-    data = EXCLUDED.data;
+    data = EXCLUDED.data,
+    content_hash = EXCLUDED.content_hash,
+    content_token_cost = EXCLUDED.content_token_cost;
 """;
         command.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
         command.Parameters.AddWithValue("collection_id", normalized.CollectionId);
@@ -91,6 +101,8 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         command.Parameters.AddWithValue("created_at", normalized.CreatedAt);
         command.Parameters.AddWithValue("updated_at", normalized.UpdatedAt);
         AddJson(command, "data", normalized);
+        command.Parameters.AddWithValue("content_hash", (object?)contentHash ?? DBNull.Value);
+        command.Parameters.AddWithValue("content_token_cost", (object?)contentTokenCost ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -164,10 +176,19 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
             command.Parameters.AddWithValue("collection_id", query.CollectionId);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.QueryText))
+        // P3：Lexical 检索改走 search_vector GIN 索引。
+        // - websearch_to_tsquery 支持 "phrase search" / OR / AND 等语法，且不包含前导通配符（可命中 GIN）。
+        // - ts_rank_cd 返回 [0, +∞) 的相关度分数；乘以 100 后写入 Metadata["__ts_rank"]，
+        //   LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
+        // - id ILIKE 仍走顺序扫描，但 id 列很短，且只在带 QueryText 时才追加该 OR 分支。
+        var hasQueryText = !string.IsNullOrWhiteSpace(query.QueryText);
+        string? rankExpression = null;
+        if (hasQueryText)
         {
-            filters.Add("((data->>'Content') ILIKE @query_text OR (data->>'Title') ILIKE @query_text OR id ILIKE @query_text)");
-            command.Parameters.AddWithValue("query_text", $"%{query.QueryText}%");
+            command.Parameters.AddWithValue("query_text", query.QueryText!);
+            filters.Add("(search_vector @@ websearch_to_tsquery('simple', @query_text) OR id ILIKE @query_id_pattern)");
+            command.Parameters.AddWithValue("query_id_pattern", $"%{query.QueryText}%");
+            rankExpression = "ts_rank_cd(search_vector, websearch_to_tsquery('simple', @query_text))";
         }
 
         if (query.Tags.Count > 0)
@@ -202,24 +223,163 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
 
         command.Parameters.AddWithValue("skip", Math.Max(0, query.Skip));
         command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
-        command.CommandText = $"""
-SELECT data
+
+        // P4：IncludeContent=false 时只投影 metadata 列，避免读取/反序列化完整 jsonb 正文。
+        // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方走 BatchGetAsync 二次读取。
+        // P3：有 QueryText 时按 ts_rank_cd DESC 排序，否则保持 importance DESC, updated_at DESC。
+        if (!query.IncludeContent)
+        {
+            var orderClause = hasQueryText && rankExpression is not null
+                ? $"{rankExpression} DESC, importance DESC, updated_at DESC"
+                : "importance DESC, updated_at DESC";
+            command.CommandText = $"""
+SELECT id, type, title, importance, version, updated_at, content_hash, content_token_cost
 FROM {Table("context_items")}
 WHERE {string.Join(" AND ", filters)}
-ORDER BY importance DESC, updated_at DESC
+ORDER BY {orderClause}
+OFFSET @skip
+LIMIT @take;
+""";
+            var metadataResults = new List<ContextItem>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                metadataResults.Add(ReadMetadataRow(reader));
+            }
+            return metadataResults;
+        }
+
+        var fullOrderClause = hasQueryText && rankExpression is not null
+            ? $"{rankExpression} DESC, importance DESC, updated_at DESC"
+            : "importance DESC, updated_at DESC";
+        // P3：有 QueryText 时追加 ts_rank 列；提取到变量避免内插条件表达式（CS8361）。
+        var rankColumnSelect = hasQueryText ? $", {rankExpression} AS ts_rank" : string.Empty;
+        command.CommandText = $"""
+SELECT data{rankColumnSelect}
+FROM {Table("context_items")}
+WHERE {string.Join(" AND ", filters)}
+ORDER BY {fullOrderClause}
 OFFSET @skip
 LIMIT @take;
 """;
 
         var results = new List<ContextItem>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var fullReader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var hasRankColumn = hasQueryText && fullReader.FieldCount > 1;
+        while (await fullReader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var item = Serializer.Deserialize<ContextItem>(reader.GetString(0));
-            results.Add(query.IncludeContent ? item : WithoutContent(item));
+            var item = Serializer.Deserialize<ContextItem>(fullReader.GetString(0));
+            // P3：把真实 TS rank 注入 Metadata，Provider 读取后替代固定 10/60 分。
+            if (hasRankColumn && !fullReader.IsDBNull(1))
+            {
+                var rank = fullReader.GetDouble(1);
+                item = WithTsRank(item, rank);
+            }
+            results.Add(item);
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// P4：从 metadata-only 行构造 <see cref="ContextItem"/>（Content 为空，不触发 jsonb 反序列化）。
+    /// 列顺序与 QueryAsync 中 IncludeContent=false 的 SELECT 子句一一对应：
+    /// id(0), type(1), title(2), importance(3), version(4), updated_at(5), content_hash(6), content_token_cost(7)。
+    /// </summary>
+    private static ContextItem ReadMetadataRow(System.Data.Common.DbDataReader reader)
+    {
+        var id = reader.GetString(0);
+        var type = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        var title = reader.IsDBNull(2) ? null : reader.GetString(2);
+        var importance = reader.IsDBNull(3) ? 0.0 : reader.GetDouble(3);
+        var version = reader.IsDBNull(4) ? 0L : reader.GetInt64(4);
+        var updatedAt = reader.IsDBNull(5) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(5);
+        var contentHash = reader.IsDBNull(6) ? null : reader.GetString(6);
+        var contentTokenCost = reader.IsDBNull(7) ? (int?)null : reader.GetInt32(7);
+
+        // P6：把持久化的 content_hash / content_token_cost 写入 Metadata，
+        // Provider 在 BuildFromContextItem 中读取后跳过在线 SHA-256 + tokenizer 调用。
+        var metadata = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(contentHash))
+        {
+            metadata[ContentMetadataKeys.ContentHash] = contentHash;
+        }
+        if (contentTokenCost.HasValue)
+        {
+            metadata[ContentMetadataKeys.ContentTokenCost] = contentTokenCost.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return new ContextItem
+        {
+            Id = id,
+            Type = type,
+            Title = title,
+            // P4：IncludeContent=false → Content 必须为空字符串（与既有 WithoutContent 契约一致）
+            Content = string.Empty,
+            Importance = importance,
+            Version = version,
+            Checksum = contentHash,
+            UpdatedAt = updatedAt,
+            Metadata = metadata
+        };
+    }
+
+    /// <summary>P3：返回带 __ts_rank 注入的 ContextItem 副本（不可变 init 属性 → 用 with 重建）。</summary>
+    private static ContextItem WithTsRank(ContextItem item, double rank)
+    {
+        var metadata = new Dictionary<string, string>(item.Metadata)
+        {
+            [ContentMetadataKeys.TsRank] = (rank * 100.0).ToString(CultureInfo.InvariantCulture)
+        };
+        return new ContextItem
+        {
+            Id = item.Id,
+            WorkspaceId = item.WorkspaceId,
+            CollectionId = item.CollectionId,
+            Type = item.Type,
+            Title = item.Title,
+            Content = item.Content,
+            ContentFormat = item.ContentFormat,
+            Tags = item.Tags,
+            Refs = item.Refs,
+            SourceRefs = item.SourceRefs,
+            Metadata = metadata,
+            Importance = item.Importance,
+            Version = item.Version,
+            Checksum = item.Checksum,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        };
+    }
+
+    /// <summary>
+    /// P6：从 ContextItem.Metadata 读取摄取阶段持久化的 content_hash / content_token_cost。
+    /// BasicContextIngestionService 在摄取时写入这两个键；未持久化时返回 (null, null)。
+    /// </summary>
+    private static (string? ContentHash, int? ContentTokenCost) ReadPersistedContentMetrics(ContextItem item)
+    {
+        string? contentHash = null;
+        int? contentTokenCost = null;
+
+        if (item.Metadata is not null)
+        {
+            if (item.Metadata.TryGetValue(ContentMetadataKeys.ContentHash, out var hashValue)
+                && !string.IsNullOrWhiteSpace(hashValue))
+            {
+                contentHash = hashValue;
+            }
+            if (item.Metadata.TryGetValue(ContentMetadataKeys.ContentTokenCost, out var tokenValue)
+                && int.TryParse(tokenValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTokens)
+                && parsedTokens >= 0)
+            {
+                contentTokenCost = parsedTokens;
+            }
+        }
+
+        // Checksum 字段作为 content_hash 的回退源（与 BasicContextIngestionService.ComputeChecksum 一致）。
+        contentHash ??= string.IsNullOrWhiteSpace(item.Checksum) ? null : item.Checksum;
+
+        return (contentHash, contentTokenCost);
     }
 
     public async Task DeleteAsync(string workspaceId, string collectionId, string id, CancellationToken cancellationToken = default)

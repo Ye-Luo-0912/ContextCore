@@ -545,8 +545,12 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
                 : epochSamples.Sum(kvp => kvp.Value.AverageQualityScore * kvp.Value.TotalObservations) / totalObservations;
 
             // 外部指标：AVG 跳过 NULL
-            var taskSuccess = AvgNullable(epochSamples, s => s.TaskSuccessRate);
-            var toolSuccess = AvgNullable(epochSamples, s => s.ToolSuccessRate);
+            // P11：TaskSuccessRate / ToolSuccessRate 改为 SUM(分子)/SUM(分母) 替代 AVG(rate)；
+            //   sum/count 为 null 时回退到 AVG(rate)（向后兼容未填充 sum/count 的旧样本）
+            var taskSuccess = SumDivSum(epochSamples, s => s.TaskSuccessSum, s => s.TaskSuccessCount)
+                ?? AvgNullable(epochSamples, s => s.TaskSuccessRate);
+            var toolSuccess = SumDivSum(epochSamples, s => s.ToolSuccessSum, s => s.ToolSuccessCount)
+                ?? AvgNullable(epochSamples, s => s.ToolSuccessRate);
             var repair = AvgNullable(epochSamples, s => s.RepairRate);
             var safety = AvgNullable(epochSamples, s => s.SafetyViolationRate);
             var ctxPrecision = AvgNullable(epochSamples, s => s.ContextPrecision);
@@ -558,6 +562,21 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
 
             var windowStart = epochSamples.Min(kvp => kvp.Value.WindowStart);
             var windowEnd = epochSamples.Max(kvp => kvp.Value.WindowEnd);
+
+            // P10：收集各实例的 DDSketch 字节（供 Leader MergeFrom 合并查询总体 P95）
+            List<byte[]>? v2InstanceSketches = null;
+            List<byte[]>? legacyInstanceSketches = null;
+            foreach (var kvp in epochSamples)
+            {
+                if (kvp.Value.V2LatencySketch is { Length: > 0 } v2Sketch)
+                {
+                    (v2InstanceSketches ??= new List<byte[]>()).Add(v2Sketch);
+                }
+                if (kvp.Value.LegacyLatencySketch is { Length: > 0 } legacySketch)
+                {
+                    (legacyInstanceSketches ??= new List<byte[]>()).Add(legacySketch);
+                }
+            }
 
             // 构建外部指标（若任一非 null）
             ExternalResultMetrics? externalMetrics = null;
@@ -597,14 +616,18 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
                 ExternalMetrics = externalMetrics,
                 CurrentStageEpoch = currentEpoch,
                 WindowStart = windowStart,
-                WindowEnd = windowEnd
+                WindowEnd = windowEnd,
+                // P10：各实例 DDSketch 字节列表（供 Leader MergeFrom 合并）
+                V2InstanceSketches = v2InstanceSketches,
+                LegacyInstanceSketches = legacyInstanceSketches
             });
         }
 
         /// <inheritdoc />
-        public ValueTask<long> AdvanceEpochAsync(string runId, CancellationToken cancellationToken = default)
+        public ValueTask<long> AdvanceEpochAsync(string runId, CancellationToken cancellationToken = default, long fencingToken = 0)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+            // InMemory 实现不做 fencing 校验（无 lease 表）；fencingToken 参数仅为接口兼容
             var newEpoch = _epochs.AddOrUpdate(runId, 1L, (_, current) => current + 1);
             return ValueTask.FromResult(newEpoch);
         }
@@ -659,6 +682,35 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
 
             if (values.Count == 0) return null;
             return values.Average();
+        }
+
+        /// <summary>
+        /// P11：SUM(分子) / SUM(分母) 聚合（跳过 null sum/count 对）。
+        /// 所有样本的 sum/count 都为 null 时返回 null（调用方回退到 AVG(rate)）。
+        /// </summary>
+        private static double? SumDivSum(
+            List<KeyValuePair<(string runId, long epoch, string instanceId), CanaryMetricsSample>> samples,
+            Func<CanaryMetricsSample, double?> sumSelector,
+            Func<CanaryMetricsSample, long?> countSelector)
+        {
+            double totalSum = 0.0;
+            long totalCount = 0;
+            var hasAny = false;
+
+            foreach (var kvp in samples)
+            {
+                var sum = sumSelector(kvp.Value);
+                var count = countSelector(kvp.Value);
+                if (sum.HasValue && count.HasValue)
+                {
+                    totalSum += sum.Value;
+                    totalCount += count.Value;
+                    hasAny = true;
+                }
+            }
+
+            if (!hasAny || totalCount == 0) return null;
+            return totalSum / totalCount;
         }
     }
 }

@@ -190,6 +190,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                     totalFailures++;
                     await outboxStore.MarkFailedAsync(
                         record.EventId,
+                        record.LeaseToken,
                         "FailingUtilityLedger: simulated materialization failure",
                         CancellationToken.None);
                 }
@@ -375,6 +376,8 @@ public sealed class R29H_LearningEventAcceptanceTests
 
             var now = DateTimeOffset.UtcNow;
             var leaseUntil = now.Add(leaseDuration);
+            // P0-8：每次 AcquirePending 生成唯一 lease_token，与 Postgres 实现保持一致。
+            var leaseToken = Guid.NewGuid().ToString("N");
 
             lock (_lock)
             {
@@ -395,6 +398,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                         retryCount: r.RetryCount,
                         leaseOwner: owner,
                         leaseExpiresAt: leaseUntil,
+                        leaseToken: leaseToken,
                         processedAt: r.ProcessedAt,
                         lastError: r.LastError,
                         deadLetterReason: r.DeadLetterReason);
@@ -406,27 +410,34 @@ public sealed class R29H_LearningEventAcceptanceTests
             }
         }
 
-        public Task<bool> MarkAckedAsync(string eventId, CancellationToken cancellationToken = default)
+        public Task<bool> MarkAckedAsync(
+            string eventId,
+            string leaseToken,
+            CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
             var now = DateTimeOffset.UtcNow;
 
             lock (_lock)
             {
                 if (!_records.TryGetValue(eventId, out var r)
-                    || r.State != LearningEventOutboxStates.Processing)
+                    || r.State != LearningEventOutboxStates.Processing
+                    || r.LeaseToken != leaseToken)
                 {
+                    // P0-8：lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
                     return Task.FromResult(false);
                 }
 
-                // CAS：仅当 state=Processing 时转为 Acked。
+                // CAS：仅当 state=Processing 且 lease_token 匹配时转为 Acked。
                 _records[eventId] = Clone(
                     r,
                     state: LearningEventOutboxStates.Acked,
                     retryCount: r.RetryCount,
                     leaseOwner: null,
                     leaseExpiresAt: null,
+                    leaseToken: null,
                     processedAt: now,
                     lastError: r.LastError,
                     deadLetterReason: r.DeadLetterReason);
@@ -436,22 +447,26 @@ public sealed class R29H_LearningEventAcceptanceTests
 
         public Task<bool> MarkFailedAsync(
             string eventId,
+            string leaseToken,
             string errorMessage,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
             var now = DateTimeOffset.UtcNow;
 
             lock (_lock)
             {
                 if (!_records.TryGetValue(eventId, out var r)
-                    || r.State != LearningEventOutboxStates.Processing)
+                    || r.State != LearningEventOutboxStates.Processing
+                    || r.LeaseToken != leaseToken)
                 {
+                    // P0-8：lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
                     return Task.FromResult(false);
                 }
 
-                // CAS：仅当 state=Processing 时转换为 DeadLettered 或 Pending。
+                // CAS：仅当 state=Processing 且 lease_token 匹配时转换为 DeadLettered 或 Pending。
                 // retry_count + 1 >= max_retry_count → DeadLettered，否则回退 Pending 等待重试。
                 var newRetry = r.RetryCount + 1;
                 var isDead = newRetry >= r.MaxRetryCount;
@@ -461,6 +476,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                     retryCount: newRetry,
                     leaseOwner: null,
                     leaseExpiresAt: null,
+                    leaseToken: null,
                     processedAt: r.ProcessedAt,
                     lastError: errorMessage,
                     deadLetterReason: isDead ? errorMessage : null);
@@ -470,20 +486,21 @@ public sealed class R29H_LearningEventAcceptanceTests
 
         public Task<bool> RenewLeaseAsync(
             string eventId,
-            string owner,
+            string leaseToken,
             TimeSpan leaseDuration,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
-            ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+            ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
             var now = DateTimeOffset.UtcNow;
 
             lock (_lock)
             {
+                // P0-8：用 lease_token 替代 lease_owner 校验更严格（token 全局唯一）。
                 if (!_records.TryGetValue(eventId, out var r)
                     || r.State != LearningEventOutboxStates.Processing
-                    || r.LeaseOwner != owner)
+                    || r.LeaseToken != leaseToken)
                 {
                     return Task.FromResult(false);
                 }
@@ -492,8 +509,9 @@ public sealed class R29H_LearningEventAcceptanceTests
                     r,
                     state: r.State,
                     retryCount: r.RetryCount,
-                    leaseOwner: owner,
+                    leaseOwner: r.LeaseOwner,
                     leaseExpiresAt: now.Add(leaseDuration),
+                    leaseToken: leaseToken,
                     processedAt: r.ProcessedAt,
                     lastError: r.LastError,
                     deadLetterReason: r.DeadLetterReason);
@@ -547,6 +565,7 @@ public sealed class R29H_LearningEventAcceptanceTests
             int retryCount,
             string? leaseOwner,
             DateTimeOffset? leaseExpiresAt,
+            string? leaseToken,
             DateTimeOffset? processedAt,
             string? lastError,
             string? deadLetterReason)
@@ -566,6 +585,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                 ProcessedAt = processedAt,
                 LeaseOwner = leaseOwner,
                 LeaseExpiresAt = leaseExpiresAt,
+                LeaseToken = leaseToken,
                 LastError = lastError,
                 DeadLetterReason = deadLetterReason
             };

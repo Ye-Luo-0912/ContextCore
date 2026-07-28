@@ -298,21 +298,21 @@ public sealed class R29H_ModelActivationAcceptanceTests
         var resultB = await manager.ActivateAsync("old-engine-b", options);
         Assert.IsTrue(resultB.Success, $"模型 B 激活应成功：{resultB.Error}");
 
-        // 通过反射检查 _previousEngine 字段（热切换后应引用旧引擎）
-        var previousEngineField = typeof(ModelActivationManager)
-            .GetField("_previousEngine", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.IsNotNull(previousEngineField, "_previousEngine 字段应存在");
+        // P1 重构后用 _previousHandle（ActiveModelHandle）替代 _previousEngine
+        var previousHandleField = typeof(ModelActivationManager)
+            .GetField("_previousHandle", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(previousHandleField, "_previousHandle 字段应存在");
 
-        var previousRightAfter = previousEngineField!.GetValue(manager);
-        Assert.IsNotNull(previousRightAfter, "热切换后 _previousEngine 应引用旧引擎 A");
+        var previousRightAfter = previousHandleField!.GetValue(manager);
+        Assert.IsNotNull(previousRightAfter, "热切换后 _previousHandle 应引用旧引擎 A 的 handle");
 
         // 等待 grace period 过期 + 后台清理任务执行
         await Task.Delay(800);
 
-        // 验证 _previousEngine 已被清理（不再引用旧引擎）
-        var previousAfterGrace = previousEngineField.GetValue(manager);
+        // 验证 _previousHandle 已被清理（不再引用旧引擎）
+        var previousAfterGrace = previousHandleField.GetValue(manager);
         Assert.IsNull(previousAfterGrace,
-            "grace period 过期后 _previousEngine 应被清理为 null，避免引擎泄漏");
+            "grace period 过期后 _previousHandle 应被清理为 null，避免引擎泄漏");
     }
 
     // ===========================================================================

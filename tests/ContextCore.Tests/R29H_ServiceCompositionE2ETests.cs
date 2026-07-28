@@ -267,7 +267,9 @@ public sealed class R29H_ServiceCompositionE2ETests
             "ProductionHA profile 应强制 LeaseEnabled=true（HA 多实例租约竞争）。");
 
         // 断言 5：CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
-        var canarySchedulerOptions = provider.GetService<CanarySchedulerOptions>();
+        // P0-2：CanarySchedulerOptions 改用 AddOptions<>() 注册（Options Pipeline），
+        // 不再注册为 POCO singleton，需通过 IOptions<T> 解析。
+        var canarySchedulerOptions = provider.GetService<IOptions<CanarySchedulerOptions>>()?.Value;
         Assert.IsNotNull(canarySchedulerOptions);
         Assert.IsFalse(canarySchedulerOptions!.Enabled,
             "ProductionHA profile 应禁用单节点 CanaryProgressionHostedService。");

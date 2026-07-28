@@ -19,7 +19,7 @@ namespace ContextCore.Core.Services.Evolution;
 // 设计权衡：
 //   - 使用 Dictionary<int, long> 稀疏存储 bucket（典型延迟分布仅几十个 bucket）。
 //   - 排序仅在查询时进行（O(b log b)，b 通常 < 100）。
-//   - 不合并 sketch（canary 每个 runId 独立）；merge API 未实现。
+//   - P10 修复：支持 MergeFrom（跨实例 DDSketch 合并）与 Serialize/Deserialize（持久化到 bytea）。
 //   - 仅支持非负值（延迟 ms 不会为负）。
 //   - 容量上限：超过 maxBuckets（默认 4096）时拒绝新 bucket，避免极端值炸桶。
 //     此时退化精度但仍可查询（极端长尾值会被合并到最末 bucket）。
@@ -31,11 +31,18 @@ namespace ContextCore.Core.Services.Evolution;
 /// </summary>
 /// <remarks>
 /// 线程安全性：本类型不是线程安全的；调用方需自行加锁（CanaryMetricsCollector 的 ObservationBucket 已加锁）。
+/// <para>
+/// P10 修复：支持跨实例合并（<see cref="MergeFrom"/>）与二进制序列化（<see cref="Serialize"/>/<see cref="Deserialize"/>）。
+/// 各实例持久化自己的 DDSketch 字节到 canary_metrics_samples.v2_latency_sketch / legacy_latency_sketch bytea 列，
+/// Leader 聚合时读取所有实例的 sketch 字节，反序列化后 MergeFrom 合并，再从合并后的 sketch 查询 P95，
+/// 替代原来对单实例 P95 做加权平均的错误做法（加权平均会低估尾延迟）。
+/// </para>
 /// </remarks>
-internal sealed class DDSketch
+public sealed class DDSketch
 {
     private readonly double _logGamma; // log(1 + α)
     private readonly int _maxBuckets;
+    private readonly double _relativeAccuracy; // P10：保留原始 α，用于序列化与合并校验
     private readonly Dictionary<int, long> _buckets = new();
     private long _totalCount;
     private double _min = double.PositiveInfinity;
@@ -55,6 +62,7 @@ internal sealed class DDSketch
         {
             throw new ArgumentOutOfRangeException(nameof(maxBuckets), "maxBuckets 必须 > 0。");
         }
+        _relativeAccuracy = relativeAccuracy;
         _logGamma = Math.Log(1 + relativeAccuracy);
         _maxBuckets = maxBuckets;
     }
@@ -166,5 +174,118 @@ internal sealed class DDSketch
             index = maxKey;
         }
         _buckets[index] = _buckets.TryGetValue(index, out var c) ? c + 1 : 1;
+    }
+
+    // -----------------------------------------------------------------------
+    // P10 修复：跨实例 DDSketch 合并 + 二进制序列化
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// P10：将另一个 DDSketch 的 bucket 计数合并到当前 sketch。
+    /// </summary>
+    /// <param name="other">被合并的源 sketch（不会被修改）。</param>
+    /// <remarks>
+    /// 合并语义：相同 bucket index 的计数相加，totalCount / min / max 同步更新。
+    /// 要求两个 sketch 的 <c>relativeAccuracy</c> 相同（误差阈值内），否则跳过合并（防御性）。
+    /// 合并后的 sketch 可用 <see cref="GetQuantile"/> 查询全局分位数，等价于所有请求的总体 P95。
+    /// </remarks>
+    public void MergeFrom(DDSketch other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        if (other._totalCount == 0)
+        {
+            return; // 空 sketch 无贡献
+        }
+        // 相对误差必须一致（浮点等值比较；构造时已确定，同一进程内的 sketch 总是一致）
+        if (Math.Abs(other._relativeAccuracy - _relativeAccuracy) > 1e-15)
+        {
+            return; // 防御性：不兼容的 relativeAccuracy，跳过合并
+        }
+
+        foreach (var (key, count) in other._buckets)
+        {
+            _buckets[key] = _buckets.TryGetValue(key, out var existing) ? existing + count : count;
+        }
+        _totalCount += other._totalCount;
+        if (other._min < _min) _min = other._min;
+        if (other._max > _max) _max = other._max;
+    }
+
+    /// <summary>
+    /// P10：将 DDSketch 状态序列化为二进制字节，用于持久化到 bytea 列。
+    /// </summary>
+    /// <returns>二进制表示；空 sketch（totalCount=0）返回空数组。</returns>
+    /// <remarks>
+    /// 格式（小端序）：
+    /// <code>
+    /// [1 byte:  format version = 1]
+    /// [8 bytes: relativeAccuracy (double)]
+    /// [8 bytes: totalCount (long)]
+    /// [8 bytes: min (double)]
+    /// [8 bytes: max (double)]
+    /// [4 bytes: bucket count (int)]
+    /// [for each bucket: 4 bytes (int key) + 8 bytes (long count)]
+    /// </code>
+    /// </remarks>
+    public byte[] Serialize()
+    {
+        // 空 sketch 返回空数组（反序列化时识别为空 sketch）
+        if (_totalCount == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        using var stream = new System.IO.MemoryStream(1 + 8 * 4 + 4 + _buckets.Count * 12);
+        using var writer = new System.IO.BinaryWriter(stream);
+        writer.Write((byte)1); // format version
+        writer.Write(_relativeAccuracy);
+        writer.Write(_totalCount);
+        writer.Write(_min);
+        writer.Write(_max);
+        writer.Write(_buckets.Count);
+        foreach (var (key, count) in _buckets)
+        {
+            writer.Write(key);
+            writer.Write(count);
+        }
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// P10：从二进制字节反序列化 DDSketch。
+    /// </summary>
+    /// <param name="bytes">序列化字节（由 <see cref="Serialize"/> 产生）。</param>
+    /// <returns>反序列化的 DDSketch；null/空数组返回 null（表示无 sketch 数据）。</returns>
+    public static DDSketch? Deserialize(byte[]? bytes)
+    {
+        if (bytes is null || bytes.Length == 0)
+        {
+            return null;
+        }
+
+        using var stream = new System.IO.MemoryStream(bytes);
+        using var reader = new System.IO.BinaryReader(stream);
+        var version = reader.ReadByte();
+        if (version != 1)
+        {
+            return null; // 未知版本，跳过
+        }
+        var relativeAccuracy = reader.ReadDouble();
+        var totalCount = reader.ReadInt64();
+        var min = reader.ReadDouble();
+        var max = reader.ReadDouble();
+        var bucketCount = reader.ReadInt32();
+
+        var sketch = new DDSketch(relativeAccuracy);
+        for (var i = 0; i < bucketCount; i++)
+        {
+            var key = reader.ReadInt32();
+            var count = reader.ReadInt64();
+            sketch._buckets[key] = count;
+        }
+        sketch._totalCount = totalCount;
+        sketch._min = min;
+        sketch._max = max;
+        return sketch;
     }
 }

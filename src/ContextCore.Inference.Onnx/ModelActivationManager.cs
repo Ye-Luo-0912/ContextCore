@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using ContextCore.Abstractions;
 
@@ -14,14 +15,57 @@ namespace ContextCore.Inference.Onnx;
 //      → OnnxInferenceEngine 激活。
 //   2. 作为 IBatchInferenceEngine 代理：激活前委托给 fallback（Deterministic），
 //      激活后委托给 OnnxInferenceEngine，让消费方无需感知激活切换。
-//   3. 线程安全：ActivateAsync 可在运行时调用，通过 lock 原子切换引擎。
+//   3. 线程安全：ActivateAsync 可在运行时调用，通过原子 ActiveModelHandle 切换引擎。
 //
 // 设计原则：
 //   1. fail-safe：激活失败不影响现有推理（继续使用 fallback）。
 //   2. 校准验证不通过时拒绝激活（Error 级违规）；Warning 级违规允许激活。
 //   3. schema 不存在时拒绝激活（防止推理时 schema drift）。
 //   4. 不捕获 OperationCanceledException（与项目约束一致）。
+//
+// P1：原子 Active Handle
+//   - 用单个 volatile ActiveModelHandle 替换分开的 _activeEngine / _activeCounter，
+//     推理时只读取一次 handle（Volatile.Read），确保 engine 与 counter 来自同一世代，
+//     避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter。
+//   - 激活时创建新 handle（Generation+1），旧 handle 注册到延迟清理队列；
+//     不在激活时立即 Dispose 旧引擎。
+//
+// P15：LoadAndWarmupAsync
+//   - 加载并 warmup 模型但不发布为 active；返回 StagedModelHandle。
+//   - 用于 /warmup 端点：预热不应替换当前 active 模型。
+//   - PromoteStagedAsync 将 Staged Handle 原子发布为 active。
 // ===========================================================================
+
+/// <summary>
+/// P1：原子 Active Handle — 把引擎、descriptor、引用计数器与世代号绑定为单个不可变 record。
+/// 推理路径通过 Volatile.Read 一次性读取整个 handle，确保 engine 与 counter 始终来自同一世代，
+/// 避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter（进而让旧 Session 被提前释放）。
+/// </summary>
+internal sealed record ActiveModelHandle(
+    IBatchInferenceEngine Engine,
+    ModelArtifactDescriptor Descriptor,
+    ModelReferenceCounter Counter,
+    long Generation);
+
+/// <summary>
+/// P1：引用计数器 — 跟踪某个引擎实例上的 in-flight 推理请求数。
+/// 每个 ActiveModelHandle 关联一个独立 counter；请求开始时捕获 handle 引用并 Increment，
+/// 结束时 Decrement 同一 counter。热切换后旧请求递减的是旧 handle 的 counter（引用已捕获），
+/// 新请求递增新 handle 的 counter，互不干扰。Dispose 任务等待旧 counter 归零后才释放旧引擎。
+/// </summary>
+internal sealed class ModelReferenceCounter
+{
+    private int _count;
+
+    /// <summary>当前 in-flight 请求数（≥0）。</summary>
+    public int Count => Volatile.Read(ref _count);
+
+    /// <summary>原子递增（请求开始时调用）。</summary>
+    public void Increment() => Interlocked.Increment(ref _count);
+
+    /// <summary>原子递减（请求结束时调用，包括异常路径）。</summary>
+    public void Decrement() => Interlocked.Decrement(ref _count);
+}
 
 /// <summary>
 /// P0-7：权威模型激活管理器实现。
@@ -41,21 +85,21 @@ public sealed class ModelActivationManager : IModelActivationManager
     private readonly IFallbackInferenceEngine _fallbackEngine;
     private readonly ICalibrationService? _calibrationService;
 
-    // 激活状态：通过 lock 保护读写，确保原子切换。
+    // P1：原子 Active Handle — 单个 volatile 字段同时持有 engine + counter + descriptor + generation。
+    // 推理路径通过 Volatile.Read 一次性读取整个 handle，保证 engine 与 counter 来自同一世代。
+    private volatile ActiveModelHandle? _activeHandle;
+    private long _generation;
+
+    // 子问题3：热切换时旧 handle 放入 _previousHandle，后台延迟 Dispose（等待 in-flight 请求完成）。
+    // 同一时间至多一个 _previousHandle；新的激活会把当前 _activeHandle 移到 _previousHandle，
+    // 并立即 Dispose 更早的 _previousHandle（其 grace period 已超过）。
+    private volatile ActiveModelHandle? _previousHandle;
     private readonly object _activationLock = new();
-    private volatile IBatchInferenceEngine? _activeEngine;
-    private volatile ModelArtifactDescriptor? _activeDescriptor;
 
-    // 子问题3：热切换时旧引擎放入 _previousEngine，后台延迟 Dispose（等待 in-flight 请求完成）。
-    // 同一时间至多一个 _previousEngine；新的激活会把当前 _activeEngine 移到 _previousEngine，
-    // 并立即 Dispose 更早的 _previousEngine（其 grace period 已超过）。
-    private volatile IBatchInferenceEngine? _previousEngine;
-
-    // 子问题6：引用计数 — 每个 engine 关联一个 InflightCounter，跟踪该 engine 上的 in-flight 请求数。
-    // 请求在捕获 engine 引用时同时捕获 counter 引用，确保热切换后旧请求递减的是旧 counter（而非新 counter）。
-    // Dispose 任务等待旧 counter 归零后才释放旧引擎，避免 in-flight 请求触发 ObjectDisposedException。
-    private InflightCounter _activeCounter = new();
-    private InflightCounter? _previousCounter;
+    // P15：Staged Handle 暂存表 — LoadAndWarmupAsync 把已 warmup 的 handle 存入此表，
+    // 调用方可通过 PromoteStagedAsync(handleId) 原子发布为 active。
+    // 失败 / 丢弃的 Staged Handle 由调用方负责 Dispose（不会自动清理）。
+    private readonly ConcurrentDictionary<string, StagedModelHandle> _stagedHandles = new();
 
     /// <summary>
     /// 构造 ModelActivationManager。
@@ -91,22 +135,22 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <inheritdoc />
-    public IBatchInferenceEngine? ActiveEngine => _activeEngine;
+    public IBatchInferenceEngine? ActiveEngine => _activeHandle?.Engine;
 
     /// <inheritdoc />
-    public ModelArtifactDescriptor? ActiveDescriptor => _activeDescriptor;
+    public ModelArtifactDescriptor? ActiveDescriptor => _activeHandle?.Descriptor;
 
     /// <inheritdoc />
-    public string ModelVersion => (_activeEngine ?? _fallbackEngine).ModelVersion;
+    public string ModelVersion => (_activeHandle?.Engine ?? _fallbackEngine).ModelVersion;
 
     /// <inheritdoc />
-    public InferenceEngineKind Kind => (_activeEngine ?? _fallbackEngine).Kind;
+    public InferenceEngineKind Kind => (_activeHandle?.Engine ?? _fallbackEngine).Kind;
 
     /// <inheritdoc />
-    public string ContentHash => (_activeEngine ?? _fallbackEngine).ContentHash;
+    public string ContentHash => (_activeHandle?.Engine ?? _fallbackEngine).ContentHash;
 
     /// <inheritdoc />
-    public string CalibrationVersion => (_activeEngine ?? _fallbackEngine).CalibrationVersion;
+    public string CalibrationVersion => (_activeHandle?.Engine ?? _fallbackEngine).CalibrationVersion;
 
     /// <inheritdoc />
     public async ValueTask<ModelActivationResult> ActivateAsync(
@@ -147,28 +191,87 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <inheritdoc />
+    public async ValueTask<StagedModelHandle> LoadAndWarmupAsync(
+        string modelArtifactId,
+        OnnxInferenceEngineOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelArtifactId);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var handleId = Guid.NewGuid().ToString("N");
+
+        var descriptor = await _registry.GetAsync(modelArtifactId, cancellationToken).ConfigureAwait(false);
+        if (descriptor is null)
+        {
+            return StagedModelHandle.Failed(
+                handleId,
+                descriptor: null,
+                $"未在 IModelArtifactRegistry 中找到 ModelArtifactId='{modelArtifactId}'。");
+        }
+
+        // 复用 ActivateCoreAsync 的加载 + 验证 + warmup 流程，但不发布为 active。
+        var loaded = await LoadAndWarmupCoreAsync(descriptor, options, cancellationToken).ConfigureAwait(false);
+        if (!loaded.Success)
+        {
+            return StagedModelHandle.Failed(handleId, descriptor, loaded.Error!, loaded.CalibrationValidation);
+        }
+
+        var staged = StagedModelHandle.Succeeded(
+            handleId,
+            loaded.Engine!,
+            descriptor,
+            loaded.CalibrationValidation);
+
+        // 存入暂存表，调用方可通过 PromoteStagedAsync(handleId) 提升为 active。
+        _stagedHandles[handleId] = staged;
+        return staged;
+    }
+
+    /// <inheritdoc />
+    public ValueTask<ModelActivationResult> PromoteStagedAsync(
+        string stagedHandleId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagedHandleId);
+
+        if (!_stagedHandles.TryGetValue(stagedHandleId, out var staged) || !staged.Success || staged.Engine is null)
+        {
+            return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
+                $"未找到 Staged Handle '{stagedHandleId}' 或该 handle 已失效。"));
+        }
+
+        // 从暂存表移除（原子发布后不再允许重复 promote）。
+        _stagedHandles.TryRemove(stagedHandleId, out _);
+
+        // 原子发布：复用 PublishAtomic 把已 warmup 的引擎切到 active。
+        // PromoteStaged 路径使用默认 grace period（无 options 上下文）。
+        var published = PublishAtomicWithGracePeriod(staged.Engine, staged.Descriptor, staged.CalibrationValidation, 30000);
+        return new ValueTask<ModelActivationResult>(published);
+    }
+
+    /// <inheritdoc />
     public async ValueTask<BatchInferenceResult> InferAsync(
         BatchInferenceRequest request,
         CancellationToken ct = default)
     {
-        // 子问题6：捕获当前引擎及其关联 counter，原子递增引用计数。
-        // 热切换后旧请求仍递减旧 counter（counter 引用在请求开始时已捕获），确保 Dispose 任务能精确等待。
-        // activeEngine 为 null 时使用 fallback（fallback 永不 Dispose，无需计数）。
-        var engine = _activeEngine;
-        if (engine is null)
+        // P1：通过 Volatile.Read 一次性捕获整个 ActiveModelHandle（engine + counter + generation）。
+        // 热切换发生在读取之后时，本次请求继续使用旧 handle 的 engine 与 counter，
+        // 旧 counter 仅被本次请求递减，不会污染新 counter；新 counter 也不会被本次请求递减。
+        var handle = _activeHandle;
+        if (handle is null)
         {
             return await _fallbackEngine.InferAsync(request, ct).ConfigureAwait(false);
         }
 
-        var counter = _activeCounter;
-        counter.Increment();
+        handle.Counter.Increment();
         try
         {
-            return await engine.InferAsync(request, ct).ConfigureAwait(false);
+            return await handle.Engine.InferAsync(request, ct).ConfigureAwait(false);
         }
         finally
         {
-            counter.Decrement();
+            handle.Counter.Decrement();
         }
     }
 
@@ -177,27 +280,26 @@ public sealed class ModelActivationManager : IModelActivationManager
         FeatureBatch batch,
         CancellationToken ct = default)
     {
-        // 子问题6：捕获当前引擎及其关联 counter，原子递增引用计数。
-        var engine = _activeEngine;
-        if (engine is null)
+        // P1：与 InferAsync 一致 — 单次 Volatile.Read 捕获 handle，避免 engine/counter 错配。
+        var handle = _activeHandle;
+        if (handle is null)
         {
             return await _fallbackEngine.InferBatchAsync(batch, ct).ConfigureAwait(false);
         }
 
-        var counter = _activeCounter;
-        counter.Increment();
+        handle.Counter.Increment();
         try
         {
-            return await engine.InferBatchAsync(batch, ct).ConfigureAwait(false);
+            return await handle.Engine.InferBatchAsync(batch, ct).ConfigureAwait(false);
         }
         finally
         {
-            counter.Decrement();
+            handle.Counter.Decrement();
         }
     }
 
     // -----------------------------------------------------------------------
-    // 激活核心流程：descriptor → 校准验证 → schema 验证 → session 创建 → 引擎切换
+    // 激活核心流程：descriptor → 校准验证 → schema 验证 → session 创建 → Golden Probe → 原子发布
     // -----------------------------------------------------------------------
 
     private async ValueTask<ModelActivationResult> ActivateCoreAsync(
@@ -205,8 +307,6 @@ public sealed class ModelActivationManager : IModelActivationManager
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken)
     {
-        var startedAt = Stopwatch.GetTimestamp();
-
         // P0-8 Step 1：校准验证（仅当 ICalibrationService 可用且 descriptor 引用了校准版本时）
         CalibrationValidationResult? calResult = null;
         if (_calibrationService is not null)
@@ -291,50 +391,144 @@ public sealed class ModelActivationManager : IModelActivationManager
                 calResult);
         }
 
-        // 子问题3：原子切换引擎并调度旧引擎延迟 Dispose。
-        // 旧 _activeEngine 移到 _previousEngine；更早的 _previousEngine 立即 Dispose（grace period 已超过）。
-        // 当前被替换的引擎进入 _previousEngine，等待 grace period 后由后台任务 Dispose。
-        IBatchInferenceEngine? oldActive;
-        IBatchInferenceEngine? oldPrevious;
-        InflightCounter? oldActiveCounter;
+        return PublishAtomic(engine, descriptor, calResult, options);
+    }
+
+    /// <summary>
+    /// P15：LoadAndWarmupCoreAsync — 执行校准 + schema + session + Golden Probe warmup，
+    /// 但不发布为 active。返回 (Success, Engine, Error, CalibrationValidation) 元组式结果。
+    /// </summary>
+    private async ValueTask<(bool Success, IBatchInferenceEngine? Engine, string? Error, CalibrationValidationResult? CalibrationValidation)> LoadAndWarmupCoreAsync(
+        ModelArtifactDescriptor descriptor,
+        OnnxInferenceEngineOptions options,
+        CancellationToken cancellationToken)
+    {
+        // P0-8 Step 1：校准验证
+        CalibrationValidationResult? calResult = null;
+        if (_calibrationService is not null)
+        {
+            var parameters = _calibrationService.GetParameters(descriptor.ModelArtifactId)
+                ?? _calibrationService.GetParameters(descriptor.ModelName);
+            if (parameters is not null)
+            {
+                calResult = _calibrationValidator.Validate(parameters, descriptor.ModelArtifactId);
+                if (!calResult.IsValid)
+                {
+                    return (false, null, $"校准验证失败：{calResult.Error}", calResult);
+                }
+            }
+        }
+
+        // P0-8 Step 2：schema 存在性验证
+        var schema = _featureRegistry.Get(descriptor.FeatureSchemaVersion);
+        if (schema is null)
+        {
+            return (false, null,
+                $"特征 schema 版本 '{descriptor.FeatureSchemaVersion}' 未在 IFeatureRegistry 中注册；无法 warmup 模型。",
+                calResult);
+        }
+
+        // Step 3：创建 ONNX session
+        IOnnxInferenceSession session;
+        try
+        {
+            session = await _sessionFactory.CreateAsync(options, descriptor, cancellationToken).ConfigureAwait(false);
+        }
+        catch (FileNotFoundException ex)
+        {
+            return (false, null, $"ONNX 模型文件未找到：{ex.Message}", calResult);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (false, null, $"ONNX session 创建失败：{ex.Message}", calResult);
+        }
+        catch (Microsoft.ML.OnnxRuntime.OnnxRuntimeException ex)
+        {
+            return (false, null, $"ONNX session 创建失败：{ex.Message}", calResult);
+        }
+
+        var engine = new OnnxInferenceEngine(
+            session,
+            options,
+            calibrationVersion: descriptor.CalibrationVersion);
+
+        // Step 4：Golden Probe warmup（不发布为 active）
+        var goldenProbeError = await RunGoldenProbeAsync(engine, schema, options, cancellationToken).ConfigureAwait(false);
+        if (goldenProbeError is not null)
+        {
+            await SafeDisposeEngineAsync(engine).ConfigureAwait(false);
+            return (false, null, $"Golden Probe 失败：{goldenProbeError}", calResult);
+        }
+
+        return (true, engine, null, calResult);
+    }
+
+    /// <summary>
+    /// P1：原子发布 — 把已 warmup 的引擎切到 _activeHandle（Generation+1），
+    /// 旧 handle 移到 _previousHandle，调度延迟 Dispose（等待 in-flight 引用归零）。
+    /// </summary>
+    private ModelActivationResult PublishAtomic(
+        IBatchInferenceEngine engine,
+        ModelArtifactDescriptor descriptor,
+        CalibrationValidationResult? calResult,
+        OnnxInferenceEngineOptions options)
+    {
+        return PublishAtomicWithGracePeriod(engine, descriptor, calResult, options.PreviousEngineGracePeriodMs);
+    }
+
+    /// <summary>P1：原子发布的内部实现，直接传入 gracePeriodMs。</summary>
+    private ModelActivationResult PublishAtomicWithGracePeriod(
+        IBatchInferenceEngine engine,
+        ModelArtifactDescriptor descriptor,
+        CalibrationValidationResult? calResult,
+        int gracePeriodMs)
+    {
+        // P1：在 lock 内创建新 handle（Generation+1），把旧 handle 移到 _previousHandle。
+        // 不在激活时立即 Dispose 旧引擎；旧引擎由延迟清理任务在引用归零后 Dispose。
+        ActiveModelHandle? oldActive;
+        ActiveModelHandle? oldPrevious;
         lock (_activationLock)
         {
-            oldActive = _activeEngine;
-            oldPrevious = _previousEngine;
-            oldActiveCounter = _activeCounter;
+            oldActive = _activeHandle;
+            oldPrevious = _previousHandle;
 
-            _activeEngine = engine;
-            _activeDescriptor = descriptor;
-            _activeCounter = new InflightCounter(); // 新引擎关联新 counter
-            _previousEngine = oldActive;
-            _previousCounter = oldActiveCounter; // 旧 counter 跟踪旧引擎 in-flight
+            var newGeneration = unchecked(Interlocked.Increment(ref _generation));
+            var newHandle = new ActiveModelHandle(
+                engine,
+                descriptor,
+                new ModelReferenceCounter(),
+                newGeneration);
+
+            // 用 Interlocked.Exchange 保证 _activeHandle 的写入对其他线程可见顺序：
+            // 先写 _activeHandle，再写 _previousHandle。Volatile.Read 在读取侧保证可见性。
+            _activeHandle = newHandle;
+            _previousHandle = oldActive;
         }
 
-        // 立即 Dispose 更早的 _previousEngine（其 grace period 已超过至少一个激活周期）。
-        if (oldPrevious is not null && !ReferenceEquals(oldPrevious, _fallbackEngine))
+        // 立即 Dispose 更早的 _previousHandle（其 grace period 已超过至少一个激活周期）。
+        // 该 handle 上的 in-flight 请求早已完成（至少经过一次完整激活周期）。
+        if (oldPrevious is not null && !ReferenceEquals(oldPrevious.Engine, _fallbackEngine))
         {
-            _ = Task.Run(() => SafeDisposeEngineAsync(oldPrevious));
+            _ = Task.Run(() => SafeDisposeHandleAsync(oldPrevious));
         }
 
-        // 调度延迟 Dispose 刚被替换的 oldActive（等待 in-flight 请求完成）。
-        if (oldActive is not null && !ReferenceEquals(oldActive, _fallbackEngine))
+        // 调度延迟 Dispose 刚被替换的 oldActive（等待 in-flight 引用归零 + grace period）。
+        if (oldActive is not null && !ReferenceEquals(oldActive.Engine, _fallbackEngine))
         {
-            var gracePeriodMs = options.PreviousEngineGracePeriodMs > 0
-                ? options.PreviousEngineGracePeriodMs
-                : 30000;
+            var oldHandleForClosure = oldActive;
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    // 子问题6：先等待 grace period（时间兜底），再检查旧引擎引用计数。
-                    // 引用计数（oldActiveCounter）精确跟踪旧引擎上的 in-flight 请求数；
+                    // P1：先等待 grace period（时间兜底），再检查旧 handle 引用计数。
+                    // 引用计数（oldHandle.Counter）精确跟踪旧引擎上的 in-flight 请求数；
                     // 即使新引擎持续接收新请求（新 counter），旧 counter 仍只递减不递增，能精确归零。
                     await Task.Delay(gracePeriodMs, CancellationToken.None).ConfigureAwait(false);
 
                     // 自旋等待旧 counter 归零（最多再等 gracePeriodMs，避免无限等待）。
                     var drainDeadline = Stopwatch.GetTimestamp();
                     var drainTimeoutTicks = TimeSpan.FromMilliseconds(gracePeriodMs).Ticks;
-                    while (oldActiveCounter is not null && oldActiveCounter.Count > 0)
+                    while (oldHandleForClosure.Counter.Count > 0)
                     {
                         if (Stopwatch.GetElapsedTime(drainDeadline).Ticks > drainTimeoutTicks)
                         {
@@ -344,13 +538,12 @@ public sealed class ModelActivationManager : IModelActivationManager
                         await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
                     }
 
-                    // 仅当 oldActive 仍是 _previousEngine 时 Dispose（避免误删正在使用的引擎）。
-                    var currentPrevious = _previousEngine;
-                    if (ReferenceEquals(currentPrevious, oldActive))
+                    // 仅当 oldHandleForClosure 仍是 _previousHandle 时 Dispose（避免误删正在使用的引擎）。
+                    var currentPrevious = _previousHandle;
+                    if (ReferenceEquals(currentPrevious, oldHandleForClosure))
                     {
-                        Interlocked.CompareExchange(ref _previousEngine, null, oldActive);
-                        Interlocked.CompareExchange(ref _previousCounter, null, oldActiveCounter);
-                        await SafeDisposeEngineAsync(oldActive).ConfigureAwait(false);
+                        Interlocked.CompareExchange(ref _previousHandle, null, oldHandleForClosure);
+                        await SafeDisposeHandleAsync(oldHandleForClosure).ConfigureAwait(false);
                     }
                 }
                 catch
@@ -360,7 +553,6 @@ public sealed class ModelActivationManager : IModelActivationManager
             });
         }
 
-        var elapsed = Stopwatch.GetElapsedTime(startedAt);
         return ModelActivationResult.Succeeded(descriptor, engine, calResult ?? new CalibrationValidationResult
         {
             IsValid = true,
@@ -490,22 +682,8 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// 子问题6：引用计数器 — 跟踪某个引擎实例上的 in-flight 推理请求数。
-    /// 每个 engine 关联一个独立 counter；请求开始时捕获 counter 引用并 Increment，
-    /// 结束时 Decrement 同一 counter。热切换后旧请求递减的是旧 counter（counter 引用已捕获），
-    /// 新请求递增新 counter，互不干扰。Dispose 任务等待旧 counter 归零后才释放旧引擎。
+    /// P1：best-effort Dispose 整个 ActiveModelHandle（实际仅 Dispose Engine；counter 无需释放）。
     /// </summary>
-    private sealed class InflightCounter
-    {
-        private int _count;
-
-        /// <summary>当前 in-flight 请求数（≥0）。</summary>
-        public int Count => Volatile.Read(ref _count);
-
-        /// <summary>原子递增（请求开始时调用）。</summary>
-        public void Increment() => Interlocked.Increment(ref _count);
-
-        /// <summary>原子递减（请求结束时调用，包括异常路径）。</summary>
-        public void Decrement() => Interlocked.Decrement(ref _count);
-    }
+    private static ValueTask SafeDisposeHandleAsync(ActiveModelHandle handle)
+        => SafeDisposeEngineAsync(handle.Engine);
 }

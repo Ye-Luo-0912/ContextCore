@@ -32,7 +32,15 @@ namespace ContextCore.Service.Extensions;
 internal static class CoreExtensions
 {
 	/// <summary>注册 Core 业务服务（摄取、打包、校验、晋升、工作记忆）。</summary>
-	/// <remarks>子问题5：使用默认 ModelExecutionOptions（Deterministic 模式），向后兼容。</remarks>
+	/// <remarks>
+	/// 子问题5：使用默认 ModelExecutionOptions（Deterministic 模式），向后兼容。
+	/// P0-1：[Obsolete] 此重载强制选择 Deterministic 模式，与 ProductionHA Profile 真实运行模式分裂。
+	/// 新代码应使用 <see cref="ProductionRuntimeExtensions.AddContextCoreRuntime"/> 单一入口，
+	/// 由该方法按 ContextCoreRuntime:ModelMode 配置选择正确的 ModelExecutionOptions。
+	/// 旧调用方（测试 / 已弃用路径）继续工作，但生产 Program.cs 已切换到新入口。
+	/// </remarks>
+	[Obsolete("P0-1: 此重载强制 Deterministic 模式。新代码应使用 AddContextCoreRuntime(IConfiguration)。"
+		+ " 详见 ContextCoreRuntimeOptions.ModelMode。")]
 	public static IServiceCollection AddContextCore(this IServiceCollection services)
 		=> AddContextCore(services, ModelExecutionOptions.Default);
 
@@ -599,12 +607,16 @@ internal static class CoreExtensions
 		services.AddSingleton<ICanaryMetricsCollector, DefaultCanaryMetricsCollector>();
 
 		// R28-B.8 工作包 D：Canary Progression HostedService。
-		// CanarySchedulerOptions 从配置节 "CanaryScheduler" 绑定（未配置时使用默认 60 秒轮询 + 启用）。
-		services.AddSingleton<CanarySchedulerOptions>(sp =>
+		// P0-2：CanarySchedulerOptions 改用 Configure<T>() 注册（Options Pipeline），
+		// 让 IOptionsMonitor<CanarySchedulerOptions> 消费者能感知后续 PostConfigure 覆盖
+		// （如 ProductionHA 强制 Enabled=false）。原 AddSingleton POCO 模式不读取
+		// Options Pipeline，导致 HA 模式下 Progression 仍 Enabled。
+		// 配置从 "CanaryScheduler" 节绑定（未配置时使用默认 60 秒轮询 + 启用）。
+		// 使用 Configure<IServiceProvider> + GetService<IConfiguration> 而非 Configure<IConfiguration>，
+		// 让未注册 IConfiguration 的测试容器（raw ServiceCollection）也能解析（回退到默认值）。
+		services.AddOptions<CanarySchedulerOptions>().Configure<IServiceProvider>((opts, sp) =>
 		{
-			var opts = new CanarySchedulerOptions();
 			sp.GetService<IConfiguration>()?.GetSection("CanaryScheduler").Bind(opts);
-			return opts;
 		});
 		// CanaryProgressionService 注册为 Singleton（依赖均为 Singleton）。
 		// 注入 CutoverControllerRegistry 实现 per-run 控制器隔离；注入 CutoverConfiguration 读取默认百分比。
@@ -620,8 +632,9 @@ internal static class CoreExtensions
 			 timeProvider: timeProvider,
 				registry: registry);
 		});
-		// HostedService 注册：定时轮询 ScopedCanary 阶段的 run 并自动推进/回滚。
-		services.AddHostedService<CanaryProgressionHostedService>();
+		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime /
+		// AddContextCoreProductionRuntime 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
+		// services.AddHostedService<CanaryProgressionHostedService>(); // 已迁移到 Runtime 入口
 
 		// 任务 C：默认外部指标采集源（ICanaryExternalMetricsSource 实现）。
 		// 从 Tool 执行结果、用户反馈、安全审计等外部信号采集 ground truth 指标，
@@ -632,19 +645,21 @@ internal static class CoreExtensions
 			new DefaultCanaryExternalMetricsSource(sp.GetService<IToolDispatchJournal>()));
 
 		// 任务 D：Canary HA Leader HostedService（多实例部署模式）。
-		// CanaryLeaderOptions 从配置节 "CanaryLeader" 绑定（未配置时 Enabled=false，单节点模式）。
-		// Enabled=false 时 ExecuteAsync 立即退出，由 CanaryProgressionHostedService 处理单节点推进；
-		// Enabled=true 时启用 HA 模式：各实例记录本地样本，leader 实例聚合跨实例指标并驱动推进/回滚。
-		// 与 CanaryProgressionHostedService 互斥运行：HA 模式下应将 CanarySchedulerOptions.Enabled=false。
-		// 注意：ICanaryLeaderLease / ICanaryMetricsAggregator 由 PostgresServiceCollectionExtensions 注册
-		// （Storage.Postgres 不引用 Service，故 HostedService 在此注册）。
-		services.AddSingleton<IOptions<CanaryLeaderOptions>>(sp =>
+		// P0-2：CanaryLeaderOptions 改用 Configure<T>() 注册（Options Pipeline），
+		// 让 IOptionsMonitor<CanaryLeaderOptions> 消费者能感知后续 PostConfigure 覆盖
+		// （如 ProductionHA 强制 Enabled=true）。原 AddSingleton<IOptions<T>> 手工注册
+		// 会被 AddContextCoreProductionRuntime 的 RemoveService 移除后重新注册，
+		// 但 IOptionsMonitor 路径仍读旧值——导致 HA Leader 实际仍 Disabled。
+		// 配置从 "CanaryLeader" 节绑定（未配置时 Enabled=false，单节点模式）。
+		// 使用 Configure<IServiceProvider> + GetService<IConfiguration> 而非 Configure<IConfiguration>，
+		// 让未注册 IConfiguration 的测试容器（raw ServiceCollection）也能解析（回退到默认值）。
+		services.AddOptions<CanaryLeaderOptions>().Configure<IServiceProvider>((opts, sp) =>
 		{
-			var opts = new CanaryLeaderOptions();
 			sp.GetService<IConfiguration>()?.GetSection("CanaryLeader").Bind(opts);
-			return Options.Create(opts);
 		});
-		services.AddHostedService<CanaryLeaderHostedService>();
+		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime /
+		// AddContextCoreProductionRuntime 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
+		// services.AddHostedService<CanaryLeaderHostedService>(); // 已迁移到 Runtime 入口
 
 		// R28-D：Model Execution Runtime 默认实现。
 		// - IFeatureRegistry：in-memory 特征 schema 注册表（生产可替换为持久化实现）
@@ -769,6 +784,9 @@ internal static class CoreExtensions
 		// 子问题 7：IAgentModelTransport fallback 实现（确定性响应，不调用真实 LLM）。
 		// 生产部署应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
 		services.TryAddSingleton<IAgentModelTransport, DeterministicAgentModelTransport>();
+
+		// P0-3：IAgentModelContextProjector（从 WorkingSet.Materials 取正文 + Token 预算控制）。
+		services.TryAddSingleton<IAgentModelContextProjector, DefaultAgentModelContextProjector>();
 
 		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
 		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。

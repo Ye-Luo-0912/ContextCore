@@ -71,6 +71,14 @@ public sealed class LearningEventOutboxRecord
     /// <summary>租约到期时间。超时后其他 worker 可抢占。</summary>
     public DateTimeOffset? LeaseExpiresAt { get; init; }
 
+    /// <summary>
+    /// P0-8：当前租约的唯一 token（每次 AcquirePendingAsync 生成新 GUID）。
+    /// <see cref="ILearningEventOutboxStore.MarkAckedAsync"/> / <see cref="ILearningEventOutboxStore.MarkFailedAsync"/>
+    /// / <see cref="ILearningEventOutboxStore.RenewLeaseAsync"/> 必须传入此 token，store 通过 CAS 校验
+    /// 仅持有者可 Ack/Nack/Renew——防止旧 Worker 在 lease 过期被抢占后越权 Ack 新 Worker 的 lease。
+    /// </summary>
+    public string? LeaseToken { get; init; }
+
     /// <summary>失败时的错误信息。</summary>
     public string? LastError { get; init; }
 
@@ -132,7 +140,8 @@ public interface ILearningEventOutboxStore
     /// <param name="owner">当前 worker 标识（用于租约持有者识别）。</param>
     /// <param name="leaseDuration">租约有效期。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>取出的 outbox 记录列表（可能为空）。</returns>
+    /// <returns>取出的 outbox 记录列表（可能为空）。每条记录的 <see cref="LearningEventOutboxRecord.LeaseToken"/>
+    /// 为本次租约的唯一 token，调用方需保留并在 Ack/Nack/Renew 时回传。</returns>
     [StoreOperation(StoreOperationKind.Write)]
     Task<IReadOnlyList<LearningEventOutboxRecord>> AcquirePendingAsync(
         int limit,
@@ -141,30 +150,46 @@ public interface ILearningEventOutboxStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 标记记录为已物化完成（state=Acked）。CAS 语义：仅当当前 state=Processing 时生效。
+    /// 标记记录为已物化完成（state=Acked）。CAS 语义：仅当当前 state=Processing 且 lease_token 匹配时生效。
     /// </summary>
+    /// <param name="eventId">记录事件 ID。</param>
+    /// <param name="leaseToken">调用方在 <see cref="AcquirePendingAsync"/> 获取的 lease token；不匹配则 0 行受影响。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true=已成功 Ack；false=lease 已被其他 worker 抢占或已 Ack/Nack，调用方应放弃该记录。</returns>
     [StoreOperation(StoreOperationKind.Write)]
     Task<bool> MarkAckedAsync(
         string eventId,
+        string leaseToken,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 标记记录为失败或重试。CAS 语义：仅当当前 state=Processing 时生效。
+    /// 标记记录为失败或重试。CAS 语义：仅当当前 state=Processing 且 lease_token 匹配时生效。
     /// 当 retryCount+1 超过 maxRetryCount 时转为 DeadLettered，否则回退为 Pending 等待下次调度。
     /// </summary>
+    /// <param name="eventId">记录事件 ID。</param>
+    /// <param name="leaseToken">调用方在 <see cref="AcquirePendingAsync"/> 获取的 lease token；不匹配则 0 行受影响。</param>
+    /// <param name="errorMessage">失败错误信息。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true=已成功 MarkFailed；false=lease 已被其他 worker 抢占或已 Ack/Nack。</returns>
     [StoreOperation(StoreOperationKind.Write)]
     Task<bool> MarkFailedAsync(
         string eventId,
+        string leaseToken,
         string errorMessage,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 续约当前持有的租约。返回 false 表示租约已过期或被其他 worker 抢占，调用方应停止处理。
+    /// 续约当前持有的租约。CAS 语义：仅当 lease_token 匹配且 state=Processing 时生效。
+    /// 返回 false 表示租约已过期或被其他 worker 抢占，调用方应停止处理。
     /// </summary>
+    /// <param name="eventId">记录事件 ID。</param>
+    /// <param name="leaseToken">调用方在 <see cref="AcquirePendingAsync"/> 获取的 lease token；不匹配则 0 行受影响。</param>
+    /// <param name="leaseDuration">续约时长。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     [StoreOperation(StoreOperationKind.Write)]
     Task<bool> RenewLeaseAsync(
         string eventId,
-        string owner,
+        string leaseToken,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
 
