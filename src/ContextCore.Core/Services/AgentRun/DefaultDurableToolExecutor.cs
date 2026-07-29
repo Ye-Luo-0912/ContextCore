@@ -81,14 +81,17 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         string runId,
         string workspaceId,
         AgentToolCallRequest toolCall,
+        int modelTurn,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentNullException.ThrowIfNull(toolCall);
 
-        // 1. 生成稳定 RequestId（基于 runId + toolCall 哈希）
-        var requestId = ComputeRequestId(runId, toolCall);
+        // P0-6：生成稳定 RequestId（基于 runId + modelTurn + toolCallId + toolName + arguments 哈希）。
+        // IdempotencyKey 不再参与 RequestId 计算——它是业务级去重键，单独存储于 journal 条目，
+        // 不应影响调用身份（InvocationId）。这避免同一 Run 内不同轮次的相同 Tool 调用被误判为重复。
+        var requestId = ComputeRequestId(runId, toolCall, modelTurn);
         var idempotencyKey = toolCall.IdempotencyKey;
         // P0-3：toolCallId 优先使用模型分配的 ToolCallId，缺失时回退到 RequestId（作为结果缓存主键）
         var toolCallId = !string.IsNullOrWhiteSpace(toolCall.ToolCallId) ? toolCall.ToolCallId! : requestId;
@@ -277,9 +280,12 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 finalJournalState = ToolDispatchState.Committed;
             }
 
-            // P0-3：写入 IDurableToolResultStore（Postgres 路径：journal 不缓存结果，由独立 store 管理）
-            // InMemory journal 已通过 MarkCommittedWithResultAsync 内置缓存，此处冗余但无害（幂等覆盖）
-            if (_resultStore is not null)
+            // P0-6：写入 IDurableToolResultStore（仅当 journal 不在同事务内持久化结果时）。
+            // Postgres journal 的 MarkCommittedWithResultAsync 已在同事务内 UPSERT 结果到 tool_dispatch_results，
+            // 此处冗余写入可跳过；InMemory journal 自带缓存但 PersistsResults=false，仍需走 resultStore（若注入）。
+            // 无 journal 路径（_dispatchJournal=null）也走 resultStore（若注入）。
+            var journalPersistsResults = _dispatchJournal?.PersistsResults ?? false;
+            if (!journalPersistsResults && _resultStore is not null)
             {
                 try
                 {
@@ -358,12 +364,18 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     }
 
     /// <summary>
-    /// 基于 runId + toolCall 生成稳定 RequestId（SHA-256 截断）。
-    /// 同一 runId + 同一 toolCall 产出相同 RequestId，确保崩溃恢复时可重放。
+    /// P0-6：基于 runId + modelTurn + toolCallId + toolName + arguments 生成稳定 RequestId（SHA-256 截断）。
     /// </summary>
-    internal static string ComputeRequestId(string runId, AgentToolCallRequest toolCall)
+    /// <remarks>
+    /// RequestId 唯一标识一次具体调用（InvocationId），确保同一 Run 内不同轮次（modelTurn）
+    /// 或不同 toolCallId 的相同 Tool 调用产生不同 RequestId，避免误将第二次调用作为重复去重。
+    /// 崩溃恢复时同一 (runId, modelTurn, toolCallId, toolName, arguments) 产出相同 RequestId，确保可重放。
+    /// <b>IdempotencyKey 不参与哈希</b>——它是业务级去重键，单独存储于 journal 条目，
+    /// 不影响调用身份；业务级 IdempotencyKey 去重为未来增强。
+    /// </remarks>
+    internal static string ComputeRequestId(string runId, AgentToolCallRequest toolCall, int modelTurn)
     {
-        var raw = $"{runId}|{toolCall.ToolName}|{toolCall.Arguments ?? string.Empty}|{toolCall.IdempotencyKey ?? string.Empty}";
+        var raw = $"{runId}|{modelTurn}|{toolCall.ToolCallId ?? string.Empty}|{toolCall.ToolName}|{toolCall.Arguments ?? string.Empty}";
         var bytes = System.Text.Encoding.UTF8.GetBytes(raw);
         var hash = System.Security.Cryptography.SHA256.HashData(bytes);
         // 取前 16 字节（128 位）作为 hex 字符串（32 字符）

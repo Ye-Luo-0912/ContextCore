@@ -399,6 +399,13 @@ public sealed record ModelChatMessage
 
     /// <summary>Tool 调用 ID（仅 Role=Tool 时填充；与引发本次观察的 ModelToolCall.Id 对应）。</summary>
     public string? ToolCallId { get; init; }
+
+    /// <summary>
+    /// P0-2：Tool 调用列表（仅 Role=Assistant 时填充；模型请求的 Tool 调用）。
+    /// 原生 function calling 响应可能 Content 为空但 ToolCalls 非空。
+    /// null = 非 Assistant 消息或无 Tool 调用。
+    /// </summary>
+    public IReadOnlyList<ModelToolCall>? ToolCalls { get; init; }
 }
 
 /// <summary>P0-1：向模型声明的 Tool 定义（OpenAI / Anthropic function calling 兼容）。</summary>

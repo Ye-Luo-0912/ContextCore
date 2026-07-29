@@ -50,6 +50,14 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// P0-6：<see cref="MarkCommittedWithResultAsync"/> 在同一 DB 事务内同时 UPDATE journal state
+    /// 与 UPSERT 结果到 <c>tool_dispatch_results</c>，返回 true，调用方无需再单独调用
+    /// <see cref="IDurableToolResultStore.SaveAsync"/>。
+    /// </remarks>
+    public bool PersistsResults => true;
+
+    /// <inheritdoc />
     public async ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -208,15 +216,111 @@ LIMIT 1;
         }
         ArgumentNullException.ThrowIfNull(result);
 
-        // P0-3：推进状态机到 Committed（复用 MarkCommittedAsync 的 CAS 逻辑）
-        await TransitionStateAsync(
-            requestId,
-            expectedState: ToolDispatchState.Dispatched,
-            targetState: ToolDispatchState.Committed,
-            externalOperationId: null,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        // 结果缓存由调用方（IDurableToolExecutor）管理；
-        // 持久化实现可在同事务内 INSERT 结果到 tool_dispatch_results 表（未来扩展）。
+        // P0-6：在单个 DB 事务内同时推进 journal 状态机到 Committed（CAS）与 UPSERT 结果到
+        // tool_dispatch_results，确保崩溃恢复时不会出现 "state=Committed 但 result 缺失" 的不一致状态。
+        var now = DateTimeOffset.UtcNow;
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            // 1. 精确前驱状态 CAS：UPDATE WHERE request_id = @id AND state = @expected_state (Dispatched)
+            bool stateAdvanced;
+            await using (var stateCmd = connection.CreateCommand())
+            {
+                stateCmd.Transaction = transaction;
+                stateCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                stateCmd.CommandText = $"""
+UPDATE {Table("tool_dispatch_journal_entries")}
+SET state = @target_state, updated_at = @updated_at
+WHERE request_id = @request_id AND state = @expected_state;
+""";
+                stateCmd.Parameters.AddWithValue("request_id", requestId);
+                stateCmd.Parameters.AddWithValue("expected_state", (byte)ToolDispatchState.Dispatched);
+                stateCmd.Parameters.AddWithValue("target_state", (byte)ToolDispatchState.Committed);
+                stateCmd.Parameters.AddWithValue("updated_at", now);
+                var affected = await stateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                stateAdvanced = affected > 0;
+            }
+
+            if (!stateAdvanced)
+            {
+                // 0 行受影响：读取当前行状态，区分 AlreadyApplied / AlreadyAdvanced / InvalidTransition / MissingPredecessor
+                await using var selectCmd = connection.CreateCommand();
+                selectCmd.Transaction = transaction;
+                selectCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                selectCmd.CommandText = $"""
+SELECT state FROM {Table("tool_dispatch_journal_entries")}
+WHERE request_id = @request_id
+LIMIT 1;
+""";
+                selectCmd.Parameters.AddWithValue("request_id", requestId);
+                await using var reader = await selectCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException(
+                        $"Tool dispatch journal 缺失前驱记录（MissingPredecessor）：request_id={requestId}，" +
+                        $"目标状态=Committed（期望前驱=Dispatched）。" +
+                        $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
+                }
+
+                var currentState = (ToolDispatchState)reader.GetByte(0);
+                // state == target 或 state > target → 幂等成功（AlreadyApplied/AlreadyAdvanced），继续 UPSERT 结果
+                if ((int)currentState < (int)ToolDispatchState.Dispatched)
+                {
+                    throw new InvalidOperationException(
+                        $"Tool dispatch state 跨级跳跃（InvalidTransition）：request_id={requestId}，" +
+                        $"当前={currentState}，期望前驱=Dispatched，目标=Committed。" +
+                        $"状态机只能逐级向前推进：Prepared → Dispatched → Committed → ResultDelivered，" +
+                        $"不允许跳过中间状态（如 Prepared → Committed）。");
+                }
+                // state >= Committed → AlreadyApplied/AlreadyAdvanced：继续 UPSERT 结果（幂等覆盖）
+            }
+
+            // 2. UPSERT 结果到 tool_dispatch_results（同一事务）
+            await using (var resultCmd = connection.CreateCommand())
+            {
+                resultCmd.Transaction = transaction;
+                resultCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                resultCmd.CommandText = $"""
+INSERT INTO {Table("tool_dispatch_results")} (
+    tool_call_id, request_id, idempotency_key, side_effect, external_operation_id,
+    result, succeeded, error, duration_ms, created_at)
+VALUES (
+    @tool_call_id, @request_id, @idempotency_key, @side_effect, @external_operation_id,
+    @result, @succeeded, @error, @duration_ms, @created_at)
+ON CONFLICT (tool_call_id) DO UPDATE SET
+    request_id = EXCLUDED.request_id,
+    idempotency_key = EXCLUDED.idempotency_key,
+    side_effect = EXCLUDED.side_effect,
+    external_operation_id = EXCLUDED.external_operation_id,
+    result = EXCLUDED.result,
+    succeeded = EXCLUDED.succeeded,
+    error = EXCLUDED.error,
+    duration_ms = EXCLUDED.duration_ms,
+    created_at = EXCLUDED.created_at;
+""";
+                resultCmd.Parameters.AddWithValue("tool_call_id", result.ToolCallId);
+                resultCmd.Parameters.AddWithValue("request_id", result.RequestId);
+                resultCmd.Parameters.AddWithValue("idempotency_key", (object?)result.IdempotencyKey ?? DBNull.Value);
+                resultCmd.Parameters.AddWithValue("side_effect", result.SideEffect.ToString());
+                resultCmd.Parameters.AddWithValue("external_operation_id", (object?)result.ExternalOperationId ?? DBNull.Value);
+                AddJson(resultCmd, "result", result);
+                resultCmd.Parameters.AddWithValue("succeeded", result.Succeeded);
+                resultCmd.Parameters.AddWithValue("error", (object?)result.Error ?? DBNull.Value);
+                resultCmd.Parameters.AddWithValue("duration_ms", (long)Math.Round(result.DurationMs));
+                resultCmd.Parameters.AddWithValue("created_at", now);
+                await resultCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <inheritdoc />

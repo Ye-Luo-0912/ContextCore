@@ -320,6 +320,22 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
                 msgObj["tool_call_id"] = msg.ToolCallId;
             }
 
+            // P0-2：Assistant 消息携带 tool_calls 时按 OpenAI 规范输出
+            if (msg.Role == ModelChatRole.Assistant && msg.ToolCalls is not null && msg.ToolCalls.Count > 0)
+            {
+                msgObj["tool_calls"] = msg.ToolCalls.Select(tc => new
+                {
+                    id = tc.Id,
+                    type = "function",
+                    function = new { name = tc.Name, arguments = tc.ArgumentsJson ?? "{}" }
+                }).ToArray();
+                // 当 tool_calls 存在且 content 为空时，OpenAI 规范允许 content 为 null
+                if (string.IsNullOrEmpty(msg.Content))
+                {
+                    msgObj["content"] = null;
+                }
+            }
+
             messages.Add(msgObj);
         }
 

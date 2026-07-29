@@ -309,8 +309,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             // 但仍触发以保持 DecisionId 审计链（即便 0 条 entry 也可追踪决策执行）。
             var emptyExecutionResult = EmptyExecutionResult(request, requestSemanticHash, providerArtifacts, snapshot, routingDecisions, completeWorkingSet);
             // P0-9：await 等待 Learning Event 持久化到 outbox 表完成（与主决策路径一致）。
-            await TriggerUtilityLedgerMaterializationAsync(emptyExecutionResult.Decision, request);
-            return emptyExecutionResult;
+            // P0-9：捕获 LearningPersistenceStatus 并写入 ExecutionResult，让 Durable Failure 不再被静默吞掉。
+            var emptyLearningStatus = await TriggerUtilityLedgerMaterializationAsync(emptyExecutionResult.Decision, request).ConfigureAwait(false);
+            return emptyExecutionResult with { LearningPersistenceStatus = emptyLearningStatus };
         }
 
         // Step 6：EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected）
@@ -327,8 +328,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 snapshot, routingDecisions, providerArtifacts);
             // R29 WP-E-2：EarlyRejected 候选作为 DroppedEnvelopes 物化到 ledger（P8 硬边界：所有 candidate 都写入）
             // P0-9：await 等待 Learning Event 持久化到 outbox 表完成（与主决策路径一致）。
-            await TriggerUtilityLedgerMaterializationAsync(earlyRejectedExecutionResult.Decision, request);
-            return earlyRejectedExecutionResult;
+            // P0-9：捕获 LearningPersistenceStatus 并写入 ExecutionResult，让 Durable Failure 不再被静默吞掉。
+            var earlyRejectedLearningStatus = await TriggerUtilityLedgerMaterializationAsync(earlyRejectedExecutionResult.Decision, request).ConfigureAwait(false);
+            return earlyRejectedExecutionResult with { LearningPersistenceStatus = earlyRejectedLearningStatus };
         }
 
         // Step 7：FeaturePipeline — 特征计算
@@ -508,8 +510,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             snapshot, routingDecisions, providerArtifacts);
         // R29 WP-E-2：主决策路径触发物化（SelectedEnvelopes + DroppedEnvelopes 全部写入 ledger）
         // P0-9：await 等待 Learning Event 持久化到 outbox 表完成，防止进程退出导致 fire-and-forget 入队丢失数据。
-        await TriggerUtilityLedgerMaterializationAsync(mainExecutionResult.Decision, request);
-        return mainExecutionResult;
+        // P0-9：捕获 LearningPersistenceStatus 并写入 ExecutionResult，让 Durable Failure 不再被静默吞掉。
+        var mainLearningStatus = await TriggerUtilityLedgerMaterializationAsync(mainExecutionResult.Decision, request).ConfigureAwait(false);
+        return mainExecutionResult with { LearningPersistenceStatus = mainLearningStatus };
     }
 
     /// <summary>
@@ -542,7 +545,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// </para>
     /// <param name="decision">决策结果（已构建完成，含 SelectedEnvelopes + DroppedEnvelopes）。</param>
     /// <param name="request">原始请求（用于提取 WorkspaceId / CollectionId）。</param>
-    private async ValueTask TriggerUtilityLedgerMaterializationAsync(
+    /// <returns>P0-9：Learning Event 持久化状态（Persisted / Deferred / Failed），caller 写入 ExecutionResult。</returns>
+    private async ValueTask<LearningPersistenceStatus> TriggerUtilityLedgerMaterializationAsync(
         ContextDecisionResult decision,
         ContextDecisionRuntimeRequest request)
     {
@@ -555,33 +559,37 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             // P0-9：await EnqueueDurablyAsync——等待 PostgreSQL durable append 完成（不等待后续 Materialize）。
             // 防止进程在 EnqueueAsync 完成 INSERT 前退出导致 Learning Event 丢失。
             // P0-9：EnqueueDurablyAsync 失败时直接抛出异常（不 FallbackDirectMaterialize）——
-            // 此处 try/catch 兜底忽略以防影响主决策流；Learning Event 持久化失败可观测性由 metrics 暴露。
+            // 此处 try/catch 兜底以防影响主决策流；Learning Event 持久化失败通过返回 Failed 状态暴露给 caller。
             // 非关键路径（如后台导入）应改用 EnqueueBestEffortAsync 以保留 fallback 降级行为。
+            // 注：本类未注入 ILogger——日志由 caller（observability layer）根据 Failed 状态统一记录。
+            var learningStatus = LearningPersistenceStatus.Persisted;
             try
             {
                 await _materializationDispatcher.EnqueueDurablyAsync(decision, workspaceId, collectionId, CancellationToken.None)
                     .ConfigureAwait(false);
             }
-            catch
+            catch (Exception)
             {
                 // P0-9：EnqueueDurablyAsync 不再内部降级——异常向上抛到此处的 catch。
-                // 主决策流不应被 Learning Event 持久化失败中断；静默忽略以保持原有契约。
+                // 主决策流不应被 Learning Event 持久化失败中断；通过 LearningPersistenceStatus=Failed 暴露失败，
+                // 让 caller 可观测（此前为静默吞掉的 P0 缺陷）。
                 // 注：fallback direct materialize 已迁移到 EnqueueBestEffortAsync（非关键路径专用）。
+                learningStatus = LearningPersistenceStatus.Failed;
             }
-            return;
+            return learningStatus;
         }
 
         // 兼容/测试路径：未注入 dispatcher 但注入了 materializer → 保留旧 Task.Run 行为。
         if (_utilityLedgerMaterializer is null)
         {
-            return;
+            return LearningPersistenceStatus.Deferred;
         }
 
         // 捕获 materializer 引用避免闭包捕获 this（防止潜在的对象生命周期问题）。
         var materializer = _utilityLedgerMaterializer;
         var decisionSnapshot = decision;
 
-        // fire-and-forget：后台执行，主决策流不等待。
+        // fire-and-forget：后台执行，主决策流不等待。返回 Deferred 表示未观测最终物化结果。
         _ = Task.Run(async () =>
         {
             try
@@ -595,6 +603,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 // 后续 WP-E-3 训练数据导出工具会检测 ledger 完整性并报警。
             }
         });
+
+        return LearningPersistenceStatus.Deferred;
     }
 
     /// <summary>

@@ -56,13 +56,25 @@ public static class AgentRunStateMachine
             return;
         }
 
-        // 任意状态可跳转到 Failed / Cancelled / LeaseLost（终态短路）
-        // P0-5：LeaseLost 表示丢租（区别于用户主动 Cancelled）
-        if (to == AgentRunState.Failed
-            || to == AgentRunState.Cancelled
-            || to == AgentRunState.LeaseLost)
+        // 任意状态可跳转到 Failed / Cancelled（终态短路，幂等收尾）
+        // P0-5：LeaseLost 表示丢租（区别于用户主动 Cancelled），但 Completed/Cancelled
+        //       已是确定终态，不可被旧 owner 的丢租写入覆盖（旧 owner 无 fencing token）。
+        if (to == AgentRunState.Failed || to == AgentRunState.Cancelled)
         {
-            // 已终态再跳 Failed/Cancelled/LeaseLost 仍允许（幂等收尾），但不会改变事实
+            // 已终态再跳 Failed/Cancelled 仍允许（幂等收尾），但不会改变事实
+            return;
+        }
+
+        if (to == AgentRunState.LeaseLost)
+        {
+            // P0-5：LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled。
+            // Completed/Cancelled 是确定终态，不应被丢租覆盖。
+            if (from == AgentRunState.Completed || from == AgentRunState.Cancelled)
+            {
+                throw new InvalidOperationException(
+                    $"Agent Run 状态机非法转换：{from} 不可流转到 {to}。" +
+                    $"Completed/Cancelled 已是确定终态，不应被标记为 LeaseLost。");
+            }
             return;
         }
 
@@ -80,7 +92,7 @@ public static class AgentRunStateMachine
                 $"Agent Run 状态机非法转换：{from} → {to} 不在合法流转图中。" +
                 $"合法流转：Created → ContextBuilding → ModelCalling → AwaitingApproval → " +
                 $"ToolDispatching → Observing → Checkpointing → ContextBuilding（下一轮）/ Completed；" +
-                $"任意状态可跳转到 Failed/Cancelled/LeaseLost。");
+                $"任意状态可跳转到 Failed/Cancelled；LeaseLost 仅可由非 Completed/Cancelled 状态跳入（P0-5）。");
         }
     }
 

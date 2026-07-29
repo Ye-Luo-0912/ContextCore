@@ -108,6 +108,9 @@ public sealed class CanaryProgressionService
     // 非空时 InitializeCanary/AdvanceAsync/RollbackAsync 操作 registry.GetOrCreate(runId) 专用控制器；
     // 为 null 时回退到直接注入的 _cutoverController（B-8 之前行为，保持向后兼容）。
     private readonly CutoverControllerRegistry? _registry;
+    // P0-7：可选的 DB 决策应用器，用于启动时从 canary_pipelines 表恢复 in-memory 状态。
+    // 为 null 时（如单元测试使用 InMemoryPipelineRunStore）RecoverFromStoreAsync 为 no-op。
+    private readonly ICanaryDecisionApplier? _decisionApplier;
 
     // 按 runId 维度记录当前百分比档 + 进入当前档的时间戳
     private readonly ConcurrentDictionary<string, CanaryRunState> _runStates
@@ -126,12 +129,18 @@ public sealed class CanaryProgressionService
     /// R28-B.8 工作包 B：可选的 per-run CutoverController 注册表。非空时按 runId 隔离控制器，
     /// 避免多 run 共享 Singleton 导致百分比互相覆盖；为 null 时回退到 <paramref name="cutoverController"/>。
     /// </param>
+    /// <param name="decisionApplier">
+    /// P0-7：可选的 DB 决策应用器。非空时 <see cref="RecoverFromStoreAsync"/> 从
+    /// <c>canary_pipelines</c> 表读取活跃 pipeline 状态并恢复 in-memory 百分比
+    /// （CutoverController + <c>_runStates</c>）。为 null 时恢复为 no-op（单节点/测试场景）。
+    /// </param>
     public CanaryProgressionService(
         IPipelineRunStore pipelineRunStore,
         CutoverController cutoverController,
         CanaryGateOptions? options = null,
         TimeProvider? timeProvider = null,
-        CutoverControllerRegistry? registry = null)
+        CutoverControllerRegistry? registry = null,
+        ICanaryDecisionApplier? decisionApplier = null)
     {
         ArgumentNullException.ThrowIfNull(pipelineRunStore);
         ArgumentNullException.ThrowIfNull(cutoverController);
@@ -140,6 +149,7 @@ public sealed class CanaryProgressionService
         _options = options ?? new CanaryGateOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _registry = registry;
+        _decisionApplier = decisionApplier;
     }
 
     /// <summary>
@@ -548,6 +558,56 @@ public sealed class CanaryProgressionService
         // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
         GetController(runId).SetCutoverPercentage(newPercentage);
         _runStates[runId] = new CanaryRunState(newPercentage, _timeProvider.GetUtcNow());
+    }
+
+    /// <summary>
+    /// P0-7：从 DB（<c>canary_pipelines</c> 表）恢复 in-memory 状态。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>恢复的活跃 pipeline 数量（0 = 无活跃 pipeline 或 decisionApplier 未注入）。</returns>
+    /// <remarks>
+    /// <b>问题背景</b>：Canary 百分比有三个真值源——
+    /// <list type="number">
+    /// <item><c>canary_pipelines</c> 表（DB，权威，由 <see cref="ICanaryDecisionApplier"/> 维护）。</item>
+    /// <item><c>_runStates</c>（进程内 ConcurrentDictionary）。</item>
+    /// <item><see cref="CutoverController"/> 的 <c>_cutoverPercentage</c>（进程内 int）。</item>
+    /// </list>
+    /// 进程重启后 #2/#3 丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时
+    /// 调用 <see cref="ICanaryDecisionApplier.GetAllActivePipelineStatesAsync"/> 读取所有活跃
+    /// pipeline，逐个调用 <see cref="UpdateInMemoryPercentage"/> 重建进程内路由状态
+    /// （同时恢复 CutoverController 百分比与 <c>_runStates</c> 字典）。
+    /// <para>
+    /// <b>幂等性</b>：可安全重复调用；已存在的 run 会被最新 DB 值覆盖。
+    /// <b>无 DB 写入</b>：本方法只读取 DB，不修改任何持久化状态。
+    /// </para>
+    /// </remarks>
+    public async Task<int> RecoverFromStoreAsync(CancellationToken cancellationToken = default)
+    {
+        if (_decisionApplier is null)
+        {
+            // 单节点/测试场景（无 Postgres storage 注册）：无 DB 可恢复，跳过。
+            return 0;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var activeStates = await _decisionApplier.GetAllActivePipelineStatesAsync(cancellationToken).ConfigureAwait(false);
+        if (activeStates.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var state in activeStates)
+        {
+            if (string.IsNullOrWhiteSpace(state.RunId))
+            {
+                continue;
+            }
+            // UpdateInMemoryPercentage 同时恢复 CutoverController 百分比与 _runStates[runId]。
+            UpdateInMemoryPercentage(state.RunId, state.Percentage);
+        }
+
+        return activeStates.Count;
     }
 
     /// <summary>获取指定 run 的所有 stage transition 审计记录（按时间升序）。</summary>

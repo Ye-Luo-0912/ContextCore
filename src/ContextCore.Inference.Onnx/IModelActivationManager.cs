@@ -20,6 +20,23 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 
 /// <summary>
+/// P0-8：推理引擎租约 —— 捕获当前 Active Engine 并递增引用计数，
+/// 防止引擎在执行期间被 Dispose。调用方必须通过 <see cref="Dispose"/> 释放（递减引用计数）。
+/// </summary>
+/// <remarks>
+/// 用于 <see cref="InferenceScheduler"/> 等上层组件在入队时捕获引擎引用，
+/// 确保请求在捕获的世代上执行，避免热切换后 cross-generation execution。
+/// </remarks>
+public interface IInferenceEngineLease : IDisposable
+{
+    /// <summary>捕获的推理引擎（已递增引用计数，执行期间不会被 Dispose）。</summary>
+    IBatchInferenceEngine Engine { get; }
+
+    /// <summary>捕获时引擎的世代号（用于诊断/日志）。</summary>
+    long Generation { get; }
+}
+
+/// <summary>
 /// P0-7：权威模型激活管理器。编排模型工件加载 → 验证 → ONNX 引擎激活的完整流程。
 /// </summary>
 /// <remarks>
@@ -32,6 +49,13 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
 {
     /// <summary>当前已激活的推理引擎（null = 未激活，使用 fallback）。</summary>
     IBatchInferenceEngine? ActiveEngine { get; }
+
+    /// <summary>
+    /// P0-8：捕获当前 Active Engine 并递增引用计数。调用方必须通过返回的 lease 释放。
+    /// 未激活时返回 null（调用方应回退到 <see cref="IBatchInferenceEngine.InferBatchAsync"/> 走 fallback）。
+    /// </summary>
+    /// <returns>引擎租约（null = 未激活）；调用方必须 Dispose 以递减引用计数。</returns>
+    IInferenceEngineLease? AcquireEngineLease();
 
     /// <summary>当前已激活的模型工件描述符（null = 未激活）。</summary>
     ModelArtifactDescriptor? ActiveDescriptor { get; }

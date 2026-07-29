@@ -462,6 +462,20 @@ public interface ICanaryDecisionApplier
     ValueTask<CanaryPipelineState> GetCanaryPipelineStateAsync(
         string runId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-7：查询所有处于活跃状态（非终态）的 Canary pipeline 状态。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>所有活跃 pipeline 的状态列表（status NOT IN 终态集合）；无活跃行时返回空列表。</returns>
+    /// <remarks>
+    /// <b>用途</b>：服务启动时从 DB 恢复 in-memory 状态（CutoverController 百分比 +
+    /// <c>CanaryProgressionService._runStates</c>）。进程重启后这两个 in-memory 真值源丢失，
+    /// 而 <c>canary_pipelines</c> 表仍持有权威百分比；本方法提供批量读取入口，
+    /// 供 <c>RecoverFromStoreAsync</c> 重建进程内路由状态，避免重启后回到 0%。
+    /// </remarks>
+    ValueTask<IReadOnlyList<CanaryPipelineState>> GetAllActivePipelineStatesAsync(
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -98,6 +98,22 @@ public sealed record ProviderExecutionReport
 }
 
 /// <summary>
+/// P0-9：Learning Event 持久化状态。由 Runtime 在 TriggerUtilityLedgerMaterializationAsync 后填充，
+/// 让 Learning Durable Failure 不再被静默吞掉（caller 可观测 Persisted / Deferred / Failed）。
+/// </summary>
+public enum LearningPersistenceStatus : byte
+{
+    /// <summary>Learning Event 已成功入队到 durable outbox（PostgreSQL INSERT 完成）。</summary>
+    Persisted = 0,
+
+    /// <summary>未注入 dispatcher/materializer（跳过物化）或 fire-and-forget 路径（未等待结果）。</summary>
+    Deferred = 1,
+
+    /// <summary>EnqueueDurablyAsync 抛出异常——Learning Event 持久化失败，需 caller 观测并处理。</summary>
+    Failed = 2
+}
+
+/// <summary>
 /// R28-B.6 Blocker-1：完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。
 /// </summary>
 /// <remarks>
@@ -147,6 +163,13 @@ public sealed record ContextDecisionExecutionResult
 
     /// <summary>R28-B.7-Final：是否有 Provider degraded（任一 ProviderExecutionReport.Succeeded=false 时为 true）。</summary>
     public bool IsDegraded { get; init; }
+
+    /// <summary>
+    /// P0-9：Learning Event 持久化状态。由 Runtime 在 TriggerUtilityLedgerMaterializationAsync 后填充。
+    /// null = 未触发物化路径（极旧 caller / 测试 stub）；非 null 时 caller 可观测 Persisted / Deferred / Failed。
+    /// Failed 时主决策结果仍可用，但 Learning Event 入队失败需上层（observability / retry）处理。
+    /// </summary>
+    public LearningPersistenceStatus? LearningPersistenceStatus { get; init; }
 }
 
 /// <summary>

@@ -285,9 +285,18 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         // 构造请求并写入 channel。
         // P0-7：deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移导致
         // 请求被错误地判定为未过期/已过期。Deadline (DateTimeOffset) 仅保留用于错误消息显示。
+        // P0-8：入队时捕获当前 Active Engine 的租约，确保请求在入队时的世代上执行，
+        // 避免热切换后请求在新引擎上执行（cross-generation execution）。
         var nowTimestamp = Stopwatch.GetTimestamp();
         var deadline = DateTimeOffset.UtcNow + _options.RequestDeadline;
         var deadlineTimestamp = nowTimestamp + (long)(_options.RequestDeadline.TotalSeconds * Stopwatch.Frequency);
+
+        IInferenceEngineLease? capturedLease = null;
+        if (_inner is IModelActivationManager activationManager)
+        {
+            capturedLease = activationManager.AcquireEngineLease();
+        }
+
         var request = new InferenceRequest
         {
             Batch = batch,
@@ -295,7 +304,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             Deadline = deadline,
             CancellationToken = ct,
             Completion = new TaskCompletionSource<BatchInferenceResult>(
-                TaskCreationOptions.RunContinuationsAsynchronously)
+                TaskCreationOptions.RunContinuationsAsynchronously),
+            CapturedLease = capturedLease
         };
 
         // P0-7：注册外部取消 —— 保存 CancellationTokenRegistration 以便请求完成后 Dispose，
@@ -315,6 +325,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         if (!_channel.Writer.TryWrite(request))
         {
             request.CancellationRegistration.Dispose();
+            // P0-8：入队失败时释放租约，递减引用计数。
+            request.CapturedLease?.Dispose();
             // DropWrite 策略：返回 Dropped 结果（语义为"已丢弃"而非"错误"），递增计数器。
             if (_options.EnableDropWrite)
             {
@@ -325,9 +337,14 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         }
 
         // P0-7：请求完成时 Dispose 取消注册，避免 ct 长期存活时回调注册泄漏。
-        // ContinueWith 在 Completion 完成后执行（无论成功/失败/取消），清理 CancellationRegistration。
+        // P0-8：同时 Dispose 租约，递减引用计数，允许 drain 任务在引用归零后清理旧引擎。
+        // ContinueWith 在 Completion 完成后执行（无论成功/失败/取消），清理 CancellationRegistration 与 CapturedLease。
         _ = request.Completion.Task.ContinueWith(
-            _ => request.CancellationRegistration.Dispose(),
+            _ =>
+            {
+                request.CancellationRegistration.Dispose();
+                request.CapturedLease?.Dispose();
+            },
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -708,6 +725,14 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
             using var deadlineCts = new CancellationTokenSource(dueIn);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopToken, deadlineCts.Token);
+
+            // P0-8：使用入队时捕获的引擎执行（避免热切换后 cross-generation execution）。
+            // 同组所有请求共享同一 BatchKey（含 ModelGeneration），故捕获的引擎一致；
+            // CapturedLease 为 null 时回退到 _inner（非 IModelActivationManager 或未激活）。
+            // 若捕获的引擎已被 Dispose（模型已退役且 drain 超时），InferBatchAsync 会抛出异常 ——
+            // 这是正确行为：请求应失败而非静默切换到新世代引擎，调用方可重试。
+            var executionEngine = active[0].CapturedLease?.Engine ?? _inner;
+
             BatchInferenceResult result;
             try
             {
@@ -715,11 +740,11 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
                 // 每个 shard 行数 ≤ MaxBatchSize；结果按行顺序合并为一个 BatchInferenceResult。
                 if (_options.MaxBatchSize > 0 && totalRows > _options.MaxBatchSize)
                 {
-                    result = await InferWithShardingAsync(combined, totalRows, featureCount, linked.Token).ConfigureAwait(false);
+                    result = await InferWithShardingAsync(combined, totalRows, featureCount, executionEngine, linked.Token).ConfigureAwait(false);
                 }
                 else
                 {
-                    result = await _inner.InferBatchAsync(combined, linked.Token).ConfigureAwait(false);
+                    result = await executionEngine.InferBatchAsync(combined, linked.Token).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException)
@@ -805,11 +830,13 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     /// <param name="combined">合并后的完整 batch（RowCount > MaxBatchSize）。</param>
     /// <param name="totalRows">总行数（= combined.RowCount）。</param>
     /// <param name="featureCount">每行特征数。</param>
+    /// <param name="engine">执行引擎（P0-8：入队时捕获的引擎，确保 shard 也在同一世代执行）。</param>
     /// <param name="ct">取消令牌（已链接 stopToken + deadline）。</param>
     private async ValueTask<BatchInferenceResult> InferWithShardingAsync(
         FeatureBatch combined,
         int totalRows,
         int featureCount,
+        IBatchInferenceEngine engine,
         CancellationToken ct)
     {
         var maxBatchSize = _options.MaxBatchSize;
@@ -838,7 +865,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
                     FeatureNames = combined.FeatureNames
                 };
 
-                var shardResult = await _inner.InferBatchAsync(shardBatch, ct).ConfigureAwait(false);
+                var shardResult = await engine.InferBatchAsync(shardBatch, ct).ConfigureAwait(false);
                 if (!shardResult.Succeeded)
                 {
                     // shard 失败：返回失败（携带 shard 错误信息）。
@@ -1139,6 +1166,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     /// 内部推理请求载体：携带 FeatureBatch、deadline 与 TaskCompletionSource。
     /// P0-7：deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移；
     /// 保留 Deadline (DateTimeOffset) 仅用于错误消息显示。
+    /// P0-8：CapturedLease 在入队时捕获当前 Active Engine 引用（含引用计数），
+    /// 确保请求在捕获的世代上执行，避免热切换后 cross-generation execution。
     /// </summary>
     private sealed class InferenceRequest
     {
@@ -1154,5 +1183,11 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         /// 否则 ct 永远存活时注册回调也永远存活（内存泄漏）。
         /// </summary>
         public CancellationTokenRegistration CancellationRegistration;
+        /// <summary>
+        /// P0-8：入队时捕获的引擎租约（仅当 _inner 为 IModelActivationManager 且已激活时非 null）。
+        /// 执行时使用 lease.Engine 而非 _inner，确保请求在入队时的世代上执行。
+        /// 请求完成（成功/失败/取消）后必须 Dispose 以递减引用计数，否则旧引擎永远无法被清理。
+        /// </summary>
+        public IInferenceEngineLease? CapturedLease;
     }
 }

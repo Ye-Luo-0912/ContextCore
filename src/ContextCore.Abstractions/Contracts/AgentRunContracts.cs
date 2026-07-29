@@ -513,6 +513,26 @@ public enum AgentMessageRole : byte
 }
 
 /// <summary>
+/// P0-2：Assistant 消息携带的 Tool 调用条目（原生 function calling 协议）。
+/// </summary>
+/// <remarks>
+/// 当模型返回 Tool 调用时，Assistant 消息的 <see cref="AgentMessage.ToolCalls"/> 填充此条目列表。
+/// 后续 Tool 角色消息通过 <see cref="AgentMessage.ToolCallId"/> 与对应条目的 <see cref="Id"/> 关联，
+/// 构成多轮 Tool 调用协议（OpenAI / Anthropic 兼容）。
+/// </remarks>
+public sealed record AgentToolCallEntry
+{
+    /// <summary>Tool 调用 ID（由模型分配，如 OpenAI 的 tool_call_id；用于关联后续 Tool 观察消息）。</summary>
+    public required string Id { get; init; }
+
+    /// <summary>Tool / function 名称（与 AgentToolDefinition.Name 对应，用作分派键）。</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Tool 参数（JSON 字符串；语义由 Tool 实现约定）。</summary>
+    public string? Arguments { get; init; }
+}
+
+/// <summary>
 /// G1：结构化 Agent 消息（替代 string _accumulatedContext 平方级拼接）。
 /// </summary>
 /// <remarks>
@@ -540,6 +560,20 @@ public sealed record AgentMessage
 
     /// <summary>Tool 名称（仅 Role=Tool 时填充；用于审计与 ToolCall 关联）。</summary>
     public string? ToolName { get; init; }
+
+    /// <summary>
+    /// P0-2：Tool 调用 ID（仅 Role=Tool 时填充；与引发本次观察的 Assistant 消息的
+    /// <see cref="ToolCalls"/>[].<see cref="AgentToolCallEntry.Id"/> 对应）。
+    /// 用于多轮 Tool 调用协议中关联 Tool 请求与观察结果（OpenAI / Anthropic 兼容）。
+    /// </summary>
+    public string? ToolCallId { get; init; }
+
+    /// <summary>
+    /// P0-2：Tool 调用列表（仅 Role=Assistant 时填充；模型请求的 Tool 调用）。
+    /// 原生 function calling 响应可能 Content 为空但 ToolCalls 非空。
+    /// null = 非 Assistant 消息或无 Tool 调用。
+    /// </summary>
+    public IReadOnlyList<AgentToolCallEntry>? ToolCalls { get; init; }
 
     /// <summary>
     /// G1：将结构化消息列表一次性序列化为模型可消费的字符串（仅在调用模型前执行一次）。
@@ -628,7 +662,8 @@ public sealed record ToolObservation
         {
             Role = AgentMessageRole.Tool,
             Content = content,
-            ToolName = ToolName
+            ToolName = ToolName,
+            ToolCallId = ToolCallId
         };
     }
 }
@@ -1174,11 +1209,13 @@ public interface IAgentApprovalGate
     /// <summary>
     /// 请求审批一个 Tool 调用。
     /// </summary>
+    /// <param name="workspaceId">Workspace ID（隔离边界；用于持久化审批记录到正确的 workspace）。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="toolCall">待审批的 Tool 调用。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>审批结果。</returns>
     ValueTask<AgentApprovalResult> RequestApprovalAsync(
+        string workspaceId,
         string runId,
         AgentToolCallRequest toolCall,
         CancellationToken cancellationToken = default);
@@ -1437,12 +1474,20 @@ public interface IDurableToolExecutor
     /// <param name="runId">Agent Run ID（用于 journal 作用域与日志关联）。</param>
     /// <param name="workspaceId">Workspace ID（journal 作用域校验）。</param>
     /// <param name="toolCall">模型请求的 Tool 调用（含 ToolName + Arguments + 可选 IdempotencyKey）。</param>
+    /// <param name="modelTurn">
+    /// P0-6：当前执行期内的模型轮次（每次 IAgentModelTransport.CallAsync 后递增的计数，每次 ExecuteAsync 重置为 0）。
+    /// 参与 RequestId 哈希计算，确保同一执行内不同轮次的相同 Tool 调用产生不同 RequestId，
+    /// 避免误将第二次调用作为重复去重（业务级 IdempotencyKey 由 <paramref name="toolCall"/> 单独承载）。
+    /// <b>必须是执行期内的相对计数</b>（非累积 ModelCallsUsed），确保崩溃恢复后同一逻辑轮次产生相同 RequestId，
+    /// 让 Journal 能正确去重以保证 exactly-once。审批恢复路径应传入 <see cref="PendingToolCommand.ModelTurnRevision"/>。
+    /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>Tool 执行结果（含 RequestId / SideEffect / JournalState / 结果本体）。</returns>
     ValueTask<ToolExecutionResult> ExecuteAsync(
         string runId,
         string workspaceId,
         AgentToolCallRequest toolCall,
+        int modelTurn,
         CancellationToken cancellationToken = default);
 }
 
@@ -1733,4 +1778,61 @@ public interface IAgentApprovalStore
 /// </summary>
 public interface IPersistentAgentApprovalStore : IAgentApprovalStore
 {
+    /// <summary>
+    /// P0-4：原子裁决审批 + 追加审批事件 + CAS 推进 Run 状态（单事务提交）。
+    /// </summary>
+    /// <remarks>
+    /// 旧路径分三步（ResolveAsync → AppendAsync 事件 → TransitionStateAsync）非原子提交，
+    /// 任一步骤失败都会留下不一致状态（如审批已裁决但 Run 仍处 AwaitingApproval）。
+    /// 本方法在单个 PostgreSQL 事务内完成：
+    /// <list type="number">
+    ///   <item>校验 approval.RunId == runId（防跨 Run 误裁决）。</item>
+    ///   <item>CAS 裁决审批（UPDATE WHERE status=Pending）。</item>
+    ///   <item>INSERT 审批事件到 agent_run_events（哈希链续接）。</item>
+    ///   <item>CAS 推进 Run 状态（UPDATE agent_runs WHERE state=expected）。</item>
+    ///   <item>COMMIT 或 ROLLBACK。</item>
+    /// </list>
+    /// 任一步骤失败则整事务回滚，保证审批裁决与 Run 状态推进的一致性。
+    /// </remarks>
+    /// <param name="workspaceId">Workspace ID（隔离边界）。</param>
+    /// <param name="runId">Run ID（必须与 approval.RunId 一致）。</param>
+    /// <param name="approvalId">审批记录 ID。</param>
+    /// <param name="expectedRunState">期望的当前 Run 状态（CAS 前件；通常为 AwaitingApproval）。</param>
+    /// <param name="decision">决策（Approved / Rejected）。</param>
+    /// <param name="approverId">审批者标识。</param>
+    /// <param name="rejectionReason">拒绝原因（Rejected 时填写）。</param>
+    /// <param name="approvalEvent">预构建的 ApprovalResolved 事件（Sequence / PrevChainHash 已由调用方计算）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>原子操作结果（含成功标志、各子步骤是否完成、失败原因、新 Run 状态）。</returns>
+    ValueTask<ApprovalResolveResult> ResolveApprovalAndAdvanceRunAsync(
+        string workspaceId,
+        string runId,
+        string approvalId,
+        AgentRunState expectedRunState,
+        AgentApprovalStatus decision,
+        string? approverId,
+        string? rejectionReason,
+        AgentRunEvent approvalEvent,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P0-4：原子裁决审批 + Run 状态推进的结果。
+/// </summary>
+public sealed record ApprovalResolveResult
+{
+    /// <summary>整体是否成功（审批裁决 + 事件追加 + 状态推进均完成）。</summary>
+    public required bool Succeeded { get; init; }
+
+    /// <summary>审批记录是否已裁决（CAS 成功）。</summary>
+    public required bool ApprovalResolved { get; init; }
+
+    /// <summary>Run 状态是否已推进（CAS 成功）。</summary>
+    public required bool RunStateChanged { get; init; }
+
+    /// <summary>失败原因（Succeeded=false 时填充）。</summary>
+    public string? FailureReason { get; init; }
+
+    /// <summary>Run 推进后的新状态（RunStateChanged=true 时填充）。</summary>
+    public AgentRunState? NewRunState { get; init; }
 }

@@ -45,6 +45,15 @@ public interface IToolHandler
     /// <summary>Tool 名称（唯一标识，用于分派）。</summary>
     string ToolName { get; }
 
+    /// <summary>Tool 描述（向模型说明何时调用此 Tool）；可选，用于原生 function calling 声明。</summary>
+    string? Description { get; }
+
+    /// <summary>
+    /// Tool 参数的 JSON Schema 字符串（OpenAI / Anthropic function calling 兼容）；可选。
+    /// 缺省时使用 <c>"{}"</c>（无参数约束）。
+    /// </summary>
+    string? ParametersJsonSchema { get; }
+
     /// <summary>
     /// 处理 Tool 调用。
     /// </summary>
@@ -194,6 +203,23 @@ public sealed class RealToolDispatcher : IToolDispatcher
             return _handlers.Keys.ToFrozenSet(StringComparer.Ordinal);
         }
         return new HashSet<string>(_handlers.Keys, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// P0-1：从已注册的 IToolHandler 集合构建 AgentToolDefinition 列表，
+    /// 用于向模型声明可调用的 Tool 及其参数 schema（原生 function calling）。
+    /// </summary>
+    /// <returns>不可变的 AgentToolDefinition 列表（按注册表当前快照构建）。</returns>
+    public IReadOnlyList<AgentToolDefinition> GetToolDefinitions()
+    {
+        return _handlers.Values
+            .Select(h => new AgentToolDefinition
+            {
+                Name = h.ToolName,
+                Description = h.Description,
+                ParametersJsonSchema = h.ParametersJsonSchema ?? "{}"
+            })
+            .ToList();
     }
 
     /// <inheritdoc />

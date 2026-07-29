@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using ContextCore.Abstractions;
+using ContextCore.Core.Services.AgentKernel;
 
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
@@ -63,11 +64,17 @@ public sealed class AgentRunActor
     private readonly IDurableToolExecutor? _durableToolExecutor;
     // P0-3：模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
     private readonly IAgentModelContextProjector? _modelContextProjector;
+    // P0-1：Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
+    private readonly IReadOnlyList<AgentToolDefinition> _toolDefinitions;
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
     // 子问题 2：模型调用次数计数（防止无限循环）
     private int _modelCallsUsed;
+    // P0-6：当前执行期内的模型轮次计数（每次 ExecuteAsync 重置为 0）。
+    // 用于 ComputeRequestId 的 modelTurn 参数，确保同一逻辑轮次在崩溃恢复后产生相同 RequestId
+    // （_modelCallsUsed 是累积值，恢复后不重置，会导致同一逻辑轮次产生不同 modelTurn → 误重新 Dispatch）。
+    private int _executionModelTurn;
     private AgentTurnBudget? _turnBudget;
     private AgentCostBudget? _costBudget;
 
@@ -175,6 +182,10 @@ public sealed class AgentRunActor
         _checkpointStore = checkpointStore;
         _durableToolExecutor = durableToolExecutor;
         _modelContextProjector = modelContextProjector;
+        // P0-1：从 RealToolDispatcher 构建 Tool 定义（原生 function calling）；
+        // EchoToolDispatcher 或其他实现无 Tool 定义 → 空列表（模型不感知 Tool）。
+        _toolDefinitions = (toolDispatcher as RealToolDispatcher)?.GetToolDefinitions()
+            ?? Array.Empty<AgentToolDefinition>();
         _modelCallsUsed = 0;
         _turnStartState = AgentRunState.Created;
     }
@@ -236,6 +247,9 @@ public sealed class AgentRunActor
         _currentTurn = run.Turn;
         // 子问题 2：从 Run 元数据恢复 ModelCallsUsed（支持崩溃恢复后续跑）
         _modelCallsUsed = run.ModelCallsUsed;
+        // P0-6：执行期内模型轮次计数重置——确保崩溃恢复后同一逻辑轮次产生相同 RequestId。
+        // _modelCallsUsed 是累积值（用于预算控制），不适用于 RequestId 计算。
+        _executionModelTurn = 0;
         // G4：记录 Turn 起始状态，用于批量提交时的 state CAS
         // 运行时能力补齐：resume 时 _turnStartState = run.State（store 中的当前状态），
         // 后续 FlushPendingEventsAsync 的 CAS 以此为 expected state
@@ -598,7 +612,7 @@ public sealed class AgentRunActor
         if (_durableToolExecutor is not null)
         {
             toolResult = await _durableToolExecutor.ExecuteAsync(
-                state.Run.RunId, state.Run.WorkspaceId, toolCall, cancellationToken).ConfigureAwait(false);
+                state.Run.RunId, state.Run.WorkspaceId, toolCall, pendingCommand.ModelTurnRevision, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -797,8 +811,18 @@ public sealed class AgentRunActor
             contextLength
         }));
 
-        // G1：调用结构化 CallAsync 重载（Transport 直接消费 AgentMessage[]，无需字符串拼接）
-        var response = await _modelTransport.CallAsync(state.Run.RunId, projectedMessages, cancellationToken).ConfigureAwait(false);
+        // P0-1：调用 AgentModelRequest 重载（携带 Tool 定义 + 模型工件 + 截止时间，支持原生 function calling）。
+        // 旧路径仅传 messages，模型无法发起 function calling；新路径将 _toolDefinitions（从 RealToolDispatcher 构建）
+        // 传给 Transport，让真实 LLM 能声明并调用 Tool。
+        var modelRequest = new AgentModelRequest
+        {
+            RunId = state.Run.RunId,
+            ModelArtifactId = state.Run.ModelArtifactId,
+            Messages = projectedMessages,
+            Tools = _toolDefinitions,
+            DeadlineAt = state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        var response = await _modelTransport.CallAsync(modelRequest, cancellationToken).ConfigureAwait(false);
         // G5：同步更新 Context.LastModelTurn 和 LastModelResponse
         state = state with
         {
@@ -808,6 +832,8 @@ public sealed class AgentRunActor
 
         // 子问题 2：递增模型调用计数
         _modelCallsUsed++;
+        // P0-6：递增执行期内模型轮次计数（用于 RequestId 的 modelTurn）
+        _executionModelTurn++;
 
         // 子问题 3：累积 token + 费用到 _costBudget
         if (_costBudget is not null)
@@ -834,16 +860,23 @@ public sealed class AgentRunActor
             _turnBudget = _turnBudget with { TurnsUsed = _turnBudget.TurnsUsed + 1 };
         }
 
-        // G1：累积模型响应到 Context.Messages（仅追加引用，不复制既有字符串）
-        if (!string.IsNullOrEmpty(response.Content))
+        // P0-2：始终追加 Assistant 消息（原生 function calling 响应可能 Content 为空 + ToolCalls 非空）。
+        // 旧路径仅在 Content 非空时追加，导致多轮 Tool 调用协议中断——模型在下一轮看不到自己上一轮
+        // 发起的 Tool 调用请求，OpenAI / Anthropic 兼容 API 会拒绝无前置 Assistant tool_calls 的 Tool 消息。
+        state.Context.Messages.Add(new AgentMessage
         {
-            state.Context.Messages.Add(new AgentMessage
-            {
-                Role = AgentMessageRole.Assistant,
-                Content = response.Content,
-                EventId = null // 关联事件 ID 在 ModelCallCompleted 事件产出后回填（此处保留 null 即可）
-            });
-        }
+            Role = AgentMessageRole.Assistant,
+            Content = response.Content ?? string.Empty,
+            EventId = null, // 关联事件 ID 在 ModelCallCompleted 事件产出后回填（此处保留 null 即可）
+            ToolCalls = response.ToolCalls.Count > 0
+                ? response.ToolCalls.Select(tc => new AgentToolCallEntry
+                  {
+                      Id = tc.ToolCallId ?? tc.ToolName ?? Guid.NewGuid().ToString("N"),
+                      Name = tc.ToolName ?? string.Empty,
+                      Arguments = tc.Arguments
+                  }).ToList()
+                : null
+        });
 
         // G4：更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
         // P0-2 Bug 3 修复：同步 run.CostBudget（从模型响应中获取实际 token cost）
@@ -978,8 +1011,11 @@ public sealed class AgentRunActor
         foreach (var toolCall in state.LastModelResponse.ToolCalls)
         {
             // P0-2 Bug 5 修复：在循环开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
-            // 确保 ToolCallStarted 事件和 ToolCallCompleted 事件的审计 ID 一致
-            var toolCallId = Guid.NewGuid().ToString("N");
+            // 确保 ToolCallStarted 事件和 ToolCallCompleted 事件的审计 ID 一致。
+            // P0-2 多轮协议修复：优先使用模型返回的 ToolCallId（如 OpenAI 的 tool_call_id），
+            // 确保 Tool 观察消息的 tool_call_id 与 Assistant 消息的 tool_calls[].id 一致——
+            // OpenAI / Anthropic 兼容 API 要求二者匹配，否则第二轮调用会被拒绝。
+            var toolCallId = toolCall.ToolCallId ?? Guid.NewGuid().ToString("N");
 
             // P0-5：强制 Run 约束的 Tool 白名单（AllowedToolIds 非空时仅允许集合中的 Tool）。
             // 旧路径未写入 AllowedToolIds，Actor 无法按 Run 限定 Tool 集；新路径从 API 入参写入并在此强制。
@@ -1038,7 +1074,7 @@ public sealed class AgentRunActor
                         ToolName = toolCall.ToolName ?? string.Empty,
                         ArgumentsJson = toolCall.Arguments ?? string.Empty,
                         IdempotencyKey = toolCall.IdempotencyKey,
-                        ModelTurnRevision = _modelCallsUsed
+                        ModelTurnRevision = _executionModelTurn
                     };
 
                     state = BufferEvent(state, AgentRunEventType.ApprovalRequested, JsonSerializer.Serialize(new
@@ -1048,40 +1084,21 @@ public sealed class AgentRunActor
                         pendingToolCommand = pendingCommand
                     }));
 
-                    // P0-2：若注入 IAgentApprovalStore，Actor 用正确 workspaceId 创建审批记录，
-                    // 而非依赖 Gate 内部用 "default" workspace 创建。
+                    // P0-3：Gate 是审批记录的唯一创建者。Actor 不再直接写 IAgentApprovalStore——
+                    // 旧路径 Actor 与 Gate 各 CreateAsync 一次，产生重复 Pending 记录（同 toolCallId 二次插入被
+                    // ON CONFLICT DO NOTHING 吞掉，但 workspaceId 不一致时会出现两条记录）。
+                    // 现统一由 Gate 用正确 workspaceId 创建记录（见 DefaultAgentApprovalGate.TryPersistApprovalAsync）。
                     // 使用 Actor 生成的 toolCallId 作为 ApprovalId，确保事件流与审批记录一致。
-                    if (_approvalStore is not null)
-                    {
-                        try
-                        {
-                            await _approvalStore.CreateAsync(new AgentApproval
-                            {
-                                ApprovalId = toolCallId,
-                                RunId = state.Run.RunId,
-                                WorkspaceId = state.Run.WorkspaceId,
-                                ToolCallId = toolCallId,
-                                ToolName = toolCall.ToolName ?? string.Empty,
-                                Status = AgentApprovalStatus.Pending,
-                                Reason = validation.ApprovalReason,
-                                CreatedAt = DateTimeOffset.UtcNow,
-                                ResolvedAt = null
-                            }, cancellationToken).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            // 创建失败不阻断流程（Gate 内部会再次尝试创建，或降级为无持久化模式）
-                        }
-                    }
-
-                    var approval = await _approvalGate.RequestApprovalAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
+                    var approval = await _approvalGate.RequestApprovalAsync(
+                        state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
 
                     // P0-6：区分三种审批结果——PendingApproval（挂起等待人工）/ Approved（批准）/ Rejected（拒绝）
                     if (approval.PendingApproval)
                     {
-                        // P0-2：使用 Actor 的 toolCallId 作为 approvalId（而非 Gate 的 ApprovalId），
-                        // 确保审批记录（已由 Actor 用正确 workspaceId 创建）与外部 POST 端点一致。
-                        var effectiveApprovalId = toolCallId;
+                        // P0-3：使用 Gate 返回的 ApprovalId 作为外部 POST 端点定位键。
+                        // Gate 是审批记录的唯一创建者，其内部 toolCallId 即为 store 中的 ApprovalId。
+                        // 未注入 store 时 Gate 返回的 ApprovalId 仍可用于事件流审计，回退到 Actor 的 toolCallId。
+                        var effectiveApprovalId = approval.ApprovalId ?? toolCallId;
 
                         // P0-6：审批挂起 — 记录 ApprovalResolved(pending) 事件 + approvalId，
                         // flush 持久化 AwaitingApproval 状态，然后退出执行槽（释放 Worker/Semaphore）。
@@ -1129,7 +1146,7 @@ public sealed class AgentRunActor
             if (_durableToolExecutor is not null)
             {
                 toolResult = await _durableToolExecutor.ExecuteAsync(
-                    state.Run.RunId, state.Run.WorkspaceId, toolCall, cancellationToken).ConfigureAwait(false);
+                    state.Run.RunId, state.Run.WorkspaceId, toolCall, _executionModelTurn, cancellationToken).ConfigureAwait(false);
             }
             else
             {

@@ -24,6 +24,7 @@ using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ContextCore.Service.Extensions;
@@ -631,17 +632,21 @@ internal static class CoreExtensions
 		});
 		// CanaryProgressionService 注册为 Singleton（依赖均为 Singleton）。
 		// 注入 CutoverControllerRegistry 实现 per-run 控制器隔离；注入 CutoverConfiguration 读取默认百分比。
+		// P0-7：注入 ICanaryDecisionApplier（可选，仅 Postgres storage 注册时存在），
+		// 供 RecoverFromStoreAsync 在启动时从 canary_pipelines 表恢复 in-memory 百分比。
 		services.AddSingleton<CanaryProgressionService>(sp =>
 		{
 			var store = sp.GetService<IPipelineRunStore>() ?? new InMemoryPipelineRunStore();
 			var defaultController = sp.GetService<CutoverController>() ?? new CutoverController(0);
 			var registry = sp.GetService<CutoverControllerRegistry>();
 			var timeProvider = sp.GetService<TimeProvider>();
+			var decisionApplier = sp.GetService<ICanaryDecisionApplier>();
 			return new CanaryProgressionService(
 				store, defaultController,
 				options: CanaryGateOptions.FromEnvironment(),
 			 timeProvider: timeProvider,
-				registry: registry);
+				registry: registry,
+				decisionApplier: decisionApplier);
 		});
 		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime /
 		// AddContextCoreProductionRuntime 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
@@ -792,7 +797,34 @@ internal static class CoreExtensions
 		// 子问题 8：循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
 		services.TryAddSingleton<IAgentLoopPolicy, DefaultAgentLoopPolicy>();
 		services.TryAddSingleton<IAgentToolCallValidator, DefaultAgentToolCallValidator>();
-		services.TryAddSingleton<IAgentApprovalGate, DefaultAgentApprovalGate>();
+		// P0-3：审批门绑定 SecurityOptions.ApprovalPolicy 配置。
+		// 旧版参数less 注册使用 autoApproveAll=true 默认值，无视 ApprovalPolicy 配置——
+		// 生产环境即便显式 Enabled=true 也被忽略，所有 Tool 静默自动放行。
+		// 现按配置构造：Enabled=true 时 autoApproveAll=false，ApprovalRequiredTools 列表中的 Tool 需人工审批；
+		// Enabled=false 或无配置时 autoApproveAll=true（向后兼容测试 / 开发环境）。
+		services.TryAddSingleton<IAgentApprovalGate>(sp =>
+		{
+			// SecurityOptions 在 Program.cs 通过 AddSingleton(securityOptions) 注册为具体类型
+			// （非 IOptions<SecurityOptions>），此处双路解析以兼容两种注册方式。
+			var securityOptions = sp.GetService<IOptions<SecurityOptions>>()?.Value
+				?? sp.GetService<SecurityOptions>();
+			var approvalPolicy = securityOptions?.ApprovalPolicy;
+			var approvalStore = sp.GetService<IAgentApprovalStore>();
+
+			// P0-3: 生产环境默认不自动放行；只有显式配置 Enabled=false 才关闭审批
+			var autoApproveAll = approvalPolicy is null || approvalPolicy.Enabled == false;
+			var approvalRequiredTools = approvalPolicy?.ApprovalRequiredTools is not null
+				? new HashSet<string>(approvalPolicy.ApprovalRequiredTools, StringComparer.OrdinalIgnoreCase)
+				: null;
+
+			var logger = sp.GetService<ILogger<DefaultAgentApprovalGate>>();
+
+			return new DefaultAgentApprovalGate(
+				approvalRequiredTools: approvalRequiredTools,
+				autoApproveAll: autoApproveAll,
+				approvalStore: approvalStore,
+				logger: logger);
+		});
 
 		// 子问题 8：IAgentCheckpointFactory（默认实现，依赖 IAgentRunEventStore / IAgentRunStore）
 		services.TryAddSingleton<IAgentCheckpointFactory, DefaultAgentCheckpointFactory>();

@@ -180,7 +180,15 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
                 Role = ToModelChatRole(msg.Role),
                 Content = msg.Content,
                 ToolName = msg.ToolName,
-                ToolCallId = null
+                ToolCallId = msg.ToolCallId,
+                ToolCalls = msg.ToolCalls is not null && msg.ToolCalls.Count > 0
+                    ? msg.ToolCalls.Select(tc => new ModelToolCall
+                    {
+                        Id = tc.Id,
+                        Name = tc.Name,
+                        ArgumentsJson = tc.Arguments ?? "{}"
+                    }).ToList()
+                    : null
             };
         }
 

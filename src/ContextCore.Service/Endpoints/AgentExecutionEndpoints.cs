@@ -400,6 +400,8 @@ internal static class AgentExecutionEndpoints
             IAgentRunEventStore eventStore,
             [FromServices] IAgentApprovalGate? approvalGate,
             [FromServices] IAgentApprovalStore? approvalStore,
+            [FromServices] IPersistentAgentApprovalStore? persistentApprovalStore,
+            [FromServices] AgentKernelHost? host,
             IWorkspaceContextAccessor workspaceContextAccessor,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -424,31 +426,11 @@ internal static class AgentExecutionEndpoints
 
             var isReject = string.Equals(request.Decision, "reject", StringComparison.OrdinalIgnoreCase);
             var approver = request.Approver ?? httpContext.User?.Identity?.Name;
+            var decision = isReject
+                ? AgentApprovalStatus.Rejected
+                : AgentApprovalStatus.Approved;
 
-            // P0-2：调用 IAgentApprovalStore.ResolveAsync 持久化审批决策（CAS：Pending → Approved/Rejected）。
-            // 旧路径只追加事件 + 修改 Run 状态，未调用 ResolveAsync——审批记录永久滞留在 Pending 状态。
-            if (approvalStore is not null)
-            {
-                try
-                {
-                    var decision = isReject
-                        ? AgentApprovalStatus.Rejected
-                        : AgentApprovalStatus.Approved;
-                    await approvalStore.ResolveAsync(
-                        workspaceId, approvalId, decision, approver, request.Reason, ct)
-                        .ConfigureAwait(false);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    // 审批不存在或已裁决（CAS 失败）→ 返回 409
-                    return ContextCoreHttpResultMapper.InvalidRequest(
-                        httpContext, string.Empty, "agents.runs.approvals",
-                        $"审批裁决失败：{ex.Message}",
-                        statusCode: StatusCodes.Status409Conflict);
-                }
-            }
-
-            // 记录 ApprovalResolved 事件到事件流（哈希链）
+            // P0-4c：先构建审批事件（哈希链计算），供原子方法或回退路径使用。
             var lastSequence = await eventStore.GetLastSequenceAsync(workspaceId, id, ct)
                 .ConfigureAwait(false);
             var lastEvent = lastSequence >= 0
@@ -469,6 +451,102 @@ internal static class AgentExecutionEndpoints
                 id, workspaceId, lastSequence + 1,
                 AgentRunEventType.ApprovalResolved, run.State,
                 payload, prevChainHash);
+
+            // P0-4c：优先使用 IPersistentAgentApprovalStore 的原子方法（单事务：裁决审批 + 追加事件 + CAS 推进 Run 状态）。
+            // 旧路径 ResolveAsync → AppendAsync → TransitionStateAsync 三步非原子，任一步失败留下不一致状态。
+            if (persistentApprovalStore is not null)
+            {
+                try
+                {
+                    var result = await persistentApprovalStore.ResolveApprovalAndAdvanceRunAsync(
+                        workspaceId, id, approvalId,
+                        expectedRunState: run.State,
+                        decision, approver, request.Reason,
+                        approvalEvent, ct).ConfigureAwait(false);
+
+                    if (!result.Succeeded)
+                    {
+                        return ContextCoreHttpResultMapper.InvalidRequest(
+                            httpContext, string.Empty, "agents.runs.approvals",
+                            $"审批裁决失败：{result.FailureReason}",
+                            statusCode: StatusCodes.Status409Conflict);
+                    }
+
+                    // P0-4c：批准且 Run 已推进到 PendingToolExecution 时，立即入队 AgentKernelHost
+                    //（不等 RecoveryWorker 轮询，缩短审批通过到 Tool 执行的延迟）。
+                    if (result.RunStateChanged
+                        && result.NewRunState == AgentRunState.PendingToolExecution
+                        && host is not null)
+                    {
+                        try
+                        {
+                            var updatedRun = await runStore.GetAsync(workspaceId, id, ct).ConfigureAwait(false);
+                            if (updatedRun is not null)
+                            {
+                                await host.StartRunAsync(updatedRun, CancellationToken.None).ConfigureAwait(false);
+                            }
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // 入队失败非致命：RecoveryWorker 会重新入队执行。
+                        }
+                    }
+
+                    return Results.Accepted($"/api/agents/runs/{id}");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return ContextCoreHttpResultMapper.InternalError(
+                        httpContext, string.Empty, "agents.runs.approvals",
+                        $"原子审批裁决失败：{ex.Message}");
+                }
+            }
+
+            // P0-4c：回退路径——Store 不支持原子方法时，走旧的三步非原子流程。
+            // ALWAYS validate approval.RunId == route runId：原子方法在 SQL 内校验（WHERE run_id=@run_id），
+            // 回退路径显式获取审批记录并校验 RunId 匹配，防跨 Run 误裁决。
+            if (approvalStore is not null)
+            {
+                AgentApproval? approval;
+                try
+                {
+                    approval = await approvalStore.GetAsync(workspaceId, approvalId, ct).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.approvals");
+                }
+
+                if (approval is null)
+                {
+                    return ContextCoreHttpResultMapper.NotFound(
+                        httpContext, string.Empty, "agents.runs.approvals",
+                        $"未找到 approvalId='{approvalId}'。");
+                }
+
+                if (!string.Equals(approval.RunId, id, StringComparison.Ordinal))
+                {
+                    return ContextCoreHttpResultMapper.InvalidRequest(
+                        httpContext, string.Empty, "agents.runs.approvals",
+                        $"审批记录的 RunId='{approval.RunId}' 与路由 RunId='{id}' 不匹配。",
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+
+                try
+                {
+                    await approvalStore.ResolveAsync(
+                        workspaceId, approvalId, decision, approver, request.Reason, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // 审批不存在或已裁决（CAS 失败）→ 返回 409
+                    return ContextCoreHttpResultMapper.InvalidRequest(
+                        httpContext, string.Empty, "agents.runs.approvals",
+                        $"审批裁决失败：{ex.Message}",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+            }
 
             try
             {

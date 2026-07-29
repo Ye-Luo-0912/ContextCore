@@ -744,6 +744,18 @@ public sealed record ToolDispatchPrepareResult
 /// </remarks>
 public interface IToolDispatchJournal
 {
+    /// <summary>
+    /// P0-6：指示 <see cref="MarkCommittedWithResultAsync"/> 是否在同事务内持久化 Tool 结果缓存。
+    /// </summary>
+    /// <remarks>
+    /// <b>true</b>（如 <c>PostgresToolDispatchJournal</c>）：MarkCommittedWithResultAsync 在同一 DB 事务内
+    /// 同时 UPDATE journal state 与 UPSERT 结果到结果表，调用方无需再单独调用
+    /// <see cref="IDurableToolResultStore.SaveAsync"/>。
+    /// <b>false</b>（如 <c>InMemoryToolDispatchJournal</c>）：MarkCommittedWithResultAsync 仅推进状态机 +
+    /// 进程内缓存，调用方需通过 <see cref="IDurableToolResultStore"/>（若注入）单独持久化结果。
+    /// </remarks>
+    bool PersistsResults { get; }
+
     /// <summary>写入 Prepared 条目（在调用 tool 之前），返回 Prepare 结果供调用方决策。</summary>
     /// <param name="entry">journal 条目（State 应为 Prepared）。</param>
     /// <param name="cancellationToken">取消令牌。</param>

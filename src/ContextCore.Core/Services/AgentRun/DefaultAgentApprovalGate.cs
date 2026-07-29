@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
@@ -34,6 +35,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     private readonly IReadOnlySet<string> _approvalRequiredTools;
     private readonly bool _autoApproveAll;
     private readonly IAgentApprovalStore? _approvalStore;
+    private readonly ILogger<DefaultAgentApprovalGate>? _logger;
 
     /// <summary>
     /// 构造默认审批门。
@@ -45,18 +47,25 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     /// 自动批准留下 Approved 审计轨迹；需人工审批留下 Pending 记录等待外部裁决。
     /// null = 不持久化（保持原行为，向后兼容）。
     /// </param>
+    /// <param name="logger">
+    /// P0-3：可选日志器。注入后持久化失败会记录为警告（不阻断审批决策，降级为纯内存模式）。
+    /// null = 不记录日志（向后兼容测试场景）。
+    /// </param>
     public DefaultAgentApprovalGate(
         IReadOnlySet<string>? approvalRequiredTools = null,
         bool autoApproveAll = true,
-        IAgentApprovalStore? approvalStore = null)
+        IAgentApprovalStore? approvalStore = null,
+        ILogger<DefaultAgentApprovalGate>? logger = null)
     {
         _approvalRequiredTools = approvalRequiredTools ?? new HashSet<string>(0, StringComparer.OrdinalIgnoreCase);
         _autoApproveAll = autoApproveAll;
         _approvalStore = approvalStore;
+        _logger = logger;
     }
 
     /// <inheritdoc />
     public async ValueTask<AgentApprovalResult> RequestApprovalAsync(
+        string workspaceId,
         string runId,
         AgentToolCallRequest toolCall,
         CancellationToken cancellationToken = default)
@@ -71,7 +80,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
         // 默认全部自动批准（测试用）
         if (_autoApproveAll)
         {
-            await TryPersistApprovalAsync(runId, toolCall, toolCallId, AgentApprovalStatus.Approved,
+            await TryPersistApprovalAsync(workspaceId, runId, toolCall, toolCallId, AgentApprovalStatus.Approved,
                 approverId: "auto-rule", rejectionReason: null, createdAt: now, cancellationToken).ConfigureAwait(false);
             return new AgentApprovalResult
             {
@@ -89,7 +98,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
         if (requiresHuman)
         {
             // 持久化 Pending 记录，等待外部 ResolveAsync
-            await TryPersistApprovalAsync(runId, toolCall, toolCallId, AgentApprovalStatus.Pending,
+            await TryPersistApprovalAsync(workspaceId, runId, toolCall, toolCallId, AgentApprovalStatus.Pending,
                 approverId: null, rejectionReason: null, createdAt: now, cancellationToken).ConfigureAwait(false);
 
             // P0-6：返回 PendingApproval=true + ApprovalId，让 Actor 进入 AwaitingApproval 状态并退出执行槽。
@@ -108,7 +117,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
         }
 
         // 不在需审批列表中 → 自动批准
-        await TryPersistApprovalAsync(runId, toolCall, toolCallId, AgentApprovalStatus.Approved,
+        await TryPersistApprovalAsync(workspaceId, runId, toolCall, toolCallId, AgentApprovalStatus.Approved,
             approverId: "auto-rule", rejectionReason: null, createdAt: now, cancellationToken).ConfigureAwait(false);
         return new AgentApprovalResult
         {
@@ -125,6 +134,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     /// 需人工审批时仅创建 Pending 记录，等待外部 ResolveAsync。
     /// </summary>
     private async ValueTask TryPersistApprovalAsync(
+        string workspaceId,
         string runId,
         AgentToolCallRequest toolCall,
         string toolCallId,
@@ -139,13 +149,8 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
             return;
         }
 
-        // 从 runId 反推 workspaceId 不可行（gate 无 workspace 入参）；
-        // 此处使用 runId 作为 workspaceId 占位——生产实现应扩展 IAgentApprovalGate 签名传入 workspaceId，
-        // 或由 Actor 在调用 Gate 前先 CreateAsync(Pending) 再调 Gate。
-        // 当前实现仅适用于单 workspace 场景；多 workspace 需调用方自行持久化。
-        // 为保持与 Store 契约一致，此处使用 "default" workspace。
-        var workspaceId = "default";
-
+        // P0-3：使用调用方传入的 workspaceId（来自 IAgentApprovalGate.RequestApprovalAsync 签名），
+        // 替代旧版硬编码 "default"。Gate 是审批记录的唯一创建者（Actor 不再直接写 Store）。
         var approval = new AgentApproval
         {
             ApprovalId = toolCallId,
@@ -173,9 +178,13 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
                     .ConfigureAwait(false);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 持久化失败不阻断审批决策（降级为纯内存模式，记录日志由上层处理）
+            // P0-3：持久化失败不阻断审批决策（降级为纯内存模式），但记录警告以便排查。
+            // 旧版本空 catch 吞掉所有错误，导致审批持久化静默失败无人知晓。
+            _logger?.LogWarning(ex,
+                "审批记录持久化失败（降级为纯内存模式）：workspaceId={WorkspaceId}, runId={RunId}, approvalId={ApprovalId}, tool={ToolName}。",
+                workspaceId, runId, toolCallId, toolCall.ToolName);
         }
     }
 }

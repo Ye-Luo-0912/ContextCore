@@ -116,6 +116,25 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             "CanaryLeaderHostedService 启动：InstanceId={InstanceId}, RenewInterval={Renew}, LeaseDuration={Lease}, ReapInterval={Reap}.",
             _instanceId, options.RenewInterval, options.LeaseDuration, options.ReapInterval);
 
+        // P0-7：启动时从 DB（canary_pipelines 表）恢复 in-memory 路由状态。
+        // 进程重启后 CutoverController._cutoverPercentage 与 CanaryProgressionService._runStates
+        // 均丢失，而 DB 仍持有权威百分比。此处调用 RecoverFromStoreAsync 重建两者，
+        // 避免重启后回到 0% 导致流量瞬间全走 Legacy 路径。恢复失败不阻断启动（后续轮询仍可工作）。
+        try
+        {
+            var recovered = await _progressionService.RecoverFromStoreAsync(stoppingToken).ConfigureAwait(false);
+            if (recovered > 0)
+            {
+                _logger.LogInformation(
+                    "CanaryLeaderHostedService 从 DB 恢复了 {Count} 个活跃 canary pipeline 的 in-memory 百分比。",
+                    recovered);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CanaryLeaderHostedService 启动恢复 in-memory canary 状态失败；继续启动（后续轮询将按 DB 状态推进）。");
+        }
+
         var reapStopwatch = Stopwatch.StartNew();
 
         while (!stoppingToken.IsCancellationRequested)

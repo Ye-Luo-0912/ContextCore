@@ -258,6 +258,25 @@ public sealed class ModelActivationManager : IModelActivationManager
     public long? ActiveGeneration => _activeHandle?.Generation;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// P0-8：捕获当前 Active Handle 的引擎并递增引用计数。返回的 lease 持有 counter 引用，
+    /// Dispose 时递减。这保证捕获的引擎在 lease 存活期间不会被 Dispose（drain 任务等待 counter 归零）。
+    /// <see cref="InferenceScheduler"/> 在入队时调用本方法捕获引擎，确保请求在入队时的世代上执行，
+    /// 避免热切换后请求在新引擎上执行（cross-generation execution）。
+    /// </remarks>
+    public IInferenceEngineLease? AcquireEngineLease()
+    {
+        // P1：与 InferBatchAsync 一致 — 单次 Volatile.Read 捕获 handle（_activeHandle 字段已 volatile）。
+        var handle = _activeHandle;
+        if (handle is null)
+        {
+            return null;
+        }
+        handle.Counter.Increment();
+        return new EngineLease(handle);
+    }
+
+    /// <inheritdoc />
     public string ModelVersion => (_activeHandle?.Engine ?? _fallbackEngine).ModelVersion;
 
     /// <inheritdoc />
@@ -1096,5 +1115,36 @@ public sealed class ModelActivationManager : IModelActivationManager
 
         // 6. Dispose _disposedCts。
         _disposedCts.Dispose();
+    }
+
+    /// <summary>
+    /// P0-8：引擎租约实现 —— 捕获 ActiveModelHandle 的引擎与 counter 引用。
+    /// Dispose 时递减 counter，允许 drain 任务在引用归零后 Dispose 引擎。
+    /// 幂等：多次 Dispose 安全（仅第一次递减）。
+    /// </summary>
+    private sealed class EngineLease : IInferenceEngineLease
+    {
+        private readonly ModelReferenceCounter _counter;
+        private int _disposed;
+
+        public EngineLease(ActiveModelHandle handle)
+        {
+            Engine = handle.Engine;
+            Generation = handle.Generation;
+            _counter = handle.Counter;
+        }
+
+        public IBatchInferenceEngine Engine { get; }
+
+        public long Generation { get; }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+            _counter.Decrement();
+        }
     }
 }

@@ -348,9 +348,9 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 if (!renewed)
                 {
                     // P0-4：租约丢失 → 其他实例已接管，立即取消 Actor 防止双执行。
-                    // P0-5：丢租时使用 LeaseLost 状态（区别于用户主动 Cancelled）。
+                    // P0-5：旧 owner 不写入 LeaseLost（无 fencing token 会破坏新 owner 状态），
+                    //       仅本地取消 Actor；LeaseLost 由新 owner/recovery worker 写入。
                     _logger?.LogWarning("Run {RunId} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", runId);
-                    await TryTransitionToLeaseLostAsync(workspaceId, runId, CancellationToken.None).ConfigureAwait(false);
                     try
                     {
                         actorCts.Cancel();
@@ -378,7 +378,6 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 {
                     _logger?.LogError("Run {RunId} heartbeat 连续 {Count} 次异常，触发本地 watchdog 取消 Actor。",
                         runId, consecutiveFailures);
-                    await TryTransitionToLeaseLostAsync(workspaceId, runId, CancellationToken.None).ConfigureAwait(false);
                     try
                     {
                         actorCts.Cancel();
@@ -390,32 +389,6 @@ public sealed class AgentKernelHost : IAsyncDisposable
                     break;
                 }
             }
-        }
-    }
-
-    /// <summary>
-    /// P0-5：尝试将 Run 状态推进到 LeaseLost（丢租时使用，区别于用户主动取消的 Cancelled）。
-    /// CAS 失败或 Run 已终态时静默忽略（其他实例可能已推进状态）。
-    /// </summary>
-    private async Task TryTransitionToLeaseLostAsync(string workspaceId, string runId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var run = await _runStore.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
-            if (run is null || AgentRunStateMachine.IsTerminalState(run.State))
-            {
-                return;
-            }
-            await _runStore.TransitionStateAsync(
-                workspaceId, runId, run.State, AgentRunState.LeaseLost, cancellationToken).ConfigureAwait(false);
-        }
-        catch (InvalidOperationException)
-        {
-            // CAS 失败 = 状态已被其他实例推进 → 非致命
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Run {RunId} 推进到 LeaseLost 状态失败。", runId);
         }
     }
 

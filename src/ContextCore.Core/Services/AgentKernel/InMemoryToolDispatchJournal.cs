@@ -41,6 +41,10 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     private readonly ConcurrentDictionary<string, DurableToolResult> _results = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
+    /// <remarks>InMemory 实现仅在进程内缓存结果，不在同事务内持久化到外部存储，返回 false。</remarks>
+    public bool PersistsResults => false;
+
+    /// <inheritdoc />
     public ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);

@@ -557,4 +557,44 @@ WHERE run_id = @run_id;
             Status = status
         };
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-7：批量读取所有活跃 pipeline 状态。过滤终态（Promoted/RolledBack），
+    /// 仅返回 status='Active'（或其它非终态）的行，供服务启动时恢复 in-memory 路由状态。
+    /// </remarks>
+    public async ValueTask<IReadOnlyList<CanaryPipelineState>> GetAllActivePipelineStatesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 终态 = Promoted（已晋升到 100%）/ RolledBack（已回滚）。Active 行（含首次初始化与推进中）返回。
+        command.CommandText = $"""
+SELECT run_id, percentage, revision, status FROM {Table("canary_pipelines")}
+WHERE status IS NULL OR status NOT IN ('Promoted', 'RolledBack');
+""";
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var results = new List<CanaryPipelineState>();
+        var runIdOrdinal = reader.GetOrdinal("run_id");
+        var percentageOrdinal = reader.GetOrdinal("percentage");
+        var revisionOrdinal = reader.GetOrdinal("revision");
+        var statusOrdinal2 = reader.GetOrdinal("status");
+
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            results.Add(new CanaryPipelineState
+            {
+                RunId = reader.GetString(runIdOrdinal),
+                Revision = reader.GetInt32(revisionOrdinal),
+                Percentage = reader.GetInt32(percentageOrdinal),
+                Status = reader.IsDBNull(statusOrdinal2) ? null : reader.GetString(statusOrdinal2)
+            });
+        }
+
+        return results;
+    }
 }

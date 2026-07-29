@@ -689,6 +689,8 @@ WHERE workspace_id = @workspaceId AND run_id = @runId
         private int _invocationCount;
 
         public string ToolName { get; }
+        public string? Description => $"Test tool: {ToolName}";
+        public string? ParametersJsonSchema => "{}";
         public int InvocationCount => Volatile.Read(ref _invocationCount);
 
         public RecordingToolHandler(string toolName, string resultContent)
