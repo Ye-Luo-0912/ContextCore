@@ -322,6 +322,24 @@ public interface IModelAdapter
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// 支持原生 function calling 的模型适配器接口。
+/// 扩展 <see cref="IModelAdapter"/>，增加原生 <see cref="ChatWithToolsAsync"/> 方法，
+/// 直接向 OpenAI / Anthropic 兼容 API 传入 tools 参数并解析结构化 tool_calls 响应。
+/// </summary>
+public interface IChatCompletionAdapter : IModelAdapter
+{
+    /// <summary>
+    /// 带 Tool 定义的原生结构化对话调用（OpenAI / Anthropic function calling）。
+    /// </summary>
+    /// <param name="request">结构化对话请求（原生 messages + tool 定义）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>结构化对话响应（含文本 / Tool 调用 / finish reason / token 用量）。</returns>
+    Task<ModelChatResponse> ChatWithToolsAsync(
+        ModelChatRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>模型网关接口，负责按角色路由请求到合适的模型适配器。</summary>
 public interface IModelGateway
 {

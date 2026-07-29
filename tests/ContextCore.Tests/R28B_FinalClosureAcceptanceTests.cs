@@ -320,7 +320,8 @@ public sealed class ArtifactTruthAcceptanceTests
 
     internal static DefaultContextDecisionRuntime BuildRuntime(
         IReadOnlyList<ICandidateProvider> providers,
-        IGlobalAllocator? allocator = null)
+        IGlobalAllocator? allocator = null,
+        ISelectedCandidateHydrator? selectedCandidateHydrator = null)
     {
         var engine = new DefaultContextDecisionEngine(
             policyRegistry: null,
@@ -340,7 +341,8 @@ public sealed class ArtifactTruthAcceptanceTests
             featurePipeline: new DefaultFeaturePipeline(),
             safetyGate: new DefaultSafetyGate(),
             lifecycleGate: new DefaultLifecycleGate(),
-            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()));
+            utilityScorer: new DefaultUtilityScorer(new DefaultFeatureSchemaValidator()),
+            selectedCandidateHydrator: selectedCandidateHydrator);
     }
 
     private static ExpertExecutionResult MakeExpertResultFromEnvelope(ContextCandidateEnvelope envelope)
@@ -364,8 +366,11 @@ public sealed class PurposeSemanticAcceptanceTests
     [TestMethod]
     public async Task IncludeContentFalseNeverLoadsOrReturnsContent()
     {
-        // IncludeContent=false 时，Provider 返回的 Material.Content 必须为空字符串。
-        // 使用 MandatoryCandidateProvider + 返回固定 item 的 mock store 验证。
+        // P3 Fix-4 契约澄清：IncludeContent=false → recall 阶段不加载正文（Material.Content 为空）；
+        // 若 hydrator 未注入（本测试 BuildRuntime 默认不注入），选中候选的 Content 保持空。
+        // 生产 DI 路径始终注入 ISelectedCandidateHydrator（见 CoreExtensions.cs），
+        // 选中候选会被 hydrator 批量 re-fetch 正文——该契约由
+        // IncludeContentFalseHydratorRefetchesSelected 测试覆盖。
         var store = new FixedItemContextStore(new ContextItem
         {
             Id = "item-mandatory",
@@ -377,6 +382,7 @@ public sealed class PurposeSemanticAcceptanceTests
         });
         var provider = new MandatoryCandidateProvider(store);
 
+        // 不注入 hydrator（模拟无 batch lookup 能力的测试容器）→ recall 后无 re-fetch
         var runtime = ArtifactTruthAcceptanceTests.BuildRuntime(providers: new[] { provider });
 
         var request = new ContextDecisionRuntimeRequest
@@ -391,11 +397,56 @@ public sealed class PurposeSemanticAcceptanceTests
 
         var execution = await runtime.ExecuteWithWorkingSetAsync(request, CancellationToken.None);
 
-        // IncludeContent=false 时，所有 Material 的 Content 必须为空字符串
+        // IncludeContent=false 且无 hydrator 时，所有 Material 的 Content 必须为空字符串
         foreach (var material in execution.WorkingSet.Materials.Values)
         {
             Assert.AreEqual(string.Empty, material.Content,
-                "IncludeContent=false 时 Material.Content 必须为空字符串（不加载正文）。");
+                "IncludeContent=false 且无 hydrator 时 Material.Content 必须为空字符串（recall 不加载正文，无 re-fetch）。");
+        }
+    }
+
+    [TestMethod]
+    public async Task IncludeContentFalseHydratorRefetchesSelected()
+    {
+        // P3 Fix-4 新增测试：IncludeContent=false + hydrator 注入时，选中候选的 Content
+        // 必须被 ISelectedCandidateHydrator 批量 re-fetch（Late Hydration 完整契约）。
+        // 生产 DI 路径（CoreExtensions.cs）始终注入 hydrator，此测试模拟生产 wiring。
+        var store = new FixedItemContextStore(new ContextItem
+        {
+            Id = "item-mandatory",
+            WorkspaceId = "test-ws",
+            CollectionId = "test-col",
+            Content = "hydrated content after late hydration",
+            Type = "test",
+            Tags = new[] { "mandatory" }
+        });
+        var provider = new MandatoryCandidateProvider(store);
+        // 注入 hydrator（store 同时实现 IContextStoreBatchLookup，模拟生产 batch lookup 能力）
+        var hydrator = new DefaultSelectedCandidateHydrator(contextBatchLookup: store);
+
+        var runtime = ArtifactTruthAcceptanceTests.BuildRuntime(
+            providers: new[] { provider },
+            selectedCandidateHydrator: hydrator);
+
+        var request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = "req-hydrate-refetch",
+            Scope = new ContextDecisionScope("test-ws", "test-col"),
+            Purpose = ContextDecisionPurpose.Retrieval,
+            TokenBudget = 4096,
+            TopK = 10,
+            RetrievalInput = new RetrievalInput { IncludeContent = false }
+        };
+
+        var execution = await runtime.ExecuteWithWorkingSetAsync(request, CancellationToken.None);
+
+        // hydrator 注入后，选中候选的 Content 必须被 re-fetch（非空）
+        Assert.IsTrue(execution.WorkingSet.Materials.Count > 0,
+            "至少应有一个候选被选中并进入 WorkingSet。");
+        foreach (var material in execution.WorkingSet.Materials.Values)
+        {
+            Assert.AreNotEqual(string.Empty, material.Content,
+                "IncludeContent=false + hydrator 注入时，选中候选的 Content 必须被 hydrate（非空）。");
         }
     }
 
@@ -1252,8 +1303,9 @@ public sealed class ExperimentPlaneAcceptanceTests
 
 /// <summary>
 /// 返回固定 ContextItem 的 IContextStore Stub，用于测试 IncludeContent 语义。
+/// P3 Fix-4：同时实现 IContextStoreBatchLookup，让 Late Hydration 测试可注入 hydrator。
 /// </summary>
-internal sealed class FixedItemContextStore : IContextStore
+internal sealed class FixedItemContextStore : IContextStore, IContextStoreBatchLookup
 {
     private readonly ContextItem _item;
 
@@ -1284,4 +1336,21 @@ internal sealed class FixedItemContextStore : IContextStore
         string workspaceId, string collectionId, string id,
         CancellationToken cancellationToken = default)
         => Task.CompletedTask;
+
+    // P3 Fix-4：IContextStoreBatchLookup 实现——返回固定 item（含完整正文），供 hydrator re-fetch
+    public Task<IReadOnlyList<ContextItem>> BatchGetAsync(
+        string workspaceId, string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new List<ContextItem>(ids.Count);
+        foreach (var id in ids)
+        {
+            if (string.Equals(id, _item.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(_item);
+            }
+        }
+        return Task.FromResult<IReadOnlyList<ContextItem>>(result);
+    }
 }

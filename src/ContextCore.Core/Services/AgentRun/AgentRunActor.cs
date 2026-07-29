@@ -542,11 +542,11 @@ public sealed class AgentRunActor
                 }
 
                 var ptc = ptcProp;
-                var toolCallId = ptc.TryGetProperty("toolCallId", out var tciProp) ? tciProp.GetString() ?? string.Empty : string.Empty;
-                var toolName = ptc.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
-                var argumentsJson = ptc.TryGetProperty("argumentsJson", out var ajProp) ? ajProp.GetString() ?? string.Empty : string.Empty;
-                var idempotencyKey = ptc.TryGetProperty("idempotencyKey", out var ikProp) ? ikProp.GetString() : null;
-                var modelTurnRevision = ptc.TryGetProperty("modelTurnRevision", out var mtrProp) ? mtrProp.GetInt32() : 0;
+                var toolCallId = ptc.TryGetProperty("ToolCallId", out var tciProp) ? tciProp.GetString() ?? string.Empty : string.Empty;
+                var toolName = ptc.TryGetProperty("ToolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
+                var argumentsJson = ptc.TryGetProperty("ArgumentsJson", out var ajProp) ? ajProp.GetString() ?? string.Empty : string.Empty;
+                var idempotencyKey = ptc.TryGetProperty("IdempotencyKey", out var ikProp) ? ikProp.GetString() : null;
+                var modelTurnRevision = ptc.TryGetProperty("ModelTurnRevision", out var mtrProp) ? mtrProp.GetInt32() : 0;
 
                 return new PendingToolCommand
                 {
@@ -941,6 +941,10 @@ public sealed class AgentRunActor
                 QueryText = run.Task,
                 TokenBudget = 0,
                 TopK = 0,
+                // P3 Fix-1：激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
+                // Engine 选出 SelectedEnvelopes 后由 ISelectedCandidateHydrator 批量 hydrate 正文，
+                // 避免对未选中候选做无用正文 I/O。
+                RetrievalInput = new RetrievalInput { IncludeContent = false },
                 AgentInput = new AgentInput
                 {
                     Session = agentSession,
@@ -1207,6 +1211,11 @@ public sealed class AgentRunActor
 
         // Tool 分派完成 → Observing（G4：本地推进）
         state = TransitionStateLocal(state, AgentRunState.Observing);
+
+        // 清除 LastModelResponse：Tool 已分派完毕，下一轮应由 LoopPolicy 决定 CallModel
+        // （而非重复 DispatchTool）。未清除会导致 ContextBuilding → ToolDispatching 非法转换。
+        // Context.LastModelTurn 保留（供 ProjectForModel 投影历史上下文）。
+        state = state with { LastModelResponse = null };
 
         // P0-2 Bug 3 修复：Turn 已在 CallModelAsync 中递增（每次模型调用计为一次 Turn）
         // 此处不再重复递增 Turn（避免双重计数）

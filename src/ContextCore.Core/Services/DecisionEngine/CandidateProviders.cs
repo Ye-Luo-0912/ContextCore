@@ -337,6 +337,9 @@ internal static class CandidateProviderHelpers
 
         // P5：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        // P3 Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
+        // ContentTokens=0（tokenizes 空字符串）。此路径下用 item.Content（真实正文，store 未走
+        // metadata-only 时仍存在）估算 token 数，确保 allocator 看到非零 token cost。
         var persistedTokenCost = ReadPersistedTokenCost(item);
         if (persistedTokenCost.HasValue)
         {
@@ -347,6 +350,20 @@ internal static class CandidateProviderHelpers
                     ContentTokens = persistedTokenCost.Value,
                     TokenizerId = tokenizerModelName ?? "persisted",
                     IsEstimated = false
+                }
+            };
+        }
+        else if (!includeContent)
+        {
+            // P3 Fix-2：IncludeContent=false 且无持久化 token cost 时，用 item.Content 长度估算
+            // （material.Content 已清空，但 item.Content 仍持有真实正文）。
+            envelope = envelope with
+            {
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = EstimateTokens(item.Content),
+                    TokenizerId = "length-div-4",
+                    IsEstimated = true
                 }
             };
         }
@@ -420,6 +437,9 @@ internal static class CandidateProviderHelpers
 
         // Perf-2：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        // P3 Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
+        // ContentTokens=0（tokenizes 空字符串）。此路径下用 memory.Content（真实正文）估算 token 数，
+        // 确保 allocator 看到非零 token cost。
         var persistedTokenCost = ReadPersistedTokenCostFromMetadata(memory.Metadata);
         if (persistedTokenCost.HasValue)
         {
@@ -430,6 +450,20 @@ internal static class CandidateProviderHelpers
                     ContentTokens = persistedTokenCost.Value,
                     TokenizerId = tokenizerModelName ?? "persisted",
                     IsEstimated = false
+                }
+            };
+        }
+        else if (!includeContent)
+        {
+            // P3 Fix-2：IncludeContent=false 且无持久化 token cost 时，用 memory.Content 长度估算
+            // （material.Content 已清空，但 memory.Content 仍持有真实正文）。
+            envelope = envelope with
+            {
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = EstimateTokens(memory.Content),
+                    TokenizerId = "length-div-4",
+                    IsEstimated = true
                 }
             };
         }
@@ -949,8 +983,10 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         {
             // P0-10：优先读取 PostgreSQL ts_rank_cd 派生的检索评分（写入 Metadata["__ts_rank"]）。
             // IncludeContent=false 路径下 PostgresContextStore 也会写入此键——确保 ts_rank 仍进入评分。
-            // 未持久化时（非 Postgres provider / 无 QueryText 路径）回退到固定 10.0 基础分。
-            var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 10.0;
+            // P3 Fix-3：未持久化 ts_rank 时（非 Postgres provider / ID-match 无 QueryText 路径），
+            // 使用 50.0 作为 ID-match 基线分（精确 ID 查找是刻意召回，而非文本搜索），
+            // 与 FTS ts_rank 评分尺度可比。title-contains 奖励 +50.0 仍叠加在此基线之上。
+            var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 50.0;
             if (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(effectiveQueryText) &&
                 item.Title.Contains(effectiveQueryText, StringComparison.OrdinalIgnoreCase))
             {

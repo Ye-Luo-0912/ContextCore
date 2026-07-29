@@ -363,4 +363,36 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IAgentKernelTransport>(sp => sp.GetRequiredService<PostgresDurableTransport>());
         return services;
     }
+
+    /// <summary>
+    /// P2：注册一个通用 PostgreSQL 租约工作存储（<see cref="PostgresLeasedWorkStore{TWork}"/>）。
+    /// </summary>
+    /// <typeparam name="TWork">工作项类型。</typeparam>
+    /// <param name="services">服务容器。</param>
+    /// <param name="configuration">表/列映射配置。</param>
+    /// <remarks>
+    /// 注册以下绑定：
+    /// <list type="bullet">
+    /// <item><see cref="LeasedWorkStoreConfiguration{TWork}"/> — 单例（供 store 构造注入）。</item>
+    /// <item><see cref="PostgresLeasedWorkStore{TWork}"/> — 单例。</item>
+    /// <item><see cref="IPostgresLeasedWorkStore{TWork}"/> — 指向同一单例（含 <c>ExecuteFencedAsync</c>）。</item>
+    /// <item><see cref="ILeasedWorkStore{TWork, LeasedWork{TWork}}"/> — 指向同一单例（provider-agnostic 接口）。</item>
+    /// <item><see cref="ILeasedWorkStore"/> — 指向同一单例（非泛型标记，供 <c>IEnumerable&lt;ILeasedWorkStore&gt;</c> 枚举）。</item>
+    /// </list>
+    /// 可多次调用以注册不同 <typeparamref name="TWork"/> 的租约存储。
+    /// </remarks>
+    public static IServiceCollection AddLeasedWorkStore<TWork>(
+        this IServiceCollection services,
+        LeasedWorkStoreConfiguration<TWork> configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.AddSingleton(configuration);
+        services.AddSingleton<PostgresLeasedWorkStore<TWork>>();
+        services.AddSingleton<IPostgresLeasedWorkStore<TWork>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
+        services.AddSingleton<ILeasedWorkStore<TWork, LeasedWork<TWork>>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
+        services.AddSingleton<ILeasedWorkStore>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
+        return services;
+    }
 }

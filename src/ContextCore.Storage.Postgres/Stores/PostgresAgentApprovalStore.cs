@@ -138,8 +138,8 @@ SET status = @new_status,
     resolved_at = @resolved_at,
     data = data || jsonb_build_object(
         'Status', to_jsonb(@new_status_name),
-        'ApproverId', to_jsonb(@approver_id),
-        'RejectionReason', to_jsonb(@rejection_reason),
+        'ApproverId', to_jsonb(@approver_id::text),
+        'RejectionReason', to_jsonb(@rejection_reason::text),
         'ResolvedAt', to_jsonb(@resolved_at))
 WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND status = @pending_status;
 """;

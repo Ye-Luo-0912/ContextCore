@@ -162,26 +162,30 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     requestId, idempotencyKey, prepareResult.ExternalOperationId, stopwatch.Elapsed);
             }
 
-            // 4c. ShouldDispatch=false 且无缓存（Postgres 路径：journal 已 Committed/ResultDelivered 但 journal 不缓存结果）
-            //     查询 IDurableToolResultStore 获取缓存结果
-            if (!prepareResult.ShouldDispatch && _resultStore is not null)
+            // 4c. ShouldDispatch=false（Postgres 路径：journal 已 Committed/ResultDelivered 但 journal 不缓存结果）
+            //     查询 IDurableToolResultStore 获取缓存结果；无 resultStore 或缓存未命中 → 返回对账结果
+            if (!prepareResult.ShouldDispatch)
             {
-                DurableToolResult? cached = null;
-                try
+                if (_resultStore is not null)
                 {
-                    cached = await _resultStore.GetAsync(toolCallId, cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // ResultStore 查询失败不阻断流程；降级为对账结果
-                }
-                if (cached is not null)
-                {
-                    stopwatch.Stop();
-                    return BuildCachedResult(cached, stopwatch.Elapsed);
+                    DurableToolResult? cached = null;
+                    try
+                    {
+                        cached = await _resultStore.GetAsync(toolCallId, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // ResultStore 查询失败不阻断流程；降级为对账结果
+                    }
+                    if (cached is not null)
+                    {
+                        stopwatch.Stop();
+                        return BuildCachedResult(cached, stopwatch.Elapsed);
+                    }
                 }
 
-                // 缓存未命中但 journal 已 Committed/ResultDelivered → 模糊状态，返回对账结果
+                // 无 resultStore 或缓存未命中，但 journal 已 Committed/ResultDelivered → 模糊状态，返回对账结果
+                // 不重新 Dispatch（journal 明确指示 ShouldDispatch=false，重新执行会违反 exactly-once）
                 stopwatch.Stop();
                 return BuildReconciliationResult(
                     requestId, idempotencyKey, prepareResult.ExternalOperationId, stopwatch.Elapsed);

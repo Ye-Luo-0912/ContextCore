@@ -91,6 +91,15 @@ public sealed class InferenceSchedulerOptions
     public int MaxQueueLength { get; set; } = 256;
 
     /// <summary>
+    /// 是否启用 DropWrite 策略（默认 false）。
+    /// false 时队列满返回 QueueFull 错误（调用方应处理失败/重试）；
+    /// true 时队列满返回 Dropped 结果（语义为"已丢弃"而非"错误"，调用方可据此跳过而非重试），
+    /// 并递增 <see cref="InferenceScheduler.DroppedCount"/> 计数器供监控使用。
+    /// 适用于实时推理场景中"宁丢不堵"的背压策略。
+    /// </summary>
+    public bool EnableDropWrite { get; set; } = false;
+
+    /// <summary>
     /// 攒批等待窗口（默认 5ms）。
     /// 第一个请求到达后开始计时，到期或攒满 MaxBatchSize 后触发推理。
     /// 较小值降低延迟，较大值提升批合并率。
@@ -144,6 +153,12 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
     // bounded queue：MaxQueueLength=0 时退化为无界（不推荐）。
     private readonly Channel<InferenceRequest> _channel;
+
+    // DropWrite 计数器：EnableDropWrite=true 时队列满丢弃的请求数。
+    private long _droppedCount;
+
+    /// <summary>DropWrite 策略下被丢弃的请求总数（供监控/告警使用）。</summary>
+    public long DroppedCount => Interlocked.Read(ref _droppedCount);
 
     // 并发治理：限制同时执行的微批数（真正生效——Coordinator 派发后不 await 执行）。
     private readonly SemaphoreSlim _concurrencyLimiter;
@@ -300,6 +315,12 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         if (!_channel.Writer.TryWrite(request))
         {
             request.CancellationRegistration.Dispose();
+            // DropWrite 策略：返回 Dropped 结果（语义为"已丢弃"而非"错误"），递增计数器。
+            if (_options.EnableDropWrite)
+            {
+                Interlocked.Increment(ref _droppedCount);
+                return new ValueTask<BatchInferenceResult>(BuildDroppedResult());
+            }
             return new ValueTask<BatchInferenceResult>(BuildQueueFullResult());
         }
 
@@ -994,6 +1015,15 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         Succeeded = false,
         Error = "InferenceSchedulerQueueFull：调度器有界队列已满，请求被拒绝（backpressure）。" +
                 "请降低上游并发或增大 MaxQueueLength。",
+        Duration = TimeSpan.Zero
+    };
+
+    private static BatchInferenceResult BuildDroppedResult() => new()
+    {
+        Outputs = Array.Empty<InferenceOutput>(),
+        Succeeded = false,
+        Error = "InferenceSchedulerDropped：调度器有界队列已满，请求已被 DropWrite 策略丢弃。" +
+                "此为预期背控行为，调用方可据此跳过而非重试。",
         Duration = TimeSpan.Zero
     };
 

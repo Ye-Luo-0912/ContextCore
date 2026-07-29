@@ -538,7 +538,9 @@ internal static class CoreExtensions
 	// 两个 batch lookup 都未注册时 hydrator 退化为 no-op，Runtime 保持旧行为（IncludeContent=true）。
 		services.AddSingleton<DefaultSelectedCandidateHydrator>(sp => new DefaultSelectedCandidateHydrator(
 			sp.GetService<IContextStoreBatchLookup>(),
-			sp.GetService<IMemoryStoreBatchLookup>()));
+			sp.GetService<IMemoryStoreBatchLookup>(),
+			// P3 Fix-5：注入 tokenizer 让 hydrate 后 TokenCost 精确重算（null 时回退 length/4 估算）
+			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ISelectedCandidateHydrator>(sp => sp.GetRequiredService<DefaultSelectedCandidateHydrator>());
 		services.AddSingleton<IContextDecisionRuntime>(sp =>
 		{

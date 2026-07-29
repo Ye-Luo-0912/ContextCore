@@ -153,15 +153,174 @@ public sealed class ConfigurableModelGateway : IModelGateway
     }
 
     /// <inheritdoc />
-    public Task<ModelChatResponse> ChatWithToolsAsync(
+    public async Task<ModelChatResponse> ChatWithToolsAsync(
         ModelChatRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        // ConfigurableModelGateway 底层适配器不原生支持 function calling，
-        // 通过降级辅助器将 messages + tools 序列化为 prompt 调用 CompleteAsync，再解析 JSON 格式的 Tool 调用。
-        // ModelArtifactId 通过 metadata 传递，路由层可据此选择特定模型（若配置了对应路由规则）。
-        return ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken);
+
+        // 路由解析：将 ModelChatRequest 转换为 ModelRequest 用于路由匹配
+        var routeRequest = new ModelRequest
+        {
+            OperationId = request.OperationId,
+            Role = request.Role,
+            Prompt = string.Empty,
+            ResponseFormat = request.ResponseFormat,
+            Metadata = request.Metadata
+        };
+        var resolution = ModelRouteResolver.Resolve(_options, routeRequest);
+        var route = resolution.Route;
+
+        if (route is null || string.IsNullOrWhiteSpace(resolution.Primary.ModelName))
+        {
+            // 无可用路由 → 降级到 fallback helper（走 CompleteAsync 可能也无路由，但保持一致语义）
+            return await ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken).ConfigureAwait(false);
+        }
+
+        var primaryModelName = resolution.Primary.ModelName;
+        var maxRetry = route.MaxRetryCount;
+
+        // 尝试原生 function calling（如果适配器支持 IChatCompletionAdapter）
+        var nativeResult = await TryNativeChatWithToolsAsync(
+            primaryModelName, request, maxRetry, fallbackUsed: false, fallbackReason: null, cancellationToken).ConfigureAwait(false);
+
+        if (nativeResult is not null && nativeResult.Succeeded)
+        {
+            return nativeResult;
+        }
+
+        // 主模型原生调用失败 → 尝试备用模型（如果配置了且支持原生）
+        if (route.EnableFallback
+            && resolution.Fallback is { ModelName: not null } fallback
+            && !string.IsNullOrWhiteSpace(fallback.ModelName))
+        {
+            var fallbackResult = await TryNativeChatWithToolsAsync(
+                fallback.ModelName, request, maxRetry, fallbackUsed: true,
+                fallbackReason: nativeResult?.ErrorMessage ?? "primary native call failed",
+                cancellationToken).ConfigureAwait(false);
+
+            if (fallbackResult is not null && fallbackResult.Succeeded)
+            {
+                return fallbackResult;
+            }
+        }
+
+        // 原生路径不可用或全部失败 → 降级到 JSON prompt fallback
+        return await ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 尝试通过 IChatCompletionAdapter 原生 function calling 调用。
+    /// 如果适配器不支持原生 function calling，返回 null（调用方应降级）。
+    /// </summary>
+    private async Task<ModelChatResponse?> TryNativeChatWithToolsAsync(
+        string modelName,
+        ModelChatRequest request,
+        int maxRetryCount,
+        bool fallbackUsed,
+        string? fallbackReason,
+        CancellationToken cancellationToken)
+    {
+        if (!_adapters.TryGetValue(modelName, out var adapter))
+        {
+            return null;
+        }
+
+        if (adapter is not IChatCompletionAdapter chatAdapter)
+        {
+            return null;
+        }
+
+        var attempts = Math.Max(1, maxRetryCount + 1);
+        ModelChatResponse? last = null;
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                last = await chatAdapter.ChatWithToolsAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                last = new ModelChatResponse
+                {
+                    OperationId = request.OperationId,
+                    Succeeded = false,
+                    ErrorMessage = ex.Message,
+                    FinishReason = ModelChatFinishReason.Error,
+                    ModelId = modelName
+                };
+            }
+
+            if (last.Succeeded)
+            {
+                return last;
+            }
+
+            // 仅对瞬态故障重试（通过 metadata 中的 failureReason 判断）
+            var failureReason = last.Metadata.TryGetValue("failureReason", out var fr) ? fr : "unknown";
+            if (!IsTransientChatFailure(failureReason))
+            {
+                return last;
+            }
+
+            if (attempt < attempts)
+            {
+                await ApplyChatRetryDelayAsync(last, attempt, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return last;
+    }
+
+    /// <summary>判断 chat 路径的失败是否为瞬态故障。</summary>
+    private static bool IsTransientChatFailure(string failureReason)
+    {
+        return failureReason is "timeout" or "rate_limit" or "server_error" or "unavailable";
+    }
+
+    /// <summary>应用 chat 路径的重试延迟。</summary>
+    private async Task ApplyChatRetryDelayAsync(ModelChatResponse last, int attempt, CancellationToken cancellationToken)
+    {
+        if (last.Metadata.TryGetValue("retryAfterMs", out var retryAfterText)
+            && int.TryParse(retryAfterText, out var retryAfterMs)
+            && retryAfterMs > 0)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(retryAfterMs), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
+        var baseMs = _resilience.RetryBaseDelay.TotalMilliseconds;
+        var maxMs = _resilience.RetryMaxDelay.TotalMilliseconds;
+        if (baseMs <= 0)
+        {
+            return;
+        }
+
+        var exponentialMs = baseMs * Math.Pow(2, attempt - 1);
+        var cappedMs = Math.Min(exponentialMs, maxMs);
+        var jitter = cappedMs * (0.75 + Random.Shared.NextDouble() * 0.5);
+        var delayMs = Math.Min(jitter, maxMs);
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 预期行为
+        }
     }
 
     private async Task<ModelAttemptResult> ExecuteWithRetryAsync(

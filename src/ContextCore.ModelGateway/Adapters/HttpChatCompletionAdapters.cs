@@ -64,7 +64,7 @@ public sealed class LocalHttpModelAdapter : HttpChatCompletionAdapterBase
 }
 
 /// <summary>基于 HTTP 的 Chat Completion 适配器基类，封装认证、请求构建、响应解析等公共逻辑。</summary>
-public abstract class HttpChatCompletionAdapterBase : IModelAdapter
+public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
@@ -204,6 +204,297 @@ public abstract class HttpChatCompletionAdapterBase : IModelAdapter
             stopwatch.Stop();
             return Failure(operationId, ex.Message, "invalid_json", latencyMs: stopwatch.ElapsedMilliseconds);
         }
+    }
+
+    /// <inheritdoc />
+    /// <summary>
+    /// 原生 function calling：向 OpenAI 兼容 /chat/completions 端点传入 tools 参数，
+    /// 直接解析模型返回的结构化 tool_calls（非 JSON prompt 降级）。
+    /// </summary>
+    public async Task<ModelChatResponse> ChatWithToolsAsync(
+        ModelChatRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var operationId = string.IsNullOrWhiteSpace(request.OperationId)
+            ? Guid.NewGuid().ToString("N")
+            : request.OperationId;
+
+        if (!_options.Enabled)
+        {
+            return ChatFailure(operationId, "模型端点已禁用。", "unavailable");
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.Endpoint))
+        {
+            return ChatFailure(operationId, "模型端点未配置。", "unavailable");
+        }
+
+        var apiKey = _apiKeyResolver.Resolve(_options);
+        if (apiKey.Required && !apiKey.Configured)
+        {
+            return ChatFailure(operationId, "API 密钥未配置。", "unavailable");
+        }
+
+        using var timeoutSource = _options.Timeout > TimeSpan.Zero
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+        if (timeoutSource is not null)
+        {
+            timeoutSource.CancelAfter(_options.Timeout);
+        }
+
+        var effectiveToken = timeoutSource?.Token ?? cancellationToken;
+        var endpoint = BuildChatCompletionsUri(_options.Endpoint);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        httpRequest.Content = new StringContent(
+            JsonSerializer.Serialize(CreateChatRequestPayload(request), JsonOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        if (!string.IsNullOrWhiteSpace(apiKey.Value))
+        {
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Value);
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            using var response = await _httpClient.SendAsync(httpRequest, effectiveToken).ConfigureAwait(false);
+            var responseText = await response.Content.ReadAsStringAsync(effectiveToken).ConfigureAwait(false);
+            stopwatch.Stop();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return ChatFailure(
+                    operationId,
+                    $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}: {Truncate(responseText, 240)}",
+                    ClassifyHttpStatus(response.StatusCode));
+            }
+
+            return ParseChatResponse(operationId, responseText, stopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+            return ChatFailure(operationId, "模型请求已超时。", "timeout");
+        }
+        catch (HttpRequestException ex)
+        {
+            stopwatch.Stop();
+            return ChatFailure(
+                operationId,
+                ex.Message,
+                ex.StatusCode is null ? "unavailable" : ClassifyHttpStatus(ex.StatusCode.Value));
+        }
+        catch (JsonException ex)
+        {
+            stopwatch.Stop();
+            return ChatFailure(operationId, ex.Message, "invalid_json");
+        }
+    }
+
+    /// <summary>构建 OpenAI 兼容的 chat completions 请求体（含 tools 参数）。</summary>
+    private object CreateChatRequestPayload(ModelChatRequest request)
+    {
+        var messages = new List<Dictionary<string, object?>>();
+        foreach (var msg in request.Messages)
+        {
+            var msgObj = new Dictionary<string, object?>
+            {
+                ["role"] = msg.Role switch
+                {
+                    ModelChatRole.System => "system",
+                    ModelChatRole.User => "user",
+                    ModelChatRole.Assistant => "assistant",
+                    ModelChatRole.Tool => "tool",
+                    _ => "user"
+                },
+                ["content"] = msg.Content
+            };
+
+            // Tool 角色消息需要 tool_call_id 关联调用与结果
+            if (msg.Role == ModelChatRole.Tool && !string.IsNullOrEmpty(msg.ToolCallId))
+            {
+                msgObj["tool_call_id"] = msg.ToolCallId;
+            }
+
+            messages.Add(msgObj);
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = ResolveModelName(_options),
+            ["messages"] = messages
+        };
+
+        // 原生 tools 参数（OpenAI function calling 格式）
+        if (request.Tools.Count > 0)
+        {
+            var tools = new List<Dictionary<string, object?>>(request.Tools.Count);
+            foreach (var tool in request.Tools)
+            {
+                object? parametersSchema;
+                try
+                {
+                    parametersSchema = JsonSerializer.Deserialize<JsonElement>(
+                        string.IsNullOrWhiteSpace(tool.ParametersJsonSchema) ? "{}" : tool.ParametersJsonSchema);
+                }
+                catch (JsonException)
+                {
+                    parametersSchema = JsonSerializer.Deserialize<JsonElement>("{}");
+                }
+
+                tools.Add(new Dictionary<string, object?>
+                {
+                    ["type"] = "function",
+                    ["function"] = new Dictionary<string, object?>
+                    {
+                        ["name"] = tool.Name,
+                        ["description"] = tool.Description ?? string.Empty,
+                        ["parameters"] = parametersSchema
+                    }
+                });
+            }
+            payload["tools"] = tools;
+        }
+
+        if (RequestExpectsJson(request.ResponseFormat) && SupportsJsonResponseFormat(_options))
+        {
+            payload["response_format"] = new Dictionary<string, string>
+            {
+                ["type"] = "json_object"
+            };
+        }
+
+        return payload;
+    }
+
+    /// <summary>解析 OpenAI 兼容 chat completions 响应（含 tool_calls）。</summary>
+    private ModelChatResponse ParseChatResponse(string operationId, string responseText, long latencyMs)
+    {
+        using var document = JsonDocument.Parse(responseText);
+        var root = document.RootElement;
+
+        var content = string.Empty;
+        var toolCalls = new List<ModelToolCall>();
+        var finishReason = ModelChatFinishReason.Stop;
+
+        if (root.TryGetProperty("choices", out var choices)
+            && choices.ValueKind == JsonValueKind.Array
+            && choices.GetArrayLength() > 0)
+        {
+            var firstChoice = choices[0];
+            if (firstChoice.TryGetProperty("message", out var message))
+            {
+                if (message.TryGetProperty("content", out var messageContent))
+                {
+                    content = ReadString(messageContent);
+                }
+
+                // 解析原生 tool_calls
+                if (message.TryGetProperty("tool_calls", out var toolCallsEl)
+                    && toolCallsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var tc in toolCallsEl.EnumerateArray())
+                    {
+                        var id = tc.TryGetProperty("id", out var idEl) ? ReadString(idEl) : $"call_{Guid.NewGuid():N}";
+                        string? name = null;
+                        string? arguments = null;
+
+                        if (tc.TryGetProperty("function", out var funcEl))
+                        {
+                            name = funcEl.TryGetProperty("name", out var nameEl) ? ReadString(nameEl) : null;
+                            arguments = funcEl.TryGetProperty("arguments", out var argsEl) ? ReadString(argsEl) : "{}";
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            toolCalls.Add(new ModelToolCall
+                            {
+                                Id = id,
+                                Name = name!,
+                                ArgumentsJson = arguments ?? "{}"
+                            });
+                        }
+                    }
+                }
+            }
+
+            // finish_reason: "tool_calls" → ToolCalls, "stop" → Stop, others → Stop (conservative)
+            if (firstChoice.TryGetProperty("finish_reason", out var finishReasonEl))
+            {
+                var fr = ReadString(finishReasonEl);
+                finishReason = fr switch
+                {
+                    "tool_calls" => ModelChatFinishReason.ToolCalls,
+                    "length" => ModelChatFinishReason.Length,
+                    "content_filter" => ModelChatFinishReason.ContentFilter,
+                    _ => ModelChatFinishReason.Stop
+                };
+            }
+        }
+
+        // 如果有 tool_calls 但 finish_reason 未标记，补设为 ToolCalls
+        if (toolCalls.Count > 0 && finishReason != ModelChatFinishReason.ToolCalls)
+        {
+            finishReason = ModelChatFinishReason.ToolCalls;
+        }
+
+        var inputTokens = 0;
+        var outputTokens = 0;
+        if (root.TryGetProperty("usage", out var usage))
+        {
+            inputTokens = ReadFirstInt(usage, "prompt_tokens", "promptTokens", "input_tokens", "inputTokens");
+            outputTokens = ReadFirstInt(usage, "completion_tokens", "completionTokens", "output_tokens", "outputTokens");
+        }
+
+        var metadata = new Dictionary<string, string>
+        {
+            ["modelName"] = Name,
+            ["provider"] = _provider,
+            ["latencyMs"] = latencyMs.ToString(),
+            ["nativeFunctionCalling"] = "true"
+        };
+
+        if (root.TryGetProperty("model", out var responseModel))
+        {
+            metadata["responseModel"] = ReadString(responseModel);
+        }
+
+        return new ModelChatResponse
+        {
+            OperationId = operationId,
+            Content = content,
+            ToolCalls = toolCalls,
+            FinishReason = finishReason,
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens,
+            Succeeded = true,
+            ModelId = Name,
+            Metadata = metadata
+        };
+    }
+
+    private ModelChatResponse ChatFailure(string operationId, string errorMessage, string failureReason)
+    {
+        return new ModelChatResponse
+        {
+            OperationId = operationId,
+            Content = string.Empty,
+            ToolCalls = Array.Empty<ModelToolCall>(),
+            FinishReason = ModelChatFinishReason.Error,
+            Succeeded = false,
+            ErrorMessage = errorMessage,
+            ModelId = Name,
+            Metadata = new Dictionary<string, string>
+            {
+                ["modelName"] = Name,
+                ["provider"] = _provider,
+                ["failureReason"] = failureReason
+            }
+        };
     }
 
     private object CreateRequestPayload(ModelRequest request)

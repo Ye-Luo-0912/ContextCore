@@ -178,7 +178,7 @@ SET state = 'Processing',
 FROM pending
 WHERE {{Table("learning_event_outbox")}}.event_id = pending.event_id
 RETURNING
-    event_id, workspace_id, collection_id, decision_id, payload::text,
+    {{Table("learning_event_outbox")}}.event_id, workspace_id, collection_id, decision_id, payload::text,
     state, retry_count, max_retry_count,
     created_at, updated_at, processed_at,
     lease_owner, lease_expires_at, lease_token, last_error, dead_letter_reason;
@@ -332,7 +332,13 @@ SELECT MAX(processed_at) FROM {Table("learning_event_outbox")}
 WHERE state = 'Acked' AND processed_at IS NOT NULL;
 """;
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return result is DBNull or null ? null : (DateTimeOffset)result;
+        return result switch
+        {
+            null or DBNull => null,
+            DateTimeOffset dto => dto,
+            DateTime dt => new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero),
+            _ => null
+        };
     }
 
     private static LearningEventOutboxRecord ReadRecord(NpgsqlDataReader reader)
@@ -347,17 +353,17 @@ WHERE state = 'Acked' AND processed_at IS NOT NULL;
             State = reader.GetString(reader.GetOrdinal("state")),
             RetryCount = reader.GetInt32(reader.GetOrdinal("retry_count")),
             MaxRetryCount = reader.GetInt32(reader.GetOrdinal("max_retry_count")),
-            CreatedAt = reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("created_at")),
-            UpdatedAt = reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("updated_at")),
+            CreatedAt = ReadTimestamp(reader, "created_at"),
+            UpdatedAt = ReadTimestamp(reader, "updated_at"),
             ProcessedAt = reader.IsDBNull(reader.GetOrdinal("processed_at"))
                 ? null
-                : reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("processed_at")),
+                : ReadTimestamp(reader, "processed_at"),
             LeaseOwner = reader.IsDBNull(reader.GetOrdinal("lease_owner"))
                 ? null
                 : reader.GetString(reader.GetOrdinal("lease_owner")),
             LeaseExpiresAt = reader.IsDBNull(reader.GetOrdinal("lease_expires_at"))
                 ? null
-                : reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("lease_expires_at")),
+                : ReadTimestamp(reader, "lease_expires_at"),
             LeaseToken = reader.IsDBNull(reader.GetOrdinal("lease_token"))
                 ? null
                 : reader.GetString(reader.GetOrdinal("lease_token")),
@@ -367,6 +373,22 @@ WHERE state = 'Acked' AND processed_at IS NOT NULL;
             DeadLetterReason = reader.IsDBNull(reader.GetOrdinal("dead_letter_reason"))
                 ? null
                 : reader.GetString(reader.GetOrdinal("dead_letter_reason"))
+        };
+    }
+
+    /// <summary>
+    /// 兼容 Npgsql 10+ 读取 timestamptz 列（可能返回 DateTime 或 DateTimeOffset）。
+    /// </summary>
+    private static DateTimeOffset ReadTimestamp(NpgsqlDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateTimeOffset dto => dto,
+            DateTime dt => new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero),
+            _ => throw new InvalidOperationException(
+                $"Cannot read timestamp column '{columnName}': unexpected type {value?.GetType().Name ?? "null"}.")
         };
     }
 
