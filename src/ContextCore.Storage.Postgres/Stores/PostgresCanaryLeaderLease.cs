@@ -119,8 +119,9 @@ RETURNING lease_token, fencing_token;
 
     /// <inheritdoc />
     /// <remarks>
-    /// 续租约（leader 心跳）：UPDATE WHERE lease_token = @token，延长 lease_expires_at。
-    /// 0 行受影响表示租约已被抢占或过期释放，返回 false；调用方应立即停止处理该 run。
+    /// 续租约（leader 心跳）：UPDATE WHERE lease_token = @token AND lease_expires_at > now()，延长 lease_expires_at。
+    /// 0 行受影响表示租约已被抢占或已过期，返回 false；调用方应立即停止处理该 run。
+    /// 过期检查防止 stale leader 续租已过期的租约（fencing 安全边界）。
     /// </remarks>
     public async ValueTask<bool> RenewAsync(
         string runId,
@@ -145,7 +146,8 @@ RETURNING lease_token, fencing_token;
 UPDATE {Table("canary_leader_leases")}
 SET lease_expires_at = @new_expires_at
 WHERE run_id = @run_id
-  AND lease_token = @token;
+  AND lease_token = @token
+  AND lease_expires_at > clock_timestamp();
 """;
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("token", leaseToken);

@@ -35,20 +35,26 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
     private readonly ConcurrentDictionary<string, List<AgentRunEvent>> _events = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, object> _locks = new(StringComparer.Ordinal);
     private readonly IAgentRunStore? _runStore;
+    private readonly IAgentCheckpointStore? _checkpointStore;
 
-    /// <summary>初始化无 Run Store 委托的实例（AppendBatchAsync 的 runStateUpdate 被忽略）。</summary>
+    /// <summary>初始化无 Run Store 委托的实例（AppendBatchAsync 的 runStateUpdate / checkpointBody 被忽略）。</summary>
     public InMemoryAgentRunEventStore()
     {
         _runStore = null;
+        _checkpointStore = null;
     }
 
     /// <summary>
     /// 初始化并注入 <see cref="IAgentRunStore"/>，使 <see cref="AppendBatchAsync"/> 能委托状态 CAS + 字段更新。
     /// </summary>
     /// <param name="runStore">Run 元数据存储（用于 AppendBatchAsync 的 runStateUpdate 委托）。</param>
-    public InMemoryAgentRunEventStore(IAgentRunStore runStore)
+    /// <param name="checkpointStore">
+    /// 3c：可选 Checkpoint Store，使 AppendBatchAsync 能委托持久化 checkpointBody（替代 Actor 中单独的 SaveAsync）。
+    /// </param>
+    public InMemoryAgentRunEventStore(IAgentRunStore runStore, IAgentCheckpointStore? checkpointStore = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
+        _checkpointStore = checkpointStore;
     }
 
     /// <inheritdoc />
@@ -105,6 +111,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
         IReadOnlyList<AgentRunEvent> events,
         AgentRunStateUpdate? runStateUpdate,
         AgentCheckpointCursor? checkpointCursor,
+        AgentCheckpoint? checkpointBody,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -115,7 +122,16 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
             return;
         }
 
-        // 有事件时校验并追加
+        // 1. checkpointBody：委托注入的 IAgentCheckpointStore 持久化（若有）。
+        //    3c：必须在事件追加之前执行——若 SaveAsync 失败，抛异常且不追加任何事件，
+        //    维持"先持久化再发事件"语义（与 Postgres 单事务原子提交对齐）。
+        //    InMemory 路径下 checkpoint 保存与事件追加非原子（无共享事务）；仅供开发/测试。
+        if (checkpointBody is not null && _checkpointStore is not null)
+        {
+            await _checkpointStore.SaveAsync(checkpointBody, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 2. 有事件时校验并追加
         if (events.Count > 0)
         {
             var first = events[0];
@@ -126,7 +142,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
             {
                 var list = _events.GetOrAdd(key, _ => new List<AgentRunEvent>());
 
-                // 1. 校验首事件 Sequence 连续性（必须 = 当前 MAX + 1）
+                // 2a. 校验首事件 Sequence 连续性（必须 = 当前 MAX + 1）
                 var expectedSequence = list.Count;
                 if (events[0].Sequence != expectedSequence)
                 {
@@ -136,7 +152,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
                         $"事件流必须从 0 开始单调递增。");
                 }
 
-                // 2. 校验首事件 PrevChainHash 链接（链头为 null；其余指向前一事件 ContentHash）
+                // 2b. 校验首事件 PrevChainHash 链接（链头为 null；其余指向前一事件 ContentHash）
                 string? expectedPrevHash = list.Count == 0
                     ? null
                     : list[^1].ContentHash;
@@ -149,7 +165,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
                         $"事件哈希链被破坏或乱序。");
                 }
 
-                // 3. 校验批量内 Sequence 连续性 + PrevChainHash 链接
+                // 2c. 校验批量内 Sequence 连续性 + PrevChainHash 链接
                 for (var i = 1; i < events.Count; i++)
                 {
                     if (events[i].Sequence != events[i - 1].Sequence + 1)
@@ -167,12 +183,12 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
                     }
                 }
 
-                // 4. 原子追加所有事件
+                // 2d. 原子追加所有事件
                 list.AddRange(events);
             }
         }
 
-        // 5. 委托 Run 状态 CAS + 字段更新到 IAgentRunStore（若注入）
+        // 3. 委托 Run 状态 CAS + 字段更新到 IAgentRunStore（若注入）
         //    注意：InMemory 路径下事件追加与状态更新非原子（无共享事务）；仅供开发/测试。
         //    P0-4：透传 leaseToken/fencingToken（InMemory store 接受但不强制校验）。
         if (runStateUpdate is not null && _runStore is not null)
@@ -189,7 +205,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
             await _runStore.UpdateAsync(runStateUpdate.RunSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
-        // 6. checkpointCursor：InMemory 实现忽略（无 agent_runs 表的 last_checkpoint_id 列）
+        // 4. checkpointCursor：InMemory 实现忽略（无 agent_runs 表的 last_checkpoint_id 列）
     }
 
     /// <inheritdoc />

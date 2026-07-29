@@ -1256,6 +1256,11 @@ public interface IAgentRunEventStore
     /// 可选：本批事件覆盖的最新 checkpoint 游标（CheckpointId + LastEventSequence）。
     /// Postgres 实现会在同一事务内 UPDATE agent_runs.last_checkpoint_id / last_checkpoint_sequence。
     /// </param>
+    /// <param name="checkpointBody">
+    /// 可选：本批要持久化的完整 checkpoint 本体。Postgres 实现会在同一事务内 INSERT 到 agent_checkpoints 表
+    /// （与事件 + 状态 CAS + 游标更新原子提交），替代原先由 <see cref="IAgentCheckpointStore.SaveAsync"/> 单独保存。
+    /// null = 本批无 checkpoint 本体（仅更新游标）。
+    /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <exception cref="InvalidOperationException">Sequence 不连续或 PrevChainHash 不匹配，或 CAS 失败。</exception>
     /// <remarks>
@@ -1263,7 +1268,7 @@ public interface IAgentRunEventStore
     /// Observation / Checkpoint 都单独 <see cref="AppendAsync"/>，Postgres 下一个 Turn 产生
     /// 8-15 次事务/网络往返。新路径在一个 Turn 内收集所有事件到缓冲，Turn 结束时一次性批量提交，
     /// 将往返次数降到 1（Postgres 单事务：BEGIN → INSERT all events → UPDATE run state (CAS) →
-    /// UPDATE checkpoint cursor → COMMIT）。
+    /// UPDATE checkpoint cursor → INSERT checkpoint body → COMMIT）。
     ///
     /// <b>幂等性</b>：调用方负责保证 <paramref name="events"/> 的 Sequence 单调递增、
     /// PrevChainHash 正确链接；实现层在事务内校验首事件 Sequence = 当前 MAX(sequence) + 1、
@@ -1273,6 +1278,7 @@ public interface IAgentRunEventStore
         IReadOnlyList<AgentRunEvent> events,
         AgentRunStateUpdate? runStateUpdate,
         AgentCheckpointCursor? checkpointCursor,
+        AgentCheckpoint? checkpointBody,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -1365,6 +1371,44 @@ public sealed record AgentCheckpointCursor
 /// </summary>
 public interface IPersistentAgentRunEventStore : IAgentRunEventStore
 {
+}
+
+/// <summary>
+/// Agent Run 事件推送通知抽象（SSE 推送通道）。
+/// </summary>
+/// <remarks>
+/// <b>引入背景</b>：SSE 端点原先以 500ms 固定轮询 <see cref="IAgentRunEventStore.ReadAsync"/>，
+/// 既增加 DB 负载又引入最高 500ms 的推送延迟。本抽象在事件追加提交后通过进程内 Channel
+/// 推送最新 sequence，让 SSE 端点在事件到达时立即唤醒读取（push），无事件时回退到轮询。
+///
+/// <b>语义</b>：
+/// <list type="bullet">
+///   <item><see cref="Notify"/>：事件批量提交事务 COMMIT 后由 Event Store 调用，写入最新 sequence。</item>
+///   <item><see cref="SubscribeAsync"/>：返回从 <paramref name="fromSequence"/> 起的 sequence 流；
+///     调用方每次迭代后应回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 拉取实际事件。
+///     若 500ms 内无新事件，迭代结束（yield）让调用方回退轮询。</item>
+/// </list>
+/// 实现应幂等且线程安全；多订阅者共享同一 (workspaceId, runId) 通道。
+/// </remarks>
+public interface IAgentRunEventNotifier
+{
+    /// <summary>
+    /// 通知指定 Run 有新事件追加（事务 COMMIT 后调用）。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="lastSequence">本批事件的最大 sequence。</param>
+    void Notify(string workspaceId, string runId, long lastSequence);
+
+    /// <summary>
+    /// 订阅指定 Run 从 <paramref name="fromSequence"/> 起的 sequence 推送流。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="fromSequence">订阅起始 sequence（仅推送 &gt;= 此值的 sequence）。</param>
+    /// <param name="cancellationToken">取消令牌（订阅者断开时取消）。</param>
+    /// <returns>异步可枚举的 sequence 流；无事件时按超时结束迭代以回退轮询。</returns>
+    IAsyncEnumerable<long> SubscribeAsync(string workspaceId, string runId, long fromSequence, CancellationToken ct);
 }
 
 // ── Durable Tool Executor（子问题 5）────────────────────────────────────────

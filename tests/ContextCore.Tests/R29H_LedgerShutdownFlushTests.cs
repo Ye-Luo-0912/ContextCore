@@ -536,7 +536,7 @@ public sealed class R29H_LedgerShutdownFlushTests
         };
 
         // 执行批量提交
-        await eventStore.AppendBatchAsync(events, runStateUpdate, checkpointCursor: null);
+        await eventStore.AppendBatchAsync(events, runStateUpdate, checkpointCursor: null, checkpointBody: null);
 
         // 断言 1：Run Store 状态已更新为 ModelCalling（CAS 委托成功）
         var updatedRun = await runStore.GetAsync(run.WorkspaceId, run.RunId);
@@ -604,7 +604,7 @@ public sealed class R29H_LedgerShutdownFlushTests
         // 断言：CAS 失败抛 InvalidOperationException
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
             async () => await eventStore.AppendBatchAsync(
-                new[] { evt }, wrongStateUpdate, checkpointCursor: null),
+                new[] { evt }, wrongStateUpdate, checkpointCursor: null, checkpointBody: null),
             "ExpectedCurrentState 不匹配时应抛 InvalidOperationException。");
 
         // 断言：Run 状态未被推进（仍为 Created）
@@ -657,7 +657,7 @@ public sealed class R29H_LedgerShutdownFlushTests
             }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await storeA.AppendBatchAsync(events, runStateUpdate: null, checkpointCursor: null, cts.Token);
+            await storeA.AppendBatchAsync(events, runStateUpdate: null, checkpointCursor: null, checkpointBody: null, cts.Token);
 
             // ── 模拟进程重启：丢弃 storeA，构造 storeB（同 DB，新实例）──
             var storeB = new PostgresAgentRunEventStore(factory, serializer, migrationRunner);
@@ -750,7 +750,7 @@ public sealed class R29H_LedgerShutdownFlushTests
             // 断言 1：CAS 失败抛 InvalidOperationException
             await Assert.ThrowsExceptionAsync<InvalidOperationException>(
                 async () => await eventStore.AppendBatchAsync(
-                    new[] { evt }, wrongStateUpdate, checkpointCursor: null, cts.Token),
+                    new[] { evt }, wrongStateUpdate, checkpointCursor: null, checkpointBody: null, cts.Token),
                 "Postgres CAS 失败应抛 InvalidOperationException。");
 
             // 断言 2：事务回滚 — 事件未被持久化
@@ -848,7 +848,7 @@ public sealed class R29H_LedgerShutdownFlushTests
             };
 
             // 执行三件套批量提交
-            await eventStore.AppendBatchAsync(events, runStateUpdate, checkpointCursor, cts.Token);
+            await eventStore.AppendBatchAsync(events, runStateUpdate, checkpointCursor, checkpointBody: null, cts.Token);
 
             // 断言 1：事件已持久化（2 个）
             var persisted = await eventStore.ReadAsync(workspaceId, runId, 0, 100, cts.Token);
@@ -895,7 +895,8 @@ public sealed class R29H_LedgerShutdownFlushTests
         await eventStore.AppendBatchAsync(
             Array.Empty<AgentRunEvent>(),
             runStateUpdate: null,
-            checkpointCursor: null);
+            checkpointCursor: null,
+            checkpointBody: null);
 
         // 断言：无事件被持久化
         var lastSeq = await eventStore.GetLastSequenceAsync("ws-empty", "run-empty");

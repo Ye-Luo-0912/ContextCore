@@ -279,6 +279,7 @@ internal static class AgentExecutionEndpoints
             IAgentRunStore runStore,
             IAgentRunEventStore eventStore,
             IWorkspaceContextAccessor workspaceContextAccessor,
+            [FromServices] IAgentRunEventNotifier? eventNotifier,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -350,14 +351,36 @@ internal static class AgentExecutionEndpoints
                     break;
                 }
 
-                // 等待下一轮轮询（500ms 间隔；客户端断开时 Task.Delay 抛 OperationCanceledException）
-                try
+                // 2d：等待下一轮事件。优先使用 push 通道（IAgentRunEventNotifier），
+                // 事件到达时立即唤醒读取；500ms 内无事件时 SubscribeAsync 结束迭代，回退到 ReadAsync 轮询。
+                // 未注入 notifier 时回退到原 500ms 固定轮询。
+                if (eventNotifier is not null)
                 {
-                    await Task.Delay(500, streamCt).ConfigureAwait(false);
+                    try
+                    {
+                        // fromSequence = lastEventSequence + 1：仅关注未发送的新事件。
+                        // 收到首个 push 通知即 break，回到循环顶部走 ReadAsync 拉取实际事件并推送。
+                        await foreach (var _ in eventNotifier.SubscribeAsync(
+                            workspaceId, id, lastEventSequence + 1, streamCt).ConfigureAwait(false))
+                        {
+                            break;
+                        }
+                    }
+                    catch (OperationCanceledException) when (streamCt.IsCancellationRequested)
+                    {
+                        break;
+                    }
                 }
-                catch (OperationCanceledException) when (streamCt.IsCancellationRequested)
+                else
                 {
-                    break;
+                    try
+                    {
+                        await Task.Delay(500, streamCt).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (streamCt.IsCancellationRequested)
+                    {
+                        break;
+                    }
                 }
             }
 

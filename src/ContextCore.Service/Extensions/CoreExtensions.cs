@@ -784,6 +784,11 @@ internal static class CoreExtensions
 		// 子问题 8：Agent Run 事件流 Store（进程内默认实现；Postgres provider 可覆盖）
 		services.TryAddSingleton<IAgentRunEventStore, InMemoryAgentRunEventStore>();
 
+		// 2e：Agent Run 事件推送通知器（SSE push 通道）。
+		// 进程内 Channel 实现：Event Store 事务 COMMIT 后 Notify → SSE 端点 SubscribeAsync 立即唤醒读取。
+		// 无事件时 500ms 超时回退轮询；多实例部署时跨实例 SSE 客户端依赖轮询兜底。
+		services.TryAddSingleton<IAgentRunEventNotifier, ChannelAgentRunEventNotifier>();
+
 		// 子问题 8：循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
 		services.TryAddSingleton<IAgentLoopPolicy, DefaultAgentLoopPolicy>();
 		services.TryAddSingleton<IAgentToolCallValidator, DefaultAgentToolCallValidator>();
@@ -806,6 +811,10 @@ internal static class CoreExtensions
 		// 子问题 8：IToolDispatchJournal（进程内默认实现；Postgres provider 可覆盖）。
 		// 注册为 singleton 让 DefaultDurableToolExecutor 与 DefaultAgentKernel 共享同一 journal 实例。
 		services.TryAddSingleton<IToolDispatchJournal, InMemoryToolDispatchJournal>();
+
+		// P0-3：IDurableToolResultStore（进程内默认实现；Postgres provider 可覆盖）。
+		// 让 DefaultDurableToolExecutor 在 Committed 时缓存结果，供后续 PrepareAsync 查询。
+		services.TryAddSingleton<IDurableToolResultStore, InMemoryDurableToolResultStore>();
 
 		// 子问题 9：IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
 		services.TryAddSingleton<IAgentRunLease, InMemoryAgentRunLease>();

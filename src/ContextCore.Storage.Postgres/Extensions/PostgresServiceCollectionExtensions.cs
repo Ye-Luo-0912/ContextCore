@@ -166,6 +166,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
         services.AddSingleton<IPersistentToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
 
+        // P0-3：Durable Tool Result 缓存持久化（PostgreSQL）。
+        // 让 DefaultDurableToolExecutor 在 Journal 已 Committed/ResultDelivered 时从持久化缓存返回结果，
+        // 防止 HA 崩溃恢复时已执行的外部副作用结果丢失（被迫重新 Dispatch）。
+        services.AddSingleton<PostgresDurableToolResultStore>();
+        services.AddSingleton<IDurableToolResultStore>(sp => sp.GetRequiredService<PostgresDurableToolResultStore>());
+
         // R29 WP-B-2：Kernel Result Outbox 持久化（PostgreSQL）。
         // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下未投递的 AgentKernelResult 可跨进程持久化与崩溃恢复重放。
         // 注册为 IKernelResultOutbox 让 DefaultAgentKernel 的 nullable 参数自动注入；
@@ -260,7 +266,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunStore>();
         services.AddSingleton<IAgentRunStore>(sp => sp.GetRequiredService<PostgresAgentRunStore>());
         services.AddSingleton<IPersistentAgentRunStore>(sp => sp.GetRequiredService<PostgresAgentRunStore>());
-        services.AddSingleton<PostgresAgentRunEventStore>();
+        // 2c：注入可选 IAgentRunEventNotifier（SSE push 通道）；未注册时为 null，回退 500ms 轮询。
+        services.AddSingleton<PostgresAgentRunEventStore>(sp => new PostgresAgentRunEventStore(
+            sp.GetRequiredService<PostgresConnectionFactory>(),
+            sp.GetRequiredService<PostgresJsonSerializer>(),
+            sp.GetRequiredService<PostgresMigrationRunner>(),
+            sp.GetService<IAgentRunEventNotifier>()));
         services.AddSingleton<IAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
         services.AddSingleton<IPersistentAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
 

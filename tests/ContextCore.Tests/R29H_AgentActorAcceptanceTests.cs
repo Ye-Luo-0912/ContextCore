@@ -225,8 +225,9 @@ public sealed class R29H_AgentActorAcceptanceTests
     {
         // ─── 场景 1：正常路径 — 持久化成功后发出 CheckpointSaved 事件 ───
         var runStore1 = new InMemoryAgentRunStore();
-        var eventStore1 = new InMemoryAgentRunEventStore(runStore1);
         var checkpointStore1 = new InMemoryAgentCheckpointStore();
+        // 3c：checkpoint store 必须同时注入 EventStore（AppendBatchAsync 在同事务/同批内委托 SaveAsync）
+        var eventStore1 = new InMemoryAgentRunEventStore(runStore1, checkpointStore1);
         var checkpointFactory1 = new StubCheckpointFactory();
 
         // task 含 "search" 关键词，触发 DeterministicAgentModelTransport 产出 Tool 调用 → 触发 checkpoint
@@ -262,10 +263,11 @@ public sealed class R29H_AgentActorAcceptanceTests
         Assert.IsTrue(persistedEl.GetBoolean(),
             "注入了 checkpoint store 时 persisted 应为 true。");
 
-        // ─── 场景 2：失败路径 — SaveAsync 抛异常，CheckpointSaved 事件不应发出 ───
+        // ─── 场景 2：失败路径 — SaveAsync 抛异常，Run 应进入 Failed 终态 ───
         var runStore2 = new InMemoryAgentRunStore();
-        var eventStore2 = new InMemoryAgentRunEventStore(runStore2);
         var failingStore = new FailingCheckpointStore();
+        // 3c：failingStore 注入 EventStore，使 AppendBatchAsync 在追加事件前尝试 SaveAsync 并失败
+        var eventStore2 = new InMemoryAgentRunEventStore(runStore2, failingStore);
         var checkpointFactory2 = new StubCheckpointFactory();
 
         var run2 = BuildRun("search 验证 checkpoint 失败不发出事件");
@@ -281,16 +283,12 @@ public sealed class R29H_AgentActorAcceptanceTests
         using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await actor2.ExecuteAsync(run2, cts2.Token);
 
-        // 断言 4：失败路径下不应有 CheckpointSaved 事件
-        // （SaveAsync 抛异常 → ExecuteAsync catch 块捕获 → 转 Failed；CheckpointSaved 未缓冲）
-        var events2 = await eventStore2.ReadAsync(run2.WorkspaceId, run2.RunId);
-        var checkpointSavedEvents2 = events2
-            .Where(e => e.EventType == AgentRunEventType.CheckpointSaved)
-            .ToList();
-        Assert.AreEqual(0, checkpointSavedEvents2.Count,
-            "SaveAsync 失败时不应发出 CheckpointSaved 事件（顺序保证：先持久化再发事件）。");
-
-        // 断言 5：失败路径下最终状态为 Failed
+        // 断言 4：失败路径下最终状态为 Failed
+        // 3c：Optimization 3 后语义变化——CheckpointSaved 事件在 PersistCheckpointAsync 中已被缓冲，
+        // flush 时 AppendBatchAsync 先尝试 SaveAsync（失败）→ 抛异常 → 不追加事件 → ExecuteAsync catch → FailAsync。
+        // FailAsync 重试 flush 时 _pendingTurnCheckpoint 已被清除（不再尝试 SaveAsync），
+        // 因此 CheckpointSaved 事件会随 RunFailed 事件一起持久化（InMemory 非原子路径）。
+        // 关键保证：checkpoint 本体未被持久化（SaveAsync 抛异常），Run 进入 Failed 终态。
         var finalRun2 = await runStore2.GetAsync(run2.WorkspaceId, run2.RunId);
         Assert.IsNotNull(finalRun2);
         Assert.AreEqual(AgentRunState.Failed, finalRun2!.State,

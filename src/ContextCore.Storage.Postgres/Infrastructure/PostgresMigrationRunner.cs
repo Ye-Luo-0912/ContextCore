@@ -108,8 +108,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// Perf-5：v45 → v46，context_items 启用 pg_trgm 扩展；search_vector 改为 CJK 预分词
     ///   （regexp_replace 在每个 CJK 字符后插入空格，simple 配置即可按字符切分）；
     ///   新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
+    /// P0-3：v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
+    ///   让 HA 崩溃恢复时已 Committed/ResultDelivered 的 tool 结果可跨进程读取，防止外部副作用结果丢失）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v46";
+    public const string SchemaVersion = "cc-schema-v47";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -184,6 +186,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "conflict_sets",
         // R29 WP-B-1：Tool Dispatch Journal 持久化（HA 崩溃恢复 exactly-once）
         "tool_dispatch_journal_entries",
+        // P0-3：Durable Tool Result 缓存持久化（已 Committed/ResultDelivered 的 tool 结果跨进程读取）
+        "tool_dispatch_results",
         // R29 WP-B-2：Kernel Result Outbox 持久化（崩溃恢复结果重放）
         "kernel_result_outbox",
         // R29 WP-B-4：Durable Transport 持久化（PostgreSQL-backed Channel，跨进程指令/结果传输）
@@ -350,6 +354,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R29 WP-B-1：Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
         ("tool_dispatch_journal_entries", "state"),
         ("tool_dispatch_journal_entries", "idempotency"),
+        // P0-3：Durable Tool Result 缓存索引（按 request_id 查同源调用结果）
+        ("tool_dispatch_results", "request"),
         // R29 WP-B-2 / P0-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史 + 租约模型 pending/expired）
         ("kernel_result_outbox", "state"),
         ("kernel_result_outbox", "instruction"),
@@ -507,6 +513,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var conflictSets = Infrastructure.PostgresNames.Table(options, "conflict_sets");
         // R29 WP-B-1：Tool Dispatch Journal 持久化表
         var toolDispatchJournalEntries = Infrastructure.PostgresNames.Table(options, "tool_dispatch_journal_entries");
+        // P0-3：Durable Tool Result 缓存持久化表
+        var toolDispatchResults = Infrastructure.PostgresNames.Table(options, "tool_dispatch_results");
         // R29 WP-B-2：Kernel Result Outbox 持久化表
         var kernelResultOutbox = Infrastructure.PostgresNames.Table(options, "kernel_result_outbox");
         // R29 WP-B-4：Durable Transport 持久化表（inbox/outbox）
@@ -1764,6 +1772,26 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_di
 --   partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
 DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")};
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- P0-3：Durable Tool Result 缓存持久化表（HA 崩溃恢复 exactly-once 结果读取）
+-- tool_dispatch_results: tool_call_id 主键 — 每个 tool 调用的结果缓存一条行
+-- result jsonb 存储完整 DurableToolResult（供 GetAsync 反序列化）；
+-- succeeded / side_effect / request_id 为反规范化列，供 SQL 查询/对账。
+CREATE TABLE IF NOT EXISTS {toolDispatchResults} (
+    tool_call_id text NOT NULL,
+    request_id text NOT NULL,
+    idempotency_key text,
+    side_effect text NOT NULL DEFAULT 'None',
+    external_operation_id text,
+    result jsonb,
+    succeeded boolean NOT NULL,
+    error text,
+    duration_ms bigint NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tool_call_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "request")} ON {toolDispatchResults} (request_id);
 
 -- R29 WP-B-2：Kernel Result Outbox 持久化表（崩溃恢复结果重放）
 -- kernel_result_outbox: outbox_id 主键 — 每个未投递的 AgentKernelResult 一条行

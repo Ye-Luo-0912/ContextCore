@@ -332,8 +332,8 @@ public sealed class R29H_AgentRunFullLoopTests
     public async Task FullLoop_WithToolDispatch_ObservesAndCompletes()
     {
         var runStore = new InMemoryAgentRunStore();
-        var eventStore = new InMemoryAgentRunEventStore(runStore);
         var checkpointStore = new InMemoryAgentCheckpointStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore, checkpointStore);
         var checkpointFactory = new StubCheckpointFactory();
 
         // task 含 "search" 关键词触发 Tool 调用

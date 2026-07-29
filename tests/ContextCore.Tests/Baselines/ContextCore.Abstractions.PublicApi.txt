@@ -1748,7 +1748,7 @@ M:ContextCore.Abstractions.IAgentModelTransport.CallAsync(System.String, System.
 M:ContextCore.Abstractions.IAgentModelTransport.CallAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentObservationSource.ObserveAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.AppendAsync(ContextCore.Abstractions.AgentRunEvent, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IAgentRunEventStore.AppendBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.AgentRunEvent>, ContextCore.Abstractions.AgentRunStateUpdate, ContextCore.Abstractions.AgentCheckpointCursor, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRunEventStore.AppendBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.AgentRunEvent>, ContextCore.Abstractions.AgentRunStateUpdate, ContextCore.Abstractions.AgentCheckpointCursor, ContextCore.Abstractions.AgentCheckpoint, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.GetLastSequenceAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.ReadAsync(System.String, System.String, System.Int32, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunStore.CreateAsync(ContextCore.Abstractions.AgentRun, System.Threading.CancellationToken)

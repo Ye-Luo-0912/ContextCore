@@ -25,6 +25,8 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </remarks>
 public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEventStore, IPersistentAgentRunEventStore
 {
+    private readonly IAgentRunEventNotifier? _notifier;
+
     /// <summary>初始化 Postgres 持久化 Agent Run Event Store。</summary>
     public PostgresAgentRunEventStore(
         PostgresConnectionFactory connectionFactory,
@@ -32,6 +34,21 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
         PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
     {
+    }
+
+    /// <summary>
+    /// 初始化并注入可选的事件推送通知器。
+    /// 注入后 <see cref="AppendBatchAsync"/> 在事务 COMMIT 后调用 <see cref="IAgentRunEventNotifier.Notify"/>，
+    /// 让 SSE 端点在事件到达时立即唤醒读取（push），无事件时回退到 500ms 轮询。
+    /// </summary>
+    public PostgresAgentRunEventStore(
+        PostgresConnectionFactory connectionFactory,
+        PostgresJsonSerializer serializer,
+        PostgresMigrationRunner migrationRunner,
+        IAgentRunEventNotifier? notifier)
+        : base(connectionFactory, serializer, migrationRunner)
+    {
+        _notifier = notifier;
     }
 
     /// <inheritdoc />
@@ -197,6 +214,7 @@ LIMIT 1;
         IReadOnlyList<AgentRunEvent> events,
         AgentRunStateUpdate? runStateUpdate,
         AgentCheckpointCursor? checkpointCursor,
+        AgentCheckpoint? checkpointBody,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -461,7 +479,52 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
                 await cursorCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            // 5. Checkpoint 本体持久化（若提供）— 与事件 + 状态 CAS + 游标更新同事务原子提交。
+            //    幂等 upsert（ON CONFLICT DO UPDATE），SQL 与 PostgresAgentCheckpointStore.SaveAsync 对齐。
+            if (checkpointBody is not null)
+            {
+                await using var checkpointCommand = connection.CreateCommand();
+                checkpointCommand.Transaction = transaction;
+                checkpointCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                checkpointCommand.CommandText = $"""
+INSERT INTO {Table("agent_checkpoints")} (
+    workspace_id, collection_id, session_value, runtime_kind, checkpoint_id,
+    turn_id, snapshot_id, created_at, state_json, data)
+VALUES (
+    @workspace_id, @collection_id, @session_value, @runtime_kind, @checkpoint_id,
+    @turn_id, @snapshot_id, @created_at, @state_json, @data)
+ON CONFLICT (workspace_id, checkpoint_id) DO UPDATE SET
+    collection_id = EXCLUDED.collection_id,
+    session_value = EXCLUDED.session_value,
+    runtime_kind = EXCLUDED.runtime_kind,
+    turn_id = EXCLUDED.turn_id,
+    snapshot_id = EXCLUDED.snapshot_id,
+    created_at = EXCLUDED.created_at,
+    state_json = EXCLUDED.state_json,
+    data = EXCLUDED.data;
+""";
+                checkpointCommand.Parameters.AddWithValue("workspace_id", checkpointBody.Session.WorkspaceId);
+                checkpointCommand.Parameters.AddWithValue("collection_id", (object?)checkpointBody.Session.CollectionId ?? DBNull.Value);
+                checkpointCommand.Parameters.AddWithValue("session_value", checkpointBody.Session.Value);
+                checkpointCommand.Parameters.AddWithValue("runtime_kind", checkpointBody.Session.RuntimeKind.ToString());
+                checkpointCommand.Parameters.AddWithValue("checkpoint_id", checkpointBody.CheckpointId);
+                checkpointCommand.Parameters.AddWithValue("turn_id", (object?)checkpointBody.TurnId ?? DBNull.Value);
+                checkpointCommand.Parameters.AddWithValue("snapshot_id", (object?)checkpointBody.SnapshotId ?? DBNull.Value);
+                checkpointCommand.Parameters.AddWithValue("created_at", checkpointBody.CreatedAt);
+                checkpointCommand.Parameters.AddWithValue("state_json", checkpointBody.StateJson ?? string.Empty);
+                AddJson(checkpointCommand, "data", checkpointBody);
+                await checkpointCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            // 2e：事务 COMMIT 后推送通知，让 SSE 端点立即唤醒读取（push），无事件时回退 500ms 轮询。
+            // 仅在注入了 notifier 且本批有事件时通知；lastSequence = 本批最大 sequence。
+            if (_notifier is not null && events.Count > 0)
+            {
+                var first = events[0];
+                _notifier.Notify(first.WorkspaceId, first.RunId, events[^1].Sequence);
+            }
         }
         catch
         {

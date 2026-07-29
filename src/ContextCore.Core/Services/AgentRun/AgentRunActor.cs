@@ -1317,27 +1317,17 @@ public sealed class AgentRunActor
             var checkpoint = await _checkpointFactory.CreateCheckpointAsync(
                 checkpointId, state.Run.SessionId, state.Run.WorkspaceId, cancellationToken).ConfigureAwait(false);
 
-            // P0-2 Bug 4 修复：先 SaveAsync 持久化 checkpoint（若有 Store 注入）
-            // SaveAsync 失败时不记录 CheckpointSaved 事件，转为 Failed 状态
-            if (_checkpointStore is not null)
-            {
-                try
-                {
-                    await _checkpointStore.SaveAsync(checkpoint, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    // SaveAsync 失败 → 不记录 CheckpointSaved 事件，转为 Failed 状态
-                    await FailAsync(state, $"Checkpoint SaveAsync 失败：{ex.Message}", CancellationToken.None).ConfigureAwait(false);
-                    // 返回 Failed 状态（FailAsync 已 flush，主循环将检测到终态并退出）
-                    return state with { Run = state.Run with { State = AgentRunState.Failed } };
-                }
-            }
+            // 3c：checkpoint 本体不再单独 SaveAsync，而是缓冲到 _pendingTurnCheckpoint，
+            // 随 Turn 结束的 AppendBatchAsync 在同一事务内持久化（Postgres：INSERT agent_checkpoints；
+            // InMemory：委托注入的 IAgentCheckpointStore）。事件与 checkpoint 原子提交，顺序保证更强。
+            //
+            // P0-2 Bug 4 修复语义保留：若批量提交（含 checkpoint INSERT）失败，CheckpointSaved 事件
+            // 也在同一批中回滚，不会出现"事件已记录但 checkpoint 未保存"的不一致。
 
             // P0-2 重构：更新 state.LastCheckpoint
             state = state with { LastCheckpoint = checkpoint };
 
-            // G4：记录 Turn 内最新 checkpoint，用于批量提交时的 checkpoint cursor
+            // G4：记录 Turn 内最新 checkpoint，用于批量提交时的 checkpoint cursor + checkpoint 本体
             _pendingTurnCheckpoint = checkpoint;
 
             // 保存成功后才缓冲 CheckpointSaved 事件（顺序保证）
@@ -1483,8 +1473,20 @@ public sealed class AgentRunActor
             };
         }
 
-        await _eventStore.AppendBatchAsync(
-            _pendingTurnEvents, runStateUpdate, checkpointCursor, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _eventStore.AppendBatchAsync(
+                _pendingTurnEvents, runStateUpdate, checkpointCursor, _pendingTurnCheckpoint, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 3c：flush 失败时清除 checkpoint 本体，避免 FailAsync/TryTransitionToCancelledAsync
+            // 重试时再次尝试保存已失败的 checkpoint（导致终态 flush 也失败、事件丢失）。
+            // checkpoint 本体保存失败不应阻止事件流（含 RunFailed/RunCancelled）的终态持久化。
+            // 注意：CheckpointSaved 事件仍在 _pendingTurnEvents 中，将在重试时被持久化。
+            _pendingTurnCheckpoint = null;
+            throw;
+        }
 
         _pendingTurnEvents.Clear();
         _turnStartState = run.State;
