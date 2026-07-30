@@ -953,6 +953,16 @@ public sealed class ModelActivationManager : IModelActivationManager
             return null;
         }
 
+        // 非 float 输入模型（如 embedding 模型的 int64 input_ids）：跳过 float Golden Probe。
+        // Golden Probe 构造的是 float warmup batch，对 int64 输入模型必然触发类型不匹配错误。
+        // 跳过 float probe 让激活成功，真实推理时由 ONNX Runtime 优雅报告类型不匹配（Succeeded=false）。
+        // 基本 WarmupAsync 会失败但被静默吞掉（重置 _warmedUp=0），不影响激活与后续推理的优雅降级。
+        if (!engine.SupportsFloatInput)
+        {
+            await engine.WarmupAsync(cancellationToken).ConfigureAwait(false);
+            return null;
+        }
+
         // 构造 1 行 × FeatureCount 列全 0 的 warmup batch。
         var featureNames = new string[featureCount];
         for (var j = 0; j < featureCount; j++)

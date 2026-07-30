@@ -146,6 +146,13 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine
     /// <inheritdoc />
     public string CalibrationVersion => _calibrationVersion;
 
+    /// <summary>
+    /// 模型主输入张量是否接受 float 数据类型（委托给 <see cref="IOnnxInferenceSession.SupportsFloatInput"/>）。
+    /// Golden Probe 据此决定是否执行 float warmup 验证：非 float 输入模型（如 int64 input_ids 的 embedding 模型）
+    /// 跳过 float probe，避免因输入类型不匹配导致激活失败。
+    /// </summary>
+    internal bool SupportsFloatInput => _session.SupportsFloatInput;
+
     /// <inheritdoc />
     public async ValueTask<BatchInferenceResult> InferAsync(
         BatchInferenceRequest request,
@@ -190,6 +197,20 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine
             };
         }
 
+        // 取消检查：预取消或 warmup 期间被取消的令牌应优雅返回失败结果，
+        // 而非让下游 _inferenceSlots.WaitAsync(ct) 抛 TaskCanceledException。
+        // 这覆盖两种场景：(1) 调用方预取消；(2) InferAsync 的 linkedCts 在 warmup 期间超时触发。
+        if (ct.IsCancellationRequested)
+        {
+            return new BatchInferenceResult
+            {
+                Outputs = Array.Empty<InferenceOutput>(),
+                Succeeded = false,
+                Error = "推理被取消。",
+                Duration = TimeSpan.Zero
+            };
+        }
+
         // P3 步骤4：lazy warmup（若 EnableWarmup=true 且尚未 warmup）。
         // 子问题2修复：warmup 失败时 EnsureWarmedUpAsync 内部已重置 _warmedUp=0，允许后续重试。
         if (_options.EnableWarmup)
@@ -215,6 +236,20 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine
         if (_options.MaxBatchSize > 0 && batch.RowCount > _options.MaxBatchSize)
         {
             return await InferBatchWithSplittingAsync(batch, ct).ConfigureAwait(false);
+        }
+
+        // warmup 可能耗时较长（首次 graph optimization），期间 InferAsync 的 linkedCts 可能因
+        // request.TimeoutMs 到期而被触发；进入槽位前再次校验，避免 _inferenceSlots.WaitAsync(ct)
+        // 抛 TaskCanceledException（调用方期望优雅的失败结果而非异常）。
+        if (ct.IsCancellationRequested)
+        {
+            return new BatchInferenceResult
+            {
+                Outputs = Array.Empty<InferenceOutput>(),
+                Succeeded = false,
+                Error = "推理被取消。",
+                Duration = TimeSpan.Zero
+            };
         }
 
         // 子问题4：经并发槽位 + 超时 watchdog 路径执行单次推理。

@@ -136,7 +136,7 @@ public sealed class P0_7_ModelActivationManagerTests
     {
         // P0-8：校准服务注入后，激活时验证校准参数
         var calibration = new PlattCalibrationService();
-        calibration.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelArtifactId);
+        calibration.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelArtifactId, version: CalibrationVersion);
 
         var manager = BuildManagerWithMockSession(out _, calibrationService: calibration);
         var options = BuildOptions();
@@ -175,7 +175,7 @@ public sealed class P0_7_ModelActivationManagerTests
     {
         // P0-8：校准参数非法（Platt A=0）→ 激活被拒绝
         var calibration = new PlattCalibrationService();
-        calibration.RegisterPlattParameters(a: 0.0, b: 0.0, modelName: ModelArtifactId); // A=0 → Error
+        calibration.RegisterPlattParameters(a: 0.0, b: 0.0, modelName: ModelArtifactId, version: CalibrationVersion); // A=0 → Error
 
         var manager = BuildManagerWithMockSession(out _, calibrationService: calibration);
         var options = BuildOptions();
@@ -223,8 +223,9 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
+        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 schema 验证步骤
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration(modelName: "bad-schema-model"));
 
         var options = BuildOptions();
         var result = await manager.ActivateAsync("bad-schema-model", options);
@@ -274,7 +275,9 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        var manager = new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback);
+        // P0-8 fail-closed：注册与 ModelName 匹配的校准参数（descriptor 用 MakeDescriptor，
+        // 其 ModelArtifactId 各不相同但 ModelName 统一为 p0-7-test-model）
+        var manager = new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration(modelName: ModelName));
         var options = BuildOptions();
 
         var result = await manager.ActivateLatestAsync(ModelName, options);
@@ -352,9 +355,13 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
+        // P0-8 fail-closed 要求 calibrationService 非空且版本精确匹配；
+        // 未显式传入时使用与 descriptor.CalibrationVersion 一致的有效参数。
+        var cal = calibrationService ?? BuildValidCalibration();
+
         return new ModelActivationManager(
             registry, calValidator, featureRegistry, factory, fallback,
-            calibrationService);
+            cal);
     }
 
     private static ModelActivationManager BuildManagerWithFailingFactory()
@@ -365,7 +372,20 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        return new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback);
+        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 session 创建步骤
+        return new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration());
+    }
+
+    /// <summary>
+    /// 构造与 descriptor.CalibrationVersion 精确匹配的有效 Platt 校准参数（A=1.0, B=0.0）。
+    /// P0-8 fail-closed 要求 ICalibrationService 非空且版本精确匹配才能通过校准验证。
+    /// </summary>
+    /// <param name="modelName">注册校准参数的目标模型名（默认 <see cref="ModelArtifactId"/>）。</param>
+    private static PlattCalibrationService BuildValidCalibration(string? modelName = null)
+    {
+        var cal = new PlattCalibrationService();
+        cal.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: modelName ?? ModelArtifactId, version: CalibrationVersion);
+        return cal;
     }
 
     private static InMemoryModelArtifactRegistry BuildRegistry()

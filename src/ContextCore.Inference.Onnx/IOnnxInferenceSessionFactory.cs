@@ -47,6 +47,17 @@ public interface IOnnxInferenceSession : IAsyncDisposable
     string ContentHash { get; }
 
     /// <summary>
+    /// 模型的主输入张量是否接受 float 数据类型。
+    /// <para>
+    /// score 模型（float 特征输入）返回 true；embedding 模型（int64 input_ids）返回 false。
+    /// Golden Probe 据此决定是否执行 float warmup batch 验证——非 float 输入模型跳过 float probe，
+    /// 改为基本 warmup（触发 graph optimization），让激活成功，真实推理时再由 ONNX Runtime 优雅报告类型不匹配。
+    /// </para>
+    /// 默认实现返回 true（向后兼容：score 模型与 mock session）。
+    /// </summary>
+    bool SupportsFloatInput => true;
+
+    /// <summary>
     /// 执行一批特征向量的推理。
     /// 直接消费 <see cref="FeatureBatch"/> 的连续 float 内存，避免装箱与字典查找。
     /// </summary>

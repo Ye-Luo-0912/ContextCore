@@ -79,7 +79,7 @@ public sealed class P0_6_RealOnnxFileE2ETests
         // 元数据来自 options fallback（无 descriptor 时）
         Assert.AreEqual(options.ModelArtifactId, session.ModelArtifactId);
         Assert.AreEqual(options.ModelVersion, session.ModelVersion);
-        Assert.AreEqual(options.ContentHash, session.ContentHash);
+        Assert.AreEqual(ComputeSha256(modelPath), session.ContentHash);
 
         await session.DisposeAsync();
     }
@@ -168,7 +168,7 @@ public sealed class P0_6_RealOnnxFileE2ETests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration());
 
         // 激活前：使用 fallback（DeterministicReplay）
         Assert.AreEqual(InferenceEngineKind.DeterministicReplay, manager.Kind);
@@ -217,7 +217,7 @@ public sealed class P0_6_RealOnnxFileE2ETests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration());
 
         var options = BuildEmbeddingOptions(modelPath);
         var activateResult = await manager.ActivateAsync(descriptor.ModelArtifactId, options);
@@ -275,7 +275,7 @@ public sealed class P0_6_RealOnnxFileE2ETests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration());
 
         var options = BuildEmbeddingOptions(modelPath);
         var result = await manager.ActivateLatestAsync(ModelName, options);
@@ -306,7 +306,7 @@ public sealed class P0_6_RealOnnxFileE2ETests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration());
 
         var options = BuildEmbeddingOptions(modelPath);
         var result = await manager.ActivateAsync(descriptor.ModelArtifactId, options);
@@ -396,6 +396,13 @@ public sealed class P0_6_RealOnnxFileE2ETests
         using var stream = File.OpenRead(path);
         var hashBytes = SHA256.HashData(stream);
         return "sha256:" + Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    private static PlattCalibrationService BuildValidCalibration()
+    {
+        var cal = new PlattCalibrationService();
+        cal.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelName, version: CalibrationVersion);
+        return cal;
     }
 
     private static string FindRepoRoot()

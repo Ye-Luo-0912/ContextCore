@@ -287,6 +287,24 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
 
     public string ContentHash { get; }
 
+    /// <summary>
+    /// 检查模型主输入张量是否接受 float 数据类型。
+    /// 通过 <see cref="InferenceSession.InputMetadata"/> 读取 InputTensorName 对应的元素类型：
+    /// float → true（score 模型）；int64/其他 → false（embedding 模型，input_ids 为 int64）。
+    /// </summary>
+    public bool SupportsFloatInput
+    {
+        get
+        {
+            // 防御性：InputTensorName 已在 ValidateTensorNames 中校验存在，此处安全读取。
+            if (_session.InputMetadata.TryGetValue(_options.InputTensorName, out var metadata))
+            {
+                return metadata.ElementDataType == TensorElementType.Float;
+            }
+            return true; // 无法读取时默认 true（向后兼容）
+        }
+    }
+
     /// <inheritdoc />
     public ValueTask<BatchInferenceResult> InferBatchAsync(
         FeatureBatch batch,

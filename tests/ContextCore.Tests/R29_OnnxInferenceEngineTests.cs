@@ -130,7 +130,8 @@ public sealed class R29_OnnxInferenceEngineTests
         var options = new OnnxInferenceEngineOptions
         {
             InputTensorName = "input",
-            ScoreOutputName = "logits"
+            ScoreOutputName = "logits",
+            EnableWarmup = false // 关闭 warmup 以独立验证"单次推理只调用 session 一次"
         };
         var engine = new OnnxInferenceEngine(session, options);
 

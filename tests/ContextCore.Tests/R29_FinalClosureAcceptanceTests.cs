@@ -403,8 +403,12 @@ public sealed class WorkflowD_ModelActivationAcceptanceTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
+        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 schema 验证步骤
+        var cal = new PlattCalibrationService();
+        cal.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: "bad-schema-model", version: CalibrationVersion);
+
         var manager = new ModelActivationManager(
-            registry, calValidator, featureRegistry, factory, fallback);
+            registry, calValidator, featureRegistry, factory, fallback, cal);
 
         var result = await manager.ActivateAsync("bad-schema-model", BuildOptions());
 
@@ -482,7 +486,10 @@ public sealed class WorkflowD_ModelActivationAcceptanceTests
         var factory = new FailingSessionFactory();
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
-        return new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback);
+        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 session 创建步骤
+        var cal = new PlattCalibrationService();
+        cal.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelArtifactId, version: CalibrationVersion);
+        return new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, cal);
     }
 
     private static InMemoryModelArtifactRegistry BuildRegistry()
