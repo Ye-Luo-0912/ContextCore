@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Storage.Postgres.Infrastructure;
+using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -157,7 +158,19 @@ RETURNING data;
         insertCommand.Parameters.AddWithValue("cost_budget_json", run.CostBudget is null ? DBNull.Value : JsonSerializer.Serialize(run.CostBudget));
         insertCommand.Parameters.AddWithValue("idempotency_key", (object?)run.IdempotencyKey ?? DBNull.Value);
         AddJson(insertCommand, "data", run);
-        var insertedData = await insertCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        // ON CONFLICT (workspace_id, run_id) DO NOTHING 仅覆盖主键冲突。
+        // 当两次请求使用相同 IdempotencyKey 但不同 run_id（每次 POST 生成新 GUID）时，
+        // 会触发 partial UNIQUE 索引 (workspace_id, idempotency_key) 的 unique_violation（23505）。
+        // 捕获该异常后落入门下 SELECT 逻辑，返回已有 Run（幂等去重）。
+        object? insertedData;
+        try
+        {
+            insertedData = await insertCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            insertedData = null;
+        }
         if (insertedData is not null and not DBNull)
         {
             var insertedRun = Serializer.Deserialize<AgentRun>((string)insertedData);

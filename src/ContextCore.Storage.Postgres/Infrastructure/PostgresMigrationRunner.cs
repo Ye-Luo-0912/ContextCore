@@ -2414,6 +2414,23 @@ CREATE TABLE IF NOT EXISTS {agentRunLeases} (
 ALTER TABLE {agentRunLeases} ADD COLUMN IF NOT EXISTS fencing_token bigint NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_leases", "expires")} ON {agentRunLeases} (lease_expires_at);
+
+-- R29 WP-A-2：Desired Model State 持久化表（HA 多节点模型期望状态同步）
+-- 每个模型至多一条记录，由 SetAsync 的 ON CONFLICT (model_id) DO UPDATE 维护。
+-- generation 字段用于乐观并发控制：ReconcilerWorker 仅当远端 generation > 本地时应用变更。
+-- content_hash 用于快速检测内容变更（避免不必要的 Activate/Deactivate 操作）。
+CREATE TABLE IF NOT EXISTS {desiredModelStates} (
+    model_id text NOT NULL,
+    desired_state text NOT NULL,
+    generation bigint NOT NULL DEFAULT 1,
+    content_hash text NOT NULL DEFAULT '',
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    updated_by text NOT NULL DEFAULT '',
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (model_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "desired_model_states", "updated")} ON {desiredModelStates} (updated_at DESC);
 """;
     }
 
