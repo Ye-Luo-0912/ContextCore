@@ -194,6 +194,20 @@ public interface ILearningEventOutboxStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Perf-7：批量续约当前实例持有的多个 lease。由 batched heartbeat coordinator 调用，
+    /// 替代每 record 独立 heartbeat Task，消除高积压下大量 Task/Timer/DB UPDATE。
+    /// </summary>
+    /// <param name="leases">要续约的 (eventId, leaseToken) 集合。</param>
+    /// <param name="leaseDuration">续约时长。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>成功续约的 eventId 集合（失败的表示 lease 已丢失或被抢占）。</returns>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task<IReadOnlySet<string>> RenewLeaseBatchAsync(
+        IReadOnlyList<(string EventId, string LeaseToken)> leases,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 按 state 分组统计记录数。用于诊断与可观测性。
     /// </summary>
     [StoreOperation(StoreOperationKind.Read)]

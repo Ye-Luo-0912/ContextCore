@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
@@ -167,24 +167,26 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         var hasQueryText = !string.IsNullOrWhiteSpace(query.QueryText);
-        // Perf-5：FTS 查询单独走 search_vector GIN 索引；ID 匹配拆分为独立查询分支走 B-tree 索引。
+        // Perf-5 / P1-2：FTS 与 ID 匹配合并为单条 CTE 查询（一次数据库往返）。
         // - websearch_to_tsquery 支持 "phrase search" / OR / AND 等语法，且不包含前导通配符（可命中 GIN）。
         // - ts_rank_cd 返回 [0, +∞) 的相关度分数；乘以 100 后写入 Metadata["__ts_rank"]，
         //   LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
-        // - id 精确/前缀匹配拆出后，FTS 与 ID 各自走最优索引，避免 OR 条件退化为全表扫描。
+        // - fts_hits 走 GIN、id_hits 走 B-tree / trigram，DISTINCT ON (workspace_id, collection_id, id) 去重（FTS 命中优先），
+        //   避免 OR 条件退化为全表扫描，同时消除第二次往返与应用层合并去重。
         string? rankExpression = hasQueryText
             ? "ts_rank_cd(search_vector, websearch_to_tsquery('simple', @query_text))"
             : null;
 
-        // --- FTS 查询分支：search_vector @@ websearch_to_tsquery 走 GIN 索引 ---
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var filters = AppendBaseFilters(command, query);
+        var baseFilterSql = string.Join(" AND ", filters);
 
         if (hasQueryText)
         {
             command.Parameters.AddWithValue("query_text", query.QueryText!);
-            filters.Add("search_vector @@ websearch_to_tsquery('simple', @query_text)");
+            command.Parameters.AddWithValue("query_exact", query.QueryText!);
+            command.Parameters.AddWithValue("query_prefix", query.QueryText! + "%");
         }
 
         command.Parameters.AddWithValue("skip", Math.Max(0, query.Skip));
@@ -192,59 +194,124 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
 
         // P4：IncludeContent=false 时只投影 metadata 列，避免读取/反序列化完整 jsonb 正文。
         // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方走 BatchGetAsync 二次读取。
-        // P3：有 QueryText 时按 ts_rank_cd DESC 排序，否则保持 importance DESC, updated_at DESC。
         // P0-10：必须返回 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
         // 否则 ReadMetadataRow 构造的 ContextItem 作用域为空，Provider 用空作用域构造 CanonicalKey
         // 会导致 Lexical/Semantic 无法 Canonical Merge（且 CanonicalCandidateKey.Create 会抛 ArgumentException）。
         var results = new List<ContextItem>();
-        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (!query.IncludeContent)
         {
-            var orderClause = hasQueryText && rankExpression is not null
-                ? $"{rankExpression} DESC, importance DESC, updated_at DESC"
-                : "importance DESC, updated_at DESC";
             // P0-10：ts_rank 列仅在 hasQueryText 时追加（与排序条件一致）。
             // 列顺序固定为：workspace_id(0), collection_id(1), id(2), type(3), title(4),
             //   importance(5), version(6), updated_at(7), created_at(8), content_hash(9),
             //   content_token_cost(10), tags(11), refs(12), source_refs(13), ts_rank?(14)
-            var tsRankColumn = hasQueryText && rankExpression is not null
-                ? $", {rankExpression} AS ts_rank"
-                : string.Empty;
-            command.CommandText = $"""
+            if (hasQueryText && rankExpression is not null)
+            {
+                command.CommandText = $"""
+WITH fts_hits AS (
+    SELECT workspace_id, collection_id, id, type, title, importance, version,
+           updated_at, created_at, content_hash, content_token_cost,
+           tags, refs, source_refs,
+           {rankExpression} AS ts_rank, 0 AS source_order
+    FROM {Table("context_items")}
+    WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
+    ORDER BY ts_rank DESC, importance DESC, updated_at DESC
+
+    LIMIT @take
+),
+id_hits AS (
+    SELECT workspace_id, collection_id, id, type, title, importance, version,
+           updated_at, created_at, content_hash, content_token_cost,
+           tags, refs, source_refs,
+           NULL::real AS ts_rank, 1 AS source_order
+    FROM {Table("context_items")}
+    WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
+    ORDER BY importance DESC, updated_at DESC
+    LIMIT @take
+),
+combined AS (
+    SELECT * FROM fts_hits
+    UNION ALL
+    SELECT * FROM id_hits
+),
+deduped AS (
+    SELECT DISTINCT ON (workspace_id, collection_id, id) * FROM combined ORDER BY workspace_id, collection_id, id, source_order
+)
 SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
-       tags, refs, source_refs{tsRankColumn}
+       tags, refs, source_refs, ts_rank
+FROM deduped
+ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC OFFSET @skip LIMIT @take;
+""";
+            }
+            else
+            {
+                command.CommandText = $"""
+SELECT workspace_id, collection_id, id, type, title, importance, version,
+       updated_at, created_at, content_hash, content_token_cost,
+       tags, refs, source_refs
 FROM {Table("context_items")}
-WHERE {string.Join(" AND ", filters)}
-ORDER BY {orderClause}
+WHERE {baseFilterSql}
+ORDER BY importance DESC, updated_at DESC
 OFFSET @skip
 LIMIT @take;
 """;
+            }
+
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             var tsRankColumnIndex = hasQueryText && rankExpression is not null ? 14 : -1;
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                var item = ReadMetadataRow(reader, tsRankColumnIndex);
-                results.Add(item);
-                seenIds.Add(item.Id);
+                results.Add(ReadMetadataRow(reader, tsRankColumnIndex));
             }
         }
         else
         {
-            var fullOrderClause = hasQueryText && rankExpression is not null
-                ? $"{rankExpression} DESC, importance DESC, updated_at DESC"
-                : "importance DESC, updated_at DESC";
-            // P3：有 QueryText 时追加 ts_rank 列；提取到变量避免内插条件表达式（CS8361）。
-            var rankColumnSelect = hasQueryText ? $", {rankExpression} AS ts_rank" : string.Empty;
-            command.CommandText = $"""
-SELECT data{rankColumnSelect}
+            if (hasQueryText && rankExpression is not null)
+            {
+                command.CommandText = $"""
+WITH fts_hits AS (
+    SELECT data, workspace_id, collection_id, id, importance, updated_at,
+           {rankExpression} AS ts_rank, 0 AS source_order
+    FROM {Table("context_items")}
+    WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
+    ORDER BY ts_rank DESC, importance DESC, updated_at DESC
+
+    LIMIT @take
+),
+id_hits AS (
+    SELECT data, workspace_id, collection_id, id, importance, updated_at,
+           NULL::real AS ts_rank, 1 AS source_order
+    FROM {Table("context_items")}
+    WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
+    ORDER BY importance DESC, updated_at DESC
+    LIMIT @take
+),
+combined AS (
+    SELECT * FROM fts_hits
+    UNION ALL
+    SELECT * FROM id_hits
+),
+deduped AS (
+    SELECT DISTINCT ON (workspace_id, collection_id, id) * FROM combined ORDER BY workspace_id, collection_id, id, source_order
+)
+SELECT data, ts_rank
+FROM deduped
+ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC OFFSET @skip LIMIT @take;
+""";
+            }
+            else
+            {
+                command.CommandText = $"""
+SELECT data
 FROM {Table("context_items")}
-WHERE {string.Join(" AND ", filters)}
-ORDER BY {fullOrderClause}
+WHERE {baseFilterSql}
+ORDER BY importance DESC, updated_at DESC
 OFFSET @skip
 LIMIT @take;
 """;
+            }
+
             await using var fullReader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             var hasRankColumn = hasQueryText && fullReader.FieldCount > 1;
             while (await fullReader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -257,62 +324,6 @@ LIMIT @take;
                     item = WithTsRank(item, rank);
                 }
                 results.Add(item);
-                seenIds.Add(item.Id);
-            }
-        }
-
-        // --- Perf-5: ID 查询分支：id = @exact OR id LIKE @prefix% 走 B-tree / trigram 索引 ---
-        // 拆分后 FTS 走 GIN、ID 走 B-tree，避免 OR 条件导致查询计划器退化为全表扫描；结果在应用层合并去重。
-        // ID 匹配无 ts_rank（不属于全文检索命中），按 importance DESC, updated_at DESC 排序作为补充召回。
-        if (hasQueryText)
-        {
-            await using var idCommand = connection.CreateCommand();
-            idCommand.CommandTimeout = Options.CommandTimeoutSeconds;
-            var idFilters = AppendBaseFilters(idCommand, query);
-            idCommand.Parameters.AddWithValue("query_exact", query.QueryText!);
-            idCommand.Parameters.AddWithValue("query_prefix", query.QueryText! + "%");
-            idFilters.Add("(id = @query_exact OR id LIKE @query_prefix)");
-            idCommand.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
-
-            if (!query.IncludeContent)
-            {
-                idCommand.CommandText = $"""
-SELECT workspace_id, collection_id, id, type, title, importance, version,
-       updated_at, created_at, content_hash, content_token_cost,
-       tags, refs, source_refs
-FROM {Table("context_items")}
-WHERE {string.Join(" AND ", idFilters)}
-ORDER BY importance DESC, updated_at DESC
-LIMIT @take;
-""";
-                await using var idReader = await idCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await idReader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    var item = ReadMetadataRow(idReader, -1);
-                    if (seenIds.Add(item.Id))
-                    {
-                        results.Add(item);
-                    }
-                }
-            }
-            else
-            {
-                idCommand.CommandText = $"""
-SELECT data
-FROM {Table("context_items")}
-WHERE {string.Join(" AND ", idFilters)}
-ORDER BY importance DESC, updated_at DESC
-LIMIT @take;
-""";
-                await using var idReader = await idCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await idReader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    var item = Serializer.Deserialize<ContextItem>(idReader.GetString(0));
-                    if (seenIds.Add(item.Id))
-                    {
-                        results.Add(item);
-                    }
-                }
             }
         }
 

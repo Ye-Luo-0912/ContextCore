@@ -119,6 +119,69 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// P1-5: Atomic create-or-get. INSERT ... ON CONFLICT DO NOTHING with RETURNING;
+    /// if no row returned, SELECT existing by idempotency_key or primary key.
+    /// </remarks>
+    public async ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(
+        AgentRun run, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        await EnsureMigratedAsync(ct).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
+
+        await using var insertCommand = connection.CreateCommand();
+        insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+        insertCommand.CommandText = $"""
+INSERT INTO {Table("agent_runs")} (
+    workspace_id, run_id, session_id, task, state, turn,
+    created_at, updated_at, finished_at, failure_reason, final_answer,
+    turn_budget_json, cost_budget_json, idempotency_key, data)
+VALUES (
+    @workspace_id, @run_id, @session_id, @task, @state, @turn,
+    @created_at, @updated_at, @finished_at, @failure_reason, @final_answer,
+    @turn_budget_json, @cost_budget_json, @idempotency_key, @data)
+ON CONFLICT (workspace_id, run_id) DO NOTHING
+RETURNING data;
+""";        insertCommand.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+        insertCommand.Parameters.AddWithValue("run_id", run.RunId);
+        insertCommand.Parameters.AddWithValue("session_id", run.SessionId);
+        insertCommand.Parameters.AddWithValue("task", run.Task ?? string.Empty);
+        insertCommand.Parameters.AddWithValue("state", (byte)run.State);
+        insertCommand.Parameters.AddWithValue("turn", run.Turn);
+        insertCommand.Parameters.AddWithValue("created_at", run.CreatedAt);
+        insertCommand.Parameters.AddWithValue("updated_at", run.UpdatedAt);        insertCommand.Parameters.AddWithValue("finished_at", (object?)run.FinishedAt ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("failure_reason", (object?)run.FailureReason ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("final_answer", (object?)run.FinalAnswer ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("turn_budget_json", run.TurnBudget is null ? DBNull.Value : JsonSerializer.Serialize(run.TurnBudget));
+        insertCommand.Parameters.AddWithValue("cost_budget_json", run.CostBudget is null ? DBNull.Value : JsonSerializer.Serialize(run.CostBudget));
+        insertCommand.Parameters.AddWithValue("idempotency_key", (object?)run.IdempotencyKey ?? DBNull.Value);
+        AddJson(insertCommand, "data", run);
+        var insertedData = await insertCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (insertedData is not null and not DBNull)
+        {
+            var insertedRun = Serializer.Deserialize<AgentRun>((string)insertedData);
+            return new AgentRunCreateResult { Created = true, Run = insertedRun ?? run, WasExisting = false };
+        }
+
+        if (!string.IsNullOrWhiteSpace(run.IdempotencyKey))
+        {
+            var existing = await GetByIdempotencyKeyAsync(run.WorkspaceId, run.IdempotencyKey, ct).ConfigureAwait(false);
+            if (existing is not null)
+            {
+                return new AgentRunCreateResult { Created = false, Run = existing, WasExisting = true };
+            }
+        }
+        var existingById = await GetAsync(run.WorkspaceId, run.RunId, ct).ConfigureAwait(false);
+        if (existingById is not null)
+        {
+            return new AgentRunCreateResult { Created = false, Run = existingById, WasExisting = true };
+        }
+
+        throw new InvalidOperationException(
+            $"INSERT conflict but no existing row found for workspace_id={run.WorkspaceId}, run_id={run.RunId}.");
+    }
+    /// <inheritdoc />
     public async ValueTask TransitionStateAsync(
         string workspaceId,
         string runId,

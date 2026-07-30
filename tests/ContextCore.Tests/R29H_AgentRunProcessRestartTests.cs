@@ -544,6 +544,9 @@ public sealed class R29H_AgentRunProcessRestartTests
         public ValueTask<AgentRun?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey, CancellationToken cancellationToken = default)
             => _inner.GetByIdempotencyKeyAsync(workspaceId, idempotencyKey, cancellationToken);
 
+        public ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(AgentRun run, CancellationToken ct = default)
+            => _inner.CreateOrGetByIdempotencyKeyAsync(run, ct);
+
         public ValueTask TransitionStateAsync(
             string workspaceId, string runId,
             AgentRunState expectedCurrentState, AgentRunState newState,

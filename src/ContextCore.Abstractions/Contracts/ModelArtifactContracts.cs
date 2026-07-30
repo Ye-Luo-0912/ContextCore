@@ -151,3 +151,87 @@ public sealed record ModelArtifactDescriptor
 public interface IPersistentModelArtifactRegistry : IModelArtifactRegistry
 {
 }
+
+// ===========================================================================
+// R29 WP-A-2：Desired Model State Store 契约（HA 多节点一致性）
+//
+// 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
+//   1. 在 HA 部署中，Model Control Plane 的 Activate/Deactivate 操作需跨节点同步。
+//   2. DesiredModelStateStore 存储"期望状态"（Active/Inactive），由各节点的
+//      ReconcilerWorker 定期拉取并应用到本地 ModelActivationManager。
+//   3. Generation 字段用于乐观并发控制：仅当本地 Generation < 远端 Generation 时才应用。
+//
+// 设计边界：
+//   - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+//   - 不与 IModelActivationManager 耦合：store 仅负责存储/查询期望状态，
+//     ReconcilerWorker 负责读取并调用 IModelActivationManager 应用变更。
+// ===========================================================================
+
+/// <summary>
+/// R29 WP-A-2：期望模型状态。描述某模型在 HA 集群中的目标状态。
+/// </summary>
+/// <remarks>
+/// 不可变 record：状态变更通过写入新记录实现（与 ModelArtifactDescriptor 不可变语义一致）。
+/// <para>
+/// 状态机：
+/// <list type="bullet">
+/// <item><term>Active</term><description>模型应被激活（Champion）</description></item>
+/// <item><term>Inactive</term><description>模型应被停用（非 Champion）</description></item>
+/// </list>
+/// </para>
+/// </remarks>
+public sealed record DesiredModelState
+{
+    /// <summary>模型工件 ID（对应 ModelArtifactDescriptor.ModelArtifactId）。</summary>
+    public required string ModelId { get; init; }
+
+    /// <summary>期望状态："Active" 或 "Inactive"。</summary>
+    public required string DesiredState { get; init; }
+
+    /// <summary>乐观并发控制版本号（单调递增）。</summary>
+    public required long Generation { get; init; }
+
+    /// <summary>模型内容哈希（用于检测跨节点不一致）。</summary>
+    public required string ContentHash { get; init; }
+
+    /// <summary>状态更新时间戳（UTC）。</summary>
+    public required DateTimeOffset UpdatedAt { get; init; }
+
+    /// <summary>最后更新者标识（节点 ID 或服务实例 ID）。</summary>
+    public required string UpdatedBy { get; init; }
+}
+
+/// <summary>
+/// R29 WP-A-2：Desired Model State Store — 存储 HA 集群中各模型的期望状态。
+/// </summary>
+/// <remarks>
+/// <b>使用模式</b>：
+/// <code>
+/// // Model Control Plane 写入期望状态
+/// await store.SetAsync(new DesiredModelState {
+///     ModelId = "model-v1",
+///     DesiredState = "Active",
+///     Generation = 42,
+///     ContentHash = "sha256:abc...",
+///     UpdatedAt = DateTimeOffset.UtcNow,
+///     UpdatedBy = "node-1"
+/// });
+///
+/// // ReconcilerWorker 读取并应用
+/// var state = await store.GetAsync("model-v1");
+/// if (state != null && state.Generation > localGeneration) {
+///     await activationManager.ActivateAsync(state.ModelId);
+/// }
+/// </code>
+/// </remarks>
+public interface IDesiredModelStateStore
+{
+    /// <summary>按 ModelId 获取期望状态；不存在时返回 null。</summary>
+    ValueTask<DesiredModelState?> GetAsync(string modelId, CancellationToken ct = default);
+
+    /// <summary>写入期望状态（覆盖式更新，Generation 由调用方保证单调递增）。</summary>
+    ValueTask SetAsync(DesiredModelState state, CancellationToken ct = default);
+
+    /// <summary>列出所有模型的期望状态（用于 ReconcilerWorker 全量同步）。</summary>
+    ValueTask<IReadOnlyList<DesiredModelState>> GetAllAsync(CancellationToken ct = default);
+}

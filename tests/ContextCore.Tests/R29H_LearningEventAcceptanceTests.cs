@@ -519,6 +519,38 @@ public sealed class R29H_LearningEventAcceptanceTests
             }
         }
 
+        public Task<IReadOnlySet<string>> RenewLeaseBatchAsync(
+            IReadOnlyList<(string EventId, string LeaseToken)> leases,
+            TimeSpan leaseDuration,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var renewed = new HashSet<string>(StringComparer.Ordinal);
+            var now = DateTimeOffset.UtcNow;
+            lock (_lock)
+            {
+                foreach (var (eventId, leaseToken) in leases)
+                {
+                    if (!_records.TryGetValue(eventId, out var r)
+                        || r.State != LearningEventOutboxStates.Processing
+                        || r.LeaseToken != leaseToken)
+                    {
+                        continue;
+                    }
+                    _records[eventId] = Clone(
+                        r, state: r.State, retryCount: r.RetryCount,
+                        leaseOwner: r.LeaseOwner,
+                        leaseExpiresAt: now.Add(leaseDuration),
+                        leaseToken: leaseToken,
+                        processedAt: r.ProcessedAt,
+                        lastError: r.LastError,
+                        deadLetterReason: r.DeadLetterReason);
+                    renewed.Add(eventId);
+                }
+            }
+            return Task.FromResult<IReadOnlySet<string>>(renewed);
+        }
+
         public Task<IReadOnlyDictionary<string, int>> CountByStateAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();

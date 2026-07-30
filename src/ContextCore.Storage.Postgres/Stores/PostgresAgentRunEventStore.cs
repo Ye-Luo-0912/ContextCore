@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Storage.Postgres.Infrastructure;
@@ -126,8 +128,12 @@ RETURNING sequence;
             insertCommand.Parameters.AddWithValue("fencing_token", fencingToken!.Value);
         }
 
-        await using var reader = await insertCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        bool insertSucceeded;
+        await using (var reader = await insertCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            insertSucceeded = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+        if (insertSucceeded)
         {
             return; // 插入成功（RETURNING 返回了 sequence）
         }
@@ -156,8 +162,11 @@ LIMIT 1;
             }
         }
 
-        string? expectedPrevHash;
-        int expectedSequence;
+        // P1-4: Wrap diagnostic SELECT in try-catch to prevent secondary errors from masking the original insert failure
+        string? expectedPrevHash = null;
+        int expectedSequence = -1;
+        try
+        {
         await using (var selectCommand = connection.CreateCommand())
         {
             selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -182,8 +191,15 @@ LIMIT 1;
                 expectedPrevHash = null;
             }
         }
+        }
+        catch
+        {
+            // Diagnostic query failed; fall through with unknown expected values
+            expectedSequence = -1;
+            expectedPrevHash = null;
+        }
 
-        if (@event.Sequence != expectedSequence)
+        if (expectedSequence >= 0 && @event.Sequence != expectedSequence)
         {
             throw new InvalidOperationException(
                 $"事件 Sequence 不连续：workspace_id={@event.WorkspaceId}, run_id={@event.RunId}。" +
@@ -191,7 +207,7 @@ LIMIT 1;
                 $"事件流必须从 0 开始单调递增。");
         }
 
-        if (!string.Equals(expectedPrevHash, @event.PrevChainHash, StringComparison.Ordinal))
+        if (expectedSequence >= 0 && !string.Equals(expectedPrevHash, @event.PrevChainHash, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"事件 PrevChainHash 不匹配：workspace_id={@event.WorkspaceId}, run_id={@event.RunId}。" +
@@ -277,6 +293,29 @@ LIMIT 1;
                         $"批量事件首事件 PrevChainHash 不匹配：workspace_id={first.WorkspaceId}, run_id={first.RunId}。" +
                         $"期望={expectedPrevHash ?? "<null>"}，实际={events[0].PrevChainHash ?? "<null>"}。" +
                         $"事件哈希链被破坏或乱序。");
+                }
+
+                // P1-4: Validate batch-internal hash chain
+                for (var i = 0; i < events.Count; i++)
+                {
+                    var evt = events[i];
+                    if (evt.WorkspaceId != first.WorkspaceId || evt.RunId != first.RunId)
+                    {
+                        throw new ArgumentException($"Batch event {i} belongs to different Run: {evt.RunId} != {first.RunId}");
+                    }
+                    if (i > 0 && evt.Sequence != events[i - 1].Sequence + 1)
+                    {
+                        throw new ArgumentException($"Batch event {i} Sequence not continuous: {events[i - 1].Sequence} -> {evt.Sequence}");
+                    }
+                    if (i > 0 && evt.PrevChainHash != events[i - 1].ContentHash)
+                    {
+                        throw new ArgumentException($"Batch event {i} PrevChainHash mismatch");
+                    }
+                    var expectedHash = ComputeContentHash(evt);
+                    if (evt.ContentHash != expectedHash)
+                    {
+                        throw new ArgumentException($"Batch event {i} ContentHash inconsistent with Payload");
+                    }
                 }
 
                 // 2. 批量插入事件（unnest 单 SQL；UNIQUE 约束兜底防并发重序列号）
@@ -592,5 +631,27 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         // COALESCE 已处理 null → -1；DB 端返回 long/int 统一转 int
         return result is long l ? (int)l : (result is int i ? i : -1);
+    }
+    /// <summary>
+    /// P1-4: Compute ContentHash for batch validation (mirrors AgentRunEventChain.ComputeContentHash).
+    /// SHA-256 of serialized event DTO with ContentHash excluded.
+    /// </summary>
+    private static string ComputeContentHash(AgentRunEvent evt)
+    {
+        var dto = new
+        {
+            evt.EventId,
+            evt.RunId,
+            evt.WorkspaceId,
+            evt.Sequence,
+            evt.EventType,
+            evt.State,
+            evt.Payload,
+            evt.PrevChainHash,
+            evt.OccurredAt
+        };
+        var json = JsonSerializer.Serialize(dto);
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

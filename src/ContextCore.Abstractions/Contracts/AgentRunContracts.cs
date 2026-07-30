@@ -1130,6 +1130,21 @@ public interface IAgentLoopPolicy
 }
 
 /// <summary>
+/// P1-5: Result of CreateOrGetByIdempotencyKeyAsync (idempotent run creation).
+/// </summary>
+public sealed record AgentRunCreateResult
+{
+    /// <summary>true if a new run was created; false if an existing run was returned (idempotency hit).</summary>
+    public required bool Created { get; init; }
+
+    /// <summary>The created or existing run.</summary>
+    public required AgentRun Run { get; init; }
+
+    /// <summary>true if an existing run was returned (idempotency hit).</summary>
+    public required bool WasExisting { get; init; }
+}
+
+/// <summary>
 /// Agent Run 元数据持久化抽象（三层模式：基础接口 + IPersistent 标记）。
 /// </summary>
 /// <remarks>
@@ -1155,6 +1170,16 @@ public interface IAgentRunStore
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>匹配的 Run；未提供幂等键或未匹配时返回 null。</returns>
     ValueTask<AgentRun?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P1-5: Atomically create a run or return existing one by idempotency key.
+    /// Eliminates the TOCTOU race between GetByIdempotencyKeyAsync + CreateAsync.
+    /// </summary>
+    /// <param name="run">The run to create (must have IdempotencyKey set for idempotent behavior).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Result indicating whether a new run was created or an existing one was returned.</returns>
+    ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(
+        AgentRun run, CancellationToken ct = default);
 
     /// <summary>更新 Run 状态（expected-state CAS：state 只能向前推进）。</summary>
     /// <param name="workspaceId">Workspace ID。</param>

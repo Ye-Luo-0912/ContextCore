@@ -246,6 +246,7 @@ internal static class ProductionRuntimeExtensions
         // 实际 HostedService 注册按 Profile 互斥（避免单节点 + HA 双推进器）。
         workerRegistry.Add<CanaryProgressionHostedService>();
         workerRegistry.Add<CanaryLeaderHostedService>();
+        workerRegistry.Add<ModelStateReconcilerWorker>();
 
         // 注册 ProductionRuntimeWorkerRegistry 和 ProductionRuntimeReadinessService
         services.AddSingleton(workerRegistry);
@@ -383,6 +384,11 @@ internal static class ProductionRuntimeExtensions
         // 5. P0-2：HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。
         services.AddHostedService<CanaryLeaderHostedService>();
+
+        // R29 WP-A-2：HA 模式注册 ModelStateReconcilerWorker（同步期望模型状态）。
+        // ModelStateReconcilerWorker 通过 IOptionsMonitor<ModelStateReconcilerOptions> 读取 Enabled=true。
+        services.PostConfigure<ModelStateReconcilerOptions>(o => o.Enabled = true);
+        services.AddHostedService<ModelStateReconcilerWorker>();
 
         // LearningMaterializationWorker：HA 模式下多实例竞争 durable outbox 物化。
         services.AddHostedService<LearningMaterializationWorker>();

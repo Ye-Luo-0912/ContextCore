@@ -165,6 +165,23 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
                         $"事件哈希链被破坏或乱序。");
                 }
 
+                // P1-4: Validate batch-internal same-Run consistency + ContentHash integrity
+                for (var i = 0; i < events.Count; i++)
+                {
+                    var evt = events[i];
+                    if (evt.WorkspaceId != first.WorkspaceId || evt.RunId != first.RunId)
+                    {
+                        throw new ArgumentException(
+                            $"Batch event {i} belongs to different Run: {evt.RunId} != {first.RunId}");
+                    }
+                    var expectedHash = AgentRunEventChain.ComputeContentHash(evt);
+                    if (evt.ContentHash != expectedHash)
+                    {
+                        throw new ArgumentException(
+                            $"Batch event {i} ContentHash inconsistent with Payload: {evt.ContentHash ?? "<null>"} != {expectedHash}");
+                    }
+                }
+
                 // 2c. 校验批量内 Sequence 连续性 + PrevChainHash 链接
                 for (var i = 1; i < events.Count; i++)
                 {

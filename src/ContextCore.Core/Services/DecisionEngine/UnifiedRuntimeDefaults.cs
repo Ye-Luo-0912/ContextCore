@@ -426,10 +426,13 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // 仅在 hydrator 注入且 SelectedEnvelopes 非空时调用；未注入时保持旧行为（Provider 已加载所有正文）。
         // hydrator 内部跳过已 hydrate 的 Material（Content 非空），避免重复 I/O；
         // 失败时降级为 no-op（Material.Content 保持空，Projector 降级为摘要），不阻塞主决策流。
+        HydrationResult? hydrationResult = null;
         if (_selectedCandidateHydrator is not null && engineResult.SelectedEnvelopes.Count > 0)
         {
-            completeWorkingSet = await _selectedCandidateHydrator.HydrateAsync(
-                engineResult.SelectedEnvelopes, completeWorkingSet, cancellationToken).ConfigureAwait(false);
+            // P1-1：传最终 token 预算做 hydrate 后二次预算修复；失败计数/超预算合并进 Outcome.Diagnostics
+            hydrationResult = await _selectedCandidateHydrator.HydrateAsync(
+                engineResult.SelectedEnvelopes, completeWorkingSet, decisionRequest.TokenBudget, cancellationToken).ConfigureAwait(false);
+            completeWorkingSet = hydrationResult.WorkingSet;
         }
 
         // P0-6：直接使用 Engine 结果，不再二次 Allocate。
@@ -455,7 +458,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         IReadOnlyDictionary<string, string> mergedDiagnostics = engineResult.Outcome.Diagnostics;
         var hasEarlyRejected = earlyRejected.Count > 0;
         var hasProviderDegraded = providerReports.Count > 0 && providerReports.Any(r => !r.Succeeded);
-        if (hasEarlyRejected || hasProviderDegraded)
+        // P1-1：hydrate 失败或预算修复后仍超预算时，合并 hydration 诊断
+        var hasHydrationDiagnostics = hydrationResult is not null
+            && (hydrationResult.FailedCount > 0 || hydrationResult.BudgetExceeded);
+        if (hasEarlyRejected || hasProviderDegraded || hasHydrationDiagnostics)
         {
             var diag = new Dictionary<string, string>(engineResult.Outcome.Diagnostics, StringComparer.Ordinal);
             if (hasEarlyRejected)
@@ -472,6 +478,20 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(s => s, StringComparer.Ordinal);
                 diag["provider.degradedKinds"] = string.Join(",", degradedKinds);
+            }
+            if (hasHydrationDiagnostics)
+            {
+                // P1-1：hydrate 计数 / 预算修复结果进入 Outcome.Diagnostics
+                diag["hydration.hydratedCount"] = hydrationResult!.HydratedCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                diag["hydration.failedCount"] = hydrationResult.FailedCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (hydrationResult.BudgetExceeded)
+                {
+                    diag["hydration.budgetExceeded"] = "true";
+                }
+                if (hydrationResult.BudgetRepairDiagnostics is { Count: > 0 } repairDiagnostics)
+                {
+                    diag["hydration.budgetRepair"] = string.Join(";", repairDiagnostics);
+                }
             }
             mergedDiagnostics = diag;
         }

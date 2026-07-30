@@ -111,7 +111,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// P0-3：v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
     ///   让 HA 崩溃恢复时已 Committed/ResultDelivered 的 tool 结果可跨进程读取，防止外部副作用结果丢失）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v47";
+    public const string SchemaVersion = "cc-schema-v48";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -215,7 +215,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "model_activation_audit",
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化
         "agent_run_approvals",
-        "agent_run_leases"
+        "agent_run_leases",
+        // R29 WP-A-2：Desired Model State Store 持久化（HA 多节点模型期望状态同步）
+        "desired_model_states"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -415,7 +417,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("agent_run_approvals", "run_pending"),
         ("agent_run_approvals", "run"),
         // agent_run_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
-        ("agent_run_leases", "expires")
+        ("agent_run_leases", "expires"),
+        // R29 WP-A-2：Desired Model State Store 索引（按 updated_at 倒序列举全部状态）
+        ("desired_model_states", "updated")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -542,6 +546,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化表
         var agentRunApprovals = Infrastructure.PostgresNames.Table(options, "agent_run_approvals");
         var agentRunLeases = Infrastructure.PostgresNames.Table(options, "agent_run_leases");
+        var desiredModelStates = Infrastructure.PostgresNames.Table(options, "desired_model_states");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;

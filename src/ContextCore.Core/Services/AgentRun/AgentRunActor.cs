@@ -987,7 +987,56 @@ public sealed class AgentRunActor
 
             // P0-3：使用 ExecuteWithWorkingSetAsync 获取完整 WorkingSet（Envelopes + Materials）
             // 让投影器从 Materials 恢复候选正文，而不只是 CandidateId/Type/Score 摘要
-            return await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
+
+            // P1-1：hydration 失败严重度处理。
+            // 1) 日志：hydration.failedCount > 0 / hydration.budgetExceeded 时记录 Trace 警告（可观测性）。
+            // 2) fail-closed：任一 Selected hard constraint / mandatory 候选正文为空时，
+            //    决策结果不可用（模型绝不能在缺失 mandatory 上下文的情况下运行），返回 null 降级。
+            if (result is not null)
+            {
+                var diagnostics = result.Decision.Outcome.Diagnostics;
+                var hasHydrationFailures = diagnostics.TryGetValue("hydration.failedCount", out var failedCountText)
+                    && !string.Equals(failedCountText, "0", StringComparison.Ordinal);
+                if (hasHydrationFailures || diagnostics.ContainsKey("hydration.budgetExceeded"))
+                {
+                    System.Diagnostics.Trace.TraceWarning(
+                        "[AgentRunActor] Late hydration degraded for run {0}: failedCount={1}, budgetExceeded={2}",
+                        run.RunId,
+                        failedCountText ?? "0",
+                        diagnostics.ContainsKey("hydration.budgetExceeded"));
+                }
+
+                // P1-1：AgentContext fail-closed — 预算修复后 mandatory 独占仍超限
+                // （exact tokenize 后实际 token 数 > 模型上下文窗口），决策结果不可用。
+                if (diagnostics.ContainsKey("hydration.budgetExceeded"))
+                {
+                    System.Diagnostics.Trace.TraceWarning(
+                        "[AgentRunActor] Fail-closed: hydration budget exceeded after exact tokenize for run {0}; mandatory items alone exceed token budget. Decision result discarded.",
+                        run.RunId);
+                    return null;
+                }
+
+                foreach (var envelope in result.Decision.SelectedEnvelopes)
+                {
+                    if (!envelope.Safety.IsHardConstraint && !envelope.Safety.IsMandatory)
+                    {
+                        continue;
+                    }
+
+                    if (!result.WorkingSet.Materials.TryGetValue(envelope.CanonicalKey, out var material)
+                        || string.IsNullOrEmpty(material.Content))
+                    {
+                        System.Diagnostics.Trace.TraceWarning(
+                            "[AgentRunActor] Fail-closed: hard constraint / mandatory candidate {0} has no hydrated content for run {1}; decision result discarded.",
+                            envelope.CanonicalKey.EntityId,
+                            run.RunId);
+                        return null;
+                    }
+                }
+            }
+
+            return result;
         }
         catch
         {

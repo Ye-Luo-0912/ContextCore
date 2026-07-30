@@ -38,8 +38,10 @@ public sealed class RelationTraversalEngine
         var profile = request.Profile;
         var maxDepth = Math.Max(1, profile.MaxDepth);
         var maxFanout = Math.Max(1, profile.MaxFanout);
-        var maxNodes = request.MaxNodesOverride ?? 100;
-        var maxRelations = request.MaxRelationsOverride ?? 300;
+        // P1-3：maxNodes 受全局硬上限 MaxExpandedNodes 约束。
+        var maxNodes = Math.Min(request.MaxNodesOverride ?? 100, GraphQueryLimits.MaxExpandedNodes);
+        // P1-3：maxRelations 不得超过全局硬上限 MaxTotalEdges。
+        var maxRelations = Math.Min(request.MaxRelationsOverride ?? 300, GraphQueryLimits.MaxTotalEdges);
         var minConfidence = profile.MinConfidence;
 
         // GRAPH-10：构建存储层排除列表，将过滤下推到 QueryNeighborsAsync
@@ -63,6 +65,8 @@ public sealed class RelationTraversalEngine
 
         var seeds = request.Seeds
             .Where(s => !string.IsNullOrWhiteSpace(s.ItemId))
+            // P1-3：全局硬上限 — 种子数超出 MaxSeeds 直接截断（保留原序）。
+            .Take(GraphQueryLimits.MaxSeeds)
             .ToArray();
         if (seeds.Length == 0)
         {

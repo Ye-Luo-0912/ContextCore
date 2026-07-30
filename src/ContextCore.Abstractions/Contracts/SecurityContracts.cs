@@ -72,8 +72,11 @@ public enum WorkspacePermission : ushort
     /// <summary>管理 Workspace 配额与限流配置。</summary>
     QuotaManage = 1 << 6,
 
+    /// <summary>读取模型工件信息（Model Control Plane 只读端点：active/list/get/ready/consistency）。</summary>
+    ModelRead = 1 << 7,
+
     /// <summary>Admin 隐含的所有权限位（除 QuotaManage 外的并集）。</summary>
-    AdminAll = AgentRun | ModelActivate | ModelRegister | LearningView | ConfigEdit | ApiKeyManage | QuotaManage
+    AdminAll = AgentRun | ModelActivate | ModelRegister | ModelRead | LearningView | ConfigEdit | ApiKeyManage | QuotaManage
 }
 
 /// <summary>
@@ -81,11 +84,11 @@ public enum WorkspacePermission : ushort
 /// </summary>
 public static class WorkspaceRolePermissions
 {
-    /// <summary>Viewer 默认权限：LearningView（仅查询）。</summary>
-    public const WorkspacePermission Viewer = WorkspacePermission.LearningView;
+    /// <summary>Viewer 默认权限：LearningView + ModelRead（仅查询）。</summary>
+    public const WorkspacePermission Viewer = WorkspacePermission.LearningView | WorkspacePermission.ModelRead;
 
-    /// <summary>Developer 默认权限：AgentRun + LearningView。</summary>
-    public const WorkspacePermission Developer = WorkspacePermission.AgentRun | WorkspacePermission.LearningView;
+    /// <summary>Developer 默认权限：AgentRun + LearningView + ModelRead。</summary>
+    public const WorkspacePermission Developer = WorkspacePermission.AgentRun | WorkspacePermission.LearningView | WorkspacePermission.ModelRead;
 
     /// <summary>Operator 默认权限：Developer + ModelActivate + ModelRegister。</summary>
     public const WorkspacePermission Operator =

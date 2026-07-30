@@ -471,6 +471,12 @@ LIMIT @take OFFSET @skip;
             return Array.Empty<RelationNeighborBatchResult>();
         }
 
+        // P1-3：全局硬上限 — 种子数超出 GraphQueryLimits.MaxSeeds 直接截断（保留原序）。
+        if (seeds.Count > GraphQueryLimits.MaxSeeds)
+        {
+            seeds.RemoveRange(GraphQueryLimits.MaxSeeds, seeds.Count - GraphQueryLimits.MaxSeeds);
+        }
+
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -553,7 +559,8 @@ LIMIT @take OFFSET @skip;
 
         // P7：per-seed 扫描上限 = MaxScan（保留原语义：先按权重取 top MaxScan，再在 C# 端 Skip/Take 分页）。
         // 总返回行数 ≤ seeds.Count × maxScan，远小于旧方案的 100K 全局上限。
-        var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        // P1-3：per-seed 扫描不得越过全局硬上限 MaxTotalEdges。
+        var maxScan = Math.Min(query.MaxScan > 0 ? query.MaxScan : 1000, GraphQueryLimits.MaxTotalEdges);
         command.Parameters.AddWithValue("per_seed_scan", maxScan);
         command.Parameters.AddWithValue("item_ids", seeds.ToArray());
 
@@ -576,9 +583,19 @@ CROSS JOIN LATERAL (
             buckets[seed] = new List<ContextRelation>();
         }
 
+        // P1-3：全局硬上限 — 总读取边数达到 MaxTotalEdges 即停止读取，截断信号传播到 cutoff 种子。
+        var totalRead = 0;
+        var globalCapHit = false;
+        string? lastReadSeedId = null;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            if (totalRead >= GraphQueryLimits.MaxTotalEdges)
+            {
+                globalCapHit = true;
+                break;
+            }
+
             var seedId = reader.GetString(0);
             var json = reader.GetString(1);
             var relation = Serializer.Deserialize<ContextRelation>(json);
@@ -587,10 +604,13 @@ CROSS JOIN LATERAL (
             if (buckets.TryGetValue(seedId, out var bucket))
             {
                 bucket.Add(relation);
+                totalRead++;
+                lastReadSeedId = seedId;
             }
         }
 
-        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        // P1-3：per-seed 返回边数不得超过 MaxEdgesPerSeed 硬上限。
+        var effectiveTake = Math.Min(query.Take > 0 ? query.Take : 100, GraphQueryLimits.MaxEdgesPerSeed);
         var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         foreach (var seed in seeds)
@@ -600,7 +620,8 @@ CROSS JOIN LATERAL (
             // bucket.Count >= maxScan 表示 LATERAL 返回了 maxScan 行（达到 LIMIT 上限），可能还有更多低权重行未读。
             // bucket.Count < maxScan 表示该种子所有匹配行已读全（无截断）。
             // 相比旧方案，此信号精确到 per-seed，不再依赖 SQL 全局 LIMIT 命中的保守推断。
-            var truncated = bucket.Count >= maxScan;
+            var truncated = bucket.Count >= maxScan
+                || (globalCapHit && string.Equals(seed, lastReadSeedId, StringComparison.OrdinalIgnoreCase));
             // 桶内已排序（LATERAL 内 ORDER BY），直接 Skip + Take 完成分页。
             var seedRelations = bucket
                 .Skip(effectiveSkip)

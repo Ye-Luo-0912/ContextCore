@@ -76,6 +76,43 @@ public sealed class InMemoryAgentRunStore : IAgentRunStore
     }
 
     /// <inheritdoc />
+    public ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(
+        AgentRun run, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var key = Key(run.WorkspaceId, run.RunId);
+
+        // Try to add atomically
+        if (_runs.TryAdd(key, run))
+        {
+            return ValueTask.FromResult(new AgentRunCreateResult { Created = true, Run = run, WasExisting = false });
+        }
+
+        // Already exists by primary key - check if idempotency key matches
+        if (!string.IsNullOrWhiteSpace(run.IdempotencyKey))
+        {
+            foreach (var kvp in _runs)
+            {
+                var r = kvp.Value;
+                if (r.WorkspaceId == run.WorkspaceId
+                    && string.Equals(r.IdempotencyKey, run.IdempotencyKey, StringComparison.Ordinal))
+                {
+                    return ValueTask.FromResult(new AgentRunCreateResult { Created = false, Run = r, WasExisting = true });
+                }
+            }
+        }
+
+        // Primary key conflict
+        if (_runs.TryGetValue(key, out var existingRun))
+        {
+            return ValueTask.FromResult(new AgentRunCreateResult { Created = false, Run = existingRun, WasExisting = true });
+        }
+
+        // Should not happen
+        throw new InvalidOperationException(
+            $"Insert conflict but no existing run found for workspace_id={run.WorkspaceId}, run_id={run.RunId}.");
+    }
+    /// <inheritdoc />
     public ValueTask TransitionStateAsync(
         string workspaceId,
         string runId,

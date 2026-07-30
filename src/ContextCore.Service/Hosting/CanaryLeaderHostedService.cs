@@ -50,7 +50,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     private readonly IServiceProvider _services;
     private readonly ICanaryMetricsCollector _metricsCollector;
     private readonly CanaryProgressionService _progressionService;
-    private readonly ICanaryLeaderLease _leaderLease;
+    private readonly ILeasedWorkStore<string, LeasedWork<string>> _leaderLease;
     private readonly ICanaryMetricsAggregator _metricsAggregator;
     private readonly ICanaryExternalMetricsSource _externalMetricsSource;
     private readonly ICanaryDecisionApplier _decisionApplier;
@@ -75,7 +75,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         IServiceProvider services,
         ICanaryMetricsCollector metricsCollector,
         CanaryProgressionService progressionService,
-        ICanaryLeaderLease leaderLease,
+        ILeasedWorkStore<string, LeasedWork<string>> leaderLease,
         ICanaryMetricsAggregator metricsAggregator,
         ICanaryExternalMetricsSource externalMetricsSource,
         ICanaryDecisionApplier decisionApplier,
@@ -460,7 +460,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
 
         try
         {
-            await _leaderLease.ReleaseAsync(runId, held.LeaseToken, cancellationToken).ConfigureAwait(false);
+            await _leaderLease.AckAsync(runId, held.LeaseToken, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Canary run {RunId} 释放 leader 租约（owner={Owner}）。", runId, _instanceId);
         }
         catch (Exception ex)

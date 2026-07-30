@@ -1555,6 +1555,12 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         for (var depth = 0; depth < maxDepth && currentFrontier.Count > 0; depth++)
         {
             var nextFrontier = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // P1-3：限制扩展节点总数，防止 BFS 爆炸
+            if (visitedItemIds.Count - seedItemIds.Count >= GraphQueryLimits.MaxExpandedNodes)
+            {
+                break;
+            }
+
 
             if (currentFrontier.Count > 1)
             {
@@ -1631,6 +1637,14 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
         if (neighborItemIds.Count == 0) return CandidateProviderHelpers.Empty();
 
+        // P1-3：全局硬上限 — 限制 hydration 条目数，防止对过多邻居进行正文批量获取。
+        if (neighborItemIds.Count > GraphQueryLimits.MaxHydrationItems)
+        {
+            neighborItemIds = new HashSet<string>(
+                neighborItemIds.Take(GraphQueryLimits.MaxHydrationItems),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
         // 3. Hydration：批量获取关联条目（context store 优先，未命中的回退到 memory store）
         var envelopes = new List<ContextCandidateEnvelope>(neighborItemIds.Count);
         var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(neighborItemIds.Count);
@@ -1696,8 +1710,15 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         }
 
         // 按原始顺序构造 envelope（context 优先，memory 回退）
+        // P1-3：MaxGraphTokens — 累计 token 超限后停止添加新候选
+        var graphTokenSum = 0;
         foreach (var itemId in neighborIdList)
         {
+            if (graphTokenSum >= GraphQueryLimits.MaxGraphTokens)
+            {
+                break;
+            }
+
             if (contextItemDict.TryGetValue(itemId, out var item))
             {
                 // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
@@ -1709,6 +1730,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
                 {
                     envelopes.Add(envelope);
                     materials[envelope.CanonicalKey] = material;
+                    graphTokenSum += envelope.TokenCost?.ContentTokens ?? 0;
                 }
                 continue;
             }
@@ -1724,6 +1746,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
                 {
                     envelopes.Add(envelope);
                     materials[envelope.CanonicalKey] = material;
+                    graphTokenSum += envelope.TokenCost?.ContentTokens ?? 0;
                 }
             }
         }

@@ -64,29 +64,8 @@ internal static class AgentExecutionEndpoints
             // 解析 workspaceId：优先认证上下文，回退请求体，再回退默认值
             var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, request.WorkspaceId);
 
-            // WP-2：幂等去重。客户端提供 IdempotencyKey 时，先查询是否已有同 key 的 Run；
-            // 命中则直接返回 200 OK（而非 201 Created），不重复启动 Actor。
-            // 防止客户端重试/网络抖动导致同一业务意图被多次执行。
+            // P1-5: Atomic idempotent creation - eliminates TOCTOU race between check and create
             var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey;
-            if (idempotencyKey is not null)
-            {
-                AgentRun? existing;
-                try
-                {
-                    existing = await runStore.GetByIdempotencyKeyAsync(workspaceId, idempotencyKey, ct)
-                        .ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
-                }
-
-                if (existing is not null)
-                {
-                    // 幂等命中：返回已有 Run（200 OK，不重复创建/启动）
-                    return Results.Ok(ToRunResponse(existing));
-                }
-            }
 
             var runId = Guid.NewGuid().ToString("N");
             var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
@@ -94,7 +73,7 @@ internal static class AgentExecutionEndpoints
                 : request.SessionId!;
             var now = DateTimeOffset.UtcNow;
 
-            // 构建预算（请求未提供时使用默认值）
+            // Build budgets (defaults when not provided)
             var turnBudget = request.CostBudget is null
                 ? new AgentTurnBudget { MaxTurns = 20, TurnsUsed = 0, MaxModelCalls = 60 }
                 : new AgentTurnBudget
@@ -113,7 +92,6 @@ internal static class AgentExecutionEndpoints
                     CostUsedUsd = 0.0
                 };
 
-            // P0-5：从 API 入参写入 Run 约束（ModelArtifactId / AllowedToolIds / DeadlineAt）
             var timeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : 300;
             var allowedToolIds = request.ToolIds is { Count: > 0 } toolIds
                 ? new HashSet<string>(toolIds, StringComparer.Ordinal)
@@ -132,42 +110,42 @@ internal static class AgentExecutionEndpoints
                 UpdatedAt = now,
                 TurnBudget = turnBudget,
                 CostBudget = costBudget,
-                // P0-5：写入约束字段（Actor 在执行时强制校验）
                 ModelArtifactId = string.IsNullOrWhiteSpace(request.ModelId) ? null : request.ModelId,
                 AllowedToolIds = allowedToolIds,
                 DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
-                ModelContextTokenBudget = 8192, // 默认 8192；0 或负数 = 不限制
+                ModelContextTokenBudget = 8192,
                 IdempotencyKey = idempotencyKey
             };
 
+            AgentRunCreateResult createResult;
             try
             {
-                await runStore.CreateAsync(run, ct).ConfigureAwait(false);
+                createResult = await runStore.CreateOrGetByIdempotencyKeyAsync(run, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
             }
 
-            // P0-5 修复 CTS 释放问题：不再创建 linked timeout CTS（它在请求结束时被 Dispose，
-            // 导致 Actor 收到 ObjectDisposedException）。
-            // 超时控制改由 Run.DeadlineAt 字段承载，Actor 在每次模型调用前检查。
-            // 传入 CancellationToken.None 让 Actor 不受 HTTP 请求生命周期影响（fire-and-forget）。
-            // Run 可通过 POST /cancel 端点显式取消。
-            try
+            if (createResult.WasExisting)
             {
-                await host.StartRunAsync(run, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (InvalidOperationException ex)
-            {
-                // Channel 已关闭或队列已满
-                return ContextCoreHttpResultMapper.InternalError(
-                    httpContext, string.Empty, "agents.runs.create",
-                    $"启动 Run 失败：{ex.Message}");
+                // Idempotent replay: return existing run (200 OK)
+                return Results.Ok(ToRunResponse(createResult.Run));
             }
 
-            var response = ToRunResponse(run);
-            return Results.Created($"/api/agents/runs/{runId}", response);
+            // Created: try to enqueue to Host. If enqueue fails, return 202 Accepted
+            // (run is persisted, Recovery will pick it up)
+            try
+            {
+                await host.StartRunAsync(createResult.Run, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // Channel closed or queue full - run is persisted, Recovery will handle it
+                return Results.Accepted($"/api/agents/runs/{createResult.Run.RunId}", ToRunResponse(createResult.Run));
+            }
+            var response = ToRunResponse(createResult.Run);
+            return Results.Created($"/api/agents/runs/{createResult.Run.RunId}", response);
         })
         .WithName("CreateAgentRun")
         .RequireWorkspacePermission(WorkspacePermission.AgentRun)

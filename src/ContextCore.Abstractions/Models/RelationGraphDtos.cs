@@ -909,6 +909,37 @@ public sealed class RelationNeighborQuery
 }
 
 /// <summary>
+/// P1-3：Graph 查询全局硬上限。所有图查询路径（store / traversal engine）必须遵守，
+/// 防止病态查询（超大种子集 × 高扇出）导致全局扫描或结果集爆炸。
+/// </summary>
+/// <remarks>
+/// 语义：
+///   - <see cref="MaxSeeds"/>：单次图查询的最大种子数，超出部分直接截断（保留原序）。
+///   - <see cref="MaxEdgesPerSeed"/>：单种子返回的最大边数（per-seed Take 硬上限）。
+///   - <see cref="MaxTotalEdges"/>：单次图查询全局读取/返回的最大边数，超出即截断并标记 Truncated。
+/// </remarks>
+public static class GraphQueryLimits
+{
+    /// <summary>单次图查询的最大种子数（硬上限）。</summary>
+    public const int MaxSeeds = 50;
+
+    /// <summary>单种子返回的最大边数（per-seed Take 硬上限）。</summary>
+    public const int MaxEdgesPerSeed = 100;
+
+    /// <summary>单次图查询全局读取/返回的最大边数（硬上限）。</summary>
+    public const int MaxTotalEdges = 5000;
+
+    /// <summary>图扩展可引入的最大新节点数（不含种子）。防止 BFS 爆炸式扩展。</summary>
+    public const int MaxExpandedNodes = 500;
+
+    /// <summary>图候选 hydration 的最大条目数。防止对过多邻居节点进行正文批量获取。</summary>
+    public const int MaxHydrationItems = 200;
+
+    /// <summary>图候选的最大总 Token 预算。防止图扩展结果超出模型上下文窗口。</summary>
+    public const int MaxGraphTokens = 8192;
+}
+
+/// <summary>
 /// P1-6：批量邻居查询 DTO。一次查询多个种子节点的邻居，消除 BFS 逐节点往返。
 /// 字段语义与 <see cref="RelationNeighborQuery"/> 一致，区别仅在于 <see cref="ItemIds"/>（多个种子）。
 /// Take/Skip/MaxScan 仍为 per-seed 语义：每个种子独立排序、独立扫描上限、独立分页。

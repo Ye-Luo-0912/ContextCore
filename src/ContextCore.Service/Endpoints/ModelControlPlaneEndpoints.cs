@@ -587,6 +587,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("GetActiveModel")
+        .RequireWorkspacePermission(WorkspacePermission.ModelRead)
         .WithSummary("获取当前 active 模型（Champion）与 shadow 模型（Challenger）信息")
         .Produces<ActiveModelResponse>(StatusCodes.Status200OK);
 
@@ -601,6 +602,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("ListModels")
+        .RequireWorkspacePermission(WorkspacePermission.ModelRead)
         .WithSummary("列出所有已注册模型工件描述符")
         .Produces<ListModelsResponse>(StatusCodes.Status200OK);
 
@@ -620,6 +622,7 @@ internal static class ModelControlPlaneEndpoints
             return Results.Ok(ToDescriptorResponse(descriptor));
         })
         .WithName("GetModel")
+        .RequireWorkspacePermission(WorkspacePermission.ModelRead)
         .WithSummary("获取模型工件描述符详情")
         .Produces<ModelArtifactDescriptorResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
@@ -644,6 +647,7 @@ internal static class ModelControlPlaneEndpoints
             });
         })
         .WithName("GetModelReadiness")
+        .RequireWorkspacePermission(WorkspacePermission.ModelRead)
         .WithSummary("readiness 检查：模型是否已加载且可推理")
         .Produces<ModelReadinessResponse>(StatusCodes.Status200OK);
 

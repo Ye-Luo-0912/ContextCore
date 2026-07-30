@@ -210,6 +210,11 @@ public sealed class ModelActivationManager : IModelActivationManager
     // 调用方可通过 PromoteStagedAsync(handleId) 原子发布为 active。
     // P0-8：包含容量上限与 TTL 自动清理。
     private readonly ConcurrentDictionary<string, StagedModelHandle> _stagedHandles = new();
+    private readonly object _stagedHandlesLock = new();
+
+    // P1-8：TTL 定时器 — 主动清理过期 Staged Handle，避免依赖被动调用 EvictExpiredStagedHandles。
+    private readonly Timer? _stagedHandleTtlTimer;
+    private static readonly TimeSpan StagedHandleTtlCheckInterval = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// 构造 ModelActivationManager。
@@ -242,6 +247,13 @@ public sealed class ModelActivationManager : IModelActivationManager
         _sessionFactory = sessionFactory;
         _fallbackEngine = fallbackEngine;
         _calibrationService = calibrationService;
+
+        // P1-8：启动 TTL 定时器，周期性清理过期 Staged Handle。
+        _stagedHandleTtlTimer = new Timer(
+            _ => EvictExpiredStagedHandles(),
+            null,
+            StagedHandleTtlCheckInterval,
+            StagedHandleTtlCheckInterval);
     }
 
     /// <inheritdoc />
@@ -368,22 +380,29 @@ public sealed class ModelActivationManager : IModelActivationManager
             descriptor,
             loaded.CalibrationValidation);
 
-        // P0-8：容量限制 + TTL 清理后再插入。
+        // P0-8 / P1-8：容量限制 + TTL 清理后再插入。
         // 先清理过期 Staged Handle（释放槽位），再检查容量；超出上限时 Dispose 新加载的引擎并返回失败。
+        // P1-8：check-then-insert 必须在锁内原子完成，防止并发 Warmup 超过 MaxStagedHandles。
         EvictExpiredStagedHandles();
-        if (_stagedHandles.Count >= MaxStagedHandles)
+        lock (_stagedHandlesLock)
         {
-            await SafeDisposeEngineAsync(loaded.Engine!).ConfigureAwait(false);
-            return StagedModelHandle.Failed(
-                handleId,
-                descriptor,
-                $"StagedHandleCapacityExceeded：暂存表已满（上限 {MaxStagedHandles}），" +
-                "请先 Promote 或丢弃现有 Staged Handle。");
+            if (_stagedHandles.Count >= MaxStagedHandles)
+            {
+                // 锁内同步 Dispose 不安全（可能阻塞）；标记后在锁外 Dispose。
+            }
+            else
+            {
+                _stagedHandles[handleId] = staged;
+                return staged;
+            }
         }
 
-        // 存入暂存表，调用方可通过 PromoteStagedAsync(handleId) 提升为 active。
-        _stagedHandles[handleId] = staged;
-        return staged;
+        await SafeDisposeEngineAsync(loaded.Engine!).ConfigureAwait(false);
+        return StagedModelHandle.Failed(
+            handleId,
+            descriptor,
+            $"StagedHandleCapacityExceeded：暂存表已满（上限 {MaxStagedHandles}），" +
+            "请先 Promote 或丢弃现有 Staged Handle。");
     }
 
     /// <inheritdoc />
@@ -740,16 +759,18 @@ public sealed class ModelActivationManager : IModelActivationManager
         }
 
         ActiveModelHandle? oldActive;
-        var newGeneration = unchecked(Interlocked.Increment(ref _generation));
-        var newHandle = new ActiveModelHandle(
-            engine,
-            descriptor,
-            new ModelReferenceCounter(),
-            newGeneration);
+        ActiveModelHandle newHandle;
 
-        // P1：在 lock 内原子切换 _activeHandle 并把 oldActive 加入 Retired 列表。
+        // P1-8：在 lock 内原子递增 Generation 并切换 _activeHandle，确保 Generation 与 handle 切换的原子性。
         lock (_activationLock)
         {
+            var newGeneration = unchecked(Interlocked.Increment(ref _generation));
+            newHandle = new ActiveModelHandle(
+                engine,
+                descriptor,
+                new ModelReferenceCounter(),
+                newGeneration);
+
             oldActive = _activeHandle;
 
             // P0-8：新 handle 转为 Active（从 Loading）。
@@ -805,6 +826,7 @@ public sealed class ModelActivationManager : IModelActivationManager
                     // DisposeAsync 取消时会跳出循环由 DisposeAsync 接管。
                     var drainDeadline = Stopwatch.GetTimestamp();
                     var drainTimeoutTicks = TimeSpan.FromMilliseconds(gracePeriodMs).Ticks;
+                    var drainTimedOut = false;
                     while (oldHandleForClosure.Counter.Count > 0)
                     {
                         if (disposedToken.IsCancellationRequested)
@@ -813,7 +835,9 @@ public sealed class ModelActivationManager : IModelActivationManager
                         }
                         if (Stopwatch.GetElapsedTime(drainDeadline).Ticks > drainTimeoutTicks)
                         {
-                            // 超时仍有 in-flight：best-effort Dispose（极端场景可能触发 ORT 内部异常）。
+                            // P1-8：超时仍有 in-flight —— 保留旧引擎，不强制 Dispose。
+                            // 宁可临时保留旧 Session 并告警，也不在仍有引用时强制 Dispose。
+                            drainTimedOut = true;
                             break;
                         }
                         try
@@ -824,6 +848,19 @@ public sealed class ModelActivationManager : IModelActivationManager
                         {
                             break;
                         }
+                    }
+
+                    if (drainTimedOut && oldHandleForClosure.Counter.Count > 0)
+                    {
+                        // P1-8：保留 retired handle，等待自然 drain（后续 DisposeAsync 或下次激活时重试）。
+                        System.Diagnostics.Trace.TraceWarning(
+                            "[ModelActivationManager] Retired handle drain timeout: {0} in-flight requests still referencing old engine (gen {1}). " +
+                            "Keeping old engine alive to avoid ORT corruption. It will be disposed when references release.",
+                            oldHandleForClosure.Counter.Count,
+                            oldHandleForClosure.Generation);
+                        // 回退状态：Draining → Retired（继续等待）
+                        oldHandleForClosure.TransitionTo(ModelSlotState.Retired);
+                        return;
                     }
 
                     // P0-8：从 _retiredHandles 移除并 Dispose（Draining → Disposed）。
@@ -911,7 +948,8 @@ public sealed class ModelActivationManager : IModelActivationManager
         {
             // schema 无特征列：跳过 Golden Probe（无法构造 warmup batch），不视为失败。
             // 标记引擎为已 warmup，跳过后续 lazy warmup。
-            _ = engine.WarmupAsync(cancellationToken);
+            // P1-8：await WarmupAsync 确保 warmup 完成，避免 fire-and-forget 导致的资源泄漏。
+            await engine.WarmupAsync(cancellationToken).ConfigureAwait(false);
             return null;
         }
 
@@ -1037,6 +1075,12 @@ public sealed class ModelActivationManager : IModelActivationManager
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;
+        }
+
+        // P1-8：停止 TTL 定时器。
+        if (_stagedHandleTtlTimer is not null)
+        {
+            await _stagedHandleTtlTimer.DisposeAsync().ConfigureAwait(false);
         }
 
         // 1. 取消所有后台 drain 任务的 grace 等待。

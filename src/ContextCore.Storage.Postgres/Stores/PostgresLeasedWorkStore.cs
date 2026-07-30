@@ -390,7 +390,9 @@ RETURNING {{BuildReturningClause()}};
         var conditions = new List<string>
         {
             $"{_config.WorkIdColumn} = @work_id",
-            $"{_config.LeaseTokenColumn} = @token"
+            $"{_config.LeaseTokenColumn} = @token",
+            // P1-9：Renew 必须检查 lease 尚未过期——不允许续租已过期的 lease。
+            $"{_config.LeaseExpiresAtColumn} > clock_timestamp()"
         };
         if (!_config.IsLeaderLease && _config.StateColumn is not null)
             conditions.Add($"{_config.StateColumn} = @leased_state");

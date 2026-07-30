@@ -71,9 +71,10 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
     }
 
     /// <inheritdoc />
-    public async ValueTask<CandidateWorkingSet> HydrateAsync(
+    public async ValueTask<HydrationResult> HydrateAsync(
         IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
         CandidateWorkingSet workingSet,
+        int tokenBudget = 0,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(selectedEnvelopes);
@@ -82,12 +83,12 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // 无 batch lookup 能力 → 直接返回原 WorkingSet（保持旧行为，Material.Content 已由 Provider 加载）
         if (_contextBatchLookup is null && _memoryBatchLookup is null)
         {
-            return workingSet;
+            return NoHydration(workingSet);
         }
 
         if (selectedEnvelopes.Count == 0)
         {
-            return workingSet;
+            return NoHydration(workingSet);
         }
 
         // 筛出需要 hydrate 的 Selected 候选：
@@ -98,6 +99,8 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // 内部对 string 字段使用 ordinal 比较，与 StringComparer.Ordinal 等价。
         var contextGroups = new Dictionary<(string WorkspaceId, string CollectionId), List<ContextCandidateEnvelope>>();
         var memoryGroups = new Dictionary<(string WorkspaceId, string CollectionId), List<ContextCandidateEnvelope>>();
+        // P1-1：hydrate 候选键集合（成功/失败计数基数；仅 context/memory 且未 hydrate 的候选）
+        var candidateKeys = new HashSet<CanonicalCandidateKey>();
 
         foreach (var envelope in selectedEnvelopes)
         {
@@ -117,6 +120,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             var groupKey = (key.WorkspaceId, key.CollectionId);
             if (string.Equals(key.EntityKind, ContextEntityKind, StringComparison.Ordinal))
             {
+                candidateKeys.Add(key);
                 if (!contextGroups.TryGetValue(groupKey, out var list))
                 {
                     list = new List<ContextCandidateEnvelope>();
@@ -126,6 +130,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             }
             else if (string.Equals(key.EntityKind, MemoryEntityKind, StringComparison.Ordinal))
             {
+                candidateKeys.Add(key);
                 if (!memoryGroups.TryGetValue(groupKey, out var list))
                 {
                     list = new List<ContextCandidateEnvelope>();
@@ -139,7 +144,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // 两个分组都为空 → 无需任何 I/O，直接返回原 WorkingSet
         if (contextGroups.Count == 0 && memoryGroups.Count == 0)
         {
-            return workingSet;
+            return NoHydration(workingSet);
         }
 
         // 收集 hydrate 后的 Material 更新（按 CanonicalKey 索引）
@@ -161,10 +166,27 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             await Task.WhenAll(tasks).ConfigureAwait(false);
         }
 
+        // P1-1：hydrate 成功/失败计数（失败 = 候选未出现在 materialUpdates：store 未命中 / 读取异常 / 正文为空）
+        var hydratedCount = 0;
+        foreach (var candidateKey in candidateKeys)
+        {
+            if (materialUpdates.ContainsKey(candidateKey))
+            {
+                hydratedCount++;
+            }
+        }
+        var failedCount = candidateKeys.Count - hydratedCount;
+
         // 无任何更新 → 返回原 WorkingSet（避免无谓的字典复制）
         if (materialUpdates.IsEmpty)
         {
-            return workingSet;
+            return new HydrationResult
+            {
+                WorkingSet = workingSet,
+                HydratedCount = 0,
+                FailedCount = failedCount,
+                BudgetExceeded = false
+            };
         }
 
         // 合并更新到新 Materials 字典（保留原有 Material 的 NativeKind / SourceRefs，
@@ -198,7 +220,126 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             }
         }
 
-        return workingSet with { Materials = mergedMaterials };
+        var hydratedWorkingSet = workingSet with { Materials = mergedMaterials };
+
+        // P1-1：最终预算修复 — hydrate 后真实 TokenCost 总和可能超出 Engine 基于召回估算的预算分配，
+        // 按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪）。
+        var (finalWorkingSet, budgetExceeded, repairDiagnostics) = RepairBudget(
+            selectedEnvelopes, hydratedWorkingSet, tokenBudget);
+
+        return new HydrationResult
+        {
+            WorkingSet = finalWorkingSet,
+            HydratedCount = hydratedCount,
+            FailedCount = failedCount,
+            BudgetExceeded = budgetExceeded,
+            BudgetRepairDiagnostics = repairDiagnostics
+        };
+    }
+
+    /// <summary>
+    /// P1-1：无 hydrate 发生时的快捷结果（WorkingSet 原样返回，计数全 0）。
+    /// </summary>
+    private static HydrationResult NoHydration(CandidateWorkingSet workingSet)
+    {
+        return new HydrationResult
+        {
+            WorkingSet = workingSet,
+            HydratedCount = 0,
+            FailedCount = 0,
+            BudgetExceeded = false
+        };
+    }
+
+    /// <summary>
+    /// P1-1：最终预算修复。hydrate 后正文的真实 TokenCost 总和可能超出 Engine 基于召回估算值
+    /// 做出的预算分配（Recall 阶段 IncludeContent=false 时 TokenCost 为估算或缺失）。
+    /// 超限时按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪），
+    /// 直到 Selected 候选的 TokenCost 总和回到预算内；全为 mandatory 时直接返回 BudgetExceeded=true。
+    /// </summary>
+    /// <param name="selectedEnvelopes">Engine 选中的候选 envelope 集合。</param>
+    /// <param name="workingSet">hydrate 后的候选工作集。</param>
+    /// <param name="tokenBudget">最终 token 预算；&lt;= 0 表示无预算约束，跳过修复。</param>
+    /// <returns>修复后的 WorkingSet + 是否仍超预算 + 修复诊断（未修复时为 null）。</returns>
+    private static (CandidateWorkingSet WorkingSet, bool BudgetExceeded, IReadOnlyList<string>? Diagnostics) RepairBudget(
+        IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
+        CandidateWorkingSet workingSet,
+        int tokenBudget)
+    {
+        if (tokenBudget <= 0 || selectedEnvelopes.Count == 0)
+        {
+            return (workingSet, false, null);
+        }
+        var totalTokens = 0;
+        foreach (var envelope in selectedEnvelopes)
+        {
+            totalTokens += GetEffectiveMaterialTokens(envelope, workingSet.Materials);
+        }
+
+        if (totalTokens <= tokenBudget)
+        {
+            return (workingSet, false, null);
+        }
+
+        // 预算超限：按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪）。
+        // CandidateId 作为 tie-break 保证确定性（与 Engine 排序约定一致）。
+        var trimmable = selectedEnvelopes
+            .Where(e => !e.Safety.IsMandatory && !e.Safety.IsHardConstraint)
+            .OrderBy(e => e.Utility.FinalScore)
+            .ThenBy(e => e.CandidateId, StringComparer.Ordinal);
+
+        var repairedMaterials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(workingSet.Materials, comparer: null);
+        List<string>? diagnostics = null;
+        var remaining = totalTokens;
+
+        foreach (var envelope in trimmable)
+        {
+            if (remaining <= tokenBudget)
+            {
+                break;
+            }
+
+            // 只裁剪实际持有正文的 Material（无 Material / 空 Content 的候选本来就不占预算）
+            if (!repairedMaterials.TryGetValue(envelope.CanonicalKey, out var material)
+                || string.IsNullOrEmpty(material.Content))
+            {
+                continue;
+            }
+            var tokens = GetEffectiveMaterialTokens(envelope, repairedMaterials);
+            repairedMaterials.Remove(envelope.CanonicalKey);
+            remaining -= tokens;
+            diagnostics ??= new List<string>();
+            diagnostics.Add(
+                "trimmed:" + envelope.CanonicalKey.EntityKind + "/" + envelope.CanonicalKey.EntityId
+                + " score=" + envelope.Utility.FinalScore.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)
+                + " tokens=" + tokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (diagnostics is null)
+        {
+            // 无可裁剪项（全部 mandatory / hard constraint 或无正文）→ 预算仍超出，WorkingSet 原样返回
+            return (workingSet, true, null);
+        }
+
+        return (workingSet with { Materials = repairedMaterials }, remaining > tokenBudget, diagnostics);
+    }
+
+    /// <summary>
+    /// P1-1：获取选中候选的有效 token 数。hydrate 后的 Material.TokenCost 优先（基于真实正文重算），
+    /// 回退到 envelope.TokenCost（recall 阶段估算）；两者都缺失时计 0（无正文不占预算）。
+    /// </summary>
+    private static int GetEffectiveMaterialTokens(
+        ContextCandidateEnvelope envelope,
+        IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> materials)
+    {
+        if (materials.TryGetValue(envelope.CanonicalKey, out var material)
+            && material.TokenCost is not null
+            && !string.IsNullOrEmpty(material.Content))
+        {
+            return material.TokenCost.ContentTokens;
+        }
+
+        return envelope.TokenCost?.ContentTokens ?? 0;
     }
 
     /// <summary>

@@ -195,6 +195,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
         services.AddSingleton<IPersistentModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
 
+        // R29 WP-A-2：Desired Model State Store 持久化（PostgreSQL）。
+        // 存储 HA 集群中各模型的期望状态（Active/Inactive），由各节点的 ReconcilerWorker 定期拉取并应用。
+        services.AddSingleton<PostgresDesiredModelStateStore>();
+        services.AddSingleton<IDesiredModelStateStore>(sp => sp.GetRequiredService<PostgresDesiredModelStateStore>());
+
         // P0-6：Model Activation Audit 持久化（PostgreSQL）。
         // 替代 FileSystem / InMemory provider 下的 InMemory 默认实现，让 HA 场景下
         // 模型生命周期审计记录（Activate / Rollback / Retire / Shadow 等）可跨进程持久化与查询。
@@ -286,6 +291,23 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunLease>();
         services.AddSingleton<IAgentRunLease>(sp => sp.GetRequiredService<PostgresAgentRunLease>());
 
+        // P1-9：注册 ILeasedWorkStore 用于 Agent Run 租约（统一租约基础设施 — dual-registration）。
+        // 与 IAgentRunLease 共享同一底层表（agent_run_leases），使用统一的 ILeasedWorkStore 接口。
+        // 消费方（AgentKernelHost）暂不改用 ILeasedWorkStore，先通过 dual-registration 证明语义覆盖。
+        services.AddLeasedWorkStore<string>(new LeasedWorkStoreConfiguration<string>
+        {
+            TableName = Infrastructure.PostgresNames.Table(options, "agent_run_leases"),
+            WorkIdColumn = "run_id",
+            LeaseTokenColumn = "lease_token",
+            LeaseOwnerColumn = "owner",
+            LeaseExpiresAtColumn = "lease_expires_at",
+            FencingTokenColumn = "fencing_token",
+            AcquiredAtColumn = "acquired_at",
+            IsLeaderLease = true,
+            SerializeWork = work => work,
+            DeserializeWork = workId => workId
+        });
+
         // 任务 D：Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
         // 替代单节点 InMemory 默认实现，让 HA 场景下 Canary 指标可跨实例聚合 + Leader 选举确保单 leader 推进。
         // - ICanaryLeaderLease：CanaryLeaderHostedService 通过 TryAcquireAsync/RenewAsync/ReleaseAsync
@@ -302,6 +324,22 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresCanaryLeaderLease>();
         services.AddSingleton<ICanaryLeaderLease>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
         services.AddSingleton<ICanaryDecisionApplier>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
+
+        // P1-9：注册 ILeasedWorkStore 用于 Canary Leader 租约（统一租约基础设施）。
+        // 与 ICanaryLeaderLease 共享同一底层表（canary_leader_leases），但使用统一的 ILeasedWorkStore 接口。
+        services.AddLeasedWorkStore<string>(new LeasedWorkStoreConfiguration<string>
+        {
+            TableName = Infrastructure.PostgresNames.Table(options, "canary_leader_leases"),
+            WorkIdColumn = "run_id",
+            LeaseTokenColumn = "lease_token",
+            LeaseOwnerColumn = "owner",
+            LeaseExpiresAtColumn = "lease_expires_at",
+            FencingTokenColumn = "fencing_token",
+            AcquiredAtColumn = "acquired_at",
+            IsLeaderLease = true,
+            SerializeWork = work => work,
+            DeserializeWork = workId => workId
+        });
         services.AddSingleton<PostgresCanaryMetricsAggregator>();
         services.AddSingleton<ICanaryMetricsAggregator>(sp => sp.GetRequiredService<PostgresCanaryMetricsAggregator>());
 

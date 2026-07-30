@@ -301,6 +301,46 @@ WHERE event_id = @event_id
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlySet<string>> RenewLeaseBatchAsync(
+        IReadOnlyList<(string EventId, string LeaseToken)> leases,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default)
+    {
+        if (leases.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        var now = DateTimeOffset.UtcNow;
+        var expiresAt = now.Add(leaseDuration);
+        var renewed = new HashSet<string>(StringComparer.Ordinal);
+
+        // Perf-7：批量 UPDATE——用 unnest 展开参数，一次 DB 往返续约所有 lease。
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $@"
+UPDATE {Table("learning_event_outbox")}
+SET lease_expires_at = @lease_expires_at,
+    updated_at = @updated_at
+FROM unnest(@event_ids, @lease_tokens) AS t(event_id, lease_token)
+WHERE {Table("learning_event_outbox")}.event_id = t.event_id
+  AND {Table("learning_event_outbox")}.lease_token = t.lease_token
+  AND {Table("learning_event_outbox")}.state = 'Processing'
+RETURNING {Table("learning_event_outbox")}.event_id;";
+
+        AddTextArray(command, "event_ids", leases.Select(l => l.EventId).ToArray());
+        AddTextArray(command, "lease_tokens", leases.Select(l => l.LeaseToken).ToArray());
+        command.Parameters.AddWithValue("lease_expires_at", expiresAt);
+        command.Parameters.AddWithValue("updated_at", now);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            renewed.Add(reader.GetString(0));
+        }
+        return renewed;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, int>> CountByStateAsync(CancellationToken cancellationToken = default)
     {
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);

@@ -67,10 +67,42 @@ public interface ISelectedCandidateHydrator
     /// </summary>
     /// <param name="selectedEnvelopes">Engine 选中的候选 envelope 集合（仅对这些候选 hydrate 正文）。</param>
     /// <param name="workingSet">当前候选工作集（含 Provider 产出的 Materials，可能 Content 为空）。</param>
+    /// <param name="tokenBudget">
+    /// P1-1：最终 token 预算（用于 hydrate 后的二次预算修复）。&lt;= 0 表示无预算约束，跳过修复。
+    /// hydrate 后正文的真实 TokenCost 可能超出 Engine 基于召回估算值做出的预算分配，
+    /// 实现须在返回前按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪），
+    /// 直到 Selected 候选的 TokenCost 总和回到预算内。
+    /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>新的 WorkingSet，其中 Selected 候选的 Material.Content 已填充；未选中候选保持原样。</returns>
-    ValueTask<CandidateWorkingSet> HydrateAsync(
+    /// <returns>hydrate 结果（修复后的 WorkingSet + 计数 + 预算修复诊断）；未选中候选保持原样。</returns>
+    ValueTask<HydrationResult> HydrateAsync(
         IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
         CandidateWorkingSet workingSet,
+        int tokenBudget = 0,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P1-1：Late Hydration 执行结果。携带修复后的 WorkingSet、hydrate 计数与预算修复诊断。
+/// </summary>
+/// <remarks>
+/// Caller（DefaultContextDecisionRuntime）将 <see cref="FailedCount"/> / <see cref="BudgetExceeded"/>
+/// 合并进 Outcome.Diagnostics；AgentContext 路径对 hard constraint hydrate 失败 fail-closed。
+/// </remarks>
+public sealed record HydrationResult
+{
+    /// <summary>hydrate（+ 预算修复）后的候选工作集。</summary>
+    public required CandidateWorkingSet WorkingSet { get; init; }
+
+    /// <summary>成功 hydrate 正文的 Selected 候选数。</summary>
+    public required int HydratedCount { get; init; }
+
+    /// <summary>需要 hydrate 但失败的 Selected 候选数（store 未命中 / 读取异常 / 正文为空）。</summary>
+    public required int FailedCount { get; init; }
+
+    /// <summary>P1-1：预算修复后 Selected 候选 TokenCost 总和仍超出预算时为 true。</summary>
+    public required bool BudgetExceeded { get; init; }
+
+    /// <summary>P1-1：预算修复诊断（被裁剪的 Material 列表及原因）；未发生修复时为 null。</summary>
+    public IReadOnlyList<string>? BudgetRepairDiagnostics { get; init; }
 }

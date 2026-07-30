@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Core.Services.Evolution;
@@ -176,6 +177,9 @@ public sealed class ProductionRuntimeReadinessService
             }
         }
 
+        // P1-6：Capability probes — 验证生产可用性（不仅是注册状态）
+        AddCapabilityProbes(checks);
+
         // 整体就绪判定：所有检查项均为 ready 或 warning 时视为就绪（warning 不阻断流量）
         var hasError = checks.Any(c => string.Equals(c.Status, "error", StringComparison.OrdinalIgnoreCase));
         var allReady = !hasError && appStarted;
@@ -338,6 +342,90 @@ public sealed class ProductionRuntimeReadinessService
             (nameof(CanaryProgressionHostedService), "CanaryProgression", !isHA),
             (nameof(Hosting.CanaryLeaderHostedService), "CanaryLeader", isHA),
         ];
+    }
+
+    /// <summary>
+    /// P1-6：Capability probes — 验证生产可用性（不仅是注册状态）。
+    /// 各 probe 失败时添加 error/warning 检查项，影响整体就绪判定。
+    /// </summary>
+    private void AddCapabilityProbes(List<ReadinessCheckItem> checks)
+    {
+        // 1. Tool Dispatcher probe：RealToolDispatcher 零 Handler 不算生产可用
+        var dispatcher = _services.GetService<IToolDispatcher>();
+        if (dispatcher is not null)
+        {
+            var isEcho = dispatcher.GetType().Name.Equals(nameof(EchoToolDispatcher), StringComparison.Ordinal);
+            var toolCount = dispatcher.SupportedTools.Count;
+            if (isEcho)
+            {
+                checks.Add(new ReadinessCheckItem(
+                    Name: "capability-tool-dispatcher",
+                    Status: "warning",
+                    Message: "Tool Dispatcher 为 Echo 模式（无真实工具执行）。"));
+            }
+            else if (toolCount == 0)
+            {
+                checks.Add(new ReadinessCheckItem(
+                    Name: "capability-tool-dispatcher",
+                    Status: "error",
+                    Message: "RealToolDispatcher 已注册但零 Handler——生产环境不可用。"));
+            }
+            else
+            {
+                checks.Add(new ReadinessCheckItem(
+                    Name: "capability-tool-dispatcher",
+                    Status: "ready",
+                    Message: $"Tool Dispatcher 正常（{dispatcher.GetType().Name}，{toolCount} 个工具）。"));
+            }
+        }
+
+        // 2. Approval Policy probe：未启用 = 不安全
+        var securityOptions = _services.GetService<IOptions<SecurityOptions>>()?.Value;
+        var approvalPolicy = securityOptions?.ApprovalPolicy;
+        if (approvalPolicy is null || approvalPolicy.Enabled == false)
+        {
+            checks.Add(new ReadinessCheckItem(
+                Name: "capability-approval-policy",
+                Status: "warning",
+                Message: "Approval Policy 未启用或缺失——所有工具调用将自动放行（autoApproveAll=true）。"));
+        }
+        else
+        {
+            checks.Add(new ReadinessCheckItem(
+                Name: "capability-approval-policy",
+                Status: "ready",
+                Message: $"Approval Policy 已启用（{approvalPolicy.ApprovalRequiredTools?.Count ?? 0} 个需审批工具）。"));
+        }
+
+        // 3. Model Gateway probe：有可用路由才算生产可用
+        var modelGateway = _services.GetService<IModelGateway>();
+        if (modelGateway is not null)
+        {
+            checks.Add(new ReadinessCheckItem(
+                Name: "capability-model-gateway",
+                Status: "ready",
+                Message: $"Model Gateway 已注册（{modelGateway.GetType().Name}）。"));
+        }
+        else
+        {
+            checks.Add(new ReadinessCheckItem(
+                Name: "capability-model-gateway",
+                Status: "warning",
+                Message: "IModelGateway 未注册——Agent 无法调用真实模型。"));
+        }
+
+        // 4. Active Model probe：模型已激活才算推理可用
+        var activationManager = _services.GetService<IModelActivationManager>();
+        if (activationManager is not null)
+        {
+            var hasActive = activationManager.ActiveEngine is not null;
+            checks.Add(new ReadinessCheckItem(
+                Name: "capability-active-model",
+                Status: hasActive ? "ready" : "warning",
+                Message: hasActive
+                    ? $"模型已激活（{activationManager.ActiveDescriptor?.ModelName ?? "unknown"}）。"
+                    : "无激活模型——推理请求将使用 fallback。"));
+        }
     }
 }
 

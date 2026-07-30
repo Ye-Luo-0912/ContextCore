@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ContextCore.Abstractions;
@@ -22,7 +22,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// </list>
 ///
 /// <b>仅进程内</b>：多实例部署时每个实例的 SSE 连接由本实例的 Event Store 推送；
-/// 跨实例的 SSE 客户端依赖 500ms 轮询兜底（与原行为一致）。
+/// 跨实例的 SSE 客户端依赖 SSE 端点的周期性 ReadAsync 轮询兜底。
 /// </remarks>
 public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
 {
@@ -72,18 +72,14 @@ public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
         {
             while (!ct.IsCancellationRequested)
             {
-                // 每轮等待最多 500ms；超时结束迭代让调用方回退轮询。
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeoutCts.CancelAfter(SubscribeTimeout);
-
+                // Perf-6：持久订阅——不再 500ms 超时退出，一直等待直到客户端断开或 channel 完成。
                 bool hasData;
                 try
                 {
-                    hasData = await channel.Reader.WaitToReadAsync(timeoutCts.Token).ConfigureAwait(false);
+                    hasData = await channel.Reader.WaitToReadAsync(ct).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
-                    // 500ms 超时：无新事件，结束迭代让调用方回退 ReadAsync 轮询。
                     yield break;
                 }
 
