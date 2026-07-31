@@ -432,52 +432,96 @@ public sealed class AgentRunActor
             return state;
         }
 
-        // 从事件流重建 ToolObservations
+        // P0-2：从事件流按时间顺序无损重建 Conversation（Assistant + Tool 消息）。
+        // ModelCallCompleted 事件携带完整模型响应（content + toolCalls[]），重建 Assistant 消息。
+        // ToolCallCompleted 事件携带 Tool 执行结果，重建 Tool 消息。
+        // 按事件 Sequence 顺序遍历，保证 "assistant tool_calls → tool result" 因果顺序。
+        // 旧事件缺少 content/toolCalls[] 字段时跳过 Assistant 重建（仅恢复 Tool 消息，向后兼容）。
         var toolObservations = new List<ToolObservation>();
+        var rebuiltConversation = new List<AgentMessage>();
         foreach (var evt in events)
         {
-            if (evt.EventType != AgentRunEventType.ToolCallCompleted)
+            if (evt.EventType == AgentRunEventType.ModelCallCompleted)
             {
-                continue;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(evt.Payload);
-                var root = doc.RootElement;
-                if (!root.TryGetProperty("succeeded", out var succeededProp))
+                // P0-2：从 ModelCallCompleted 重建 Assistant 消息
+                try
                 {
-                    continue;
+                    using var doc = JsonDocument.Parse(evt.Payload);
+                    var root = doc.RootElement;
+                    // 旧事件无 content 字段 → 跳过（向后兼容）
+                    if (!root.TryGetProperty("content", out var contentProp))
+                    {
+                        continue;
+                    }
+
+                    var content = contentProp.GetString() ?? string.Empty;
+                    List<AgentToolCallEntry>? toolCalls = null;
+                    if (root.TryGetProperty("toolCalls", out var tcArrayEl)
+                        && tcArrayEl.ValueKind == JsonValueKind.Array
+                        && tcArrayEl.GetArrayLength() > 0)
+                    {
+                        toolCalls = new List<AgentToolCallEntry>(tcArrayEl.GetArrayLength());
+                        foreach (var tcEl in tcArrayEl.EnumerateArray())
+                        {
+                            toolCalls.Add(new AgentToolCallEntry
+                            {
+                                Id = tcEl.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty,
+                                Name = tcEl.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty,
+                                Arguments = tcEl.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() ?? string.Empty : string.Empty
+                            });
+                        }
+                    }
+
+                    // 仅当有内容或 ToolCalls 时才追加（避免空消息污染对话流）
+                    if (!string.IsNullOrEmpty(content) || toolCalls is { Count: > 0 })
+                    {
+                        rebuiltConversation.Add(new AgentMessage
+                        {
+                            Role = AgentMessageRole.Assistant,
+                            Content = content,
+                            ToolCalls = toolCalls
+                        });
+                    }
                 }
-
-                var succeeded = succeededProp.GetBoolean();
-                var toolName = root.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
-                var toolCallId = root.TryGetProperty("toolCallId", out var tcProp) ? tcProp.GetString() : null;
-                var output = root.TryGetProperty("output", out var outProp) ? outProp.GetString() : null;
-                var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : null;
-
-                toolObservations.Add(new ToolObservation
+                catch
                 {
-                    ToolName = toolName,
-                    ToolCallId = toolCallId,
-                    Result = output,
-                    Error = error,
-                    Succeeded = succeeded
-                });
+                    // 解析单个事件失败 → 跳过（不影响整体恢复）
+                }
             }
-            catch
+            else if (evt.EventType == AgentRunEventType.ToolCallCompleted)
             {
-                // 解析单个事件失败 → 跳过（不影响整体恢复）
-            }
-        }
+                // 从 ToolCallCompleted 重建 ToolObservation + Tool 消息
+                try
+                {
+                    using var doc = JsonDocument.Parse(evt.Payload);
+                    var root = doc.RootElement;
+                    if (!root.TryGetProperty("succeeded", out var succeededProp))
+                    {
+                        continue;
+                    }
 
-        // P0-1：从重建的 ToolObservations 生成 Conversation（Tool 消息部分）。
-        // 完整的 Assistant 消息重建（含 ToolCalls）属于 P0-2 范畴——需要 ModelCallCompleted 事件
-        // 持久化完整模型响应。当前仅恢复 Tool 消息，确保投影器至少能按因果顺序输出 Tool 结果。
-        var rebuiltConversation = new List<AgentMessage>(toolObservations.Count);
-        for (var i = 0; i < toolObservations.Count; i++)
-        {
-            rebuiltConversation.Add(toolObservations[i].ToAgentMessage());
+                    var succeeded = succeededProp.GetBoolean();
+                    var toolName = root.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
+                    var toolCallId = root.TryGetProperty("toolCallId", out var tcProp) ? tcProp.GetString() : null;
+                    var output = root.TryGetProperty("output", out var outProp) ? outProp.GetString() : null;
+                    var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : null;
+
+                    var obs = new ToolObservation
+                    {
+                        ToolName = toolName,
+                        ToolCallId = toolCallId,
+                        Result = output,
+                        Error = error,
+                        Succeeded = succeeded
+                    };
+                    toolObservations.Add(obs);
+                    rebuiltConversation.Add(obs.ToAgentMessage());
+                }
+                catch
+                {
+                    // 解析单个事件失败 → 跳过（不影响整体恢复）
+                }
+            }
         }
 
         // 从最后一个事件恢复 EventSequence / EventChainHash（保证哈希链连续）
@@ -972,7 +1016,18 @@ public sealed class AgentRunActor
             estimatedCost = response.EstimatedCost,
             billedCost = response.BilledCost,
             modelCallsUsed = _modelCallsUsed,
-            durationMs = response.Duration.TotalMilliseconds
+            durationMs = response.Duration.TotalMilliseconds,
+            // P0-2：持久化完整模型响应，支持崩溃恢复时无损重建 Conversation。
+            // 旧事件缺少此字段时恢复路径跳过 Assistant 重建（仅恢复 Tool 消息，向后兼容）。
+            content = response.Content ?? string.Empty,
+            toolCalls = response.ToolCalls.Count > 0
+                ? response.ToolCalls.Select(tc => new
+                  {
+                      id = tc.ToolCallId ?? tc.ToolName ?? Guid.NewGuid().ToString("N"),
+                      name = tc.ToolName ?? string.Empty,
+                      arguments = tc.Arguments ?? string.Empty
+                  }).ToArray()
+                : Array.Empty<object>()
         }));
 
         return state;
