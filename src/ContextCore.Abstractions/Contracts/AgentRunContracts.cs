@@ -1676,6 +1676,15 @@ public interface IAgentRunLease
     /// </summary>
     /// <returns>回收的过期租约数。</returns>
     ValueTask<int> ReapExpiredAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-6：查询指定 Run 是否存在有效（未过期）的活跃租约。
+    /// Recovery Worker 在标记 Run 为 Failed 前调用此方法，避免误杀正被活跃 Actor 持有合法租约的 Run。
+    /// </summary>
+    /// <param name="runId">Agent Run ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true = 存在未过期租约；false = 无租约或已过期。</returns>
+    ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

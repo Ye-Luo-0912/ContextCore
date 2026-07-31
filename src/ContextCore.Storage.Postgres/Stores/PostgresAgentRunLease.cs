@@ -200,4 +200,30 @@ WHERE lease_expires_at < @now;
 
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-6：查询是否存在未过期租约：SELECT 1 WHERE lease_expires_at &gt;= now LIMIT 1。
+    /// 用于 Recovery Worker 在标记 Run 为 Failed 前校验是否有活跃 Owner。
+    /// </remarks>
+    public async ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        var now = DateTimeOffset.UtcNow;
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT 1 FROM {Table("agent_run_leases")}
+WHERE run_id = @run_id AND lease_expires_at >= @now
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("now", now);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is not null;
+    }
 }

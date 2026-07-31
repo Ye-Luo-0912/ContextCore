@@ -168,6 +168,43 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                     var elapsed = now - run.UpdatedAt;
                     if (elapsed > timeout)
                     {
+                        // P0-6：超时判定前必须校验 Lease + DeadlineAt，避免误杀活跃 Run。
+                        // 1. 存在活跃租约（lease_expires_at > now）→ Run 正被活跃 Actor 处理，跳过。
+                        // 2. DeadlineAt 未到期 → Run 自身超时尚未到达，跳过（即便 UpdatedAt 超过全局阈值）。
+                        // 只有同时满足：无活跃租约 AND DeadlineAt 已到期（或未设置）才标记为 Failed。
+                        var runLease = scope.ServiceProvider.GetService<IAgentRunLease>();
+                        if (runLease is not null)
+                        {
+                            try
+                            {
+                                var hasActiveLease = await runLease.HasActiveLeaseAsync(run.RunId, cancellationToken).ConfigureAwait(false);
+                                if (hasActiveLease)
+                                {
+                                    _logger.LogDebug(
+                                        "AgentRunRecoveryWorker: Run {RunId} 超时但存在活跃租约，跳过（避免误杀活跃 Actor）。",
+                                        run.RunId);
+                                    continue;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                // Lease 查询失败 → 保守跳过（不误杀）
+                                _logger.LogWarning(ex,
+                                    "AgentRunRecoveryWorker: Run {RunId} Lease 查询失败，保守跳过超时标记。",
+                                    run.RunId);
+                                continue;
+                            }
+                        }
+
+                        // P0-6：DeadlineAt 校验——Run 自身超时未到期时不标记失败
+                        if (run.DeadlineAt is not null && run.DeadlineAt > now)
+                        {
+                            _logger.LogDebug(
+                                "AgentRunRecoveryWorker: Run {RunId} UpdatedAt 超时但 DeadlineAt 未到期（{Deadline}），跳过。",
+                                run.RunId, run.DeadlineAt);
+                            continue;
+                        }
+
                         try
                         {
                             await runStore.TransitionStateAsync(
@@ -175,8 +212,8 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                                 .ConfigureAwait(false);
                             totalTimedOut++;
                             _logger.LogWarning(
-                                "AgentRunRecoveryWorker: Run {RunId} 超时（状态={State}, 已停留 {Elapsed}min > {Timeout}min），标记为 Failed。",
-                                run.RunId, run.State, elapsed.TotalMinutes, timeout.TotalMinutes);
+                                "AgentRunRecoveryWorker: Run {RunId} 超时（状态={State}, 已停留 {Elapsed}min > {Timeout}min，无活跃租约，DeadlineAt={Deadline}），标记为 Failed。",
+                                run.RunId, run.State, elapsed.TotalMinutes, timeout.TotalMinutes, run.DeadlineAt);
                         }
                         catch (InvalidOperationException)
                         {

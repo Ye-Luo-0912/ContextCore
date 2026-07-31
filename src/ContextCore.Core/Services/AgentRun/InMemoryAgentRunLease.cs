@@ -171,6 +171,19 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         return ValueTask.FromResult(reaped);
     }
 
+    /// <inheritdoc />
+    /// <remarks>P0-6：查询指定 Run 是否存在未过期租约（InMemory 实现）。</remarks>
+    public ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        var now = DateTimeOffset.UtcNow;
+        if (_leases.TryGetValue(runId, out var entry))
+        {
+            return ValueTask.FromResult(entry.ExpiresAt > now);
+        }
+        return ValueTask.FromResult(false);
+    }
+
     /// <summary>当前持有的租约数量（诊断/监控用）。</summary>
     public int ActiveLeaseCount => _leases.Count;
 
