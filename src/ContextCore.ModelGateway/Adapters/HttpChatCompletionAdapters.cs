@@ -479,6 +479,11 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
             metadata["responseModel"] = ReadString(responseModel);
         }
 
+        // WP-0需求7：按模型配置的 token 单价计算 cost（美元）。
+        // EstimatedCost = 不考虑缓存折扣的估算费用；BilledCost = 同值（缓存折扣由提供商侧已计入 prompt_tokens）。
+        var estimatedCost = (inputTokens * _options.InputTokenPricePerMillionUsd
+            + outputTokens * _options.OutputTokenPricePerMillionUsd) / 1_000_000.0;
+
         return new ModelChatResponse
         {
             OperationId = operationId,
@@ -487,6 +492,8 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
             FinishReason = finishReason,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
+            EstimatedCost = estimatedCost,
+            BilledCost = estimatedCost,
             Succeeded = true,
             ModelId = Name,
             Metadata = metadata

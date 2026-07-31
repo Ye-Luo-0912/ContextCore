@@ -51,6 +51,17 @@ public sealed class ModelEndpointOptions
     /// <summary>是否启用此端点。</summary>
     public bool Enabled { get; init; } = true;
 
+    /// <summary>
+    /// WP-0需求7：每百万输入 token 的费用（美元）。默认 0 = 不计费。
+    /// 配置后 HttpChatCompletionAdapter 按实际 token 用量计算 EstimatedCost/BilledCost。
+    /// </summary>
+    public double InputTokenPricePerMillionUsd { get; init; }
+
+    /// <summary>
+    /// WP-0需求7：每百万输出 token 的费用（美元）。默认 0 = 不计费。
+    /// </summary>
+    public double OutputTokenPricePerMillionUsd { get; init; }
+
     /// <summary>附加元数据。</summary>
     public Dictionary<string, string> Metadata { get; init; } = new();
 }
@@ -212,6 +223,12 @@ public sealed class ModelRequest
 {
     /// <summary>请求唯一标识符。</summary>
     public string OperationId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// WP-0需求6：模型工件 ID（指定具体模型；null = 由网关按 Role 路由）。
+    /// 非空时路由器优先精确匹配 Metadata["modelArtifactId"] 的模型端点。
+    /// </summary>
+    public string? ModelArtifactId { get; init; }
 
     /// <summary>使用的模型角色。</summary>
     public ModelRole Role { get; init; } = ModelRole.Fallback;

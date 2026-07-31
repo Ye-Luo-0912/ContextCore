@@ -163,6 +163,7 @@ public sealed class ConfigurableModelGateway : IModelGateway
         var routeRequest = new ModelRequest
         {
             OperationId = request.OperationId,
+            ModelArtifactId = request.ModelArtifactId,
             Role = request.Role,
             Prompt = string.Empty,
             ResponseFormat = request.ResponseFormat,

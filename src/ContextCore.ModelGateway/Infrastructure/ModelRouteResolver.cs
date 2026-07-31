@@ -87,6 +87,24 @@ public static class ModelRouteResolver
         ModelGatewayOptions options,
         ModelRequest request)
     {
+        // WP-0需求6：ModelArtifactId 精确匹配优先于 Role 路由。
+        // 调用方指定了具体工件 ID 时，直接在所有已启用模型中查找 Metadata["modelArtifactId"] 匹配的端点。
+        if (!string.IsNullOrWhiteSpace(request.ModelArtifactId))
+        {
+            var artifactModel = options.Models.FirstOrDefault(model =>
+                model.Enabled
+                && model.Metadata.TryGetValue("modelArtifactId", out var artifactId)
+                && string.Equals(artifactId, request.ModelArtifactId, StringComparison.OrdinalIgnoreCase));
+            if (artifactModel is not null)
+            {
+                return new ResolvedRouteMatch(new ModelRoleRoute
+                {
+                    Role = request.Role,
+                    PrimaryModelName = artifactModel.Name
+                }, ModelRouteSource.ExactRole);
+            }
+        }
+
         var exact = SelectBestRoute(
             options.Routes.Where(route => route.Role == request.Role),
             request);
