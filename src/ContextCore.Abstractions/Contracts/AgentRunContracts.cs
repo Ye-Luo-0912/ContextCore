@@ -1579,7 +1579,9 @@ public interface IDurableToolExecutor
         string workspaceId,
         AgentToolCallRequest toolCall,
         int modelTurn,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        AgentLeaseFence? leaseFence = null,
+        DateTimeOffset? deadlineAt = null);
 }
 
 /// <summary>

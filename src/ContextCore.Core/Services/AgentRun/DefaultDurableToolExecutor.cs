@@ -82,7 +82,9 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         string workspaceId,
         AgentToolCallRequest toolCall,
         int modelTurn,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AgentLeaseFence? leaseFence = null,
+        DateTimeOffset? deadlineAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
@@ -203,6 +205,19 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         ToolDispatchResult dispatchResult;
         try
         {
+            // P0-4：对写副作用 Tool 做 lease fence 校验——lease 已失效时 fail-closed，
+            // 阻止旧 Owner 在租约过期后执行外部写操作。
+            // ReadOnly/None 可跳过校验（无副作用，重放安全）。
+            // NonIdempotentWrite 在 ProductionHA 下无外部幂等或 fencing 支持时必须 fail-closed。
+            if (leaseFence is not null && DateTimeOffset.UtcNow >= leaseFence.ExpiresAt)
+            {
+                return BuildFailedResult(
+                    requestId, idempotencyKey, ToolSideEffect.Unknown,
+                    error: $"Lease 已过期（ExpiresAt={leaseFence.ExpiresAt:O}），Tool 执行被 fence 阻止。",
+                    journalState: ToolDispatchState.Prepared,
+                    duration: stopwatch.Elapsed);
+            }
+
             dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
             {
                 ToolName = toolCall.ToolName,
@@ -210,7 +225,11 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 RequestId = requestId,
                 IdempotencyKey = idempotencyKey,
                 WorkspaceId = workspaceId,
-                RunId = runId
+                RunId = runId,
+                // P0-4：透传 leaseFence + deadlineAt 到 ToolDispatchRequest，
+                // 让 Tool Handler 在执行外部写操作前校验租约有效性。
+                LeaseFence = leaseFence,
+                DeadlineAt = deadlineAt
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)

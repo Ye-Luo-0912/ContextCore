@@ -827,8 +827,19 @@ public sealed class AgentRunActor
             ToolExecutionResult? toolResult = null;
             if (_durableToolExecutor is not null)
             {
+                // P0-4：构造 leaseFence 并传入，保护 Tool 副作用边界。
+                // ExpiresAt 用 Run.DeadlineAt 保守推导（lease 不会超过 Run 超时）。
+                var leaseFence1 = (_leaseToken is not null && _fencingToken is not null)
+                    ? new AgentLeaseFence
+                      {
+                          LeaseToken = _leaseToken,
+                          FencingToken = _fencingToken.Value,
+                          ExpiresAt = state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
+                      }
+                    : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
-                    state.Run.RunId, state.Run.WorkspaceId, toolCall, pendingCommand.ModelTurnRevision, cancellationToken).ConfigureAwait(false);
+                    state.Run.RunId, state.Run.WorkspaceId, toolCall, pendingCommand.ModelTurnRevision,
+                    cancellationToken, leaseFence1, state.Run.DeadlineAt).ConfigureAwait(false);
             }
             else
             {
@@ -1465,8 +1476,18 @@ public sealed class AgentRunActor
             ToolExecutionResult? toolResult = null;
             if (_durableToolExecutor is not null)
             {
+                // P0-4：构造 leaseFence 并传入，保护 Tool 副作用边界。
+                var leaseFence2 = (_leaseToken is not null && _fencingToken is not null)
+                    ? new AgentLeaseFence
+                      {
+                          LeaseToken = _leaseToken,
+                          FencingToken = _fencingToken.Value,
+                          ExpiresAt = state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
+                      }
+                    : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
-                    state.Run.RunId, state.Run.WorkspaceId, toolCall, _executionModelTurn, cancellationToken).ConfigureAwait(false);
+                    state.Run.RunId, state.Run.WorkspaceId, toolCall, _executionModelTurn,
+                    cancellationToken, leaseFence2, state.Run.DeadlineAt).ConfigureAwait(false);
             }
             else
             {

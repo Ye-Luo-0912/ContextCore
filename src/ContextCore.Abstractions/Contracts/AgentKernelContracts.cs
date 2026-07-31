@@ -472,7 +472,30 @@ public enum ToolSideEffect : byte
     /// <summary>
     /// 未知副作用。恢复时<b>不自动重放</b>——需调用方显式确认后才提交。
     /// </summary>
-    Unknown = 3
+    Unknown = 3,
+
+    /// <summary>
+    /// P0-4：幂等写（如带 IdempotencyKey 的 API 调用）。可安全重放，但需 lease fence 保护。
+    /// 恢复时：若有缓存结果则使用，否则重放（依赖外部幂等性）。
+    /// </summary>
+    IdempotentWrite = 4,
+
+    /// <summary>
+    /// P0-4：受 Fence 保护的写（如数据库事务 + fencing token 校验）。
+    /// 恢复时：必须有有效 lease fence，否则 fail-closed。
+    /// </summary>
+    FencedWrite = 5,
+
+    /// <summary>
+    /// P0-4：非幂等写（如发送邮件 / 扣款）。无外部幂等或 fencing 支持时必须 fail-closed。
+    /// 恢复时：使用缓存结果，绝不重放；无缓存结果时需 RequiresReconciliation 对账。
+    /// </summary>
+    NonIdempotentWrite = 6,
+
+    /// <summary>
+    /// P0-4：需对账（如外部系统状态不确定）。恢复时不自动重放，需人工或外部对账流程确认。
+    /// </summary>
+    RequiresReconciliation = 7
 }
 
 /// <summary>
