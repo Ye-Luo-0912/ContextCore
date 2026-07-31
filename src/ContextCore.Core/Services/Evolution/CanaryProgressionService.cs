@@ -370,7 +370,33 @@ public sealed class CanaryProgressionService
             case CanaryProgressionDecision.Advance:
                 {
                     var nextPercentage = evaluation.NextPercentage!.Value;
-                    // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+
+                    // WP-2：当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
+                    // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
+                    if (_decisionApplier is not null)
+                    {
+                        var dbResult = await ApplyDecisionToStoreAsync(
+                            runId, CanaryDecision.Promote, nextPercentage, previousPercentage,
+                            transitionId, evaluation.Rationale, cancellationToken).ConfigureAwait(false);
+
+                        if (dbResult.Applied)
+                        {
+                            UpdateInMemoryPercentage(runId, nextPercentage);
+                        }
+
+                        return new CanaryProgressionResult
+                        {
+                            Decision = dbResult.Applied ? CanaryProgressionDecision.Advance : CanaryProgressionDecision.Hold,
+                            Rationale = dbResult.Applied ? evaluation.Rationale : $"DB CAS 失败（{dbResult.FailureReason}）；保持当前百分比。",
+                            PreviousPercentage = dbResult.PreviousPercentage,
+                            CurrentPercentage = dbResult.Applied ? nextPercentage : dbResult.PreviousPercentage,
+                            Applied = dbResult.Applied,
+                            TransitionId = transitionId,
+                            IdempotencyKey = idempotencyKey
+                        };
+                    }
+
+                    // 回退路径（_decisionApplier=null，测试场景）：仅写进程内状态
                     GetController(runId).SetCutoverPercentage(nextPercentage);
                     var now = _timeProvider.GetUtcNow();
                     _runStates[runId] = new CanaryRunState(nextPercentage, now);
@@ -493,22 +519,36 @@ public sealed class CanaryProgressionService
         var previousPercentage = GetCurrentPercentage(runId);
         var now = _timeProvider.GetUtcNow();
 
-        // 重置 CutoverController 到 0%（全部 Legacy）
-        // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
-        GetController(runId).SetCutoverPercentage(0);
-        _runStates[runId] = new CanaryRunState(0, now);
-
-        await RecordTransitionAsync(new StageTransitionRecord
+        // WP-2：当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
+        // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
+        if (_decisionApplier is not null)
         {
-            TransitionId = tid,
-            RunId = runId,
-            FromPercentage = previousPercentage,
-            ToPercentage = 0,
-            TransitionedAt = now,
-            IdempotencyKey = idempotencyKey,
-            Decision = CanaryProgressionDecision.Rollback,
-            Rationale = $"Canary 自动回滚：reason={reason}"
-        }, cancellationToken).ConfigureAwait(false);
+            await ApplyDecisionToStoreAsync(
+                runId, CanaryDecision.Rollback, 0, previousPercentage,
+                tid, $"Canary 自动回滚：reason={reason}", cancellationToken).ConfigureAwait(false);
+
+            // 无论 DB CAS 是否成功，都更新内存为 0%（确保路由立即回到 0%，全部 Legacy）
+            UpdateInMemoryPercentage(runId, 0);
+        }
+        else
+        {
+            // 回退路径（_decisionApplier=null，测试场景）：仅写进程内状态
+            // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+            GetController(runId).SetCutoverPercentage(0);
+            _runStates[runId] = new CanaryRunState(0, now);
+
+            await RecordTransitionAsync(new StageTransitionRecord
+            {
+                TransitionId = tid,
+                RunId = runId,
+                FromPercentage = previousPercentage,
+                ToPercentage = 0,
+                TransitionedAt = now,
+                IdempotencyKey = idempotencyKey,
+                Decision = CanaryProgressionDecision.Rollback,
+                Rationale = $"Canary 自动回滚：reason={reason}"
+            }, cancellationToken).ConfigureAwait(false);
+        }
 
         // 同步持久化 RollbackRecord 到 store（供 Pipeline 的 GetRollbackRecordAsync 查询）
         var snapshot = await _pipelineRunStore.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
@@ -731,6 +771,66 @@ public sealed class CanaryProgressionService
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// WP-2：通过 <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionLocalAsync"/> 单事务写入 DB
+    /// （canary_pipelines revision CAS + transition audit + epoch 递增），统一 DB 真相源。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="decision">决策类型（Promote/Rollback）。</param>
+    /// <param name="newPercentage">新百分比档（Rollback 时为 0）。</param>
+    /// <param name="previousPercentage">推进前百分比（用于 transition 描述）。</param>
+    /// <param name="transitionId">transition ID（审计幂等去重）。</param>
+    /// <param name="rationale">决策理由（写入审计）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>决策执行结果（Applied=true 时 DB 事务已提交）。</returns>
+    /// <remarks>
+    /// <b>单节点模式</b>：跳过 lease/fencing 校验（FencingToken 传 "0"，被
+    /// <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionLocalAsync"/> 忽略），
+    /// 仅执行 revision CAS + transition audit + epoch update，确保 DB 与进程内状态一致。
+    /// <para>
+    /// <b>Epoch 计算</b>：从 <see cref="ICanaryDecisionApplier.GetCurrentEpochAsync"/> 读取当前 epoch，
+    /// 计算 <c>newEpoch = currentEpoch + 1</c>，确保重启后 epoch 单调递增（不回退）。
+    /// </para>
+    /// </remarks>
+    private async ValueTask<CanaryDecisionResult> ApplyDecisionToStoreAsync(
+        string runId,
+        CanaryDecision decision,
+        int newPercentage,
+        int previousPercentage,
+        string transitionId,
+        string rationale,
+        CancellationToken cancellationToken)
+    {
+        // 查询当前 pipeline 状态获取 CAS 预期 revision
+        var pipelineState = await _decisionApplier!.GetCanaryPipelineStateAsync(
+            runId, cancellationToken).ConfigureAwait(false);
+
+        // 读取当前 epoch，计算 newEpoch = current + 1（确保重启后不回退）
+        var currentEpoch = await _decisionApplier.GetCurrentEpochAsync(
+            runId, cancellationToken).ConfigureAwait(false);
+
+        var transition = decision == CanaryDecision.Rollback
+            ? $"{previousPercentage}→0(rollback)"
+            : $"{previousPercentage}→{newPercentage}";
+
+        var request = new CanaryDecisionRequest
+        {
+            RunId = runId,
+            ExpectedRevision = pipelineState.Revision,
+            // 单节点模式无 Leader lease，FencingToken 传 "0"（被 ApplyCanaryDecisionLocalAsync 忽略）
+            FencingToken = "0",
+            Decision = decision,
+            NewPercentage = newPercentage,
+            Transition = transition,
+            NewEpoch = currentEpoch + 1,
+            TransitionId = transitionId,
+            Rationale = rationale
+        };
+
+        return await _decisionApplier.ApplyCanaryDecisionLocalAsync(
+            request, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask RecordTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken)

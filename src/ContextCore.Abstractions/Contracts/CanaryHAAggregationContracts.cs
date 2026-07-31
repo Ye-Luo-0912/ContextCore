@@ -450,6 +450,27 @@ public interface ICanaryDecisionApplier
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// WP-2：在单一事务中原子应用 Canary 决策（单节点/本地模式，跳过 lease/fencing 校验）。
+    /// </summary>
+    /// <param name="request">决策请求（FencingToken 字段被忽略；其余字段同 <see cref="ApplyCanaryDecisionAsync"/>）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>执行结果（Applied=true 时事务已提交；Applied=false 时事务已回滚）。</returns>
+    /// <remarks>
+    /// <b>用途</b>：单节点模式（<c>CanaryProgressionHostedService</c>）下统一 DB 真相源。
+    /// 旧路径 <c>CanaryProgressionService.AdvanceAsync</c> 仅写进程内状态（<c>_runStates</c> +
+    /// <c>CutoverController</c>），不写 <c>canary_pipelines</c> 表，导致进程重启后
+    /// <c>RecoverFromStoreAsync</c> 读不到真实百分比。本方法跳过 lease 校验（单节点无 Leader），
+    /// 但仍走 revision CAS + transition audit + epoch update 单事务，确保 DB 与审计一致。
+    /// <para>
+    /// <b>与 <see cref="ApplyCanaryDecisionAsync"/> 的区别</b>：仅省略步骤 1（lease/fencing 校验），
+    /// 步骤 2-5（revision CAS + audit + epoch）完全一致。
+    /// </para>
+    /// </remarks>
+    ValueTask<CanaryDecisionResult> ApplyCanaryDecisionLocalAsync(
+        CanaryDecisionRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 查询指定 run 的当前 pipeline 状态（percentage + revision）。
     /// </summary>
     /// <param name="runId">Canary run ID。</param>
@@ -460,6 +481,22 @@ public interface ICanaryDecisionApplier
     /// 避免 CAS 失败。本方法不持有事务，调用方应在获取状态后尽快提交决策以减少冲突窗口。
     /// </remarks>
     ValueTask<CanaryPipelineState> GetCanaryPipelineStateAsync(
+        string runId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// WP-2：查询指定 run 的当前 stage epoch（从 <c>canary_run_epochs</c> 表读取）。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 stage epoch；行不存在时返回 0。</returns>
+    /// <remarks>
+    /// <b>用途</b>：单节点模式下 <see cref="ContextCore.Core.Services.Evolution.CanaryProgressionService"/>
+    /// 在调用 <see cref="ApplyCanaryDecisionLocalAsync"/> 前需读取当前 epoch，计算
+    /// <c>newEpoch = currentEpoch + 1</c>，确保 epoch 单调递增（重启后不回退）。
+    /// HA 模式下 epoch 由 <see cref="ICanaryMetricsAggregator.GetCurrentEpochAsync"/> 提供。
+    /// </remarks>
+    ValueTask<long> GetCurrentEpochAsync(
         string runId,
         CancellationToken cancellationToken = default);
 
