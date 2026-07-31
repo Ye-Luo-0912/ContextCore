@@ -248,8 +248,8 @@ public sealed class AgentRunActor
         _currentTurn = run.Turn;
         // 子问题 2：从 Run 元数据恢复 ModelCallsUsed（支持崩溃恢复后续跑）
         _modelCallsUsed = run.ModelCallsUsed;
-        // P0-6：执行期内模型轮次计数重置——确保崩溃恢复后同一逻辑轮次产生相同 RequestId。
-        // _modelCallsUsed 是累积值（用于预算控制），不适用于 RequestId 计算。
+        // P0-5：_executionModelTurn 先重置为 0，Resume 时由 RebuildStateFromEventsAsync
+        // 从 ModelCallCompleted 事件流统计重建——避免恢复后从 0 重新计数导致 RequestId 改变。
         _executionModelTurn = 0;
         // G4：记录 Turn 起始状态，用于批量提交时的 state CAS
         // 运行时能力补齐：resume 时 _turnStartState = run.State（store 中的当前状态），
@@ -526,6 +526,39 @@ public sealed class AgentRunActor
 
         // 从最后一个事件恢复 EventSequence / EventChainHash（保证哈希链连续）
         var lastEvent = events[events.Count - 1];
+
+        // P0-5：从事件流统计 ModelCallCompleted 数量重建 _executionModelTurn。
+        // 避免恢复后从 0 重新计数导致 RequestId 改变（Journal 无法识别原调用）。
+        // 优先读取 ModelCallCompleted.executionModelTurn（新事件）；旧事件无此字段时降级为事件计数。
+        var rebuiltModelTurn = 0;
+        foreach (var evt in events)
+        {
+            if (evt.EventType != AgentRunEventType.ModelCallCompleted)
+            {
+                continue;
+            }
+            try
+            {
+                using var doc = JsonDocument.Parse(evt.Payload);
+                if (doc.RootElement.TryGetProperty("executionModelTurn", out var emtEl)
+                    && emtEl.ValueKind == JsonValueKind.Number)
+                {
+                    var v = emtEl.GetInt32();
+                    if (v > rebuiltModelTurn) { rebuiltModelTurn = v; }
+                }
+                else
+                {
+                    // 旧事件无此字段 — 降级为计数（与原 _executionModelTurn 递增语义一致）
+                    rebuiltModelTurn++;
+                }
+            }
+            catch
+            {
+                // 解析失败 — 降级为计数
+                rebuiltModelTurn++;
+            }
+        }
+        _executionModelTurn = rebuiltModelTurn;
 
         // P0-2：审批通过后从 PendingToolExecution 状态恢复——不规范化为 ContextBuilding，
         // 而是从最后一个 ApprovalRequested 事件提取 PendingToolCommands，让主循环直接执行原 Tool。
@@ -1134,6 +1167,9 @@ public sealed class AgentRunActor
             estimatedCost = response.EstimatedCost,
             billedCost = response.BilledCost,
             modelCallsUsed = _modelCallsUsed,
+            // P0-5：持久化执行期模型轮次，支持崩溃恢复时重建 _executionModelTurn，
+            // 避免恢复后从 0 重新计数导致 RequestId 改变（Journal 无法识别原调用）。
+            executionModelTurn = _executionModelTurn,
             durationMs = response.Duration.TotalMilliseconds,
             // P0-2：持久化完整模型响应，支持崩溃恢复时无损重建 Conversation。
             // 旧事件缺少此字段时恢复路径跳过 Assistant 重建（仅恢复 Tool 消息，向后兼容）。
