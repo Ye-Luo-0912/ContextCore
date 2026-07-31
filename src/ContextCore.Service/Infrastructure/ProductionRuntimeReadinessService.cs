@@ -426,6 +426,42 @@ public sealed class ProductionRuntimeReadinessService
                     ? $"模型已激活（{activationManager.ActiveDescriptor?.ModelName ?? "unknown"}）。"
                     : "无激活模型——推理请求将使用 fallback。"));
         }
+
+        // 5. WP-3 Retrieval Hydration pipeline probe：Late Hydration 管道完整性检查
+        // AgentRunActor 强制 IncludeContent=false 激活 Late Hydration，依赖 ISelectedCandidateHydrator
+        // + IContextStoreBatchLookup 批量回填 Selected 候选正文。缺失时非 mandatory 候选静默空正文，
+        // Projector 降级为摘要，检索质量退化且无错误信号。warning 级别（不阻断启动）——与 model-gateway/
+        // active-model 探针一致：缺失=降级但非崩溃；仅 tool-dispatcher 零 Handler 为 error（硬约束）。
+        var hydrator = _services.GetService<ISelectedCandidateHydrator>();
+        if (hydrator is null)
+        {
+            checks.Add(new ReadinessCheckItem(
+                Name: "capability-retrieval-hydration",
+                Status: "warning",
+                Message: "ISelectedCandidateHydrator 未注册——Late Hydration 无法执行，IncludeContent=false 时非 mandatory 候选正文为空。"));
+        }
+        else
+        {
+            var contextBatchLookup = _services.GetService<IContextStoreBatchLookup>();
+            var memoryBatchLookup = _services.GetService<IMemoryStoreBatchLookup>();
+            if (contextBatchLookup is null && memoryBatchLookup is null)
+            {
+                checks.Add(new ReadinessCheckItem(
+                    Name: "capability-retrieval-hydration",
+                    Status: "warning",
+                    Message: "ISelectedCandidateHydrator 已注册但 IContextStoreBatchLookup + IMemoryStoreBatchLookup 均未注册——hydrator 为 no-op，无法批量回填正文。"));
+            }
+            else
+            {
+                var backends = new List<string>(2);
+                if (contextBatchLookup is not null) backends.Add("context");
+                if (memoryBatchLookup is not null) backends.Add("memory");
+                checks.Add(new ReadinessCheckItem(
+                    Name: "capability-retrieval-hydration",
+                    Status: "ready",
+                    Message: $"Retrieval Hydration 管道就绪（{hydrator.GetType().Name}，batch lookup: {string.Join("+", backends)}）。"));
+            }
+        }
     }
 }
 
