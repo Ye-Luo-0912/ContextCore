@@ -733,6 +733,15 @@ public sealed record AgentContextState
     /// <summary>Tool 观察结果列表（按时间顺序；投影为 Tool 消息）。</summary>
     public List<ToolObservation> ToolObservations { get; init; } = new();
 
+    /// <summary>
+    /// P0-1：统一对话流（按时间顺序存储所有对话消息，含 Assistant 与 Tool 角色）。
+    /// 投影器从此列表按原子协议单元（AssistantToolCallTurn + ToolResultTurn）保序裁剪，
+    /// 避免 Messages 与 ToolObservations 分离投影导致 Function Calling 消息顺序破坏。
+    /// Actor 在 CallModelAsync/DispatchToolsAsync 中同步追加；RebuildStateFromEventsAsync 重建。
+    /// 为空时投影器回退到 Messages + ToolObservations 分离投影（向后兼容）。
+    /// </summary>
+    public List<AgentMessage> Conversation { get; init; } = new();
+
     /// <summary>稳定记忆引用列表（投影为 System 消息）。</summary>
     public List<MemoryReference> StableMemoryReferences { get; init; } = new();
 
@@ -796,14 +805,23 @@ public sealed record AgentContextState
             });
         }
 
-        // 5-6. Messages + ToolObservations：根据预算截断
+        // 5-6. Conversation / Messages + ToolObservations：根据预算截断
+        // P0-1：优先使用 Conversation（按时间顺序保持 "assistant tool_calls → tool result" 因果顺序）。
+        // Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容）。
         if (tokenBudget <= 0)
         {
-            // 无预算限制 — 全量返回（保持与旧路径 state.Messages 等价的行为）
-            projected.AddRange(Messages);
-            for (var i = 0; i < ToolObservations.Count; i++)
+            // 无预算限制 — 全量返回
+            if (Conversation.Count > 0)
             {
-                projected.Add(ToolObservations[i].ToAgentMessage());
+                projected.AddRange(Conversation);
+            }
+            else
+            {
+                projected.AddRange(Messages);
+                for (var i = 0; i < ToolObservations.Count; i++)
+                {
+                    projected.Add(ToolObservations[i].ToAgentMessage());
+                }
             }
             return projected;
         }
@@ -812,37 +830,85 @@ public sealed record AgentContextState
         var usedTokens = EstimateTokens(projected);
         var remaining = Math.Max(0, tokenBudget - usedTokens);
 
-        // 5. 最近 N 条 Messages（从最新开始纳入，然后反转为时间顺序）
-        var recentMessages = new List<AgentMessage>();
-        for (var i = Messages.Count - 1; i >= 0; i--)
+        if (Conversation.Count > 0)
         {
-            var msg = Messages[i];
-            var tokens = EstimateTokens(msg.Content);
-            if (remaining < tokens)
+            // P0-1：从 Conversation 按时间顺序纳入（简单截断，不含原子单元逻辑——
+            // 完整的原子单元裁剪由 DefaultAgentModelContextProjector.ProjectConversation 处理）。
+            var recent = new List<AgentMessage>();
+            for (var i = Conversation.Count - 1; i >= 0; i--)
             {
-                break;
+                var msg = Conversation[i];
+                var tokens = EstimateMessageTokensLocal(msg);
+                if (remaining < tokens)
+                {
+                    break;
+                }
+                recent.Insert(0, msg);
+                remaining -= tokens;
             }
-            recentMessages.Insert(0, msg);
-            remaining -= tokens;
+            projected.AddRange(recent);
         }
-        projected.AddRange(recentMessages);
+        else
+        {
+            // 回退路径：Messages + ToolObservations 分离投影
+            var recentMessages = new List<AgentMessage>();
+            for (var i = Messages.Count - 1; i >= 0; i--)
+            {
+                var msg = Messages[i];
+                var tokens = EstimateMessageTokensLocal(msg);
+                if (remaining < tokens)
+                {
+                    break;
+                }
+                recentMessages.Insert(0, msg);
+                remaining -= tokens;
+            }
+            projected.AddRange(recentMessages);
 
-        // 6. Tool Observations（从最新开始纳入，然后反转为时间顺序）
-        var recentTools = new List<AgentMessage>();
-        for (var i = ToolObservations.Count - 1; i >= 0; i--)
-        {
-            var obs = ToolObservations[i];
-            var tokens = EstimateTokens(obs.Succeeded ? obs.Result : obs.Error);
-            if (remaining < tokens)
+            var recentTools = new List<AgentMessage>();
+            for (var i = ToolObservations.Count - 1; i >= 0; i--)
             {
-                break;
+                var obs = ToolObservations[i];
+                var msg = obs.ToAgentMessage();
+                var tokens = EstimateMessageTokensLocal(msg);
+                if (remaining < tokens)
+                {
+                    break;
+                }
+                recentTools.Insert(0, msg);
+                remaining -= tokens;
             }
-            recentTools.Insert(0, obs.ToAgentMessage());
-            remaining -= tokens;
+            projected.AddRange(recentTools);
         }
-        projected.AddRange(recentTools);
 
         return projected;
+    }
+
+    /// <summary>
+    /// P0-1：估算单条消息的 token 数，包含 Content + ToolCalls + ToolName/ToolCallId 开销。
+    /// </summary>
+    private int EstimateMessageTokensLocal(AgentMessage msg)
+    {
+        var tokens = EstimateTokens(msg.Content);
+        if (msg.ToolCalls is { Count: > 0 })
+        {
+            for (var i = 0; i < msg.ToolCalls.Count; i++)
+            {
+                var tc = msg.ToolCalls[i];
+                tokens += EstimateTokens(tc.Id);
+                tokens += EstimateTokens(tc.Name);
+                tokens += EstimateTokens(tc.Arguments);
+            }
+        }
+        if (!string.IsNullOrEmpty(msg.ToolName))
+        {
+            tokens += EstimateTokens(msg.ToolName);
+        }
+        if (!string.IsNullOrEmpty(msg.ToolCallId))
+        {
+            tokens += EstimateTokens(msg.ToolCallId);
+        }
+        return tokens;
     }
 
     /// <summary>字符估算 token 数（与 LegacyCharacterTokenizer 对齐：Max(1, (length+1)/2)）。</summary>

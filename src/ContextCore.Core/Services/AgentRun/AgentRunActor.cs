@@ -471,6 +471,15 @@ public sealed class AgentRunActor
             }
         }
 
+        // P0-1：从重建的 ToolObservations 生成 Conversation（Tool 消息部分）。
+        // 完整的 Assistant 消息重建（含 ToolCalls）属于 P0-2 范畴——需要 ModelCallCompleted 事件
+        // 持久化完整模型响应。当前仅恢复 Tool 消息，确保投影器至少能按因果顺序输出 Tool 结果。
+        var rebuiltConversation = new List<AgentMessage>(toolObservations.Count);
+        for (var i = 0; i < toolObservations.Count; i++)
+        {
+            rebuiltConversation.Add(toolObservations[i].ToAgentMessage());
+        }
+
         // 从最后一个事件恢复 EventSequence / EventChainHash（保证哈希链连续）
         var lastEvent = events[events.Count - 1];
 
@@ -493,6 +502,7 @@ public sealed class AgentRunActor
                         CurrentTask = state.Run.Task,
                         Messages = new List<AgentMessage>(),
                         ToolObservations = toolObservations,
+                        Conversation = rebuiltConversation,
                         StableMemoryReferences = new List<MemoryReference>(),
                         LastModelTurn = null
                     },
@@ -520,6 +530,7 @@ public sealed class AgentRunActor
                 CurrentTask = state.Run.Task,
                 Messages = new List<AgentMessage>(),
                 ToolObservations = toolObservations,
+                Conversation = rebuiltConversation,
                 StableMemoryReferences = new List<MemoryReference>(),
                 LastModelTurn = null
             },
@@ -714,14 +725,17 @@ public sealed class AgentRunActor
                 ? $"{toolResult.Result}"
                 : $"[ERROR] {toolResult.Error}";
 
-            state.Context.ToolObservations.Add(new ToolObservation
+            var resumedObservation = new ToolObservation
             {
                 ToolName = pendingCommand.ToolName,
                 ToolCallId = pendingCommand.ToolCallId,
                 Result = toolResult.Result,
                 Error = toolResult.Error,
                 Succeeded = toolResult.Succeeded
-            });
+            };
+            state.Context.ToolObservations.Add(resumedObservation);
+            // P0-1：同步追加到统一对话流（审批恢复路径同样需要保持因果顺序）。
+            state.Context.Conversation.Add(resumedObservation.ToAgentMessage());
 
             state = BufferEvent(state, AgentRunEventType.ObservationAppended, JsonSerializer.Serialize(new
             {
@@ -914,7 +928,7 @@ public sealed class AgentRunActor
         // P0-2：始终追加 Assistant 消息（原生 function calling 响应可能 Content 为空 + ToolCalls 非空）。
         // 旧路径仅在 Content 非空时追加，导致多轮 Tool 调用协议中断——模型在下一轮看不到自己上一轮
         // 发起的 Tool 调用请求，OpenAI / Anthropic 兼容 API 会拒绝无前置 Assistant tool_calls 的 Tool 消息。
-        state.Context.Messages.Add(new AgentMessage
+        var assistantMessage = new AgentMessage
         {
             Role = AgentMessageRole.Assistant,
             Content = response.Content ?? string.Empty,
@@ -927,7 +941,11 @@ public sealed class AgentRunActor
                       Arguments = tc.Arguments
                   }).ToList()
                 : null
-        });
+        };
+        state.Context.Messages.Add(assistantMessage);
+        // P0-1：同步追加到统一对话流，保持 Function Calling 消息因果顺序。
+        // 投影器从 Conversation 按原子协议单元保序裁剪，避免 Messages 与 ToolObservations 分离投影。
+        state.Context.Conversation.Add(assistantMessage);
 
         // G4：更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
         // P0-2 Bug 3 修复：同步 run.CostBudget（从模型响应中获取实际 token cost）
@@ -1334,14 +1352,18 @@ public sealed class AgentRunActor
                 ? $"{toolResult.Result}"
                 : $"[ERROR] {toolResult.Error}";
 
-            state.Context.ToolObservations.Add(new ToolObservation
+            var toolObservation = new ToolObservation
             {
                 ToolName = toolCall.ToolName,
                 ToolCallId = toolCallId,
                 Result = toolResult.Result,
                 Error = toolResult.Error,
                 Succeeded = toolResult.Succeeded
-            });
+            };
+            state.Context.ToolObservations.Add(toolObservation);
+            // P0-1：同步追加 Tool 消息到统一对话流，紧随引发它的 Assistant ToolCall 之后，
+            // 保持 "assistant tool_calls → tool result" 因果顺序（OpenAI/Anthropic 协议要求）。
+            state.Context.Conversation.Add(toolObservation.ToAgentMessage());
 
             // 5. ObservationAppended 事件 payload 用序列化后的 observation 长度（与旧路径兼容）
             state = BufferEvent(state, AgentRunEventType.ObservationAppended, JsonSerializer.Serialize(new

@@ -14,21 +14,25 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 本投影器在投影阶段从 ContextDecisionExecutionResult.WorkingSet.Materials 取出候选
 // 正文内容，并按 Run.ModelContextTokenBudget 截断。
 //
-// Perf-4 修复后的投影顺序（高优先级在前）：
+// P0-1 修复后的投影顺序（高优先级在前）：
 //   1. System Prompt（可信系统指令，System 角色）
 //   2. Hard Constraints（硬约束，System 角色）
 //   3. Current Task（当前任务，User 角色）
-//   4. Latest Tool Observations（最新工具观察，Tool 角色；按预算从最新向最旧纳入）
-//   5. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记；best-fit 策略）
-//   6. Recent Assistant Turns（历史对话，Messages；按预算从最新向最旧纳入）
+//   4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记；best-fit 策略）
+//   5. Conversation（对话历史，按原子协议单元保序裁剪）
 //
-// Perf-4 修复要点：
-//   a. Retrieved Materials 不再放入 System 角色（避免提示注入风险），改为 User 角色
-//      并以 [untrusted_data] section 标记为不可信数据，让模型区分可信指令与外部数据。
-//   b. Latest Tool Observations 优先级提升到 Retrieved Materials 之前（最新工具观察
-//      比历史检索材料对当前决策更关键）。
-//   c. Retrieved Materials 使用 best-fit 策略：按 FinalScore 排序后逐个尝试纳入，
-//      某个材料太大时跳过该材料继续尝试下一个（不直接 break），让更小的相关材料仍能进入上下文。
+// P0-1 修复要点：
+//   a. 引入 AgentContextState.Conversation 统一对话流，按时间顺序存储 Assistant + Tool 消息。
+//   b. AssistantToolCallTurn（含 ToolCalls）与对应 ToolResultTurn 作为不可拆分协议单元：
+//      预算不足时整体截断，不拆分 Assistant 与 Tool 消息——保持 "assistant tool_calls → tool result"
+//      因果顺序（OpenAI/Anthropic function calling 协议要求）。
+//   c. EstimateMessageTokens 扩展：包含 ToolCalls 的 Id/Name/Arguments 开销，
+//      不再仅算 Content.Length（Content 为空但 ToolCalls 非空的消息不再算作 0 token）。
+//   d. Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容）。
+//
+// Perf-4 保留要点：
+//   - Retrieved Materials 不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
+//   - Retrieved Materials 使用 best-fit 策略：按 FinalScore 排序后逐个尝试纳入。
 // ===========================================================================
 
 /// <summary>
@@ -84,44 +88,9 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
             usedTokens += EstimateTokens(msg.Content);
         }
 
-        // 4. Latest Tool Observations（最新工具观察，Tool 角色）
-        // Perf-4：优先级提升到 Retrieved Materials 之前——最新工具观察对当前决策比历史检索材料更关键。
-        // 按预算从最新向最旧纳入（chronological break：最旧的最先被截断）。
-        if (budget <= 0)
-        {
-            foreach (var obs in context.ToolObservations)
-            {
-                projected.Add(obs.ToAgentMessage());
-                usedTokens += EstimateTokens(obs.Succeeded ? obs.Result : obs.Error);
-            }
-        }
-        else
-        {
-            var remaining = Math.Max(0, budget - usedTokens);
-            var recentTools = new List<AgentMessage>();
-            for (var i = context.ToolObservations.Count - 1; i >= 0; i--)
-            {
-                var obs = context.ToolObservations[i];
-                var content = obs.Succeeded ? obs.Result : obs.Error;
-                var tokens = EstimateTokens(content);
-                if (remaining < tokens)
-                {
-                    // 时间序列数据：旧观察对当前决策价值递减，break 而非 skip
-                    //（避免跳过最新观察却纳入更旧的观察，破坏时序一致性）
-                    if (i > 0 || recentTools.Count == 0)
-                    {
-                        truncated = true;
-                    }
-                    break;
-                }
-                recentTools.Insert(0, obs.ToAgentMessage());
-                remaining -= tokens;
-            }
-            projected.AddRange(recentTools);
-            usedTokens += EstimateTokens(recentTools);
-        }
-
-        // 5. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记）
+        // 4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记）
+        // P0-1：Retrieved Materials 移到 Conversation 之前——作为检索上下文注入，
+        // 不破坏对话历史中 "assistant tool_calls → tool result" 的因果顺序。
         // Perf-4 修复 a：不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
         // Perf-4 修复 c：best-fit 策略——按 FinalScore 排序后逐个尝试纳入，
         //   某个材料太大时跳过该材料继续尝试下一个（不直接 break），让更小的相关材料仍能进入上下文。
@@ -162,53 +131,31 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                     Content = $"{UntrustedDataSectionMarker}\n[RetrievedContext:{env.Type}]\n{content}"
                 };
 
-                var tokens = EstimateTokens(msg.Content);
+                var tokens = EstimateMessageTokens(msg);
                 if (budget > 0 && usedTokens + tokens > budget)
                 {
                     // Perf-4 修复 c：best-fit — 当前材料太大时跳过，继续尝试下一个更小的材料（不 break）
                     truncated = true;
                     continue;
                 }
-
                 projected.Add(msg);
                 usedTokens += tokens;
             }
         }
 
-        // 6. Recent Assistant Turns（历史对话，Messages）
-        // Perf-4：优先级最低——历史对话对当前决策的边际价值低于 Tool Observations 和 Retrieved Materials。
-        // 按预算从最新向最旧纳入（chronological break：最旧的最先被截断）。
-        if (budget <= 0)
+        // 5. Conversation（对话历史，按原子协议单元保序裁剪）
+        // P0-1：从 context.Conversation 按时间顺序投影，保持 "assistant tool_calls → tool result" 因果顺序。
+        // AssistantToolCallTurn（含 ToolCalls）与对应的 ToolResultTurn 作为不可拆分协议单元：
+        // 预算不足时整体截断，不拆分 Assistant 与 Tool 消息。
+        // Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容旧路径）。
+        if (context.Conversation.Count > 0)
         {
-            // 无预算限制 — 全量返回
-            foreach (var msg in context.Messages)
-            {
-                projected.Add(msg);
-                usedTokens += EstimateTokens(msg.Content);
-            }
+            ProjectConversation(context.Conversation, budget, ref projected, ref usedTokens, ref truncated);
         }
         else
         {
-            var recent = new List<AgentMessage>();
-            var remaining = Math.Max(0, budget - usedTokens);
-            for (var i = context.Messages.Count - 1; i >= 0; i--)
-            {
-                var msg = context.Messages[i];
-                var tokens = EstimateTokens(msg.Content);
-                if (remaining < tokens)
-                {
-                    // 时间序列数据：旧消息对当前决策价值递减，break 而非 skip
-                    if (i > 0 || recent.Count == 0)
-                    {
-                        truncated = true;
-                    }
-                    break;
-                }
-                recent.Insert(0, msg);
-                remaining -= tokens;
-            }
-            projected.AddRange(recent);
-            usedTokens += EstimateTokens(recent);
+            // 回退路径：Conversation 为空（旧路径或恢复路径未重建）——分离投影 Messages + ToolObservations
+            ProjectLegacyConversation(context, budget, ref projected, ref usedTokens, ref truncated);
         }
 
         return new AgentModelContextProjection
@@ -220,6 +167,176 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                 ? $"Projected {projected.Count} messages, {usedTokens} tokens (budget={budget}). Some content truncated."
                 : null
         };
+    }
+
+    // ── P0-1：Conversation 原子协议单元投影 ──────────────────────────────
+
+    /// <summary>
+    /// P0-1：从 Conversation 按原子协议单元保序裁剪。
+    /// AssistantToolCallTurn（含 ToolCalls）与紧随其后的 ToolResultTurn 作为一个不可拆分单元：
+    /// 预算不足时整体截断，不拆分 Assistant 与 Tool 消息。
+    /// </summary>
+    private static void ProjectConversation(
+        List<AgentMessage> conversation,
+        int budget,
+        ref List<AgentMessage> projected,
+        ref int usedTokens,
+        ref bool truncated)
+    {
+        // 预处理：识别 turn 边界
+        // AssistantToolCallTurn = Assistant(含 ToolCalls) + 紧随其后的所有 Tool 消息
+        // 其他消息（Assistant text / User / 孤立 Tool）各自成单独 turn
+        var turns = new List<(int Start, int Count, int Tokens)>();
+        var i = 0;
+        while (i < conversation.Count)
+        {
+            var msg = conversation[i];
+            if (msg.Role == AgentMessageRole.Assistant && msg.ToolCalls is { Count: > 0 })
+            {
+                // Assistant ToolCall turn：包含此 Assistant + 紧随其后的所有 Tool 消息
+                var start = i;
+                var count = 1;
+                i++;
+                while (i < conversation.Count
+                       && conversation[i].Role == AgentMessageRole.Tool)
+                {
+                    count++;
+                    i++;
+                }
+                // 计算此 turn 的总 token 数（含 ToolCalls 开销）
+                var turnTokens = 0;
+                for (var j = start; j < start + count; j++)
+                {
+                    turnTokens += EstimateMessageTokens(conversation[j]);
+                }
+                turns.Add((start, count, turnTokens));
+            }
+            else
+            {
+                // 单独 turn（Assistant text / User / 孤立 Tool）
+                turns.Add((i, 1, EstimateMessageTokens(msg)));
+                i++;
+            }
+        }
+
+        if (budget <= 0)
+        {
+            // 无预算限制 — 全量返回（按时间顺序）
+            for (var t = 0; t < turns.Count; t++)
+            {
+                var turn = turns[t];
+                for (var j = turn.Start; j < turn.Start + turn.Count; j++)
+                {
+                    projected.Add(conversation[j]);
+                    usedTokens += EstimateMessageTokens(conversation[j]);
+                }
+            }
+            return;
+        }
+
+        // 有预算限制 — 从最新 turn 向最旧 turn 纳入（chronological break）
+        var remaining = Math.Max(0, budget - usedTokens);
+        var recentTurns = new List<AgentMessage>();
+        for (var t = turns.Count - 1; t >= 0; t--)
+        {
+            var turn = turns[t];
+            if (remaining < turn.Tokens)
+            {
+                // 原子单元不可拆分 — break（不纳入更旧的 turn）
+                if (t > 0 || recentTurns.Count == 0)
+                {
+                    truncated = true;
+                }
+                break;
+            }
+            // 将此 turn 的消息插入到 recentTurns 开头（保持时间顺序）
+            for (var j = turn.Start + turn.Count - 1; j >= turn.Start; j--)
+            {
+                recentTurns.Insert(0, conversation[j]);
+            }
+            remaining -= turn.Tokens;
+        }
+        projected.AddRange(recentTurns);
+        usedTokens += budget - usedTokens - remaining; // 已使用的 token 数
+    }
+
+    /// <summary>
+    /// P0-1：回退路径——Conversation 为空时从 Messages + ToolObservations 分离投影（向后兼容）。
+    /// 注意：此路径不保证 "assistant tool_calls → tool result" 因果顺序，
+    /// 仅用于未填充 Conversation 的旧路径或恢复路径。
+    /// </summary>
+    private static void ProjectLegacyConversation(
+        AgentContextState context,
+        int budget,
+        ref List<AgentMessage> projected,
+        ref int usedTokens,
+        ref bool truncated)
+    {
+        // Tool Observations（Tool 角色，按预算从最新向最旧纳入）
+        if (budget <= 0)
+        {
+            foreach (var obs in context.ToolObservations)
+            {
+                var msg = obs.ToAgentMessage();
+                projected.Add(msg);
+                usedTokens += EstimateMessageTokens(msg);
+            }
+        }
+        else
+        {
+            var remaining = Math.Max(0, budget - usedTokens);
+            var recentTools = new List<AgentMessage>();
+            for (var i = context.ToolObservations.Count - 1; i >= 0; i--)
+            {
+                var obs = context.ToolObservations[i];
+                var msg = obs.ToAgentMessage();
+                var tokens = EstimateMessageTokens(msg);
+                if (remaining < tokens)
+                {
+                    if (i > 0 || recentTools.Count == 0)
+                    {
+                        truncated = true;
+                    }
+                    break;
+                }
+                recentTools.Insert(0, msg);
+                remaining -= tokens;
+            }
+            projected.AddRange(recentTools);
+            usedTokens += budget - usedTokens - remaining;
+        }
+
+        // Messages（Assistant，按预算从最新向最旧纳入）
+        if (budget <= 0)
+        {
+            foreach (var msg in context.Messages)
+            {
+                projected.Add(msg);
+                usedTokens += EstimateMessageTokens(msg);
+            }
+        }
+        else
+        {
+            var remaining = Math.Max(0, budget - usedTokens);
+            var recent = new List<AgentMessage>();
+            for (var i = context.Messages.Count - 1; i >= 0; i--)
+            {
+                var msg = context.Messages[i];
+                var tokens = EstimateMessageTokens(msg);
+                if (remaining < tokens)
+                {
+                    if (i > 0 || recent.Count == 0)
+                    {
+                        truncated = true;
+                    }
+                    break;
+                }
+                recent.Insert(0, msg);
+                remaining -= tokens;
+            }
+            projected.AddRange(recent);
+            usedTokens += budget - usedTokens - remaining;
+        }
     }
 
     /// <summary>
@@ -249,14 +366,36 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         return Math.Max(1, (content.Length + 1) / 2);
     }
 
-    /// <summary>批量估算消息列表的 token 数。</summary>
-    private static int EstimateTokens(IReadOnlyList<AgentMessage> messages)
+    /// <summary>
+    /// P0-1：估算单条消息的 token 数，包含 Content + ToolCalls（Id/Name/Arguments）+ ToolName/ToolCallId 开销。
+    /// 旧路径仅算 Content.Length，导致 Content 为空但 ToolCalls 非空的 Assistant 消息算作 0 token。
+    /// </summary>
+    private static int EstimateMessageTokens(AgentMessage msg)
     {
-        var total = 0;
-        for (var i = 0; i < messages.Count; i++)
+        var tokens = EstimateTokens(msg.Content);
+
+        // ToolCalls 开销（Assistant 消息的 function calling 参数）
+        if (msg.ToolCalls is { Count: > 0 })
         {
-            total += EstimateTokens(messages[i].Content);
+            for (var i = 0; i < msg.ToolCalls.Count; i++)
+            {
+                var tc = msg.ToolCalls[i];
+                tokens += EstimateTokens(tc.Id);
+                tokens += EstimateTokens(tc.Name);
+                tokens += EstimateTokens(tc.Arguments);
+            }
         }
-        return total;
+
+        // Tool 消息的协议字段开销
+        if (!string.IsNullOrEmpty(msg.ToolName))
+        {
+            tokens += EstimateTokens(msg.ToolName);
+        }
+        if (!string.IsNullOrEmpty(msg.ToolCallId))
+        {
+            tokens += EstimateTokens(msg.ToolCallId);
+        }
+
+        return tokens;
     }
 }
