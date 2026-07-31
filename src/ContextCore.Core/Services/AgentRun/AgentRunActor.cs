@@ -686,10 +686,12 @@ public sealed class AgentRunActor
             ?? throw new InvalidOperationException(
                 "PendingToolExecution 状态下 PendingToolCommands 为 null（状态不一致）。");
 
-        // WP-1#6：依次执行所有 Pending Tool Call（首项为被审批的 Tool，后续为中断时未处理的同轮 Tool）
-        foreach (var pendingCommand in pendingCommands)
+        // P0-3：首项为被审批的 Tool（已通过审批），直接执行。
+        // 后续项为同轮未处理的 Tool Call，必须逐个走独立校验+审批流程，
+        // 不能因首项审批通过而隐式批准后续命令。
+        for (var cmdIndex = 0; cmdIndex < pendingCommands.Count; cmdIndex++)
         {
-            // 从 PendingToolCommand 重建 AgentToolCallRequest
+            var pendingCommand = pendingCommands[cmdIndex];
             var toolCall = new AgentToolCallRequest
             {
                 ToolName = pendingCommand.ToolName,
@@ -698,8 +700,113 @@ public sealed class AgentRunActor
                 ToolCallId = pendingCommand.ToolCallId
             };
 
+            // P0-3：后续 Tool Call（非首项）必须走独立校验+审批流程
+            if (cmdIndex > 0)
+            {
+                // P0-3：AllowedToolIds 检查
+                if (state.Run.AllowedToolIds.Count > 0
+                    && !string.IsNullOrWhiteSpace(toolCall.ToolName)
+                    && !state.Run.AllowedToolIds.Contains(toolCall.ToolName))
+                {
+                    state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
+                        toolCallId: pendingCommand.ToolCallId,
+                        requestId: null,
+                        toolName: pendingCommand.ToolName,
+                        idempotencyKey: pendingCommand.IdempotencyKey,
+                        sideEffect: ToolSideEffect.Unknown.ToString(),
+                        externalOperationId: null,
+                        journalState: ToolDispatchState.Prepared.ToString(),
+                        succeeded: false,
+                        output: null,
+                        error: $"Tool '{pendingCommand.ToolName}' 不在 Run.AllowedToolIds 白名单中，已被 Run 约束拒绝。",
+                        durationMs: 0)));
+                    continue;
+                }
+
+                // P0-3：Tool Schema 校验
+                if (_toolCallValidator is not null)
+                {
+                    var validation = await _toolCallValidator.ValidateAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
+                    if (!validation.IsValid)
+                    {
+                        state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
+                            toolCallId: pendingCommand.ToolCallId,
+                            requestId: null,
+                            toolName: pendingCommand.ToolName,
+                            idempotencyKey: pendingCommand.IdempotencyKey,
+                            sideEffect: ToolSideEffect.Unknown.ToString(),
+                            externalOperationId: null,
+                            journalState: ToolDispatchState.Prepared.ToString(),
+                            succeeded: false,
+                            output: null,
+                            error: validation.Error ?? "Validation failed",
+                            durationMs: 0)));
+                        continue;
+                    }
+
+                    // P0-3：后续 Tool Call 需要独立审批——不能因首项审批通过而隐式批准
+                    if (validation.RequiresApproval && _approvalGate is not null)
+                    {
+                        state = TransitionStateLocal(state, AgentRunState.AwaitingApproval);
+
+                        // 构建新的 PendingToolCommands：当前后续 Tool + 剩余未处理的 Tool
+                        var newPendingCommands = new List<PendingToolCommand> { pendingCommand };
+                        for (var j = cmdIndex + 1; j < pendingCommands.Count; j++)
+                        {
+                            newPendingCommands.Add(pendingCommands[j]);
+                        }
+
+                        state = BufferEvent(state, AgentRunEventType.ApprovalRequested, JsonSerializer.Serialize(new
+                        {
+                            toolName = pendingCommand.ToolName,
+                            reason = validation.ApprovalReason,
+                            pendingToolCommand = pendingCommand,
+                            pendingToolCommands = newPendingCommands
+                        }));
+
+                        var approval = await _approvalGate.RequestApprovalAsync(
+                            state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
+
+                        if (approval.PendingApproval)
+                        {
+                            var effectiveApprovalId = approval.ApprovalId ?? pendingCommand.ToolCallId;
+                            state = BufferEvent(state, AgentRunEventType.ApprovalResolved, JsonSerializer.Serialize(new
+                            {
+                                approved = false,
+                                pending = true,
+                                approvalId = effectiveApprovalId,
+                                approverId = (string?)null,
+                                rejectionReason = (string?)null
+                            }));
+
+                            await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+
+                            // P0-3：保存剩余 PendingToolCommands（含当前需审批的 Tool），供恢复后执行
+                            state = state with { PendingToolCommands = newPendingCommands };
+                            return state;
+                        }
+
+                        state = BufferEvent(state, AgentRunEventType.ApprovalResolved, JsonSerializer.Serialize(new
+                        {
+                            approved = approval.Approved,
+                            approverId = approval.ApproverId,
+                            rejectionReason = approval.RejectionReason
+                        }));
+
+                        if (!approval.Approved)
+                        {
+                            // 审批拒绝 → 跳过此 Tool，继续处理下一个
+                            state = TransitionStateLocal(state, AgentRunState.PendingToolExecution);
+                            continue;
+                        }
+
+                        // 审批通过 → 转回 PendingToolExecution 继续执行此 Tool
+                        state = TransitionStateLocal(state, AgentRunState.PendingToolExecution);
+                    }
+                }
+            }
+
             // WP-1#7：先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
-            // 旧路径在执行后才缓冲 ToolCallStarted，崩溃时无法审计已发起的调用。
             var requestId = (_durableToolExecutor is not null)
                 ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
                 : pendingCommand.ToolCallId;
@@ -710,7 +817,7 @@ public sealed class AgentRunActor
                 toolCallId = pendingCommand.ToolCallId,
                 requestId = requestId,
                 idempotencyKey = pendingCommand.IdempotencyKey,
-                resumedFromApproval = true
+                resumedFromApproval = cmdIndex == 0
             }));
 
             // WP-1#7：flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
