@@ -17,7 +17,7 @@ namespace ContextCore.IntegrationTests.TestFixtures;
 //      - 单一 handler 模式：所有请求返回同一响应（最简场景）。
 //      - 队列匹配模式：按入队顺序依次返回（脚本化多次调用）。
 //   2. 捕获所有请求用于断言（方法、URI、请求体、请求头）。
-//   3. 线程安全（ConcurrentQueue + ConcurrentBag），支持并发 HTTP 调用。
+//   3. 线程安全（ConcurrentQueue (ordered)），支持并发 HTTP 调用。
 //   4. 提供 Json(...) 静态工厂简化 JSON 响应构造。
 // ===========================================================================
 
@@ -27,7 +27,7 @@ namespace ContextCore.IntegrationTests.TestFixtures;
 public sealed class StubHttpMessageHandler : HttpMessageHandler
 {
     private readonly ConcurrentQueue<Func<HttpRequestMessage, HttpResponseMessage>> _handlers = new();
-    private readonly ConcurrentBag<HttpRequestMessage> _capturedRequests = new();
+    private readonly ConcurrentQueue<HttpRequestMessage> _capturedRequests = new();
 
     /// <summary>
     /// 使用单一 handler 构造：所有请求返回同一响应。
@@ -57,7 +57,7 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         // 捕获请求（克隆以避免 Dispose 后无法读取）
-        _capturedRequests.Add(CloneRequest(request));
+        _capturedRequests.Enqueue(CloneRequest(request));
 
         if (_handlers.TryDequeue(out var handler))
         {
