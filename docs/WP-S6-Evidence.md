@@ -57,7 +57,7 @@
 | 7 | 节点重启后自动加载集群唯一 Champion | WP-S4 Reconciler 三测试（FirstStart 立即激活 + DesiredState 先写 + 更高 revision 切换） |
 | 8 | SSE 在读取/订阅竞争窗口不丢最终事件 | `E2E_Http_Sse_LastEventIdReplay_NoLostWakeup`；端点注册-后-读取设计 |
 | 9 | 10,000 条以上事件可以分页恢复 | `E2E_TenThousandEvents_PaginatedRecovery_ChainIntact` |
-| 10 | Late Hydration 后 Decision 与实际输入一致 | WP-S5 既有（HydrationRepairDecision） |
+| 10 | Late Hydration 后 Decision 与实际输入一致 | WP-S5 既有（HydrationRepairDecision）+ `R28B_FinalClosureAcceptanceTests.LateHydrationRepairDropsCandidate_DecisionMatchesActualInput`（hydrator 返回 Repair 后，SelectedEnvelopes / Outcome.SelectedCount / EffectiveTokens / AllocationDecisions 全量与实际输入一致） |
 | 11 | FTS 第二页及后续页正确 | WP-S5 既有（FTS keyset 三存储分页） |
 | 12 | Mandatory CI 不允许通过 Inconclusive 掩盖缺失证据 | `evidence` job no-Inconclusive 门禁 + `R29H_CiEvidenceAcceptanceTests.Ci_GateScript_RejectsInconclusive` |
 | 13 | 当前 HEAD 的 CI、故障测试和基准结果可追溯 | `head-evidence.json` + `head-commit.json` 工件 + 本文档 + `R29H_CiEvidenceAcceptanceTests` |

@@ -451,6 +451,86 @@ public sealed class PurposeSemanticAcceptanceTests
     }
 
     [TestMethod]
+    public async Task LateHydrationRepairDropsCandidate_DecisionMatchesActualInput()
+    {
+        // 硬验收第 10 条：Late Hydration 修复重建后，Decision 必须与实际输入一致。
+        // hydrator 返回 Repair（丢弃 cand-b、保留 cand-a、替换 AllocationDecisions、
+        // 重算精确 token 总数）时，Runtime 必须据此重建 ContextDecisionResult：
+        // SelectedEnvelopes / Outcome.SelectedCount / Outcome.EffectiveTokens /
+        // AllocationDecisions 全部反映修复后的实际结果，而非 Engine 的原始输出。
+        var store = new TwoItemContextStore(new[]
+        {
+            new ContextItem
+            {
+                Id = "cand-a",
+                WorkspaceId = "test-ws",
+                CollectionId = "test-col",
+                Content = "cand-a content",
+                Type = "test",
+                Tags = new[] { "mandatory" }
+            },
+            new ContextItem
+            {
+                Id = "cand-b",
+                WorkspaceId = "test-ws",
+                CollectionId = "test-col",
+                Content = "cand-b content",
+                Type = "test",
+                Tags = new[] { "mandatory" }
+            }
+        });
+        var provider = new MandatoryCandidateProvider(store);
+        // 注入返回 Repair 的 hydrator Stub（模拟 hydrate 后预算修复丢弃 cand-b）
+        var hydrator = new DropLastHydrator(dropSuffix: "cand-b");
+
+        var runtime = ArtifactTruthAcceptanceTests.BuildRuntime(
+            providers: new[] { provider },
+            selectedCandidateHydrator: hydrator);
+
+        var request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = "req-late-hydration-repair",
+            Scope = new ContextDecisionScope("test-ws", "test-col"),
+            Purpose = ContextDecisionPurpose.Retrieval,
+            TokenBudget = 4096,
+            TopK = 10,
+            RetrievalInput = new RetrievalInput { IncludeContent = false }
+        };
+
+        var execution = await runtime.ExecuteWithWorkingSetAsync(request, CancellationToken.None);
+        var decision = execution.Decision;
+
+        // SelectedEnvelopes 反映修复后实际输入：cand-b 被丢弃，仅保留 cand-a
+        Assert.AreEqual(1, decision.SelectedEnvelopes.Count,
+            "Late Hydration 丢弃候选后，SelectedEnvelopes 必须与实际保留集合一致。");
+        Assert.AreEqual("Mandatory:cand-a", decision.SelectedEnvelopes[0].CandidateId,
+            "保留候选必须与 HydrationRepairDecision.HydratedSelected 一致。");
+
+        // Outcome 反映精确 token 总数与真实选中数
+        Assert.AreEqual(1, decision.Outcome.SelectedCount,
+            "Outcome.SelectedCount 必须等于修复后实际保留的候选数。");
+        Assert.AreEqual(42, decision.Outcome.EffectiveTokens,
+            "Outcome.EffectiveTokens 必须等于 HydrationRepairDecision.ExactTokenCount（基于真实正文重算）。");
+
+        // AllocationDecisions 替换为修复后的实际分配
+        var allocationsByEntity = decision.AllocationDecisions.ToDictionary(
+            d => d.CandidateKey.EntityId, StringComparer.Ordinal);
+        Assert.AreEqual(2, allocationsByEntity.Count,
+            "AllocationDecisions 必须携带修复后的全部候选分配（retained=Selected，dropped=TokenBudgetExceeded）。");
+        Assert.AreEqual(CandidateDecisionReasonCode.SelectedMandatory,
+            allocationsByEntity["cand-a"].ReasonCode,
+            "保留候选必须标记为 Selected。");
+        Assert.AreEqual(CandidateDecisionReasonCode.TokenBudgetExceeded,
+            allocationsByEntity["cand-b"].ReasonCode,
+            "被丢弃候选必须标记为 TokenBudgetExceeded。");
+
+        // WorkingSet 使用 hydrator 返回的修复后工作集（正文已 hydrate）
+        var materialA = execution.WorkingSet.Materials[allocationsByEntity["cand-a"].CandidateKey];
+        Assert.AreEqual("hydrated content for cand-a", materialA.Content,
+            "WorkingSet.Materials 必须使用 hydrator 修复后的真实正文。");
+    }
+
+    [TestMethod]
     public async Task RewrittenQueryIsActuallyUsed()
     {
         // RewrittenQueryText 必须被 Provider 实际使用（而非被忽略）。
@@ -1352,5 +1432,146 @@ internal sealed class FixedItemContextStore : IContextStore, IContextStoreBatchL
             }
         }
         return Task.FromResult<IReadOnlyList<ContextItem>>(result);
+    }
+}
+
+// ===========================================================================
+// 辅助 Stub：TwoItemContextStore + DropLastHydrator — Late Hydration 修复一致性
+// ===========================================================================
+
+/// <summary>
+/// 返回固定多个 ContextItem 的 IContextStore Stub。供 Late Hydration 修复重建测试
+/// 提供两个 mandatory 候选（一个保留、一个被 hydrator 丢弃）。
+/// </summary>
+internal sealed class TwoItemContextStore : IContextStore, IContextStoreBatchLookup
+{
+    private readonly IReadOnlyList<ContextItem> _items;
+
+    public TwoItemContextStore(IReadOnlyList<ContextItem> items) => _items = items;
+
+    public Task<IReadOnlyList<ContextItem>> QueryAsync(
+        ContextQuery query, CancellationToken cancellationToken = default)
+    {
+        // 按 Tags 匹配
+        if (query.Tags is { Count: > 0 } tags)
+        {
+            var matched = _items
+                .Where(i => (i.Tags ?? Array.Empty<string>())
+                    .Any(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+                .ToArray();
+            return Task.FromResult<IReadOnlyList<ContextItem>>(matched);
+        }
+        return Task.FromResult(_items);
+    }
+
+    public Task<ContextItem?> GetAsync(
+        string workspaceId, string collectionId, string id,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<ContextItem?>(_items.FirstOrDefault(
+            i => string.Equals(i.Id, id, StringComparison.Ordinal)));
+
+    public Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task DeleteAsync(
+        string workspaceId, string collectionId, string id,
+        CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<ContextItem>> BatchGetAsync(
+        string workspaceId, string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new List<ContextItem>(ids.Count);
+        foreach (var id in ids)
+        {
+            var item = _items.FirstOrDefault(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (item is not null)
+            {
+                result.Add(item);
+            }
+        }
+        return Task.FromResult<IReadOnlyList<ContextItem>>(result);
+    }
+}
+
+/// <summary>
+/// 丢弃指定后缀候选、保留其余候选的 ISelectedCandidateHydrator Stub。
+/// 模拟生产 hydrator hydrate 后因预算修复丢弃候选的行为：返回 HydrationRepairDecision
+/// （HydratedSelected / HydrationDropped / UpdatedAllocationDecisions / ExactTokenCount），
+/// 让 Runtime 据此重建 ContextDecisionResult。
+/// </summary>
+internal sealed class DropLastHydrator : ISelectedCandidateHydrator
+{
+    private readonly string _dropSuffix;
+
+    public DropLastHydrator(string dropSuffix) => _dropSuffix = dropSuffix;
+
+    public ValueTask<HydrationResult> HydrateAsync(
+        IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
+        CandidateWorkingSet workingSet,
+        int tokenBudget = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var retained = new List<ContextCandidateEnvelope>(selectedEnvelopes.Count);
+        var dropped = new List<ContextCandidateEnvelope>();
+        foreach (var envelope in selectedEnvelopes)
+        {
+            if (envelope.CandidateId.EndsWith(_dropSuffix, StringComparison.Ordinal))
+                dropped.Add(envelope);
+            else
+                retained.Add(envelope);
+        }
+
+        // hydrate 保留候选的正文，并生成修复后的分配决策
+        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(retained.Count);
+        var hydratedSelected = new List<string>(retained.Count);
+        var updatedDecisions = new List<CandidateAllocationDecision>(selectedEnvelopes.Count);
+        foreach (var envelope in retained)
+        {
+            var content = $"hydrated content for {envelope.CanonicalKey.EntityId}";
+            materials[envelope.CanonicalKey] = R28BTestHelpers.MakeMaterial(envelope.CanonicalKey, content);
+            hydratedSelected.Add(envelope.CandidateId);
+            updatedDecisions.Add(new CandidateAllocationDecision
+            {
+                CandidateKey = envelope.CanonicalKey,
+                Section = "context",
+                IncludedTokens = 40,
+                ReasonCode = CandidateDecisionReasonCode.SelectedMandatory
+            });
+        }
+        var hydrationDropped = new List<string>(dropped.Count);
+        foreach (var envelope in dropped)
+        {
+            hydrationDropped.Add(envelope.CandidateId);
+            updatedDecisions.Add(new CandidateAllocationDecision
+            {
+                CandidateKey = envelope.CanonicalKey,
+                Section = "context",
+                IncludedTokens = 0,
+                ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+            });
+        }
+
+        // 与生产 hydrator 一致：WorkingSet.Envelopes 保持原集合，仅替换 Materials
+        var repairedWorkingSet = workingSet with { Materials = materials };
+        var repair = new HydrationRepairDecision
+        {
+            HydratedSelected = hydratedSelected,
+            HydrationDropped = hydrationDropped,
+            UpdatedAllocationDecisions = updatedDecisions,
+            ExactTokenCount = 42,
+            HydrationFailures = new Dictionary<string, string>()
+        };
+        var result = new HydrationResult
+        {
+            WorkingSet = repairedWorkingSet,
+            HydratedCount = retained.Count,
+            FailedCount = 0,
+            BudgetExceeded = false,
+            Repair = repair
+        };
+        return ValueTask.FromResult(result);
     }
 }
