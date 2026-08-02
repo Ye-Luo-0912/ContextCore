@@ -92,7 +92,7 @@ internal sealed class PackageInputLoader
             planBuilder.RecordDedupHit();
         }
 
-        // ── current_task（R13.2 #3：与 6 源预取并行）─────────────────────────
+        // ── current_task（与 6 源预取并行）─────────────────────────
         Task<WorkingMemoryCurrentTask?>? currentTaskTask = options.IncludeCurrentTaskSection
             ? ResolveCurrentTaskAsync(request, collectionId ?? string.Empty, planBuilder, cancellationToken)
             : null;

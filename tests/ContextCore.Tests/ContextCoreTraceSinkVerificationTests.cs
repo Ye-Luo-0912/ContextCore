@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Learning.V14_0;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// OPT-2: Runtime Candidate Trace Sink 验证测试。
+/// Runtime Candidate Trace Sink 验证测试。
 ///
 /// 验证范围：
 /// 1. FileRuntimeCandidateTraceSink 现有行为（write count / drop on null writer / write failures / flush）

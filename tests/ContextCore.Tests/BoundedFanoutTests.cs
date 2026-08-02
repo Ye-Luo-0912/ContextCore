@@ -243,7 +243,7 @@ public sealed class RetrievalFanoutOptionsTests
         Assert.AreEqual(16, options.MaxReadFanout, "memoryStore 为 null 时应按 contextStore 推断");
     }
 
-    // --- R13.3 #2：能力驱动路径（FromProfile）---
+    // --- 能力驱动路径（FromProfile）---
 
     /// <summary>
     /// FromProfile：InMemory 预设的 RecommendedReadFanout=16，应被原样采用。
@@ -327,7 +327,7 @@ public sealed class RetrievalFanoutOptionsTests
             RetrievalFanoutOptions.FromProfile(null!));
     }
 
-    // --- R13.3 #2：IStoreRuntimeCapabilities 路径优先 ---
+    // --- IStoreRuntimeCapabilities 路径优先 ---
 
     /// <summary>
     /// Resolve：store 实现 IStoreRuntimeCapabilities 时，使用 Profile.RecommendedReadFanout。

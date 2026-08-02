@@ -19,7 +19,7 @@ namespace ContextCore.Abstractions;
 /// FileSystem 实现逐行读取 JSONL；InMemory 实现遍历内存字典。</item>
 /// <item>排序语义与 <see cref="IRelationStore.QueryAsync"/> 一致（weight/confidence/createdAt desc）；
 /// 但流式不应用调用方提供的 Skip/Take——返回完整候选集，由消费方按需裁剪。</item>
-/// <item>P1-9：流式不得无界扫描。实现方必须应用 <see cref="GraphQueryLimits.MaxTotalEdges"/>
+/// <item>流式不得无界扫描。实现方必须应用 <see cref="GraphQueryLimits.MaxTotalEdges"/>
 /// 作为 SQL LIMIT 或迭代上限，防止病态全表扫描把整张图拉入内存。在线主链不得调用本方法
 /// 做候选枚举——应走 <see cref="IRelationStore.QueryNeighborsBatchAsync"/> 的 per-seed TopN 路径。</item>
 /// </list>

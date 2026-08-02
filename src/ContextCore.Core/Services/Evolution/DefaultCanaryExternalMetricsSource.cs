@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// 任务 C：默认的外部指标采集源（ICanaryExternalMetricsSource 实现）。
+// 默认的外部指标采集源（ICanaryExternalMetricsSource 实现）。
 //
 // 目标：
 //   1. 提供 RegisterTaskResult / RegisterToolResult / RegisterRepairResult /
@@ -24,7 +24,7 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// 任务 C：默认的 <see cref="ICanaryExternalMetricsSource"/> 实现。
+/// 默认的 <see cref="ICanaryExternalMetricsSource"/> 实现。
 /// 从内部计数器采集外部结果指标（Tool 成功率、Task 成功率、用户反馈等）。
 /// </summary>
 /// <remarks>

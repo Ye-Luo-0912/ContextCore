@@ -40,7 +40,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build ContextCore.sln -c Release --no-restore -warnaserror
 
-      # P0-10 修复：upload bin/obj 产物供下游 test job 复用。
+      # 修复：upload bin/obj 产物供下游 test job 复用。
       # 下游 job 在新 runner 上运行 --no-build --no-restore，若无此 artifact 将在资产解析阶段失败
       # （obj/project.assets.json 缺失，NuGet cache 也不含该 runner 的 restore 产物）。
       - name: Upload build artifacts
@@ -73,7 +73,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      # 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -136,7 +136,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      # 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -182,7 +182,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      # 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -226,7 +226,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      # 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -270,7 +270,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # P0-10 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
+      # 修复：下载 build job 产出的 bin/obj，使 --no-build --no-restore 可用
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -293,7 +293,7 @@ jobs:
           path: '**/TestResults/*.trx'
           retention-days: 7
 
-  # WP-S6：生产证据固化 job —— 汇总各测试 job 的 TRX 结果：
+  # 生产证据固化 job —— 汇总各测试 job 的 TRX 结果：
   #   1. no-Inconclusive 门禁：任何测试以 Inconclusive 跳过都导致 CI 失败，
   #      不允许用 Inconclusive 掩盖缺失的证据（例如 Docker 未就绪导致的静默跳过）。
   #   2. 记录当前 HEAD（commit sha + run id + 各 job 结果）为可追溯证据，
@@ -343,7 +343,7 @@ jobs:
           path: evidence/trx/openapi-snapshot
         continue-on-error: true
 
-      # WP-S6 门禁：拒绝 Inconclusive。TRX 缺失（目录为空）同样失败（证据不完整）。
+      # 门禁：拒绝 Inconclusive。TRX 缺失（目录为空）同样失败（证据不完整）。
       - name: Gate — no Inconclusive test results
         run: python3 scripts/gate-no-inconclusive.py evidence/trx
 

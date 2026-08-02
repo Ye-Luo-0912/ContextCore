@@ -43,7 +43,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IContextIndex>(sp => sp.GetRequiredService<PostgresContextIndex>());
 
         // MemoryStore
-        // Perf-2：注入 IContextTokenizerResolver（可选），让 SaveAsync 在摄取阶段计算并持久化 tokenization metadata。
+        // 注入 IContextTokenizerResolver（可选），让 SaveAsync 在摄取阶段计算并持久化 tokenization metadata。
         // GetService 返回 null 时不影响 Store 基本读写（仅 token_count 列保持 NULL）。
         services.AddSingleton<PostgresMemoryStore>(sp => new PostgresMemoryStore(
             sp.GetRequiredService<PostgresConnectionFactory>(),
@@ -81,7 +81,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresLearningFeatureCandidateStore>();
 
         // ConstraintStore
-        // Perf-2：注入 IContextTokenizerResolver（可选），让 SaveAsync 在摄取阶段计算并持久化 tokenization metadata。
+        // 注入 IContextTokenizerResolver（可选），让 SaveAsync 在摄取阶段计算并持久化 tokenization metadata。
         services.AddSingleton<PostgresConstraintStore>(sp => new PostgresConstraintStore(
             sp.GetRequiredService<PostgresConnectionFactory>(),
             sp.GetRequiredService<PostgresJsonSerializer>(),
@@ -203,7 +203,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresPipelineRunStore>();
         services.AddSingleton<IPipelineRunStore>(sp => sp.GetRequiredService<PostgresPipelineRunStore>());
 
-        // WS-A：Postgres Policy Registry 持久化（bundle 注册 + activation CAS 激活）。
+        // Postgres Policy Registry 持久化（bundle 注册 + activation CAS 激活）。
         // 替代 InMemory DefaultPolicyRegistry，让 HA 场景下 policy activation 可跨进程持久化 + CAS。
         services.AddSingleton<PostgresPolicyRegistry>();
         services.AddSingleton<IPolicyRegistry>(sp => sp.GetRequiredService<PostgresPolicyRegistry>());
@@ -230,7 +230,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresContextEventSink>();
         services.AddSingleton<IContextEventSink>(sp => sp.GetRequiredService<PostgresContextEventSink>());
 
-        // / R29 WP-E-1：Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
+        // / Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
         // 读 API（IUtilityLedgerStore / IConflictSetStore）+ 写 API（IUtilityLedger / IConflictSetLedger）
         // 均绑定到同一 singleton；UtilityLedgerMaterializer 通过 IUtilityLedger / IConflictSetLedger
         // 异步批量写入，无需感知存储后端。无需失效 Decorator（读路径未接入缓存）。
@@ -255,7 +255,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresLearningEventOutboxStore>();
         services.AddSingleton<ILearningEventOutboxStore>(sp => sp.GetRequiredService<PostgresLearningEventOutboxStore>());
 
-        // 任务 F：Agent Run 状态机 + 事件流哈希链持久化（PostgreSQL）。
+        // Agent Run 状态机 + 事件流哈希链持久化（PostgreSQL）。
         // 替代 InMemory 默认实现，让 HA 场景下 Agent Run 元数据 + 审计事件流可跨进程持久化与崩溃恢复。
         // - IAgentRunStore / IAgentRunEventStore：让 AgentRunActor / AgentKernelHost 自动注入持久化实现；
         // - IPersistentAgentRunStore / IPersistentAgentRunEventStore：标记接口以显式区分持久化能力。
@@ -299,7 +299,7 @@ public static class PostgresServiceCollectionExtensions
             DeserializeWork = workId => workId
         });
 
-        // 任务 D：Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
+        // Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
         // 替代单节点 InMemory 默认实现，让 HA 场景下 Canary 指标可跨实例聚合 + Leader 选举确保单 leader 推进。
         // - ICanaryLeaderLease：CanaryLeaderHostedService 通过 TryAcquireAsync/RenewAsync/ReleaseAsync
         //   竞争 per-run leader 租约（复用 P0-1/P0-2 租约模式，但状态机简化为"持有/未持有"两态）。

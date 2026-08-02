@@ -49,7 +49,7 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
     }
 
     /// <inheritdoc />
-    /// <remarks>P2-1：使用 ConcurrentDictionary.TryAdd 实现 insert-if-absent 语义。</remarks>
+    /// <remarks>使用 ConcurrentDictionary.TryAdd 实现 insert-if-absent 语义。</remarks>
     public Task<bool> TryCreateRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -293,6 +293,6 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
     /// <summary>当前 baseline comparison 总数（测试与诊断用）。</summary>
     public int BaselineComparisonCount => _baselineComparisons.Count;
 
-    /// <summary>R28-B.8 stage transition count (test).</summary>
+    /// <summary>stage transition count (test).</summary>
     public int StageTransitionCount => _stageTransitions.Count;
 }

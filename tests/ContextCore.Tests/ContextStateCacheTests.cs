@@ -908,7 +908,7 @@ public sealed class ContextStateCacheTests
         }
     }
 
-    // ── R13.0 #7: semantic metadata fingerprint 测试 ──────────────────────────
+    // ──  semantic metadata fingerprint 测试 ──────────────────────────
 
     /// <summary>
     /// #7: 操作性 metadata key（requestId/traceId/operationId/correlationId/spanId 等）
@@ -1386,7 +1386,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("src-1", sourceRefs[0]);
     }
 
-    // ── R13.0 #8: mutable result isolation tests ──────────────────────────
+    // ──  mutable result isolation tests ──────────────────────────
 
     /// <summary>
     /// #8: 缓存层 GetAsync 不做防御性拷贝——返回存储的同一引用。
@@ -1604,7 +1604,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("item-1", result2.ItemReferences[0].ItemId, "ItemReferences 未被污染");
     }
 
-    // ── R13.0 #9: write-during-build race tests ───────────────────────────
+    // ──  write-during-build race tests ───────────────────────────
 
     /// <summary>
     /// #9: 构建期间无并发写入（版本稳定）——factory 仅执行一次，结果缓存。
@@ -1747,7 +1747,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("v1", v2);
     }
 
-    // ── R13.0 #4: factory shutdown token 与 timeout ──────────────────────
+    // ──  factory shutdown token 与 timeout ──────────────────────
 
     /// <summary>
     /// #4: Shutdown() 取消正在执行的 factory——factory 通过 token 收到取消信号。
@@ -1999,7 +1999,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("pre-shutdown-value", hit, "shutdown 后缓存命中应不受影响");
     }
 
-    // ── R13.0 #5: version bump 先于 physical eviction ────────────────────
+    // ──  version bump 先于 physical eviction ────────────────────
 
     /// <summary>
     /// #5: AfterCommitAsync 中 BumpVersionAsync 必须先于 InvalidateAsync 执行。
@@ -2043,7 +2043,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("Invalidate", callOrder[0]);
     }
 
-    // ── R13.0 #6: Cache TTL ──────────────────────────────────────────────
+    // ──  Cache TTL ──────────────────────────────────────────────
 
     /// <summary>
     /// #6: 条目在 TTL 内可命中，超过 TTL 后 lazy 淘汰并返回 null。
@@ -2188,7 +2188,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual(0L, cache.TtlExpirations, "scope 失效不应计 TTL 过期");
     }
 
-    // ── R13.0 #10: Cache 默认生产关闭 / R13-F：Cache Canary 可选启用 ─────────
+    // ──  Cache 默认生产关闭 / Cache Canary 可选启用 ─────────
     //
     // 生产默认行为：PackageTemplateCacheOptions.Enabled=false → CacheAccessor=null
     // → BasicContextPackageBuilder._cacheAccessor 为 null → 每个 Build 走全量流水线。
@@ -2243,7 +2243,7 @@ public sealed class ContextStateCacheTests
         Assert.AreSame(accessor, value, "非 null CacheAccessor 必须传播到 builder._cacheAccessor");
     }
 
-    // ── R13-F: Cache Canary Gate 测试 ─────────────────────────────────────
+    // ──  Cache Canary Gate 测试 ─────────────────────────────────────
     //
     // 验证 ContextStateCacheAccessor.canaryGate 谓词按工作空间粒度控制缓存路径：
     // - gate 返回 true → 走缓存路径（命中/未命中/写入缓存）

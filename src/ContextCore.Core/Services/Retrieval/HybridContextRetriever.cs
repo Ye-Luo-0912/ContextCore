@@ -220,7 +220,7 @@ public sealed class HybridContextRetriever : IContextRetriever
         var result = _resultAssembler.Assemble(operationId, request, effectivePacked, trace, metadata);
         CoreMetrics.RetrievalDuration.Record(_sw.Elapsed.TotalMilliseconds);
 
-        // V17.0: 投影只读 decision trace，不改变 result。
+        // 投影只读 decision trace，不改变 result。
         if (_decisionTraceStore is not null)
         {
             try

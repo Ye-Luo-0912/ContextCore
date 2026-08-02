@@ -153,7 +153,7 @@ public sealed class CanaryProgressionService
     private readonly CutoverController _cutoverController;
     private readonly CanaryGateOptions _options;
     private readonly TimeProvider _timeProvider;
-    // 工作包 B：可选的 per-run CutoverController 注册表。
+    // 可选的 per-run CutoverController 注册表。
     // 非空时 InitializeCanary/AdvanceAsync/RollbackAsync 操作 registry.GetOrCreate(runId) 专用控制器；
     // 为 null 时回退到直接注入的 _cutoverController（B-8 之前行为，保持向后兼容）。
     private readonly CutoverControllerRegistry? _registry;
@@ -181,7 +181,7 @@ public sealed class CanaryProgressionService
     /// <param name="options">Canary Gate 配置（可选，默认 <see cref="CanaryGateOptions"/>）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
     /// <param name="registry">
-    /// 工作包 B：可选的 per-run CutoverController 注册表。非空时按 runId 隔离控制器，
+    /// 可选的 per-run CutoverController 注册表。非空时按 runId 隔离控制器，
     /// 避免多 run 共享 Singleton 导致百分比互相覆盖；为 null 时回退到 <paramref name="cutoverController"/>。
     /// </param>
     /// <param name="decisionApplier">
@@ -213,7 +213,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// 工作包 B：解析指定 run 应操作的 CutoverController。
+    /// 解析指定 run 应操作的 CutoverController。
     /// registry 非空时返回该 run 的专用控制器（按需创建）；否则回退到共享的 <see cref="_cutoverController"/>。
     /// </summary>
     private CutoverController GetController(string runId)
@@ -245,7 +245,7 @@ public sealed class CanaryProgressionService
         if (_runStates.TryAdd(runId, state))
         {
             // 仅在首次初始化时调整 CutoverController
-            // 工作包 B：registry 非空时操作 per-run 专用控制器
+            // registry 非空时操作 per-run 专用控制器
             GetController(runId).SetCutoverPercentage(initialPercentage);
         }
         // 已存在 → no-op（幂等）
@@ -638,7 +638,7 @@ public sealed class CanaryProgressionService
         else
         {
             // 回退路径（_decisionApplier=null，测试场景）：仅写进程内状态
-            // 工作包 B：registry 非空时操作 per-run 专用控制器
+            // registry 非空时操作 per-run 专用控制器
             GetController(runId).SetCutoverPercentage(0);
             _runStates[runId] = new CanaryRunState(0, now);
 
@@ -697,7 +697,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// Perf-7：在 HA 单事务提交后同步更新 in-memory 状态（CutoverController + _runStates）。
+    /// 在 HA 单事务提交后同步更新 in-memory 状态（CutoverController + _runStates）。
     /// </summary>
     /// <remarks>
     /// <b>背景</b>：<see cref="CanaryLeaderHostedService"/> 在 Perf-7 后改用
@@ -715,7 +715,7 @@ public sealed class CanaryProgressionService
         if (newPercentage < 0) newPercentage = 0;
         if (newPercentage > 100) newPercentage = 100;
 
-        // 工作包 B：registry 非空时操作 per-run 专用控制器
+        // registry 非空时操作 per-run 专用控制器
         GetController(runId).SetCutoverPercentage(newPercentage);
         _runStates[runId] = new CanaryRunState(newPercentage, _timeProvider.GetUtcNow());
     }
@@ -846,7 +846,7 @@ public sealed class CanaryProgressionService
             }
         }
 
-        // 4. R29 WP-C-3：质量分下限（quality_score）：experimentMetrics["quality_score"] < MinQualityScore
+        // 4. 质量分下限（quality_score）：experimentMetrics["quality_score"] < MinQualityScore
         // 阈值 = 0.0 时禁用此检查（不触发回滚）。
         if (_options.MinQualityScore > 0.0 &&
             experimentMetrics.TryGetValue("quality_score", out var quality) &&
@@ -857,7 +857,7 @@ public sealed class CanaryProgressionService
                 $"V2 产出质量退化（section 覆盖率 + 候选相关性综合分过低）；自动回滚。");
         }
 
-        // 任务 C：外部指标回滚检查。指标未采集（不在字典中）时跳过（优雅降级）。
+        // 外部指标回滚检查。指标未采集（不在字典中）时跳过（优雅降级）。
         // 与 quality_score 不同，外部指标只在被 DefaultCanaryExternalMetricsSource 等采集源
         // 真正写入时才出现在 experimentMetrics 字典中（ToExperimentMetrics 仅写入非 null 字段）。
 

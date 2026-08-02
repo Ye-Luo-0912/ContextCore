@@ -204,7 +204,7 @@ public sealed class PackageStateSnapshot
     public DateTimeOffset CapturedAt { get; }
 }
 
-/// <summary>R15 增量上下文包：delta 种类，决定增量构建策略。</summary>
+/// <summary>增量上下文包：delta 种类，决定增量构建策略。</summary>
 public enum PackageDeltaKind
 {
     /// <summary>无变化：请求指纹一致 + 所有 store 版本一致 → 直接复用快照。</summary>
@@ -220,7 +220,7 @@ public enum PackageDeltaKind
     FullRebuildRequired
 }
 
-/// <summary>R15 增量上下文包：delta 计划，由 DeltaPlanner 输出，描述变化范围。</summary>
+/// <summary>增量上下文包：delta 计划，由 DeltaPlanner 输出，描述变化范围。</summary>
 public sealed record PackageDeltaPlan(
     PackageDeltaKind Kind,
     IReadOnlyList<string> AffectedSectionNames,
@@ -300,7 +300,7 @@ public interface ISnapshotCapablePackageBuilder : IContextPackageBuilder
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// V2：从既有快照复用 PackageTemplate，重新投影为新的 <see cref="ContextPackageBuildResult"/>。
+    /// 从既有快照复用 PackageTemplate，重新投影为新的 <see cref="ContextPackageBuildResult"/>。
     /// 仅用于 <see cref="PackageDeltaKind.NoChange"/> 路径：请求指纹 + store 版本均未变化，
     /// 因此快照中的 PackageTemplate 仍有效，可跳过 build pipeline。
     /// </summary>
@@ -321,7 +321,7 @@ public interface ISnapshotCapablePackageBuilder : IContextPackageBuilder
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>R15 增量上下文包：全量构建结果与状态快照的组合返回。</summary>
+/// <summary>增量上下文包：全量构建结果与状态快照的组合返回。</summary>
 public sealed record PackageBuildWithSnapshot(
     ContextPackageBuildResult Result,
     PackageStateSnapshot Snapshot);

@@ -8,7 +8,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// GRAPH-10：Postgres provider 的 RelationStore contract 测试。
+/// Postgres provider 的 RelationStore contract 测试。
 /// 继承 <see cref="RelationStoreContractBase"/>，与 InMemory / FileSystem 跑同一套断言。
 /// 使用 Testcontainers（pgvector 镜像）启动临时 Postgres 实例；无 Docker 时所有测试标记为 Inconclusive。
 /// 每次创建 store 使用唯一 TablePrefix，避免测试间数据干扰。

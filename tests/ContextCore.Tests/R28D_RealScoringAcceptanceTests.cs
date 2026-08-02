@@ -501,7 +501,7 @@ public sealed class R28D_EndToEndIntegrationTests
             modelWeight: 0.5,
             modelArtifactId: engine.ModelVersion,
             confidenceThreshold: 0.0, // Deterministic 引擎的 confidence 可能低于默认 0.70，置 0 确保 model-weighted 路径
-            allowDeterministicReplayScoring: true, // R28-D P0-1：显式允许 DeterministicReplay 参与评分（测试/预览场景）
+            allowDeterministicReplayScoring: true, // 显式允许 DeterministicReplay 参与评分（测试/预览场景）
             featureSchemaVersion: engine.ModelVersion);
 
         // 阶段 1：特征提升

@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// B-4：Authoritative Cutover — Retrieval → Package → AgentContext
+// Authoritative Cutover — Retrieval → Package → AgentContext
 //
 // 目标（B-4 阶段：V2 Runtime 成为权威路径，Legacy 降级为可选 fallback）：
 //   1. AuthoritativeRetrievalRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
@@ -28,7 +28,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-4：Cutover 控制器。按 percentage 控制 Legacy → V2 流量比例。
+/// Cutover 控制器。按 percentage 控制 Legacy → V2 流量比例。
 /// </summary>
 /// <remarks>
 /// 灰度策略：按 requestId 的稳定哈希决定走 V2 还是 Legacy。
@@ -84,7 +84,7 @@ public sealed class CutoverController
 }
 
 /// <summary>
-/// 工作包 B：从请求 metadata 中提取 canary run ID 的内部辅助方法。
+/// 从请求 metadata 中提取 canary run ID 的内部辅助方法。
 /// </summary>
 internal static class CanaryRunIdResolver
 {
@@ -246,7 +246,7 @@ internal static class CanaryQualityScoreCalculator
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-4：Retrieval 权威路径运行时。
+/// Retrieval 权威路径运行时。
 /// 编排 Legacy Retriever + V2 Runtime + 可选 Shadow parity + fallback。
 /// </summary>
 public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
@@ -261,7 +261,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     private readonly ShadowGate? _shadowGate;
     // 注入实验平面集成（可选），用于自动记录 shadow fixture + sampled shadow。
     private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
-    // 工作包 B：可选的 per-run CutoverController 解析器。
+    // 可选的 per-run CutoverController 解析器。
     // 非空时按请求 metadata 中的 canaryRunId 解析到对应 run 的专用控制器；
     // 为 null 时回退到直接注入的 _cutoverController（B-5 行为，向后兼容）。
     private readonly ICutoverControllerResolver? _cutoverResolver;
@@ -293,7 +293,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     }
 
     /// <summary>
-    /// 工作包 B：解析当前请求应使用的 CutoverController。
+    /// 解析当前请求应使用的 CutoverController。
     /// resolver 非空时从请求 metadata 读取 canaryRunId 解析到 per-run 控制器；
     /// 否则回退到直接注入的 _cutoverController。
     /// </summary>
@@ -319,7 +319,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // 工作包 B：按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
+        // 按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
         var cutoverController = ResolveController(request);
         var useV2 = cutoverController.ShouldUseV2(request.OperationId);
 
@@ -424,7 +424,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     /// <summary>
     /// 100% V2-only 路径。不执行 Legacy，直接调用 V2 Runtime。
     /// V2 失败时抛出异常（无 Legacy fallback）。
-    /// Blocker-1+4：使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
+    /// 使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
     /// （含 WorkingSet），并将 WorkingSet 传给 Projector 恢复 Material 正文。
     /// 构建 RetrievalInput 完整保留原 ContextRetrievalRequest 语义；使用 request.TokenBudget
     /// 而非硬编码 4096。
@@ -441,7 +441,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
 
     /// <summary>
     /// V2-only 路径，同时返回 raw V2 执行结果（供 sampled shadow 复用，避免重复调用 V2）。
-    /// Blocker-1：返回 ContextDecisionExecutionResult（含 WorkingSet），供 sampled shadow
+    /// 返回 ContextDecisionExecutionResult（含 WorkingSet），供 sampled shadow
     /// 构建完整 shadow 报告（不丢失 Material）。
     /// </summary>
     /// <returns>(projected RetrievalResult, raw ExecutionResult)。</returns>
@@ -456,7 +456,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     }
 
     /// <summary>
-    /// Blocker-4：从 ContextRetrievalRequest 构建完整的 V2 RuntimeRequest，
+    /// 从 ContextRetrievalRequest 构建完整的 V2 RuntimeRequest，
     /// 携带 RetrievalInput（完整保留 RequiredIds/RequiredTags/QueryVector/IncludeVectorRecall/
     /// IncludeRelationExpansion/RewrittenQueryText 等）+ 真实 TokenBudget。
     /// </summary>
@@ -502,7 +502,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     /// 100% V2 cutover 下的 sampled shadow 路径。
     /// 执行 V2 权威 + Legacy 对照 + 记录 fixture，但始终返回 V2 结果。
     /// V2 只调用一次（权威路径），shadow 复用 V2 结果做 parity 对比，不重复调用 V2。
-    /// Blocker-1：sampled shadow 同样使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult。
+    /// sampled shadow 同样使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult。
     /// Shadow 失败时回退到 V2-only（不影响权威路径）。
     /// sampled shadow 路径同样调用 RecordObservation 上报 Canary 样本。
     /// </summary>
@@ -618,7 +618,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-4：Package 权威路径运行时。
+/// Package 权威路径运行时。
 /// 编排 Legacy PackageBuilder + V2 Runtime + 可选 Shadow parity + fallback。
 /// </summary>
 public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
@@ -633,7 +633,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     private readonly ShadowGate? _shadowGate;
     // 注入实验平面集成（可选），用于自动记录 shadow fixture + sampled shadow。
     private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
-    // 工作包 B：可选的 per-run CutoverController 解析器（语义同 Retrieval 运行时）。
+    // 可选的 per-run CutoverController 解析器（语义同 Retrieval 运行时）。
     private readonly ICutoverControllerResolver? _cutoverResolver;
     // 可选的 Canary 指标采集器（语义同 Retrieval 运行时）。
     private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
@@ -662,7 +662,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     }
 
     /// <summary>
-    /// 工作包 B：解析当前请求应使用的 CutoverController（语义同 Retrieval 运行时）。
+    /// 解析当前请求应使用的 CutoverController（语义同 Retrieval 运行时）。
     /// </summary>
     private CutoverController ResolveController(ContextPackageRequest request)
     {
@@ -675,7 +675,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     }
 
     /// <summary>
-    /// Blocker-3：IContextPackageBuilder.BuildAsync 统一走 BuildDetailedAsync（含 V2 路径），
+    /// IContextPackageBuilder.BuildAsync 统一走 BuildDetailedAsync（含 V2 路径），
     /// 返回 result.Package。不再绕过 V2 直接走 Legacy 的 BuildAsync。
     /// </summary>
     public async Task<ContextPackage> BuildAsync(
@@ -696,7 +696,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // 工作包 B：按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
+        // 按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
         var cutoverController = ResolveController(request);
         var useV2 = cutoverController.ShouldUseV2(request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText);
 
@@ -793,7 +793,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
 
     /// <summary>
     /// 100% V2-only Package 路径。不执行 Legacy，直接调用 V2 Runtime。
-    /// Blocker-1+4：使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
+    /// 使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
     /// （含 WorkingSet），并将 WorkingSet 传给 Projector 恢复 Material 正文。
     /// 构建 PackageInput 完整保留原 ContextPackageRequest 语义；使用 request.TokenBudget
     /// 而非硬编码 4096。
@@ -811,7 +811,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
 
     /// <summary>
     /// V2-only Package 路径，同时返回 raw V2 执行结果（供 sampled shadow 复用，避免重复调用 V2）。
-    /// Blocker-1：返回 ContextDecisionExecutionResult（含 WorkingSet），供 sampled shadow
+    /// 返回 ContextDecisionExecutionResult（含 WorkingSet），供 sampled shadow
     /// 构建完整 shadow 报告（不丢失 Material）。
     /// </summary>
     private async Task<(ContextPackageBuildResult Projected, ContextDecisionExecutionResult Raw)> ExecuteV2OnlyPackageWithRawAsync(
@@ -825,7 +825,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     }
 
     /// <summary>
-    /// Blocker-4：从 ContextPackageRequest 构建完整的 V2 RuntimeRequest，
+    /// 从 ContextPackageRequest 构建完整的 V2 RuntimeRequest，
     /// 携带 PackageInput（完整保留 RequiredIds/RequiredTags/QueryVector 等）+ 真实 TokenBudget。
     /// 补齐 Mode/Policy/IncludeRecent/IsAuditMode/Metadata 字段映射，
     /// 完整保留原 ContextPackageRequest 语义。
@@ -862,7 +862,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     /// 100% V2 cutover 下的 sampled shadow 路径（Package）。
     /// 执行 V2 权威 + Legacy 对照 + 记录 fixture，但始终返回 V2 结果。
     /// V2 只调用一次（权威路径），shadow 复用 V2 结果做 parity 对比，不重复调用 V2。
-    /// Blocker-1：sampled shadow 同样使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult。
+    /// sampled shadow 同样使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult。
     /// Shadow 失败时回退到 V2-only（不影响权威路径）。
     /// sampled shadow 路径同样调用 RecordObservation 上报 Canary 样本。
     /// </summary>
@@ -979,7 +979,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-4：AgentContext 权威路径运行时。
+/// AgentContext 权威路径运行时。
 /// 直接消费 V2 Runtime + AgentContextProjector，无需 Legacy fallback（AgentContext 是新路径）。
 /// </summary>
 public sealed class AuthoritativeAgentContextRuntime
@@ -991,7 +991,7 @@ public sealed class AuthoritativeAgentContextRuntime
     /// <summary>构造 AgentContext 权威路径运行时。</summary>
     /// <param name="v2Runtime">V2 Runtime（编排 Provider → Merge → Feature → Engine）。</param>
     /// <param name="agentContextProjector">AgentContext 投影器。</param>
-    /// <param name="componentHealthRegistry">P5：组件健康注册表（null 时跳过 projection_ms 归因，向后兼容）。</param>
+    /// <param name="componentHealthRegistry">组件健康注册表（null 时跳过 projection_ms 归因，向后兼容）。</param>
     public AuthoritativeAgentContextRuntime(
         IContextDecisionRuntime v2Runtime,
         IAgentContextProjector agentContextProjector,
@@ -1007,7 +1007,7 @@ public sealed class AuthoritativeAgentContextRuntime
     /// </summary>
     /// <param name="request">V2 Runtime 请求。</param>
     /// <param name="workingSet">候选 WorkingSet（含 Envelopes + Materials）。</param>
-    /// <param name="projectionContext">R28-B.6：真实 Agent session + scope（null 时从 request.AgentInput.Session 自动构造）。</param>
+    /// <param name="projectionContext">真实 Agent session + scope（null 时从 request.AgentInput.Session 自动构造）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
     /// 将 caller WorkingSet 作为 SeedWorkingSet 传入（含 Envelopes + Materials），
@@ -1025,7 +1025,7 @@ public sealed class AuthoritativeAgentContextRuntime
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workingSet);
 
-        // + P0-4：将 caller WorkingSet 作为 SeedWorkingSet 传入（含 Materials），
+        // + 将 caller WorkingSet 作为 SeedWorkingSet 传入（含 Materials），
         // 而非仅合并 Envelopes 到 SeedCandidates。Runtime 在合并阶段会保留 SeedWorkingSet.Materials。
         var mergedRequest = request with { SeedWorkingSet = workingSet };
 

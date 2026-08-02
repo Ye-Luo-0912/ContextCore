@@ -10,7 +10,7 @@ using System.Diagnostics;
 namespace ContextCore.Service.Hosting;
 
 /// <summary>
-/// 任务 D：Canary Leader 选举后台服务（HA 模式）。
+/// Canary Leader 选举后台服务（HA 模式）。
 /// </summary>
 /// <remarks>
 /// 包装 <see cref="CanaryProgressionService"/> 的 leader 选举层，确保多实例部署时
@@ -66,7 +66,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     // 每次轮询时与 DB 中的 current_epoch 比较；若 epoch 已推进，Reset 本地 Collector 从 0 开始新 epoch 累计。
     private readonly Dictionary<string, long> _lastKnownEpoch = new(StringComparer.Ordinal);
 
-    // Perf-7：本实例已知的 canary_pipelines 修订号（runId → lastKnownRevision）。
+    // 本实例已知的 canary_pipelines 修订号（runId → lastKnownRevision）。
     // Leader 在调用 ApplyCanaryDecisionAsync 前先查询当前 revision，作为 CAS 预期值；
     // 调用成功后更新为 NewRevision；调用失败（RevisionMismatch）时清除缓存强制下次重新查询。
     private readonly Dictionary<string, int> _pipelineRevisions = new(StringComparer.Ordinal);
@@ -298,7 +298,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                 case CanaryProgressionDecision.Advance:
                 case CanaryProgressionDecision.Rollback:
                 {
-                    // Perf-7：单一事务路径，替代旧的 AdvanceAsync + AdvanceEpochAsync 两步调用。
+                    // 单一事务路径，替代旧的 AdvanceAsync + AdvanceEpochAsync 两步调用。
                     // 在一个 PostgreSQL 事务内完成：lease/fencing 校验 → pipeline revision CAS →
                     // transition audit 写入 → epoch 递增。任一步骤失败则整个事务回滚，
                     // 确保旧 Leader 在 lease 失效后无法修改 rollout（fencing 在事务内首先执行）。
@@ -351,7 +351,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                         _metricsCollector.Reset(runId);
                         _lastKnownEpoch[runId] = decisionResult.NewEpoch;
 
-                        // Perf-7：同步 in-memory CutoverController + _runStates（保持进程内路由状态一致）
+                        // 同步 in-memory CutoverController + _runStates（保持进程内路由状态一致）
                         // DB 状态已由事务原子更新（canary_pipelines + canary_transition_audit + canary_run_epochs），
                         // 此处仅更新进程本地状态，不重复写入 DB。
                         _progressionService.UpdateInMemoryPercentage(runId, newPercentage);

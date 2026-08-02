@@ -5,7 +5,7 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// /R21-5：Memory Evolution 实现测试。
+/// /Memory Evolution 实现测试。
 ///
 /// 覆盖：
 ///   1. InMemoryMemoryStateStore：append-only / 查询 / 最新状态 / 最近事件 / EventId 唯一性 / NewState != Fresh

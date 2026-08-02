@@ -69,13 +69,13 @@ public class AllocatorBenchmarks
         _v21Allocator = new DefaultAllocatorV2_1(_v2Allocator);
     }
 
-    // V2.0 Allocator 基线
+    // Allocator 基线
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("V20")]
     public AllocationResult Allocate_V20()
         => _v2Allocator.Allocate(_envelopes, _snapshot, _allocationContext);
 
-    // V2.1 Allocator 主链（section rollover + MMR diversity）
+    // Allocator 主链（section rollover + MMR diversity）
     [Benchmark]
     [BenchmarkCategory("V21")]
     public AllocationResult Allocate_V21_WithDiversity()

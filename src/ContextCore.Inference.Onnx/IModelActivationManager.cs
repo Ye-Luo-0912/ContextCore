@@ -222,10 +222,10 @@ public sealed record ModelActivationResult
     /// <summary>已激活的推理引擎（Success=false 时为 null）。</summary>
     public required IBatchInferenceEngine? Engine { get; init; }
 
-    /// <summary>校准验证结果（P0-8：ICalibrationValidator 输出；未执行时为 null）。</summary>
+    /// <summary>校准验证结果（ICalibrationValidator 输出；未执行时为 null）。</summary>
     public required CalibrationValidationResult? CalibrationValidation { get; init; }
 
-    /// <summary>特征 schema 验证错误消息（P0-8：schema 不存在或不匹配时非 null）。</summary>
+    /// <summary>特征 schema 验证错误消息（schema 不存在或不匹配时非 null）。</summary>
     public required string? SchemaValidationError { get; init; }
 
     /// <summary>构造成功结果。</summary>
@@ -242,7 +242,7 @@ public sealed record ModelActivationResult
         SchemaValidationError = null
     };
 
-    /// <summary>P0-9：构造停用成功结果（Engine/Descriptor/Calibration 均为 null，表示已回退到 fallback）。</summary>
+    /// <summary>构造停用成功结果（Engine/Descriptor/Calibration 均为 null，表示已回退到 fallback）。</summary>
     internal static ModelActivationResult Deactivated(ModelArtifactDescriptor? previousDescriptor) => new()
     {
         Success = true,

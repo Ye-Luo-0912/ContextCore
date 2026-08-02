@@ -15,7 +15,7 @@ namespace ContextCore.Tests;
 ///   2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
 ///   3. 接口实现契约（IAgentCheckpointStore）
 ///   4. DI 注册路径（PostgresServiceCollectionExtensions）
-///   5. P0-6：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
+///   5. <see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
 ///      workspaceId 与 checkpointId 的 null / empty / whitespace 校验独立
 ///
 /// 端到端持久化语义由 ContextCore.IntegrationTests 覆盖（需 Testcontainers）。
@@ -60,7 +60,7 @@ public sealed class PostgresAgentCheckpointStoreTests
     }
 
     // =========================================================================
-    // 3. GetAsync 参数校验（P0-6：workspaceId + checkpointId）
+    // 3. GetAsync 参数校验（workspaceId + checkpointId）
     // =========================================================================
 
     [TestMethod]
@@ -134,7 +134,7 @@ public sealed class PostgresAgentCheckpointStoreTests
     }
 
     // =========================================================================
-    // 5. DeleteAsync 参数校验（P0-6：workspaceId + checkpointId）
+    // 5. DeleteAsync 参数校验（workspaceId + checkpointId）
     // =========================================================================
 
     [TestMethod]

@@ -85,7 +85,7 @@ public sealed class CanaryGateOptions
     public double MinQualityScore { get; init; } = 0.3;
 
     /// <summary>
-    /// 任务 C：任务成功率下限阈值（V2 路径 task_success_rate &lt; 此值则自动回滚）。
+    /// 任务成功率下限阈值（V2 路径 task_success_rate &lt; 此值则自动回滚）。
     /// </summary>
     /// <remarks>
     /// 语义：experimentMetrics["task_success_rate"]（0.0-1.0）&lt; MinTaskSuccessRate 时触发回滚。
@@ -97,7 +97,7 @@ public sealed class CanaryGateOptions
     public double MinTaskSuccessRate { get; init; } = 0.7;
 
     /// <summary>
-    /// 任务 C：安全违规率上限阈值（V2 路径 safety_violation_rate &gt; 此值则自动回滚）。
+    /// 安全违规率上限阈值（V2 路径 safety_violation_rate &gt; 此值则自动回滚）。
     /// </summary>
     /// <remarks>
     /// 语义：experimentMetrics["safety_violation_rate"]（0.0-1.0）&gt; MaxSafetyViolationRate 时触发回滚。
@@ -109,7 +109,7 @@ public sealed class CanaryGateOptions
     public double MaxSafetyViolationRate { get; init; } = 0.0;
 
     /// <summary>
-    /// 任务 C：用户接受率下限阈值（V2 路径 user_acceptance &lt; 此值则自动回滚）。
+    /// 用户接受率下限阈值（V2 路径 user_acceptance &lt; 此值则自动回滚）。
     /// </summary>
     /// <remarks>
     /// 语义：experimentMetrics["user_acceptance"]（0.0-1.0）&lt; MinUserAcceptance 时触发回滚。

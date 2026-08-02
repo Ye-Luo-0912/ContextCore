@@ -280,7 +280,7 @@ public class ContextCoreGraphTraversalSafetyTests
             "MaxDepthReached should be 2");
     }
 
-    // ── P1-8：relation weight/confidence/路径衰减传播到多跳评分 ─────────────
+    // ── relation weight/confidence/路径衰减传播到多跳评分 ─────────────
 
     /// <summary>
     /// 默认参数（DecayFactor=1.0, weight=1.0, confidence=1.0）下，

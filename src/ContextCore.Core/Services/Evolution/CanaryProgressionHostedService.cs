@@ -56,7 +56,7 @@ public sealed class CanaryProgressionHostedService : BackgroundService
     /// <param name="scopeFactory">DI scope 工厂（用于解析 scoped 依赖）。</param>
     /// <param name="metricsCollector">Canary 指标采集器。</param>
     /// <param name="progressionService">Canary 渐进推进服务。</param>
-    /// <param name="optionsMonitor">调度器配置监视器（P0-2：替代直接 POCO 注入，感知 PostConfigure 覆盖）。</param>
+    /// <param name="optionsMonitor">调度器配置监视器（替代直接 POCO 注入，感知 PostConfigure 覆盖）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 System）。</param>
     /// <param name="logger">日志器。</param>
     /// <remarks>

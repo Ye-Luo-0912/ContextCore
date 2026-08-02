@@ -34,7 +34,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     /// <param name="judge">Promotion judge（必填）。</param>
     /// <param name="store">Pipeline run store（可选，默认 <see cref="InMemoryPipelineRunStore"/>）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
-    /// <param name="canaryProgression">R28-B.8：Canary Gate 渐进推进服务（可选；注入后启用渐进百分比推进）。</param>
+    /// <param name="canaryProgression">Canary Gate 渐进推进服务（可选；注入后启用渐进百分比推进）。</param>
     public DefaultGuardedOptimizationPipeline(
         IPromotionJudge judge,
         IPipelineRunStore? store = null,
@@ -162,7 +162,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     /// <param name="runId">运行 ID。</param>
     /// <param name="baselineMetrics">基线指标。</param>
     /// <param name="experimentMetrics">实验指标。</param>
-    /// <param name="transition">P2-2：调用方提供的 transition 标识（含 TransitionId / ObservationBatchId / IdempotencyKey）。</param>
+    /// <param name="transition">调用方提供的 transition 标识（含 TransitionId / ObservationBatchId / IdempotencyKey）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
     /// 使用 <see cref="IPipelineRunStore.TryTransitionAsync"/> 原子 CAS 推进。
@@ -326,7 +326,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             experimentMetrics: experimentMetrics);
         var judgeResult = await _judge.JudgeAsync(request, cancellationToken).ConfigureAwait(false);
 
-        // 应用 judge decision → 生成 next snapshot（P0-7：Revision +1 + LastTransitionId）
+        // 应用 judge decision → 生成 next snapshot（Revision +1 + LastTransitionId）
         // 使用调用方提供的 transitionId
         var now = _timeProvider.GetUtcNow();
         var transitionId = transition.TransitionId;

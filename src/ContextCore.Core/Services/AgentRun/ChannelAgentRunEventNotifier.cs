@@ -17,7 +17,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 ///     向该 run 的所有订阅者 channel TryWrite 最新 sequence；channel 已满时丢弃（轮询兜底）。</item>
 ///   <item><see cref="SubscribeAsync"/> 等待最多 500ms 读取新 sequence；超时则结束迭代，
 ///     让调用方回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 轮询。</item>
-///   <item>P0-10：<see cref="RegisterSubscription"/> 分离订阅注册与事件等待，
+///   <item><see cref="RegisterSubscription"/> 分离订阅注册与事件等待，
 ///     让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。</item>
 ///   <item>订阅者断开（cancellationToken 取消或 Dispose）时从 per-run 订阅表移除 channel；
 ///     某 run 无订阅者时清理其订阅表条目。</item>
@@ -132,7 +132,7 @@ public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
         {
             try
             {
-                // Perf-6：持久订阅——不超时退出，一直等待直到客户端断开、watchdog 超时或 channel 完成。
+                // 持久订阅——不超时退出，一直等待直到客户端断开、watchdog 超时或 channel 完成。
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     bool hasData;

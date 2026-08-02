@@ -50,7 +50,7 @@ public sealed class PackageQualityReport
     /// </summary>
     public double OverallScore { get; init; }
 
-    /// <summary>策略版本，标识 Package Quality 计算结构（OPT-4: QualityContractV1_0 = "quality-contract/1.0"，按能力独立演进）。</summary>
+    /// <summary>策略版本，标识 Package Quality 计算结构（ QualityContractV1_0 = "quality-contract/1.0"，按能力独立演进）。</summary>
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.QualityContractV1_0;
 
     /// <summary>计算时间。</summary>

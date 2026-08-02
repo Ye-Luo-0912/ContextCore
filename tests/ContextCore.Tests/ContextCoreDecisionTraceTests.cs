@@ -9,7 +9,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// V17.0 Context Decision Foundation 测试。
+/// Context Decision Foundation 测试。
 /// 验证 decision trace 不改变 package/retrieval 正式输出，非激活契约恒成立，投影保留 ID。
 /// </summary>
 [TestClass]

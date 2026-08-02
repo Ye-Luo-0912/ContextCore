@@ -11,7 +11,7 @@ namespace ContextCore.Service.Infrastructure;
 
 /// <summary>
 /// Relation governance scoped service mode 的状态与门禁读取服务。
-/// GRAPH-12: 仅以下 3 个 JSON 文件为硬门禁（阻断生产 runtime）：
+/// 仅以下 3 个 JSON 文件为硬门禁（阻断生产 runtime）：
 ///   1. postgres-relation-governance-readiness-gate.json
 ///   2. postgres-relation-provider-switch-gate.json
 ///   3. postgres-relation-runtime-canary-report.json
@@ -301,7 +301,7 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             cancellationToken);
     }
 
-    /// <summary>GRAPH-10：统一邻居查询委托。</summary>
+    /// <summary>统一邻居查询委托。</summary>
     public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(RelationNeighborQuery query, CancellationToken cancellationToken = default)
         => ExecuteReadAsync(
             "service-relation-neighbors-unified",
@@ -312,7 +312,7 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             token => _postgresStore.QueryNeighborsAsync(query, token),
             cancellationToken);
 
-    /// <summary>P1-6：批量邻居查询委托。</summary>
+    /// <summary>批量邻居查询委托。</summary>
     public Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(RelationNeighborBatchQuery query, CancellationToken cancellationToken = default)
         => ExecuteReadAsync(
             "service-relation-neighbors-batch",

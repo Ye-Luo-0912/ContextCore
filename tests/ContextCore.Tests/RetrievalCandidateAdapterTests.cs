@@ -362,7 +362,7 @@ public sealed class RetrievalCandidateAdapterTests
     }
 
     // =========================================================================
-    // 8. P0-5：CandidateAdaptationContext 上下文传入
+    // 8. CandidateAdaptationContext 上下文传入
     // =========================================================================
 
     [TestMethod]

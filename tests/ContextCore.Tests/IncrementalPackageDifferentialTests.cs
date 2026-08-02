@@ -19,7 +19,7 @@ namespace ContextCore.Tests;
 /// <item>同时执行 IncrementalBuild（基于前一个快照）与 FullBuild（独立 builder，无缓存）</item>
 /// <item>比较两者输出在 6 个维度完全等价：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs</item>
 /// </list>
-/// V1：所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。
+/// 所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。
 /// 这些测试为 R15 V2 的选择性重载提供安全网 — V2 实现后，相同测试应继续通过。
 /// </remarks>
 [TestClass]
@@ -384,7 +384,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// V2：使用预先捕获的快照执行 IncrementalBuild，验证与 FullBuild 等价。
+    /// 使用预先捕获的快照执行 IncrementalBuild，验证与 FullBuild 等价。
     /// 用于 NoChange 路径连续复用同一快照的场景。
     /// </summary>
     private static async Task AssertIncrementalEqualsFullWithSnapshotAsync(
@@ -623,7 +623,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 }
 
-/// <summary>R15 测试夹具：内存 IContextStateVersionStore 实现，供 differential testing 使用。</summary>
+/// <summary>测试夹具：内存 IContextStateVersionStore 实现，供 differential testing 使用。</summary>
 internal sealed class InMemoryContextStateVersionStore : IContextStateVersionStore
 {
     private readonly Dictionary<VersionScope, long> _versions = new();

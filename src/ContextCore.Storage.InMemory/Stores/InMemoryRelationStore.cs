@@ -11,7 +11,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
 {
     private readonly ConcurrentDictionary<string, ContextRelation> _relations = new();
 
-    /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
+    /// <summary>SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
     public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
         => BatchUpsertAsync([relation], cancellationToken);
 
@@ -56,7 +56,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
             _relations.TryRemove(Key(workspaceId, collectionId, relationId), out _));
     }
 
-    /// <summary>GRAPH-10：统一邻居查询，在内存中过滤。</summary>
+    /// <summary>统一邻居查询，在内存中过滤。</summary>
     public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
         RelationNeighborQuery query,
         CancellationToken cancellationToken = default)

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E7 + 子问题 9：AgentKernelHost — 多 Session 隔离的 Kernel Host（生产化）
+// AgentKernelHost — 多 Session 隔离的 Kernel Host（生产化）
 //
 // 替代旧单例 Kernel 平面的全局状态，实现真正的多 Session 隔离：
 //   1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
@@ -32,7 +32,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E7 + 子问题 9：多 Session 隔离的 Kernel Host（生产化）。
+/// 多 Session 隔离的 Kernel Host（生产化）。
 /// 替代旧单例 Kernel 平面的全局状态，
 /// 为每个 Run 创建独立的 <see cref="AgentRunActor"/> 实例，实现真正的多 Session 隔离。
 /// </summary>
@@ -208,7 +208,7 @@ public sealed class AgentKernelHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子问题 9 + P0-4 + P0-5：带租约心跳 + 并发上限的 Run 执行包装。
+    /// 子问题 9 + P0-4 + 带租约心跳 + 并发上限的 Run 执行包装。
     /// </summary>
     /// <remarks>
     /// 方案 A：Worker 从 Channel 取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，

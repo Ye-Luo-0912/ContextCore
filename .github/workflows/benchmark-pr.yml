@@ -78,7 +78,7 @@ jobs:
           restore-keys: |
             benchmark-baseline-main-
 
-      # P0-9 修复：cache 缺失时不应视为通过。校验 cache hit 后基线完整性：
+      # 修复：cache 缺失时不应视为通过。校验 cache hit 后基线完整性：
       # 目录非空 + 至少一个 *-report-full.json + 每个文件非空 + JSON 合法。
       # 此处校验是脚本内 REQUIRE_BASELINE 校验的前置防御层（脚本在 PR 模式下也会拒绝）。
       - name: Verify baseline integrity
@@ -109,7 +109,7 @@ jobs:
           echo "✅ Baseline integrity verified: $found file(s) present and valid JSON."
         shell: bash
 
-      # P0-9 新增：环境指纹记录 CPU / Runner / Runtime / JIT 配置，附加到 baseline 报告。
+      # 新增：环境指纹记录 CPU / Runner / Runtime / JIT 配置，附加到 baseline 报告。
       # 这些信息用于解释回归测量值差异（如 runner 不同 → 绝对值不同但 CaseKey 一致仍可对比）。
       - name: Record environment fingerprint
         run: |
@@ -167,7 +167,7 @@ jobs:
             --exporters json,csv
         shell: bash
 
-      # P0-9 修复：传播脚本返回码。
+      # 修复：传播脚本返回码。
       # 原实现 `set +e` + `rc=$?` 捕获后未传播，脚本退出码 2/3/4 会被静默吞掉导致假通过。
       # 现实现：捕获 rc 提取 regression_found 输出，最后 `exit $rc` 强制非零退出码传播给 Job。
       # 退出码语义：0=无回归；1=检测到回归；2=输入错误；3=基线缺失；4=基线损坏。

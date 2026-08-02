@@ -894,7 +894,7 @@ public sealed class ProjectorAcceptanceTests
         Assert.AreEqual(1, dto.SelectedItems.Count, "Package 必须包含 selected 候选。");
         var item = dto.SelectedItems[0];
         Assert.AreEqual("working_memory", item.SectionName, "Section 从 AllocationDecision 恢复。");
-        // Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数），
+        // EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数），
         // 不再等于 AllocationDecision.IncludedTokens（150）。"package body content" 估算 ~5 tokens。
         Assert.IsTrue(item.EstimatedTokens > 0, "EstimatedTokens 必须大于 0（由 truncator 重算）。");
         Assert.IsTrue(item.EstimatedTokens <= 150, "EstimatedTokens 不应超过 AllocationDecision.IncludedTokens。");
@@ -1074,7 +1074,7 @@ internal sealed class RecordingDecisionRuntime : IContextDecisionRuntime
         return ValueTask.FromResult(_result);
     }
 
-    // Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
+    // 实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
     public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default)
@@ -1104,7 +1104,7 @@ internal sealed class ThrowingDecisionRuntime : IContextDecisionRuntime
         CancellationToken cancellationToken = default)
         => throw _exception;
 
-    // Blocker-1：ExecuteWithWorkingSetAsync 同样抛出预设异常（取消异常必须传播）
+    // ExecuteWithWorkingSetAsync 同样抛出预设异常（取消异常必须传播）
     public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default)

@@ -90,10 +90,10 @@ internal sealed class ProductionRuntimeStatusResponse
     /// <summary>Model Activation 状态（null = 未启用）。</summary>
     public ModelActivationStatus? ModelActivation { get; init; }
 
-    /// <summary>P0-3：Agent Model Transport 状态（Deterministic vs Real，null = 未注册）。</summary>
+    /// <summary>Agent Model Transport 状态（Deterministic vs Real，null = 未注册）。</summary>
     public AgentModelTransportStatus? AgentModelTransport { get; init; }
 
-    /// <summary>P0-3：Tool Dispatcher 状态（Echo vs Real，null = 未注册）。</summary>
+    /// <summary>Tool Dispatcher 状态（Echo vs Real，null = 未注册）。</summary>
     public ToolDispatcherStatus? ToolDispatcher { get; init; }
 
     /// <summary>Canary 状态。</summary>

@@ -9,7 +9,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <summary>
 /// PostgreSQL 分层记忆存储。
 /// 第一版聚焦 <see cref="IMemoryStore"/>：保存、按层/状态/标签查询，以及更新记忆状态。
-/// Perf-2：SaveAsync 计算 SHA-256 + token 数并持久化到专用列，Provider 读取时直接复用、跳过在线重算。
+/// SaveAsync 计算 SHA-256 + token 数并持久化到专用列，Provider 读取时直接复用、跳过在线重算。
 /// </summary>
 public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore, IMemoryStoreBatchLookup, IMemoryStoreMetadataLookup
 {
@@ -29,7 +29,7 @@ public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore, IMemo
     {
         ArgumentNullException.ThrowIfNull(item);
         var normalized = CompositeContextNormalizer.Normalize(item);
-        // Perf-2：摄取阶段计算 tokenization metadata，写入专用列与 Metadata（与 ContextItem 摄取逻辑一致）。
+        // 摄取阶段计算 tokenization metadata，写入专用列与 Metadata（与 ContextItem 摄取逻辑一致）。
         var tokenization = ComputeTokenizationMetadata(normalized.Content);
         var metadataWithTokenization = WithTokenizationMetadata(normalized.Metadata, tokenization);
         var persisted = new ContextMemoryItem
@@ -173,7 +173,7 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
     }
 
     /// <summary>
-    /// Perf-2：按 ID 批量获取记忆条目元数据（不读取/反序列化完整 jsonb 正文）。
+    /// 按 ID 批量获取记忆条目元数据（不读取/反序列化完整 jsonb 正文）。
     /// SELECT 除 data 外的全列，读取走 <see cref="ReadMemoryItemMetadataRow"/>——Content 恒为空字符串，
     /// Metadata 合并摄取阶段持久化的 content_hash / content_length / token_count 等专用列，
     /// Layer/Status/Type/SourceRefs 等字段齐全（ApplyExcludedStatusesFilter 依赖 Status）。
@@ -270,7 +270,7 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
         command.Parameters.AddWithValue("skip", Math.Max(0, query.Skip));
         command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
 
-        // Perf-2：IncludeContent=false 时只投影元数据列，避免读取/反序列化完整 jsonb 正文。
+        // IncludeContent=false 时只投影元数据列，避免读取/反序列化完整 jsonb 正文。
         // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方（ISelectedCandidateHydrator）二次读取。
         if (!query.IncludeContent)
         {
@@ -344,7 +344,7 @@ LIMIT @take;
     }
 
     /// <summary>
-    /// Perf-2：从 reader 当前行读取 ContextMemoryItem，并把专用列的 tokenization metadata 合并到 Metadata 字典。
+    /// 从 reader 当前行读取 ContextMemoryItem，并把专用列的 tokenization metadata 合并到 Metadata 字典。
     /// 列顺序：data(0), content_hash(1), content_length(2), tokenizer_id(3), tokenizer_version(4), token_count(5), counted_at(6)。
     /// </summary>
     private ContextMemoryItem ReadMemoryItemWithTokenization(System.Data.Common.DbDataReader reader)
@@ -384,7 +384,7 @@ LIMIT @take;
             };
     }
 
-    /// <summary>Perf-2：把 tokenization metadata 列值绑定到 NpgsqlCommand 参数。</summary>
+    /// <summary>把 tokenization metadata 列值绑定到 NpgsqlCommand 参数。</summary>
     private static void AddTokenizationColumnParameters(NpgsqlCommand command, TokenizationMetadata metadata)
     {
         command.Parameters.AddWithValue("content_hash", (object?)metadata.ContentHash ?? DBNull.Value);
@@ -396,7 +396,7 @@ LIMIT @take;
     }
 
     /// <summary>
-    /// Perf-2：从 reader 当前行读取 ContextMemoryItem 元数据（不反序列化 jsonb 正文）。
+    /// 从 reader 当前行读取 ContextMemoryItem 元数据（不反序列化 jsonb 正文）。
     /// Content 恒为空字符串（Selected-only Hydration 契约），Layer/Status/Type/Tags/SourceRefs/
     /// RelationRefs/Importance/Confidence/Version/CreatedAt/UpdatedAt 字段齐全，
     /// 并把专用列的 tokenization metadata 合并到 Metadata 字典（Provider 读取后跳过在线重算）。
@@ -441,7 +441,7 @@ LIMIT @take;
             Layer = layer,
             Status = status,
             Type = type,
-            // Perf-2：IncludeContent=false → Content 必须为空字符串（与 ContextItem metadata-only 契约一致）
+            // IncludeContent=false → Content 必须为空字符串（与 ContextItem metadata-only 契约一致）
             Content = string.Empty,
             Tags = tags,
             SourceRefs = sourceRefs,

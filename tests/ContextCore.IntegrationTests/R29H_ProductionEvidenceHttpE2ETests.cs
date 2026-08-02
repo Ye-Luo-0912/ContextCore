@@ -230,7 +230,7 @@ public sealed class R29H_ProductionEvidenceHttpE2ETests : IAsyncDisposable
         var runId = createdRun.GetProperty("runId").GetString();
 
         // ── 订阅 SSE 事件流 ──
-        // Perf-6：ChannelAgentRunEventNotifier 已移除 500ms 超时，订阅应持久直到客户端断开。
+        // ChannelAgentRunEventNotifier 已移除 500ms 超时，订阅应持久直到客户端断开。
         // 这里验证：订阅请求不会立即返回错误（200 OK 且 content-type 为 text/event-stream）。
         using var sseRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/agents/runs/{runId}/events");
         using var sseResponse = await client.SendAsync(sseRequest, HttpCompletionOption.ResponseHeadersRead);

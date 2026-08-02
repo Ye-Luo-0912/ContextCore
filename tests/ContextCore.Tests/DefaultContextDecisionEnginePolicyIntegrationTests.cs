@@ -625,7 +625,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
     }
 
     // =========================================================================
-    // 11. PolicyBundleId 显式提供时不调用 GetActiveBundleAsync（P0-2：改走 GetBundleAsync）
+    // 11. PolicyBundleId 显式提供时不调用 GetActiveBundleAsync（改走 GetBundleAsync）
     // =========================================================================
 
     [TestMethod]

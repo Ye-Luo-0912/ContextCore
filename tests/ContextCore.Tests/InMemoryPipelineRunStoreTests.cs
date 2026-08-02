@@ -226,7 +226,7 @@ public sealed class InMemoryPipelineRunStoreTests
     }
 
     // =========================================================================
-    // 8. P0-7：TryTransitionAsync CAS 推进
+    // 8. TryTransitionAsync CAS 推进
     // =========================================================================
 
     [TestMethod]

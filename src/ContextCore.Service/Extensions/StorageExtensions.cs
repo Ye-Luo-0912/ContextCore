@@ -139,7 +139,7 @@ internal static class StorageExtensions
 				$"未知存储提供商 '{options.Provider}'。支持的 provider: filesystem, memory, postgres。");
 		}
 
-		// 阶段 E：按 provider 注册 IExperimentRecorder。
+		// 按 provider 注册 IExperimentRecorder。
 		// 显式 env CC_EXPERIMENT_RECORDER_BACKEND 可覆盖默认选择（memory/filesystem/postgres）。
 		// 未注入时 CoreExtensions 的 TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder> 回退。
 		RegisterExperimentRecorder(services, options);
@@ -148,7 +148,7 @@ internal static class StorageExtensions
 	}
 
 	/// <summary>
-	/// 阶段 E：按 storage provider 注册 IExperimentRecorder。
+	/// 按 storage provider 注册 IExperimentRecorder。
 	/// 默认映射：postgres → PostgresExperimentRecorder，filesystem → FileSystemExperimentRecorder，memory → 不注册（回退到 InMemory）。
 	/// 显式 env CC_EXPERIMENT_RECORDER_BACKEND 可覆盖：memory=强制 InMemory，filesystem=强制 FileSystem，postgres=强制 Postgres。
 	/// </summary>
@@ -509,7 +509,7 @@ internal static class StorageExtensions
 		services.AddPlain<IContextJobQueue, InMemoryJobQueue>();
 		services.AddForwardedService<IContextJobQueryStore, InMemoryJobQueue>();
 
-		// /E-2：Utility Ledger + ConflictSet Ledger（InMemory 实现）。
+		// /Utility Ledger + ConflictSet Ledger（InMemory 实现）。
 		// 生产路径由 PostgresServiceCollectionExtensions 注册 Postgres 实现（同一 IUtilityLedger / IConflictSetLedger 契约）。
 		// IUtilityLedgerStore / IConflictSetStore 旧读 API 也由同一实现提供（向后兼容）。
 		services.AddSingleton<InMemoryUtilityLedgerStore>();

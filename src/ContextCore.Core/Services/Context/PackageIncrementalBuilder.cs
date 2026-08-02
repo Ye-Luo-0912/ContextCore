@@ -12,7 +12,7 @@ namespace ContextCore.Core;
 /// 对当前状态执行全量构建（<see cref="IContextPackageBuilder.BuildDetailedAsync"/>）的输出
 /// 在以下维度完全等价：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs。
 ///
-/// <b>R15 V2 实现策略</b>：
+/// <b>V2 实现策略</b>：
 /// <list type="bullet">
 /// <item><see cref="PackageDeltaKind.NoChange"/>：调用 <see cref="ISnapshotCapablePackageBuilder.RebuildFromSnapshotAsync"/>
 ///   直接复用快照中的 PackageTemplate，跳过 build pipeline（PackageInputLoader + CandidateSelector），
@@ -71,14 +71,14 @@ public sealed class PackageIncrementalBuilder : IPackageIncrementalBuilder
         _onDeltaPlanned?.Invoke(deltaPlan);
 
         // 3. 根据 delta kind 选择路径
-        // V2: NoChange 路径直接复用快照中的 PackageTemplate，跳过 build pipeline
+        // NoChange 路径直接复用快照中的 PackageTemplate，跳过 build pipeline
         if (deltaPlan.Kind == PackageDeltaKind.NoChange)
         {
             return await _innerBuilder.RebuildFromSnapshotAsync(
                 previousSnapshot, currentRequest, cancellationToken).ConfigureAwait(false);
         }
 
-        // V2: 其他 delta kind 委托到全量构建（PartialSectionChange 选择性重载留待 V3）
+        // 其他 delta kind 委托到全量构建（PartialSectionChange 选择性重载留待 V3）
         return await _innerBuilder.BuildDetailedAsync(currentRequest, cancellationToken).ConfigureAwait(false);
     }
 

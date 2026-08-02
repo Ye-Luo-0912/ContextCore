@@ -110,7 +110,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// Perf-2：从 Metadata 派生 stable content hash，避免 Memory/Constraint 在线重复 SHA-256 计算。
+    /// 从 Metadata 派生 stable content hash，避免 Memory/Constraint 在线重复 SHA-256 计算。
     /// Memory/Constraint 摄取阶段已持久化 content_hash（Metadata["__content_hash"]），此处直接复用。
     /// 仅当未持久化时才回退到 <see cref="ComputeContentHash(string)"/> 在线计算。
     /// </summary>
@@ -129,7 +129,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// Perf-2：从 Metadata 读取摄取阶段持久化的精确 token cost（Memory/Constraint）。
+    /// 从 Metadata 读取摄取阶段持久化的精确 token cost（Memory/Constraint）。
     /// 返回 null 表示未持久化（Provider 回退到 <see cref="EnrichTokenCost"/> fail-fast 路径）。
     /// </summary>
     internal static int? ReadPersistedTokenCostFromMetadata(
@@ -154,7 +154,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// Perf-2：解析 metadata 中摄取阶段持久化的 content_length（Memory/Constraint 摄取时写入
+    /// 解析 metadata 中摄取阶段持久化的 content_length（Memory/Constraint 摄取时写入
     /// <see cref="ContentMetadataKeys.ContentLength"/>）。未持久化返回 -1。
     /// </summary>
     internal static int ResolveContentLength(IReadOnlyDictionary<string, string>? metadata)
@@ -170,7 +170,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// Perf-2：返回用于 token 估算的有效长度——优先真实正文长度；正文为空（metadata-only 路径）时
+    /// 返回用于 token 估算的有效长度——优先真实正文长度；正文为空（metadata-only 路径）时
     /// 回退到 metadata 持久化 content_length；两者皆无返回 -1（调用方按 1 token 处理，与既有
     /// <see cref="EstimateTokens(string)"/> 对空字符串的行为一致）。
     /// </summary>
@@ -312,7 +312,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>从 ContextItem 构建 Envelope + Material。</summary>
-    /// <param name="includeContent">R28-B.7 P1-1：是否包含候选正文（false 时 Content 置空，尊重 RetrievalInput.IncludeContent）。</param>
+    /// <param name="includeContent">是否包含候选正文（false 时 Content 置空，尊重 RetrievalInput.IncludeContent）。</param>
     internal static (ContextCandidateEnvelope Envelope, CandidateMaterial Material) BuildFromContextItem(
         ContextItem item,
         ContextCandidateSource source,
@@ -332,7 +332,7 @@ internal static class CandidateProviderHelpers
             entityId: item.Id,
             entityVersion: item.Version > 0 ? item.Version.ToString() : contentHash);
 
-        // Perf-2：估算长度——正文非空时用真实长度；metadata-only 路径（Content 为空）回退到
+        // 估算长度——正文非空时用真实长度；metadata-only 路径（Content 为空）回退到
         // 持久化 content_length（memory 有该列；context 无该列时为 -1，按 1 token 处理）。
         var estimateLength = ResolveEstimateLength(item.Content, item.Metadata);
 
@@ -377,7 +377,7 @@ internal static class CandidateProviderHelpers
 
         // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
-        // Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
+        // IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
         // ContentTokens=0（tokenizes 空字符串）。此路径下用 item.Content（真实正文，store 未走
         // metadata-only 时仍存在）估算 token 数，确保 allocator 看到非零 token cost。
         var persistedTokenCost = ReadPersistedTokenCost(item);
@@ -395,9 +395,9 @@ internal static class CandidateProviderHelpers
         }
         else if (!includeContent)
         {
-            // Fix-2：IncludeContent=false 且无持久化 token cost 时，用 item.Content 长度估算
+            // IncludeContent=false 且无持久化 token cost 时，用 item.Content 长度估算
             // （material.Content 已清空，但 item.Content 仍持有真实正文）。
-            // Perf-2：metadata-only 路径下 item.Content 为空，回退到 metadata 持久化 content_length
+            // metadata-only 路径下 item.Content 为空，回退到 metadata 持久化 content_length
             // （memory 摄取时写入；context 无该列时按 1 token 处理，与既有空字符串行为一致）。
             envelope = envelope with
             {
@@ -419,7 +419,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>从 ContextMemoryItem 构建 Envelope + Material。</summary>
-    /// <param name="includeContent">R28-B.7 P1-1：是否包含候选正文（false 时 Content 置空，尊重 RetrievalInput.IncludeContent）。</param>
+    /// <param name="includeContent">是否包含候选正文（false 时 Content 置空，尊重 RetrievalInput.IncludeContent）。</param>
     internal static (ContextCandidateEnvelope Envelope, CandidateMaterial Material) BuildFromMemoryItem(
         ContextMemoryItem memory,
         ContextCandidateSource source,
@@ -430,7 +430,7 @@ internal static class CandidateProviderHelpers
         IContextTokenizerResolver? tokenizerResolver = null,
         string? tokenizerModelName = null)
     {
-        // Perf-2：优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
+        // 优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
         var contentHash = ResolveContentHashFromMetadata(memory.Metadata, memory.Content);
         var key = CanonicalCandidateKey.Create(
             workspaceId: memory.WorkspaceId,
@@ -439,7 +439,7 @@ internal static class CandidateProviderHelpers
             entityId: memory.Id,
             entityVersion: contentHash);
 
-        // Perf-2：估算长度——正文非空时用真实长度；metadata-only 路径（Content 为空）回退到
+        // 估算长度——正文非空时用真实长度；metadata-only 路径（Content 为空）回退到
         // 持久化 content_length（memory 摄取时写入专用列并合并进 Metadata）。
         var estimateLength = ResolveEstimateLength(memory.Content, memory.Metadata);
 
@@ -481,9 +481,9 @@ internal static class CandidateProviderHelpers
             SourceRefs = memory.SourceRefs
         };
 
-        // Perf-2：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
+        // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
-        // Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
+        // IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
         // ContentTokens=0（tokenizes 空字符串）。此路径下用 memory.Content（真实正文）估算 token 数，
         // 确保 allocator 看到非零 token cost。
         var persistedTokenCost = ReadPersistedTokenCostFromMetadata(memory.Metadata);
@@ -501,9 +501,9 @@ internal static class CandidateProviderHelpers
         }
         else if (!includeContent)
         {
-            // Fix-2：IncludeContent=false 且无持久化 token cost 时，用 memory.Content 长度估算
+            // IncludeContent=false 且无持久化 token cost 时，用 memory.Content 长度估算
             // （material.Content 已清空，但 memory.Content 仍持有真实正文）。
-            // Perf-2：metadata-only 路径下 memory.Content 为空，回退到 metadata 持久化 content_length。
+            // metadata-only 路径下 memory.Content 为空，回退到 metadata 持久化 content_length。
             envelope = envelope with
             {
                 TokenCost = new CandidateTokenCost
@@ -532,7 +532,7 @@ internal static class CandidateProviderHelpers
         IContextTokenizerResolver? tokenizerResolver = null,
         string? tokenizerModelName = null)
     {
-        // Perf-2：优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
+        // 优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
         var contentHash = ResolveContentHashFromMetadata(constraint.Metadata, constraint.Content);
         var collectionId = constraint.CollectionId ?? string.Empty;
         var key = CanonicalCandidateKey.Create(
@@ -584,7 +584,7 @@ internal static class CandidateProviderHelpers
             SourceRefs = constraint.SourceRefs
         };
 
-        // Perf-2：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
+        // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
         var persistedTokenCost = ReadPersistedTokenCostFromMetadata(constraint.Metadata);
         if (persistedTokenCost.HasValue)
@@ -775,7 +775,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
             if (idsToFetch.Count > 0)
             {
                 // 批量或并行查询，消除 N+1
-                // Perf-2（Selected-only Hydration）：IncludeContent=false 时优先走元数据投影
+                // IncludeContent=false 时优先走元数据投影
                 // （不读取/反序列化 jsonb 正文，避免把未选中正文送入内存）；store 未实现
                 // IContextStoreMetadataLookup 时回退到全量批量（正确性不变）。
                 var fetchedDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
@@ -1044,7 +1044,7 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         {
             // 优先读取 PostgreSQL ts_rank_cd 派生的检索评分（写入 Metadata["__ts_rank"]）。
             // IncludeContent=false 路径下 PostgresContextStore 也会写入此键——确保 ts_rank 仍进入评分。
-            // Fix-3：未持久化 ts_rank 时（非 Postgres provider / ID-match 无 QueryText 路径），
+            // 未持久化 ts_rank 时（非 Postgres provider / ID-match 无 QueryText 路径），
             // 使用 50.0 作为 ID-match 基线分（精确 ID 查找是刻意召回，而非文本搜索），
             // 与 FTS ts_rank 评分尺度可比。title-contains 奖励 +50.0 仍叠加在此基线之上。
             var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 50.0;
@@ -1234,7 +1234,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 
         var batchContextStore = _contextStore as IContextStoreBatchLookup;
         var batchMemoryStore = _memoryStore as IMemoryStoreBatchLookup;
-        // Perf-2（Selected-only Hydration）：IncludeContent=false 时优先走元数据投影，
+        // IncludeContent=false 时优先走元数据投影，
         // 避免把未选中候选的完整正文 jsonb 读入内存；未实现时回退到全量批量（正确性不变）。
         var metadataContextStore = !includeContent ? _contextStore as IContextStoreMetadataLookup : null;
         var metadataMemoryStore = !includeContent ? _memoryStore as IMemoryStoreMetadataLookup : null;
@@ -1444,7 +1444,7 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
             CollectionId = context.Request.Scope.CollectionId,
             Layer = ContextMemoryLayer.Working,
             Take = take,
-            // Perf-2（Selected-only Hydration）：IncludeContent=false 时 store 只投影元数据列，
+            // IncludeContent=false 时 store 只投影元数据列，
             // 避免把未选中记忆正文读入内存（需要正文时由 ISelectedCandidateHydrator 二次读取）。
             IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
@@ -1524,7 +1524,7 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
             Layer = ContextMemoryLayer.Stable,
             Status = ContextMemoryStatus.Stable,
             Take = take,
-            // Perf-2（Selected-only Hydration）：IncludeContent=false 时 store 只投影元数据列，
+            // IncludeContent=false 时 store 只投影元数据列，
             // 避免把未选中记忆正文读入内存（需要正文时由 ISelectedCandidateHydrator 二次读取）。
             IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
@@ -1708,7 +1708,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         var neighborIdList = neighborItemIds.ToArray();
 
         // 批量查询 context store
-        // Perf-2（Selected-only Hydration）：IncludeContent=false 时优先走元数据投影，
+        // IncludeContent=false 时优先走元数据投影，
         // 避免把未选中关联条目的完整正文 jsonb 读入内存；未实现时回退到全量批量（正确性不变）。
         var contextItemDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
         var metadataContextStore = !includeContent ? _contextStore as IContextStoreMetadataLookup : null;

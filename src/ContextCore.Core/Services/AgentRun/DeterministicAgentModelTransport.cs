@@ -110,7 +110,7 @@ public sealed class DeterministicAgentModelTransport : IAgentModelTransport
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(messages);
 
-        // G1：结构化消息 → 一次性序列化为字符串，委托到旧路径。
+        // 结构化消息 → 一次性序列化为字符串，委托到旧路径。
         // 确定性 fallback 不需要原生消费 AgentMessage[]（真实 LLM adapter 可直接传 chat completions）。
         var context = AgentMessage.Serialize(messages);
         return CallAsync(runId, context, cancellationToken);

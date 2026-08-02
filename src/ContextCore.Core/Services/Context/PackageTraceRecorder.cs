@@ -38,7 +38,7 @@ internal sealed class PackageTraceRecorder
     }
 
     /// <summary>
-    /// OPT-1: kind → SourceType 枚举映射。替代原 magic byte switch。
+    /// kind → SourceType 枚举映射。替代原 magic byte switch。
     /// 未匹配 kind 显式返回 Unknown(0) 而非静默默认 Raw(1)，便于下游检测 schema 演进缺口。
     /// </summary>
     private static RuntimeCandidateSourceType MapSourceType(string kindLower) => kindLower switch
@@ -53,7 +53,7 @@ internal sealed class PackageTraceRecorder
         _ => RuntimeCandidateSourceType.Unknown
     };
 
-    /// <summary>OPT-1: kind → AuthorityLevel 枚举映射。</summary>
+    /// <summary> kind → AuthorityLevel 枚举映射。</summary>
     private static CandidateAuthorityLevel MapAuthority(string kindLower) => kindLower switch
     {
         "raw" or "legacy" or "recent_context" => CandidateAuthorityLevel.UserAttached,
@@ -67,7 +67,7 @@ internal sealed class PackageTraceRecorder
         _ => CandidateAuthorityLevel.Unknown
     };
 
-    /// <summary>OPT-1: kind → StrategyType 枚举映射。</summary>
+    /// <summary> kind → StrategyType 枚举映射。</summary>
     private static CandidateStrategyType MapStrategyType(string kindLower) => kindLower switch
     {
         "current_task" => CandidateStrategyType.Current,
@@ -81,7 +81,7 @@ internal sealed class PackageTraceRecorder
     };
 
     /// <summary>
-    /// OPT-1: (section, kind) → RetrievalChannel 枚举映射。
+    /// (section, kind) → RetrievalChannel 枚举映射。
     /// 注意：原 byte 映射中 constraints section 的非 constraint kind 会回退到 Memory；此处保留相同语义。
     /// </summary>
     private static RuntimeCandidateRetrievalChannel MapRetrievalChannel(string sectionLower, string kindLower) => sectionLower switch
@@ -206,7 +206,7 @@ internal sealed class PackageTraceRecorder
     }
 
     /// <summary>
-    /// 写入单条候选 trace 行。P0-6.3: 以 RuntimeCandidateOutcome + IncludedTokens/OriginalTokens 替代 bool included，
+    /// 写入单条候选 trace 行。 以 RuntimeCandidateOutcome + IncludedTokens/OriginalTokens 替代 bool included，
     /// 使下游诊断能区分 Accepted/PartiallyAccepted/Rejected/Dropped 并观察截断比率。
     /// </summary>
     /// <param name="c">候选。</param>
@@ -284,7 +284,7 @@ internal sealed class PackageTraceRecorder
     }
 
     /// <summary>
-    /// OPT-1: 聚合 (SourceType, Authority, StrategyType, RetrievalChannel) 枚举映射。
+    /// 聚合 (SourceType, Authority, StrategyType, RetrievalChannel) 枚举映射。
     /// 替代原返回 byte tuple 的实现。未匹配 kind/section 显式落入 Unknown(0)，
     /// 下游消费者可检测 0 值识别 schema 演进缺口，而非静默使用错误的默认值。
     /// </summary>

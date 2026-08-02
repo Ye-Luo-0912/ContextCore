@@ -7,7 +7,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// GRAPH-08 端到端测试：验证正式字段作为唯一运行时来源，
+/// 端到端测试：验证正式字段作为唯一运行时来源，
 /// Review Reject 后遍历引擎不可再命中被拒绝的关系。
 /// </summary>
 [TestClass]
@@ -26,7 +26,7 @@ public class ContextCoreRelationStateSingleSourceTests
 
         var stored = await fixture.RelationStore.GetAsync("workspace-test", "collection-test", "rel-test");
         Assert.IsNotNull(stored);
-        // GRAPH-08：正式字段作为唯一运行时来源
+        // 正式字段作为唯一运行时来源
         Assert.AreEqual(StableMemoryLifecycle.Rejected, stored!.Lifecycle);
         Assert.AreEqual(RelationReviewStatuses.Rejected, stored.ReviewStatus);
         Assert.AreEqual("relation_review", stored.Provenance);

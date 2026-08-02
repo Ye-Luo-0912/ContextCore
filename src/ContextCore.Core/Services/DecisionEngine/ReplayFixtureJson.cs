@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// 阶段 E：Replay fixture JSON 序列化辅助
+// Replay fixture JSON 序列化辅助
 //
 // 目标：
 //   1. 让 ReplayFixture（含 WorkingSet + V2Result）可往返 JSON 序列化。

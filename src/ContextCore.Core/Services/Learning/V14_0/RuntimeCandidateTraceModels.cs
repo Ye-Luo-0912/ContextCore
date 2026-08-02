@@ -6,7 +6,7 @@ public enum RuntimeCandidateTraceSource : byte { Unknown = 0, ShadowEval = 1, Gr
 public enum RuntimeCandidateRetrievalChannel : byte { Unknown = 0, Vector = 1, Memory = 2, Graph = 3, Keyword = 4, Anchor = 5, Constraint = 6 }
 
 /// <summary>
-/// OPT-1: 候选来源类型枚举（替代原 magic byte 1/2/3/4/5/6/7）。
+/// 候选来源类型枚举（替代原 magic byte 1/2/3/4/5/6/7）。
 /// 取值与历史 byte 输出兼容（: byte），JSON 序列化仍输出数值。
 /// 未匹配的 kind 不再静默落入 Raw(1)，而是显式 Unknown(0)，便于下游检测 schema 演进缺口。
 /// </summary>
@@ -31,7 +31,7 @@ public enum RuntimeCandidateSourceType : byte
 }
 
 /// <summary>
-/// OPT-1: 候选权威等级枚举（替代原 magic byte 1/2/3/4/5）。
+/// 候选权威等级枚举（替代原 magic byte 1/2/3/4/5）。
 /// 取值与历史 byte 输出兼容（: byte）。
 /// </summary>
 public enum CandidateAuthorityLevel : byte
@@ -51,7 +51,7 @@ public enum CandidateAuthorityLevel : byte
 }
 
 /// <summary>
-/// OPT-1: 候选策略类型枚举（替代原 magic byte 1/2/3/4/5）。
+/// 候选策略类型枚举（替代原 magic byte 1/2/3/4/5）。
 /// 取值与历史 byte 输出兼容（: byte）。
 /// </summary>
 public enum CandidateStrategyType : byte
@@ -94,13 +94,13 @@ public sealed class RuntimeCandidateTraceRow
     public string RequestId { get; init; } = "";
     public string CandidateId { get; init; } = "";
     public string SourceId { get; init; } = "";
-    /// <summary>OPT-1: 候选来源类型（原 byte SourceType，现 <see cref="RuntimeCandidateSourceType"/>，: byte 保证 JSON 输出兼容）。</summary>
+    /// <summary> 候选来源类型（原 byte SourceType，现 <see cref="RuntimeCandidateSourceType"/>，: byte 保证 JSON 输出兼容）。</summary>
     public RuntimeCandidateSourceType SourceType { get; init; }
-    /// <summary>OPT-1: 候选权威等级（原 byte Authority，现 <see cref="CandidateAuthorityLevel"/>）。</summary>
+    /// <summary> 候选权威等级（原 byte Authority，现 <see cref="CandidateAuthorityLevel"/>）。</summary>
     public CandidateAuthorityLevel Authority { get; init; }
-    /// <summary>OPT-1: 候选策略类型（原 byte StrategyType，现 <see cref="CandidateStrategyType"/>）。</summary>
+    /// <summary> 候选策略类型（原 byte StrategyType，现 <see cref="CandidateStrategyType"/>）。</summary>
     public CandidateStrategyType StrategyType { get; init; }
-    /// <summary>OPT-1: 检索通道（原 byte RetrievalChannel，现 <see cref="RuntimeCandidateRetrievalChannel"/>）。</summary>
+    /// <summary> 检索通道（原 byte RetrievalChannel，现 <see cref="RuntimeCandidateRetrievalChannel"/>）。</summary>
     public RuntimeCandidateRetrievalChannel RetrievalChannel { get; init; }
     public RuntimeCandidateTraceSource TraceSource { get; init; }
     public double DeterministicScore { get; init; }
@@ -113,13 +113,13 @@ public sealed class RuntimeCandidateTraceRow
     public string Section { get; init; } = "";
     public DateTimeOffset RecordedAt { get; init; } = DateTimeOffset.UtcNow;
 
-    /// <summary>P0-6.3: 候选的精确归属结果（Accepted/PartiallyAccepted/Rejected/Dropped）。</summary>
+    /// <summary> 候选的精确归属结果（Accepted/PartiallyAccepted/Rejected/Dropped）。</summary>
     public RuntimeCandidateOutcome Outcome { get; init; }
-    /// <summary>P0-6.3: 候选原始估算 token 数（截断前）。Accepted 路径下与 TokenCost 一致。</summary>
+    /// <summary> 候选原始估算 token 数（截断前）。Accepted 路径下与 TokenCost 一致。</summary>
     public int OriginalTokens { get; init; }
-    /// <summary>P0-6.3: 候选实际保留进 section 输出的 token 数（截断后）。</summary>
+    /// <summary> 候选实际保留进 section 输出的 token 数（截断后）。</summary>
     public int IncludedTokens { get; init; }
-    /// <summary>P0-6.3: 截断比率 = IncludedTokens / max(OriginalTokens, 1)。Accepted=1.0，Rejected/Dropped=0.0。</summary>
+    /// <summary> 截断比率 = IncludedTokens / max(OriginalTokens, 1)。Accepted=1.0，Rejected/Dropped=0.0。</summary>
     public double TruncationRatio { get; init; }
 
     public string ToJsonLine() => JsonSerializer.Serialize(new

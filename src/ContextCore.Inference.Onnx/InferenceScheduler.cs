@@ -845,7 +845,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     /// <param name="combined">合并后的完整 batch（RowCount > MaxBatchSize）。</param>
     /// <param name="totalRows">总行数（= combined.RowCount）。</param>
     /// <param name="featureCount">每行特征数。</param>
-    /// <param name="engine">执行引擎（P0-8：入队时捕获的引擎，确保 shard 也在同一世代执行）。</param>
+    /// <param name="engine">执行引擎（入队时捕获的引擎，确保 shard 也在同一世代执行）。</param>
     /// <param name="ct">取消令牌（已链接 stopToken + deadline）。</param>
     private async ValueTask<BatchInferenceResult> InferWithShardingAsync(
         FeatureBatch combined,

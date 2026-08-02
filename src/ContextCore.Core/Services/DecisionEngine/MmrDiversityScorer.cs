@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// / R28-G P1-3：MMR（Maximal Marginal Relevance）diversity scorer
+// / MMR（Maximal Marginal Relevance）diversity scorer
 //
 // MMR 重排序算法：
 //   MMR = argmax_{d ∈ R\D} [λ · sim(d, q) - (1-λ) · max_{d' ∈ D} sim(d, d')]
@@ -31,7 +31,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //   3. 不处理 mandatory 候选：由调用方在 MMR 前分离 mandatory / non-mandatory。
 // ===========================================================================
 
-/// <summary>R28-B.8.1 / R28-G P1-3：MMR（Maximal Marginal Relevance）diversity scorer。</summary>
+/// <summary>MMR（Maximal Marginal Relevance）diversity scorer。</summary>
 internal static class MmrDiversityScorer
 {
     /// <summary>
@@ -197,7 +197,7 @@ internal static class MmrDiversityScorer
     private static double ComputeMmrScore(double lambda, double relevance, double maxSim)
         => lambda * relevance - (1.0 - lambda) * maxSim;
 
-    /// <summary>R28-G P1-3：第一轮比较（relevance 降序，CandidateId 升序 tie-break）。</summary>
+    /// <summary>第一轮比较（relevance 降序，CandidateId 升序 tie-break）。</summary>
     private static int CompareFirstRound(
         IReadOnlyList<ContextCandidateEnvelope> working,
         int aIdx,

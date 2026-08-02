@@ -8,7 +8,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// GRAPH-09：投影与 taxonomy 闭环测试。
+/// 投影与 taxonomy 闭环测试。
 /// 验证所有 projector 输出通过 registry/validation 零 High 级诊断，以及 Ingest reconcile 语义。
 /// </summary>
 [TestClass]

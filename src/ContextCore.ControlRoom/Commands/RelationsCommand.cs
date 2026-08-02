@@ -125,7 +125,7 @@ public static class RelationsCommand
             ? []
             : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    /// <summary>GRAPH-13: 在客户端对子图边进行后置过滤（按置信度/生命周期/审核状态）。</summary>
+    /// <summary> 在客户端对子图边进行后置过滤（按置信度/生命周期/审核状态）。</summary>
     private static RelationSubgraph FilterSubgraph(
         RelationSubgraph subgraph,
         double minConfidence,

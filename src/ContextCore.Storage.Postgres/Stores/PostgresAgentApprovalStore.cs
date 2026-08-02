@@ -389,7 +389,7 @@ ON CONFLICT (workspace_id, run_id, sequence) DO NOTHING;
             }
         }
 
-        // 4. CAS 推进 Run 状态（P0-5：严格规则 — 0 行时查询当前状态区分幂等成功与冲突失败）
+        // 4. CAS 推进 Run 状态（严格规则 — 0 行时查询当前状态区分幂等成功与冲突失败）
         int runAffected;
         await using (var runUpdateCommand = connection.CreateCommand())
         {

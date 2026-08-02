@@ -161,7 +161,7 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     }
 
     /// <summary>
-    /// Perf-2：按 ID 批量获取上下文条目元数据（不读取/反序列化完整 jsonb 正文）。
+    /// 按 ID 批量获取上下文条目元数据（不读取/反序列化完整 jsonb 正文）。
     /// 列集与 QueryAsync 的 IncludeContent=false 投影一致，复用 <see cref="ReadMetadataRow"/>；
     /// Metadata 携带摄取阶段持久化的 content_hash / content_token_cost，Provider 据此跳过在线
     /// SHA-256 + tokenizer 调用。Content 恒为空字符串（Selected-only Hydration 契约）。
@@ -215,7 +215,7 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         var hasQueryText = !string.IsNullOrWhiteSpace(query.QueryText);
-        // Perf-5 / P1-2：FTS 与 ID 匹配合并为单条 CTE 查询（一次数据库往返）。
+        // FTS 与 ID 匹配合并为单条 CTE 查询（一次数据库往返）。
         // - websearch_to_tsquery 支持 "phrase search" / OR / AND 等语法，且不包含前导通配符（可命中 GIN）。
         // - ts_rank_cd 返回 [0, +∞) 的相关度分数；乘以 100 后写入 Metadata["__ts_rank"]，
         //   LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
@@ -450,7 +450,7 @@ ORDER BY importance DESC, updated_at DESC, id DESC
     }
 
     /// <summary>
-    /// Perf-5：构建 ContextQuery 的基础过滤条件（workspace/collection/tags/types/excluded/refs），
+    /// 构建 ContextQuery 的基础过滤条件（workspace/collection/tags/types/excluded/refs），
     /// 供 FTS 与 ID 两个查询分支共享。返回 filter 片段列表，参数已绑定到 command。
     /// </summary>
     private List<string> AppendBaseFilters(NpgsqlCommand command, ContextQuery query)
@@ -571,7 +571,7 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         };
     }
 
-    /// <summary>P3：返回带 __ts_rank 注入的 ContextItem 副本（不可变 init 属性 → 用 with 重建）。</summary>
+    /// <summary>返回带 __ts_rank 注入的 ContextItem 副本（不可变 init 属性 → 用 with 重建）。</summary>
     private static ContextItem WithTsRank(ContextItem item, double rank)
     {
         var metadata = new Dictionary<string, string>(item.Metadata)

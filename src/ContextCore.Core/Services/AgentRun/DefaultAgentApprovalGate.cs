@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E5：DefaultAgentApprovalGate — 默认审批门
+// DefaultAgentApprovalGate — 默认审批门
 //
 // 实现 IAgentApprovalGate 的默认审批策略：
 //   1. 自动审批模式：低风险操作直接 Approved=true（默认行为）。
@@ -28,7 +28,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E5：默认审批门实现。
+/// 默认审批门实现。
 /// 默认全部自动批准（测试用）；可通过构造参数配置需要人工审批的 Tool 列表。
 /// 注入 <see cref="IAgentApprovalStore"/> 后启用 durable approval（持久化审批状态）。
 /// </summary>

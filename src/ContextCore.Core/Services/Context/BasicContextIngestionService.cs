@@ -122,7 +122,7 @@ public sealed class BasicContextIngestionService
             if (_relationProjector is not null && _relationStore is not null)
             {
                 var ingestRelations = _relationProjector.ProjectForIngest(normalized);
-                // GRAPH-09：Ingest reconcile — 新增需要的边，删除已经移除的 refs 边。
+                // Ingest reconcile — 新增需要的边，删除已经移除的 refs 边。
                 // 4.4：通过 IRelationProjectionWriter 写入，若未注入则回退到 BatchUpsertAsync。
                 await ReconcileIngestRelationsAsync(normalized, ingestRelations, cancellationToken).ConfigureAwait(false);
             }
@@ -226,7 +226,7 @@ public sealed class BasicContextIngestionService
     }
 
     /// <summary>
-    /// GRAPH-09：Ingest reconcile — 新增需要的 related_to 边，删除已经移除的 refs 边。
+    /// Ingest reconcile — 新增需要的 related_to 边，删除已经移除的 refs 边。
     /// 仅清理由 ingest 生产的 related_to 边（Provenance="ingest"），不影响其他 projector 生产的边。
     /// </summary>
     private async Task ReconcileIngestRelationsAsync(

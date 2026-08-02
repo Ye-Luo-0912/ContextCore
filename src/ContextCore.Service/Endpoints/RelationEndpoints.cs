@@ -537,7 +537,7 @@ internal static class RelationEndpoints
 		};
 	}
 
-	/// <summary>GRAPH-13: 从记忆/上下文存储中查找节点元数据，丰富子图节点。</summary>
+	/// <summary> 从记忆/上下文存储中查找节点元数据，丰富子图节点。</summary>
 	private static async Task<RelationSubgraph> EnrichSubgraphNodesAsync(
 		RelationSubgraph subgraph,
 		string workspaceId,

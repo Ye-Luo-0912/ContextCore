@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.Graph;
 
 /// <summary>
-/// GRAPH-09：投影输出验证器 — 在 projector 输出写入 store 前通过 registry/validation 检查，
+/// 投影输出验证器 — 在 projector 输出写入 store 前通过 registry/validation 检查，
 /// 确保零 High 级诊断。仅检查 projector 可控字段（类型、NodeKind、方向、inverse 完整性），
 /// 不检查需要 item store 上下文的诊断（BrokenSource/BrokenTarget）。
 /// </summary>
@@ -46,7 +46,7 @@ public sealed class RelationProjectorOutputValidator
                 continue;
             }
 
-            // GRAPH-09：projector 必须填充正式 NodeKind 字段
+            // projector 必须填充正式 NodeKind 字段
             if (string.IsNullOrWhiteSpace(relation.SourceNodeKind))
             {
                 diagnostics.Add(new RelationProjectorOutputDiagnostic(
@@ -81,7 +81,7 @@ public sealed class RelationProjectorOutputValidator
                     $"Projector {provenance} produced TargetNodeKind={relation.TargetNodeKind} not allowed for type {definition.Type}. Allowed: [{string.Join(", ", definition.AllowedTargetKinds)}]"));
             }
 
-            // GRAPH-09：无向边必须按规范顺序存储（source < target）
+            // 无向边必须按规范顺序存储（source < target）
             if (!definition.IsDirectional
                 && !string.IsNullOrWhiteSpace(relation.SourceId)
                 && !string.IsNullOrWhiteSpace(relation.TargetId)
@@ -95,7 +95,7 @@ public sealed class RelationProjectorOutputValidator
             }
         }
 
-        // GRAPH-09：directional inverse 完整性检查（如 superseded_by ↔ replaces）
+        // directional inverse 完整性检查（如 superseded_by ↔ replaces）
         foreach (var relation in relations)
         {
             var normalizedType = _normalizer.Normalize(relation.RelationType);

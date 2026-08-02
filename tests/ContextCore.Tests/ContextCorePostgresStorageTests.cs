@@ -634,7 +634,7 @@ public sealed class ContextCorePostgresStorageTests
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_rollback_records_triggered");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_baseline_comparisons_proposal");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_baseline_comparisons_compared");
-        // WS-A：Policy Registry 持久化表 + CAS 激活索引
+        // Policy Registry 持久化表 + CAS 激活索引
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_policy_bundles");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_policy_activations");
         StringAssert.Contains(sql, "bundle_id text NOT NULL");

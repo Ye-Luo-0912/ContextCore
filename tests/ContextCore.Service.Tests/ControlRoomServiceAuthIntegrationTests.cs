@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace ContextCore.Service.Tests;
 
 /// <summary>
-/// CR-01 端到端测试：验证 ControlRoom Service 模式下正确传递 API Key。
+/// 端到端测试：验证 ControlRoom Service 模式下正确传递 API Key。
 /// 启动真实 Service（RequireApiKey=true），用 ControlRoomService.CreateServiceState 连接并执行只读操作。
 /// </summary>
 [TestClass]

@@ -22,11 +22,11 @@ namespace ContextCore.Abstractions;
 //   7. Recency Expert 不注册 no-op，Router 基于 IExpertCatalog 显式 disable。
 //
 // 子阶段进度：
-//   B-1（当前）：契约定义 + 默认实现骨架，不改生产行为。
-//   B-2：Candidate capture + pure Runtime + Tee 影子执行。
-//   B-3：Shadow Gate 多维度验收。
-//   B-4：Authoritative cutover（Retrieval → Package → AgentContext）。
-//   B-5：Legacy removal + DecisionExperimentPlane 保留。
+//   契约定义 + 默认实现骨架，不改生产行为。
+//   Candidate capture + pure Runtime + Tee 影子执行。
+//   Shadow Gate 多维度验收。
+//   Authoritative cutover（Retrieval → Package → AgentContext）。
+//   Legacy removal + DecisionExperimentPlane 保留。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ public interface IContextDecisionRuntime
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Blocker-1：执行完整决策编排，返回 ExecutionResult（含 WorkingSet）。
+    /// 执行完整决策编排，返回 ExecutionResult（含 WorkingSet）。
     /// </summary>
     /// <remarks>
     /// 与 <see cref="ExecuteAsync"/> 的差异：返回 <see cref="ContextDecisionExecutionResult"/>，
@@ -71,7 +71,7 @@ public interface IContextDecisionRuntime
 }
 
 /// <summary>
-/// Blocker-1：Provider 执行报告。
+/// Provider 执行报告。
 /// </summary>
 public sealed record ProviderExecutionReport
 {
@@ -114,7 +114,7 @@ public enum LearningPersistenceStatus : byte
 }
 
 /// <summary>
-/// Blocker-1：完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。
+/// 完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。
 /// </summary>
 /// <remarks>
 /// Runtime 返回此类型，Projector 始终消费 Decision + WorkingSet + ProjectionContext，
@@ -137,25 +137,25 @@ public sealed record ContextDecisionExecutionResult
     /// <summary>各 Provider 的执行报告（按执行顺序；Phase 2 Graph 在最后）。</summary>
     public IReadOnlyList<ProviderExecutionReport> ProviderReports { get; init; } = [];
 
-    /// <summary>R28-B.7：标准化后的请求（Purpose Request Normalizer 产出）。</summary>
+    /// <summary>标准化后的请求（Purpose Request Normalizer 产出）。</summary>
     public ContextDecisionRuntimeRequest? NormalizedRequest { get; init; }
 
-    /// <summary>R28-B.7：请求语义哈希（用于 replay 匹配）。</summary>
+    /// <summary>请求语义哈希（用于 replay 匹配）。</summary>
     public string? RequestSemanticHash { get; init; }
 
-    /// <summary>R28-B.7：请求作用域（标准化，不从候选反推）。</summary>
+    /// <summary>请求作用域（标准化，不从候选反推）。</summary>
     public ContextDecisionScope Scope { get; init; }
 
-    /// <summary>R28-B.7：Feature Schema 版本（从 Policy 获取，用于 replay 兼容性）。</summary>
+    /// <summary>Feature Schema 版本（从 Policy 获取，用于 replay 兼容性）。</summary>
     public string? FeatureSchemaVersion { get; init; }
 
-    /// <summary>R28-B.7：Allocator 版本（用于 replay 兼容性）。</summary>
+    /// <summary>Allocator 版本（用于 replay 兼容性）。</summary>
     public string? AllocatorVersion { get; init; }
 
-    /// <summary>R28-B.7：Tokenizer 版本（用于精确 token 计算兼容性）。</summary>
+    /// <summary>Tokenizer 版本（用于精确 token 计算兼容性）。</summary>
     public string? TokenizerVersion { get; init; }
 
-    /// <summary>R28-B.7：Provider 输出快照（每个 Provider 的 Envelopes+Materials 快照，用于 replay）。</summary>
+    /// <summary>Provider 输出快照（每个 Provider 的 Envelopes+Materials 快照，用于 replay）。</summary>
     public IReadOnlyList<ProviderOutputSnapshot> ProviderOutputSnapshots { get; init; } = [];
 
     /// <summary>R28-B.7-Final：最终序列化 token 成本（精确计算，含 section content + separator + header）。</summary>
@@ -356,7 +356,7 @@ public interface IExecutionArtifactFactory
 public sealed record ContextDecisionRuntimeRequest
 {
     /// <summary>
-    /// 关联的请求 ID（R28-D P0-7：仅作为 CorrelationId 用于链路追踪，不参与 SemanticHash 计算）。
+    /// 关联的请求 ID（仅作为 CorrelationId 用于链路追踪，不参与 SemanticHash 计算）。
     /// </summary>
     public required string RequestId { get; init; }
 
@@ -387,18 +387,18 @@ public sealed record ContextDecisionRuntimeRequest
     /// </summary>
     public CandidateWorkingSet? SeedWorkingSet { get; init; }
 
-    /// <summary>R28-B.6 Blocker-4：Retrieval 专用输入（Purpose=Retrieval 时使用）。</summary>
+    /// <summary>Retrieval 专用输入（Purpose=Retrieval 时使用）。</summary>
     public RetrievalInput? RetrievalInput { get; init; }
 
-    /// <summary>R28-B.6 Blocker-4：Package 专用输入（Purpose=Package 时使用）。</summary>
+    /// <summary>Package 专用输入（Purpose=Package 时使用）。</summary>
     public PackageInput? PackageInput { get; init; }
 
-    /// <summary>R28-B.6 Blocker-4：AgentContext 专用输入（Purpose=AgentContext 时使用）。</summary>
+    /// <summary>AgentContext 专用输入（Purpose=AgentContext 时使用）。</summary>
     public AgentInput? AgentInput { get; init; }
 }
 
 /// <summary>
-/// Blocker-4：Retrieval 专用输入。完整保留原 ContextRetrievalRequest 语义。
+/// Retrieval 专用输入。完整保留原 ContextRetrievalRequest 语义。
 /// </summary>
 public sealed record RetrievalInput
 {
@@ -453,15 +453,15 @@ public sealed record RetrievalInput
     /// <summary>是否启用短期记忆召回。</summary>
     public bool IncludeWorkingMemory { get; init; } = true;
 
-    // --- R28-B.6 P0-2：补齐原 ContextRetrievalRequest 完整语义 ---
+    // --- 补齐原 ContextRetrievalRequest 完整语义 ---
 
-    /// <summary>R28-B.6 P0-2：是否启用稳定记忆召回（默认 true）。</summary>
+    /// <summary>是否启用稳定记忆召回（默认 true）。</summary>
     public bool IncludeStableMemory { get; init; } = true;
 
-    /// <summary>R28-B.6 P0-2：是否在召回结果中包含候选正文 Content（默认 true）。</summary>
+    /// <summary>是否在召回结果中包含候选正文 Content（默认 true）。</summary>
     public bool IncludeContent { get; init; } = true;
 
-    /// <summary>R28-B.6 P0-2：附加元数据（透传到 Provider/Projector 用于诊断或策略）。</summary>
+    /// <summary>附加元数据（透传到 Provider/Projector 用于诊断或策略）。</summary>
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 
     /// <summary>
@@ -472,7 +472,7 @@ public sealed record RetrievalInput
 }
 
 /// <summary>
-/// Blocker-4：Package 专用输入。
+/// Package 专用输入。
 /// </summary>
 public sealed record PackageInput
 {
@@ -506,15 +506,15 @@ public sealed record PackageInput
     /// <summary>section 比例（覆盖 policy 默认 SectionRatios）。</summary>
     public IReadOnlyDictionary<string, double>? SectionRatios { get; init; }
 
-    // --- R28-B.7 P1-2：补齐原 ContextPackageRequest 完整语义 ---
+    // --- 补齐原 ContextPackageRequest 完整语义 ---
 
-    /// <summary>R28-B.7 P1-2：场景模式，优先级高于 metadata["mode"]。指定后按预设权重分配 token 预算。</summary>
+    /// <summary>场景模式，优先级高于 metadata["mode"]。指定后按预设权重分配 token 预算。</summary>
     public ContextPackageMode Mode { get; init; } = ContextPackageMode.None;
 
-    /// <summary>R28-B.7 P1-2：显式策略引用（可选）。</summary>
+    /// <summary>显式策略引用（可选）。</summary>
     public ContextPackagePolicy? Policy { get; init; }
 
-    /// <summary>R28-B.7 P1-2：是否包含近期对话（默认 true）。</summary>
+    /// <summary>是否包含近期对话（默认 true）。</summary>
     public bool IncludeRecent { get; init; } = true;
 
     /// <summary>
@@ -523,12 +523,12 @@ public sealed record PackageInput
     /// </summary>
     public bool? IsAuditMode { get; init; }
 
-    /// <summary>R28-B.7 P1-2：附加元数据（透传到 Provider/Projector 用于诊断或策略）。</summary>
+    /// <summary>附加元数据（透传到 Provider/Projector 用于诊断或策略）。</summary>
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 }
 
 /// <summary>
-/// Blocker-4：AgentContext 专用输入。
+/// AgentContext 专用输入。
 /// </summary>
 public sealed record AgentInput
 {
@@ -742,7 +742,7 @@ public sealed record ExpertOrigin(
     DateTimeOffset ObservedAt);
 
 /// <summary>
-/// / R28-G P1-1：候选正文 Material sidecar。正文与决策分离，Projector 不访问 Store。
+/// / 候选正文 Material sidecar。正文与决策分离，Projector 不访问 Store。
 /// 新增 ContentHash / TokenCost 字段，避免 Merger 在冲突检测时重复计算 SHA256。
 /// </summary>
 public sealed record CandidateMaterial
@@ -800,7 +800,7 @@ public sealed record CandidateMaterial
     /// </summary>
     public CandidateTokenCost? TokenCost { get; init; }
 
-    /// <summary>R28-G P1-1：计算 Content 的稳定 hash（与 Merger 旧实现公式一致）。</summary>
+    /// <summary>计算 Content 的稳定 hash（与 Merger 旧实现公式一致）。</summary>
     /// <param name="content">正文内容。</param>
     /// <returns>"sha256:&lt;16hex&gt;" 形式的哈希字符串；空内容返回 "sha256:" 前缀。</returns>
     internal static string ComputeContentHash(string content)
@@ -901,7 +901,7 @@ public sealed record CandidateProviderContext(
     /// </summary>
     public IContextTokenizerResolver? TokenizerResolver { get; init; }
 
-    /// <summary>R28-D P0-3：tokenizer 使用的模型名（可选，从 Policy 路由）。</summary>
+    /// <summary>tokenizer 使用的模型名（可选，从 Policy 路由）。</summary>
     public string? TokenizerModelName { get; init; }
 }
 
@@ -971,7 +971,7 @@ public interface IEarlyAdmissionGate
     AdmissionResult Evaluate(ContextCandidateEnvelope envelope, EffectivePolicySnapshot snapshot);
 
     /// <summary>
-    /// Blocker-6：评估候选集合的准入，返回分区结果（Admitted + Rejected）。
+    /// 评估候选集合的准入，返回分区结果（Admitted + Rejected）。
     /// </summary>
     /// <remarks>
     /// 与 <see cref="Evaluate"/> 的差异：批量评估并返回分区结果，
@@ -993,7 +993,7 @@ public sealed record AdmissionResult(
     string Detail);
 
 /// <summary>
-/// Blocker-6：准入分区结果。
+/// 准入分区结果。
 /// </summary>
 /// <param name="Admitted">通过 Early Admission Gate 的候选集合。</param>
 /// <param name="Rejected">被 Early Admission Gate 拒绝的候选集合（保留到 DroppedEnvelopes，不丢失）。</param>
@@ -1158,7 +1158,7 @@ public interface IGlobalAllocator
 }
 
 // ---------------------------------------------------------------------------
-// Allocator V2.1（R28-B.8.1：section rollover + MMR diversity）
+// Allocator V2.1（section rollover + MMR diversity）
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -1358,7 +1358,7 @@ public sealed class MandatoryHydrationFailedException : InvalidOperationExceptio
 /// Agent Context Projector。从 DecisionResult + WorkingSet 投影为 AgentContextSnapshot。
 /// </summary>
 /// <remarks>
-/// 复用 R23 AgentContextSnapshot（不新增 AgentContextPackage）。
+/// 复用 AgentContextSnapshot（不新增 AgentContextPackage）。
 /// Projector 不访问 Store；不重新排序、过滤、截断或计分。
 /// AgentContextSnapshot 仅通过 DecisionRequestIds 引用 ContextDecisionResult，不嵌入实例。
 /// </remarks>
@@ -1415,11 +1415,11 @@ public sealed record ProjectionContext
 }
 
 // ---------------------------------------------------------------------------
-// Impl-1：内容截断器
+// 内容截断器
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// Impl-1：内容截断器接口。按 token 数截断候选正文。
+/// 内容截断器接口。按 token 数截断候选正文。
 /// </summary>
 /// <remarks>
 /// Allocator 在预算不足时仅做账面截断（IncludedTokens=remaining, IsTruncated=true），
@@ -1434,14 +1434,14 @@ public interface IContentTruncator
     /// <returns>截断结果（含截断后正文、实际 token 数、是否发生截断）。</returns>
     TruncationResult Truncate(string content, int maxTokens);
 
-    /// <summary>R28-B.7：计算完整序列的 token 数（包括所有 section、separator、header）。</summary>
+    /// <summary>计算完整序列的 token 数（包括所有 section、separator、header）。</summary>
     /// <param name="content">待计算的内容（可以是单个候选正文、section 拼接或完整序列化 package）。</param>
     /// <param name="modelName">tokenizer 使用的模型名（可选，null 时使用截断器默认模型）。</param>
     /// <returns>内容的 token 数。</returns>
     int CountTokens(string content, string? modelName = null);
 }
 
-/// <summary>R28-B.6 Impl-1：截断结果。</summary>
+/// <summary>截断结果。</summary>
 /// <param name="TruncatedContent">截断后的正文（不超过 maxTokens 对应的字符数）。</param>
 /// <param name="ActualTokens">截断后正文的实际 token 估算数。</param>
 /// <param name="WasTruncated">是否发生了截断。</param>

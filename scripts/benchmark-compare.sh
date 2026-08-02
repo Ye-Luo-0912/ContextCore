@@ -11,7 +11,7 @@
 #   ALLOCATION    Bytes/Op  超过 ALLOCATION_THRESHOLD_PCT（默认 5%，分配稳定）
 #   STORE         StoreCalls 超过 STORECALL_THRESHOLD_PCT（默认 0%，仅当 benchmark 发射 StoreCalls 字段时生效）
 #
-# P0-9 假阳性抑制（环境噪声 / 样本不足 / I/O 变异性 → 误报）：
+# 假阳性抑制（环境噪声 / 样本不足 / I/O 变异性 → 误报）：
 #   NOISE_FLOOR_PCT        最小回归百分比（默认 3%）。低于此值的回归视为噪声，忽略。
 #                          例：+2% 回归低于 3% 噪声底 → 不报告，即使超过 0% 的严格阈值。
 #   MIN_SAMPLE_COUNT       基线最小样本数 N（默认 5）。低于此值跳过该 case 对比
@@ -49,7 +49,7 @@ P95_THRESHOLD_PCT="${P95_THRESHOLD_PCT:-15}"
 ALLOCATION_THRESHOLD_PCT="${ALLOCATION_THRESHOLD_PCT:-5}"
 STORECALL_THRESHOLD_PCT="${STORECALL_THRESHOLD_PCT:-0}"
 
-# P0-9 假阳性抑制参数
+# 假阳性抑制参数
 NOISE_FLOOR_PCT="${NOISE_FLOOR_PCT:-3}"
 MIN_SAMPLE_COUNT="${MIN_SAMPLE_COUNT:-5}"
 CONFIDENCE_SIGMA="${CONFIDENCE_SIGMA:-2}"
@@ -96,7 +96,7 @@ COMPARED=0
 # 判断 benchmark Type 是否属于 I/O 密集型（应用宽松阈值，避免磁盘/OS 缓存噪声误报）。
 # IO_BOUND_PATTERNS 以 "|" 分隔，每段作为 bash case glob 匹配 Type 名。
 #
-# P0-9 修复：原实现 `for pat in $IO_BOUND_PATTERNS` 在 IFS='|' 下拆分后，
+# 修复：原实现 `for pat in $IO_BOUND_PATTERNS` 在 IFS='|' 下拆分后，
 # bash 将每段（如 FileSystem*、*Io*）视为文件名 glob。由于脚本上方 `shopt -s nullglob`
 # 已开启，当 CWD 无匹配文件时这些 pattern 消失 → for 循环零迭代 → 函数恒返回 1（false），
 # I/O 宽松阈值永远不生效。修复：用 read -ra 将 pattern 拆入数组（不触发 glob），
@@ -182,7 +182,7 @@ for current in "$CURRENT_DIR"/*-report-full.json; do
   #   bn  = baseline Statistics.N（样本数）
   #   bse = baseline Statistics.StandardError（置信区间检查用）
   #
-  # P0-9 修复：jq @tsv 中 StoreCalls 缺失时原输出 ""（空），导致 bs/cs 两个相邻空字段
+  # 修复：jq @tsv 中 StoreCalls 缺失时原输出 ""（空），导致 bs/cs 两个相邻空字段
   # 产生连续 tab。bash `read` 的 IFS=$'\t' 因 tab 属于空白字符会将连续 tab 折叠为单个
   # 分隔符，使 N/SE 值错位落入 bs/cs，bn/bse 变空 → 所有 case 误判 LOW-N(0<5) 被跳过。
   # 修复方式：StoreCalls 缺失时输出 0（数值语义正确：未发射 = 0 次调用），消除连续 tab。

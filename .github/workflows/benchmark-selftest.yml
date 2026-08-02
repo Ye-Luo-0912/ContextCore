@@ -42,7 +42,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/bench_base /tmp/bench_cur
 
-          # P0-9：合成 fixture 必须包含 Statistics.N 与 Statistics.StandardError，
+          # 合成 fixture 必须包含 Statistics.N 与 Statistics.StandardError，
           # 否则 benchmark-compare.sh 的 MIN_SAMPLE_COUNT 检查会因 N 缺失（默认 0）跳过所有 case
           # （LOW-N(0<5) 假阴性），且置信区间检查因 SE 缺失而无法生效。
           #

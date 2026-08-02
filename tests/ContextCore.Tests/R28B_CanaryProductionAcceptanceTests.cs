@@ -791,7 +791,7 @@ public sealed class CanaryEndToEndAcceptanceTests
 
 // ===========================================================================
 // 测试类 5：CanaryProductionSampleSourceAcceptanceTests
-// 验证 R28-D P0-6：Authoritative Runtime 在生产路径调用 RecordObservation
+// 验证 Authoritative Runtime 在生产路径调用 RecordObservation
 // 并记录真实 Legacy 延迟（修复此前 Collector 永远没有样本 + LegacyP95LatencyMs = V2P95LatencyMs 的问题）
 // ===========================================================================
 

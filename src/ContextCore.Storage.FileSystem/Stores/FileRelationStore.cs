@@ -110,7 +110,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
     }
 
-    /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
+    /// <summary>SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
     public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
         => BatchUpsertAsync([relation], cancellationToken);
 
@@ -129,7 +129,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
     }
 
     /// <summary>
-    /// 删除单条边。P1-1: 走与 BatchUpsertAsync 相同的跨进程锁 RMW，避免丢失更新。
+    /// 删除单条边。走与 BatchUpsertAsync 相同的跨进程锁 RMW，避免丢失更新。
     /// </summary>
     public async Task<bool> DeleteAsync(
         string workspaceId,
@@ -212,7 +212,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         }
     }
 
-    /// <summary>GRAPH-10：统一邻居查询，在内存中过滤。</summary>
+    /// <summary>统一邻居查询，在内存中过滤。</summary>
     public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
         RelationNeighborQuery query,
         CancellationToken cancellationToken = default)

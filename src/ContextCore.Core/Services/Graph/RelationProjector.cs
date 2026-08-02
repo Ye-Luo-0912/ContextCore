@@ -208,7 +208,7 @@ public sealed class RelationProjector : IRelationProjector
             ["createdFrom"] = "stable_lifecycle_review",
             ["confidence"] = "1.0",
             ["confidenceReason"] = "stable_lifecycle_review",
-            // GRAPH-08：lifecycle/reviewStatus 由正式字段承载，Metadata 不再双写
+            // lifecycle/reviewStatus 由正式字段承载，Metadata 不再双写
             ["policyVersion"] = policyVersion,
             ["sourceRefs"] = string.Join(',', sourceRefs),
             ["evidenceRefs"] = string.Join(',', evidenceRefs)

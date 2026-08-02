@@ -350,7 +350,7 @@ internal static class AgentExecutionEndpoints
                 }
 
                 // e. 等待下一轮事件。优先使用 push 通道（IAgentRunEventNotifier），
-                // 事件到达时立即唤醒读取。P0-10：添加 30s watchdog 补偿——
+                // 事件到达时立即唤醒读取。添加 30s watchdog 补偿——
                 // 若 notifier 遗漏通知（如 channel 满时 TryWrite 丢弃），watchdog 超时后
                 // 回到循环顶部做 DB 补读，防止永久挂起。
                 // 未注入 notifier 时回退到 500ms 固定轮询。
@@ -882,7 +882,7 @@ public sealed class CreateRunRequest
     /// <summary>允许调用的 Tool ID 列表（可选）。</summary>
     public IReadOnlyList<string>? ToolIds { get; init; }
 
-    /// <summary>WP-2：幂等键（可选；客户端提供用于去重，防止重试导致重复执行）。</summary>
+    /// <summary>幂等键（可选；客户端提供用于去重，防止重试导致重复执行）。</summary>
     public string? IdempotencyKey { get; init; }
 
     /// <summary>Cost 预算限制（可选；未提供时使用默认值）。</summary>

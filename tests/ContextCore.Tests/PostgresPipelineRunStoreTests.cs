@@ -16,7 +16,7 @@ namespace ContextCore.Tests;
 ///   2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
 ///   3. 接口实现契约（IPipelineRunStore）
 ///   4. DI 注册路径（PostgresServiceCollectionExtensions）
-///   5. P0-7：TryTransitionAsync 参数校验 + cancellation 透传（CAS 推进路径）
+///   5. TryTransitionAsync 参数校验 + cancellation 透传（CAS 推进路径）
 ///
 /// 端到端持久化语义（CAS 成功 / 失败 / 幂等 / 并发）由 ContextCore.IntegrationTests 覆盖
 /// （需 Testcontainers）— 与 InMemoryPipelineRunStoreTests 中对应的 10 个 TryTransitionAsync

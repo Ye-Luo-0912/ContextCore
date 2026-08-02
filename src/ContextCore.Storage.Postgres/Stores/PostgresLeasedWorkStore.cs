@@ -5,7 +5,7 @@ using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
-// ── P2: Unified Lease/Fencing Infrastructure — PostgreSQL Implementation ──
+// ──  Unified Lease/Fencing Infrastructure — PostgreSQL Implementation ──
 
 /// <summary>
 /// 租约工作存储的表/列映射配置。描述如何将 <see cref="ILeasedWorkStore{TWork, TLeased}"/>

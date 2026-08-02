@@ -98,7 +98,7 @@ internal static class R28BTestHelpers
     }
 
     /// <summary>
-    /// Blocker-1：从 ContextDecisionResult 构建 ContextDecisionExecutionResult（含 WorkingSet）。
+    /// 从 ContextDecisionResult 构建 ContextDecisionExecutionResult（含 WorkingSet）。
     /// 供测试桩（StubDecisionRuntime / RecordingDecisionRuntime）使用，
     /// 让 ExecuteWithWorkingSetAsync 返回完整 ExecutionResult。
     /// WorkingSet 从 result 的 SelectedEnvelopes + DroppedEnvelopes 构建（Materials 留空）。
@@ -271,7 +271,7 @@ public sealed class RetrievalResultProjectorTests
         var dto = projector.Project(result, workingSet);
 
         Assert.AreEqual(1, dto.SelectedItems.Count);
-        // Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
+        // EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
         // content="content"（7 chars）估算 7/4=1 token，1 <= maxTokens(150) 故不截断，ActualTokens=1。
         Assert.AreEqual(1, dto.SelectedItems[0].EstimatedTokens);
         // IsTruncated=true 添加 "truncated" reason
@@ -376,7 +376,7 @@ public sealed class PackageResultProjectorTests
         var decision = dto.SelectedItems[0];
         // Section 从 AllocationDecision 恢复
         Assert.AreEqual("custom-section", decision.SectionName);
-        // Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
+        // EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
         // content="package content body"（20 chars）估算 20/4=5 token，5 <= maxTokens(120) 故不截断，ActualTokens=5。
         Assert.AreEqual(5, decision.EstimatedTokens);
         // IsTruncated=true 写入 metadata["truncated"]="true"
@@ -1059,7 +1059,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 
         integration.RecordShadowReport(shadowReport, "fx-1", "retrieval-mixed");
 
-        // Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
+        // RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
         await integration.FlushAsync();
         var history = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, history.Count);
@@ -1107,7 +1107,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 
         integration.RecordShadowReport(shadowReport, "fx-pkg-1", "package-mixed");
 
-        // Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
+        // RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
         await integration.FlushAsync();
         var history = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, history.Count);
@@ -1508,7 +1508,7 @@ public sealed class ShadowDecisionRuntimeTests
             return new ValueTask<ContextDecisionResult>(_result);
         }
 
-        // Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
+        // 实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
         public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
             ContextDecisionRuntimeRequest request,
             CancellationToken cancellationToken = default)

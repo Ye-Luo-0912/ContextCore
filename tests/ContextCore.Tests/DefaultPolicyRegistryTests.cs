@@ -287,7 +287,7 @@ public sealed class DefaultPolicyRegistryTests
     }
 
     // =========================================================================
-    // 8. RegisterBundleAsync — P0-4：Bundle 全局不可变（相同 BundleId+Version 重复注册抛异常）
+    // 8. RegisterBundleAsync — Bundle 全局不可变（相同 BundleId+Version 重复注册抛异常）
     // =========================================================================
 
     [TestMethod]

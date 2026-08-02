@@ -456,7 +456,7 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
             ? ExtractTensor(results, confidenceName) ?? scoreTensor
             : scoreTensor;
 
-        // G7 输出零拷贝：
+        // 输出零拷贝：
         //   - 热路径（ORT 始终返回 DenseTensor<float>）：直接用 Buffer.Span 访问底层内存，零分配。
         //   - 回退路径（理论非 DenseTensor，ORT 不会触发）：用 ArrayPool 租借 buffer 并 CopyTo，
         //     避免每批 ToArray 产生堆分配。buffer 在 finally 中归还。
@@ -564,7 +564,7 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
     }
 
     /// <summary>
-    /// G7 输出零拷贝：尝试从 Tensor 获取 DenseTensor.Buffer（Memory<float>）。
+    /// 输出零拷贝：尝试从 Tensor 获取 DenseTensor.Buffer（Memory<float>）。
     /// ORT 输出始终为 DenseTensor<float>；若非 DenseTensor 返回 false（调用方走 ArrayPool 回退路径）。
     /// </summary>
     private static bool TryGetBuffer(Tensor<float> tensor, out Memory<float> buffer)
@@ -579,7 +579,7 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
     }
 
     /// <summary>
-    /// G7 输出 ArrayPool 回退：为非 DenseTensor 的 Tensor&lt;float&gt; 租借 buffer 并拷贝数据。
+    /// 输出 ArrayPool 回退：为非 DenseTensor 的 Tensor&lt;float&gt; 租借 buffer 并拷贝数据。
     /// 这是 ORT 输出的防御性回退路径（ORT 始终返回 DenseTensor，理论不触发）。
     /// 用 ArrayPool 复用替代每次 ToArray 的堆分配，避免 GC 压力。
     /// </summary>

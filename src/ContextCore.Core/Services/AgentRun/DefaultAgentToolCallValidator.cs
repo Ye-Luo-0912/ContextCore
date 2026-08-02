@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E4：DefaultAgentToolCallValidator — 默认 Tool 调用校验器
+// DefaultAgentToolCallValidator — 默认 Tool 调用校验器
 //
 // 实现 IAgentToolCallValidator 的默认安全校验逻辑：
 //   1. 检查 ToolName 非空（基础合法性）。
@@ -21,7 +21,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E4：默认 Tool 调用校验器。
+/// 默认 Tool 调用校验器。
 /// 校验 ToolName 非空、Arguments 合法 JSON、危险 Tool 黑名单匹配。
 /// </summary>
 public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator

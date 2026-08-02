@@ -224,8 +224,8 @@ public sealed class ModelActivationManager : IModelActivationManager
     /// 构造 ModelActivationManager。
     /// </summary>
     /// <param name="registry">模型工件注册表（从中读取 descriptor）。</param>
-    /// <param name="calibrationValidator">校准参数验证器（P0-8：加载时验证校准有效性）。</param>
-    /// <param name="featureRegistry">特征注册表（从中查询 schema；P0-8：加载时验证 schema 存在性）。</param>
+    /// <param name="calibrationValidator">校准参数验证器（加载时验证校准有效性）。</param>
+    /// <param name="featureRegistry">特征注册表（从中查询 schema；加载时验证 schema 存在性）。</param>
     /// <param name="sessionFactory">ONNX session 工厂（创建推理会话）。</param>
     /// <param name="fallbackEngine">降级引擎（未激活时使用，通常为 DeterministicBatchInferenceEngine）。
     /// 子问题1：通过 IFallbackInferenceEngine 标记接口注入，避免 DI 容器解析 IBatchInferenceEngine
@@ -658,7 +658,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken)
     {
-        // Step 1：校准验证（WP-5：精确 CalibrationVersion 绑定 + fail-closed）
+        // Step 1：校准验证（精确 CalibrationVersion 绑定 + fail-closed）
         var calValidation = ValidateCalibrationForDescriptor(descriptor);
         if (calValidation is { IsFailed: true } failed)
         {
@@ -766,7 +766,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         return CalibrationValidationOutcome.Succeeded(calResult);
     }
 
-    /// <summary>WP-5：校准验证结果容器。</summary>
+    /// <summary>校准验证结果容器。</summary>
     private sealed class CalibrationValidationOutcome
     {
         public bool IsFailed { get; init; }
@@ -793,7 +793,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         return PublishAtomicWithGracePeriod(engine, descriptor, calResult, options.PreviousEngineGracePeriodMs);
     }
 
-    /// <summary>P1：原子发布的内部实现，直接传入 gracePeriodMs。</summary>
+    /// <summary>原子发布的内部实现，直接传入 gracePeriodMs。</summary>
     /// <remarks>
     /// 使用 <see cref="_retiredHandles"/> 列表管理所有被替换的旧 handle，
     /// 每个 handle 独立等待其 counter 归零后再 Dispose。快速连续激活时更早的 oldPrevious

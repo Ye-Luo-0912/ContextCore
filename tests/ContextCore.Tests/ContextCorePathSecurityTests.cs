@@ -5,7 +5,7 @@ using ContextCore.Storage.FileSystem.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// SEC-01 路径边界安全测试。
+/// 路径边界安全测试。
 /// 验证 FilePathResolver 对 rooted path、../、Windows 驱动器、UNC、超长 ID、Unicode 的防护。
 /// 不能只在 API 层拦截——所有 Store 使用的路径方法都必须经过 SanitizeSegment + EnsureInsideRoot。
 /// </summary>

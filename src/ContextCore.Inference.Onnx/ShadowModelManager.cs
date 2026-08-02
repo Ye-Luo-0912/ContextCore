@@ -246,7 +246,7 @@ public sealed class ShadowModelManager
         return CalibrationValidationOutcome.Succeeded(calResult);
     }
 
-    /// <summary>WP-5：校准验证结果容器。</summary>
+    /// <summary>校准验证结果容器。</summary>
     private sealed class CalibrationValidationOutcome
     {
         public bool IsFailed { get; init; }

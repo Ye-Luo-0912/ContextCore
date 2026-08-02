@@ -420,7 +420,7 @@ public sealed class PolicyBundleContractsTests
         Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.ListBundlesAsync)));
         Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.RegisterBundleAsync)));
         Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.TryActivateAsync)));
-        // WS-A：ActivateAsync 已彻底删除，仅保留 TryActivateAsync CAS 路径
+        // ActivateAsync 已彻底删除，仅保留 TryActivateAsync CAS 路径
         Assert.IsNull(type.GetMethod("ActivateAsync"));
     }
 

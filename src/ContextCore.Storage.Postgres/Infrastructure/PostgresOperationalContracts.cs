@@ -21,7 +21,7 @@ public interface IStoreMigrationRunner
 
     Task<string?> GetAppliedVersionAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>R14-PG-8：查询已应用的 migration 历史，按 applied_at 升序。</summary>
+    /// <summary>查询已应用的 migration 历史，按 applied_at 升序。</summary>
     Task<IReadOnlyList<PostgresMigrationHistoryEntry>> GetMigrationHistoryAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -35,7 +35,7 @@ public interface IStoreMigrationRunner
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>R14-PG-8：已应用的 migration 历史记录。</summary>
+/// <summary>已应用的 migration 历史记录。</summary>
 public sealed record PostgresMigrationHistoryEntry
 {
     public string MigrationId { get; init; } = string.Empty;

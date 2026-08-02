@@ -6,7 +6,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E2：AgentRunEventChain — Agent Run 事件哈希链工具
+// AgentRunEventChain — Agent Run 事件哈希链工具
 //
 // 复用 DefaultAgentCheckpointFactory 的 ComputeContentHash / VerifyContentHash 模式：
 //   - ContentHash = SHA-256(序列化 payload，ContentHash=null)
@@ -19,7 +19,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E2：Agent Run 事件哈希链工具（静态方法）。
+/// Agent Run 事件哈希链工具（静态方法）。
 /// 复用 <see cref="ContextCore.Core.Services.AgentKernel.DefaultAgentCheckpointFactory"/> 的 SHA-256 哈希链模式。
 /// </summary>
 public static class AgentRunEventChain

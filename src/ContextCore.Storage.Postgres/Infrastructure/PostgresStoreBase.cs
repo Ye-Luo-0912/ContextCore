@@ -33,7 +33,7 @@ public abstract class PostgresStoreBase
     protected PostgresOptions Options => ConnectionFactory.Options;
 
     /// <summary>
-    /// Perf-2：可选 tokenizer 解析器与模型名。Memory/Constraint 子类在 SaveAsync 时调用
+    /// 可选 tokenizer 解析器与模型名。Memory/Constraint 子类在 SaveAsync 时调用
     /// <see cref="ComputeTokenizationMetadata"/> 计算 SHA-256 + token 数，持久化到专用列；
     /// 读取时 Provider 直接复用持久化值，跳过在线 SHA-256 + tokenizer 调用。
     /// null 时仅持久化 content_hash / content_length，token_count 等列保持 NULL。
@@ -43,7 +43,7 @@ public abstract class PostgresStoreBase
     protected string? TokenizerModelName { get; init; }
 
     /// <summary>
-    /// Perf-2：计算内容的 tokenization metadata。SHA-256 总是计算（无外部依赖）；
+    /// 计算内容的 tokenization metadata。SHA-256 总是计算（无外部依赖）；
     /// token_count 在 tokenizer 可用时计算，否则返回 null（Provider 回退到在线 fail-fast 路径）。
     /// </summary>
     protected TokenizationMetadata ComputeTokenizationMetadata(string content)
@@ -80,7 +80,7 @@ public abstract class PostgresStoreBase
     }
 
     /// <summary>
-    /// Perf-2：把 tokenization metadata 注入到 Metadata 字典（供 Provider 读取复用）。
+    /// 把 tokenization metadata 注入到 Metadata 字典（供 Provider 读取复用）。
     /// 调用方应使用返回的字典替换原 Metadata（避免修改原集合）。
     /// </summary>
     protected static Dictionary<string, string> WithTokenizationMetadata(
@@ -111,7 +111,7 @@ public abstract class PostgresStoreBase
     }
 
     /// <summary>
-    /// Perf-2：从数据库列读取 tokenization metadata，写入 Metadata 字典（供 Provider 读取复用）。
+    /// 从数据库列读取 tokenization metadata，写入 Metadata 字典（供 Provider 读取复用）。
     /// 调用方应在反序列化 jsonb 后调用本方法，把专用列的值合并到 Metadata。
     /// 所有参数为 null 时直接返回原字典（不复制）。
     /// </summary>

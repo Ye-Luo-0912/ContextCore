@@ -2,7 +2,7 @@ namespace ContextCore.Abstractions.Models;
 
 /// <summary>
 /// 统一的上下文决策记录 DTO。
-/// V17.0 引入：在不改变 retrieval/package/planning/PackingPolicy/attention/constraints/vector formal runtime
+/// 引入：在不改变 retrieval/package/planning/PackingPolicy/attention/constraints/vector formal runtime
 /// 的前提下，把已有的 selected/dropped/context plan 信息投影为只读 decision trace artifact。
 /// 该记录本身不触发任何运行时变更，所有 <see cref="ContextDecisionRisk"/> 标志位恒为 false。
 /// </summary>
@@ -36,7 +36,7 @@ public sealed class ContextDecisionRecord
     /// </summary>
     public PackageQualityReport? Quality { get; init; }
 
-    /// <summary>策略版本，用于 trace 兼容性识别（OPT-4: DecisionSchemaV2_0 = "decision-schema/2.0"，按能力独立演进）。</summary>
+    /// <summary>策略版本，用于 trace 兼容性识别（ DecisionSchemaV2_0 = "decision-schema/2.0"，按能力独立演进）。</summary>
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.DecisionSchemaV2_0;
 
     public Dictionary<string, string> Metadata { get; init; } = new();
@@ -74,7 +74,7 @@ public sealed record ContextDecisionCandidate
 
     /// <summary>
     /// 主决策原因码。替代 <see cref="Reason"/> 自由文本的机器可解析版本。
-    /// V17.0 历史 trace 升级路径设为 <see cref="CandidateDecisionReasonCode.Unknown"/>。
+    /// 历史 trace 升级路径设为 <see cref="CandidateDecisionReasonCode.Unknown"/>。
     /// </summary>
     public CandidateDecisionReasonCode ReasonCode { get; init; } = CandidateDecisionReasonCode.Unknown;
 
@@ -109,16 +109,16 @@ public sealed record ContextDecisionCandidate
     /// </summary>
     public string LifecycleState { get; init; } = "active";
 
-    /// <summary>R14-1：候选在排序前的位置（0-based）；-1 表示未提供。</summary>
+    /// <summary>候选在排序前的位置（0-based）；-1 表示未提供。</summary>
     public int RankBefore { get; init; } = -1;
 
-    /// <summary>R14-1：候选在排序后的位置（0-based）；-1 表示未提供。</summary>
+    /// <summary>候选在排序后的位置（0-based）；-1 表示未提供。</summary>
     public int RankAfter { get; init; } = -1;
 
-    /// <summary>R14-1：决策前剩余 token 预算；-1 表示未提供。</summary>
+    /// <summary>决策前剩余 token 预算；-1 表示未提供。</summary>
     public int TokenBudgetBefore { get; init; } = -1;
 
-    /// <summary>R14-1：决策后剩余 token 预算；-1 表示未提供。</summary>
+    /// <summary>决策后剩余 token 预算；-1 表示未提供。</summary>
     public int TokenBudgetAfter { get; init; } = -1;
 
     public double Score { get; init; }
@@ -171,7 +171,7 @@ public sealed class ContextDecisionOutcome
 
 /// <summary>
 /// 非激活契约风险标志位集合。
-/// V17.0 阶段所有标志位恒为 false，仅用于审计断言：decision trace 不得改变任何正式运行时输出。
+/// 阶段所有标志位恒为 false，仅用于审计断言：decision trace 不得改变任何正式运行时输出。
 /// </summary>
 public sealed class ContextDecisionRisk
 {
@@ -187,7 +187,7 @@ public sealed class ContextDecisionRisk
 }
 
 /// <summary>
-/// OPT-4: decision trace 策略版本常量。按能力（capability）独立演进，
+/// decision trace 策略版本常量。按能力（capability）独立演进，
 /// 不再绑定全项目阶段编号（如 R14/R17）。新增能力时在此追加常量，
 /// 旧名 V17_0/V18_0 保留为 alias 供历史消费者平滑迁移。
 /// </summary>

@@ -5,7 +5,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// 任务 D：本地指标样本输入（写入 <c>canary_metrics_samples</c> 表的 DTO）。
+/// 本地指标样本输入（写入 <c>canary_metrics_samples</c> 表的 DTO）。
 /// </summary>
 /// <remarks>
 /// Storage.Postgres 项目不引用 ContextCore.Core，无法直接使用
@@ -107,7 +107,7 @@ public sealed record CanaryMetricsSample
 }
 
 /// <summary>
-/// 任务 D：PostgreSQL 持久化 Canary HA 指标聚合器。
+/// PostgreSQL 持久化 Canary HA 指标聚合器。
 /// </summary>
 /// <remarks>
 /// 各实例定期调用 <see cref="RecordSampleAsync"/> 将本地 <see cref="CanaryMetricsSample"/>
@@ -314,7 +314,7 @@ SELECT
     END AS legacy_error_rate,
     -- v36：P95 延迟改为加权平均（按 TotalObservations 加权）替代 MAX，
     -- 更接近跨实例 DDSketch 合并的真实分位数（保守上界 MAX 会高估 V2 延迟导致误回滚）。
-    -- P10：加权平均仍作为 fallback；Leader 若发现 V2InstanceSketches 非空，应 MergeFrom 合并后覆盖此值。
+    -- 加权平均仍作为 fallback；Leader 若发现 V2InstanceSketches 非空，应 MergeFrom 合并后覆盖此值。
     CASE WHEN COALESCE(SUM(total_observations), 0) = 0 THEN 0.0
          ELSE SUM(v2_p95_latency_ms * total_observations) / SUM(total_observations)
     END AS v2_p95_latency_ms,
@@ -324,7 +324,7 @@ SELECT
     CASE WHEN COALESCE(SUM(total_observations), 0) = 0 THEN 0.0
          ELSE SUM(average_quality_score * total_observations) / SUM(total_observations)
     END AS average_quality_score,
-    -- P11：task/tool 成功率改为 SUM(分子)/SUM(分母) 替代 AVG(rate)，
+    -- task/tool 成功率改为 SUM(分子)/SUM(分母) 替代 AVG(rate)，
     -- 避免 10 样本实例与 10000 样本实例权重相同。NULLIF 防 0 除。
     CASE WHEN COALESCE(SUM(task_success_count), 0) = 0 THEN NULL
          ELSE SUM(task_success_sum) / NULLIF(SUM(task_success_count), 0)

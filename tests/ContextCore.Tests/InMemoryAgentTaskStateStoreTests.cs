@@ -18,7 +18,7 @@ namespace ContextCore.Tests;
 ///   9. DeleteAsync 空 workspaceId/TaskId 抛异常
 ///  10. Count 属性
 ///  11. CancellationToken 传递
-///  12. P0-6：跨 workspace 隔离
+///  12. 跨 workspace 隔离
 /// </summary>
 [TestClass]
 [TestCategory("R24")]
@@ -251,7 +251,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     }
 
     // =========================================================================
-    // 7. P0-6：跨 workspace 隔离
+    // 7. 跨 workspace 隔离
     // =========================================================================
 
     [TestMethod]

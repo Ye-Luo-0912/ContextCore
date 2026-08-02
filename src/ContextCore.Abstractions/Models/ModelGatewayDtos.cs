@@ -389,7 +389,7 @@ public interface IModelGateway
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>P0-1：结构化对话消息角色（与 OpenAI / Anthropic chat completions 对齐）。</summary>
+/// <summary>结构化对话消息角色（与 OpenAI / Anthropic chat completions 对齐）。</summary>
 public enum ModelChatRole : byte
 {
     /// <summary>系统指令。</summary>
@@ -402,7 +402,7 @@ public enum ModelChatRole : byte
     Tool = 3
 }
 
-/// <summary>P0-1：结构化对话消息（chat completions 单条消息）。</summary>
+/// <summary>结构化对话消息（chat completions 单条消息）。</summary>
 public sealed record ModelChatMessage
 {
     /// <summary>消息角色。</summary>
@@ -425,7 +425,7 @@ public sealed record ModelChatMessage
     public IReadOnlyList<ModelToolCall>? ToolCalls { get; init; }
 }
 
-/// <summary>P0-1：向模型声明的 Tool 定义（OpenAI / Anthropic function calling 兼容）。</summary>
+/// <summary>向模型声明的 Tool 定义（OpenAI / Anthropic function calling 兼容）。</summary>
 public sealed record ModelToolDefinition
 {
     /// <summary>Tool 名称。</summary>
@@ -441,7 +441,7 @@ public sealed record ModelToolDefinition
     public required string ParametersJsonSchema { get; init; }
 }
 
-/// <summary>P0-1：模型返回的结构化 Tool 调用。</summary>
+/// <summary>模型返回的结构化 Tool 调用。</summary>
 public sealed record ModelToolCall
 {
     /// <summary>
@@ -457,7 +457,7 @@ public sealed record ModelToolCall
     public required string ArgumentsJson { get; init; }
 }
 
-/// <summary>P0-1：模型对话 finish reason（与 OpenAI / Anthropic 对齐）。</summary>
+/// <summary>模型对话 finish reason（与 OpenAI / Anthropic 对齐）。</summary>
 public enum ModelChatFinishReason : byte
 {
     /// <summary>模型自然停止（产出最终答案；无 Tool 调用）。</summary>
@@ -472,7 +472,7 @@ public enum ModelChatFinishReason : byte
     Error = 4
 }
 
-/// <summary>P0-1：带 Tool 定义的结构化对话请求。</summary>
+/// <summary>带 Tool 定义的结构化对话请求。</summary>
 public sealed record ModelChatRequest
 {
     /// <summary>请求唯一标识符。</summary>
@@ -502,7 +502,7 @@ public sealed record ModelChatRequest
     public Dictionary<string, string> Metadata { get; init; } = new();
 }
 
-/// <summary>P0-1：带 Tool 定义的结构化对话响应。</summary>
+/// <summary>带 Tool 定义的结构化对话响应。</summary>
 public sealed record ModelChatResponse
 {
     /// <summary>对应请求的操作 ID。</summary>

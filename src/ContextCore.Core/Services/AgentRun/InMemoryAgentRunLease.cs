@@ -39,7 +39,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     /// <summary>
     /// 初始化 InMemoryAgentRunLease（开发/测试用）。
     /// </summary>
-    /// <param name="runStore">P0-7：可选的 Run Store，提供时 MarkLeaseLostIfLeaseExpiredAsync 会执行状态转移；null = 仅检查租约。</param>
+    /// <param name="runStore">可选的 Run Store，提供时 MarkLeaseLostIfLeaseExpiredAsync 会执行状态转移；null = 仅检查租约。</param>
     public InMemoryAgentRunLease(IAgentRunStore? runStore = null)
     {
         _runStore = runStore;
@@ -225,7 +225,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     }
 
     /// <inheritdoc />
-    /// <remarks>P0-6：查询指定 Run 是否存在未过期租约（InMemory 实现）。</remarks>
+    /// <remarks>查询指定 Run 是否存在未过期租约（InMemory 实现）。</remarks>
     public ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
@@ -279,6 +279,6 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     /// <summary>当前持有的租约数量（诊断/监控用）。</summary>
     public int ActiveLeaseCount => _leases.Count;
 
-    /// <summary>租约内部条目（P0-4：含 FencingToken 用于副作用校验）。</summary>
+    /// <summary>租约内部条目（含 FencingToken 用于副作用校验）。</summary>
     private sealed record LeaseEntry(string LeaseToken, string Owner, DateTimeOffset ExpiresAt, long FencingToken);
 }

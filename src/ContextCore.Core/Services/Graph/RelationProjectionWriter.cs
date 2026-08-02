@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.Graph;
 
 /// <summary>
-/// GRAPH-09 / 4.4：统一的关系投影写入边界。在 IRelationStore.BatchUpsertAsync 之前
+/// / 4.4：统一的关系投影写入边界。在 IRelationStore.BatchUpsertAsync 之前
 /// 调用 <see cref="RelationProjectorOutputValidator"/> 进行验证，过滤 High 级诊断的 relation，
 /// 再将剩余 relation 落库。有 High 级诊断的 relation 被跳过（不写入），但整批不抛异常。
 /// 同时负责在 relation.Provenance 为空时填充调用方传入的 provenance。

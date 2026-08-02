@@ -314,7 +314,7 @@ WHERE event_id = @event_id
         var expiresAt = now.Add(leaseDuration);
         var renewed = new HashSet<string>(StringComparer.Ordinal);
 
-        // Perf-7：批量 UPDATE——用 unnest 展开参数，一次 DB 往返续约所有 lease。
+        // 批量 UPDATE——用 unnest 展开参数，一次 DB 往返续约所有 lease。
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;

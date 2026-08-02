@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// / R19-3：统一决策引擎默认实现（DefaultContextDecisionEngine）
+// / 统一决策引擎默认实现（DefaultContextDecisionEngine）
 //
 // 目标：
 //   实现 IContextDecisionEngine 接口，编排 envelope 集合的
@@ -20,7 +20,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //   3. Engine 是幂等的：相同 Request 产生相同 Result（确定性 tie-break）。
 //   4. Engine 失败时回退到 deterministic policy（ModelConfidence=0 + FinalScore=DeterministicScore），
 //      不抛异常（除非 Request 本身非法）。
-//   5. R19-3：可选注入 IPolicyRegistry。当 registry 可用时，Engine 通过
+//   5. 可选注入 IPolicyRegistry。当 registry 可用时，Engine 通过
 //      GetActiveBundleAsync(workspaceId, collectionId) 解析当前激活 bundle，
 //      应用 Safety/Budget/Routing 三个 profile。未注入时使用 hardcoded defaults
 //      保持向后兼容。
@@ -49,7 +49,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// / R19-3 / R28-B.6：默认决策引擎实现。编排 envelope 集合的
+/// / R19-3 / 默认决策引擎实现。编排 envelope 集合的
 /// safety gate → lifecycle gate → utility scoring → budget allocation 四个阶段。
 /// </summary>
 /// <remarks>
@@ -153,7 +153,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     /// <param name="globalAllocator">全局分配器（V2.0 基础，null 时走 Legacy 静态路径）。</param>
     /// <param name="allocatorV2_1">V2.1 Allocator（section rollover + MMR；null 时回退 V2.0 Allocate）。</param>
     /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 R28-G 行为）。</param>
-    /// <param name="componentHealthRegistry">P5 组件健康注册表（null 时不归因、不回退，向后兼容 P5 之前的行为）。</param>
+    /// <param name="componentHealthRegistry">组件健康注册表（null 时不归因、不回退，向后兼容 P5 之前的行为）。</param>
     public DefaultContextDecisionEngine(
         IPolicyRegistry? policyRegistry,
         ISafetyGate? safetyGate,
@@ -332,7 +332,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             DroppedCount = allDropped.Count,
             EstimatedTokens = usedTokens,
             TokenBudget = outcomeTokenBudget,
-            Sections = Array.Empty<string>(), // R18-2 不实现 section 分层
+            Sections = Array.Empty<string>(), // 不实现 section 分层
             SafetyGateBlockedCount = blocked.Count,
             BudgetExceededCount = droppedByBudget.Count
         };
@@ -472,7 +472,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             lifecyclePassed = passing;
         }
 
-        // 阶段 3：UtilityScorer — R28-D：ScoreAsync 返回新列表（immutable record 友好）
+        // 阶段 3：UtilityScorer — ScoreAsync 返回新列表（immutable record 友好）
         // 用 Stopwatch 拆分 scoring_ms，记录到 IComponentHealthRegistry。
         // 注：inference_ms 不再使用 scoring_ms 作为代理值——Inference 各阶段耗时由
         // OnnxInferenceEngine 通过 RecordInferencePhaseTime 直接上报（queue/copy/run/parse），
@@ -517,10 +517,10 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             || effectiveTopK != snapshot.Budget.DefaultTopK)
             ? snapshot with { Budget = snapshot.Budget with { DefaultTokenBudget = effectiveTokenBudget, DefaultTopK = effectiveTopK } }
             : snapshot;
-        // V2.1 路径选择 — 当 request.DiversityOptions 非空 + IAllocatorV2_1 注入 +
+        // 路径选择 — 当 request.DiversityOptions 非空 + IAllocatorV2_1 注入 +
         // AllocationContext 非空时，走 AllocateWithDiversity（section rollover + MMR）；
         // 否则回退 V2.0 Allocate（向后兼容 R28-G 之前的行为）。
-        // V2.1 需要 AllocationContext 携带 Purpose + MandatoryOverflowPolicy，保证安全边界不被绕过。
+        // 需要 AllocationContext 携带 Purpose + MandatoryOverflowPolicy，保证安全边界不被绕过。
         // forceV20Fallback=true 时强制跳过 V2.1 路径，避免性能回退拖累主链。
         // forceV20Fallback 也由 Allocation 组件回退触发（见上方 allocationFallbackActive）。
         AllocationResult allocation;

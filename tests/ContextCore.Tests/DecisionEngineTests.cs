@@ -369,7 +369,7 @@ public sealed class DecisionEngineTests
         StringAssert.Contains(dropped.Reason, "DeprecatedBlocked");
 
         Assert.AreEqual("decision-schema/2.0", record.PolicyVersion);
-        Assert.IsNull(record.Quality); // R18-2 不计算 quality
+        Assert.IsNull(record.Quality); // 不计算 quality
     }
 
     // =========================================================================

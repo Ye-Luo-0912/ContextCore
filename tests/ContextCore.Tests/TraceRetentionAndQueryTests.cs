@@ -5,7 +5,7 @@ using ContextCore.Storage.FileSystem.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// 验证 R12-5：FileSystem trace store 的 QueryRecent 尾部读取优化（budget 提前终止）
+/// 验证 FileSystem trace store 的 QueryRecent 尾部读取优化（budget 提前终止）
 /// 和 retention/compaction（FileTraceJanitor 按 yyyyMMdd 分片清理过期数据）。
 /// </summary>
 [TestClass]
@@ -249,7 +249,7 @@ public sealed class TraceRetentionAndQueryTests
         }
     }
 
-    // ── R13.1 #3：retention 自然日（UTC 日历日）边界语义 ────────────────
+    // ── retention 自然日（UTC 日历日）边界语义 ────────────────
 
     /// <summary>
     /// #3：恰好 retentionDays 天前的分片应保留（不严格早于 cutoff）。

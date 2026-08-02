@@ -6,7 +6,7 @@ using ContextCore.Core.Services.AgentKernel;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E6：AgentRunActor — 单个 Agent Run 的执行者（per-run 实例）
+// AgentRunActor — 单个 Agent Run 的执行者（per-run 实例）
 //
 // 负责单个 Run 的完整生命周期：
 //   1. ContextBuilding → 调用 IContextDecisionRuntime 或直接构造上下文（子问题 1）
@@ -40,7 +40,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E6：单个 Agent Run 的执行者（per-run 实例）。
+/// 单个 Agent Run 的执行者（per-run 实例）。
 /// </summary>
 /// <remarks>
 /// 每个 Run 由独立的 Actor 实例执行；Actor 之间通过 <see cref="AgentKernelHost"/> 隔离。
@@ -65,7 +65,7 @@ public sealed class AgentRunActor
     // 模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
     private readonly IAgentModelContextProjector? _modelContextProjector;
     // Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
-    private IReadOnlyList<AgentToolDefinition> _toolDefinitions;  // P1-1: mutable for AllowedToolIds filtering in ExecuteAsync
+    private IReadOnlyList<AgentToolDefinition> _toolDefinitions;  // mutable for AllowedToolIds filtering in ExecuteAsync
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
@@ -78,13 +78,13 @@ public sealed class AgentRunActor
     private AgentTurnBudget? _turnBudget;
     private AgentCostBudget? _costBudget;
 
-    // G4：Turn 内事件批量缓冲（替代每次单独 AppendAsync）
+    // Turn 内事件批量缓冲（替代每次单独 AppendAsync）
     private readonly List<AgentRunEvent> _pendingTurnEvents = new();
-    // G4：Turn 起始状态快照（用于批量提交时的 state CAS）
+    // Turn 起始状态快照（用于批量提交时的 state CAS）
     private AgentRunState _turnStartState;
-    // G4：Turn 内最新 checkpoint（用于批量提交时的 checkpoint cursor）
+    // Turn 内最新 checkpoint（用于批量提交时的 checkpoint cursor）
     private AgentCheckpoint? _pendingTurnCheckpoint;
-    // G4：批量提交阈值（超过则 mid-turn 强制 flush）
+    // 批量提交阈值（超过则 mid-turn 强制 flush）
     private const int PendingEventsFlushThreshold = 32;
     // 强制 checkpoint 阈值 — 未 checkpoint 事件数达到此值时强制创建 checkpoint，
     // 防止事件流无限增长导致恢复时重放代价过大。
@@ -115,7 +115,7 @@ public sealed class AgentRunActor
         public required AgentRun Run { get; init; }
 
         /// <summary>
-        /// G5：结构化 Agent 上下文状态（替代旧 List&lt;AgentMessage&gt; Messages）。
+        /// 结构化 Agent 上下文状态（替代旧 List&lt;AgentMessage&gt; Messages）。
         /// 包含 SystemPrompt / Constraints / CurrentTask / 短期工作集 / Tool Observations /
         /// Stable Memory References / LastModelTurn；由 ProjectForModel 根据 TokenBudget 投影。
         /// </summary>
@@ -172,8 +172,8 @@ public sealed class AgentRunActor
     /// <param name="decisionRuntime">Context Decision Runtime（null 时直接构造上下文）。</param>
     /// <param name="checkpointStore">子问题 4：Checkpoint Store（null 时跳过 SaveAsync）。</param>
     /// <param name="durableToolExecutor">子问题 5：Durable Tool Executor（null 时回退到 IToolDispatcher）。</param>
-    /// <param name="modelContextProjector">P0-3：模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
-    /// <param name="approvalStore">P0-2：审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
+    /// <param name="modelContextProjector">模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
+    /// <param name="approvalStore">审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -261,7 +261,7 @@ public sealed class AgentRunActor
         }
 
         // 重构：初始化 AgentRunExecutionState（统一管理执行期状态）
-        // G5：用 AgentContextState 替代旧 List<AgentMessage> Messages，
+        // 用 AgentContextState 替代旧 List<AgentMessage> Messages，
         // CurrentTask 在初始化时设置为 run.Task，后续由 ProjectForModel 投影为 User 消息
         var state = new AgentRunExecutionState
         {
@@ -284,7 +284,7 @@ public sealed class AgentRunActor
         // _executionModelTurn 先重置为 0，Resume 时由 RebuildStateFromEventsAsync
         // 从 ModelCallCompleted 事件流统计重建——避免恢复后从 0 重新计数导致 RequestId 改变。
         _executionModelTurn = 0;
-        // G4：记录 Turn 起始状态，用于批量提交时的 state CAS
+        // 记录 Turn 起始状态，用于批量提交时的 state CAS
         // 运行时能力补齐：resume 时 _turnStartState = run.State（store 中的当前状态），
         // 后续 FlushPendingEventsAsync 的 CAS 以此为 expected state
         _turnStartState = run.State;
@@ -300,7 +300,7 @@ public sealed class AgentRunActor
         }
         else
         {
-            // 全新启动：记录 RunCreated 事件（审计起点）— G4：缓冲到 _pendingTurnEvents，待 Turn 结束批量提交
+            // 全新启动：记录 RunCreated 事件（审计起点）— 缓冲到 _pendingTurnEvents，待 Turn 结束批量提交
             state = BufferEvent(state, AgentRunEventType.RunCreated, JsonSerializer.Serialize(new
             {
                 runId = run.RunId,
@@ -313,7 +313,7 @@ public sealed class AgentRunActor
         {
             if (!isResume)
             {
-                // 全新启动：Created → ContextBuilding（G4：本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
+                // 全新启动：Created → ContextBuilding（本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
                 state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
             }
             // Resume 场景：RebuildStateFromEventsAsync 已将本地状态规范化为 ContextBuilding，
@@ -327,7 +327,7 @@ public sealed class AgentRunActor
                 if (state.Run.State == AgentRunState.PendingToolExecution && state.PendingToolCommands is { Count: > 0 })
                 {
                     state = await ExecutePendingToolAsync(state, cancellationToken).ConfigureAwait(false);
-                    // G4：mid-turn 缓冲超过阈值时强制 flush
+                    // mid-turn 缓冲超过阈值时强制 flush
                     if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
                     {
                         await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
@@ -342,7 +342,7 @@ public sealed class AgentRunActor
                 {
                     case AgentLoopDecision.CallModel:
                         state = await CallModelAsync(state, cancellationToken).ConfigureAwait(false);
-                        // G4：mid-turn 缓冲超过阈值时强制 flush，避免长 Turn 内存膨胀
+                        // mid-turn 缓冲超过阈值时强制 flush，避免长 Turn 内存膨胀
                         if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
                         {
                             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
@@ -1238,14 +1238,14 @@ public sealed class AgentRunActor
                 observationLength = observation.Length
             }));
 
-            // G4：mid-loop 缓冲超过阈值时强制 flush
+            // mid-loop 缓冲超过阈值时强制 flush
             if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
             {
                 await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        // 所有 Pending Tool 执行完成 → Observing（G4：本地推进）
+        // 所有 Pending Tool 执行完成 → Observing（本地推进）
         state = TransitionStateLocal(state, AgentRunState.Observing);
 
         // Checkpointing（若有工厂）→ ContextBuilding（下一轮）
@@ -1265,7 +1265,7 @@ public sealed class AgentRunActor
             state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
 
-        // G4：Turn 结束 → 批量提交所有缓冲事件 + state CAS（单事务）
+        // Turn 结束 → 批量提交所有缓冲事件 + state CAS（单事务）
         await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
         // 清除 PendingToolCommands（已全部执行完成）
@@ -1317,10 +1317,10 @@ public sealed class AgentRunActor
             return state with { Run = state.Run with { State = AgentRunState.Failed } };
         }
 
-        // 进入 ModelCalling（G4：本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
+        // 进入 ModelCalling（本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
         state = TransitionStateLocal(state, AgentRunState.ModelCalling);
 
-        // G1：构建结构化上下文（首次追加 User(run.Task) + 可选 System(decisionContext)；后续轮次复用 Messages）
+        // 构建结构化上下文（首次追加 User(run.Task) + 可选 System(decisionContext)；后续轮次复用 Messages）
         state = await BuildContextAsync(state, cancellationToken).ConfigureAwait(false);
 
         // 模型传输未注入 → 降级：直接产出空响应，进入下一轮决策
@@ -1334,7 +1334,7 @@ public sealed class AgentRunActor
                 TokensConsumed = 0,
                 Duration = TimeSpan.Zero
             };
-            // G5：同步更新 Context.LastModelTurn 和 LastModelResponse（后者供 IAgentLoopPolicy 使用）
+            // 同步更新 Context.LastModelTurn 和 LastModelResponse（后者供 IAgentLoopPolicy 使用）
             // degraded 响应无 ToolCalls，NormalizedToolCalls 置空避免上一轮残留。
             state = state with
             {
@@ -1370,7 +1370,7 @@ public sealed class AgentRunActor
             projectedMessages = state.Context.ProjectForModel(tokenBudget: 0);
         }
 
-        // G1：仅在事件 payload 中携带 contextLength（不再传字符串给 Transport）
+        // 仅在事件 payload 中携带 contextLength（不再传字符串给 Transport）
         var contextLength = AgentMessage.Serialize(projectedMessages).Length;
 
         // 记录 ModelCallStarted
@@ -1392,7 +1392,7 @@ public sealed class AgentRunActor
             DeadlineAt = state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
         };
         var response = await _modelTransport.CallAsync(modelRequest, cancellationToken).ConfigureAwait(false);
-        // G5：同步更新 Context.LastModelTurn 和 LastModelResponse
+        // 同步更新 Context.LastModelTurn 和 LastModelResponse
         state = state with
         {
             LastModelResponse = response,
@@ -1460,7 +1460,7 @@ public sealed class AgentRunActor
         // 投影器从 Conversation 按原子协议单元保序裁剪，避免 Messages 与 ToolObservations 分离投影。
         state.Context.Conversation.Add(assistantMessage);
 
-        // G4：更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
+        // 更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
         // Bug 3 修复：同步 run.CostBudget（从模型响应中获取实际 token cost）
         var updatedRun = state.Run with
         {
@@ -1507,8 +1507,8 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// G1/G5：构建结构化上下文。
-    /// G5：User(run.Task) 不再追加到 Messages，而是由 AgentContextState.CurrentTask 持有，
+    /// 构建结构化上下文。
+    /// User(run.Task) 不再追加到 Messages，而是由 AgentContextState.CurrentTask 持有，
     ///     ProjectForModel 投影时合成 User 消息（消除 hasUserMessage 去重检查）。
     /// 若 IContextDecisionRuntime 注入，执行决策并存储 ContextDecisionExecutionResult 到
     ///       state.LastDecisionResult，由 IAgentModelContextProjector 在投影时从 WorkingSet.Materials
@@ -1518,7 +1518,7 @@ public sealed class AgentRunActor
     /// <param name="cancellationToken">取消令牌。</param>
     private async Task<AgentRunExecutionState> BuildContextAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
-        // G5：CurrentTask 已在 ExecuteAsync 初始化时设置为 run.Task，
+        // CurrentTask 已在 ExecuteAsync 初始化时设置为 run.Task，
         // ProjectForModel 会将其投影为 User 消息，无需在此追加。
         // 旧路径的 hasUserMessage 去重检查随之移除（CurrentTask 是单值字段，天然不会重复）。
 
@@ -1571,7 +1571,7 @@ public sealed class AgentRunActor
                 QueryText = run.Task,
                 TokenBudget = 0,
                 TopK = 0,
-                // Fix-1：激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
+                // 激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
                 // Engine 选出 SelectedEnvelopes 后由 ISelectedCandidateHydrator 批量 hydrate 正文，
                 // 避免对未选中候选做无用正文 I/O。
                 RetrievalInput = new RetrievalInput { IncludeContent = false },
@@ -1651,7 +1651,7 @@ public sealed class AgentRunActor
             return TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
 
-        // 进入 ToolDispatching（G4：本地推进 + 缓冲 StateTransition 事件）
+        // 进入 ToolDispatching（本地推进 + 缓冲 StateTransition 事件）
         state = TransitionStateLocal(state, AgentRunState.ToolDispatching);
 
         for (var toolIndex = 0; toolIndex < state.LastModelResponse.ToolCalls.Count; toolIndex++)
@@ -1895,7 +1895,7 @@ public sealed class AgentRunActor
                 error: toolResult.Error,
                 durationMs: toolResult.Duration.TotalMilliseconds)));
 
-            // G5：观察结果以结构化 ToolObservation 形式追加到 Context.ToolObservations
+            // 观察结果以结构化 ToolObservation 形式追加到 Context.ToolObservations
             // （替代旧路径直接 Add AgentMessage 到 Messages）；
             // ProjectForModel 投影时一次性合成 Tool 角色 AgentMessage，避免在每次模型响应/Tool 观察时复制既有字符串。
             var observation = toolResult.Succeeded
@@ -1922,14 +1922,14 @@ public sealed class AgentRunActor
                 observationLength = observation.Length
             }));
 
-            // G4：mid-loop 缓冲超过阈值时强制 flush，避免大量 Tool 调用导致内存膨胀
+            // mid-loop 缓冲超过阈值时强制 flush，避免大量 Tool 调用导致内存膨胀
             if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
             {
                 await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        // Tool 分派完成 → Observing（G4：本地推进）
+        // Tool 分派完成 → Observing（本地推进）
         state = TransitionStateLocal(state, AgentRunState.Observing);
 
         // 清除 LastModelResponse：Tool 已分派完毕，下一轮应由 LoopPolicy 决定 CallModel
@@ -1941,7 +1941,7 @@ public sealed class AgentRunActor
         // Bug 3 修复：Turn 已在 CallModelAsync 中递增（每次模型调用计为一次 Turn）
         // 此处不再重复递增 Turn（避免双重计数）
 
-        // G4：更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
+        // 更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
         var updatedRun = state.Run with
         {
             Turn = _currentTurn,
@@ -1971,7 +1971,7 @@ public sealed class AgentRunActor
             state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
 
-        // G4：Turn 结束 → 批量提交所有缓冲事件 + state CAS + checkpoint cursor（单事务）
+        // Turn 结束 → 批量提交所有缓冲事件 + state CAS + checkpoint cursor（单事务）
         await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
         return state;
@@ -2069,11 +2069,11 @@ public sealed class AgentRunActor
     /// 缓冲 CheckpointSaved event → 本地推进到 ContextBuilding。
     /// 顺序必须是保存成功后才记录事件（不能先记录成功事件再保存）。
     /// Bug 4 修复：SaveAsync 失败时显式捕获异常，转 Failed 状态，不记录 CheckpointSaved 事件。
-    /// G4：状态推进与事件均缓冲到 _pendingTurnEvents，CAS 延后到 Turn 结束批量提交。
+    /// 状态推进与事件均缓冲到 _pendingTurnEvents，CAS 延后到 Turn 结束批量提交。
     /// </remarks>
     private async Task<AgentRunExecutionState> PersistCheckpointAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
-        // 进入 Checkpointing（G4：本地推进 + 缓冲 StateTransition 事件）
+        // 进入 Checkpointing（本地推进 + 缓冲 StateTransition 事件）
         state = TransitionStateLocal(state, AgentRunState.Checkpointing);
 
         if (_checkpointFactory is not null)
@@ -2109,7 +2109,7 @@ public sealed class AgentRunActor
             // 重构：更新 state.LastCheckpoint
             state = state with { LastCheckpoint = checkpoint };
 
-            // G4：记录 Turn 内最新 checkpoint，用于批量提交时的 checkpoint cursor + checkpoint 本体
+            // 记录 Turn 内最新 checkpoint，用于批量提交时的 checkpoint cursor + checkpoint 本体
             _pendingTurnCheckpoint = checkpoint;
 
             // 保存成功后才缓冲 CheckpointSaved 事件（顺序保证）
@@ -2123,7 +2123,7 @@ public sealed class AgentRunActor
             }));
         }
 
-        // Checkpointing → ContextBuilding（循环继续）（G4：本地推进）
+        // Checkpointing → ContextBuilding（循环继续）（本地推进）
         state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
 
         return state;
@@ -2134,7 +2134,7 @@ public sealed class AgentRunActor
     {
         var finalAnswer = state.LastModelResponse?.Content ?? string.Empty;
 
-        // G4：更新本地 Run 副本（含最终答案 + ModelCallsUsed）
+        // 更新本地 Run 副本（含最终答案 + ModelCallsUsed）
         var updatedRun = state.Run with
         {
             FinalAnswer = finalAnswer,
@@ -2147,7 +2147,7 @@ public sealed class AgentRunActor
         };
         state = state with { Run = updatedRun };
 
-        // G4：推进到 Completed（本地 + 缓冲 StateTransition 事件）
+        // 推进到 Completed（本地 + 缓冲 StateTransition 事件）
         state = TransitionStateLocal(state, AgentRunState.Completed);
 
         // 缓冲 RunCompleted 事件
@@ -2160,14 +2160,14 @@ public sealed class AgentRunActor
             costUsedUsd = _costBudget?.CostUsedUsd ?? 0
         }));
 
-        // G4：终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
+        // 终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
         await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
         return state;
     }
 
     /// <summary>
-    /// G4：本地推进 Run 状态（不直接写 DB），同时缓冲 StateTransition 事件。
+    /// 本地推进 Run 状态（不直接写 DB），同时缓冲 StateTransition 事件。
     /// CAS 与字段更新延后到 Turn 结束时的 <see cref="FlushPendingEventsAsync"/> 批量提交。
     /// </summary>
     /// <param name="state">当前执行状态。</param>
@@ -2195,7 +2195,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// G4：缓冲事件到 <see cref="_pendingTurnEvents"/>（不直接写 DB），
+    /// 缓冲事件到 <see cref="_pendingTurnEvents"/>（不直接写 DB），
     /// 延后到 Turn 结束时由 <see cref="FlushPendingEventsAsync"/> 批量提交。
     /// </summary>
     private AgentRunExecutionState BufferEvent(AgentRunExecutionState state, AgentRunEventType type, string payload)
@@ -2219,7 +2219,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// G4：批量提交所有缓冲事件 + 可选 Run 状态 CAS + 可选 Checkpoint 游标，单事务提交。
+    /// 批量提交所有缓冲事件 + 可选 Run 状态 CAS + 可选 Checkpoint 游标，单事务提交。
     /// 将原本每事件一次 <see cref="IAgentRunEventStore.AppendAsync"/> 的网络往返
     /// 合并为 Turn 结束时一次 <see cref="IAgentRunEventStore.AppendBatchAsync"/>。
     /// </summary>
@@ -2330,7 +2330,7 @@ public sealed class AgentRunActor
         {
             var fromState = state.Run.State;
 
-            // G4：更新本地 Run 副本（含失败原因 + ModelCallsUsed）
+            // 更新本地 Run 副本（含失败原因 + ModelCallsUsed）
             var failedRun = state.Run with
             {
                 FailureReason = reason,
@@ -2342,7 +2342,7 @@ public sealed class AgentRunActor
             };
             state = state with { Run = failedRun };
 
-            // G4：推进到 Failed（本地 + 缓冲 StateTransition 事件；允许任意状态跳转 Failed）
+            // 推进到 Failed（本地 + 缓冲 StateTransition 事件；允许任意状态跳转 Failed）
             state = TransitionStateLocal(state, AgentRunState.Failed);
 
             // 缓冲 RunFailed 事件
@@ -2354,7 +2354,7 @@ public sealed class AgentRunActor
                 turn = _currentTurn
             }));
 
-            // G4：终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
+            // 终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
             await FlushPendingEventsAsync(state.Run, CancellationToken.None).ConfigureAwait(false);
         }
         catch
@@ -2368,7 +2368,7 @@ public sealed class AgentRunActor
     {
         try
         {
-            // G4：推进到 Cancelled（本地 + 缓冲 StateTransition 事件；允许任意状态跳转 Cancelled）
+            // 推进到 Cancelled（本地 + 缓冲 StateTransition 事件；允许任意状态跳转 Cancelled）
             state = TransitionStateLocal(state, AgentRunState.Cancelled);
             var cancelledRun = state.Run with
             {
@@ -2383,7 +2383,7 @@ public sealed class AgentRunActor
                 fromState = state.Run.State.ToString()
             }));
 
-            // G4：终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
+            // 终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
             await FlushPendingEventsAsync(state.Run, CancellationToken.None).ConfigureAwait(false);
         }
         catch

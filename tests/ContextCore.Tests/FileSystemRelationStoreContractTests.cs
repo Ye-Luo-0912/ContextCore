@@ -5,7 +5,7 @@ using ContextCore.Storage.FileSystem.Stores;
 
 namespace ContextCore.Tests;
 
-/// <summary>GRAPH-10：FileSystem provider 的 RelationStore contract 测试。</summary>
+/// <summary>FileSystem provider 的 RelationStore contract 测试。</summary>
 /// <remarks>
 /// 每个测试创建独立的临时根目录，避免 JSONL 文件跨测试干扰；类清理时删除整个目录。
 /// </remarks>

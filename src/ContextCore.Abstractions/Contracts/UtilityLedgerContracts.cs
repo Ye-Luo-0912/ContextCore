@@ -6,7 +6,7 @@ namespace ContextCore.Abstractions;
 // Utility Ledger + ConflictSet 契约
 //
 // 目标：
-//   为 R20 Multi-Expert 选择系统提供"per-Expert per-Candidate utility 贡献账本"
+//   为 Multi-Expert 选择系统提供"per-Expert per-Candidate utility 贡献账本"
 //   和"冲突集合"两个独立 store，用于学习闭环 / ablation / 归因分析。
 //
 // 设计原则（对齐 8 项用户澄清）：
@@ -24,7 +24,7 @@ namespace ContextCore.Abstractions;
 //      - Utility Ledger 记录所有 candidate 的 utility（无论 selected/dropped），
 //        避免将 dropped 简单视为负样本。
 //
-// 与 R20-R21 已有契约的关系：
+// 与 已有契约的关系：
 //   - RetrievalExpert（R20-1）：Utility Ledger 按 Expert 分组
 //   - ExpertRoutingDecisionSet（R20-1/20-2）：路由决策影响 per-Expert TopK
 //   - ContextCandidateEnvelope.Utility.CandidateUtilityScore（R18-1）：

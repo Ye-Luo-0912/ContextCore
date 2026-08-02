@@ -521,13 +521,13 @@ public sealed record AgentLeaseFence
     public required DateTimeOffset ExpiresAt { get; init; }
 }
 
-// ── AgentMessage：结构化上下文消息（G1：替代 string _accumulatedContext）────────
+// ── AgentMessage：结构化上下文消息（替代 string _accumulatedContext）────────
 
 /// <summary>
 /// Agent 消息角色（与 OpenAI/Anthropic chat completion 角色对齐）。
 /// </summary>
 /// <remarks>
-/// G1 重构：AgentRunActor 不再用 <c>string _accumulatedContext</c> 平方级拼接，
+/// 重构：AgentRunActor 不再用 <c>string _accumulatedContext</c> 平方级拼接，
 /// 改为维护 <c>List&lt;AgentMessage&gt;</c>。模型 Transport 可直接消费结构化消息，
 /// 或在调用前由 <c>BuildContextString</c> 一次性序列化为字符串。
 /// </remarks>
@@ -567,7 +567,7 @@ public sealed record AgentToolCallEntry
 }
 
 /// <summary>
-/// G1：结构化 Agent 消息（替代 string _accumulatedContext 平方级拼接）。
+/// 结构化 Agent 消息（替代 string _accumulatedContext 平方级拼接）。
 /// </summary>
 /// <remarks>
 /// <b>引入背景</b>：旧实现通过 <c>_accumulatedContext = old + "\n---\n" + new</c> 不断拼接，
@@ -610,7 +610,7 @@ public sealed record AgentMessage
     public IReadOnlyList<AgentToolCallEntry>? ToolCalls { get; init; }
 
     /// <summary>
-    /// G1：将结构化消息列表一次性序列化为模型可消费的字符串（仅在调用模型前执行一次）。
+    /// 将结构化消息列表一次性序列化为模型可消费的字符串（仅在调用模型前执行一次）。
     /// </summary>
     /// <param name="messages">按时间顺序排列的消息列表。</param>
     /// <returns>以 <c>[Role]\nContent</c> 为单元、<c>\n---\n</c> 为分隔的字符串。</returns>
@@ -661,10 +661,10 @@ public sealed record AgentMessage
     };
 }
 
-// ── AgentContextState：结构化 Agent 上下文状态（G5：委托 ContextCore 投影）────────
+// ── AgentContextState：结构化 Agent 上下文状态（委托 ContextCore 投影）────────
 
 /// <summary>
-/// G5：Tool 观察结果（结构化，替代直接拼接为 AgentMessage）。
+/// Tool 观察结果（结构化，替代直接拼接为 AgentMessage）。
 /// </summary>
 /// <remarks>
 /// 将 Tool 执行结果以结构化形式保存于 <see cref="AgentContextState.ToolObservations"/>，
@@ -703,7 +703,7 @@ public sealed record ToolObservation
 }
 
 /// <summary>
-/// G5：稳定记忆引用（指向 ContextCore Stable Memory 中的条目）。
+/// 稳定记忆引用（指向 ContextCore Stable Memory 中的条目）。
 /// </summary>
 /// <remarks>
 /// 引用而非复制记忆正文；<see cref="AgentContextState.ProjectForModel"/> 投影时
@@ -722,7 +722,7 @@ public sealed record MemoryReference
 }
 
 /// <summary>
-/// G5：结构化 Agent 上下文状态。
+/// 结构化 Agent 上下文状态。
 /// 替代旧路径中直接维护 <c>List&lt;AgentMessage&gt;</c> 的扁平结构，
 /// 将上下文按角色分层（System / Constraints / CurrentTask / Working Set /
 /// Tool Observations / Stable Memory），由 <see cref="ProjectForModel"/>
@@ -730,7 +730,7 @@ public sealed record MemoryReference
 /// </summary>
 /// <remarks>
 /// <b>设计目的</b>：G1 已消除 <c>_accumulatedContext</c> 字符串拼接（O(n²)），
-/// G5 进一步引入结构化分层，让 ContextCore 的 TokenBudget / Compression / Snapshot
+/// 进一步引入结构化分层，让 ContextCore 的 TokenBudget / Compression / Snapshot
 /// 能力可介入：
 /// <list type="bullet">
 ///   <item><see cref="SystemPrompt"/> / <see cref="Constraints"/>：高优先级，总是保留。</item>
@@ -1163,7 +1163,7 @@ public interface IAgentModelTransport
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// G1：以结构化消息列表调用模型（替代 string context 平方级拼接）。
+    /// 以结构化消息列表调用模型（替代 string context 平方级拼接）。
     /// </summary>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="messages">已构建的结构化消息列表（System/User/Assistant/Tool 角色）。</param>
@@ -1292,7 +1292,7 @@ public interface IAgentRunStore
     /// UPDATE 的 WHERE 子句追加 lease_token + fencing_token 校验；lease 已被抢占时 0 行受影响，
     /// 抛 <see cref="InvalidOperationException"/>（与 CAS 失败语义一致）。null = 不校验（外部取消/恢复 Worker 等无 lease 路径）。
     /// </param>
-    /// <param name="fencingToken">P0-4：可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
+    /// <param name="fencingToken">可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
     /// <exception cref="InvalidOperationException">当前状态与 expectedCurrentState 不匹配（逆退或已被其他实例推进），或 lease 校验失败。</exception>
     ValueTask TransitionStateAsync(
         string workspaceId,
@@ -1397,7 +1397,7 @@ public interface IAgentRunEventStore
     /// 追加事件前校验 lease 仍由当前实例持有；lease 已被抢占时抛 <see cref="InvalidOperationException"/>。
     /// null = 不校验（无 lease 路径）。
     /// </param>
-    /// <param name="fencingToken">P0-4：可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
+    /// <param name="fencingToken">可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
     /// <exception cref="InvalidOperationException">Sequence 不连续或 PrevChainHash 不匹配，或 lease 校验失败。</exception>
     ValueTask AppendAsync(
         AgentRunEvent @event,
@@ -1406,7 +1406,7 @@ public interface IAgentRunEventStore
         long? fencingToken = null);
 
     /// <summary>
-    /// G4：批量追加事件 + 可选 Run 状态 CAS + 可选 Checkpoint 游标，单事务提交。
+    /// 批量追加事件 + 可选 Run 状态 CAS + 可选 Checkpoint 游标，单事务提交。
     /// </summary>
     /// <param name="events">待追加的事件列表（已按 Sequence 升序、PrevChainHash 链接好）。</param>
     /// <param name="runStateUpdate">
@@ -1481,7 +1481,7 @@ public interface IAgentRunEventStore
 }
 
 /// <summary>
-/// G4：Run 状态 CAS + 可变字段更新载荷（用于 <see cref="IAgentRunEventStore.AppendBatchAsync"/>）。
+/// Run 状态 CAS + 可变字段更新载荷（用于 <see cref="IAgentRunEventStore.AppendBatchAsync"/>）。
 /// </summary>
 /// <remarks>
 /// 将原本由 <see cref="IAgentRunStore.TransitionStateAsync"/> + <see cref="IAgentRunStore.UpdateAsync"/>
@@ -1516,12 +1516,12 @@ public sealed record AgentRunStateUpdate
     /// </summary>
     public string? LeaseToken { get; init; }
 
-    /// <summary>P0-4：可选 fencing token，与 <see cref="LeaseToken"/> 配合使用。</summary>
+    /// <summary>可选 fencing token，与 <see cref="LeaseToken"/> 配合使用。</summary>
     public long? FencingToken { get; init; }
 }
 
 /// <summary>
-/// G4：Checkpoint 游标（用于 <see cref="IAgentRunEventStore.AppendBatchAsync"/>）。
+/// Checkpoint 游标（用于 <see cref="IAgentRunEventStore.AppendBatchAsync"/>）。
 /// </summary>
 /// <remarks>
 /// 记录"本批事件覆盖的最新 checkpoint"信息，Postgres 实现将其写入 agent_runs 的

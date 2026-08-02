@@ -6,7 +6,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// / R29 WP-E-1：Utility Ledger Materializer。异步批量物化 ContextDecisionResult
+/// / Utility Ledger Materializer。异步批量物化 ContextDecisionResult
 /// 中的 SelectedEnvelopes + DroppedEnvelopes 为 UtilityLedgerEntry 条目，
 /// 并检测冲突候选生成 ConflictSet。
 /// </summary>

@@ -105,7 +105,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // TRACE-01: 设置请求级 trace 上下文（AsyncLocal），替代全局静态状态。
+        // 设置请求级 trace 上下文（AsyncLocal），替代全局静态状态。
         var prevOpId = _currentOperationId.Value;
         var prevReqId = _currentRequestId.Value;
         _currentOperationId.Value = request.OperationId ?? Guid.NewGuid().ToString("N");
@@ -155,7 +155,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
     }
 
     /// <summary>
-    /// V2：从既有快照复用 PackageTemplate，重新投影为新的 ContextPackageBuildResult。
+    /// 从既有快照复用 PackageTemplate，重新投影为新的 ContextPackageBuildResult。
     /// 仅用于 NoChange delta 路径：请求指纹 + store 版本均未变化，
     /// 因此快照中的 PackageTemplate 仍有效，可跳过 build pipeline。
     /// </summary>
@@ -280,7 +280,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
             }
         }
 
-        // V17.0: 投影只读 decision trace，不改变 result。
+        // 投影只读 decision trace，不改变 result。
         if (_decisionTraceStore is not null)
         {
             try

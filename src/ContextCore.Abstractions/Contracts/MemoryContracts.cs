@@ -15,7 +15,7 @@ public enum RelationDirection
 
 /// <summary>存储和查询上下文条目之间的有向关系。</summary>
 /// <remarks>
-/// GRAPH-11：接口精简为 5 个核心方法 + SaveAsync 薄包装。
+/// 接口精简为 5 个核心方法 + SaveAsync 薄包装。
 /// 核心：Get/Delete/BatchUpsert/Query/QueryNeighbors(RelationNeighborQuery)。
 /// SaveAsync 保留为单条便利方法，实现委托 BatchUpsertAsync；旧 SaveMany/QueryForItem/QueryBySource/QueryByTarget/QueryByType 已移除，统一走 Query。
 /// 新增 QueryNeighborsBatchAsync 批量邻居查询，BFS 引擎用单次调用替代逐节点往返；Take/Skip/MaxScan 仍为 per-seed 语义。
@@ -55,7 +55,7 @@ public interface IRelationStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// GRAPH-10：统一邻居查询。携带方向、类型、置信度、生命周期、分页和扫描上限。
+    /// 统一邻居查询。携带方向、类型、置信度、生命周期、分页和扫描上限。
     /// Postgres 在 SQL 中过滤和 Limit；File/InMemory 在内存中过滤。
     /// </summary>
     [StoreOperation(StoreOperationKind.Read)]

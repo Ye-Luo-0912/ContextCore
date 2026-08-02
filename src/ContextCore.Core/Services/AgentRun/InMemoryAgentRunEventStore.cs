@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 F2：InMemoryAgentRunEventStore — 进程内 Agent Run Event Store（开发/测试用）
+// InMemoryAgentRunEventStore — 进程内 Agent Run Event Store（开发/测试用）
 //
 // 实现 IAgentRunEventStore 的进程内默认实现，复用 Checkpoint 哈希链模式：
 //   - ConcurrentDictionary 维护 (workspaceId, runId) → List<AgentRunEvent> 映射；
@@ -19,14 +19,14 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 F2：进程内 Agent Run Event Store 默认实现（开发/测试用）。
+/// 进程内 Agent Run Event Store 默认实现（开发/测试用）。
 /// 维护 Run 事件流的进程内映射，支持 sequence 连续性 + 哈希链校验。
 /// </summary>
 /// <remarks>
 /// <b>此实现不持久化</b>：进程崩溃后事件流丢失。
 /// 生产部署应注入基于 DB/WAL 的持久化实现（如 <c>PostgresAgentRunEventStore</c>）。
 ///
-/// G4：<see cref="AppendBatchAsync"/> 支持批量事件 + 可选 Run 状态 CAS + 可选 checkpoint 游标。
+/// <see cref="AppendBatchAsync"/> 支持批量事件 + 可选 Run 状态 CAS + 可选 checkpoint 游标。
 /// 若构造时注入了 <see cref="IAgentRunStore"/>，则状态 CAS + 字段更新委托给它（非原子，
 /// 仅供开发/测试；生产路径走 Postgres 单事务）。
 /// </remarks>

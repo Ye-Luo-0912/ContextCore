@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E3：DefaultAgentLoopPolicy — Agent 循环默认策略
+// DefaultAgentLoopPolicy — Agent 循环默认策略
 //
 // 实现 IAgentLoopPolicy 的默认决策逻辑：
 //   1. 首轮（lastModelResponse=null）→ CallModel（启动模型调用）
@@ -23,7 +23,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E3：Agent 循环默认策略实现。
+/// Agent 循环默认策略实现。
 /// </summary>
 public sealed class DefaultAgentLoopPolicy : IAgentLoopPolicy
 {

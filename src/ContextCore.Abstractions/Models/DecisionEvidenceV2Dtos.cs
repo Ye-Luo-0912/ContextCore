@@ -63,7 +63,7 @@ public enum CandidateDecisionReasonCode
     /// <summary>候选因被其他 section 引用而作为 duplicate reference 跳过（不重复写入）。</summary>
     DuplicateSectionReference = 15,
 
-    /// <summary>R28-B.6 Blocker-6：Early Admission Gate 拒绝（scope mismatch / superseded / archived 等）。</summary>
+    /// <summary>Early Admission Gate 拒绝（scope mismatch / superseded / archived 等）。</summary>
     EarlyAdmissionRejected = 16
 }
 
@@ -196,6 +196,6 @@ public sealed class DecisionEvidenceV2Result
     /// <summary>证据解析时间。</summary>
     public DateTimeOffset ResolvedAt { get; init; }
 
-    /// <summary>策略版本，标识 V2 证据结构（OPT-4: QualityContractV1_0 = "quality-contract/1.0"）。</summary>
+    /// <summary>策略版本，标识 V2 证据结构（ QualityContractV1_0 = "quality-contract/1.0"）。</summary>
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.QualityContractV1_0;
 }

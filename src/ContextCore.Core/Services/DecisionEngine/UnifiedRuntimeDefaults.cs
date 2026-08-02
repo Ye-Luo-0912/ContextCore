@@ -13,7 +13,7 @@ using ContextCore.Core.Services.Policy;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// B-1：Unified Runtime 默认实现骨架（Skeletons）
+// Unified Runtime 默认实现骨架（Skeletons）
 //
 // 目标（B-1 阶段：Contracts correction，无行为变更）：
 //   为 §5.1~§5.9 新增契约提供可编译、可注入的默认实现。
@@ -31,11 +31,11 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //      FeaturePipeline 为 identity transform；Allocator 使用 TopK + TokenBudget 硬截断。
 //
 // 替换策略：
-//   - B-2：DefaultContextDecisionRuntime 替换为真实编排（Policy → Router → Providers →
+//   - DefaultContextDecisionRuntime 替换为真实编排（Policy → Router → Providers →
 //     Merge → EarlyGate → FeaturePipeline → Engine → Allocator）。
-//   - B-3/B-4：DefaultRouter / DefaultExpertCatalog / DefaultCanonicalCandidateMerger
+//   - DefaultRouter / DefaultExpertCatalog / DefaultCanonicalCandidateMerger
 //     替换为接入真实 Provider 网络的实现。
-//   - B-5：Legacy 移除后，本文件中保留的实现升级为权威路径。
+//   - Legacy 移除后，本文件中保留的实现升级为权威路径。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-2：统一 Context Decision Runtime — pure Runtime 真实编排。
+/// 统一 Context Decision Runtime — pure Runtime 真实编排。
 /// </summary>
 /// <remarks>
 /// 修复：移除 Runtime 后二次 Allocate。Engine 是分配的唯一权威所有者，
@@ -85,19 +85,19 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     private readonly UtilityLedgerMaterializer? _utilityLedgerMaterializer;
     private readonly LearningMaterializationDispatcher? _materializationDispatcher;
     private readonly IComponentHealthRegistry? _componentHealthRegistry;
-    // Perf-1：Selected 候选正文批量 hydrator（可选）。未注入时保持旧行为（IncludeContent=true）。
+    // Selected 候选正文批量 hydrator（可选）。未注入时保持旧行为（IncludeContent=true）。
     private readonly ISelectedCandidateHydrator? _selectedCandidateHydrator;
 
     /// <summary>构造 pure Runtime。</summary>
-    /// <param name="providerTimeout">R28-B.6：单个 Provider 调用超时（默认 30s）。</param>
+    /// <param name="providerTimeout">单个 Provider 调用超时（默认 30s）。</param>
     /// <param name="requestNormalizer">R28-B.7-Final：请求标准化器（null 时使用默认实现）。</param>
     /// <param name="requestSemanticHasher">R28-B.7-Final：请求语义哈希器（null 时使用默认实现）。</param>
     /// <param name="executionArtifactFactory">R28-B.7-Final：执行结果工厂（null 时使用默认实现）。</param>
-    /// <param name="utilityLedgerMaterializer">R29 WP-E-2：Utility Ledger 物化器（null 时跳过物化；生产路径注入）。
+    /// <param name="utilityLedgerMaterializer">Utility Ledger 物化器（null 时跳过物化；生产路径注入）。
     /// 注意：生产路径应注入 <paramref name="materializationDispatcher"/> 而非直接注入 materializer——
     /// dispatcher 使用 Durable Outbox / bounded Channel 替代每请求 Task.Run fire-and-forget。
     /// 此参数保留用于未注入 dispatcher 时的测试/兼容路径。</param>
-    /// <param name="componentHealthRegistry">P5：组件健康注册表（null 时跳过组件级归因与回退，向后兼容 P5 之前的行为）。</param>
+    /// <param name="componentHealthRegistry">组件健康注册表（null 时跳过组件级归因与回退，向后兼容 P5 之前的行为）。</param>
     /// <param name="materializationDispatcher">Learning Loop Durable Outbox 调度器。
     /// 非空时优先使用——通过 bounded Channel + 固定 worker 或 Durable Outbox 替代 Task.Run，
     /// 消除进程崩溃静默丢训练数据、Task 风暴、无背压等问题。null 时回退到 materializer 直接调用路径。</param>
@@ -145,14 +145,14 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Learning Loop Durable Outbox：注入 dispatcher 后，主决策流通过 bounded Channel / outbox
         // 触发物化，消除每请求 Task.Run（生产热路径）。null 时回退到 materializer 直接路径（测试用）。
         _materializationDispatcher = materializationDispatcher;
-        // Perf-1：Selected 候选正文批量 hydrator（可选；未注入时保持旧行为）
+        // Selected 候选正文批量 hydrator（可选；未注入时保持旧行为）
         _selectedCandidateHydrator = selectedCandidateHydrator;
     }
 
     /// <summary>
     /// 执行 pure Runtime 编排：
     /// Policy → Router → Providers → Merge → Seed merge → EarlyGate → Feature → Safety → Lifecycle → Score → Engine。
-    /// Blocker-1：委托到 ExecuteWithWorkingSetAsync，仅返回 Decision 部分（向后兼容）。
+    /// 委托到 ExecuteWithWorkingSetAsync，仅返回 Decision 部分（向后兼容）。
     /// </summary>
     public async ValueTask<ContextDecisionResult> ExecuteAsync(
         ContextDecisionRuntimeRequest request,
@@ -163,16 +163,16 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// Blocker-1：执行完整决策编排，返回 ExecutionResult（含 WorkingSet + Policy + Routing + ProviderReports）。
+    /// 执行完整决策编排，返回 ExecutionResult（含 WorkingSet + Policy + Routing + ProviderReports）。
     /// </summary>
     /// <remarks>
     /// 完整编排流程：
     ///   1. 策略解析（IResolvedPolicyProvider → EffectivePolicySnapshot）
     ///   2. Router 路由（IRouter → ExpertRoutingDecisionSet）
-    ///   3. Provider DAG 召回（Blocker-5：两阶段 — Phase 1 主召回 + Phase 2 Graph 扩展）
+    ///   3. Provider DAG 召回（两阶段 — Phase 1 主召回 + Phase 2 Graph 扩展）
     ///   4. Canonical Merge（ICanonicalCandidateMerger 合并 Provider 输出）
     ///   5. SeedCandidates 合并（将外部传入的种子候选合并到工作集）
-    ///   6. EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected 到 DroppedEnvelopes）
+    ///   6. EarlyAdmissionGate 批量评估（保留 Rejected 到 DroppedEnvelopes）
     ///   7. FeaturePipeline 特征计算
     ///   8. 委托 IContextDecisionEngine 执行完整决策
     ///   9. 合并 EarlyRejected + Engine.DroppedEnvelopes 到最终 DroppedEnvelopes
@@ -207,7 +207,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var providerFallbackActive = componentRegistry is not null
             && componentRegistry.ShouldFallbackComponent(ComponentKind.Provider, componentScopeKey);
 
-        // Step 3：Provider DAG 召回（Blocker-5：两阶段）
+        // Step 3：Provider DAG 召回（两阶段）
         // Phase 1：执行 Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory
         // Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
         // 用 Stopwatch 拆分 provider_ms（聚合所有 Provider 调用总耗时），记录到 IComponentHealthRegistry
@@ -314,7 +314,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             return emptyExecutionResult with { LearningPersistenceStatus = emptyLearningStatus };
         }
 
-        // Step 6：EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected）
+        // Step 6：EarlyAdmissionGate 批量评估（保留 Rejected）
         var partition = _earlyAdmissionGate.EvaluateBatch(allEnvelopes, snapshot);
         var admitted = partition.Admitted;
         var earlyRejected = partition.Rejected;
@@ -401,7 +401,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             TopK = request.TopK > 0 && request.TopK != int.MaxValue
                 ? request.TopK
                 : snapshot.Budget.DefaultTopK,
-            // 工作包 B-2：PackageInput.SectionRatios 作为 per-request override，
+            // PackageInput.SectionRatios 作为 per-request override，
             // 优先于 snapshot.Budget.SectionRatios（与 ContextDecisionRequest.SectionRatios 语义一致：
             // 调用方显式值高于 Policy 默认值）。Retrieval/AgentContext 路径无 PackageInput，回退到 snapshot。
             SectionRatios = request.PackageInput?.SectionRatios is { Count: > 0 } pkgRatios
@@ -422,7 +422,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var engineResult = await DecideWithFailClosedPropagationAsync(
             decisionRequest, cancellationToken).ConfigureAwait(false);
 
-        // Perf-1：Late Hydration — Engine 选出 SelectedEnvelopes 后，对 Selected IDs 批量 hydrate 正文。
+        // Late Hydration — Engine 选出 SelectedEnvelopes 后，对 Selected IDs 批量 hydrate 正文。
         // 仅在 hydrator 注入且 SelectedEnvelopes 非空时调用；未注入时保持旧行为（Provider 已加载所有正文）。
         // hydrator 内部跳过已 hydrate 的 Material（Content 非空），避免重复 I/O；
         // 失败时降级为 no-op（Material.Content 保持空，Projector 降级为摘要），不阻塞主决策流。
@@ -512,7 +512,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             ? allocationDecisions
             : AppendEarlyRejectedAllocationDecisions(allocationDecisions, earlyRejected);
 
-        // 工作包 D：合并 EarlyRejected 后重构造 Outcome 时，复制 Engine Outcome.Diagnostics
+        // 合并 EarlyRejected 后重构造 Outcome 时，复制 Engine Outcome.Diagnostics
         // 并添加 Runtime 级别 diagnostics（earlyAdmission.rejectedCount / provider.degraded），不丢失 Engine 诊断。
         // 仅在有 EarlyRejected 或 Provider degraded 时创建新字典（避免无谓分配）；否则直接复用 Engine Diagnostics 引用。
         IReadOnlyDictionary<string, string> mergedDiagnostics = engineResult.Outcome.Diagnostics;
@@ -530,7 +530,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
             if (hasProviderDegraded)
             {
-                // 工作包 D：Provider degraded 状态进入 Execution Artifact 诊断
+                // Provider degraded 状态进入 Execution Artifact 诊断
                 diag["provider.degraded"] = "true";
                 var degradedKinds = providerReports
                     .Where(r => !r.Succeeded)
@@ -582,7 +582,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 Sections = engineResult.Outcome.Sections,
                 SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,
                 BudgetExceededCount = engineResult.Outcome.BudgetExceededCount,
-                // + R28-B.7 工作包 D：保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
+                // + 保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
                 // 并补充 Runtime 级 diagnostics（earlyAdmission.rejectedCount）
                 Diagnostics = mergedDiagnostics
             },
@@ -613,7 +613,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// 设计原则：
     ///   1. 学习闭环物化不阻塞主决策流的<b>最终决策结果</b>——主决策已构建完成，
     ///      物化在后台异步执行（worker 池消费 outbox 表）。
-    ///   2. P0-9：但调用方必须等待 Learning Event <b>入队到 outbox 表</b>完成（PostgreSQL INSERT），
+    ///   2. 但调用方必须等待 Learning Event <b>入队到 outbox 表</b>完成（PostgreSQL INSERT），
     ///      否则进程退出/崩溃会导致 fire-and-forget 入队丢失数据。等待入队持久化，不等待 Materialize。
     ///   3. 物化失败不影响主决策正确性——dispatcher 内部捕获所有异常并降级（fallback direct materialize）。
     ///   4. 使用 CancellationToken.None——决策请求的取消不应中断物化（数据已生成，需写入 ledger）。
@@ -636,7 +636,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// </para>
     /// <param name="decision">决策结果（已构建完成，含 SelectedEnvelopes + DroppedEnvelopes）。</param>
     /// <param name="request">原始请求（用于提取 WorkspaceId / CollectionId）。</param>
-    /// <returns>P0-9：Learning Event 持久化状态（Persisted / Deferred / Failed），caller 写入 ExecutionResult。</returns>
+    /// <returns>Learning Event 持久化状态（Persisted / Deferred / Failed），caller 写入 ExecutionResult。</returns>
     private async ValueTask<LearningPersistenceStatus> TriggerUtilityLedgerMaterializationAsync(
         ContextDecisionResult decision,
         ContextDecisionRuntimeRequest request)
@@ -699,7 +699,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// Blocker-5：Provider DAG 两阶段执行。
+    /// Provider DAG 两阶段执行。
     /// Phase 1：执行 Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory
     /// Canonical Merge Phase 1 结果
     /// Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
@@ -707,8 +707,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// 当 <paramref name="providerFallbackActive" /> 为 true 时，按 ProviderKind 粒度逐个检查
     /// ShouldFallbackProvider — Semantic 慢不会导致 Graph 被跳过（仅跳过实际 Open 的 Provider）。
     /// </summary>
-    /// <param name="providerFallbackActive">P5：Provider 组件是否处于聚合回退激活态（来自 IComponentHealthRegistry）。</param>
-    /// <param name="componentScopeKey">P5：组件归因 scopeKey（用于 per-provider ShouldFallbackProvider 查询）。</param>
+    /// <param name="providerFallbackActive">Provider 组件是否处于聚合回退激活态（来自 IComponentHealthRegistry）。</param>
+    /// <param name="componentScopeKey">组件归因 scopeKey（用于 per-provider ShouldFallbackProvider 查询）。</param>
     private async Task<(IReadOnlyList<ExpertExecutionResult> Outputs, IReadOnlyList<ProviderExecutionReport> Reports)> InvokeEnabledProvidersWithDagAsync(
         ContextDecisionRuntimeRequest request,
         EffectivePolicySnapshot snapshot,
@@ -759,7 +759,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             return (Array.Empty<ExpertExecutionResult>(), Array.Empty<ProviderExecutionReport>());
         }
 
-        // Blocker-5：拆分为两阶段
+        // 拆分为两阶段
         // Phase 1：非 Graph Provider（Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory）
         var phase1Providers = allEnabledProviders
             .Where(p => p.Kind != ExpertKind.Graph)
@@ -828,8 +828,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// Blocker-5：批量执行一组 Provider，bounded parallel + 超时保护 + 执行报告。
-    /// Impl-3：为每个 Provider 单独创建 timeout CTS（一个 Provider 超时不取消其他 Provider）。
+    /// 批量执行一组 Provider，bounded parallel + 超时保护 + 执行报告。
+    /// 为每个 Provider 单独创建 timeout CTS（一个 Provider 超时不取消其他 Provider）。
     /// per-provider 耗时记录——每个 Provider 执行后通过 RecordProviderTime 上报到
     /// DefaultComponentHealthRegistry，细化到 ProviderKind 粒度（Semantic 慢不影响 Graph 熔断）。
     /// 专家故障等级：
@@ -838,7 +838,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     ///   - Lexical / WorkingMemory / StableMemory 失败或超时 → degraded result（默认）。
     /// </summary>
     /// <param name="cancellationToken">原始调用方 cancellationToken（用于区分超时 vs 用户取消）。</param>
-    /// <param name="componentScopeKey">P5：组件归因 scopeKey（用于 per-provider RecordProviderTime）。</param>
+    /// <param name="componentScopeKey">组件归因 scopeKey（用于 per-provider RecordProviderTime）。</param>
     private async Task<(IReadOnlyList<ExpertExecutionResult> Outputs, IReadOnlyList<ProviderExecutionReport> Reports)> InvokeProviderBatchAsync(
         IReadOnlyList<ICandidateProvider> providers,
         ContextDecisionRuntimeRequest request,
@@ -877,7 +877,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             var executionStartedAt = Stopwatch.GetTimestamp();
             var queueElapsed = Stopwatch.GetElapsedTime(queueStartedAt);
 
-            // Impl-3：为每个 Provider 单独创建 linked CTS with timeout。
+            // 为每个 Provider 单独创建 linked CTS with timeout。
             // 一个 Provider 超时只取消自身，不影响其他 Provider。
             using var perProviderCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             perProviderCts.CancelAfter(_providerTimeout);
@@ -921,7 +921,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                     ErrorCode = "timeout"
                 };
 
-                // Impl-3：Mandatory / Constraint 超时 → fail-closed（抛异常，整个请求失败）
+                // Mandatory / Constraint 超时 → fail-closed（抛异常，整个请求失败）
                 if (expertKind == ExpertKind.Mandatory || expertKind == ExpertKind.Constraint)
                 {
                     throw new InvalidOperationException(
@@ -954,7 +954,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                     ErrorCode = ex.GetType().Name
                 };
 
-                // Impl-3：Mandatory / Constraint 执行失败 → fail-closed（抛异常，整个请求失败）
+                // Mandatory / Constraint 执行失败 → fail-closed（抛异常，整个请求失败）
                 if (expertKind == ExpertKind.Mandatory || expertKind == ExpertKind.Constraint)
                 {
                     throw new InvalidOperationException(
@@ -1001,7 +1001,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// Blocker-6：合并 Engine.DroppedEnvelopes + EarlyRejected 到最终 DroppedEnvelopes。
+    /// 合并 Engine.DroppedEnvelopes + EarlyRejected 到最终 DroppedEnvelopes。
     /// EarlyRejected 候选携带 EarlyAdmissionRejected reason code（在 Safety.BlockReasonCode 字段）。
     /// </summary>
     private static IReadOnlyList<ContextCandidateEnvelope> CombineDroppedWithEarlyRejected(
@@ -1037,7 +1037,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// Blocker-6：为 EarlyRejected 候选补建 AllocationDecision（reason=EarlyAdmissionRejected）。
+    /// 为 EarlyRejected 候选补建 AllocationDecision（reason=EarlyAdmissionRejected）。
     /// </summary>
     private static IReadOnlyList<CandidateAllocationDecision> AppendEarlyRejectedAllocationDecisions(
         IReadOnlyList<CandidateAllocationDecision> existing,
@@ -1067,7 +1067,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// Blocker-6：当所有候选被 EarlyGate 拒绝时，构建仅含 EarlyRejected 的 Decision。
+    /// 当所有候选被 EarlyGate 拒绝时，构建仅含 EarlyRejected 的 Decision。
     /// </summary>
     private static ContextDecisionResult BuildEarlyRejectedResult(
         ContextDecisionRuntimeRequest request,
@@ -1895,7 +1895,7 @@ public sealed class DefaultExecutionArtifactFactory : IExecutionArtifactFactory
         ArgumentNullException.ThrowIfNull(routing);
         ArgumentNullException.ThrowIfNull(providerArtifacts);
 
-        // 工作包 C：计算最终 Artifact token 成本（含 section 明细 + 分隔符）。
+        // 计算最终 Artifact token 成本（含 section 明细 + 分隔符）。
         // Allocator 与 Projector 使用同一 tokenizer 版本（TokenizerId），确保 token 计数一致。
         var finalTokenCost = TokenCostHelper.ComputeFinalArtifactTokenCost(decision, workingSet);
 
@@ -1917,14 +1917,14 @@ public sealed class DefaultExecutionArtifactFactory : IExecutionArtifactFactory
             FeatureSchemaVersion = policy.FeatureSchemaVersion,
             // Allocator 版本（用于 replay 兼容性）
             AllocatorVersion = AllocatorVersion,
-            // 工作包 C：Tokenizer 版本从 FinalTokenCost.TokenizerId 获取，
+            // Tokenizer 版本从 FinalTokenCost.TokenizerId 获取，
             // 确保 TokenizerVersion 与实际 token 计算使用的 tokenizer 一致（可追溯）。
             TokenizerVersion = finalTokenCost.TokenizerId,
             // Provider 输出快照（用于 replay 和审计）
             ProviderOutputSnapshots = BuildProviderOutputSnapshots(providerArtifacts),
-            // 工作包 C：最终序列化 token 成本（含 section content + separator + header）
+            // 最终序列化 token 成本（含 section content + separator + header）
             FinalTokenCost = finalTokenCost,
-            // 工作包 D：任一 Provider degraded 时标记 IsDegraded=true
+            // 任一 Provider degraded 时标记 IsDegraded=true
             IsDegraded = providerArtifacts.Count > 0 && providerArtifacts.Any(p => !p.Succeeded)
         };
     }
@@ -1975,7 +1975,7 @@ public sealed class DefaultExecutionArtifactFactory : IExecutionArtifactFactory
 }
 
 // ---------------------------------------------------------------------------
-// ExecutionArtifactFactory — R28-B.7 P0-1：执行结果工厂（保留向后兼容）
+// ExecutionArtifactFactory — 执行结果工厂（保留向后兼容）
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -2036,9 +2036,9 @@ internal static class ExecutionArtifactFactory
             TokenizerVersion = TokenizerVersionValue,
             // Provider 输出快照（用于 replay 和审计）
             ProviderOutputSnapshots = BuildProviderOutputSnapshots(expertOutputs, providerReports),
-            // 工作包 C：统一 Token Ledger — 从 AllocationDecisions + WorkingSet 精确计算
+            // 统一 Token Ledger — 从 AllocationDecisions + WorkingSet 精确计算
             FinalTokenCost = TokenCostHelper.ComputeFinalArtifactTokenCost(decision, workingSet),
-            // 工作包 D：Provider degraded 标记（任一 Provider 失败时为 true）
+            // Provider degraded 标记（任一 Provider 失败时为 true）
             IsDegraded = providerReports.Count > 0 && providerReports.Any(r => !r.Succeeded)
         };
     }
@@ -2090,7 +2090,7 @@ internal static class ExecutionArtifactFactory
                 Materials = output.Materials,
                 Succeeded = succeeded,
                 Duration = duration,
-                // 工作包 D：传播错误码到快照（用于 replay 诊断 degraded 原因）
+                // 传播错误码到快照（用于 replay 诊断 degraded 原因）
                 ErrorCode = errorCode
             });
         }
@@ -2099,7 +2099,7 @@ internal static class ExecutionArtifactFactory
 }
 
 // ---------------------------------------------------------------------------
-// TokenCostHelper — R28-B.7 P0-4：token 成本计算辅助
+// TokenCostHelper — token 成本计算辅助
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -2283,7 +2283,7 @@ internal static class TokenCostHelper
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-1：策略快照提供者默认骨架。返回基于全局默认 bundle 的不可变快照。
+/// 策略快照提供者默认骨架。返回基于全局默认 bundle 的不可变快照。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：不接入 IPolicyRegistry，使用 DefaultPolicyBundleFactory.Create() 的 hardcoded 值。
@@ -2335,7 +2335,7 @@ public sealed class DefaultResolvedPolicyProvider : IResolvedPolicyProvider
 }
 
 // ---------------------------------------------------------------------------
-// PostgresResolvedPolicyProvider（P0-3：接入 IPolicyRegistry 的真实策略解析）
+// PostgresResolvedPolicyProvider（接入 IPolicyRegistry 的真实策略解析）
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -2563,7 +2563,7 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
 }
 
 // ---------------------------------------------------------------------------
-// PolicyBundleHasher（P0-3：bundle 内容哈希计算，用于 immutability 验证）
+// PolicyBundleHasher（bundle 内容哈希计算，用于 immutability 验证）
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -2614,7 +2614,7 @@ public static class PolicyBundleHasher
         sb.Append(bundle.Policies.RelationProfileVersion).Append('|');
         sb.Append(bundle.Policies.QualityContractVersion).Append('|');
 
-        // Impl-4：Safety — bool/double 使用 invariant culture，tag 集合先排序再 join
+        // Safety — bool/double 使用 invariant culture，tag 集合先排序再 join
         sb.Append(bundle.Safety.ProfileId).Append('|');
         sb.Append(bundle.Safety.AllowDeprecatedUsedByActiveChain.ToString()).Append('|');
         sb.Append(bundle.Safety.AllowDuplicateReference.ToString()).Append('|');
@@ -2658,7 +2658,7 @@ public static class PolicyBundleHasher
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-1：统一 Router 默认骨架。返回 Budget-Aware 平均分配的 ExpertRoutingDecisionSet。
+/// 统一 Router 默认骨架。返回 Budget-Aware 平均分配的 ExpertRoutingDecisionSet。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：复用 RetrievalExpertMask.AllEnabled 语义，Mandatory/Constraint 永远启用，
@@ -2837,7 +2837,7 @@ public sealed class DefaultRouter : IRouter
 }
 
 /// <summary>
-/// B-1：Provider 能力目录默认骨架。返回除 Recency 外的全部 Expert。
+/// Provider 能力目录默认骨架。返回除 Recency 外的全部 Expert。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：Recency 默认不注册（设计文档 §5.7 约定）。
@@ -2868,7 +2868,7 @@ public sealed class DefaultExpertCatalog : IExpertCatalog
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// / R28-G P1-1：规范化候选合并器默认实现。按 CanonicalCandidateKey 合并多 Expert 来源。
+/// / 规范化候选合并器默认实现。按 CanonicalCandidateKey 合并多 Expert 来源。
 /// </summary>
 /// <remarks>
 /// 重构：
@@ -3102,11 +3102,11 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
 }
 
 /// <summary>
-/// B-1：Early Admission Gate 默认骨架。检查 scope mismatch / superseded / archived。
+/// Early Admission Gate 默认骨架。检查 scope mismatch / superseded / archived。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：仅检查 superseded + scope 字段非空；B-2 将接入 forbidden tag / illegal evidence。
-/// Blocker-6：新增 EvaluateBatch 批量评估，返回 AdmissionPartition（Admitted + Rejected），
+/// 新增 EvaluateBatch 批量评估，返回 AdmissionPartition（Admitted + Rejected），
 /// 调用方将 Rejected 候选保留到 DroppedEnvelopes（reason=EarlyAdmissionRejected），不再静默丢弃。
 /// </remarks>
 public sealed class DefaultEarlyAdmissionGate : IEarlyAdmissionGate
@@ -3150,7 +3150,7 @@ public sealed class DefaultEarlyAdmissionGate : IEarlyAdmissionGate
     }
 
     /// <summary>
-    /// Blocker-6：批量评估候选准入，返回分区结果（Admitted + Rejected + RejectReasons）。
+    /// 批量评估候选准入，返回分区结果（Admitted + Rejected + RejectReasons）。
     /// </summary>
     public AdmissionPartition EvaluateBatch(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
@@ -3283,7 +3283,7 @@ public sealed class DefaultFeaturePipeline : IFeaturePipeline
 }
 
 /// <summary>
-/// B-1：Decision Safety Gate 默认骨架。基于 envelope.Safety + bundle.Safety 评估。
+/// Decision Safety Gate 默认骨架。基于 envelope.Safety + bundle.Safety 评估。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：复用 DefaultContextDecisionEngine.EvaluateSafetyGate 语义。
@@ -3351,7 +3351,7 @@ public sealed class DefaultSafetyGate : ISafetyGate
 }
 
 /// <summary>
-/// B-1：Lifecycle Gate 默认骨架。检查候选生命周期状态。
+/// Lifecycle Gate 默认骨架。检查候选生命周期状态。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：仅检查 LifecycleState 非 "deprecated"/"archived"。
@@ -3409,9 +3409,9 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     /// 构造 Utility Scorer。
     /// </summary>
     /// <param name="featureSchemaValidator">子问题6：特征 schema 验证器（必须，非 null）。推理前验证输入特征与 schema 一致性。</param>
-    /// <param name="inferenceEngine">R28-D：模型批量推理引擎（null 时强制 rule-only）。</param>
-    /// <param name="calibrationService">R28-D：分数校准服务（null 时使用原始模型分数）。</param>
-    /// <param name="featureRegistry">R28-D：特征 schema 注册表（null 时无法构造 FeatureVector，强制 rule-only）。</param>
+    /// <param name="inferenceEngine">模型批量推理引擎（null 时强制 rule-only）。</param>
+    /// <param name="calibrationService">分数校准服务（null 时使用原始模型分数）。</param>
+    /// <param name="featureRegistry">特征 schema 注册表（null 时无法构造 FeatureVector，强制 rule-only）。</param>
     /// <param name="inferenceValidator">
     /// 推理输出验证器。null 时使用默认 DefaultInferenceResultValidator。
     /// 验证失败时降级到 deterministic（不抛异常，fail-safe）。
@@ -3511,7 +3511,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         return result;
     }
 
-    /// <summary>R28-D / R28-F：模型加权评分路径。</summary>
+    /// <summary>模型加权评分路径。</summary>
     private async ValueTask<IReadOnlyList<ContextCandidateEnvelope>> ScoreWithModelAsync(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
         EffectivePolicySnapshot snapshot,
@@ -3848,13 +3848,13 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
 }
 
 /// <summary>
-/// B-1：统一全局分配器默认骨架。TopK + TokenBudget 硬截断。
+/// 统一全局分配器默认骨架。TopK + TokenBudget 硬截断。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：复用 DefaultContextDecisionEngine 的分配算法
 /// （IsMandatory/IsHardConstraint 优先 → FinalScore 降序 → EstimatedTokens 降序 → CandidateId 升序 →
 /// TopK 截断 → TokenBudget 截断）。
-/// Impl-2：接入 MandatoryOverflowPolicy — mandatory 候选超出预算时按策略处理：
+/// 接入 MandatoryOverflowPolicy — mandatory 候选超出预算时按策略处理：
 ///   - FailClosed（AgentContext 硬窗口）：拒绝 mandatory 候选，标记 HardWindowViolated；
 ///   - AllowOverflowWithDiagnostic（Package/Retrieval 默认）：选入 mandatory，记录 overflow tokens；
 ///   - RejectLowestAuthorityMandatory：拒绝最低优先级的 mandatory 候选。
@@ -3868,7 +3868,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
     /// 构造分配器。
     /// </summary>
     /// <param name="mandatoryOverflowPolicy">
-    /// Impl-2：mandatory 候选超出预算时的处理策略。
+    /// mandatory 候选超出预算时的处理策略。
     /// 默认 AllowOverflowWithDiagnostic（Package/Retrieval 语义）；AgentContext 硬窗口应注入 FailClosed。
     /// 此构造函数策略仅作为旧 Allocate(envelopes, snapshot) 重载的 fallback；
     /// 新 Allocate(envelopes, snapshot, context) 重载优先使用 context 中的策略。
@@ -3961,7 +3961,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         var dropped = new List<ContextCandidateEnvelope>();
         var usedTokens = 0;
         var takenCount = 0;
-        // Impl-2：mandatory overflow 诊断累计
+        // mandatory overflow 诊断累计
         var mandatoryOverflowTokens = 0;
         var hardWindowViolated = false;
         // FailClosed 时收集溢出 mandatory 候选 ID + 总 token 需求（用于抛出异常）
@@ -3996,7 +3996,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         {
             var isMandatory = envelope.Safety.IsMandatory || envelope.Safety.IsHardConstraint;
 
-            // Impl-2：mandatory 候选超出预算时按策略处理
+            // mandatory 候选超出预算时按策略处理
             // 使用 EffectiveTokens（TokenCost 优先）
             var effectiveTokens = GetEffectiveTokens(envelope);
             if (isMandatory && usedTokens + effectiveTokens > tokenBudget)
@@ -4114,7 +4114,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                 overflowedCandidateIds: overflowedMandatoryIds);
         }
 
-        // Impl-2：构建诊断字典（仅在有 mandatory overflow 时记录）
+        // 构建诊断字典（仅在有 mandatory overflow 时记录）
         var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal);
         if (mandatoryOverflowTokens > 0 || hardWindowViolated)
         {
@@ -4227,7 +4227,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         }
     }
 
-    /// <summary>R28-G P1-2：合并 mandatory 与 non-mandatory TopK 为单一遍历序列。</summary>
+    /// <summary>合并 mandatory 与 non-mandatory TopK 为单一遍历序列。</summary>
     private static IEnumerable<ContextCandidateEnvelope> IterateMandatoryThenTopK(
         IReadOnlyList<ContextCandidateEnvelope> mandatory,
         IReadOnlyList<ContextCandidateEnvelope> nonMandatoryTopK)
@@ -4297,11 +4297,11 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
 }
 
 // ---------------------------------------------------------------------------
-// Impl-1：DefaultContentTruncator（默认内容截断器）
+// DefaultContentTruncator（默认内容截断器）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// Impl-1：默认内容截断器。使用 content.Length/4 粗略估算 token，
+/// 默认内容截断器。使用 content.Length/4 粗略估算 token，
 /// 按 char 数截断（确保不超过 maxTokens * 4 字符）。
 /// </summary>
 /// <remarks>
@@ -4394,14 +4394,14 @@ public sealed class TokenizerContentTruncator : IContentTruncator
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-1：Agent Context Projector 默认骨架。
+/// Agent Context Projector 默认骨架。
 /// 从 DecisionResult + WorkingSet 投影为 AgentContextSnapshot。
 /// </summary>
 /// <remarks>
 /// B-1 骨架：投影为单 section（"context"），包含所有 selected 候选的 Content 拼接。
 /// B-2 将按 CandidateAllocationDecision.Section 分区投影。
 /// 不访问 Store；不重新排序、过滤、截断或计分（仅格式投影）。
-/// Impl-1：当 IncludedTokens < EstimatedTokens 时，使用 IContentTruncator 真正截断 Content。
+/// 当 IncludedTokens < EstimatedTokens 时，使用 IContentTruncator 真正截断 Content。
 /// </remarks>
 public sealed class AgentContextProjector : IAgentContextProjector
 {
@@ -4411,7 +4411,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
     /// 构造 AgentContextProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
+    /// 内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
     /// <param name="tokenizerResolver">
     /// tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
@@ -4459,7 +4459,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
     /// 将决策结果 + 候选正文 + 投影上下文投影为 AgentContextSnapshot。
     /// 使用 context.AgentSession（如有）而非伪造的 session ID。
     /// 按 CandidateAllocationDecision.Section 分区投影（而非单 section 拼接）。
-    /// Impl-1：当 IncludedTokens < EstimatedTokens 时截断 Content。
+    /// 当 IncludedTokens < EstimatedTokens 时截断 Content。
     /// </summary>
     public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet, ProjectionContext context)
     {
@@ -4505,7 +4505,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
                         contentBuilder.Append("\n\n");
                     }
 
-                    // Impl-1：当 IncludedTokens < EstimatedTokens 时，真正截断 Content
+                    // 当 IncludedTokens < EstimatedTokens 时，真正截断 Content
                     var contentToAppend = material.Content;
                     if (item.IncludedTokens < item.Envelope.EstimatedTokens && item.IncludedTokens > 0)
                     {

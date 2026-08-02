@@ -828,16 +828,16 @@ public sealed class RelationSubgraphNode
 
     public string? NodeKind { get; init; }
 
-    /// <summary>GRAPH-13: 节点标题（条目标题或摘要首行），供 UI 紧凑展示。</summary>
+    /// <summary> 节点标题（条目标题或摘要首行），供 UI 紧凑展示。</summary>
     public string? Title { get; init; }
 
-    /// <summary>GRAPH-13: 节点摘要，供 UI 紧凑展示。</summary>
+    /// <summary> 节点摘要，供 UI 紧凑展示。</summary>
     public string? Summary { get; init; }
 
-    /// <summary>GRAPH-13: 节点生命周期（Active/Deprecated/Superseded）。</summary>
+    /// <summary> 节点生命周期（Active/Deprecated/Superseded）。</summary>
     public string? Lifecycle { get; init; }
 
-    /// <summary>GRAPH-13: 节点审核状态（Reviewed/Rejected/NeedsEvidence）。</summary>
+    /// <summary> 节点审核状态（Reviewed/Rejected/NeedsEvidence）。</summary>
     public string? ReviewStatus { get; init; }
 }
 
@@ -863,7 +863,7 @@ public sealed class RelationSubgraphEdge
 }
 
 /// <summary>
-/// GRAPH-10：统一邻居查询 DTO。携带方向、类型、置信度、生命周期、分页和扫描上限，
+/// 统一邻居查询 DTO。携带方向、类型、置信度、生命周期、分页和扫描上限，
 /// 代替多个 QueryBy 方法。Postgres 在 SQL 中过滤和 Limit；File/InMemory 在内存中过滤。
 /// </summary>
 public sealed class RelationNeighborQuery
@@ -1021,7 +1021,7 @@ public sealed class RelationNeighborBatchResult
     public bool Truncated { get; init; }
 }
 
-/// <summary>P3-03：关系旧数据迁移报告。</summary>
+/// <summary>关系旧数据迁移报告。</summary>
 public sealed class RelationMigrationReport
 {
     /// <summary>扫描的关系总数。</summary>

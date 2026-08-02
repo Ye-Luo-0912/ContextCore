@@ -208,7 +208,7 @@ public sealed class RiskAssessment
     public IReadOnlyList<string> Mitigations { get; }
 }
 
-/// <summary>R16 风险等级。</summary>
+/// <summary>风险等级。</summary>
 public enum RiskSeverity
 {
     /// <summary>低：可观察但不影响主路径。</summary>
@@ -269,7 +269,7 @@ public sealed class RollbackCondition
     };
 }
 
-/// <summary>R16 比较运算符（用于 <see cref="RollbackCondition"/>）。</summary>
+/// <summary>比较运算符（用于 <see cref="RollbackCondition"/>）。</summary>
 public enum ComparisonOperator
 {
     /// <summary>value &gt; threshold</summary>
@@ -687,7 +687,7 @@ public sealed class PromotionJudgeResult
     public IReadOnlyList<string> Conditions { get; }
 }
 
-/// <summary>R17 晋升裁决类型。</summary>
+/// <summary>晋升裁决类型。</summary>
 public enum PromotionDecision
 {
     /// <summary>推进到下一阶段（如 OfflineExperiment → Shadow）。</summary>

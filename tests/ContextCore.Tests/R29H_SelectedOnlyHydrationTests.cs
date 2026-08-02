@@ -9,7 +9,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// H：Selected-only Hydration（Perf-2）验收测试
+// Selected-only Hydration（Perf-2）验收测试
 //
 // 目标路径：轻量召回 → Score/Allocate → 只 hydrate Selected → 精确 tokenize
 //           → 正式 Decision Repair → Model Projection
@@ -33,7 +33,7 @@ namespace ContextCore.Tests;
 // ===========================================================================
 
 /// <summary>
-/// H：Selected-only Hydration（Perf-2）验收测试。
+/// Selected-only Hydration（Perf-2）验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R29")]

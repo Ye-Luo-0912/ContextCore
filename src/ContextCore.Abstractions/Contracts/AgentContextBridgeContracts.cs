@@ -44,7 +44,7 @@ public interface IAgentContextBridge
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>R24-1：Agent Context 桥接请求。</summary>
+/// <summary>Agent Context 桥接请求。</summary>
 public sealed record AgentContextBridgeRequest
 {
     /// <summary>Agent session 标识（必填）。</summary>
@@ -70,7 +70,7 @@ public sealed record AgentContextBridgeRequest
         = new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
-/// <summary>R24-1：Agent Context 桥接响应。</summary>
+/// <summary>Agent Context 桥接响应。</summary>
 public sealed record AgentContextBridgeResponse
 {
     /// <summary>构建的 Agent 上下文快照。</summary>

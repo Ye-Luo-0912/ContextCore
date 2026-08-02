@@ -44,7 +44,7 @@ public sealed class RelationTraversalEngine
         var maxRelations = Math.Min(request.MaxRelationsOverride ?? 300, GraphQueryLimits.MaxTotalEdges);
         var minConfidence = profile.MinConfidence;
 
-        // GRAPH-10：构建存储层排除列表，将过滤下推到 QueryNeighborsAsync
+        // 构建存储层排除列表，将过滤下推到 QueryNeighborsAsync
         var excludedLifecycles = new List<string>();
         if (!profile.AllowDeprecatedRelations)
         {
@@ -79,7 +79,7 @@ public sealed class RelationTraversalEngine
             };
         }
 
-        // GRAPH-10：visitedNodes 仅用于环检测（含种子）；discoveredCount 统计扩展引入的新节点数（不含种子）。
+        // visitedNodes 仅用于环检测（含种子）；discoveredCount 统计扩展引入的新节点数（不含种子）。
         // maxNodes 约束的是"图扩展能引入的最大新节点数"，种子作为查询起点不占用扩展预算。
         var visitedNodes = seeds.Select(s => s.ItemId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var visitedEdges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -96,7 +96,7 @@ public sealed class RelationTraversalEngine
 
         for (var depth = 1; depth <= maxDepth && currentFrontier.Length > 0; depth++)
         {
-            // GRAPH-10：maxNodes 约束的是新发现的节点数（不含种子），而非边数或总节点数
+            // maxNodes 约束的是新发现的节点数（不含种子），而非边数或总节点数
             if (relationCount >= maxRelations || discoveredCount >= maxNodes)
             {
                 truncated = true;
@@ -183,7 +183,7 @@ public sealed class RelationTraversalEngine
                         continue;
                     }
 
-                    // GRAPH-10：修正 incoming path 方向 — 入边用 <-[type]- 箭头
+                    // 修正 incoming path 方向 — 入边用 <-[type]- 箭头
                     var isOutgoing = string.Equals(relation.SourceId, node.ItemId, StringComparison.OrdinalIgnoreCase);
                     var path = isOutgoing
                         ? $"{node.Path} -[{relation.RelationType}]-> {neighborId}"
@@ -199,7 +199,7 @@ public sealed class RelationTraversalEngine
 
                     edges.Add(new RelationTraversalEdge(relation, depth, node.Score, path, neighborId, childScore));
 
-                    // GRAPH-10：移除 per-node nextFrontier.Count < maxFanout 限制，统一在层末截断
+                    // 移除 per-node nextFrontier.Count < maxFanout 限制，统一在层末截断
                     if (visitedNodes.Add(neighborId))
                     {
                         discoveredCount++;
@@ -278,7 +278,7 @@ public sealed class RelationTraversalEngine
     }
 
     /// <summary>
-    /// GRAPH-10：边去重 key — 使用 relation 的正式 SourceId/TargetId 规范化，
+    /// 边去重 key — 使用 relation 的正式 SourceId/TargetId 规范化，
     /// 确保 A→B 和 B→A 两条不同的有向边不会被错误合并。
     /// </summary>
     private static string EdgeKey(ContextRelation relation)
@@ -307,7 +307,7 @@ public sealed class RelationTraversalEngine
         var lifecycle = relation.Lifecycle ?? string.Empty;
         var reviewStatus = relation.ReviewStatus ?? string.Empty;
 
-        // GRAPH-08：正式字段作为唯一来源；Rejected lifecycle 与 Deprecated 同级别排除
+        // 正式字段作为唯一来源；Rejected lifecycle 与 Deprecated 同级别排除
         if (!profile.AllowDeprecatedRelations
             && (string.Equals(lifecycle, RelationLifecycles.Deprecated, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(lifecycle, RelationLifecycles.Superseded, StringComparison.OrdinalIgnoreCase)

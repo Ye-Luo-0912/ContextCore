@@ -87,7 +87,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     /// <summary>版本失配次数（命中条目但因版本过期被移除）。</summary>
     public long VersionMismatches => Interlocked.Read(ref _versionMismatches);
 
-    /// <summary>TTL 过期次数（R13.0 #6：条目因超过 TTL 被 lazy 淘汰）。</summary>
+    /// <summary>TTL 过期次数（条目因超过 TTL 被 lazy 淘汰）。</summary>
     public long TtlExpirations => Interlocked.Read(ref _ttlExpirations);
 
     /// <inheritdoc />
@@ -174,7 +174,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
             ValueType = typeof(T),
             Scopes = scopes,
             VersionSnapshots = versionSnapshots,
-            CreatedAt = DateTimeOffset.UtcNow, // R13.0 #6: 记录写入时间用于 TTL 过期检查
+            CreatedAt = DateTimeOffset.UtcNow, // 记录写入时间用于 TTL 过期检查
             Accessed = 1  // 新写入条目初始 accessed=1，给予一次 CLOCK 扫描保护
         };
 

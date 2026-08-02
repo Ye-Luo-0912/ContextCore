@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 E1：AgentRunStateMachine — Agent Run 状态机校验器
+// AgentRunStateMachine — Agent Run 状态机校验器
 //
 // 校验 AgentRunState 的合法状态流转（参考 AgentRunState 注释中的合法流转图）。
 // 状态机复用 ToolDispatchState 的 expected-state CAS + 不可逆前向推进模式：
@@ -14,7 +14,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 E1：Agent Run 状态机校验器（静态方法）。
+/// Agent Run 状态机校验器（静态方法）。
 /// </summary>
 /// <remarks>
 /// 合法流转图（与 <see cref="AgentRunState"/> 注释一致）：
@@ -23,7 +23,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 ///    ↓           ↓                ↓               ↓
 ///    └───────────┴────────────────┴───────────────┘
 ///                        ↓
-///               ToolDispatching → AwaitingApproval（P0-6：需审批时挂起）
+///               ToolDispatching → AwaitingApproval（需审批时挂起）
 ///                        ↓            ↓
 ///                        └────────────┘
 ///                                     ↓
@@ -125,7 +125,7 @@ public static class AgentRunStateMachine
                                           || to == AgentRunState.Completed
                                           || to == AgentRunState.ContextBuilding,
 
-            // AwaitingApproval → PendingToolExecution（P0-2：审批通过后直接执行原 Tool，不重新调用模型）
+            // AwaitingApproval → PendingToolExecution（审批通过后直接执行原 Tool，不重新调用模型）
             //                    / ToolDispatching（旧路径兼容：批准后继续分派）
             //                    / ContextBuilding（拒绝后回到上下文构建重试）/ Completed（拒绝且无法继续则完成）
             AgentRunState.AwaitingApproval => to == AgentRunState.PendingToolExecution
@@ -133,11 +133,11 @@ public static class AgentRunStateMachine
                                               || to == AgentRunState.ContextBuilding
                                               || to == AgentRunState.Completed,
 
-            // PendingToolExecution → Observing（P0-2：原 Tool 执行完成后观察结果，继续 Observation→Model 循环）
+            // PendingToolExecution → Observing（原 Tool 执行完成后观察结果，继续 Observation→Model 循环）
             //                        / Failed（执行异常）/ Cancelled（外部取消，由短路处理）
             AgentRunState.PendingToolExecution => to == AgentRunState.Observing,
 
-            // ToolDispatching → AwaitingApproval（P0-6：Tool 分派中需审批时挂起等待人工裁决）/ Observing（观察结果）
+            // ToolDispatching → AwaitingApproval（Tool 分派中需审批时挂起等待人工裁决）/ Observing（观察结果）
             AgentRunState.ToolDispatching => to == AgentRunState.AwaitingApproval
                                               || to == AgentRunState.Observing,
 

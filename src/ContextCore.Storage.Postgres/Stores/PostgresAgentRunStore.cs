@@ -6,7 +6,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// 任务 F3：PostgreSQL 持久化 Agent Run Store。
+/// PostgreSQL 持久化 Agent Run Store。
 /// 替代 <see cref="ContextCore.Core.Services.AgentRunRuntime.InMemoryAgentRunStore"/>，
 /// 让 HA 场景下 Agent Run 元数据可跨进程持久化与崩溃恢复。
 /// </summary>
@@ -233,7 +233,7 @@ RETURNING data;
             var dataMerge = isTerminal
                 ? "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))"
                 : "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))";
-            // + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+            // + lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
             // 同时校验 lease_expires_at > clock_timestamp()，防止已过期但未被 reaper 清理的租约
             // 仍能通过 fencing 校验（fencing_token 匹配但租约实际已过期 → 仍应拒绝写入）。
             var leaseClause = leaseValidated

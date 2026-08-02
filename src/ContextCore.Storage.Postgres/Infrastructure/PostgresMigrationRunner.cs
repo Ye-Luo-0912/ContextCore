@@ -22,8 +22,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
     /// v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
     /// v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
-    /// WS-A：v16 → v17，新增 policy_bundles + policy_activations 表与索引（Postgres Policy Registry 持久化 + CAS 激活）。
-    /// 阶段 E：v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
+    /// v16 → v17，新增 policy_bundles + policy_activations 表与索引（Postgres Policy Registry 持久化 + CAS 激活）。
+    /// v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
     /// v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
     /// v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
     /// v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
@@ -33,10 +33,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// v26 → v27，新增 user_feedback_entries 表与索引（用户显式反馈接入 ledger：thumbs up/down + 评分修正 + 文本反馈）。
     /// v27 → v28，tool_dispatch_journal_entries.idempotency_key 索引由普通 index 升级为 UNIQUE partial index，
     ///       防止不同 request_id 使用相同幂等键分别执行（外部副作用 exactly-once 的数据库层兜底）。
-    /// 任务 F：v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
-    /// 任务 D：v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
+    /// v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
+    /// v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
     ///       （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
-    /// CAS-2：v32 → v33，tool_dispatch_journal_entries 追加 payload_digest / workspace_id / run_id 列，
+    /// v32 → v33，tool_dispatch_journal_entries 追加 payload_digest / workspace_id / run_id 列，
     ///       支持 PrepareAsync 语义等价校验，防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
     /// Learning Loop Durable Outbox：v33 → v34，新增 learning_event_outbox 表与索引。
     ///       将 Utility Ledger 物化从 fire-and-forget Task.Run 改为 Durable Outbox 模式：
@@ -68,20 +68,20 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// v41 → v42，context_items 追加 content_hash / content_token_cost 列，
     ///   摄取阶段持久化 SHA-256 与精确 token cost，Provider 直接读取不再在线重复计算。
     /// v42 → v43，Canary 与性能真相三项修复：
-    ///   - P10：canary_metrics_samples 追加 v2_latency_sketch / legacy_latency_sketch bytea 列，
+    ///   - canary_metrics_samples 追加 v2_latency_sketch / legacy_latency_sketch bytea 列，
     ///     各实例持久化 DDSketch 字节，Leader 聚合时 MergeFrom 合并后查询总体 P95，
     ///     替代对单实例 P95 加权平均（加权平均会低估尾延迟）。
-    ///   - P11：canary_metrics_samples 追加 task_success_sum / task_success_count /
+    ///   - canary_metrics_samples 追加 task_success_sum / task_success_count /
     ///     tool_success_sum / tool_success_count 列，聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)，
     ///     避免 10 样本实例与 10000 样本实例权重相同。
-    ///   - P12：canary_leader_leases 追加 fencing_token bigint 列（单调递增），
+    ///   - canary_leader_leases 追加 fencing_token bigint 列（单调递增），
     ///     每次 TryAcquireAsync 成功获取（含抢占过期）时递增；AdvanceEpochAsync 的 UPDATE
     ///     校验 WHERE fencing_token <= @fencingToken，旧 Leader（fencing token 较小）推进失败。
     /// v43 → v44，agent_runs 追加 idempotency_key text 列与 partial UNIQUE 索引
     ///   (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL，
     ///   让 POST /api/agents/runs 在提供 IdempotencyKey 时返回已有 Run（200 OK）而非创建重复 Run，
     ///   防止客户端重试/网络抖动导致同一业务意图被多次执行。
-    /// Perf-7：v44 → v45，新增 canary_pipelines + canary_transition_audit 表与索引：
+    /// v44 → v45，新增 canary_pipelines + canary_transition_audit 表与索引：
     ///   - canary_pipelines：per-run pipeline 状态表（percentage + status + revision），
     ///     ApplyCanaryDecisionAsync 在单一事务内通过 revision CAS 原子更新，替代旧路径
     ///     AdvanceAsync（修改 in-memory）+ AdvanceEpochAsync（fencing 校验）的两步模式。
@@ -89,10 +89,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///     fencing_token/new_epoch，与 canary_pipelines UPDATE 同事务写入，确保审计与状态强一致。
     ///   修复 HA 正确性：旧 Leader 在 lease 失效后无法再修改 rollout（fencing 校验在事务内首先执行）；
     ///   Rollback 路径也经过 fencing 校验（旧路径完全无校验）。
-    /// Perf-2：v45 → v46，memory_items / constraints 追加 content_hash / content_length /
+    /// v45 → v46，memory_items / constraints 追加 content_hash / content_length /
     ///   tokenizer_id / tokenizer_version / token_count / counted_at 列，Memory/Constraint
     ///   摄取阶段持久化完整 tokenization metadata，Provider 读取后跳过在线 SHA-256 + tokenize。
-    /// Perf-5：v45 → v46，context_items 启用 pg_trgm 扩展；search_vector 改为 CJK 预分词
+    /// v45 → v46，context_items 启用 pg_trgm 扩展；search_vector 改为 CJK 预分词
     ///   （regexp_replace 在每个 CJK 字符后插入空格，simple 配置即可按字符切分）；
     ///   新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
     /// v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
@@ -167,10 +167,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "pipeline_canary_assignments",
         "pipeline_rollback_records",
         "pipeline_baseline_comparisons",
-        // WS-A：Policy Registry 持久化（bundle 注册 + activation CAS 激活）
+        // Policy Registry 持久化（bundle 注册 + activation CAS 激活）
         "policy_bundles",
         "policy_activations",
-        // 阶段 E：Experiment Recorder 持久化（replay fixture 存储）
+        // Experiment Recorder 持久化（replay fixture 存储）
         "experiment_replay_fixtures",
         // Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit，记录每次 stage 推进的完整历史）
         "stage_transitions",
@@ -185,14 +185,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "model_artifacts",
         // User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）
         "user_feedback_entries",
-        // 任务 F：Agent Run 状态机 + 事件流哈希链持久化
+        // Agent Run 状态机 + 事件流哈希链持久化
         "agent_runs",
         "agent_run_events",
-        // 任务 D：Canary HA 聚合（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
+        // Canary HA 聚合（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
         "canary_metrics_samples",
         "canary_leader_leases",
         "canary_run_epochs",
-        // Perf-7：Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
+        // Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
         "canary_pipelines",
         "canary_transition_audit",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
@@ -323,11 +323,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("pipeline_rollback_records", "triggered"),
         ("pipeline_baseline_comparisons", "proposal"),
         ("pipeline_baseline_comparisons", "compared"),
-        // WS-A：Policy Registry 索引
+        // Policy Registry 索引
         ("policy_bundles", "bundle"),
         ("policy_bundles", "superseded"),
         ("policy_activations", "bundle"),
-        // 阶段 E：experiment_replay_fixtures 索引（按时间倒序 + 按 purpose 过滤）
+        // experiment_replay_fixtures 索引（按时间倒序 + 按 purpose 过滤）
         ("experiment_replay_fixtures", "recorded"),
         ("experiment_replay_fixtures", "purpose"),
         // stage_transitions 索引（按 run_id 查历史 + 按 idempotency_key 去重）
@@ -359,18 +359,18 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("user_feedback_entries", "given_by"),
         ("user_feedback_entries", "given_at"),
         ("user_feedback_entries", "idempotency"),
-        // 任务 F：Agent Run 索引（按 session 列举 + 按 state 拉取待处理；events 主键已覆盖按 run 查询）
+        // Agent Run 索引（按 session 列举 + 按 state 拉取待处理；events 主键已覆盖按 run 查询）
         ("agent_runs", "session"),
         ("agent_runs", "state"),
         // idempotency_key partial UNIQUE 索引（按 workspace + idempotency_key 点查 + 去重）
         ("agent_runs", "idempotency"),
-        // 任务 D：Canary HA 聚合索引
+        // Canary HA 聚合索引
         // canary_metrics_samples：按 run + recorded_at 查最新样本（聚合器 SELECT）+ 按 run + instance 去重
         ("canary_metrics_samples", "run_recorded"),
         ("canary_metrics_samples", "run_instance"),
         // canary_leader_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
         ("canary_leader_leases", "expires"),
-        // Perf-7：canary_transition_audit 按 run + transitioned_at 查历史
+        // canary_transition_audit 按 run + transitioned_at 查历史
         ("canary_transition_audit", "run"),
         ("canary_transition_audit", "transition"),
         // Learning Loop Durable Outbox 索引（按 state + created_at 拉 Pending + 按租约过期重试 + 按 workspace 查）
@@ -474,10 +474,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var pipelineCanaryAssignments = Infrastructure.PostgresNames.Table(options, "pipeline_canary_assignments");
         var pipelineRollbackRecords = Infrastructure.PostgresNames.Table(options, "pipeline_rollback_records");
         var pipelineBaselineComparisons = Infrastructure.PostgresNames.Table(options, "pipeline_baseline_comparisons");
-        // WS-A：Policy Registry 持久化表
+        // Policy Registry 持久化表
         var policyBundles = Infrastructure.PostgresNames.Table(options, "policy_bundles");
         var policyActivations = Infrastructure.PostgresNames.Table(options, "policy_activations");
-        // 阶段 E：Experiment Recorder 持久化表
+        // Experiment Recorder 持久化表
         var experimentReplayFixtures = Infrastructure.PostgresNames.Table(options, "experiment_replay_fixtures");
         // Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit）
         var stageTransitions = Infrastructure.PostgresNames.Table(options, "stage_transitions");
@@ -494,14 +494,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var modelArtifacts = Infrastructure.PostgresNames.Table(options, "model_artifacts");
         // User Feedback Ledger 持久化表
         var userFeedbackEntries = Infrastructure.PostgresNames.Table(options, "user_feedback_entries");
-        // 任务 F：Agent Run 状态机 + 事件流哈希链持久化表
+        // Agent Run 状态机 + 事件流哈希链持久化表
         var agentRuns = Infrastructure.PostgresNames.Table(options, "agent_runs");
         var agentRunEvents = Infrastructure.PostgresNames.Table(options, "agent_run_events");
-        // 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
+        // Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
         var canaryMetricsSamples = Infrastructure.PostgresNames.Table(options, "canary_metrics_samples");
         var canaryLeaderLeases = Infrastructure.PostgresNames.Table(options, "canary_leader_leases");
         var canaryRunEpochs = Infrastructure.PostgresNames.Table(options, "canary_run_epochs");
-        // Perf-7：Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
+        // Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
         var canaryPipelines = Infrastructure.PostgresNames.Table(options, "canary_pipelines");
         var canaryTransitionAudit = Infrastructure.PostgresNames.Table(options, "canary_transition_audit");
         var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
@@ -524,10 +524,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
 {schemaSql}
 {extensionSql}
 
--- Perf-5：pg_trgm 扩展用于 id / title 的 ILIKE 中文/前缀检索（gin_trgm_ops GIN 索引）。
+-- pg_trgm 扩展用于 id / title 的 ILIKE 中文/前缀检索（gin_trgm_ops GIN 索引）。
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Perf-5：CJK 预分词 IMMUTABLE 函数。在每个 CJK 字符后插入空格，
+-- CJK 预分词 IMMUTABLE 函数。在每个 CJK 字符后插入空格，
 -- 让 to_tsvector('simple', ...) 能按字符切分，避免中文整段被当作单一 token。
 -- 覆盖 CJK Unified Ideographs 主块 (U+4E00..U+9FFF) 与扩展 A 区 (U+3400..U+4DBF)，
 -- 这两块覆盖了绝大多数现代中文用字。函数标记 IMMUTABLE 以便在 GENERATED 列中使用。
@@ -615,10 +615,10 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "tags")} ON {contextItems} USING gin (tags);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "updated")} ON {contextItems} (workspace_id, collection_id, updated_at DESC);
 
--- P3：Lexical 检索 tsvector 生成列 + GIN 索引。
+-- Lexical 检索 tsvector 生成列 + GIN 索引。
 -- Title 加权 A（高），Content 加权 B；simple 配置避免词典依赖，对中英文/代码/JSON 均可分词。
 -- STORED 生成列随 data jsonb 一起写入，无需触发器；GIN 索引让 websearch_to_tsquery 走索引而非全表扫描。
--- Perf-5：CJK 预分词——cjk_pre_tokenize 在每个 CJK 字符后插入空格，
+-- CJK 预分词——cjk_pre_tokenize 在每个 CJK 字符后插入空格，
 -- simple 配置即可按字符切分，避免中文整段被当作单一 token。
 -- 仅修改 search_vector 表达式时需先 DROP 旧生成列再 ADD 新列（PostgreSQL 不支持 ALTER COLUMN 表达式）。
 ALTER TABLE {contextItems} DROP COLUMN IF EXISTS search_vector;
@@ -629,12 +629,12 @@ ALTER TABLE {contextItems} ADD COLUMN IF NOT EXISTS search_vector tsvector
     ) STORED;
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "search_vector")} ON {contextItems} USING gin (search_vector);
 
--- Perf-5：id / title 的 trigram GIN 索引，支持 ILIKE 中文/前缀检索（gin_trgm_ops）。
+-- id / title 的 trigram GIN 索引，支持 ILIKE 中文/前缀检索（gin_trgm_ops）。
 -- id 列直接索引；title 是 data jsonb 字段，用表达式索引 (data->>'Title') gin_trgm_ops。
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "id_trgm")} ON {contextItems} USING gin (id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_items", "title_trgm")} ON {contextItems} USING gin ((data->>'Title') gin_trgm_ops);
 
--- P6：摄取阶段持久化 content_hash / content_token_cost，Provider 直接读取不再在线重复计算。
+-- 摄取阶段持久化 content_hash / content_token_cost，Provider 直接读取不再在线重复计算。
 -- content_hash 为 SHA-256 小写 hex（与 ContextItem.Checksum 一致），content_token_cost 为精确 token 数。
 -- 两列均可 NULL（兼容历史数据与无 tokenizer 的部署），Provider 读取时 NULL 表示未持久化、回退到在线计算。
 ALTER TABLE {contextItems} ADD COLUMN IF NOT EXISTS content_hash text NULL;
@@ -663,7 +663,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "memory_
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "memory_items", "tags")} ON {memoryItems} USING gin (tags);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "memory_items", "importance")} ON {memoryItems} (workspace_id, collection_id, importance DESC, updated_at DESC);
 
--- Perf-2：memory_items 持久化 tokenization metadata。Memory 摄取阶段计算 content_hash /
+-- memory_items 持久化 tokenization metadata。Memory 摄取阶段计算 content_hash /
 -- content_length / tokenizer_id / tokenizer_version / token_count / counted_at 并写入专用列，
 -- Provider 读取后跳过在线 SHA-256 + tokenizer 调用。所有列均可 NULL（兼容历史数据与无 tokenizer 部署）。
 ALTER TABLE {memoryItems} ADD COLUMN IF NOT EXISTS content_hash text NULL;
@@ -737,7 +737,7 @@ CREATE TABLE IF NOT EXISTS {decisionTraces} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decision_traces", "created")} ON {decisionTraces} (workspace_id, collection_id, created_at DESC);
 
--- R14-PG-3：short-term memory / promotion / candidate review 表与索引
+-- short-term memory / promotion / candidate review 表与索引
 CREATE TABLE IF NOT EXISTS {shortTermRawEvents} (
     workspace_id text NOT NULL,
     collection_id text NOT NULL,
@@ -869,7 +869,7 @@ CREATE TABLE IF NOT EXISTS {stableReviewRecords} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_records", "candidate")} ON {stableReviewRecords} (workspace_id, collection_id, stable_review_candidate_id, reviewed_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_records", "reviewed")} ON {stableReviewRecords} (workspace_id, collection_id, reviewed_at DESC);
 
--- R14-PG-4：context learning / governance review 表与索引
+-- context learning / governance review 表与索引
 CREATE TABLE IF NOT EXISTS {contextLearningFeedback} (
     workspace_id text NOT NULL,
     collection_id text NOT NULL,
@@ -959,7 +959,7 @@ CREATE TABLE IF NOT EXISTS {constraintGapReviews} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_reviews", "gap")} ON {constraintGapReviews} (workspace_id, collection_id, gap_id, reviewed_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_reviews", "reviewed")} ON {constraintGapReviews} (workspace_id, collection_id, reviewed_at DESC);
 
--- R14-PG-5：vector lifecycle + artifact 表与索引
+-- vector lifecycle + artifact 表与索引
 CREATE TABLE IF NOT EXISTS {vectorReindexReports} (
     workspace_id text NOT NULL,
     collection_id text NOT NULL,
@@ -1030,7 +1030,7 @@ CREATE TABLE IF NOT EXISTS {artifacts} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "artifacts", "kind")} ON {artifacts} (workspace_id, artifact_kind);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "artifacts", "updated")} ON {artifacts} (workspace_id, collection_id, updated_at DESC);
 
--- R14-PG-6：分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
+-- 分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
 CREATE TABLE IF NOT EXISTS {contextStateVersions} (
     workspace_id text NOT NULL,
     collection_id text NOT NULL,
@@ -1073,7 +1073,7 @@ CREATE TABLE IF NOT EXISTS {constraints} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraints", "coll")} ON {constraints} (workspace_id, collection_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraints", "level")} ON {constraints} (workspace_id, level);
 
--- Perf-2：constraints 持久化 tokenization metadata。Constraint 摄取阶段计算 content_hash /
+-- constraints 持久化 tokenization metadata。Constraint 摄取阶段计算 content_hash /
 -- content_length / tokenizer_id / tokenizer_version / token_count / counted_at 并写入专用列，
 -- Provider 读取后跳过在线 SHA-256 + tokenizer 调用。所有列均可 NULL（兼容历史数据与无 tokenizer 部署）。
 ALTER TABLE {constraints} ADD COLUMN IF NOT EXISTS content_hash text NULL;
@@ -1300,7 +1300,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relatio
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_diagnostics", "kind")} ON {relationDiagnostics} (workspace_id, collection_id, diagnostic_kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_diagnostics", "severity")} ON {relationDiagnostics} (workspace_id, collection_id, severity, created_at DESC);
 
--- P1-5：关系写入 outbox 表。表结构与 context_jobs 对齐（lease/retry/state + relation payload）。
+-- 关系写入 outbox 表。表结构与 context_jobs 对齐（lease/retry/state + relation payload）。
 CREATE TABLE IF NOT EXISTS {relationOutbox} (
     outbox_id text NOT NULL,
     workspace_id text NOT NULL,
@@ -1475,7 +1475,7 @@ CREATE TABLE IF NOT EXISTS {vectorIndexManifests} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_index_manifests", "updated")} ON {vectorIndexManifests} (workspace_id, collection_id, updated_at DESC);
 
--- R26-1：Agent Runtime 持久化表（checkpoint + task state）
+-- Agent Runtime 持久化表（checkpoint + task state）
 -- 表反规范化 session 字段（session_value / runtime_kind / workspace_id / collection_id）以便按 session 索引查询；
 -- 完整 AgentCheckpoint / AgentTaskState 对象保存在 data jsonb，由 store 反序列化。
 CREATE TABLE IF NOT EXISTS {agentCheckpoints} (
@@ -1511,10 +1511,10 @@ CREATE TABLE IF NOT EXISTS {agentTaskStates} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_task_states", "session")} ON {agentTaskStates} (workspace_id, session_value, updated_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_task_states", "updated")} ON {agentTaskStates} (workspace_id, updated_at DESC);
 
--- R27-1：Evolution Pipeline 持久化表（run state + 3 audit tables）
+-- Evolution Pipeline 持久化表（run state + 3 audit tables）
 -- 表反规范化 proposal_id / status / run_id 字段以便按 proposal/status/run 索引查询；
 -- 完整 PipelineRunSnapshot / CanaryAssignment / RollbackRecord / BaselineComparison 对象保存在 data jsonb，由 store 反序列化。
--- P0-7：新增 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
+-- 新增 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
 CREATE TABLE IF NOT EXISTS {pipelineRuns} (
     run_id text NOT NULL,
     proposal_id text NOT NULL,
@@ -1535,7 +1535,7 @@ CREATE TABLE IF NOT EXISTS {pipelineRuns} (
     PRIMARY KEY (run_id)
 );
 
--- P0-7：v15 → v16 升级路径 — 已有 pipeline_runs 表追加新列（幂等）
+-- v15 → v16 升级路径 — 已有 pipeline_runs 表追加新列（幂等）
 ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS revision bigint NOT NULL DEFAULT 1;
 ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS lease_owner text NULL;
 ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz NULL;
@@ -1583,7 +1583,7 @@ CREATE TABLE IF NOT EXISTS {pipelineBaselineComparisons} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "proposal")} ON {pipelineBaselineComparisons} (proposal_id, compared_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "compared")} ON {pipelineBaselineComparisons} (compared_at DESC);
 
--- R28-B.8：Canary Gate 渐进推进审计表
+-- Canary Gate 渐进推进审计表
 -- 独立于 pipeline_runs 的 transition audit（PipelineAuditBatch），记录每次 stage 推进的完整历史
 -- 用于 CanaryProgressionService 推进/回滚决策的端到端审计溯源（含 idempotency_key 端到端幂等）
 CREATE TABLE IF NOT EXISTS {stageTransitions} (
@@ -1601,7 +1601,7 @@ CREATE TABLE IF NOT EXISTS {stageTransitions} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stage_transitions", "run_id")} ON {stageTransitions} (run_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stage_transitions", "idempotency")} ON {stageTransitions} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
--- WS-A：Policy Registry 持久化表（bundle 注册 + activation CAS 激活）
+-- Policy Registry 持久化表（bundle 注册 + activation CAS 激活）
 -- policy_bundles: (bundle_id, version) 复合主键 — bundle 全局不可变；supersede 通过新建 bundle 实现
 -- policy_activations: (workspace_id, collection_id) 主键 — 每个作用域仅一条 activation 记录；epoch 用于 CAS
 -- 反规范化 bundle_id / bundle_version / epoch 字段以便索引查询 + CAS UPDATE；完整对象保存在 data jsonb
@@ -1631,7 +1631,7 @@ CREATE TABLE IF NOT EXISTS {policyActivations} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "policy_activations", "bundle")} ON {policyActivations} (bundle_id, bundle_version);
 
--- R28-B.6 阶段 E：Experiment Recorder 持久化表（replay fixture 索引 + jsonb）
+-- Experiment Recorder 持久化表（replay fixture 索引 + jsonb）
 -- FileSystem 存 raw fixture JSON，PostgreSQL 存索引列 + jsonb（含 WorkingSet + V2Result）。
 -- fixture_id 为主键，幂等写入（ON CONFLICT DO NOTHING）；recorded_at + purpose 为查询索引。
 CREATE TABLE IF NOT EXISTS {experimentReplayFixtures} (
@@ -1656,7 +1656,7 @@ CREATE TABLE IF NOT EXISTS {experimentReplayFixtures} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "experiment_replay_fixtures", "recorded")} ON {experimentReplayFixtures} (recorded_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "experiment_replay_fixtures", "purpose")} ON {experimentReplayFixtures} (purpose, recorded_at DESC);
 
--- R28-E：Durable Memory Governance 持久化表（Utility Ledger + ConflictSet durable projection）
+-- Durable Memory Governance 持久化表（Utility Ledger + ConflictSet durable projection）
 -- utility_ledger_entries：per-Candidate per-Expert utility 贡献账本条目（read-only 公共 API，写入由 materializer 批量插入）
 -- 反规范化 workspace_id / collection_id / candidate_item_id / decision_id / materialized_at 字段以便索引查询；
 -- 完整 UtilityLedgerEntry 对象保存在 data jsonb，由 store 反序列化。
@@ -1685,7 +1685,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "candidate")} ON {utilityLedgerEntries} (candidate_item_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "decision")} ON {utilityLedgerEntries} (decision_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "materialized")} ON {utilityLedgerEntries} (materialized_at DESC);
--- P1-5：防御性唯一约束——同一 (decision_id, candidate_item_id, expert) 仅允许一条 ledger 条目，
+-- 防御性唯一约束——同一 (decision_id, candidate_item_id, expert) 仅允许一条 ledger 条目，
 -- 防止 Learning Lease 过期后旧 Worker 与新 Worker 重复物化产生重复条目（entry_id 幂等之外的数据库层兜底）。
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "decision_candidate_kind")} ON {utilityLedgerEntries} (decision_id, candidate_item_id, expert);
 
@@ -1733,21 +1733,21 @@ CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
     PRIMARY KEY (request_id)
 );
 
--- P0-3 CAS-2：为已有数据库（v32 及更早）补加 payload_digest / workspace_id / run_id 列。
+-- 为已有数据库（v32 及更早）补加 payload_digest / workspace_id / run_id 列。
 -- 新数据库由上方 CREATE TABLE 直接创建；ALTER ... ADD COLUMN IF NOT EXISTS 保证幂等。
 ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS payload_digest text;
 ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS workspace_id text;
 ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS run_id text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
--- P0-3：idempotency_key 升级为 UNIQUE partial index。
+-- idempotency_key 升级为 UNIQUE partial index。
 --   旧版本（v21）创建的是普通 index；此处先 DROP 旧 index（若存在）再创建 UNIQUE index，
 --   保证已有数据库升级后幂等键全局唯一，防止不同 request_id 复用同一幂等键分别执行。
 --   partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
 DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")};
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
--- P0-3：Durable Tool Result 缓存持久化表（HA 崩溃恢复 exactly-once 结果读取）
+-- Durable Tool Result 缓存持久化表（HA 崩溃恢复 exactly-once 结果读取）
 -- tool_dispatch_results: tool_call_id 主键 — 每个 tool 调用的结果缓存一条行
 -- result jsonb 存储完整 DurableToolResult（供 GetAsync 反序列化）；
 -- succeeded / side_effect / request_id 为反规范化列，供 SQL 查询/对账。
@@ -1765,7 +1765,7 @@ CREATE TABLE IF NOT EXISTS {toolDispatchResults} (
     PRIMARY KEY (tool_call_id)
 );
 
--- P0-4：修复 Durable Tool Result 主键结构
+-- 修复 Durable Tool Result 主键结构
 -- 原主键为 tool_call_id（模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复），
 -- 改为 request_id（稳定调用身份哈希），并添加 workspace_id/run_id/invocation_id 列与 UNIQUE 约束。
 -- 1. 添加新列（幂等）
@@ -1937,7 +1937,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) uf ON true;
 
--- 任务 F：Agent Run 状态机持久化表（替代 InMemoryAgentRunStore，支持 HA 跨进程恢复）
+-- Agent Run 状态机持久化表（替代 InMemoryAgentRunStore，支持 HA 跨进程恢复）
 -- 反规范化 workspace_id / run_id / session_id / state / turn 字段以便索引查询；
 -- turn_budget_json / cost_budget_json 存预算 JSON 列；
 -- 完整 AgentRun 对象保存在 data jsonb，由 store 反序列化。
@@ -1964,22 +1964,22 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
     PRIMARY KEY (workspace_id, run_id)
 );
 
--- G4：v34 → v35 迁移：为已有 agent_runs 表补充 last_checkpoint_id / last_checkpoint_sequence 列
+-- v34 → v35 迁移：为已有 agent_runs 表补充 last_checkpoint_id / last_checkpoint_sequence 列
 -- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_id text NULL;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_sequence integer NULL;
 
--- WP-2：v43 → v44 迁移：为已有 agent_runs 表补充 idempotency_key 列
+-- v43 → v44 迁移：为已有 agent_runs 表补充 idempotency_key 列
 -- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效，幂等）
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS idempotency_key text NULL;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);
--- WP-2：partial UNIQUE 索引让同一 workspace 内 idempotency_key 全局唯一（NULL 不参与唯一约束），
+-- partial UNIQUE 索引让同一 workspace 内 idempotency_key 全局唯一（NULL 不参与唯一约束），
 -- 防止客户端重试/网络抖动产生重复 Run； GetByIdempotencyKeyAsync 走此索引点查。
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "idempotency")} ON {agentRuns} (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
--- 任务 F：Agent Run 事件流哈希链持久化表
+-- Agent Run 事件流哈希链持久化表
 -- 主键 (workspace_id, run_id, sequence)：UNIQUE 约束防重序列号，保证事件流单调递增。
 -- AppendAsync 校验 sequence 连续性 + prev_chain_hash 链接（链头为 null）。
 -- 完整 AgentRunEvent 对象保存在 data jsonb，由 store 反序列化。
@@ -1999,7 +1999,7 @@ CREATE TABLE IF NOT EXISTS {agentRunEvents} (
     PRIMARY KEY (workspace_id, run_id, sequence)
 );
 
--- 任务 D：Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
+-- Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
 -- canary_metrics_samples：各实例定期 UPSERT 本地 CanaryObservationMetrics 快照（含外部指标）。
 --   v36 最新快照模型：PK = (run_id, stage_epoch, instance_id)，每次 UPSERT 覆盖该实例最新累计值，
 --   不再追加行。聚合时只汇总 WHERE stage_epoch = current_epoch 的行，避免重复累计。
@@ -2030,10 +2030,10 @@ CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
     external_sample_count integer NOT NULL DEFAULT 0,
     external_window_start timestamptz,
     external_window_end timestamptz,
-    -- P10：DDSketch 二进制字节（各实例持久化，Leader 聚合时 MergeFrom 合并查询总体 P95）
+    -- DDSketch 二进制字节（各实例持久化，Leader 聚合时 MergeFrom 合并查询总体 P95）
     v2_latency_sketch bytea,
     legacy_latency_sketch bytea,
-    -- P11：成功率分子/分母（聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)）
+    -- 成功率分子/分母（聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)）
     task_success_sum double precision,
     task_success_count bigint,
     tool_success_sum double precision,
@@ -2106,7 +2106,7 @@ CREATE TABLE IF NOT EXISTS {canaryLeaderLeases} (
     PRIMARY KEY (run_id)
 );
 
--- P12：为已有 canary_leader_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
+-- 为已有 canary_leader_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
 ALTER TABLE {canaryLeaderLeases} ADD COLUMN IF NOT EXISTS fencing_token bigint NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_leader_leases", "expires")} ON {canaryLeaderLeases} (lease_expires_at ASC);
@@ -2122,7 +2122,7 @@ CREATE TABLE IF NOT EXISTS {canaryRunEpochs} (
     PRIMARY KEY (run_id)
 );
 
--- Perf-7：Canary 严格 HA 单事务接口持久化表（v45 新增）。
+-- Canary 严格 HA 单事务接口持久化表（v45 新增）。
 -- canary_pipelines：per-run pipeline 状态表，revision 列用于 CAS 原子更新。
 --   ApplyCanaryDecisionAsync 在单一事务内：
 --     1. SELECT fencing_token FROM canary_leader_leases WHERE ...（lease 校验）
@@ -2186,7 +2186,7 @@ CREATE TABLE IF NOT EXISTS {learningEventOutbox} (
     PRIMARY KEY (event_id)
 );
 
--- P0-8：租约 token 列追加（幂等）— AcquirePendingAsync 生成唯一 token 写入 lease_token，
+-- 租约 token 列追加（幂等）— AcquirePendingAsync 生成唯一 token 写入 lease_token，
 -- MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 WHERE lease_token = @token CAS 校验
 -- 仅持有者可 Ack/Nack/Renew（与其他租约模型队列对齐）。
 ALTER TABLE {learningEventOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
@@ -2195,7 +2195,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learnin
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "lease")} ON {learningEventOutbox} (state, lease_expires_at);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "workspace")} ON {learningEventOutbox} (workspace_id, collection_id);
 
--- P0-6：Model Control Plane 激活审计持久化表
+-- Model Control Plane 激活审计持久化表
 -- model_activation_audit: append-only 审计表，记录 Activate / Rollback / Retire / Shadow / Warmup /
 --   Validate / Register 等模型生命周期事件，含 previous_model_id / operator / reason / node_id 业务字段。
 -- 反规范化 model_artifact_id / model_name / operation / timestamp 字段以便索引查询；
@@ -2261,12 +2261,12 @@ CREATE TABLE IF NOT EXISTS {agentRunLeases} (
     PRIMARY KEY (run_id)
 );
 
--- P0-4：为已有 agent_run_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
+-- 为已有 agent_run_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
 ALTER TABLE {agentRunLeases} ADD COLUMN IF NOT EXISTS fencing_token bigint NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_leases", "expires")} ON {agentRunLeases} (lease_expires_at);
 
--- R29 WP-A-2：Desired Model State 持久化表（HA 多节点模型期望状态同步）
+-- Desired Model State 持久化表（HA 多节点模型期望状态同步）
 -- 每个模型至多一条记录，由 SetAsync 的 ON CONFLICT (model_id) DO UPDATE 维护。
 -- generation 字段用于乐观并发控制：ReconcilerWorker 仅当远端 generation > 本地时应用变更。
 -- content_hash 用于快速检测内容变更（避免不必要的 Activate/Deactivate 操作）。
@@ -2283,7 +2283,7 @@ CREATE TABLE IF NOT EXISTS {desiredModelStates} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "desired_model_states", "updated")} ON {desiredModelStates} (updated_at DESC);
 
--- P0-9: Cluster Model Slot (single champion source of truth)
+-- Cluster Model Slot (single champion source of truth)
 -- Single-row table per slot_name (e.g., "primary"). CAS on revision atomically switches ActiveModelArtifactId.
 -- Replaces desired_model_states multi-row Active/Inactive model: one UPDATE invalidates old champion + activates new.
 CREATE TABLE IF NOT EXISTS {clusterModelSlots} (

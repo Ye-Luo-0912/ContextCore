@@ -10,7 +10,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// V2.1 Allocator 主链接入验收测试
+// Allocator 主链接入验收测试
 //
 // 覆盖：
 //   1. Engine 路径选择：V2.1 AllocateWithDiversity vs V2.0 Allocate fallback
@@ -26,7 +26,7 @@ namespace ContextCore.Tests;
 // ===========================================================================
 
 /// <summary>
-/// V2.1 Allocator 主链接入验收测试。
+/// Allocator 主链接入验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R29")]
@@ -38,7 +38,7 @@ public sealed class R29D_AllocatorV2_1MainChainTests
     // =======================================================================
 
     /// <summary>
-    /// 间谍 Allocator V2.1：委托真实 DefaultAllocatorV2_1，记录 AllocateWithDiversity 是否被调用。
+    /// 间谍 Allocator 委托真实 DefaultAllocatorV2_1，记录 AllocateWithDiversity 是否被调用。
     /// </summary>
     private sealed class SpyAllocatorV2_1 : IAllocatorV2_1
     {
@@ -274,7 +274,7 @@ public sealed class R29D_AllocatorV2_1MainChainTests
     [TestMethod]
     public async Task Engine_V2_1Path_MandatoryAlwaysSelected()
     {
-        // V2.1 路径下 mandatory 候选始终选入（即使超出预算）
+        // 路径下 mandatory 候选始终选入（即使超出预算）
         var spy = new SpyAllocatorV2_1(new DefaultGlobalAllocator());
         var engine = BuildEngine(spy);
 

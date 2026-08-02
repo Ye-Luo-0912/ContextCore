@@ -371,7 +371,7 @@ public sealed record PolicyActivation
 ///   - ListBundlesAsync：列出所有 bundle（可选包含 superseded）。
 ///   - RegisterBundleAsync：注册新 bundle（insert-if-absent；P0-4 修复：相同 BundleId+Version 已存在则抛异常）。
 ///   - TryActivateAsync：compare-and-swap 原子激活；expectedEpoch 匹配时才激活并返回 true。
-///     （WS-A：原 ActivateAsync 无条件覆盖入口已彻底删除，仅保留 CAS 路径，防止绕过 epoch 检查。）
+///     （原 ActivateAsync 无条件覆盖入口已彻底删除，仅保留 CAS 路径，防止绕过 epoch 检查。）
 ///
 /// 实现层可注入 Postgres / InMemory store；契约本身不依赖存储。
 /// </remarks>

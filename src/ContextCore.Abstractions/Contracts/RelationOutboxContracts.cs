@@ -91,7 +91,7 @@ public sealed class RelationOutboxRecord
     public string? LastErrorMessage { get; init; }
 }
 
-/// <summary>P1-5：关系写入 outbox 记录的状态常量。</summary>
+/// <summary>关系写入 outbox 记录的状态常量。</summary>
 public static class RelationOutboxStates
 {
     /// <summary>已入队，待 worker 调度。</summary>

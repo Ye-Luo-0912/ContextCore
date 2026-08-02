@@ -9,13 +9,13 @@ namespace ContextCore.Abstractions;
 //   2. 让 HA 场景下 pipeline run state 可跨进程恢复（替代 DefaultGuardedOptimizationPipeline
 //      内的 ConcurrentDictionary in-memory 存储）。
 //   3. 失败语义：SaveRunAsync 幂等（同 RunId 覆盖）；GetRunAsync 不存在返回 null。
-//   4. P0-7：TryTransitionAsync 原子 CAS 推进（revision + stage 双重检查 + 审计批量同事务），
+//   4. TryTransitionAsync 原子 CAS 推进（revision + stage 双重检查 + 审计批量同事务），
 //      避免 HA 场景下两个实例同时推进同一 run 导致状态分裂。
-//   5. P2-1：TryCreateRunAsync insert-if-absent（同 RunId 已存在返回 false，不覆盖），
+//   5. TryCreateRunAsync insert-if-absent（同 RunId 已存在返回 false，不覆盖），
 //      替代 SaveRunAsync 用于 StartAsync 创建新 run，避免秒精度 RunId 碰撞导致覆盖。
-//   6. P2-2：PipelineTransitionRequest 让调用方提供 TransitionId 实现端到端幂等；
+//   6. PipelineTransitionRequest 让调用方提供 TransitionId 实现端到端幂等；
 //      Postgres 实现应在 transitions 审计表上建立 (run_id, transition_id) 唯一约束。
-//   7. P2-3：CanaryAssignment 应作为进入 ScopedCanary 的 transition audit 一部分原子提交，
+//   7. CanaryAssignment 应作为进入 ScopedCanary 的 transition audit 一部分原子提交，
 //      不再通过独立的 SaveCanaryAssignmentAsync 写入。
 //
 // 设计边界：
@@ -24,7 +24,7 @@ namespace ContextCore.Abstractions;
 //   - Store 不调用 IPromotionJudge；仅保存/读取。
 //   - 默认实现使用 ConcurrentDictionary（in-memory）；生产实现替换为 Postgres store。
 //   - 与 IAgentCheckpointStore 设计模式对齐（R26-2）。
-//   - P0-7：TryTransitionAsync 是唯一允许并发推进 run state 的入口；
+//   - TryTransitionAsync 是唯一允许并发推进 run state 的入口；
 //     TryCreateRunAsync 是唯一创建新 run 的入口（insert-if-absent 语义）。
 // ===========================================================================
 
@@ -81,7 +81,7 @@ public sealed record PipelineRunSnapshot
     public IReadOnlyList<BaselineComparison> StageMetrics { get; init; }
         = Array.Empty<BaselineComparison>();
 
-    // ---------- P0-7：HA 字段 ----------
+    // ---------- HA 字段 ----------
 
     /// <summary>
     /// 单调递增版本号。StartAsync 初始为 1；每次 TryTransitionAsync 成功后 +1。
@@ -123,7 +123,7 @@ public sealed record PipelineAuditBatch
     /// <summary>可选的 RollbackRecord（自动回滚记录）。</summary>
     public RollbackRecord? RollbackRecord { get; init; }
 
-    /// <summary>R28-B.8：可选的 StageTransitionRecord（canary 百分比推进审计）。</summary>
+    /// <summary>可选的 StageTransitionRecord（canary 百分比推进审计）。</summary>
     public StageTransitionRecord? StageTransition { get; init; }
 }
 

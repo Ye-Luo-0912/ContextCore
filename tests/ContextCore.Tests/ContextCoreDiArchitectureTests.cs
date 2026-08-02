@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// OPT-5: DI 架构测试。验证以下 5 项不变量：
+/// DI 架构测试。验证以下 5 项不变量：
 /// 1. 每个 provider 的最终解析类型（Final resolved type per provider）
 /// 2. Postgres provider 无 Unsupported 占位（No Unsupported placeholder in production）
 /// 3. 不存在意外重复覆盖（No accidental duplicate override）

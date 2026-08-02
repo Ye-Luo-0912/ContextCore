@@ -56,10 +56,10 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
 
     // 子问题4：并发推理槽位（SemaphoreSlim），限制同时调用 session.Run 的请求数。
     // 容量 = MaxConcurrentInferences（默认 = Environment.ProcessorCount）。
-    // G8：构造时若 CpuOversubscriptionGuard=true，按 IntraOpNumThreads 收缩以避免过度订阅。
+    // 构造时若 CpuOversubscriptionGuard=true，按 IntraOpNumThreads 收缩以避免过度订阅。
     private readonly SemaphoreSlim _inferenceSlots;
 
-    // G8：等待推理槽位的排队计数（在 SemaphoreSlim 上等待但尚未获取的请求数）。
+    // 等待推理槽位的排队计数（在 SemaphoreSlim 上等待但尚未获取的请求数）。
     // 用于实现 BatchQueueCapacity 限制：超过则立即拒绝，避免无限排队。
     // -1 表示 BatchQueueCapacity=0（不限制），跳过计数逻辑。
     private readonly int _batchQueueCapacity;
@@ -109,7 +109,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             ? options.MaxConcurrentInferences
             : Environment.ProcessorCount;
 
-        // G8：CPU 过度订阅保护。
+        // CPU 过度订阅保护。
         // 当 ASP.NET 请求并发 × IntraOpNumThreads 超过 ProcessorCount 时，ORT 线程池与
         // 请求线程争抢核心导致 P99 飙升。启用保护时收缩 slotCount，使乘积不超过核心数。
         if (options.CpuOversubscriptionGuard)
@@ -126,7 +126,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
 
         _inferenceSlots = new SemaphoreSlim(Math.Max(1, slotCount), Math.Max(1, slotCount));
 
-        // G8：BatchQueueCapacity<=0 表示不限制（向后兼容）。
+        // BatchQueueCapacity<=0 表示不限制（向后兼容）。
         _batchQueueCapacity = options.BatchQueueCapacity > 0 ? options.BatchQueueCapacity : -1;
         _waitingCount = 0;
 
@@ -265,7 +265,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     ///   3. 通过 Task.WaitAsync(TimeSpan) 实现超时；超时后释放槽位让其他请求继续，
     ///      native 调用仍在后台运行（无法中断）。
     ///   4. 超时累计达 CircuitBreakerThreshold 后打开熔断器。
-    /// G8：在 WaitAsync 之前用 _waitingCount 实现 bounded queue；超过 BatchQueueCapacity
+    /// 在 WaitAsync 之前用 _waitingCount 实现 bounded queue；超过 BatchQueueCapacity
     ///   立即返回 QueueFull 失败，避免在过载场景下请求无限期堆积。
     /// 子问题7：超时产生的孤儿 native 调用通过 _orphanedTaskCount 计数；当达
     ///   MaxOrphanedInferences 时新请求立即返回 NativePoolSaturated 失败（back-pressure），
@@ -299,7 +299,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             };
         }
 
-        // G8：bounded queue — 在等待槽位前先校验排队容量。
+        // bounded queue — 在等待槽位前先校验排队容量。
         // _batchQueueCapacity=-1 表示不限制（向后兼容 BatchQueueCapacity=0 行为）。
         // 否则用 Interlocked.Increment 原子抢占一个等待位；若超过容量立即回退并拒绝。
         if (_batchQueueCapacity > 0)

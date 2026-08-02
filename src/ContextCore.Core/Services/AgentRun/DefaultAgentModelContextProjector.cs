@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// / Perf-4：DefaultAgentModelContextProjector — Agent 模型上下文默认投影器
+// / DefaultAgentModelContextProjector — Agent 模型上下文默认投影器
 //
 // 修复问题：
 //   旧路径中 Actor 调用 IContextDecisionRuntime 后仅将 CandidateId/Type/FinalScore
@@ -30,20 +30,20 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //      不再仅算 Content.Length（Content 为空但 ToolCalls 非空的消息不再算作 0 token）。
 //   d. Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容）。
 //
-// Perf-4 保留要点：
+// 保留要点：
 //   - Retrieved Materials 不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
 //   - Retrieved Materials 使用 best-fit 策略：按 FinalScore 排序后逐个尝试纳入。
 // ===========================================================================
 
 /// <summary>
-/// / Perf-4：Agent 模型上下文默认投影器。
+/// / Agent 模型上下文默认投影器。
 /// 从 ContextDecisionExecutionResult.WorkingSet.Materials 取出候选正文内容，
 /// 按 Run.ModelContextTokenBudget 截断投影为最终发送给模型的消息列表。
 /// </summary>
 public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjector
 {
     /// <summary>
-    /// Perf-4：Retrieved Materials 的 section 标记前缀。
+    /// Retrieved Materials 的 section 标记前缀。
     /// 标记为 untrusted_data 让模型区分可信系统指令与外部检索数据，降低提示注入风险。
     /// </summary>
     private const string UntrustedDataSectionMarker = "[untrusted_data]";
@@ -91,8 +91,8 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         // 4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记）
         // Retrieved Materials 移到 Conversation 之前——作为检索上下文注入，
         // 不破坏对话历史中 "assistant tool_calls → tool result" 的因果顺序。
-        // Perf-4 修复 a：不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
-        // Perf-4 修复 c：best-fit 策略——按 FinalScore 排序后逐个尝试纳入，
+        // 修复 a：不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
+        // 修复 c：best-fit 策略——按 FinalScore 排序后逐个尝试纳入，
         //   某个材料太大时跳过该材料继续尝试下一个（不直接 break），让更小的相关材料仍能进入上下文。
         if (decisionResult is not null)
         {
@@ -124,7 +124,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                     selectedMaterialIds.Add(materialId);
                 }
 
-                // Perf-4：User 角色 + [untrusted_data] section 标记（替代旧的 System 角色）
+                // User 角色 + [untrusted_data] section 标记（替代旧的 System 角色）
                 var prefix = $"{UntrustedDataSectionMarker}\n[RetrievedContext:{env.Type}]\n";
                 var msg = new AgentMessage
                 {
@@ -132,7 +132,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                     Content = prefix + content
                 };
 
-                // Perf-2（精确 tokenize → Model Projection）：hydrated material 的 TokenCost 已由
+                // hydrated material 的 TokenCost 已由
                 // ISelectedCandidateHydrator 用 tokenizer 精确重算（P3 Fix-5），正文 token 直接复用精确值，
                 // 仅对固定包装开销（[untrusted_data]/[RetrievedContext:type]）做长度估算；
                 // 无精确值（测试 stub / 降级路径 / 正文缺失）时回退到整体长度估算（与旧行为一致）。
@@ -141,7 +141,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                     : EstimateMessageTokens(msg);
                 if (budget > 0 && usedTokens + tokens > budget)
                 {
-                    // Perf-4 修复 c：best-fit — 当前材料太大时跳过，继续尝试下一个更小的材料（不 break）
+                    // 修复 c：best-fit — 当前材料太大时跳过，继续尝试下一个更小的材料（不 break）
                     truncated = true;
                     continue;
                 }
@@ -176,7 +176,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         };
     }
 
-    // ── P0-1：Conversation 原子协议单元投影 ──────────────────────────────
+    // ── Conversation 原子协议单元投影 ──────────────────────────────
 
     /// <summary>
     /// 从 Conversation 按原子协议单元保序裁剪。
@@ -364,7 +364,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
     }
 
     /// <summary>
-    /// Perf-2（精确 tokenize → Model Projection）：尝试读取 material 的精确 token 数。
+    /// 尝试读取 material 的精确 token 数。
     /// 仅当正文非空且 TokenCost 存在（ISelectedCandidateHydrator hydrate 后用 tokenizer 精确重算，
     /// 或摄取阶段持久化的精确 cost）时返回 true；测试 stub / 降级路径返回 false，调用方回退到长度估算。
     /// </summary>

@@ -295,7 +295,7 @@ internal static class CoreExtensions
 				sinks.Add(postgresSink);
 			}
 
-			// + R13.4 #1：CompositeContextEventSink.Kind 取最严格值——
+			// + CompositeContextEventSink.Kind 取最严格值——
 			// 当 FileContextEventSink / PostgresContextEventSink（审计 sink，Kind=Required）存在时，
 			// Composite.Kind = Required，外层 BoundedChannelContextEventSink 绕过通道、直接同步调用，
 			// 审计事件不被通道满丢弃。
@@ -374,7 +374,7 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 
-		// B-2：Unified Decision Runtime — pure Runtime + Shadow tee 注册。
+		// Unified Decision Runtime — pure Runtime + Shadow tee 注册。
 		// 主链（IContextRetriever / IContextPackageBuilder）已切换为 Authoritative Runtime（装饰器模式）。
 		// IContextDecisionRuntime 已升级为真实编排（EarlyGate → Feature → Safety → Score → Engine → Allocator）。
 		// ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，产出 Diagnostic parity 报告（B-3 升级为 Hard）。
@@ -535,13 +535,13 @@ internal static class CoreExtensions
 
 		// DefaultContextDecisionRuntime 注册改为工厂：注入 LearningMaterializationDispatcher（替代 Task.Run 热路径）。
 	// dispatcher null 时（测试容器未注册）回退到 materializer 直接调用路径（保持向后兼容）。
-	// Perf-1：注入 ISelectedCandidateHydrator（Late Hydration）。
+	// 注入 ISelectedCandidateHydrator（Late Hydration）。
 	// hydrator 依赖 IContextStoreBatchLookup / IMemoryStoreBatchLookup（均由 storage provider 可选注册）。
 	// 两个 batch lookup 都未注册时 hydrator 退化为 no-op，Runtime 保持旧行为（IncludeContent=true）。
 		services.AddSingleton<DefaultSelectedCandidateHydrator>(sp => new DefaultSelectedCandidateHydrator(
 			sp.GetService<IContextStoreBatchLookup>(),
 			sp.GetService<IMemoryStoreBatchLookup>(),
-			// Fix-5：注入 tokenizer 让 hydrate 后 TokenCost 精确重算（null 时回退 length/4 估算）
+			// 注入 tokenizer 让 hydrate 后 TokenCost 精确重算（null 时回退 length/4 估算）
 			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ISelectedCandidateHydrator>(sp => sp.GetRequiredService<DefaultSelectedCandidateHydrator>());
 		services.AddSingleton<IContextDecisionRuntime>(sp =>
@@ -580,7 +580,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ShadowDecisionRuntime>();
 		services.AddSingleton<ShadowGate>();
 		services.AddSingleton<ShadowGateEvaluator>();
-		// B-5：CutoverConfiguration 从环境变量读取（默认 0% = Legacy only）
+		// CutoverConfiguration 从环境变量读取（默认 0% = Legacy only）
 		services.AddSingleton(CutoverConfiguration.FromEnvironment());
 		services.AddSingleton<CutoverController>(sp =>
 		{
@@ -588,7 +588,7 @@ internal static class CoreExtensions
 			var controller = new CutoverController(config.CutoverPercentage);
 			return controller;
 		});
-		// 工作包 B：Per-run CutoverController 隔离。
+		// Per-run CutoverController 隔离。
 		// CutoverControllerRegistry 包装默认控制器（CutoverPercentage 从环境变量读取），
 		// 并为每个 canary run 维护独立的 CutoverController 实例，避免多 run 百分比互相覆盖。
 		// ICutoverControllerResolver 供 AuthoritativeRuntime 按请求 metadata 中的 canaryRunId 路由。
@@ -610,16 +610,16 @@ internal static class CoreExtensions
 		// 供 Authoritative Runtime 作为 fallback 路径注入。普通消费者通过接口获取的是 V2 装饰器。
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<AuthoritativeRetrievalRuntime>());
 		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<AuthoritativePackageRuntime>());
-		// B-5：DecisionExperimentPlane 长期保留（sampled shadow + replay fixtures）
+		// DecisionExperimentPlane 长期保留（sampled shadow + replay fixtures）
 		// 注册 IExperimentRecorder（默认 in-memory；可替换为持久化实现）
 		services.TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder>();
 		services.AddSingleton<DecisionExperimentPlaneIntegration>();
 
-		// 工作包 C：Canary Metrics 采集器。从 shadow/parity 报告聚合 divergence_rate /
+		// Canary Metrics 采集器。从 shadow/parity 报告聚合 divergence_rate /
 		// error_rate / p95_latency_ms，供 CanaryProgressionService.EvaluateAsync 消费。
 		services.AddSingleton<ICanaryMetricsCollector, DefaultCanaryMetricsCollector>();
 
-		// 工作包 D：Canary Progression HostedService。
+		// Canary Progression HostedService。
 		// CanarySchedulerOptions 改用 Configure<T>() 注册（Options Pipeline），
 		// 让 IOptionsMonitor<CanarySchedulerOptions> 消费者能感知后续 PostConfigure 覆盖
 		// （如 ProductionHA 强制 Enabled=false）。原 AddSingleton POCO 模式不读取
@@ -653,7 +653,7 @@ internal static class CoreExtensions
 		// 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
 		// services.AddHostedService<CanaryProgressionHostedService>(); // 已迁移到 Runtime 入口
 
-		// 任务 C：默认外部指标采集源（ICanaryExternalMetricsSource 实现）。
+		// 默认外部指标采集源（ICanaryExternalMetricsSource 实现）。
 		// 从 Tool 执行结果、用户反馈、安全审计等外部信号采集 ground truth 指标，
 		// 替代仅依赖 token budget + FinalScore 的 quality_score。
 		// 注册为 Singleton：进程内 in-memory 计数器，线程安全（lock 保护）。
@@ -661,7 +661,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ICanaryExternalMetricsSource>(sp =>
 			new DefaultCanaryExternalMetricsSource(sp.GetService<IToolDispatchJournal>()));
 
-		// 任务 D：Canary HA Leader HostedService（多实例部署模式）。
+		// Canary HA Leader HostedService（多实例部署模式）。
 		// CanaryLeaderOptions 改用 Configure<T>() 注册（Options Pipeline），
 		// 让 IOptionsMonitor<CanaryLeaderOptions> 消费者能感知后续 PostConfigure 覆盖
 		// （如 ProductionHA 强制 Enabled=true）。原 AddSingleton<IOptions<T>> 手工注册

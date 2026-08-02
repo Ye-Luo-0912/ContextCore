@@ -72,7 +72,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         string? version,
         CancellationToken cancellationToken = default)
     {
-        // + P0-4：精确加载。
+        // + 精确加载。
         // - version 非空：按 (BundleId, Version) 复合主键精确查找。
         // - version 为空：返回该 BundleId 下最新非 superseded 版本。
         if (version is not null)

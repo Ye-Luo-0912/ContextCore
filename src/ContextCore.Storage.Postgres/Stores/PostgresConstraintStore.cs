@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL 约束规则存储，实现 <see cref="IConstraintStore"/>。
-/// Perf-2：SaveAsync 计算 SHA-256 + token 数并持久化到专用列，Provider 读取时直接复用、跳过在线重算。
+/// SaveAsync 计算 SHA-256 + token 数并持久化到专用列，Provider 读取时直接复用、跳过在线重算。
 /// </summary>
 public sealed class PostgresConstraintStore : PostgresStoreBase, IConstraintStore
 {
@@ -29,7 +29,7 @@ public sealed class PostgresConstraintStore : PostgresStoreBase, IConstraintStor
         ArgumentNullException.ThrowIfNull(constraint);
         var now = DateTimeOffset.UtcNow;
         var isNew = string.IsNullOrWhiteSpace(constraint.Id);
-        // Perf-2：摄取阶段计算 tokenization metadata，写入专用列与 Metadata（与 ContextItem 摄取逻辑一致）。
+        // 摄取阶段计算 tokenization metadata，写入专用列与 Metadata（与 ContextItem 摄取逻辑一致）。
         var tokenization = ComputeTokenizationMetadata(constraint.Content);
         var metadataWithTokenization = WithTokenizationMetadata(constraint.Metadata, tokenization);
         var normalized = new ContextConstraint
@@ -176,7 +176,7 @@ LIMIT {take};
     }
 
     /// <summary>
-    /// Perf-2：从 reader 当前行读取 ContextConstraint，并把专用列的 tokenization metadata 合并到 Metadata 字典。
+    /// 从 reader 当前行读取 ContextConstraint，并把专用列的 tokenization metadata 合并到 Metadata 字典。
     /// 列顺序：data(0), content_hash(1), content_length(2), tokenizer_id(3), tokenizer_version(4), token_count(5), counted_at(6)。
     /// </summary>
     private ContextConstraint ReadConstraintWithTokenization(System.Data.Common.DbDataReader reader)
@@ -212,7 +212,7 @@ LIMIT {take};
             };
     }
 
-    /// <summary>Perf-2：把 tokenization metadata 列值绑定到 NpgsqlCommand 参数。</summary>
+    /// <summary>把 tokenization metadata 列值绑定到 NpgsqlCommand 参数。</summary>
     private static void AddTokenizationColumnParameters(NpgsqlCommand command, TokenizationMetadata metadata)
     {
         command.Parameters.AddWithValue("content_hash", (object?)metadata.ContentHash ?? DBNull.Value);

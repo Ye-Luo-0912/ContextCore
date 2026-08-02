@@ -84,7 +84,7 @@ public sealed partial class ControlRoomService
         return await EnrichSubgraphNodesAsync(subgraph, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>GRAPH-13: 从记忆存储中查找节点元数据（标题/摘要/状态），丰富子图节点。</summary>
+    /// <summary> 从记忆存储中查找节点元数据（标题/摘要/状态），丰富子图节点。</summary>
     private async Task<RelationSubgraph> EnrichSubgraphNodesAsync(RelationSubgraph subgraph, CancellationToken cancellationToken)
     {
         if (subgraph.Nodes.Count == 0)
@@ -386,7 +386,7 @@ public sealed partial class ControlRoomService
         return nameof(GraphNodeKind.CandidateMemory);
     }
 
-    /// <summary>P3-03：从 Metadata createdFrom/source/generatedBy 推断 Provenance。</summary>
+    /// <summary>从 Metadata createdFrom/source/generatedBy 推断 Provenance。</summary>
     private static string? InferProvenance(IReadOnlyDictionary<string, string> metadata)
     {
         var createdFrom = ReadMetadataValue(metadata, "createdFrom", "source", "generatedBy");

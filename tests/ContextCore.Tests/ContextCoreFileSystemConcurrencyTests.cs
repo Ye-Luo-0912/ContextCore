@@ -477,7 +477,7 @@ public sealed class ContextCoreFileSystemConcurrencyTests
         }
     }
 
-    // ── R13.1 #5：JobId → 文件路径索引 ────────────────────────────────
+    // ── JobId → 文件路径索引 ────────────────────────────────
 
     /// <summary>
     /// #5：Enqueue 应将 jobId→路径写入进程内索引，后续 Ack 命中索引跳过扫描。

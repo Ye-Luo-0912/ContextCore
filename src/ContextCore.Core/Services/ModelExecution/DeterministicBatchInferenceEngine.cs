@@ -6,7 +6,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// / R28-F：Deterministic Batch Inference Engine
+// / Deterministic Batch Inference Engine
 //
 // 目标：
 //   提供 IBatchInferenceEngine 的 fallback 实现，不调用真实模型，
@@ -34,7 +34,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// / R28-F：确定性批量推理引擎（fallback 实现）。
+/// / 确定性批量推理引擎（fallback 实现）。
 /// </summary>
 /// <remarks>
 /// 相同输入始终产出相同分数；不调用真实模型，适合作为 fallback 或基础设施测试实现。

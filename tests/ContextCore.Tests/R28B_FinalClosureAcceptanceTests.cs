@@ -366,7 +366,7 @@ public sealed class PurposeSemanticAcceptanceTests
     [TestMethod]
     public async Task IncludeContentFalseNeverLoadsOrReturnsContent()
     {
-        // Fix-4 契约澄清：IncludeContent=false → recall 阶段不加载正文（Material.Content 为空）；
+        // 契约澄清：IncludeContent=false → recall 阶段不加载正文（Material.Content 为空）；
         // 若 hydrator 未注入（本测试 BuildRuntime 默认不注入），选中候选的 Content 保持空。
         // 生产 DI 路径始终注入 ISelectedCandidateHydrator（见 CoreExtensions.cs），
         // 选中候选会被 hydrator 批量 re-fetch 正文——该契约由
@@ -408,7 +408,7 @@ public sealed class PurposeSemanticAcceptanceTests
     [TestMethod]
     public async Task IncludeContentFalseHydratorRefetchesSelected()
     {
-        // Fix-4 新增测试：IncludeContent=false + hydrator 注入时，选中候选的 Content
+        // 新增测试：IncludeContent=false + hydrator 注入时，选中候选的 Content
         // 必须被 ISelectedCandidateHydrator 批量 re-fetch（Late Hydration 完整契约）。
         // 生产 DI 路径（CoreExtensions.cs）始终注入 hydrator，此测试模拟生产 wiring。
         var store = new FixedItemContextStore(new ContextItem
@@ -1303,7 +1303,7 @@ public sealed class ExperimentPlaneAcceptanceTests
 
 /// <summary>
 /// 返回固定 ContextItem 的 IContextStore Stub，用于测试 IncludeContent 语义。
-/// Fix-4：同时实现 IContextStoreBatchLookup，让 Late Hydration 测试可注入 hydrator。
+/// 同时实现 IContextStoreBatchLookup，让 Late Hydration 测试可注入 hydrator。
 /// </summary>
 internal sealed class FixedItemContextStore : IContextStore, IContextStoreBatchLookup
 {
@@ -1337,7 +1337,7 @@ internal sealed class FixedItemContextStore : IContextStore, IContextStoreBatchL
         CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
-    // Fix-4：IContextStoreBatchLookup 实现——返回固定 item（含完整正文），供 hydrator re-fetch
+    // IContextStoreBatchLookup 实现——返回固定 item（含完整正文），供 hydrator re-fetch
     public Task<IReadOnlyList<ContextItem>> BatchGetAsync(
         string workspaceId, string collectionId,
         IReadOnlyList<string> ids,

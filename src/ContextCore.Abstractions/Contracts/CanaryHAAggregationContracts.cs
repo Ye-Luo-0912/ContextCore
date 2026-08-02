@@ -316,7 +316,7 @@ public sealed record LeasedLeadership
 }
 
 /// <summary>
-/// Perf-7：Canary 决策类型（用于严格 HA 单事务推进）。
+/// Canary 决策类型（用于严格 HA 单事务推进）。
 /// </summary>
 /// <remarks>
 /// 与 <see cref="CanaryProgressionDecision"/> 的差异：本枚举仅用于 <see cref="ICanaryDecisionApplier"/>
@@ -336,7 +336,7 @@ public enum CanaryDecision
 }
 
 /// <summary>
-/// Perf-7：Canary 决策请求（单一事务接口入参）。
+/// Canary 决策请求（单一事务接口入参）。
 /// </summary>
 /// <remarks>
 /// 调用方（<c>CanaryLeaderHostedService</c>）在评估完聚合指标后构造本请求，
@@ -390,7 +390,7 @@ public sealed record CanaryDecisionRequest
 }
 
 /// <summary>
-/// Perf-7：Canary 决策执行结果。
+/// Canary 决策执行结果。
 /// </summary>
 public sealed record CanaryDecisionResult
 {
@@ -421,7 +421,7 @@ public sealed record CanaryDecisionResult
 }
 
 /// <summary>
-/// Perf-7：Canary 决策原子应用器（单一 PostgreSQL 事务接口）。
+/// Canary 决策原子应用器（单一 PostgreSQL 事务接口）。
 /// </summary>
 /// <remarks>
 /// <b>背景</b>：旧路径 <c>ProgressionService.AdvanceAsync</c> → <c>AdvanceEpochAsync(fencingToken)</c>
@@ -516,7 +516,7 @@ public interface ICanaryDecisionApplier
 }
 
 /// <summary>
-/// Perf-7：Canary pipeline 当前状态（revision + percentage）。
+/// Canary pipeline 当前状态（revision + percentage）。
 /// </summary>
 public sealed record CanaryPipelineState
 {

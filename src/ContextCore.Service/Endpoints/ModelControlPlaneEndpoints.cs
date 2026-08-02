@@ -204,7 +204,7 @@ internal static class ModelControlPlaneEndpoints
             {
                 try
                 {
-                    // Perf-8：tensor 名从配置读取（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName），
+                    // tensor 名从配置读取（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName），
                     // 避免硬编码 "input" / "score" 与不同模型 schema 不匹配。
                     var validateOptions = CreateDefaultOnnxOptions(configuration, enableWarmup: false);
                     var session = await sessionFactory.CreateAsync(validateOptions, descriptor, ct).ConfigureAwait(false);
@@ -282,7 +282,7 @@ internal static class ModelControlPlaneEndpoints
             // warmup 不再调用 ActivateAsync（会替换 ActiveEngine），改为 LoadAndWarmupAsync。
             // LoadAndWarmupAsync 加载模型并执行 Golden Probe warmup，但不发布为 active；
             // 返回 Staged Handle 供后续 /activate 端点（接受 stagedHandleId）原子发布。
-            // Perf-8：tensor 名从配置读取，避免硬编码 "input" / "score"。
+            // tensor 名从配置读取，避免硬编码 "input" / "score"。
             var options = CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var staged = await activationManager.LoadAndWarmupAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Warmup,
@@ -340,7 +340,7 @@ internal static class ModelControlPlaneEndpoints
                     $"未找到 ModelArtifactId='{id}'。");
             }
 
-            // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
+            // request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
             var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var result = await shadowManager.ActivateShadowAsync(descriptor, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Shadow,
@@ -423,7 +423,7 @@ internal static class ModelControlPlaneEndpoints
             }
             else
             {
-                // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
+                // request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
                 var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
                 result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
             }
@@ -508,7 +508,7 @@ internal static class ModelControlPlaneEndpoints
             }
 
             // 本地激活（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
-            // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
+            // request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
             var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Rollback,
@@ -863,7 +863,7 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
-    /// Perf-8：从 IConfiguration 构造默认 OnnxInferenceEngineOptions。
+    /// 从 IConfiguration 构造默认 OnnxInferenceEngineOptions。
     /// tensor 名从配置读取（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName），
     /// 缺省时回退到 "input" / "score"，与历史行为保持向后兼容。
     /// 替换原本散落在多个端点中的硬编码字面量。
@@ -928,7 +928,7 @@ internal static class ModelControlPlaneEndpoints
     /// 拒绝：
     ///   - 包含 ".." 的路径（防止路径穿越）
     ///   - 非配置根目录的绝对路径
-    ///   - Perf-8：路径中存在 symlink 指向 ArtifactRoot 之外（防止 symlink 穿越攻击）
+    ///   - 路径中存在 symlink 指向 ArtifactRoot 之外（防止 symlink 穿越攻击）
     /// </summary>
     /// <param name="artifactPath">客户端提交的路径。</param>
     /// <param name="artifactRoot">配置的 ArtifactRoot（绝对路径）。</param>
@@ -984,7 +984,7 @@ internal static class ModelControlPlaneEndpoints
             return false;
         }
 
-        // 5. Perf-8：解析 symlink，防止 ArtifactRoot 内的 symlink 指向外部路径。
+        // 5. 解析 symlink，防止 ArtifactRoot 内的 symlink 指向外部路径。
         // Path.GetFullPath 仅规范化 .. 与 . ，不解析 symlink；攻击者可在 ArtifactRoot 内
         // 创建指向外部目录的 symlink，绕过 StartsWith 校验读取服务器任意文件。
         // 这里逐级解析路径上每个已存在的组件的 symlink，得到真实路径后再校验是否仍在 ArtifactRoot 内。
@@ -1002,7 +1002,7 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
-    /// Perf-8：逐级解析路径上已存在组件的 symlink，返回最终真实路径。
+    /// 逐级解析路径上已存在组件的 symlink，返回最终真实路径。
     /// Path.GetFullPath 仅规范化 ".." 与 "."，不解析 symlink；本方法补充此缺失。
     /// 对不存在的路径组件（如待上传的目标文件）跳过解析，仅解析已存在的父目录链。
     /// </summary>
@@ -1040,7 +1040,7 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
-    /// Perf-8：若指定路径是 symlink，返回其最终目标的真实路径；否则原样返回。
+    /// 若指定路径是 symlink，返回其最终目标的真实路径；否则原样返回。
     /// 同时处理文件与目录 symlink；对不存在的路径或解析失败的情况原样返回。
     /// </summary>
     private static string ResolveLinkIfExists(string path)
@@ -1101,7 +1101,7 @@ internal static class ModelControlPlaneEndpoints
             CalibrationVersion = descriptor.CalibrationVersion,
             EngineKind = descriptor.EngineKind.ToString(),
             ContentHash = descriptor.ContentHash,
-            // Perf-8：不返回服务器本地 ArtifactPath，仅暴露安全信息。
+            // 不返回服务器本地 ArtifactPath，仅暴露安全信息。
             // 对象存储 URI（s3:// / https:// 等）可直接返回；本地路径仅返回文件名。
             ArtifactName = ResolveSafeArtifactName(descriptor.ArtifactPath),
             Description = descriptor.Description,
@@ -1109,7 +1109,7 @@ internal static class ModelControlPlaneEndpoints
         };
 
     /// <summary>
-    /// Perf-8：把 ArtifactPath 转换为不暴露服务器目录结构的安全表示。
+    /// 把 ArtifactPath 转换为不暴露服务器目录结构的安全表示。
     /// 对象存储 URI 直接返回（不涉及服务器文件系统路径）；本地路径仅返回文件名。
     /// </summary>
     private static string? ResolveSafeArtifactName(string? artifactPath)
@@ -1205,7 +1205,7 @@ public sealed class ModelArtifactDescriptorResponse
     public string CalibrationVersion { get; init; } = string.Empty;
     public string EngineKind { get; init; } = string.Empty;
     public string ContentHash { get; init; } = string.Empty;
-    /// <summary>Perf-8：安全的工件名（对象存储 URI 或本地文件名，不暴露服务器目录结构）。</summary>
+    /// <summary>安全的工件名（对象存储 URI 或本地文件名，不暴露服务器目录结构）。</summary>
     public string? ArtifactName { get; init; }
     public string? Description { get; init; }
     public DateTimeOffset RegisteredAt { get; init; }

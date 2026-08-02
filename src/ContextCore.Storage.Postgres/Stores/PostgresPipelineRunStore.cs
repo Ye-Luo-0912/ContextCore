@@ -21,7 +21,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   4. <see cref="SaveRunAsync"/> 幂等（同主键覆盖）— 仅用于 StartAsync 创建新 run；
 ///      后续推进必须走 <see cref="TryTransitionAsync"/>（P0-7 CAS 路径）。
 ///   5. 与 PostgresAgentCheckpointStore 设计模式对齐（R26-2）。
-///   6. P0-7：<see cref="TryTransitionAsync"/> 在单事务内完成 CAS UPDATE + audit 批量 INSERT，
+///   6. <see cref="TryTransitionAsync"/> 在单事务内完成 CAS UPDATE + audit 批量 INSERT，
 ///      SELECT FOR UPDATE 锁定行，避免并发推进导致状态分裂。
 /// </remarks>
 public sealed class PostgresPipelineRunStore : PostgresStoreBase, IPipelineRunStore
@@ -88,7 +88,7 @@ ON CONFLICT (run_id) DO UPDATE SET
     }
 
     /// <inheritdoc />
-    /// <remarks>P2-1：使用 ON CONFLICT (run_id) DO NOTHING 实现 insert-if-absent 语义。</remarks>
+    /// <remarks>使用 ON CONFLICT (run_id) DO NOTHING 实现 insert-if-absent 语义。</remarks>
     public async Task<bool> TryCreateRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);

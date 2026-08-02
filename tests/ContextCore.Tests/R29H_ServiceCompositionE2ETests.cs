@@ -232,7 +232,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
-        // 断言 1：HA 平面 hosted services 注册（P0-6：旧平面 pump/replay/reaper/metrics 已退役）
+        // 断言 1：HA 平面 hosted services 注册（旧平面 pump/replay/reaper/metrics 已退役）
         var hostedServiceTypes = services
             .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
             .Select(d => d.ImplementationType)

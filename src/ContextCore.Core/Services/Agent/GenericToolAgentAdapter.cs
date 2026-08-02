@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// /R23-4：Agent Runtime Adapter 实现
+// /Agent Runtime Adapter 实现
 //
 // 设计原则（对齐 R23 规格）：
 //   1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型

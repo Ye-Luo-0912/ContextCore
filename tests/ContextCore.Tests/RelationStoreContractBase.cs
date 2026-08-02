@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// GRAPH-10：IRelationStore provider contract 基类。
+/// IRelationStore provider contract 基类。
 /// 同一套断言在 InMemory / FileSystem / Postgres 三个 provider 上运行，验证核心契约一致：
 /// Get/Delete/BatchUpsert 行为，以及 QueryNeighborsAsync(RelationNeighborQuery) 的方向、类型、
 /// 置信度、生命周期、ReviewStatus 过滤和 Take 分页语义。
@@ -472,7 +472,7 @@ public abstract class RelationStoreContractBase
         }
     }
 
-    // ── P1-6：QueryNeighborsBatchAsync 契约 ────────────────────────────
+    // ── QueryNeighborsBatchAsync 契约 ────────────────────────────
 
     [TestMethod]
     public async Task QueryNeighborsBatch_ReturnsEachSeedWithItsNeighbors()
@@ -760,7 +760,7 @@ public abstract class RelationStoreContractBase
         }
     }
 
-    // ── P1-4：高基数邻居查询语义 + Truncated 信号 ─────────────────────────
+    // ── 高基数邻居查询语义 + Truncated 信号 ─────────────────────────
 
     /// <summary>
     /// 种子邻居数超过 MaxScan 时，结果应标记 Truncated=true。

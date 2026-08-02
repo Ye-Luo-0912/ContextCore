@@ -66,7 +66,7 @@ public sealed class RelationEvalBackfillPolicy : IRelationBackfillPolicy
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var confidence = relation.Confidence;
-        // GRAPH-08：正式字段作为默认值
+        // 正式字段作为默认值
         var lifecycle = relation.Lifecycle;
         var reviewStatus = relation.ReviewStatus;
 
@@ -133,7 +133,7 @@ public sealed class RelationEvalBackfillPolicy : IRelationBackfillPolicy
             SourceRefs = sourceRefs.ToArray(),
             Metadata = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase),
             CreatedAt = relation.CreatedAt,
-            // GRAPH-08：保留正式字段
+            // 保留正式字段
             SourceNodeKind = relation.SourceNodeKind,
             TargetNodeKind = relation.TargetNodeKind,
             Lifecycle = lifecycleOverride ?? relation.Lifecycle,

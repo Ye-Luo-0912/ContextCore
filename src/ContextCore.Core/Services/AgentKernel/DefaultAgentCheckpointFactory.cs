@@ -296,7 +296,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         return string.Equals(computedHash, state.ContentHash, StringComparison.Ordinal);
     }
 
-    /// <summary>R28-E P1-1 / R28-G P1-5 / P4：Kernel 状态访问器（读取已提交结果 + snapshot 引用 + delta cursor + event cursor）。</summary>
+    /// <summary>Kernel 状态访问器（读取已提交结果 + snapshot 引用 + delta cursor + event cursor）。</summary>
     /// <remarks>
     /// 通过委托避免直接暴露状态持有方内部字段；工厂构造时由状态持有方注入。
     /// 新增（P1-5）的访问器委托可为 null（兼容旧调用方）；null 时退回默认值（cursor=0 → Full 模式）。
@@ -332,10 +332,10 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         /// <param name="getPendingResults">返回 pending（Unknown 副作用）结果字典的委托（null 时退回空集）。</param>
         /// <param name="getLastCheckpointSequence">返回上次 checkpoint LastSequence 的委托（null 时退回 0 = Full 模式）。</param>
         /// <param name="getLastCheckpointId">返回上次 checkpoint ID 的委托（null 时退回 null）。</param>
-        /// <param name="getLastCheckpointContentHash">P0-5：返回上次 checkpoint ContentHash 的委托（null 时退回 null = 无前驱哈希）。</param>
-        /// <param name="getLastEventSequence">P4：返回 AgentRunEventStore 最后事件序列号的委托（null 时退回 null = 非 Cursor 模式）。</param>
-        /// <param name="getActiveSnapshotId">P4：返回当前活跃 AgentContextSnapshot ID 的委托（null 时退回 null）。</param>
-        /// <param name="getBudgetCounters">P4：返回 turn/cost 预算计数器的委托（null 时退回 null）。</param>
+        /// <param name="getLastCheckpointContentHash">返回上次 checkpoint ContentHash 的委托（null 时退回 null = 无前驱哈希）。</param>
+        /// <param name="getLastEventSequence">返回 AgentRunEventStore 最后事件序列号的委托（null 时退回 null = 非 Cursor 模式）。</param>
+        /// <param name="getActiveSnapshotId">返回当前活跃 AgentContextSnapshot ID 的委托（null 时退回 null）。</param>
+        /// <param name="getBudgetCounters">返回 turn/cost 预算计数器的委托（null 时退回 null）。</param>
         public KernelStateAccessor(
             Func<string?> getLastSnapshotId,
             Func<IReadOnlyDictionary<string, ToolDispatchResult>> getCommittedResults,
@@ -380,25 +380,25 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         /// <summary>获取上次 checkpoint 的 ID（用于 delta 链 BaseCheckpointId）。</summary>
         public string? GetLastCheckpointId() => _getLastCheckpointId?.Invoke();
 
-        /// <summary>P0-5：获取上次 checkpoint 的 ContentHash（用于 delta 链 PrevChainHash）。</summary>
+        /// <summary>获取上次 checkpoint 的 ContentHash（用于 delta 链 PrevChainHash）。</summary>
         public string? GetLastCheckpointContentHash() => _getLastCheckpointContentHash?.Invoke();
 
-        /// <summary>P4：获取 AgentRunEventStore 的最后事件序列号（Cursor 模式核心）。</summary>
+        /// <summary>获取 AgentRunEventStore 的最后事件序列号（Cursor 模式核心）。</summary>
         /// <returns>最后事件序列号；未注入 EventStore 时返回 null（非 Cursor 模式）。</returns>
         public int? GetLastEventSequence() => _getLastEventSequence?.Invoke();
 
-        /// <summary>P4：获取当前活跃的 AgentContextSnapshot ID（替代嵌入完整 snapshot）。</summary>
+        /// <summary>获取当前活跃的 AgentContextSnapshot ID（替代嵌入完整 snapshot）。</summary>
         /// <returns>当前活跃 snapshot ID；Kernel 无活跃 snapshot 时返回 null。</returns>
         public string? GetActiveSnapshotId() => _getActiveSnapshotId?.Invoke();
 
-        /// <summary>P4：获取 turn/cost 预算计数器（替代嵌入完整结果集合用于预算追踪）。</summary>
+        /// <summary>获取 turn/cost 预算计数器（替代嵌入完整结果集合用于预算追踪）。</summary>
         /// <returns>当前预算计数器快照；Kernel 不维护预算计数器时返回 null。</returns>
         public BudgetCountersDto? GetBudgetCounters() => _getBudgetCounters?.Invoke();
 
         private static IReadOnlyDictionary<string, T> ReadOnlyDict<T>() => new Dictionary<string, T>(0, StringComparer.Ordinal);
     }
 
-    /// <summary>R28-G P1-5 / P4：Checkpoint 模式（Full 完整快照 / Delta 增量 / Cursor 事件游标）。</summary>
+    /// <summary>Checkpoint 模式（Full 完整快照 / Delta 增量 / Cursor 事件游标）。</summary>
     public enum CheckpointMode
     {
         /// <summary>完整快照：序列化所有 in-memory committed results。</summary>
@@ -415,26 +415,26 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         Cursor = 2
     }
 
-    /// <summary>R28-E P1-1 / R28-G P1-5 / P0-5 / P4：Checkpoint 序列化模型（公开以供 ResumeAsync 反序列化）。</summary>
+    /// <summary>Checkpoint 序列化模型（公开以供 ResumeAsync 反序列化）。</summary>
     public sealed class KernelCheckpointStateDto
     {
         /// <summary>Snapshot ID（可空）。</summary>
         public string? SnapshotId { get; init; }
 
-        /// <summary>R28-G P1-5 / P4：Checkpoint 模式（Full=完整快照，Delta=增量，Cursor=事件游标）。</summary>
+        /// <summary>Checkpoint 模式（Full=完整快照，Delta=增量，Cursor=事件游标）。</summary>
         /// <remarks>默认 Full 保持向后兼容（旧 checkpoint 反序列化时 Mode 字段缺失 → 取默认值 Full）。</remarks>
         public CheckpointMode Mode { get; init; } = CheckpointMode.Full;
 
-        /// <summary>R28-G P1-5：Delta 模式下的 BaseCheckpoint ID（用于 ResumeAsync 递归加载基线）。</summary>
+        /// <summary>Delta 模式下的 BaseCheckpoint ID（用于 ResumeAsync 递归加载基线）。</summary>
         public string? BaseCheckpointId { get; init; }
 
-        /// <summary>R28-G P1-5：本次 checkpoint 覆盖的最大 Sequence（用于推进下次 delta cursor）。</summary>
+        /// <summary>本次 checkpoint 覆盖的最大 Sequence（用于推进下次 delta cursor）。</summary>
         public long LastSequence { get; init; }
 
         /// <summary>已提交 tool 结果列表（Full=全部，Delta=仅新增，Cursor=空）。</summary>
         public List<CommittedToolResultDto> CommittedResults { get; init; } = new();
 
-        /// <summary>R28-G P1-5：pending（Unknown 副作用）tool 结果列表。</summary>
+        /// <summary>pending（Unknown 副作用）tool 结果列表。</summary>
         public List<CommittedToolResultDto> PendingResults { get; init; } = new();
 
         /// <summary>
@@ -496,7 +496,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
     /// <param name="CostUsedUsd">已产生的推理费用（美元）。</param>
     public sealed record BudgetCountersDto(int TurnsUsed, int TokensUsed, double CostUsedUsd);
 
-    /// <summary>R28-E P1-1 / R28-G P1-5：已提交 tool 结果序列化条目。</summary>
+    /// <summary>已提交 tool 结果序列化条目。</summary>
     public sealed class CommittedToolResultDto
     {
         /// <summary>Tool RequestId。</summary>
@@ -514,7 +514,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         /// <summary>副作用分类。</summary>
         public ToolSideEffect SideEffect { get; init; }
 
-        /// <summary>R28-G P1-5：committed result 序号（用于 delta 过滤；pending 结果为 0）。</summary>
+        /// <summary>committed result 序号（用于 delta 过滤；pending 结果为 0）。</summary>
         public long Sequence { get; init; }
     }
 }

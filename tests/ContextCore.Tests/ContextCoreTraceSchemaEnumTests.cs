@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Learning.V14_0;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// OPT-1 验收测试：验证 PackageTraceRecorder.MapTraceFields 不再使用 magic byte + 字符串 switch，
+/// 验收测试：验证 PackageTraceRecorder.MapTraceFields 不再使用 magic byte + 字符串 switch，
 /// 改为枚举化映射。验收：
 /// - 已知 kind → 正确枚举值（与历史 byte 输出兼容）
 /// - 未匹配 kind → 显式 Unknown(0)（不再静默默认 Raw(1)）
@@ -72,7 +72,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
             itemReferences: new System.Collections.Generic.List<ContextPackageItemReference>());
     }
 
-    /// <summary>OPT-1: 枚举类型存在且为 : byte（保证 JSON 序列化兼容）。</summary>
+    /// <summary> 枚举类型存在且为 : byte（保证 JSON 序列化兼容）。</summary>
     [TestMethod]
     public void TraceSchema_Enums_HaveByteUnderlyingType()
     {
@@ -82,7 +82,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(typeof(byte), Enum.GetUnderlyingType(typeof(RuntimeCandidateRetrievalChannel)));
     }
 
-    /// <summary>OPT-1: RuntimeCandidateSourceType 枚举值与历史 byte 数值对齐。</summary>
+    /// <summary> RuntimeCandidateSourceType 枚举值与历史 byte 数值对齐。</summary>
     [TestMethod]
     public void TraceSchema_SourceType_ValuesMatchHistoricBytes()
     {
@@ -96,7 +96,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(7, (byte)RuntimeCandidateSourceType.RelatedContext);
     }
 
-    /// <summary>OPT-1: CandidateAuthorityLevel 枚举值与历史 byte 数值对齐。</summary>
+    /// <summary> CandidateAuthorityLevel 枚举值与历史 byte 数值对齐。</summary>
     [TestMethod]
     public void TraceSchema_Authority_ValuesMatchHistoricBytes()
     {
@@ -108,7 +108,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(5, (byte)CandidateAuthorityLevel.Authoritative);
     }
 
-    /// <summary>OPT-1: CandidateStrategyType 枚举值与历史 byte 数值对齐。</summary>
+    /// <summary> CandidateStrategyType 枚举值与历史 byte 数值对齐。</summary>
     [TestMethod]
     public void TraceSchema_StrategyType_ValuesMatchHistoricBytes()
     {
@@ -120,7 +120,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(5, (byte)CandidateStrategyType.Related);
     }
 
-    /// <summary>OPT-1: 已知 kind "current_task" → SourceType=CurrentTask / Authority=Authoritative / StrategyType=Current。</summary>
+    /// <summary> 已知 kind "current_task" → SourceType=CurrentTask / Authority=Authoritative / StrategyType=Current。</summary>
     [TestMethod]
     public void TraceSchema_KnownKind_CurrentTask_MapsToExpectedEnums()
     {
@@ -137,7 +137,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(RuntimeCandidateRetrievalChannel.Anchor, row.RetrievalChannel);
     }
 
-    /// <summary>OPT-1: 已知 kind "hard_constraint" → SourceType=Constraint / Authority=HardRequirement / StrategyType=Constraint。</summary>
+    /// <summary> 已知 kind "hard_constraint" → SourceType=Constraint / Authority=HardRequirement / StrategyType=Constraint。</summary>
     [TestMethod]
     public void TraceSchema_KnownKind_HardConstraint_MapsToExpectedEnums()
     {
@@ -154,7 +154,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(RuntimeCandidateRetrievalChannel.Constraint, row.RetrievalChannel);
     }
 
-    /// <summary>OPT-1: 已知 kind "working_memory" → SourceType=Memory / Authority=Authoritative / StrategyType=Recent。</summary>
+    /// <summary> 已知 kind "working_memory" → SourceType=Memory / Authority=Authoritative / StrategyType=Recent。</summary>
     [TestMethod]
     public void TraceSchema_KnownKind_WorkingMemory_MapsToExpectedEnums()
     {
@@ -171,7 +171,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(RuntimeCandidateRetrievalChannel.Memory, row.RetrievalChannel);
     }
 
-    /// <summary>OPT-1: 已知 kind "related_context" → SourceType=RelatedContext / Authority=Inferred / StrategyType=Related / Channel=Graph。</summary>
+    /// <summary> 已知 kind "related_context" → SourceType=RelatedContext / Authority=Inferred / StrategyType=Related / Channel=Graph。</summary>
     [TestMethod]
     public void TraceSchema_KnownKind_RelatedContext_MapsToExpectedEnums()
     {
@@ -188,7 +188,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(RuntimeCandidateRetrievalChannel.Graph, row.RetrievalChannel);
     }
 
-    /// <summary>OPT-1: 未匹配 kind "future_unknown_kind" → 显式 Unknown(0)，不再静默默认 Raw(1)。</summary>
+    /// <summary> 未匹配 kind "future_unknown_kind" → 显式 Unknown(0)，不再静默默认 Raw(1)。</summary>
     [TestMethod]
     public void TraceSchema_UnknownKind_ReturnsUnknownEnums_NotSilentDefault()
     {
@@ -209,7 +209,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(RuntimeCandidateRetrievalChannel.Memory, row.RetrievalChannel);
     }
 
-    /// <summary>OPT-1: TraceSource 枚举 PackageTrace=3（替代 magic byte (byte)3）。</summary>
+    /// <summary> TraceSource 枚举 PackageTrace=3（替代 magic byte (byte)3）。</summary>
     [TestMethod]
     public void TraceSchema_TraceSource_PackageTraceValueIsThree()
     {
@@ -224,7 +224,7 @@ public sealed class ContextCoreTraceSchemaEnumTests
         Assert.AreEqual(3, (byte)row.TraceSource);
     }
 
-    /// <summary>OPT-1: ToJsonLine 仍输出数值（与历史 byte 序列化兼容）。</summary>
+    /// <summary> ToJsonLine 仍输出数值（与历史 byte 序列化兼容）。</summary>
     [TestMethod]
     public void TraceSchema_ToJsonLine_SerializesAsNumericByteValues()
     {

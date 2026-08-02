@@ -506,7 +506,7 @@ public sealed class PackageCandidateAdapterTests
     }
 
     // =========================================================================
-    // 9. P0-5：CandidateAdaptationContext 上下文传入
+    // 9. CandidateAdaptationContext 上下文传入
     // =========================================================================
 
     [TestMethod]

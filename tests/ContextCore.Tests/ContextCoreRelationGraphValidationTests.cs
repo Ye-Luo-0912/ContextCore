@@ -300,7 +300,7 @@ public sealed class ContextCoreRelationGraphValidationTests
 
         Assert.IsNotNull(result);
         Assert.AreEqual(StableMemoryLifecycle.Rejected, result!.ToLifecycle);
-        // GRAPH-08：正式字段作为唯一运行时来源
+        // 正式字段作为唯一运行时来源
         Assert.AreEqual(RelationReviewStatuses.Rejected, updated.ReviewStatus);
         Assert.AreEqual(StableMemoryLifecycle.Rejected, updated.Lifecycle);
     }

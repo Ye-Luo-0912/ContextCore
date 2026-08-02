@@ -9,7 +9,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// OPT-3: Trace 写入与正式返回解耦的 fault injection 测试。
+/// Trace 写入与正式返回解耦的 fault injection 测试。
 ///
 /// 验证目标（用户指令 #3）：
 ///   "Trace 写入与正式返回解耦的 fault injection 测试
@@ -41,7 +41,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     // =========================================================================
 
     /// <summary>
-    /// OPT-3 latency: sink.Write 阻塞 100ms 时，PackageTraceRecorder 主流程仍应正常完成。
+    /// latency: sink.Write 阻塞 100ms 时，PackageTraceRecorder 主流程仍应正常完成。
     /// 当前 IRuntimeCandidateTraceSink 为同步 void Write，主流程会被阻塞（known coupling），
     /// 但 trace 写入完成后主流程结果必须正确。
     /// </summary>
@@ -70,7 +70,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 disk full: sink.Write 抛 IOException("disk full") 时，主流程不受影响。
+    /// disk full: sink.Write 抛 IOException("disk full") 时，主流程不受影响。
     /// </summary>
     [TestMethod]
     public void PackageTraceRecorder_SinkDiskFull_MainFlowUnaffected()
@@ -92,7 +92,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 exception types: 不同异常类型（IOException / ArgumentException / InvalidOperationException /
+    /// exception types: 不同异常类型（IOException / ArgumentException / InvalidOperationException /
     /// OutOfMemoryException / ApplicationException）均不应影响主流程。
     /// PackageTraceRecorder 通过 catch (Exception ex) 捕获所有非 OperationCanceledException 异常。
     /// </summary>
@@ -124,7 +124,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     // =========================================================================
 
     /// <summary>
-    /// OPT-3 latency: IContextPackageBuildTraceStore.SaveAsync 延迟 100ms 时，
+    /// latency: IContextPackageBuildTraceStore.SaveAsync 延迟 100ms 时，
     /// 正式 package 输出（Sections / SelectedItems / DroppedItems）必须保持不变。
     /// </summary>
     [TestMethod]
@@ -162,7 +162,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 exception: IContextPackageBuildTraceStore.SaveAsync 抛异常时，正式 package 输出必须保持不变。
+    /// exception: IContextPackageBuildTraceStore.SaveAsync 抛异常时，正式 package 输出必须保持不变。
     /// BasicContextPackageBuilder.WriteTracesAsync 通过 catch (Exception) 实现 fail-open。
     /// </summary>
     [TestMethod]
@@ -201,7 +201,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     // =========================================================================
 
     /// <summary>
-    /// OPT-3 latency: IDecisionTraceStore.SaveAsync 延迟 100ms 时，
+    /// latency: IDecisionTraceStore.SaveAsync 延迟 100ms 时，
     /// 正式 package 输出必须保持不变。
     /// </summary>
     [TestMethod]
@@ -228,7 +228,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 exception: IDecisionTraceStore.SaveAsync 抛异常时，正式 package 输出必须保持不变。
+    /// exception: IDecisionTraceStore.SaveAsync 抛异常时，正式 package 输出必须保持不变。
     /// </summary>
     [TestMethod]
     public async Task PackageBuilder_DecisionTraceThrows_PackageOutputUnchanged()
@@ -254,7 +254,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 latency: IDecisionTraceStore.SaveAsync 延迟 100ms 时，正式 retrieval 输出必须保持不变。
+    /// latency: IDecisionTraceStore.SaveAsync 延迟 100ms 时，正式 retrieval 输出必须保持不变。
     /// </summary>
     [TestMethod]
     public async Task Retriever_DecisionTraceLatency100ms_RetrievalOutputUnchanged()
@@ -280,7 +280,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 exception: IDecisionTraceStore.SaveAsync 抛异常时，正式 retrieval 输出必须保持不变。
+    /// exception: IDecisionTraceStore.SaveAsync 抛异常时，正式 retrieval 输出必须保持不变。
     /// HybridContextRetriever 通过 catch (Exception) 实现 fail-open（OperationCanceledException 除外）。
     /// </summary>
     [TestMethod]
@@ -311,7 +311,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     // =========================================================================
 
     /// <summary>
-    /// OPT-3 latency: IRetrievalTraceStore.SaveAsync 延迟 100ms 时，正式 retrieval 输出必须保持不变。
+    /// latency: IRetrievalTraceStore.SaveAsync 延迟 100ms 时，正式 retrieval 输出必须保持不变。
     /// </summary>
     [TestMethod]
     public async Task Retriever_RetrievalTraceLatency100ms_RetrievalOutputUnchanged()
@@ -336,7 +336,7 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     /// <summary>
-    /// OPT-3 exception: IRetrievalTraceStore.SaveAsync 抛异常时，正式 retrieval 输出必须保持不变。
+    /// exception: IRetrievalTraceStore.SaveAsync 抛异常时，正式 retrieval 输出必须保持不变。
     /// HybridContextRetriever 通过 catch (Exception) 实现 fail-open（OperationCanceledException 除外）。
     /// </summary>
     [TestMethod]

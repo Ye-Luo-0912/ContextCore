@@ -11,7 +11,7 @@ namespace ContextCore.Core;
 /// 相同指纹的请求产生相同 package（在依赖 scope 未变更的前提下）。
 /// 使用长度前缀编码防止分隔符碰撞（输入值中包含 | 或 : 不会导致不同输入产生相同指纹）。
 /// 纳入时间桶（5 分钟窗口），确保 Working Memory 评分依赖的时间边界（24h/7d/30d）
-/// 跨越后缓存自动失效。P0-5.6: <see cref="BuildHashed"/> 输出 SHA-256 固定长度哈希，避免明文驻留。
+/// 跨越后缓存自动失效。 <see cref="BuildHashed"/> 输出 SHA-256 固定长度哈希，避免明文驻留。
 /// #7: semantic metadata fingerprint——request.Metadata 中仅纳入语义字段
 /// （影响 package 模板的字段），排除操作性字段（requestId/traceId 等 per-call 标识）。
 /// 语义字段（mustHit/currentTask/tokenizerModel/anchor metadata）已显式提取，

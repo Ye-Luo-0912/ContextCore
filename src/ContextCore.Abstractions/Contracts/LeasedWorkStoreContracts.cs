@@ -1,6 +1,6 @@
 namespace ContextCore.Abstractions;
 
-// ── P2: Unified Lease/Fencing Infrastructure ──────────────────────────────
+// ──  Unified Lease/Fencing Infrastructure ──────────────────────────────
 
 /// <summary>
 /// 统一租约工作项（被租约保护的工作单元）。

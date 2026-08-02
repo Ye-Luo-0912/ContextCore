@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// Perf-1：DefaultSelectedCandidateHydrator — Selected 候选正文批量 hydrator 默认实现
+// DefaultSelectedCandidateHydrator — Selected 候选正文批量 hydrator 默认实现
 //
 // 目标：
 //   补齐 Late Hydration 链路最后一环。Provider 在 Recall 阶段使用 IncludeContent=false
@@ -35,7 +35,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// Perf-1：<see cref="ISelectedCandidateHydrator"/> 默认实现。
+/// <see cref="ISelectedCandidateHydrator"/> 默认实现。
 /// 使用 <see cref="IContextStoreBatchLookup"/> / <see cref="IMemoryStoreBatchLookup"/>
 /// 对 Engine 选中的候选批量读取正文，填充 <see cref="CandidateMaterial.Content"/>。
 /// </summary>
@@ -53,15 +53,15 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
 
     private readonly IContextStoreBatchLookup? _contextBatchLookup;
     private readonly IMemoryStoreBatchLookup? _memoryBatchLookup;
-    // Fix-5：可选 tokenizer，用于 hydrate 后重算 TokenCost（null 时回退到 length/4 估算）。
+    // 可选 tokenizer，用于 hydrate 后重算 TokenCost（null 时回退到 length/4 估算）。
     private readonly IContextTokenizerResolver? _tokenizerResolver;
     private readonly string? _tokenizerModelName;
 
     /// <summary>构造 hydrator。两个 batch lookup 接口均可为 null（对应 store 未实现批量查询能力）。</summary>
     /// <param name="contextBatchLookup">Context 批量查询能力（null 时跳过 context hydrate）。</param>
     /// <param name="memoryBatchLookup">Memory 批量查询能力（null 时跳过 memory hydrate）。</param>
-    /// <param name="tokenizerResolver">P3 Fix-5：tokenizer 解析器（null 时 hydrate 后 TokenCost 用 length/4 估算）。</param>
-    /// <param name="tokenizerModelName">P3 Fix-5：tokenizer 使用的模型名（可选）。</param>
+    /// <param name="tokenizerResolver">tokenizer 解析器（null 时 hydrate 后 TokenCost 用 length/4 估算）。</param>
+    /// <param name="tokenizerModelName">tokenizer 使用的模型名（可选）。</param>
     public DefaultSelectedCandidateHydrator(
         IContextStoreBatchLookup? contextBatchLookup = null,
         IMemoryStoreBatchLookup? memoryBatchLookup = null,
@@ -230,14 +230,14 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // CandidateMaterial.Content 的 init accessor 仅在 _contentHash 为空时计算 hash，
         // 使用 with { Content = ... } 会跳过重算（_contentHash 已从原对象复制），导致 hash 与新内容不一致。
         // 因此此处显式构造新 CandidateMaterial，让 ContentHash 由 init accessor 正确计算。
-        // Fix-5：hydrate 后 Content 已变更，原 TokenCost（recall 阶段基于空/旧正文计算）已过期，
+        // hydrate 后 Content 已变更，原 TokenCost（recall 阶段基于空/旧正文计算）已过期，
         // 需从 hydrate 后的正文重新计算 TokenCost，让 Projector / Allocator 看到准确 token 数。
         var mergedMaterials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(workingSet.Materials, comparer: null);
         foreach (var kvp in materialUpdates)
         {
             if (mergedMaterials.TryGetValue(kvp.Key, out var original))
             {
-                // Fix-5：用 hydrate 后的正文重算 TokenCost（tokenizer 可用时精确计数，否则 length/4 估算）
+                // 用 hydrate 后的正文重算 TokenCost（tokenizer 可用时精确计数，否则 length/4 估算）
                 var hydratedTokenCost = TokenCostHelper.ComputeTokenCost(
                     kvp.Value.Content, _tokenizerResolver, _tokenizerModelName);
                 // 保留原 Material 的 NativeKind / SourceRefs，仅用 hydrate 后的 Content + 重算的 TokenCost 替换

@@ -39,7 +39,7 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
         _writer = new FileSystemWriter();
     }
 
-    /// <summary>R13.1 #5：进程内 JobId→路径索引的条目数，供测试观察索引是否被 Enqueue 命中。</summary>
+    /// <summary>进程内 JobId→路径索引的条目数，供测试观察索引是否被 Enqueue 命中。</summary>
     internal int JobPathIndexCount => _jobPathIndex.Count;
 
     public async Task EnqueueAsync(ContextJob job, CancellationToken cancellationToken = default)

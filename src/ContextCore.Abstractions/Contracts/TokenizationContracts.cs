@@ -80,30 +80,30 @@ public static class ContextTokenizationMetadataKeys
 /// </summary>
 public static class ContentMetadataKeys
 {
-    /// <summary>P6：SHA-256 小写 hex（与 ContextItem.Checksum 一致）。Provider 派生 EntityVersion 时复用。</summary>
+    /// <summary>SHA-256 小写 hex（与 ContextItem.Checksum 一致）。Provider 派生 EntityVersion 时复用。</summary>
     public const string ContentHash = "__content_hash";
 
-    /// <summary>P5：精确 token 数（由 IContextTokenizer 在摄取时计算）。Provider 读取后跳过在线 tokenize。</summary>
+    /// <summary>精确 token 数（由 IContextTokenizer 在摄取时计算）。Provider 读取后跳过在线 tokenize。</summary>
     public const string ContentTokenCost = "__content_token_cost";
 
-    /// <summary>P3：Postgres ts_rank_cd 返回的相关度分数 × 100。Lexical Provider 读取后作为 Provider score。</summary>
+    /// <summary>Postgres ts_rank_cd 返回的相关度分数 × 100。Lexical Provider 读取后作为 Provider score。</summary>
     public const string TsRank = "__ts_rank";
 
-    /// <summary>Perf-2：内容字节长度（UTF-8）。Store 写入专用列，Provider 读取后用于诊断与回退估算。</summary>
+    /// <summary>内容字节长度（UTF-8）。Store 写入专用列，Provider 读取后用于诊断与回退估算。</summary>
     public const string ContentLength = "__content_length";
 
-    /// <summary>Perf-2：Tokenizer 标识符（如 unicode-cjk-v1）。Store 写入专用列，Provider 读取后验证 tokenizer 一致性。</summary>
+    /// <summary>Tokenizer 标识符（如 unicode-cjk-v1）。Store 写入专用列，Provider 读取后验证 tokenizer 一致性。</summary>
     public const string TokenizerId = "__tokenizer_id";
 
-    /// <summary>Perf-2：Tokenizer 版本 / 模型名称。Store 写入专用列，Provider 读取后验证模型兼容性。</summary>
+    /// <summary>Tokenizer 版本 / 模型名称。Store 写入专用列，Provider 读取后验证模型兼容性。</summary>
     public const string TokenizerVersion = "__tokenizer_version";
 
-    /// <summary>Perf-2：Token 计算时间（ISO 8601）。Store 写入专用列，用于判断是否需要重新计算。</summary>
+    /// <summary>Token 计算时间（ISO 8601）。Store 写入专用列，用于判断是否需要重新计算。</summary>
     public const string CountedAt = "__counted_at";
 }
 
 /// <summary>
-/// Perf-2：内容的 tokenization metadata 中间表示。
+/// 内容的 tokenization metadata 中间表示。
 /// 由 PostgresStoreBase.ComputeTokenizationMetadata 产出，写入 ContextItem.Metadata（专用列）。
 /// SHA-256 总是计算（无外部依赖）；token_count 在 tokenizer 可用时计算，否则为 0。
 /// </summary>

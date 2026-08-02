@@ -25,7 +25,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 /// <see cref="ContextPackageBuildResult"/>，保持与现有 Package 主链出口 DTO 兼容。
 /// </summary>
 /// <remarks>
-/// Impl-1：当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
+/// 当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
 /// 真正截断 Material.Content，并重新计算 ActualTokens（section content + SelectedItems）。
 /// </remarks>
 public sealed class PackageResultProjector : IResultProjector<ContextPackageBuildResult>
@@ -37,7 +37,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// 构造 PackageResultProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
+    /// 内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
     /// <param name="tokenizerResolver">
     /// tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
@@ -92,7 +92,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// 将决策结果 + 候选正文 sidecar 投影为 ContextPackageBuildResult。
     /// 从 workingSet.Materials 恢复候选 Content；从 result.AllocationDecisions
     /// 消费 Section / IncludedTokens / IsTruncated 构建 section + token 分配。
-    /// Blocker-2：真正构建 ContextPackage（含 Sections/PackageId/SourceRefs/CreatedAt）+
+    /// 真正构建 ContextPackage（含 Sections/PackageId/SourceRefs/CreatedAt）+
     /// ContextPackageStandardOutput，赋值到 BuildResult.Package。
     /// </summary>
     /// <remarks>
@@ -112,14 +112,14 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// 便捷重载：从 execution 提取 Decision + WorkingSet + Scope。
     /// 关键修复：使用 execution.Scope 而非 default，避免空 Package 丢失 Scope
     /// （候选为空时仍能从 execution.Scope 获取 WorkspaceId/CollectionId）。
-    /// 工作包 B-2：从 execution.NormalizedRequest.PackageInput 提取
+    /// 从 execution.NormalizedRequest.PackageInput 提取
     /// Mode/Policy/IncludeRecent/IsAuditMode 语义，传递给内部 Project 重载，
     /// 让 Projector 能按调用方意图过滤 recent_context section 并写入审计/模式元数据。
     /// </remarks>
     public ContextPackageBuildResult Project(ContextDecisionExecutionResult execution)
     {
         ArgumentNullException.ThrowIfNull(execution);
-        // 工作包 B-2：从标准化请求中提取 PackageInput 语义
+        // 从标准化请求中提取 PackageInput 语义
         var packageInput = execution.NormalizedRequest?.PackageInput;
         return Project(execution.Decision, execution.WorkingSet, execution.Scope, packageInput);
     }
@@ -128,7 +128,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// 将决策结果 + 候选正文 sidecar + 作用域投影为 ContextPackageBuildResult。
     /// 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非从候选反推
     /// （候选为空时反推会丢失 Scope）。
-    /// 工作包 B-2：此重载不携带 PackageInput，等价于 packageInput=null（不做
+    /// 此重载不携带 PackageInput，等价于 packageInput=null（不做
     /// recent_context 过滤、不写 mode/auditMode 元数据），保持向后兼容。
     /// </summary>
     public ContextPackageBuildResult Project(
@@ -140,7 +140,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// 工作包 B-2：将决策结果 + 候选正文 sidecar + 作用域 + PackageInput 语义
+    /// 将决策结果 + 候选正文 sidecar + 作用域 + PackageInput 语义
     /// 投影为 ContextPackageBuildResult。
     /// </summary>
     /// <remarks>
@@ -188,7 +188,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             })
             .ToList();
 
-        // Blocker-2：按 AllocationDecision.Section 分组，构建 ContextPackageSection 列表
+        // 按 AllocationDecision.Section 分组，构建 ContextPackageSection 列表
         var sectionGroups = result.SelectedEnvelopes
             .Select(env =>
             {
@@ -241,7 +241,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                         separatorTokens += 2;
                     }
 
-                    // Impl-1 + P0-6：当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens。
+                    // 当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens。
                     // 截断时减去分隔符预留预算（2 token），确保 section 总 token 不超出 IncludedTokens。
                     var contentToAppend = material.Content;
                     if (item.IsTruncated && !string.IsNullOrEmpty(contentToAppend) && item.IncludedTokens > 0)
@@ -296,7 +296,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             totalUsedTokens += totalSectionTokens;
         }
 
-        // 工作包 B-2：消费 PackageInput.IncludeRecent 语义。
+        // 消费 PackageInput.IncludeRecent 语义。
         // IncludeRecent=false 时过滤掉 recent_context section（与 Legacy
         // BasicContextPackageBuilder 中 IncludeRecentRawContext=false 行为对齐），
         // 并从 totalUsedTokens 中扣除被过滤 section 的 token 数，保持 token 计账一致。
@@ -322,14 +322,14 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             }
         }
 
-        // Blocker-2：构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）
+        // 构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）
         // 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非候选反推
         // （候选为空时 firstEnvelope 为 null，反推会丢失 Scope）
         var firstEnvelope = result.SelectedEnvelopes.FirstOrDefault();
         var packageWorkspaceId = firstEnvelope?.CanonicalKey.WorkspaceId ?? scope.WorkspaceId;
         var packageCollectionId = firstEnvelope?.CanonicalKey.CollectionId ?? scope.CollectionId;
 
-        // 工作包 B-2：解析 PackageInput 语义为 metadata 键值，供下游 trace/审计消费。
+        // 解析 PackageInput 语义为 metadata 键值，供下游 trace/审计消费。
         var packageMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["policyVersion"] = result.PolicyVersion,
@@ -356,12 +356,12 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         // （result.Outcome.EstimatedTokens）。统一事实源，避免双重报告。
         var actualUsedTokens = package.EstimatedTokens;
 
-        // Blocker-2：构建稳定的 ContextPackageStandardOutput
+        // 构建稳定的 ContextPackageStandardOutput
         var standardOutput = BuildStandardOutput(result, sections, actualUsedTokens);
 
-        // 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
+        // 传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
         // 诊断键加 "diag." 前缀以避免与既有 Metadata 键冲突。
-        // 工作包 B-2：同时传播 PackageInput 语义（mode/isAuditMode/packagePolicyId）。
+        // 同时传播 PackageInput 语义（mode/isAuditMode/packagePolicyId）。
         var metadata = new Dictionary<string, string>
         {
             ["policyVersion"] = result.PolicyVersion,
@@ -418,7 +418,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// 工作包 B-2：判断 section 是否属于 recent_context 分组。
+    /// 判断 section 是否属于 recent_context 分组。
     /// 与 <see cref="BuildStandardOutput"/> 中 recent_context 分组映射保持一致，
     /// 包含 recent_context / global / global_context / related 几个历史别名。
     /// </summary>
@@ -432,7 +432,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// 工作包 B-2：将 PackageInput 语义写入 metadata 字典（原地修改）。
+    /// 将 PackageInput 语义写入 metadata 字典（原地修改）。
     /// 仅写入有意义的字段，避免在 metadata 中留下空值或 None 噪音。
     /// </summary>
     /// <remarks>
@@ -470,7 +470,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// Blocker-2：构建稳定的 ContextPackageStandardOutput。
+    /// 构建稳定的 ContextPackageStandardOutput。
     /// 按 section 名称映射到标准 schema 的 7 个分组（CurrentTask/RecentContext/WorkingState/
     /// StableBackground/Constraints/Entities/Relations/Evidence）。
     /// Budget 的 token 字段使用 Projector 截断后的真实 token 数（actualUsedTokens），
@@ -577,7 +577,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             content = material.Content;
         }
 
-        // Impl-1：当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
+        // 当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
         if (isTruncated && !string.IsNullOrEmpty(content) && includedTokens > 0)
         {
             var truncation = _contentTruncator.Truncate(content, includedTokens);

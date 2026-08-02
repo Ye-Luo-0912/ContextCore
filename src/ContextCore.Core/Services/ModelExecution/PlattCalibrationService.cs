@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// / R28-F P3-3：Platt Calibration Service
+// / Platt Calibration Service
 //
 // 目标：
 //   提供 ICalibrationService 的默认 Platt scaling 实现，把任意 raw score
@@ -30,7 +30,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// / R28-F P3-3：默认校准服务（支持 Identity/Platt/Temperature/Isotonic）。
+/// / 默认校准服务（支持 Identity/Platt/Temperature/Isotonic）。
 /// </summary>
 /// <remarks>
 /// 默认 Identity：未配置参数时 calibrated = rawScore。
@@ -116,7 +116,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// 注册 Platt (A, B) 参数。null modelName 表示更新全局默认。
     /// 已存在同名模型参数时覆盖（与 FeatureRegistry 不同——校准参数允许 refit）。
     /// </summary>
-    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    /// <param name="version">校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
     public void RegisterPlattParameters(double a, double b, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         var key = NormalizeKey(modelName);
@@ -136,7 +136,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// <summary>
     /// 注册 Temperature T 参数。T 必须 > 0。
     /// </summary>
-    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    /// <param name="version">校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
     public void RegisterTemperatureParameters(double t, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         if (t <= 0.0 || double.IsNaN(t) || double.IsInfinity(t))
@@ -159,7 +159,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// <summary>
     /// 注册 Isotonic 回归点。points 必须按 Input 升序，否则抛 ArgumentException。
     /// </summary>
-    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    /// <param name="version">校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
     public void RegisterIsotonicParameters(IReadOnlyList<IsotonicPoint> points, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         ArgumentNullException.ThrowIfNull(points);
@@ -190,7 +190,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     /// <summary>
     /// 注册 Identity 参数（重置某模型为恒等变换）。
     /// </summary>
-    /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
+    /// <param name="version">校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
     public void RegisterIdentityParameters(string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
     {
         var key = NormalizeKey(modelName);

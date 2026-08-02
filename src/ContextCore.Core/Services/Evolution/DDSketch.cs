@@ -42,7 +42,7 @@ public sealed class DDSketch
 {
     private readonly double _logGamma; // log(1 + α)
     private readonly int _maxBuckets;
-    private readonly double _relativeAccuracy; // P10：保留原始 α，用于序列化与合并校验
+    private readonly double _relativeAccuracy; // 保留原始 α，用于序列化与合并校验
     private readonly Dictionary<int, long> _buckets = new();
     private long _totalCount;
     private double _min = double.PositiveInfinity;

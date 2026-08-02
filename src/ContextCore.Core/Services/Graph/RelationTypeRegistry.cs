@@ -34,7 +34,7 @@ public sealed class RelationTypeRegistry
             Definition(ContextRelationTypes.Duplicates, directional: false, inverse: ContextRelationTypes.Duplicates, weight: 0.7, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
             Definition(ContextRelationTypes.IncludedInPackage, inverse: null, weight: 0.5, sourceKinds: ["*"], targetKinds: [nameof(GraphNodeKind.Package)]),
             Definition(ContextRelationTypes.GeneratedBy, inverse: null, weight: 0.6, sourceKinds: ["*"], targetKinds: [nameof(GraphNodeKind.Operation)]),
-            // GRAPH-09：短期晋升流程生成 Candidate 层目标条目（Status=Candidate），因此 PromotedFrom 的 source
+            // 短期晋升流程生成 Candidate 层目标条目（Status=Candidate），因此 PromotedFrom 的 source
             // 同时允许 StableMemory/StableConstraint（稳定晋升路径）和 CandidateMemory/CandidateConstraint（短期晋升路径）。
             Definition(ContextRelationTypes.PromotedFrom, inverse: null, weight: 0.7, sourceKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.CandidateMemory), nameof(GraphNodeKind.CandidateConstraint)], targetKinds: [nameof(GraphNodeKind.CandidateMemory), nameof(GraphNodeKind.CandidateConstraint)]),
             Definition(ContextRelationTypes.Summarizes, inverse: null, weight: 0.7, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),

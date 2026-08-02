@@ -25,7 +25,7 @@ public static class CoreMetrics
             unit: "ms",
             description: "HybridContextRetriever 检索端到端耗时");
 
-    // ── P8：Provider 性能计时拆分 ──────────────────────────────────────────
+    // ── Provider 性能计时拆分 ──────────────────────────────────────────
     // 以下 Histogram 用于将 Provider 调用耗时拆分为 queue / execution / hydration /
     // tokenization 四段。Circuit Breaker 仅依据 execution（RecordProviderTime）做熔断判定，
     // queue_ms 仅作诊断指标，不参与熔断（避免本地并发饱和时误判 Semantic/Graph Store 变慢）。
@@ -72,7 +72,7 @@ public static class CoreMetrics
             unit: "{tokens}",
             description: "LLM 压缩消耗的 Token 总数（inputTokens + outputTokens）");
 
-    // ── R13.4 #2：Event Sink 观测管线指标 ─────────────────────────────────
+    // ── Event Sink 观测管线指标 ─────────────────────────────────
     // 以下计数器由 BoundedChannelContextEventSink 记录，反映 BestEffort 事件通道的背压与健康度。
     // Required sink 不走通道，不参与这些计数器。
 

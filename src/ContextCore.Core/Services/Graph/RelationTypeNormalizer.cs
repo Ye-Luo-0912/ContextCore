@@ -85,7 +85,7 @@ public sealed class RelationTypeNormalizer
 
     public static bool HasLifecycle(ContextRelation relation)
     {
-        // GRAPH-08：正式字段优先，Metadata 仅兜底
+        // 正式字段优先，Metadata 仅兜底
         if (!string.IsNullOrWhiteSpace(relation.Lifecycle))
         {
             return true;
@@ -95,7 +95,7 @@ public sealed class RelationTypeNormalizer
 
     public static bool HasReviewStatus(ContextRelation relation)
     {
-        // GRAPH-08：正式字段优先，Metadata 仅兜底
+        // 正式字段优先，Metadata 仅兜底
         if (!string.IsNullOrWhiteSpace(relation.ReviewStatus))
         {
             return true;
@@ -127,7 +127,7 @@ public sealed class RelationTypeNormalizer
             SourceRefs = sourceRefs.ToArray(),
             Metadata = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase),
             CreatedAt = relation.CreatedAt,
-            // GRAPH-08：保留正式字段
+            // 保留正式字段
             SourceNodeKind = relation.SourceNodeKind,
             TargetNodeKind = relation.TargetNodeKind,
             Lifecycle = lifecycleOverride ?? relation.Lifecycle,

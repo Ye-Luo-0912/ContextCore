@@ -7,7 +7,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// 任务 F4：PostgreSQL 持久化 Agent Run Event Store。
+/// PostgreSQL 持久化 Agent Run Event Store。
 /// 替代 <see cref="ContextCore.Core.Services.AgentRunRuntime.InMemoryAgentRunEventStore"/>，
 /// 让 HA 场景下 Agent Run 事件流（哈希链）可跨进程持久化与崩溃恢复审计。
 /// </summary>
@@ -22,7 +22,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   3. <see cref="ReadAsync"/> 按 sequence 升序读取（fromSequence + take + LIMIT）。
 ///   4. <see cref="GetLastSequenceAsync"/> 通过 SELECT MAX(sequence) 实现；无事件返回 -1。
 ///   5. 完整 <see cref="AgentRunEvent"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   6. G4：<see cref="AppendBatchAsync"/> 单事务批量插入事件 + Run 状态 CAS + checkpoint 游标，
+///   6. <see cref="AppendBatchAsync"/> 单事务批量插入事件 + Run 状态 CAS + checkpoint 游标，
 ///      将 Turn 内 8-15 次网络往返降为 1 次。
 /// </remarks>
 public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEventStore, IPersistentAgentRunEventStore
@@ -75,7 +75,7 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
 
         // 单条 SQL：CTE 读取 last_event；WHERE 校验 sequence 连续性 + prev_hash 链接；
         // ON CONFLICT DO NOTHING 兜底；RETURNING 用于判断是否插入成功。
-        // + P0-5：leaseValidated 时 WHERE 追加 lease EXISTS 子句，
+        // + leaseValidated 时 WHERE 追加 lease EXISTS 子句，
         // 同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能写入。
         await using var insertCommand = connection.CreateCommand();
         insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -223,7 +223,7 @@ LIMIT 1;
 
     /// <inheritdoc />
     /// <remarks>
-    /// G4：单事务批量提交。BEGIN → 校验首事件连续性 → INSERT all events →
+    /// 单事务批量提交。BEGIN → 校验首事件连续性 → INSERT all events →
     /// UPDATE agent_runs state CAS + 可变字段 → UPDATE checkpoint 游标 → COMMIT。
     /// </remarks>
     public async ValueTask AppendBatchAsync(
@@ -419,7 +419,7 @@ RETURNING sequence;
                 updateCommand.Transaction = transaction;
                 updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
                 var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
-                // + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+                // + lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
                 // 同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能通过 CAS
                 var leaseClause = leaseValidated
                     ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"

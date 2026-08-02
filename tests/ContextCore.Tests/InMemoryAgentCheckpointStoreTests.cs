@@ -14,7 +14,7 @@ namespace ContextCore.Tests;
 ///   5. ListAsync take 限制 + take<0 抛异常
 ///   6. DeleteAsync 存在/不存在
 ///   7. Count 属性
-///   8. P0-6：跨 workspace 隔离（相同 checkpointId 在不同 workspace 互不可见）
+///   8. 跨 workspace 隔离（相同 checkpointId 在不同 workspace 互不可见）
 /// </summary>
 [TestClass]
 [TestCategory("R23")]
@@ -235,7 +235,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     }
 
     // =========================================================================
-    // 6. P0-6：跨 workspace 隔离
+    // 6. 跨 workspace 隔离
     // =========================================================================
 
     [TestMethod]

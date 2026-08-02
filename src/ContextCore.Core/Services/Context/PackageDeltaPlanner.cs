@@ -49,7 +49,7 @@ public sealed class PackageDeltaPlanner : IPackageDeltaPlanner
             var affectedSections = ResolveAffectedSections(previous.SectionDependencies, changedScopes);
             if (affectedSections.Count > 0 && affectedSections.Count < previous.SectionDependencies.Count)
             {
-                // V1: 部分变化也委托全量构建（保守策略保证等价性）
+                // 部分变化也委托全量构建（保守策略保证等价性）
                 // V2 可在此分支实现真正的选择性重载
                 var reason = $"部分 store scope 变化（{changedScopes.Count} 个 scope），影响 sections: {string.Join(", ", affectedSections)}；R15 V1 委托全量构建";
                 return new PackageDeltaPlan(

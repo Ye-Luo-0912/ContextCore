@@ -5,7 +5,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// 任务 D：PostgreSQL 持久化 Canary Leader 租约实现。
+/// PostgreSQL 持久化 Canary Leader 租约实现。
 /// </summary>
 /// <remarks>
 /// 确保 <see cref="ContextCore.Core.Services.Evolution.CanaryProgressionHostedService"/>
@@ -211,7 +211,7 @@ WHERE lease_expires_at < @now;
     }
 
     // -----------------------------------------------------------------------
-    // Perf-7：ICanaryDecisionApplier 实现（单一 PostgreSQL 事务）
+    // ICanaryDecisionApplier 实现（单一 PostgreSQL 事务）
     // -----------------------------------------------------------------------
 
     /// <inheritdoc />

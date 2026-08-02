@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// 任务 F1：InMemoryAgentRunStore — 进程内 Agent Run Store（开发/测试用）
+// InMemoryAgentRunStore — 进程内 Agent Run Store（开发/测试用）
 //
 // 实现 IAgentRunStore 的进程内默认实现，与 InMemoryAgentCheckpointStore 模式对齐：
 //   - ConcurrentDictionary 维护 (workspaceId, runId) → AgentRun 映射；
@@ -20,7 +20,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// 任务 F1：进程内 Agent Run Store 默认实现（开发/测试用）。
+/// 进程内 Agent Run Store 默认实现（开发/测试用）。
 /// 维护 Run 元数据的进程内映射，支持 expected-state CAS 推进。
 /// </summary>
 /// <remarks>

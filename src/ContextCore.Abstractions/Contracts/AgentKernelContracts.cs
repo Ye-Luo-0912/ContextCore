@@ -569,7 +569,7 @@ public sealed record ToolDispatchPrepareResult
 ///   3. <see cref="MarkCommittedAsync"/>：结果写入 durable result store 后。
 ///   4. <see cref="MarkResultDeliveredAsync"/>：结果成功送达后。
 ///
-/// <b>CAS-1：expected-state 精确匹配（state = @expected）</b>。
+/// <b>expected-state 精确匹配（state = @expected）</b>。
 /// Mark* 方法使用精确前驱状态 CAS 推进状态机（而非旧版 <c>state &lt; @target</c> 宽松匹配），
 /// <b>不自动创建 stub 条目</b>，且<b>禁止跨级跳跃</b>（如 Prepared → Committed）：
 /// <list type="bullet">
@@ -581,7 +581,7 @@ public sealed record ToolDispatchPrepareResult
 ///     而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
 /// </list>
 ///
-/// <b>CAS-2：PrepareAsync 语义等价校验</b>。
+/// <b>PrepareAsync 语义等价校验</b>。
 /// <see cref="PrepareAsync"/> 对同一 request_id 重复写入时不再静默沿用旧记录：
 /// 既有行必须与新条目在 <see cref="ToolDispatchJournalEntry.ToolName"/> /
 /// <see cref="ToolDispatchJournalEntry.IdempotencyKey"/> /

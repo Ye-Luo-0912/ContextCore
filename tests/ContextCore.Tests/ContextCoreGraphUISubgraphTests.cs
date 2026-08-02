@@ -8,7 +8,7 @@ using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
-/// <summary>GRAPH-13: 图 UI 子图集成测试 — 节点丰富、过滤、紧凑渲染。</summary>
+/// <summary> 图 UI 子图集成测试 — 节点丰富、过滤、紧凑渲染。</summary>
 [TestClass]
 [TestCategory("Relation")]
 [TestCategory("GraphUI")]

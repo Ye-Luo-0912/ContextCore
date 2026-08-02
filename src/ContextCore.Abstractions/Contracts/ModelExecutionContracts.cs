@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// / R28-F：Model Execution Runtime 契约
+// / Model Execution Runtime 契约
 //
 // 目标：
 //   把分散在 ModelGateway 基础设施之上的特征管理、批量推理、模型校准能力
@@ -30,7 +30,7 @@ namespace ContextCore.Abstractions;
 //   - IInferenceResultValidator：推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
 // ===========================================================================
 
-/// <summary>R28-D：Feature Registry — 管理特征 schema 版本。</summary>
+/// <summary>Feature Registry — 管理特征 schema 版本。</summary>
 public interface IFeatureRegistry
 {
     /// <summary>注册特征 schema。</summary>
@@ -46,7 +46,7 @@ public interface IFeatureRegistry
     IReadOnlyList<FeatureSchema> ListAll();
 }
 
-/// <summary>R28-D：特征 schema 定义。</summary>
+/// <summary>特征 schema 定义。</summary>
 public sealed record FeatureSchema
 {
     /// <summary>Schema 版本号（语义化版本字符串，如 "1.0.0"）。</summary>
@@ -59,7 +59,7 @@ public sealed record FeatureSchema
     public required DateTimeOffset CreatedAt { get; init; }
 }
 
-/// <summary>R28-D：特征定义。</summary>
+/// <summary>特征定义。</summary>
 public sealed record FeatureDefinition
 {
     /// <summary>特征名（在 schema 内唯一）。</summary>
@@ -75,7 +75,7 @@ public sealed record FeatureDefinition
     public string? DefaultValue { get; init; }
 }
 
-/// <summary>R28-D：特征类型枚举。</summary>
+/// <summary>特征类型枚举。</summary>
 public enum FeatureType : byte
 {
     /// <summary>数值型特征。</summary>
@@ -115,7 +115,7 @@ public enum InferenceEngineKind : byte
     Disabled = 2
 }
 
-/// <summary>R28-D：Batch Inference Engine — 批量推理。</summary>
+/// <summary>Batch Inference Engine — 批量推理。</summary>
 public interface IBatchInferenceEngine
 {
     /// <summary>批量推理。</summary>
@@ -166,7 +166,7 @@ public interface IFallbackInferenceEngine : IBatchInferenceEngine
 {
 }
 
-/// <summary>R28-D：批量推理请求。</summary>
+/// <summary>批量推理请求。</summary>
 public sealed record BatchInferenceRequest
 {
     /// <summary>批量输入特征向量列表。</summary>
@@ -179,7 +179,7 @@ public sealed record BatchInferenceRequest
     public int TimeoutMs { get; init; } = 5000;
 }
 
-/// <summary>R28-D：特征向量。</summary>
+/// <summary>特征向量。</summary>
 public sealed record FeatureVector
 {
     /// <summary>关联的 schema 版本。</summary>
@@ -189,7 +189,7 @@ public sealed record FeatureVector
     public required IReadOnlyDictionary<string, object> Values { get; init; }
 }
 
-/// <summary>R28-D：批量推理结果。</summary>
+/// <summary>批量推理结果。</summary>
 public sealed record BatchInferenceResult
 {
     /// <summary>每条输入对应的推理输出（顺序与输入一致）。</summary>
@@ -205,7 +205,7 @@ public sealed record BatchInferenceResult
     public required TimeSpan Duration { get; init; }
 }
 
-/// <summary>R28-D：单条推理输出。</summary>
+/// <summary>单条推理输出。</summary>
 public sealed record InferenceOutput
 {
     /// <summary>主分数（语义由模型决定，校准前可能不在 [0,1]）。</summary>
@@ -218,7 +218,7 @@ public sealed record InferenceOutput
     public IReadOnlyDictionary<string, double>? PerClassScores { get; init; }
 }
 
-/// <summary>R28-D：Calibration Service — 模型校准。</summary>
+/// <summary>Calibration Service — 模型校准。</summary>
 public interface ICalibrationService
 {
     /// <summary>校准分数。</summary>
@@ -245,7 +245,7 @@ public interface ICalibrationService
 }
 
 /// <summary>
-/// / R28-F P3-3：校准方法种类。用于精确路由 calibration 策略。
+/// / 校准方法种类。用于精确路由 calibration 策略。
 /// </summary>
 public enum CalibrationMethodKind : byte
 {
@@ -263,7 +263,7 @@ public enum CalibrationMethodKind : byte
 }
 
 /// <summary>
-/// / R28-F P3-3：校准参数。
+/// / 校准参数。
 /// 原始契约仅暴露单个 Parameter（= Platt A）；R28-F 扩展为完整支持
 /// Platt(A,B) / Temperature(T) / Isotonic(points) / Identity。
 /// 旧字段 Parameter 保留为 Platt A 的兼容别名（值同步 ParameterA）。
@@ -276,7 +276,7 @@ public sealed record CalibrationParameters
     /// </summary>
     public required string Method { get; init; }
 
-    /// <summary>R28-F P3-3：方法种类枚举（强类型路由）。</summary>
+    /// <summary>方法种类枚举（强类型路由）。</summary>
     public CalibrationMethodKind Kind { get; init; } = CalibrationMethodKind.Platt;
 
     /// <summary>
@@ -286,16 +286,16 @@ public sealed record CalibrationParameters
     /// </summary>
     public double Parameter { get; init; } = 1.0;
 
-    /// <summary>R28-F P3-3：Platt A 参数（calibrated = sigmoid(A*raw + B)）。</summary>
+    /// <summary>Platt A 参数（calibrated = sigmoid(A*raw + B)）。</summary>
     public double ParameterA { get; init; } = 1.0;
 
-    /// <summary>R28-F P3-3：Platt B 参数。</summary>
+    /// <summary>Platt B 参数。</summary>
     public double ParameterB { get; init; } = 0.0;
 
-    /// <summary>R28-F P3-3：Temperature T 参数（calibrated = sigmoid(raw / T)）。</summary>
+    /// <summary>Temperature T 参数（calibrated = sigmoid(raw / T)）。</summary>
     public double Temperature { get; init; } = 1.0;
 
-    /// <summary>R28-F P3-3：Isotonic 回归的输入→输出映射点（按 Input 升序）。</summary>
+    /// <summary>Isotonic 回归的输入→输出映射点（按 Input 升序）。</summary>
     public IReadOnlyList<IsotonicPoint> IsotonicPoints { get; init; } = Array.Empty<IsotonicPoint>();
 
     /// <summary>参数拟合时间戳。</summary>
@@ -424,6 +424,6 @@ public interface IInferenceResultValidator
     /// <returns>验证结果（IsValid=false 时含违规明细）。</returns>
     InferenceValidationResult Validate(BatchInferenceRequest request, BatchInferenceResult result);
 
-    /// <summary>R28-F P4-1：基于 FeatureBatch 的重载（验证 SchemaVersion 一致性）。</summary>
+    /// <summary>基于 FeatureBatch 的重载（验证 SchemaVersion 一致性）。</summary>
     InferenceValidationResult Validate(FeatureBatch batch, BatchInferenceResult result);
 }

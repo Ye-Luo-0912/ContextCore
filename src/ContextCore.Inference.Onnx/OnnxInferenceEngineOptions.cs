@@ -186,7 +186,7 @@ public sealed class OnnxInferenceEngineOptions
     public int PreviousEngineGracePeriodMs { get; init; } = 30000;
 
     /// <summary>
-    /// G8：等待推理槽位（SemaphoreSlim）的最大排队请求数。
+    /// 等待推理槽位（SemaphoreSlim）的最大排队请求数。
     /// 当同时请求推理的数量超过 <see cref="MaxConcurrentInferences"/> 时，额外请求会在此队列上等待；
     /// 队列满后，新请求立即返回失败（QueueFull），避免在过载场景下请求无限期堆积。
     /// 默认 256；0 表示不限制（向后兼容旧行为）。
@@ -199,7 +199,7 @@ public sealed class OnnxInferenceEngineOptions
     public int BatchQueueCapacity { get; init; } = 256;
 
     /// <summary>
-    /// G8：动态批处理窗口（毫秒）。
+    /// 动态批处理窗口（毫秒）。
     /// 大于 0 时，引擎在窗口内聚集多个请求合并为一次 session.Run 以提升吞吐。
     /// 默认 0 = 禁用（每个请求独立 session.Run，与现有架构一致）。
     /// </summary>
@@ -212,7 +212,7 @@ public sealed class OnnxInferenceEngineOptions
     public int DynamicBatchWindow { get; init; } = 0;
 
     /// <summary>
-    /// G8：是否在构造引擎时启用 CPU 过度订阅保护。
+    /// 是否在构造引擎时启用 CPU 过度订阅保护。
     /// 默认 true：当 <see cref="MaxConcurrentInferences"/> × max(<see cref="IntraOpNumThreads"/>, 1)
     /// 超过 <see cref="System.Environment.ProcessorCount"/> 时，自动将并发槽位收缩为
     /// max(1, ProcessorCount / max(IntraOpNumThreads, 1))，避免 ASP.NET 请求并发 × ORT 线程池

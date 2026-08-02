@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// B-3：Shadow Gate 多维度验收
+// Shadow Gate 多维度验收
 //
 // 目标（B-3 阶段：Hard parity 验收 + replay fixtures）：
 //   1. ShadowGate：基于 ParityReport 的验收门控。
@@ -25,7 +25,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-3：Shadow Gate 验收门控。
+/// Shadow Gate 验收门控。
 /// 基于 ParityReport 判定是否可安全执行 Authoritative cutover。
 /// </summary>
 /// <remarks>
@@ -157,7 +157,7 @@ public sealed class ShadowGate
     }
 }
 
-/// <summary>R28-B B-3：单个验收维度的结果。</summary>
+/// <summary>单个验收维度的结果。</summary>
 public sealed record ShadowGateDimensionResult(
     string Dimension,
     double Value,
@@ -165,7 +165,7 @@ public sealed record ShadowGateDimensionResult(
     ParityLevel Level,
     string Detail);
 
-/// <summary>R28-B B-3：Shadow Gate 综合验收结果。</summary>
+/// <summary>Shadow Gate 综合验收结果。</summary>
 public sealed record ShadowGateResult(
     ParityLevel OverallLevel,
     bool CanCutover,
@@ -178,7 +178,7 @@ public sealed record ShadowGateResult(
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-3：可重放的 parity fixture。
+/// 可重放的 parity fixture。
 /// 序列化为 JSON 供回归测试和 CI 验收消费。
 /// </summary>
 /// <remarks>
@@ -201,13 +201,13 @@ public sealed record ReplayFixture(
     ParityLevel ParityLevel,
     string Notes)
 {
-    /// <summary>P0-9：完整候选工作集（Envelopes + Materials sidecar），用于离线 replay。</summary>
+    /// <summary>完整候选工作集（Envelopes + Materials sidecar），用于离线 replay。</summary>
     public CandidateWorkingSet? WorkingSet { get; init; }
 
-    /// <summary>P0-9：V2 决策结果快照（含 AllocationDecisions），用于离线 replay。</summary>
+    /// <summary>V2 决策结果快照（含 AllocationDecisions），用于离线 replay。</summary>
     public ContextDecisionResult? V2Result { get; init; }
 
-    /// <summary>R28-B.7：存储的 WorkingSet（用于 DecisionReplay）。</summary>
+    /// <summary>存储的 WorkingSet（用于 DecisionReplay）。</summary>
     /// <remarks>
     /// 与 <see cref="WorkingSet"/> 区分：WorkingSet 携带 shadow 报告时的候选快照，
     /// StoredWorkingSet 是专为 DecisionReplay 准备的 Engine 入口候选（语义相同但来源独立，
@@ -215,56 +215,56 @@ public sealed record ReplayFixture(
     /// </remarks>
     public CandidateWorkingSet? StoredWorkingSet { get; init; }
 
-    /// <summary>R28-B.7：存储的 PolicySnapshot（用于 DecisionReplay / ExpertReplay）。</summary>
+    /// <summary>存储的 PolicySnapshot（用于 DecisionReplay / ExpertReplay）。</summary>
     /// <remarks>
     /// 请求生命周期内不可变的有效策略快照，直接喂给 IContextDecisionEngine.DecideAsync，
     /// 不重新解析 Policy / 不调用 Router，保证纯决策重放。
     /// </remarks>
     public EffectivePolicySnapshot? StoredPolicySnapshot { get; init; }
 
-    /// <summary>R28-B.7：存储的 Provider 输出快照（用于 ExpertReplay）。</summary>
+    /// <summary>存储的 Provider 输出快照（用于 ExpertReplay）。</summary>
     /// <remarks>
     /// 每个 Provider 的 Envelopes + Materials 快照。ExpertReplay 跳过 Provider 执行，
     /// 直接 Merge 这些快照后进入 Engine。
     /// </remarks>
     public IReadOnlyList<ProviderOutputSnapshot>? StoredProviderOutputs { get; init; }
 
-    /// <summary>R28-B.7 工作包 E：存储的标准化请求（Purpose Request Normalizer 产出）。</summary>
+    /// <summary>存储的标准化请求（Purpose Request Normalizer 产出）。</summary>
     /// <remarks>
     /// 携带标准化后的请求，让 replay 能对比 stored 与 replayed 的请求标准化结果，
     /// 检测 Normalizer 版本漂移。null 表示 Execution 未携带。
     /// </remarks>
     public ContextDecisionRuntimeRequest? StoredNormalizedRequest { get; init; }
 
-    /// <summary>R28-B.7 工作包 E：存储的请求语义哈希（用于 replay 匹配）。</summary>
+    /// <summary>存储的请求语义哈希（用于 replay 匹配）。</summary>
     /// <remarks>
     /// 让 replay 能按语义哈希匹配历史 fixture，而非依赖 RequestId 字符串匹配。
     /// null 表示 Execution 未携带。
     /// </remarks>
     public string? StoredRequestSemanticHash { get; init; }
 
-    /// <summary>R28-B.7 工作包 E：存储的 Feature Schema 版本（用于 replay 兼容性校验）。</summary>
+    /// <summary>存储的 Feature Schema 版本（用于 replay 兼容性校验）。</summary>
     /// <remarks>
     /// replay 前校验 schema 版本一致，避免 Feature Pipeline 版本不兼容导致重放结果失真。
     /// null 表示 Execution 未携带。
     /// </remarks>
     public string? StoredFeatureSchemaVersion { get; init; }
 
-    /// <summary>R28-B.7 工作包 E：存储的 Allocator 版本（用于 replay 兼容性校验）。</summary>
+    /// <summary>存储的 Allocator 版本（用于 replay 兼容性校验）。</summary>
     /// <remarks>
     /// replay 前校验 Allocator 版本一致，避免分配逻辑变更导致重放结果不可比。
     /// null 表示 Execution 未携带。
     /// </remarks>
     public string? StoredAllocatorVersion { get; init; }
 
-    /// <summary>R28-B.7 工作包 E：存储的 Tokenizer 版本（用于 replay 兼容性校验）。</summary>
+    /// <summary>存储的 Tokenizer 版本（用于 replay 兼容性校验）。</summary>
     /// <remarks>
     /// replay 前校验 Tokenizer 版本一致，避免 token 计算口径变化导致预算重放失真。
     /// null 表示 Execution 未携带。
     /// </remarks>
     public string? StoredTokenizerVersion { get; init; }
 
-    /// <summary>R28-B.7 工作包 E：存储的最终产出 token 成本快照（用于 replay 漂移检测）。</summary>
+    /// <summary>存储的最终产出 token 成本快照（用于 replay 漂移检测）。</summary>
     /// <remarks>
     /// 携带 stored 决策的最终 token 成本，让 replay 能对比 stored 与 replayed 的 token 成本，
     /// 检测 Allocator/Tokenizer 版本漂移。null 表示 Execution 未携带。
@@ -312,11 +312,11 @@ public sealed record ReplayFixture(
     }
 
     /// <summary>
-    /// / 工作包 E：从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
+    /// / 从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
     /// </summary>
     /// <remarks>
     /// 填充 StoredWorkingSet / StoredPolicySnapshot / StoredProviderOutputs +
-    /// 工作包 E 新增的 StoredNormalizedRequest / StoredRequestSemanticHash /
+    /// 新增的 StoredNormalizedRequest / StoredRequestSemanticHash /
     /// StoredFeatureSchemaVersion / StoredAllocatorVersion / StoredTokenizerVersion /
     /// StoredFinalTokenCost，使离线 replay 能纯决策重放（DecisionReplay / ExpertReplay）：
     ///   - StoredPolicySnapshot：直接喂给 IContextDecisionEngine.DecideAsync，不重新解析 Policy；
@@ -337,7 +337,7 @@ public sealed record ReplayFixture(
         var fixture = FromShadowReport(report, execution?.WorkingSet, execution?.Decision, fixtureId, purpose, notes);
         if (execution is null) return fixture;
 
-        // 工作包 E：从 Execution 提取完整 artifact 字段，让 replay 能离线重放且可校验版本漂移。
+        // 从 Execution 提取完整 artifact 字段，让 replay 能离线重放且可校验版本漂移。
         // FinalTokenCost 直接取自 execution（由 Runtime 在执行时填充）；未填充时为 null，replay 侧降级跳过校验。
         return fixture with
         {
@@ -359,7 +359,7 @@ public sealed record ReplayFixture(
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// B-3：批量评估多个 Shadow 报告，产出 cutover 就绪判定。
+/// 批量评估多个 Shadow 报告，产出 cutover 就绪判定。
 /// </summary>
 /// <remarks>
 /// 用于 CI 验收：批量运行 Shadow tee，收集所有 ParityReport，
@@ -433,7 +433,7 @@ public sealed class ShadowGateEvaluator
     }
 }
 
-/// <summary>R28-B B-3：Cutover 就绪评估报告。</summary>
+/// <summary>Cutover 就绪评估报告。</summary>
 public sealed record CutoverReadinessAssessment(
     bool IsReady,
     int TotalReports,

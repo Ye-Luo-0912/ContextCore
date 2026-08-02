@@ -484,7 +484,7 @@ public sealed class R28B_AllocatorV2_1Tests
         var v2Result = allocator.Allocate(envelopes, snapshot);
         var baseResult = baseAllocator.Allocate(envelopes, snapshot);
 
-        // V2.1 委托结果应与 base allocator 直接调用一致
+        // 委托结果应与 base allocator 直接调用一致
         Assert.AreEqual(baseResult.Selected.Count, v2Result.Selected.Count);
         Assert.AreEqual(baseResult.Dropped.Count, v2Result.Dropped.Count);
     }

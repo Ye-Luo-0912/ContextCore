@@ -5,7 +5,7 @@ namespace ContextCore.Core.Services;
 
 /// <summary>
 /// 把已有的 ContextPackageBuildResult / ContextRetrievalResult 投影为只读 <see cref="ContextDecisionRecord"/>。
-/// V17.0：投影过程纯只读，不修改任何输入对象，不触发运行时变更。
+/// 投影过程纯只读，不修改任何输入对象，不触发运行时变更。
 /// 所有 <see cref="ContextDecisionRisk"/> 标志位恒为 false（非激活契约）。
 /// </summary>
 public static class ContextDecisionProjector
@@ -292,7 +292,7 @@ public static class ContextDecisionProjector
             Source = result.DecisionSource,
             Candidates = candidates,
             PolicyVersion = result.PolicyVersion,
-            Quality = null, // R18-2 不计算 quality；由 PackageQualityCalculator 单独计算
+            Quality = null, // 不计算 quality；由 PackageQualityCalculator 单独计算
             CreatedAt = result.DecidedAt
         };
     }

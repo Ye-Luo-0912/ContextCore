@@ -68,7 +68,7 @@ public sealed class StorageExecutionProfile
         SupportsBatchWrites = true,            // AppendRangeAsync / UpsertAsync
         SupportsTransactions = false,          // 无跨文件事务
         SupportsCrossProcessSafety = false,    // advisory 锁仅标记多进程，不阻断
-        SupportsSnapshotReuse = true,          // R13.2 #2：按 last-write-time 复用快照
+        SupportsSnapshotReuse = true,          // 按 last-write-time 复用快照
         IsPersistent = true,
         MaxRecommendedConcurrency = 8,         // 磁盘 I/O 串行化，过高并发收益递减
         RecommendedReadFanout = 2,             // store 自身 _gate(1,1) 串行化写，外层 fanout 不应再加压

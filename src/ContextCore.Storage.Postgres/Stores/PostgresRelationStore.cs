@@ -16,7 +16,7 @@ public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore, I
     {
     }
 
-    /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
+    /// <summary>SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
     public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
         => BatchUpsertAsync([relation], cancellationToken);
 
@@ -132,7 +132,7 @@ WHERE workspace_id = @workspace_id
     }
 
     /// <summary>
-    /// GRAPH-11：批量 upsert 改用 NpgsqlBatch，单次往返提交所有语句；单事务保证原子性。
+    /// 批量 upsert 改用 NpgsqlBatch，单次往返提交所有语句；单事务保证原子性。
     /// </summary>
     public async Task BatchUpsertAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
     {
@@ -190,7 +190,7 @@ WHERE workspace_id = @workspace_id
         List<ContextRelation> list,
         CancellationToken cancellationToken)
     {
-        // GRAPH-11：NpgsqlBatch 单次往返提交全部 upsert 语句
+        // NpgsqlBatch 单次往返提交全部 upsert 语句
         var batch = new NpgsqlBatch(connection, transaction);
         batch.Timeout = Options.CommandTimeoutSeconds;
 
@@ -322,7 +322,7 @@ LIMIT @take OFFSET @skip;
 """;
     }
 
-    /// <summary>GRAPH-10：统一邻居查询，在 SQL 中过滤和 Limit。</summary>
+    /// <summary>统一邻居查询，在 SQL 中过滤和 Limit。</summary>
     public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
         RelationNeighborQuery query,
         CancellationToken cancellationToken = default)
@@ -438,12 +438,12 @@ LIMIT @take OFFSET @skip;
     }
 
     /// <summary>
-    /// / P7 / P1-9：批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
+    /// / P7 / 批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
     /// 每个种子独立扫描 + 排序 + LIMIT @per_seed_scan，命中 (workspace_id, source_id) / (workspace_id, target_id) 索引。
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item>P7：per-seed LIMIT @per_seed_scan 替代旧 ANY(@item_ids) 全局扫描方案，命中单侧索引。</item>
+    /// <item>per-seed LIMIT @per_seed_scan 替代旧 ANY(@item_ids) 全局扫描方案，命中单侧索引。</item>
     /// <item>P1-9 全局 LIMIT 下推：每批外层 <c>LIMIT @global_limit</c> = <c>MaxTotalEdges - totalRead</c>，
     /// 数据库只排序/生成 ≤ MaxTotalEdges 行结构列，不再为 MaxSeeds × maxScan 条候选产生完整 Relation JSON。</item>
     /// <item>P1-9 Seed 分批：每批 <c>SeedBatchSize</c> 个种子，避免单次 LATERAL unnest 过大。</item>

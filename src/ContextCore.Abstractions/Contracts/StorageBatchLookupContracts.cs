@@ -42,7 +42,7 @@ public interface IMemoryStoreBatchLookup
 /// <see cref="IContextStoreBatchLookup.BatchGetAsync"/> 二次读取。
 /// </summary>
 /// <remarks>
-/// Perf-2（Selected-only Hydration）：Provider 在 IncludeContent=false 时优先使用本接口，
+/// Provider 在 IncludeContent=false 时优先使用本接口，
 /// 仅对 Engine 最终选中的候选由 ISelectedCandidateHydrator 批量 hydrate 正文。
 /// 未实现本接口的 store 回退到全量批量读取（正确性不变，仅失去元数据投影的传输/解析节省）。
 /// </remarks>
@@ -73,7 +73,7 @@ public interface IMemoryStoreMetadataLookup
 }
 
 // ===========================================================================
-// Perf-1：Late Hydration 契约
+// Late Hydration 契约
 //
 // 目标：
 //   补齐 Recall metadata → Merge/Score/Allocate → Selected IDs → Batch hydrate
@@ -89,7 +89,7 @@ public interface IMemoryStoreMetadataLookup
 // ===========================================================================
 
 /// <summary>
-/// Perf-1：Selected 候选正文批量 hydrator。
+/// Selected 候选正文批量 hydrator。
 /// 在 Engine 产出 SelectedEnvelopes 后，对选中的候选批量读取正文，
 /// 替换 WorkingSet 中对应 Material 的空 Content（IncludeContent=false 路径产出）。
 /// </summary>
@@ -114,7 +114,7 @@ public interface ISelectedCandidateHydrator
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>
     /// hydrate 结果（修复后的 WorkingSet + 计数 + 预算修复诊断 + P1-7 正式修复决策 <see cref="HydrationResult.Repair"/>）；
-    /// 未选中候选保持原样。P1-7：Caller 必须基于 <see cref="HydrationRepairDecision"/> 重建 ContextDecisionResult。
+    /// 未选中候选保持原样。Caller 必须基于 <see cref="HydrationRepairDecision"/> 重建 ContextDecisionResult。
     /// </returns>
     ValueTask<HydrationResult> HydrateAsync(
         IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
@@ -143,10 +143,10 @@ public sealed record HydrationResult
     /// <summary>需要 hydrate 但失败的 Selected 候选数（store 未命中 / 读取异常 / 正文为空）。</summary>
     public required int FailedCount { get; init; }
 
-    /// <summary>P1-1：预算修复后 Selected 候选 TokenCost 总和仍超出预算时为 true。</summary>
+    /// <summary>预算修复后 Selected 候选 TokenCost 总和仍超出预算时为 true。</summary>
     public required bool BudgetExceeded { get; init; }
 
-    /// <summary>P1-1：预算修复诊断（被裁剪的 Material 列表及原因）；未发生修复时为 null。</summary>
+    /// <summary>预算修复诊断（被裁剪的 Material 列表及原因）；未发生修复时为 null。</summary>
     public IReadOnlyList<string>? BudgetRepairDiagnostics { get; init; }
 
     /// <summary>

@@ -41,7 +41,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             cts.Token);
 
         // 2. 尝试直接 MarkCommittedAsync（跳过 MarkDispatchedAsync）→ 应抛 InvalidOperationException（InvalidTransition）
-        //    CAS-1：expected-state 精确匹配，禁止跨级跳跃
+        //    expected-state 精确匹配，禁止跨级跳跃
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
             () => journal.MarkCommittedAsync(requestId, cts.Token).AsTask(),
             "Prepared → Committed 跨级跳跃必须被拒绝（InvalidTransition）。");
@@ -76,7 +76,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareAsync(originalEntry, cts.Token);
 
         // 2. 第二次 PrepareAsync（相同 RequestId，但 PayloadDigest = digest-B，IdempotencyKey = idem-conflicting）
-        //    CAS-2：语义等价校验失败 → 抛 InvalidOperationException（RequestIdReuseDetected）
+        //    语义等价校验失败 → 抛 InvalidOperationException（RequestIdReuseDetected）
         var conflictingEntry = BuildEntry(
             requestId,
             ToolDispatchState.Prepared,

@@ -5,7 +5,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL Policy Registry 持久化存储。
-/// WS-A：替代 in-memory <c>DefaultPolicyRegistry</c>，
+/// 替代 in-memory <c>DefaultPolicyRegistry</c>，
 /// 让 Postgres provider 在 HA 场景下能持久化 Policy Bundle 注册 + Activation CAS 激活。
 /// </summary>
 /// <remarks>

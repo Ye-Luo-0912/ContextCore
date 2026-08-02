@@ -115,7 +115,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         var dropped = candidates.Where(c => !selectedKeys.Contains(c.CanonicalKey)).ToList();
 
         // 接入 MandatoryOverflowPolicy。
-        // V2.1 section 分配阶段 mandatory 候选始终选入（AllowOverflowWithDiagnostic 语义），
+        // section 分配阶段 mandatory 候选始终选入（AllowOverflowWithDiagnostic 语义），
         // 此处在 section 分配完成后统一检查总 mandatory token 是否超出总预算：
         //   - FailClosed：收集溢出 mandatory 候选 ID + 总 token 需求，抛 MandatoryContextWindowExceededException
         //     （Runtime 不捕获，让请求真正失败，fail-closed 语义）
@@ -490,7 +490,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
     }
 
-    /// <summary>R28-G P1-4：section 分配中间状态（便于第二轮 rollover 复用）。</summary>
+    /// <summary>section 分配中间状态（便于第二轮 rollover 复用）。</summary>
     private sealed class SectionState
     {
         public string Section { get; init; } = string.Empty;

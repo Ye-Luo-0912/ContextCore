@@ -47,35 +47,35 @@ public enum ContextCandidateSource : byte
     Unknown = 0,
 
     /// <summary>Mandatory 候选（hard constraint / required tag / mandatory metadata）。</summary>
-    /// <remarks>R20 Expert: Mandatory。永不关闭。</remarks>
+    /// <remarks>Expert: Mandatory。永不关闭。</remarks>
     Mandatory = 1,
 
     /// <summary>Lexical 候选（keyword / context recall）。</summary>
-    /// <remarks>R20 Expert: Lexical。</remarks>
+    /// <remarks>Expert: Lexical。</remarks>
     Lexical = 2,
 
     /// <summary>Semantic 候选（vector recall）。</summary>
-    /// <remarks>R20 Expert: Semantic。</remarks>
+    /// <remarks>Expert: Semantic。</remarks>
     Semantic = 3,
 
     /// <summary>Working Memory 候选（task state / short-term signal）。</summary>
-    /// <remarks>R20 Expert: WorkingMemory。</remarks>
+    /// <remarks>Expert: WorkingMemory。</remarks>
     WorkingMemory = 4,
 
     /// <summary>Stable Memory 候选（长期记忆 / verified memory）。</summary>
-    /// <remarks>R20 Expert: StableMemory。</remarks>
+    /// <remarks>Expert: StableMemory。</remarks>
     StableMemory = 5,
 
     /// <summary>Graph 候选（relation expansion / traversal）。</summary>
-    /// <remarks>R20 Expert: Graph。</remarks>
+    /// <remarks>Expert: Graph。</remarks>
     Graph = 6,
 
     /// <summary>Recency / Task-State 候选（recent_context / current_task）。</summary>
-    /// <remarks>R20 Expert: Recency。</remarks>
+    /// <remarks>Expert: Recency。</remarks>
     Recency = 7,
 
     /// <summary>Constraint 候选（hard/soft/merged constraint）。</summary>
-    /// <remarks>R20 Expert: Constraint。永不关闭。</remarks>
+    /// <remarks>Expert: Constraint。永不关闭。</remarks>
     Constraint = 8,
 
     /// <summary>Global Context 候选（global context section）。</summary>
@@ -216,7 +216,7 @@ public sealed record CandidateFeatureVector
 ///   - ModelScore：模型评分（Router / Ranker / Listwise model 输出），可为 null。
 ///   - FinalScore：Engine 聚合后的最终分数（deterministic + model 加权）。
 ///   - ModelConfidence：模型置信度 [0,1]；0 或低于阈值时 Engine 回退到 DeterministicScore。
-///   - R28-D P0-1：ModelAttempted/ModelApplied/ModelFallbackReason 区分"模型尝试过"和"实际参与排序"，
+///   - ModelAttempted/ModelApplied/ModelFallbackReason 区分"模型尝试过"和"实际参与排序"，
 ///     避免把 fallback 误认为模型已生效。
 ///
 /// 这样 Model failure 时可精确回退到 deterministic policy（验收标准 #6）。
@@ -348,7 +348,7 @@ public sealed record ContextCandidateEnvelope
     [Obsolete("Use TokenCost.ContentTokens. Fallback to length/4 is inaccurate for CJK/code/JSON.")]
     public int EstimatedTokens { get; init; }
 
-    /// <summary>R28-B.7 P0-4：候选 token 成本（精确计算或估算）。</summary>
+    /// <summary>候选 token 成本（精确计算或估算）。</summary>
     /// <remarks>
     /// Provider 召回时若 IContextTokenizerResolver 可用，填充精确 token 成本；
     /// null 时回退到 <see cref="EstimatedTokens"/>（length/4 粗略估算）。
@@ -375,21 +375,21 @@ public sealed record ContextCandidateEnvelope
     /// <summary>候选 collection ID（跨 collection 决策时填充）。</summary>
     public string CollectionId { get; init; } = string.Empty;
 
-    /// <summary>R28-B：规范化候选标识（跨 Expert 合并去重键）。</summary>
+    /// <summary>规范化候选标识（跨 Expert 合并去重键）。</summary>
     /// <remarks>
     /// required。Adapter/Provider 必须填充，不得使用默认空 struct。
     /// 空 CanonicalKey 会导致 WorkingSetTee 中多个候选互相覆盖。
     /// </remarks>
     public required CanonicalCandidateKey CanonicalKey { get; init; }
 
-    /// <summary>R28-B：多 Expert 来源记录（合并时 union）。</summary>
+    /// <summary>多 Expert 来源记录（合并时 union）。</summary>
     public IReadOnlyList<ExpertOrigin> Origins { get; init; } = Array.Empty<ExpertOrigin>();
 
-    /// <summary>R28-B：per-Expert 贡献权重（保留 per-Expert contribution，不合并为单一值）。</summary>
+    /// <summary>per-Expert 贡献权重（保留 per-Expert contribution，不合并为单一值）。</summary>
     public IReadOnlyDictionary<ExpertKind, double> ExpertContributions { get; init; }
         = new Dictionary<ExpertKind, double>();
 
-    /// <summary>R28-B：策略引用（provenance；null = 未绑定到有效策略快照）。</summary>
+    /// <summary>策略引用（provenance；null = 未绑定到有效策略快照）。</summary>
     public ResolvedPolicyReference? PolicyReference { get; init; }
 }
 

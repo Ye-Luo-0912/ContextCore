@@ -283,7 +283,7 @@ public sealed class WorkflowD_ModelActivationAcceptanceTests
     [TestMethod]
     public async Task ModelActivation_ActivateAsync_SchemaNotRegistered_RejectsActivation()
     {
-        // 验证 P0-8：descriptor 引用未注册的 schema 版本 → 激活被拒绝
+        // 验证 descriptor 引用未注册的 schema 版本 → 激活被拒绝
         var registry = new InMemoryModelArtifactRegistry();
         await registry.RegisterAsync(new ModelArtifactDescriptor
         {
@@ -656,7 +656,7 @@ public sealed class WorkflowF_PerformanceTruthAcceptanceTests
     [TestMethod]
     public void BenchmarkCompareScript_ContainsFalsePositiveSuppressionParameters()
     {
-        // 验证 P0-9：benchmark-compare.sh 包含四层假阳性抑制参数
+        // 验证 benchmark-compare.sh 包含四层假阳性抑制参数
         // （NOISE_FLOOR_PCT / MIN_SAMPLE_COUNT / CONFIDENCE_SIGMA / IO_BOUND_THRESHOLD_PCT）
         var repoRoot = FindRepoRoot();
         var scriptPath = Path.Combine(repoRoot, "scripts", "benchmark-compare.sh");

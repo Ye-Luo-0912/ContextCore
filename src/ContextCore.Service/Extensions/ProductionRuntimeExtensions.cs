@@ -40,7 +40,7 @@ namespace ContextCore.Service.Extensions;
 /// </summary>
 internal static class ProductionRuntimeExtensions
 {
-    // ── P0-1：统一入口 ──────────────────────────────────────────────────
+    // ── 统一入口 ──────────────────────────────────────────────────
 
     /// <summary>
     /// 统一注册 Core 服务 + 生产 Runtime 服务，作为生产 Composition Root 的唯一入口。
@@ -244,7 +244,7 @@ internal static class ProductionRuntimeExtensions
             return opts;
         });
 
-        // 2. P0-2：Canary 模式切换——通过 PostConfigure 覆盖 Enabled 标志。
+        // 2. Canary 模式切换——通过 PostConfigure 覆盖 Enabled 标志。
         // PostConfigure 在 Configure 之后执行，IOptionsMonitor<T>.CurrentValue 会反映覆盖值。
         // CanarySchedulerOptions.Enabled = false（禁用单节点 CanaryProgressionHostedService）
         services.PostConfigure<CanarySchedulerOptions>(o => o.Enabled = false);
@@ -257,7 +257,7 @@ internal static class ProductionRuntimeExtensions
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
-        // 3. P0-2：HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
+        // 3. HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。
         services.AddHostedService<CanaryLeaderHostedService>();
 
