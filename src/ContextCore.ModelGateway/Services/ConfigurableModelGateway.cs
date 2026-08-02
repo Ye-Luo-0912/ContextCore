@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
@@ -159,7 +159,6 @@ public sealed class ConfigurableModelGateway : IModelGateway
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // 路由解析：将 ModelChatRequest 转换为 ModelRequest 用于路由匹配
         var routeRequest = new ModelRequest
         {
             OperationId = request.OperationId,
@@ -174,40 +173,186 @@ public sealed class ConfigurableModelGateway : IModelGateway
 
         if (route is null || string.IsNullOrWhiteSpace(resolution.Primary.ModelName))
         {
-            // 无可用路由 → 降级到 fallback helper（走 CompleteAsync 可能也无路由，但保持一致语义）
             return await ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken).ConfigureAwait(false);
         }
 
         var primaryModelName = resolution.Primary.ModelName;
         var maxRetry = route.MaxRetryCount;
+        var fallbackModelName = resolution.Fallback?.ModelName;
+        var primarySupportsNative = AdapterSupportsNativeToolCalling(primaryModelName);
+        var fallbackSupportsNative = !string.IsNullOrWhiteSpace(fallbackModelName)
+            && AdapterSupportsNativeToolCalling(fallbackModelName!);
 
-        // 尝试原生 function calling（如果适配器支持 IChatCompletionAdapter）
-        var nativeResult = await TryNativeChatWithToolsAsync(
-            primaryModelName, request, maxRetry, fallbackUsed: false, fallbackReason: null, cancellationToken).ConfigureAwait(false);
-
-        if (nativeResult is not null && nativeResult.Succeeded)
+        if (route.HighRiskTask && !primarySupportsNative && !fallbackSupportsNative)
         {
-            return nativeResult;
+            return CreateChatStructuredFailure(
+                request.OperationId,
+                primaryModelName,
+                "高风险任务要求原生 Tool Calling，但当前路由的模型适配器均不支持。",
+                "native_unsupported",
+                requiresReview: true);
         }
 
-        // 主模型原生调用失败 → 尝试备用模型（如果配置了且支持原生）
-        if (route.EnableFallback
-            && resolution.Fallback is { ModelName: not null } fallback
-            && !string.IsNullOrWhiteSpace(fallback.ModelName))
+        if (primarySupportsNative)
+        {
+            var nativeResult = await TryNativeChatWithToolsAsync(
+                primaryModelName, request, maxRetry, fallbackUsed: false, fallbackReason: null, cancellationToken).ConfigureAwait(false);
+
+            if (nativeResult is not null && nativeResult.Succeeded)
+            {
+                return nativeResult;
+            }
+
+            if (nativeResult is not null)
+            {
+                if (route.HighRiskTask)
+                {
+                    return WithChatMetadata(nativeResult, new Dictionary<string, string>
+                    {
+                        ["requiresReview"] = "true",
+                        ["fallbackBlocked"] = "highRiskTask"
+                    });
+                }
+
+                if (route.EnableFallback && fallbackSupportsNative && !string.IsNullOrWhiteSpace(fallbackModelName))
+                {
+                    var fallbackResult = await TryNativeChatWithToolsAsync(
+                        fallbackModelName!, request, maxRetry, fallbackUsed: true,
+                        fallbackReason: nativeResult.ErrorMessage ?? "primary native call failed",
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (fallbackResult is not null && fallbackResult.Succeeded)
+                    {
+                        return WithChatMetadata(fallbackResult, new Dictionary<string, string>
+                        {
+                            ["primaryModelName"] = primaryModelName,
+                            ["fallbackUsed"] = "true",
+                            ["fallbackReason"] = nativeResult.ErrorMessage ?? "primary native call failed"
+                        });
+                    }
+
+                    if (fallbackResult is not null)
+                    {
+                        return WithChatMetadata(fallbackResult, new Dictionary<string, string>
+                        {
+                            ["primaryModelName"] = primaryModelName,
+                            ["fallbackUsed"] = "true",
+                            ["fallbackReason"] = nativeResult.ErrorMessage ?? "primary native call failed",
+                            ["fallbackBlocked"] = "nativeAttempted"
+                        });
+                    }
+                }
+
+                return WithChatMetadata(nativeResult, new Dictionary<string, string>
+                {
+                    ["fallbackBlocked"] = "nativeAttempted"
+                });
+            }
+        }
+
+        if (route.EnableFallback && fallbackSupportsNative && !string.IsNullOrWhiteSpace(fallbackModelName))
         {
             var fallbackResult = await TryNativeChatWithToolsAsync(
-                fallback.ModelName, request, maxRetry, fallbackUsed: true,
-                fallbackReason: nativeResult?.ErrorMessage ?? "primary native call failed",
+                fallbackModelName!, request, maxRetry, fallbackUsed: true,
+                fallbackReason: "primary adapter does not support native tool calling",
                 cancellationToken).ConfigureAwait(false);
 
             if (fallbackResult is not null && fallbackResult.Succeeded)
             {
-                return fallbackResult;
+                return WithChatMetadata(fallbackResult, new Dictionary<string, string>
+                {
+                    ["primaryModelName"] = primaryModelName,
+                    ["fallbackUsed"] = "true",
+                    ["fallbackReason"] = "primary adapter does not support native tool calling"
+                });
+            }
+
+            if (fallbackResult is not null)
+            {
+                return WithChatMetadata(fallbackResult, new Dictionary<string, string>
+                {
+                    ["primaryModelName"] = primaryModelName,
+                    ["fallbackUsed"] = "true",
+                    ["fallbackReason"] = "primary adapter does not support native tool calling",
+                    ["fallbackBlocked"] = "nativeAttempted"
+                });
             }
         }
 
-        // 原生路径不可用或全部失败 → 降级到 JSON prompt fallback
+        if (route.HighRiskTask)
+        {
+            return CreateChatStructuredFailure(
+                request.OperationId,
+                primaryModelName,
+                "高风险任务要求原生 Tool Calling，但当前路由的模型适配器均不支持。",
+                "native_unsupported",
+                requiresReview: true);
+        }
+
         return await ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    private bool AdapterSupportsNativeToolCalling(string modelName)
+    {
+        return _adapters.TryGetValue(modelName, out var adapter) && adapter is IChatCompletionAdapter;
+    }
+
+    private static ModelChatResponse CreateChatStructuredFailure(
+        string operationId,
+        string modelName,
+        string errorMessage,
+        string failureReason,
+        bool requiresReview)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["modelName"] = modelName,
+            ["failureReason"] = failureReason,
+            ["fallbackBlocked"] = requiresReview ? "highRiskTask" : "nativeAttempted"
+        };
+
+        if (requiresReview)
+        {
+            metadata["requiresReview"] = "true";
+        }
+
+        return new ModelChatResponse
+        {
+            OperationId = operationId,
+            Content = string.Empty,
+            ToolCalls = Array.Empty<ModelToolCall>(),
+            FinishReason = ModelChatFinishReason.Error,
+            Succeeded = false,
+            ErrorMessage = errorMessage,
+            ModelId = modelName,
+            Metadata = metadata
+        };
+    }
+
+    private static ModelChatResponse WithChatMetadata(ModelChatResponse response, Dictionary<string, string> metadata)
+    {
+        var merged = new Dictionary<string, string>(response.Metadata);
+        foreach (var (key, value) in metadata)
+        {
+            merged[key] = value;
+        }
+
+        return new ModelChatResponse
+        {
+            OperationId = response.OperationId,
+            Content = response.Content,
+            ToolCalls = response.ToolCalls,
+            FinishReason = response.FinishReason,
+            InputTokens = response.InputTokens,
+            OutputTokens = response.OutputTokens,
+            CachedInputTokens = response.CachedInputTokens,
+            Succeeded = response.Succeeded,
+            ErrorMessage = response.ErrorMessage,
+            ModelId = response.ModelId,
+            EstimatedCost = response.EstimatedCost,
+            BilledCost = response.BilledCost,
+            Metadata = merged
+        };
     }
 
     /// <summary>

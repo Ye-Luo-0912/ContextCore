@@ -368,6 +368,17 @@ public interface IToolDispatcher
 }
 
 /// <summary>
+/// P1-1: Tool catalog 鈥?provides tool definitions for model function calling.
+/// Decoupled from IToolDispatcher to allow decorators/wrappers/MCP adapters to expose definitions
+/// without requiring Actor to cast to a concrete RealToolDispatcher.
+/// </summary>
+public interface IToolCatalog
+{
+    /// <summary>Get tool definitions for model function calling. Returns empty list if no tools registered.</summary>
+    IReadOnlyList<AgentToolDefinition> GetToolDefinitions();
+}
+
+/// <summary>
 /// R28-C：Tool 分派请求。
 /// </summary>
 public sealed record ToolDispatchRequest

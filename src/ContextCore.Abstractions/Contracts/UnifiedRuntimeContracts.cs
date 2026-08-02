@@ -1322,6 +1322,34 @@ public sealed class MandatoryContextWindowExceededException : InvalidOperationEx
     }
 }
 
+/// <summary>
+/// P1-7锛歮andatory / hard constraint 鍊欓€夋鏂?hydrate 澶辫触鏃舵姏鍑恒€?/// </summary>
+/// <remarks>
+/// 鏍规嵁 project_memory 绾︽潫锛欰gentContext hydration failures must fail closed for mandatory/hard
+/// constraints銆傚綋 <see cref="ISelectedCandidateHydrator"/> 杩斿洖鐨?<c>HydrationRepairDecision.HydrationFailures</c>
+/// 鍖呭惈 mandatory / hard constraint 鍊欓€夛紝涓?Purpose 涓?AgentContext 鎴?Package 鏃讹紝Runtime 鎶涘嚭姝ゅ紓甯?/// 锛坒ail-closed 璇箟锛夛紝涓嶈繑鍥為檷绾х粨鏋溿€俁etrieval 璺緞浣跨敤 best-effort锛堜笉鎶涘紓甯革紝鍊欓€夎 dropped锛夈€?/// </remarks>
+public sealed class MandatoryHydrationFailedException : InvalidOperationException
+{
+    /// <summary>hydrate 澶辫触鐨?mandatory / hard constraint 鍊欓€?ID 鍒楄〃銆?/summary>
+    public IReadOnlyList<string> FailedMandatoryCandidateIds { get; }
+
+    /// <summary>hydrate 澶辫触鏄庣粏锛坈andidate_id -> error锛夈€?/summary>
+    public IReadOnlyDictionary<string, string> HydrationFailures { get; }
+
+    /// <summary>鏋勯€?mandatory hydrate 澶辫触寮傚父銆?/summary>
+    public MandatoryHydrationFailedException(
+        IReadOnlyList<string> failedMandatoryCandidateIds,
+        IReadOnlyDictionary<string, string> hydrationFailures)
+        : base($"Mandatory candidate hydration failed: {failedMandatoryCandidateIds.Count} mandatory/hard " +
+               $"constraint candidate(s) could not be hydrated. Failed candidates: " +
+               $"{string.Join(", ", failedMandatoryCandidateIds)}. " +
+               $"All hydration failures: {string.Join("; ", hydrationFailures.Select(kv => kv.Key + "=" + kv.Value))}")
+    {
+        FailedMandatoryCandidateIds = failedMandatoryCandidateIds;
+        HydrationFailures = hydrationFailures;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AgentContext Projector
 // ---------------------------------------------------------------------------

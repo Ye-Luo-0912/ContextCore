@@ -47,7 +47,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
     // P0-9：批量 heartbeat 协调器——单个后台任务为所有活跃 lease 续约，替代每 record 一个 heartbeat 任务。
     // eventId → (leaseToken, per-record CTS for signaling lease loss to the owning worker)
-    private readonly ConcurrentDictionary<string, (string LeaseToken, CancellationTokenSource Cts)> _activeLeases = new();
+    private readonly ConcurrentDictionary<string, (string LeaseToken, CancellationTokenSource Cts, DateTimeOffset ConfirmedExpiresAt)> _activeLeases = new();
     private Task? _heartbeatCoordinatorTask;
 
     public LearningMaterializationWorker(
@@ -232,7 +232,10 @@ public sealed class LearningMaterializationWorker : BackgroundService
             // leaseCts 由协调器在检测到租约丢失时 cancel，信号 worker 中止该 record 处理。
             // 如果 record 未被消费（Channel 关闭/异常），下面的 try-catch 会调用 RemoveLease 清理。
             var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _activeLeases[record.EventId] = (record.LeaseToken, leaseCts);
+            // P1-5：本地记录 DB 确认的 ExpiresAt——续约异常时不更新，
+            // DB 不可达超过 LeaseDuration 后过期 → watchdog cancel leaseCts → linked CTS 取消 MaterializeAsync。
+            var confirmedExpiresAt = DateTimeOffset.UtcNow.Add(leaseDuration);
+            _activeLeases[record.EventId] = (record.LeaseToken, leaseCts, confirmedExpiresAt);
 
             try
             {
@@ -416,11 +419,31 @@ public sealed class LearningMaterializationWorker : BackgroundService
             var snapshot = _activeLeases.ToArray();
             if (snapshot.Length == 0) continue;
 
+            var now = DateTimeOffset.UtcNow;
+
+            // P1-5 本地 watchdog：内存比较，无 DB 开销。
+            // 续约异常时不更新 ConfirmedExpiresAt；DB 不可达超过 LeaseDuration 后 ConfirmedExpiresAt 过期，
+            // 立即 cancel leaseCts → worker 的 linked CTS 取消 MaterializeAsync，避免旧 Worker 越权继续物化。
+            // 此检查先于 RenewLeaseBatchAsync——即使续约调用阻塞，已过期的 lease 也能被及时取消。
+            foreach (var kv in snapshot)
+            {
+                if (now >= kv.Value.ConfirmedExpiresAt)
+                {
+                    try { kv.Value.Cts.Cancel(); }
+                    catch (ObjectDisposedException) { /* CTS 已被 worker 清理——忽略 */ }
+                }
+            }
+
+            // 仅续约尚未过期（未取消）的 lease——过期的 lease DB 端也会拒绝（lease_expires_at > clock_timestamp()）。
             var renewals = new List<(string EventId, string LeaseToken)>(snapshot.Length);
             foreach (var kv in snapshot)
             {
-                renewals.Add((kv.Key, kv.Value.LeaseToken));
+                if (now < kv.Value.ConfirmedExpiresAt)
+                {
+                    renewals.Add((kv.Key, kv.Value.LeaseToken));
+                }
             }
+            if (renewals.Count == 0) continue;
 
             IReadOnlySet<string> renewed;
             try
@@ -434,16 +457,27 @@ public sealed class LearningMaterializationWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                // 瞬时错误——等待下次续约。
+                // 瞬时错误——不更新 ConfirmedExpiresAt（保持上一次确认的值），等待下次续约。
+                // 本地 watchdog 已在上面检查过期，过期的 lease 会在后续迭代被取消。
                 _logger.LogDebug(ex, "Failed to renew learning event outbox leases in batch.");
                 continue;
             }
 
-            // 对任何不在 renewed set 中的 eventId → 租约丢失 → cancel 该 record 的 CTS 信号 worker 中止。
+            // 续约成功——更新本地确认的 ExpiresAt；未续约且未过期的（lease 被抢占）→ cancel 该 record 的 CTS。
+            var newConfirmedExpiresAt = DateTimeOffset.UtcNow.Add(leaseDuration);
             foreach (var kv in snapshot)
             {
-                if (!renewed.Contains(kv.Key))
+                if (renewed.Contains(kv.Key))
                 {
+                    // 续约成功——更新 ConfirmedExpiresAt 为本次确认的过期时间。
+                    if (_activeLeases.TryGetValue(kv.Key, out var current))
+                    {
+                        _activeLeases[kv.Key] = (current.LeaseToken, current.Cts, newConfirmedExpiresAt);
+                    }
+                }
+                else if (now < kv.Value.ConfirmedExpiresAt)
+                {
+                    // 未过期但续约失败 → lease 已被其他 worker 抢占 → cancel 信号 worker 中止。
                     try { kv.Value.Cts.Cancel(); }
                     catch (ObjectDisposedException) { /* CTS 已被 worker 清理——忽略 */ }
                 }

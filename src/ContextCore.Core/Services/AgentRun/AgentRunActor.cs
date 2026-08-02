@@ -65,7 +65,7 @@ public sealed class AgentRunActor
     // P0-3：模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
     private readonly IAgentModelContextProjector? _modelContextProjector;
     // P0-1：Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
-    private readonly IReadOnlyList<AgentToolDefinition> _toolDefinitions;
+    private IReadOnlyList<AgentToolDefinition> _toolDefinitions;  // P1-1: mutable for AllowedToolIds filtering in ExecuteAsync
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
@@ -86,6 +86,13 @@ public sealed class AgentRunActor
     private AgentCheckpoint? _pendingTurnCheckpoint;
     // G4：批量提交阈值（超过则 mid-turn 强制 flush）
     private const int PendingEventsFlushThreshold = 32;
+    // P1-4: 强制 checkpoint 阈值 — 未 checkpoint 事件数达到此值时强制创建 checkpoint，
+    // 防止事件流无限增长导致恢复时重放代价过大。
+    private const int ForcedCheckpointEventThreshold = 1000;
+    // P1-4: 事件恢复 keyset pagination 页大小（基于 sequence 索引的分页读取）。
+    private const int RecoveryEventPageSize = 500;
+    // P1-4: 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
+    private int _eventsSinceLastCheckpoint;
 
     // P0-4：当前 Run 的 lease token 与 fencing token（由 AgentKernelHost 在 ExecuteAsync 时注入）。
     // 非空时 FlushPendingEventsAsync 将它们写入 AgentRunStateUpdate，由 Postgres 实现在
@@ -112,6 +119,14 @@ public sealed class AgentRunActor
 
         /// <summary>最近一次模型响应（null = 首轮，尚未调用模型；与 Context.LastModelTurn 同步，保留供 IAgentLoopPolicy 使用）。</summary>
         public AgentModelResponse? LastModelResponse { get; init; }
+
+        /// <summary>
+        /// P1-2：最近一次模型响应的规范化 Tool 调用列表（与 <see cref="LastModelResponse"/> 同步生成）。
+        /// null = 尚未调用模型或模型响应已分派完毕（DispatchToolsAsync 结束后置 null）。
+        /// 非空时，<see cref="DispatchToolsAsync"/> 按 ordinal 索引取出 <see cref="NormalizedToolCall.InvocationId"/>
+        /// 作为统一的 ToolCallId，确保 Assistant 消息 / 事件 / Journal / Tool Message 引用同一 ID。
+        /// </summary>
+        public List<NormalizedToolCall>? NormalizedToolCalls { get; init; }
 
         /// <summary>
         /// P0-3：最近一次 Context Decision Runtime 的执行结果（含 WorkingSet.Materials）。
@@ -227,6 +242,14 @@ public sealed class AgentRunActor
         // run.State != Created 表示 Run 之前已开始执行（崩溃/重启后由 RecoveryWorker 重新入队）
         var isResume = run.State != AgentRunState.Created;
 
+        // P1-1锛氭寜 Run.AllowedToolIds 杩囨护妯″瀷鍙鐨?Tool Definitions锛堝湪妯″瀷璋冪敤鍓嶈繃婊わ級
+        if (run.AllowedToolIds.Count > 0 && _toolDefinitions.Count > 0)
+        {
+            _toolDefinitions = _toolDefinitions
+                .Where(t => run.AllowedToolIds.Contains(t.Name))
+                .ToList();
+        }
+
         // P0-2 重构：初始化 AgentRunExecutionState（统一管理执行期状态）
         // G5：用 AgentContextState 替代旧 List<AgentMessage> Messages，
         // CurrentTask 在初始化时设置为 run.Task，后续由 ProjectForModel 投影为 User 消息
@@ -257,6 +280,8 @@ public sealed class AgentRunActor
         _turnStartState = run.State;
         _pendingTurnEvents.Clear();
         _pendingTurnCheckpoint = null;
+        // P1-4: 重置未 checkpoint 事件计数
+        _eventsSinceLastCheckpoint = 0;
 
         if (isResume)
         {
@@ -311,6 +336,16 @@ public sealed class AgentRunActor
                         if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
                         {
                             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+                            // P1-4: 强制 checkpoint 阈值检查 — 未 checkpoint 事件达阈值时记录警告。
+                            // ModelCalling 状态无法直接进入 Checkpointing（状态机仅允许 Observing → Checkpointing），
+                            // checkpoint 将在下一个 Observing 状态（DispatchToolsAsync Turn 结束）时创建并重置计数。
+                            if (_eventsSinceLastCheckpoint >= ForcedCheckpointEventThreshold && _checkpointFactory is not null)
+                            {
+                                System.Diagnostics.Trace.TraceWarning(
+                                    "[AgentRunActor] 未 checkpoint 事件数 ({0}) 达到强制阈值 ({1})，run={2}，状态={3}。" +
+                                    "将在下一个 Observing 状态创建 checkpoint。",
+                                    _eventsSinceLastCheckpoint, ForcedCheckpointEventThreshold, state.Run.RunId, state.Run.State);
+                            }
                         }
                         break;
 
@@ -396,17 +431,67 @@ public sealed class AgentRunActor
         AgentRunExecutionState state,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<AgentRunEvent> events;
+        // P1-4: 获取最新 Checkpoint Cursor
+        AgentCheckpointCursor? cursor = null;
         try
         {
-            events = await _eventStore.ReadAsync(
-                state.Run.WorkspaceId, state.Run.RunId,
-                fromSequence: 0, take: 10000, cancellationToken)
-                .ConfigureAwait(false);
+            cursor = await _eventStore.GetCheckpointCursorAsync(
+                state.Run.WorkspaceId, state.Run.RunId, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            // 事件流读取失败（store 不可用 / 跨 workspace 不可见）→ 回退为全新启动路径
+            // Cursor 读取失败非致命
+        }
+
+        // P1-4: Keyset pagination
+        var allEvents = new List<AgentRunEvent>();
+        var fromSequence = 0;
+        string? expectedPrevChainHash = null;
+
+        try
+        {
+            while (true)
+            {
+                var page = await _eventStore.ReadAsync(
+                    state.Run.WorkspaceId, state.Run.RunId,
+                    fromSequence: fromSequence, take: RecoveryEventPageSize, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (page.Count == 0)
+                {
+                    break;
+                }
+
+                for (var i = 0; i < page.Count; i++)
+                {
+                    var evt = page[i];
+                    var expectedSequence = fromSequence + i;
+                    if (evt.Sequence != expectedSequence)
+                    {
+                        throw new InvalidOperationException(
+                            $"事件序列号不连续：期望 {expectedSequence}，实际 {evt.Sequence}（run={state.Run.RunId}）。");
+                    }
+                    var expectedHash = (i == 0) ? expectedPrevChainHash : page[i - 1].ContentHash;
+                    if (!string.Equals(evt.PrevChainHash, expectedHash, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            $"事件哈希链断裂：sequence={evt.Sequence} 的 PrevChainHash 与前一事件 ContentHash 不匹配（run={state.Run.RunId}）。");
+                    }
+                }
+
+                allEvents.AddRange(page);
+                expectedPrevChainHash = page[page.Count - 1].ContentHash;
+                fromSequence += page.Count;
+
+                if (page.Count < RecoveryEventPageSize)
+                {
+                    break;
+                }
+            }
+        }
+        catch
+        {
+            // 事件流读取失败（store 不可用 / 跨 workspace 不可见 / 哈希链断裂）→ 回退为全新启动路径
             // 此时 _turnStartState = run.State（非 Created），首次 CAS 可能失败，
             // Actor 的 catch 块会转 Failed 状态
             state = BufferEvent(state, AgentRunEventType.RunCreated, JsonSerializer.Serialize(new
@@ -419,7 +504,7 @@ public sealed class AgentRunActor
             return state;
         }
 
-        if (events.Count == 0)
+        if (allEvents.Count == 0)
         {
             // 无事件 — 崩溃发生在首次 flush 之前 → 回退为全新启动路径
             state = BufferEvent(state, AgentRunEventType.RunCreated, JsonSerializer.Serialize(new
@@ -431,6 +516,24 @@ public sealed class AgentRunActor
             state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
             return state;
         }
+
+        // P1-4: 从 Cursor 初始化 _eventsSinceLastCheckpoint。
+        // cursor.LastEventSequence 是已 checkpoint 的最后事件序列号（0-based），
+        // 未 checkpoint 事件数 = 总事件数 - (lastCheckpointedSequence + 1)。
+        // 无 Cursor 时全部事件视为未 checkpoint（首次恢复或 InMemory 无游标）。
+        if (cursor is not null)
+        {
+            var checkpointedCount = cursor.LastEventSequence + 1;
+            _eventsSinceLastCheckpoint = allEvents.Count > checkpointedCount
+                ? allEvents.Count - checkpointedCount
+                : 0;
+        }
+        else
+        {
+            _eventsSinceLastCheckpoint = allEvents.Count;
+        }
+
+        var events = allEvents;
 
         // P0-2：从事件流按时间顺序无损重建 Conversation（Assistant + Tool 消息）。
         // ModelCallCompleted 事件携带完整模型响应（content + toolCalls[]），重建 Assistant 消息。
@@ -948,13 +1051,20 @@ public sealed class AgentRunActor
         // 所有 Pending Tool 执行完成 → Observing（G4：本地推进）
         state = TransitionStateLocal(state, AgentRunState.Observing);
 
-        // Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        // P1-4: Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        // 强制 checkpoint 阈值由 _eventsSinceLastCheckpoint 跟踪：Turn 结束的 checkpoint 会重置计数。
         if (_checkpointFactory is not null)
         {
             state = await PersistCheckpointAsync(state, cancellationToken).ConfigureAwait(false);
         }
         else
         {
+            if (_eventsSinceLastCheckpoint >= ForcedCheckpointEventThreshold)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "[AgentRunActor] 未 checkpoint 事件数 ({0}) 达到强制阈值 ({1})，run={2}，但无 checkpoint factory 配置。",
+                    _eventsSinceLastCheckpoint, ForcedCheckpointEventThreshold, state.Run.RunId);
+            }
             state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
 
@@ -1028,10 +1138,12 @@ public sealed class AgentRunActor
                 Duration = TimeSpan.Zero
             };
             // G5：同步更新 Context.LastModelTurn 和 LastModelResponse（后者供 IAgentLoopPolicy 使用）
+            // P1-2：degraded 响应无 ToolCalls，NormalizedToolCalls 置空避免上一轮残留。
             state = state with
             {
                 LastModelResponse = degradedResponse,
-                Context = state.Context with { LastModelTurn = degradedResponse }
+                Context = state.Context with { LastModelTurn = degradedResponse },
+                NormalizedToolCalls = null
             };
 
             BufferEvent(state, AgentRunEventType.ModelCallCompleted, JsonSerializer.Serialize(new
@@ -1095,6 +1207,13 @@ public sealed class AgentRunActor
         // P0-6：递增执行期内模型轮次计数（用于 RequestId 的 modelTurn）
         _executionModelTurn++;
 
+        // P1-2：模型响应进入 Actor 后立刻生成不可变的 NormalizedToolCall 列表。
+        // InvocationId = {runId}_{executionModelTurn}_{ordinal}（确定性、可重建），
+        // 后续 Assistant 消息 / ModelCallCompleted 事件 / DispatchToolsAsync / 审批 / Journal / Tool Message
+        // 全部引用此 InvocationId，消除两条路径分别 Guid.NewGuid() 产生不同 ID 的问题。
+        var normalizedToolCalls = NormalizeToolCalls(state.Run.RunId, _executionModelTurn, response.ToolCalls);
+        state = state with { NormalizedToolCalls = normalizedToolCalls };
+
         // 子问题 3：累积 token + 费用到 _costBudget
         if (_costBudget is not null)
         {
@@ -1123,15 +1242,17 @@ public sealed class AgentRunActor
         // P0-2：始终追加 Assistant 消息（原生 function calling 响应可能 Content 为空 + ToolCalls 非空）。
         // 旧路径仅在 Content 非空时追加，导致多轮 Tool 调用协议中断——模型在下一轮看不到自己上一轮
         // 发起的 Tool 调用请求，OpenAI / Anthropic 兼容 API 会拒绝无前置 Assistant tool_calls 的 Tool 消息。
+        // P1-2：ToolCalls[].Id 使用 NormalizedToolCall.InvocationId（确定性、与分派路径一致），
+        // 替代旧路径的 tc.ToolCallId ?? tc.ToolName ?? Guid.NewGuid().ToString("N")。
         var assistantMessage = new AgentMessage
         {
             Role = AgentMessageRole.Assistant,
             Content = response.Content ?? string.Empty,
             EventId = null, // 关联事件 ID 在 ModelCallCompleted 事件产出后回填（此处保留 null 即可）
             ToolCalls = response.ToolCalls.Count > 0
-                ? response.ToolCalls.Select(tc => new AgentToolCallEntry
+                ? response.ToolCalls.Select((tc, idx) => new AgentToolCallEntry
                   {
-                      Id = tc.ToolCallId ?? tc.ToolName ?? Guid.NewGuid().ToString("N"),
+                      Id = normalizedToolCalls[idx].InvocationId,
                       Name = tc.ToolName ?? string.Empty,
                       Arguments = tc.Arguments
                   }).ToList()
@@ -1173,11 +1294,12 @@ public sealed class AgentRunActor
             durationMs = response.Duration.TotalMilliseconds,
             // P0-2：持久化完整模型响应，支持崩溃恢复时无损重建 Conversation。
             // 旧事件缺少此字段时恢复路径跳过 Assistant 重建（仅恢复 Tool 消息，向后兼容）。
+            // P1-2：toolCalls[].id 使用 NormalizedToolCall.InvocationId（与 Assistant 消息 / 分派路径一致）。
             content = response.Content ?? string.Empty,
             toolCalls = response.ToolCalls.Count > 0
-                ? response.ToolCalls.Select(tc => new
+                ? response.ToolCalls.Select((tc, idx) => new
                   {
-                      id = tc.ToolCallId ?? tc.ToolName ?? Guid.NewGuid().ToString("N"),
+                      id = normalizedToolCalls[idx].InvocationId,
                       name = tc.ToolName ?? string.Empty,
                       arguments = tc.Arguments ?? string.Empty
                   }).ToArray()
@@ -1344,7 +1466,13 @@ public sealed class AgentRunActor
             // P0-2 多轮协议修复：优先使用模型返回的 ToolCallId（如 OpenAI 的 tool_call_id），
             // 确保 Tool 观察消息的 tool_call_id 与 Assistant 消息的 tool_calls[].id 一致——
             // OpenAI / Anthropic 兼容 API 要求二者匹配，否则第二轮调用会被拒绝。
-            var toolCallId = toolCall.ToolCallId ?? Guid.NewGuid().ToString("N");
+            // P1-2：优先使用 NormalizedToolCall.InvocationId（由 CallModelAsync 在模型响应进入 Actor
+            // 后立即生成，与 Assistant 消息 / ModelCallCompleted 事件 / Tool Message 引用同一 ID）。
+            // 回退到 toolCall.ToolCallId / Guid 仅为防御性兼容（如 resume 路径未重建 NormalizedToolCalls）。
+            var normalized = (state.NormalizedToolCalls is not null && toolIndex < state.NormalizedToolCalls.Count)
+                ? state.NormalizedToolCalls[toolIndex]
+                : null;
+            var toolCallId = normalized?.InvocationId ?? toolCall.ToolCallId ?? Guid.NewGuid().ToString("N");
 
             // P0-5：强制 Run 约束的 Tool 白名单（AllowedToolIds 非空时仅允许集合中的 Tool）。
             // 旧路径未写入 AllowedToolIds，Actor 无法按 Run 限定 Tool 集；新路径从 API 入参写入并在此强制。
@@ -1408,11 +1536,18 @@ public sealed class AgentRunActor
 
                     // WP-1#6：构建完整 PendingToolCommands 列表（当前 + 同轮后续未处理的 Tool Call）。
                     // 旧路径仅保存单数 PendingToolCommand，审批中断时同轮后续 Tool Call 被丢弃。
+                    // P1-2：remainingToolCallId 优先使用 NormalizedToolCall.InvocationId，确保审批恢复后
+                    // ExecutePendingToolAsync 使用的 ID 与原 Assistant 消息 / 事件一致。
                     var pendingCommands = new List<PendingToolCommand> { pendingCommand };
                     for (var j = toolIndex + 1; j < state.LastModelResponse.ToolCalls.Count; j++)
                     {
                         var remaining = state.LastModelResponse.ToolCalls[j];
-                        var remainingToolCallId = remaining.ToolCallId ?? Guid.NewGuid().ToString("N");
+                        var remainingNormalized = (state.NormalizedToolCalls is not null && j < state.NormalizedToolCalls.Count)
+                            ? state.NormalizedToolCalls[j]
+                            : null;
+                        var remainingToolCallId = remainingNormalized?.InvocationId
+                            ?? remaining.ToolCallId
+                            ?? Guid.NewGuid().ToString("N");
                         pendingCommands.Add(new PendingToolCommand
                         {
                             ToolCallId = remainingToolCallId,
@@ -1604,7 +1739,8 @@ public sealed class AgentRunActor
         // 清除 LastModelResponse：Tool 已分派完毕，下一轮应由 LoopPolicy 决定 CallModel
         // （而非重复 DispatchTool）。未清除会导致 ContextBuilding → ToolDispatching 非法转换。
         // Context.LastModelTurn 保留（供 ProjectForModel 投影历史上下文）。
-        state = state with { LastModelResponse = null };
+        // P1-2：同步清除 NormalizedToolCalls（已分派完毕，避免下一轮残留）。
+        state = state with { LastModelResponse = null, NormalizedToolCalls = null };
 
         // P0-2 Bug 3 修复：Turn 已在 CallModelAsync 中递增（每次模型调用计为一次 Turn）
         // 此处不再重复递增 Turn（避免双重计数）
@@ -1620,13 +1756,21 @@ public sealed class AgentRunActor
         };
         state = state with { Run = updatedRun };
 
-        // Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        // P1-4: Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        // 强制 checkpoint 阈值由 _eventsSinceLastCheckpoint 跟踪：Turn 结束的 checkpoint 会重置计数。
+        // 若 _checkpointFactory 为 null 但未 checkpoint 事件已达阈值，记录警告（无法强制 checkpoint）。
         if (_checkpointFactory is not null)
         {
             state = await PersistCheckpointAsync(state, cancellationToken).ConfigureAwait(false);
         }
         else
         {
+            if (_eventsSinceLastCheckpoint >= ForcedCheckpointEventThreshold)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "[AgentRunActor] 未 checkpoint 事件数 ({0}) 达到强制阈值 ({1})，run={2}，但无 checkpoint factory 配置。",
+                    _eventsSinceLastCheckpoint, ForcedCheckpointEventThreshold, state.Run.RunId);
+            }
             // 无 checkpoint 工厂 → 直接进入下一轮
             state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
@@ -1687,6 +1831,42 @@ public sealed class AgentRunActor
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// P1-2：将模型响应的 ToolCalls 规范化为不可变 <see cref="NormalizedToolCall"/> 列表。
+    /// 在模型响应进入 Actor 后立即调用一次，生成确定性 InvocationId（{runId}_{turn}_{ordinal}）。
+    /// 后续 Assistant 消息 / 事件 / 审批 / Journal / Tool Message 全部引用此 InvocationId。
+    /// </summary>
+    /// <param name="runId">Agent Run ID。</param>
+    /// <param name="executionModelTurn">当前执行期内的模型轮次（已递增后的值）。</param>
+    /// <param name="toolCalls">模型返回的 Tool 调用列表。</param>
+    /// <returns>规范化 Tool 调用列表（与 <paramref name="toolCalls"/> 等长，按 ordinal 0-based 索引）。</returns>
+    private static List<NormalizedToolCall> NormalizeToolCalls(
+        string runId,
+        int executionModelTurn,
+        IReadOnlyList<AgentToolCallRequest> toolCalls)
+    {
+        if (toolCalls.Count == 0)
+        {
+            return new List<NormalizedToolCall>(0);
+        }
+
+        var list = new List<NormalizedToolCall>(toolCalls.Count);
+        for (var i = 0; i < toolCalls.Count; i++)
+        {
+            var tc = toolCalls[i];
+            list.Add(new NormalizedToolCall
+            {
+                InvocationId = $"{runId}_{executionModelTurn}_{i}",
+                ProviderToolCallId = tc.ToolCallId,
+                ToolName = tc.ToolName ?? string.Empty,
+                Arguments = tc.Arguments ?? string.Empty,
+                Turn = executionModelTurn,
+                Ordinal = i
+            });
+        }
+        return list;
+    }
+
     /// <summary>执行 Checkpoint 阶段。</summary>
     /// <remarks>
     /// 子问题 4：Create checkpoint → Save checkpoint（IAgentCheckpointStore.SaveAsync）→
@@ -1705,6 +1885,21 @@ public sealed class AgentRunActor
             var checkpointId = $"run-{state.Run.RunId}-turn-{_currentTurn}-{Guid.NewGuid():N}";
             var checkpoint = await _checkpointFactory.CreateCheckpointAsync(
                 checkpointId, state.Run.SessionId, state.Run.WorkspaceId, cancellationToken).ConfigureAwait(false);
+
+            // P1-4: 将 executionModelTurn 写入 checkpoint metadata，支持恢复时从 Checkpoint Cursor
+            // 重建 _executionModelTurn（无需读取 checkpoint 之前的 ModelCallCompleted 事件）。
+            // 与 RebuildStateFromEventsAsync 中的 _executionModelTurn 重建逻辑配合：
+            // 有 Cursor 时优先从 metadata 读取，无 Cursor 时降级为事件计数。
+            if (checkpoint.Metadata is null || !checkpoint.Metadata.ContainsKey("executionModelTurn"))
+            {
+                var enrichedMetadata = new Dictionary<string, string>(
+                    checkpoint.Metadata ?? new Dictionary<string, string>(0),
+                    StringComparer.Ordinal)
+                {
+                    ["executionModelTurn"] = _executionModelTurn.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                };
+                checkpoint = checkpoint with { Metadata = enrichedMetadata };
+            }
 
             // 3c：checkpoint 本体不再单独 SaveAsync，而是缓冲到 _pendingTurnCheckpoint，
             // 随 Turn 结束的 AppendBatchAsync 在同一事务内持久化（Postgres：INSERT agent_checkpoints；
@@ -1837,6 +2032,10 @@ public sealed class AgentRunActor
             return;
         }
 
+        // P1-4: 记录本批 flush 的事件数与是否含 checkpoint，用于成功后更新 _eventsSinceLastCheckpoint。
+        var eventsBeingFlushed = _pendingTurnEvents.Count;
+        var hasCheckpoint = _pendingTurnCheckpoint is not null;
+
         var runStateUpdate = new AgentRunStateUpdate
         {
             WorkspaceId = run.WorkspaceId,
@@ -1883,6 +2082,18 @@ public sealed class AgentRunActor
         _pendingTurnEvents.Clear();
         _turnStartState = run.State;
         _pendingTurnCheckpoint = null;
+
+        // P1-4: 更新未 checkpoint 事件计数。
+        // 本批含 checkpoint → 计数归零（所有事件已被 checkpoint 覆盖）；
+        // 本批无 checkpoint → 累加本批事件数（mid-turn flush 的事件仍未 checkpoint）。
+        if (hasCheckpoint)
+        {
+            _eventsSinceLastCheckpoint = 0;
+        }
+        else
+        {
+            _eventsSinceLastCheckpoint += eventsBeingFlushed;
+        }
     }
 
     /// <summary>

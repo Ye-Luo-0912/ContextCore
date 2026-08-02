@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>PostgreSQL 关系存储，使用结构化列加 jsonb 原文保存关系边。</summary>
-public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore, ITransactionalRelationStore, IRelationStreamStore
+public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore, ITransactionalRelationStore, IRelationStreamStore, IRelationHydrationStore
 {
     public PostgresRelationStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -438,16 +438,20 @@ LIMIT @take OFFSET @skip;
     }
 
     /// <summary>
-    /// P1-6 / P7：批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
+    /// P1-6 / P7 / P1-9：批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
     /// 每个种子独立扫描 + 排序 + LIMIT @per_seed_scan，命中 (workspace_id, source_id) / (workspace_id, target_id) 索引。
     /// </summary>
     /// <remarks>
-    /// P7 优化（替代 P1-6 的 ANY(@item_ids) OR ANY(@item_ids) 全局扫描方案）：
     /// <list type="bullet">
-    /// <item>旧方案用 (source_id = ANY(@ids) OR target_id = ANY(@ids)) 削弱单侧索引，全局 LIMIT 上限 100K。</item>
-    /// <item>新方案 per-seed LIMIT @per_seed_scan，总返回行数 ≤ seeds.Count × MaxScan，避免一次拉回十万条完整 JSON。</item>
-    /// <item>Both 方向：(source_id = seed.id OR target_id = seed.id)。自环边（source == target == seed）只返回一次。</item>
-    /// <item>truncated 信号：bucket.Count &gt;= maxScan 表示 LATERAL LIMIT 命中，可能还有更多低权重行未读。</item>
+    /// <item>P7：per-seed LIMIT @per_seed_scan 替代旧 ANY(@item_ids) 全局扫描方案，命中单侧索引。</item>
+    /// <item>P1-9 全局 LIMIT 下推：每批外层 <c>LIMIT @global_limit</c> = <c>MaxTotalEdges - totalRead</c>，
+    /// 数据库只排序/生成 ≤ MaxTotalEdges 行结构列，不再为 MaxSeeds × maxScan 条候选产生完整 Relation JSON。</item>
+    /// <item>P1-9 Seed 分批：每批 <c>SeedBatchSize</c> 个种子，避免单次 LATERAL unnest 过大。</item>
+    /// <item>P1-9 在线路径只返回结构列（id/source/target/relation_type/weight/confidence/created_at）
+    /// 加廉价 JSON 提取（lifecycle/review_status/source_node_kind/target_node_kind），不反序列化完整 Relation JSON。
+    /// 完整 Metadata 由 <see cref="HydrateRelationsAsync"/> 在客户端 Selected 后批量补全。</item>
+    /// <item>Both 方向：(source_id = seed.id OR target_id = seed.id)。自环边只返回一次。</item>
+    /// <item>truncated 信号：bucket.Count &gt;= maxScan 表示 LATERAL LIMIT 命中；globalCapHit 时 cutoff 种子保守标记。</item>
     /// </list>
     /// </remarks>
     public async Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
@@ -479,139 +483,172 @@ LIMIT @take OFFSET @skip;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
 
-        // P7：LATERAL 内部 WHERE 引用外层 seed.id（correlated subquery）。
-        // 过滤条件全部下推到 LATERAL 内，每个种子独立使用 (workspace_id, source_id) / (workspace_id, target_id) 索引。
-        var filters = new List<string> { "workspace_id = @workspace_id" };
-        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
-
-        if (!string.IsNullOrWhiteSpace(query.CollectionId))
-        {
-            filters.Add("collection_id = @collection_id");
-            command.Parameters.AddWithValue("collection_id", query.CollectionId);
-        }
-
-        // P7：方向过滤改为与 seed.id 的等值比较（替代 ANY(@item_ids)），让 LATERAL 走索引。
-        switch (query.Direction)
-        {
-            case RelationDirection.Outgoing:
-                filters.Add("source_id = seed.id");
-                break;
-            case RelationDirection.Incoming:
-                filters.Add("target_id = seed.id");
-                break;
-            default:
-                // Both 方向：source 或 target 命中种子即可。PostgreSQL 优化器可用 BitmapOr 合并两侧索引扫描。
-                // 自环边（source == target == seed）只匹配一次（OR 不重复返回）。
-                filters.Add("(source_id = seed.id OR target_id = seed.id)");
-                break;
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.RelationType))
-        {
-            filters.Add("relation_type = @relation_type");
-            command.Parameters.AddWithValue("relation_type", query.RelationType);
-        }
-
-        if (query.AllowedRelationTypes.Count > 0)
-        {
-            var paramNames = new List<string>();
-            for (var i = 0; i < query.AllowedRelationTypes.Count; i++)
-            {
-                var paramName = $"allowed_rt_{i}";
-                paramNames.Add($"@{paramName}");
-                command.Parameters.AddWithValue(paramName, query.AllowedRelationTypes[i]);
-            }
-            filters.Add($"relation_type IN ({string.Join(", ", paramNames)})");
-        }
-
-        if (query.MinConfidence > 0)
-        {
-            filters.Add("confidence >= @min_confidence");
-            command.Parameters.AddWithValue("min_confidence", query.MinConfidence);
-        }
-
-        if (query.ExcludedLifecycles.Count > 0)
-        {
-            var paramNames = new List<string>();
-            for (var i = 0; i < query.ExcludedLifecycles.Count; i++)
-            {
-                var paramName = $"ex_lc_{i}";
-                paramNames.Add($"@{paramName}");
-                command.Parameters.AddWithValue(paramName, query.ExcludedLifecycles[i]);
-            }
-            filters.Add($"(data ->> 'Lifecycle' IS NULL OR data ->> 'Lifecycle' NOT IN ({string.Join(", ", paramNames)}))");
-        }
-
-        if (query.ExcludedReviewStatuses.Count > 0)
-        {
-            var paramNames = new List<string>();
-            for (var i = 0; i < query.ExcludedReviewStatuses.Count; i++)
-            {
-                var paramName = $"ex_rs_{i}";
-                paramNames.Add($"@{paramName}");
-                command.Parameters.AddWithValue(paramName, query.ExcludedReviewStatuses[i]);
-            }
-            filters.Add($"(data ->> 'ReviewStatus' IS NULL OR data ->> 'ReviewStatus' NOT IN ({string.Join(", ", paramNames)}))");
-        }
-
-        // P7：per-seed 扫描上限 = MaxScan（保留原语义：先按权重取 top MaxScan，再在 C# 端 Skip/Take 分页）。
-        // 总返回行数 ≤ seeds.Count × maxScan，远小于旧方案的 100K 全局上限。
-        // P1-3：per-seed 扫描不得越过全局硬上限 MaxTotalEdges。
+        // P7：per-seed 扫描上限 = MaxScan（不超过 MaxTotalEdges）。
         var maxScan = Math.Min(query.MaxScan > 0 ? query.MaxScan : 1000, GraphQueryLimits.MaxTotalEdges);
-        command.Parameters.AddWithValue("per_seed_scan", maxScan);
-        command.Parameters.AddWithValue("item_ids", seeds.ToArray());
+        // P1-3：per-seed 返回边数不得超过 MaxEdgesPerSeed 硬上限。
+        var effectiveTake = Math.Min(query.Take > 0 ? query.Take : 100, GraphQueryLimits.MaxEdgesPerSeed);
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
 
-        command.CommandText = $"""
-SELECT seed.id AS seed_id, r.data AS relation_data
-FROM unnest(@item_ids) AS seed(id)
-CROSS JOIN LATERAL (
-    SELECT data
-    FROM {Table("relations")}
-    WHERE {string.Join(" AND ", filters)}
-    ORDER BY weight DESC, confidence DESC, created_at DESC
-    LIMIT @per_seed_scan
-) r;
-""";
-
-        // P7：读取 (seed_id, relation_data) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
+        // P7：读取 (seed_id, 结构列) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
         var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var seed in seeds)
         {
             buckets[seed] = new List<ContextRelation>();
         }
 
-        // P1-3：全局硬上限 — 总读取边数达到 MaxTotalEdges 即停止读取，截断信号传播到 cutoff 种子。
+        // P1-3 / P1-9：全局硬上限 — 总读取边数达到 MaxTotalEdges 即停止读取，截断信号传播到 cutoff 种子。
         var totalRead = 0;
         var globalCapHit = false;
         string? lastReadSeedId = null;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+
+        // P1-9：Seed 分批执行，避免单次 LATERAL unnest(@item_ids) 过大。
+        // 全局 LIMIT @global_limit 下推到 SQL：每批 = MaxTotalEdges - totalRead 的剩余预算，
+        // 数据库只需为每批排序/生成 ≤ remainingBudget 行结构列。
+        const int SeedBatchSize = 10;
+        for (var batchStart = 0; batchStart < seeds.Count && totalRead < GraphQueryLimits.MaxTotalEdges; batchStart += SeedBatchSize)
         {
+            var batchSize = Math.Min(SeedBatchSize, seeds.Count - batchStart);
+            var batchSeeds = seeds.Skip(batchStart).Take(batchSize).ToArray();
+            var remainingBudget = GraphQueryLimits.MaxTotalEdges - totalRead;
+
+            await using var command = connection.CreateCommand();
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+            // P7：LATERAL 内部 WHERE 引用外层 seed.id（correlated subquery）。
+            // 过滤条件全部下推到 LATERAL 内，每个种子独立使用 (workspace_id, source_id) / (workspace_id, target_id) 索引。
+            var filters = new List<string> { "workspace_id = @workspace_id" };
+            command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+
+            if (!string.IsNullOrWhiteSpace(query.CollectionId))
+            {
+                filters.Add("collection_id = @collection_id");
+                command.Parameters.AddWithValue("collection_id", query.CollectionId);
+            }
+
+            // P7：方向过滤改为与 seed.id 的等值比较（替代 ANY(@item_ids)），让 LATERAL 走索引。
+            switch (query.Direction)
+            {
+                case RelationDirection.Outgoing:
+                    filters.Add("source_id = seed.id");
+                    break;
+                case RelationDirection.Incoming:
+                    filters.Add("target_id = seed.id");
+                    break;
+                default:
+                    // Both 方向：source 或 target 命中种子即可。PostgreSQL 优化器可用 BitmapOr 合并两侧索引扫描。
+                    // 自环边（source == target == seed）只匹配一次（OR 不重复返回）。
+                    filters.Add("(source_id = seed.id OR target_id = seed.id)");
+                    break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.RelationType))
+            {
+                filters.Add("relation_type = @relation_type");
+                command.Parameters.AddWithValue("relation_type", query.RelationType);
+            }
+
+            if (query.AllowedRelationTypes.Count > 0)
+            {
+                var paramNames = new List<string>();
+                for (var i = 0; i < query.AllowedRelationTypes.Count; i++)
+                {
+                    var paramName = $"allowed_rt_{i}";
+                    paramNames.Add($"@{paramName}");
+                    command.Parameters.AddWithValue(paramName, query.AllowedRelationTypes[i]);
+                }
+                filters.Add($"relation_type IN ({string.Join(", ", paramNames)})");
+            }
+
+            if (query.MinConfidence > 0)
+            {
+                filters.Add("confidence >= @min_confidence");
+                command.Parameters.AddWithValue("min_confidence", query.MinConfidence);
+            }
+
+            if (query.ExcludedLifecycles.Count > 0)
+            {
+                var paramNames = new List<string>();
+                for (var i = 0; i < query.ExcludedLifecycles.Count; i++)
+                {
+                    var paramName = $"ex_lc_{i}";
+                    paramNames.Add($"@{paramName}");
+                    command.Parameters.AddWithValue(paramName, query.ExcludedLifecycles[i]);
+                }
+                filters.Add($"(data ->> 'Lifecycle' IS NULL OR data ->> 'Lifecycle' NOT IN ({string.Join(", ", paramNames)}))");
+            }
+
+            if (query.ExcludedReviewStatuses.Count > 0)
+            {
+                var paramNames = new List<string>();
+                for (var i = 0; i < query.ExcludedReviewStatuses.Count; i++)
+                {
+                    var paramName = $"ex_rs_{i}";
+                    paramNames.Add($"@{paramName}");
+                    command.Parameters.AddWithValue(paramName, query.ExcludedReviewStatuses[i]);
+                }
+                filters.Add($"(data ->> 'ReviewStatus' IS NULL OR data ->> 'ReviewStatus' NOT IN ({string.Join(", ", paramNames)}))");
+            }
+
+            command.Parameters.AddWithValue("per_seed_scan", maxScan);
+            command.Parameters.AddWithValue("global_limit", remainingBudget);
+            command.Parameters.AddWithValue("item_ids", batchSeeds);
+
+            // P1-9：SELECT 只返回结构列 + 廉价 JSON 提取，不返回完整 data jsonb。
+            // 外层 LIMIT @global_limit 把全局上限下推到 SQL，DB 不再为剩余候选生成/序列化行。
+            command.CommandText = $"""
+SELECT seed.id AS seed_id,
+       r.collection_id,
+       r.id,
+       r.source_id,
+       r.target_id,
+       r.relation_type,
+       r.weight,
+       r.confidence,
+       r.created_at,
+       r.data ->> 'Lifecycle' AS lifecycle,
+       r.data ->> 'ReviewStatus' AS review_status,
+       r.data ->> 'SourceNodeKind' AS source_node_kind,
+       r.data ->> 'TargetNodeKind' AS target_node_kind
+FROM unnest(@item_ids) AS seed(id)
+CROSS JOIN LATERAL (
+    SELECT id, collection_id, source_id, target_id, relation_type, weight, confidence, created_at, data
+    FROM {Table("relations")}
+    WHERE {string.Join(" AND ", filters)}
+    ORDER BY weight DESC, confidence DESC, created_at DESC
+    LIMIT @per_seed_scan
+) r
+LIMIT @global_limit;
+""";
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (totalRead >= GraphQueryLimits.MaxTotalEdges)
+                {
+                    globalCapHit = true;
+                    break;
+                }
+
+                var seedId = reader.GetString(0);
+                var relation = ReadStructuralRelation(reader, query.WorkspaceId);
+                if (relation is null) continue;
+
+                if (buckets.TryGetValue(seedId, out var bucket))
+                {
+                    bucket.Add(relation);
+                    totalRead++;
+                    lastReadSeedId = seedId;
+                }
+            }
+
             if (totalRead >= GraphQueryLimits.MaxTotalEdges)
             {
                 globalCapHit = true;
                 break;
             }
-
-            var seedId = reader.GetString(0);
-            var json = reader.GetString(1);
-            var relation = Serializer.Deserialize<ContextRelation>(json);
-            if (relation is null) continue;
-
-            if (buckets.TryGetValue(seedId, out var bucket))
-            {
-                bucket.Add(relation);
-                totalRead++;
-                lastReadSeedId = seedId;
-            }
         }
 
-        // P1-3：per-seed 返回边数不得超过 MaxEdgesPerSeed 硬上限。
-        var effectiveTake = Math.Min(query.Take > 0 ? query.Take : 100, GraphQueryLimits.MaxEdgesPerSeed);
-        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         foreach (var seed in seeds)
         {
@@ -619,7 +656,7 @@ CROSS JOIN LATERAL (
             // P7：truncated 信号来自 LATERAL LIMIT 命中。
             // bucket.Count >= maxScan 表示 LATERAL 返回了 maxScan 行（达到 LIMIT 上限），可能还有更多低权重行未读。
             // bucket.Count < maxScan 表示该种子所有匹配行已读全（无截断）。
-            // 相比旧方案，此信号精确到 per-seed，不再依赖 SQL 全局 LIMIT 命中的保守推断。
+            // P1-9：globalCapHit 时 cutoff 种子（最后读取的）保守标记 truncated，与单批语义一致。
             var truncated = bucket.Count >= maxScan
                 || (globalCapHit && string.Equals(seed, lastReadSeedId, StringComparison.OrdinalIgnoreCase));
             // 桶内已排序（LATERAL 内 ORDER BY），直接 Skip + Take 完成分页。
@@ -639,6 +676,33 @@ CROSS JOIN LATERAL (
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// P1-9：从结构列 + 廉价 JSON 提取构造 <see cref="ContextRelation"/>，不反序列化完整 data jsonb。
+    /// Metadata/SourceRefs/Provenance/UpdatedAt 留空——由 <see cref="HydrateRelationsAsync"/> 在 Selected 后补全。
+    /// 列序：0=seed_id, 1=collection_id, 2=id, 3=source_id, 4=target_id, 5=relation_type,
+    /// 6=weight, 7=confidence, 8=created_at, 9=lifecycle, 10=review_status, 11=source_node_kind, 12=target_node_kind。
+    /// </summary>
+    private static ContextRelation ReadStructuralRelation(NpgsqlDataReader reader, string workspaceId)
+    {
+        return new ContextRelation
+        {
+            Id = reader.GetString(2),
+            WorkspaceId = workspaceId,
+            CollectionId = reader.GetString(1),
+            SourceId = reader.GetString(3),
+            TargetId = reader.GetString(4),
+            RelationType = reader.GetString(5),
+            Weight = reader.GetDouble(6),
+            Confidence = reader.GetDouble(7),
+            CreatedAt = reader.GetFieldValue<DateTimeOffset>(8),
+            Lifecycle = reader.IsDBNull(9) ? RelationLifecycles.Active : (reader.GetString(9) ?? RelationLifecycles.Active),
+            ReviewStatus = reader.IsDBNull(10) ? string.Empty : (reader.GetString(10) ?? string.Empty),
+            SourceNodeKind = reader.IsDBNull(11) ? string.Empty : (reader.GetString(11) ?? string.Empty),
+            TargetNodeKind = reader.IsDBNull(12) ? string.Empty : (reader.GetString(12) ?? string.Empty)
+            // Metadata / SourceRefs / Provenance / UpdatedAt 留空：在线主链不使用这些字段。
+        };
     }
 
     /// <summary>按 lifecycle 查询；GRAPH-08 起优先查正式字段，兼容旧 Metadata 数据。</summary>
@@ -794,9 +858,11 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
     }
 
     /// <summary>
-    /// P1-7：流式枚举关系，使用 NpgsqlDataReader.ReadAsync 逐行读取，避免一次性将全部结果缓冲到 List。
-    /// 不应用 LIMIT/OFFSET——返回完整候选集，由消费方按需裁剪。
+    /// P1-7 / P1-9：流式枚举关系，使用 NpgsqlDataReader.ReadAsync 逐行读取，避免一次性将全部结果缓冲到 List。
+    /// 不应用调用方提供的 Skip/Take——返回完整候选集，由消费方按需裁剪。
     /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc）。
+    /// P1-9：禁止无界扫描——SQL 强制 LIMIT @maxTotalEdges（= <see cref="GraphQueryLimits.MaxTotalEdges"/>），
+    /// 防止病态全表把整张图拉入内存。在线主链不得调用本方法做候选枚举。
     /// </summary>
     public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
         string workspaceId,
@@ -811,7 +877,7 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
 
-        // 构造流式 SQL：与 ApplyQueryCommandText 一致的过滤条件，但不应用 LIMIT/OFFSET。
+        // 构造流式 SQL：与 ApplyQueryCommandText 一致的过滤条件，但不应用调用方 Skip/Take。
         var filters = new List<string> { "workspace_id = @workspace_id" };
         command.Parameters.AddWithValue("workspace_id", workspaceId);
         if (!string.IsNullOrWhiteSpace(collectionId))
@@ -825,11 +891,16 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
             command.Parameters.AddWithValue("item_id", itemId);
         }
 
+        // P1-9：强制全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限，
+        // 防止无界扫描把整张关系图拉入内存。
+        command.Parameters.AddWithValue("max_total_edges", GraphQueryLimits.MaxTotalEdges);
+
         command.CommandText = $"""
 SELECT data
 FROM {Table("relations")}
 WHERE {string.Join(" AND ", filters)}
-ORDER BY weight DESC, confidence DESC, created_at DESC;
+ORDER BY weight DESC, confidence DESC, created_at DESC
+LIMIT @max_total_edges;
 """;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -842,5 +913,48 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
                 yield return relation;
             }
         }
+    }
+
+    /// <summary>
+    /// P1-9：按关系 ID 批量 hydrate 完整 Relation Metadata（data jsonb 反序列化）。
+    /// 供客户端 Selected 特定 edges 后补全 Metadata/SourceRefs/Provenance 等字段。
+    /// 在线主链的 <see cref="QueryNeighborsBatchAsync"/> 只返回结构列，不反序列化完整 JSON。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextRelation>> HydrateRelationsAsync(
+        string workspaceId,
+        string? collectionId,
+        IReadOnlyList<string> relationIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentNullException.ThrowIfNull(relationIds);
+        if (relationIds.Count == 0)
+        {
+            return Array.Empty<ContextRelation>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        var filters = new List<string> { "workspace_id = @workspace_id", "id = ANY(@relation_ids)" };
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("relation_ids", relationIds.ToArray());
+        if (!string.IsNullOrWhiteSpace(collectionId))
+        {
+            filters.Add("collection_id = @collection_id");
+            command.Parameters.AddWithValue("collection_id", collectionId);
+        }
+
+        // P1-9：hydration 路径命中主键索引 (workspace_id, collection_id, id)；无 collection_id 时
+        // 走 (workspace_id, id) 的 ANY 展开 + 索引扫描。结果集大小由调用方控制（已 Selected 的 edges）。
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE {string.Join(" AND ", filters)};
+""";
+
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 }

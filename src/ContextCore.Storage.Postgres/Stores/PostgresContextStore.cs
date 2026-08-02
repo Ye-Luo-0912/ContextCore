@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
@@ -173,6 +173,15 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         //   LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
         // - fts_hits 走 GIN、id_hits 走 B-tree / trigram，DISTINCT ON (workspace_id, collection_id, id) 去重（FTS 命中优先），
         //   避免 OR 条件退化为全表扫描，同时消除第二次往返与应用层合并去重。
+        // TODO(P1-8 中文检索改进)：search_vector 生成时已应用 cjk_pre_tokenize（拆分 CJK 单字），
+        //   但查询侧 websearch_to_tsquery('simple', @query_text) 未对 @query_text 应用 cjk_pre_tokenize，
+        //   导致中文查询（如"测试"）被当作单一 token，与已拆分的 search_vector 无法匹配，中文 FTS 基本失效。
+        //   改进方向：将 3 处 websearch_to_tsquery('simple', @query_text) 改为
+        //     websearch_to_tsquery('simple', cjk_pre_tokenize(@query_text))（本处 rankExpression + 2 处 WHERE）。
+        //   注意：cjk_pre_tokenize 只对 CJK 字符插入空格，对 ASCII/英文查询无影响，websearch 操作符（OR/-/"）不变；
+        //   改造后中文查询"测试"→"测 试"→ 测 & 试（AND），可命中已拆分的 search_vector；
+        //   需同步修改 rankExpression（ts_rank_cd）以保持排名一致；
+        //   改造前应补充中文 FTS 命中的单元/集成测试（当前无覆盖），避免回归。
         string? rankExpression = hasQueryText
             ? "ts_rank_cd(search_vector, websearch_to_tsquery('simple', @query_text))"
             : null;
@@ -217,7 +226,7 @@ WITH fts_hits AS (
     WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
     ORDER BY ts_rank DESC, importance DESC, updated_at DESC
 
-    LIMIT @take
+    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
 ),
 id_hits AS (
     SELECT workspace_id, collection_id, id, type, title, importance, version,
@@ -227,7 +236,7 @@ id_hits AS (
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
     ORDER BY importance DESC, updated_at DESC
-    LIMIT @take
+    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
 ),
 combined AS (
     SELECT * FROM fts_hits
@@ -277,7 +286,7 @@ WITH fts_hits AS (
     WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
     ORDER BY ts_rank DESC, importance DESC, updated_at DESC
 
-    LIMIT @take
+    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
 ),
 id_hits AS (
     SELECT data, workspace_id, collection_id, id, importance, updated_at,
@@ -285,7 +294,7 @@ id_hits AS (
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
     ORDER BY importance DESC, updated_at DESC
-    LIMIT @take
+    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
 ),
 combined AS (
     SELECT * FROM fts_hits

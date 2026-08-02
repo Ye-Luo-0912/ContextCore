@@ -1,8 +1,57 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.DecisionEngine;
+using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Core.Services.Evolution;
+
+// ===========================================================================
+// P1-6：Canary 紧急回滚本地状态建模
+//
+// 背景：
+//   RollbackAsync 在 DB CAS 失败时仍无条件将本地流量切到 0%（安全优先），
+//   但旧实现没有把"本地已回滚 / DB 未持久化"这一不一致状态建模出来，
+//   后续 AdvanceAsync 会把本地与 DB 状态当作一致继续推进，可能掩盖 DB 真实状态。
+//
+// 本枚举显式建模本地 vs DB 的一致性状态，让 Progression 流水线在 DB 持久化
+// 失败后能拒绝推进、要求 Operator 介入或重试持久化。
+//
+// 设计为 [Flags]：一次紧急回滚可能同时满足多个语义条件（已紧急回滚 + 等待持久化 +
+// 需告警），用位标志组合可让查询方独立判断每个条件。
+// ===========================================================================
+
+/// <summary>
+/// P1-6：Canary 本地状态（相对 DB 真相源的一致性标记）。
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>语义</b>：<see cref="Consistent"/> 表示进程内 <c>_runStates</c> +
+/// <see cref="CutoverController"/> 与 <c>canary_pipelines</c> 表的 DB 真相一致；
+/// 其他位标记表示存在不一致，<see cref="CanaryProgressionService.AdvanceAsync"/> 应拒绝推进。
+/// </para>
+/// <para>
+/// <b>典型组合</b>：DB CAS 失败的紧急回滚会同时设置
+/// <see cref="LocalEmergencyRollback"/> | <see cref="PersistPending"/> | <see cref="OperatorAlertRequired"/>。
+/// </para>
+/// </remarks>
+[Flags]
+public enum CanaryLocalState : byte
+{
+    /// <summary>本地与 DB 一致（无任何未持久化变更）。</summary>
+    Consistent = 0,
+
+    /// <summary>本地已紧急回滚到 0%，但 DB CAS 失败（DB 仍记录旧百分比）。</summary>
+    LocalEmergencyRollback = 1,
+
+    /// <summary>等待 DB 持久化（本地变更尚未写入 <c>canary_pipelines</c>）。</summary>
+    PersistPending = 2,
+
+    /// <summary>进度推进被阻止（需 Operator 干预或重试 DB 持久化后才能恢复）。</summary>
+    ProgressionBlocked = 4,
+
+    /// <summary>需要 Operator 告警（应触发外部告警通道）。</summary>
+    OperatorAlertRequired = 8
+}
 
 // ===========================================================================
 // R28-B.8：Production Canary Gate — 渐进推进服务
@@ -111,6 +160,12 @@ public sealed class CanaryProgressionService
     // P0-7：可选的 DB 决策应用器，用于启动时从 canary_pipelines 表恢复 in-memory 状态。
     // 为 null 时（如单元测试使用 InMemoryPipelineRunStore）RecoverFromStoreAsync 为 no-op。
     private readonly ICanaryDecisionApplier? _decisionApplier;
+    // P1-6：per-run 本地状态标记（DB 一致性），用于在 DB CAS 失败时拒绝后续推进。
+    // Consistent = 与 DB 一致；非 Consistent = 本地有未持久化变更，AdvanceAsync 应拒绝推进。
+    private readonly ConcurrentDictionary<string, CanaryLocalState> _localStates
+        = new(StringComparer.Ordinal);
+    // P1-6：可选的日志器，用于在紧急回滚（DB CAS 失败）时记录告警。
+    private readonly ILogger<CanaryProgressionService> _logger;
 
     // 按 runId 维度记录当前百分比档 + 进入当前档的时间戳
     private readonly ConcurrentDictionary<string, CanaryRunState> _runStates
@@ -134,13 +189,17 @@ public sealed class CanaryProgressionService
     /// <c>canary_pipelines</c> 表读取活跃 pipeline 状态并恢复 in-memory 百分比
     /// （CutoverController + <c>_runStates</c>）。为 null 时恢复为 no-op（单节点/测试场景）。
     /// </param>
+    /// <param name="logger">
+    /// P1-6：可选的日志器。非空时在紧急回滚（DB CAS 失败）记录告警；为 null 时使用 NullLogger。
+    /// </param>
     public CanaryProgressionService(
         IPipelineRunStore pipelineRunStore,
         CutoverController cutoverController,
         CanaryGateOptions? options = null,
         TimeProvider? timeProvider = null,
         CutoverControllerRegistry? registry = null,
-        ICanaryDecisionApplier? decisionApplier = null)
+        ICanaryDecisionApplier? decisionApplier = null,
+        ILogger<CanaryProgressionService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(pipelineRunStore);
         ArgumentNullException.ThrowIfNull(cutoverController);
@@ -150,6 +209,7 @@ public sealed class CanaryProgressionService
         _timeProvider = timeProvider ?? TimeProvider.System;
         _registry = registry;
         _decisionApplier = decisionApplier;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CanaryProgressionService>.Instance;
     }
 
     /// <summary>
@@ -363,6 +423,24 @@ public sealed class CanaryProgressionService
             };
         }
 
+        // P1-6：本地状态一致性检查。如果本地存在未持久化变更（如紧急回滚后 DB CAS 失败），
+        // 拒绝推进并返回错误。调用方需先解决 PersistPending 状态（重试 RollbackAsync 持久化
+        // 或 Operator 介入修复 DB 状态），让 _localStates[runId] 回到 Consistent 后才能推进。
+        var localState = GetLocalState(runId);
+        if (localState != CanaryLocalState.Consistent)
+        {
+            return new CanaryProgressionResult
+            {
+                Decision = CanaryProgressionDecision.Hold,
+                Rationale = $"本地状态非 Consistent（{localState}）；拒绝推进。需先解决 PersistPending（重试 RollbackAsync 持久化或 Operator 介入）。",
+                PreviousPercentage = previousPercentage,
+                CurrentPercentage = previousPercentage,
+                Applied = false,
+                TransitionId = transitionId,
+                IdempotencyKey = idempotencyKey
+            };
+        }
+
         var evaluation = await EvaluateAsync(runId, baselineMetrics, experimentMetrics, cancellationToken).ConfigureAwait(false);
 
         switch (evaluation.Decision)
@@ -382,6 +460,8 @@ public sealed class CanaryProgressionService
                         if (dbResult.Applied)
                         {
                             UpdateInMemoryPercentage(runId, nextPercentage);
+                            // P1-6：DB CAS 成功 → 本地与 DB 一致，清除任何遗留的本地状态标记。
+                            _localStates[runId] = CanaryLocalState.Consistent;
                         }
 
                         return new CanaryProgressionResult
@@ -523,12 +603,37 @@ public sealed class CanaryProgressionService
         // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
         if (_decisionApplier is not null)
         {
-            await ApplyDecisionToStoreAsync(
+            // P1-6：捕获 DB CAS 结果，用于决定本地状态标记。
+            // 项目 memory 约束：RollbackAsync 必须无条件立即更新 in-memory 百分比为 0%，
+            // 无论 DB CAS 是否成功（安全优先 — 本地先回滚可以成立）。
+            // 但 DB CAS 失败时，本地与 DB 状态不再一致，必须建模为 LocalEmergencyRollback。
+            var dbResult = await ApplyDecisionToStoreAsync(
                 runId, CanaryDecision.Rollback, 0, previousPercentage,
                 tid, $"Canary 自动回滚：reason={reason}", cancellationToken).ConfigureAwait(false);
 
             // 无论 DB CAS 是否成功，都更新内存为 0%（确保路由立即回到 0%，全部 Legacy）
             UpdateInMemoryPercentage(runId, 0);
+
+            if (dbResult.Applied)
+            {
+                // DB CAS 成功 → 本地与 DB 一致
+                _localStates[runId] = CanaryLocalState.Consistent;
+            }
+            else
+            {
+                // P1-6：DB CAS 失败 → 本地已紧急回滚到 0%，但 DB 仍记录旧百分比。
+                // 建模为 LocalEmergencyRollback + PersistPending + OperatorAlertRequired。
+                // 后续 AdvanceAsync 将拒绝推进，直到通过重试 RollbackAsync 持久化成功
+                // 或 Operator 介入修复 DB 状态。
+                var emergencyState = CanaryLocalState.LocalEmergencyRollback
+                    | CanaryLocalState.PersistPending
+                    | CanaryLocalState.OperatorAlertRequired;
+                _localStates[runId] = emergencyState;
+                _logger.LogWarning(
+                    "P1-6：Canary run {RunId} 紧急回滚：本地已切到 0%，但 DB CAS 失败（{FailureReason}）。" +
+                    "本地状态标记为 {State}；AdvanceAsync 将拒绝推进，直到持久化成功或 Operator 介入。",
+                    runId, dbResult.FailureReason, emergencyState);
+            }
         }
         else
         {
@@ -574,6 +679,21 @@ public sealed class CanaryProgressionService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         return _runStates.TryGetValue(runId, out var state) ? state.Percentage : 0;
+    }
+
+    /// <summary>
+    /// P1-6：获取指定 run 的本地状态（相对 DB 真相源的一致性标记）。
+    /// </summary>
+    /// <param name="runId">Run ID。</param>
+    /// <returns>本地状态枚举（未初始化的 runId 返回 <see cref="CanaryLocalState.Consistent"/>）。</returns>
+    /// <remarks>
+    /// 用于测试断言与运维诊断。非 <see cref="CanaryLocalState.Consistent"/> 时
+    /// <see cref="AdvanceAsync"/> 会拒绝推进，调用方应先解决 PersistPending 状态。
+    /// </remarks>
+    public CanaryLocalState GetLocalState(string runId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        return _localStates.TryGetValue(runId, out var state) ? state : CanaryLocalState.Consistent;
     }
 
     /// <summary>
@@ -637,6 +757,20 @@ public sealed class CanaryProgressionService
             return 0;
         }
 
+        // TODO(P1-6 长期目标)：合并 canary_pipelines 表与 IPipelineRunStore 为单一 Pipeline Run 状态源。
+        // 当前存在两个持久化聚合：
+        //   1. canary_pipelines 表（由 ICanaryDecisionApplier 维护，存储 canary 百分比 + revision + epoch）
+        //   2. IPipelineRunStore（存储 PipelineRunSnapshot + 审计记录，由 DefaultGuardedOptimizationPipeline 维护）
+        // 两者语义重叠（都记录 run 的当前状态），但 schema 与 CAS 维度不同：
+        //   - canary_pipelines 按 run_id CAS revision（canary 百分比推进专用）
+        //   - IPipelineRunStore 按 run_id CAS revision + stage（覆盖整个 pipeline 生命周期）
+        // 合并方向：将 canary_pipelines 的 percentage/revision/epoch 字段并入 PipelineRunSnapshot
+        // （新增 CanaryPercentage / CanaryRevision / CanaryEpoch 字段），让 IPipelineRunStore
+        // 成为唯一的 run 状态真相源，消除 RecoverFromStoreAsync 的需要。
+        // 改造成本：需迁移 canary_pipelines 表数据、修改 ICanaryDecisionApplier 实现、
+        // 更新所有 percentage 读取方（CutoverController 同步、metrics epoch 等）。
+        // 短期方案：保持双真相源，但通过本方法在启动时同步，并通过 _localStates 在运行时
+        // 显式建模不一致（P1-6）。
         foreach (var state in activeStates)
         {
             if (string.IsNullOrWhiteSpace(state.RunId))
@@ -645,6 +779,8 @@ public sealed class CanaryProgressionService
             }
             // UpdateInMemoryPercentage 同时恢复 CutoverController 百分比与 _runStates[runId]。
             UpdateInMemoryPercentage(state.RunId, state.Percentage);
+            // P1-6：DB 是权威真相源，恢复后本地与 DB 一致，清除任何紧急回滚标记。
+            _localStates[state.RunId] = CanaryLocalState.Consistent;
         }
 
         return activeStates.Count;

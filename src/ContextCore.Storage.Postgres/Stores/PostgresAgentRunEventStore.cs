@@ -632,6 +632,50 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
         // COALESCE 已处理 null → -1；DB 端返回 long/int 统一转 int
         return result is long l ? (int)l : (result is int i ? i : -1);
     }
+
+    /// <summary>
+    /// P1-4: 获取指定 Run 的最新 checkpoint 游标（从 agent_runs 表的 last_checkpoint_id / last_checkpoint_sequence 列读取）。
+    /// </summary>
+    public async ValueTask<AgentCheckpointCursor?> GetCheckpointCursorAsync(
+        string workspaceId, string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT last_checkpoint_id, last_checkpoint_sequence
+FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+        if (reader.IsDBNull(0) || reader.IsDBNull(1))
+        {
+            return null;
+        }
+        var checkpointId = reader.GetString(0);
+        var lastSequence = reader.GetInt32(1);
+        if (string.IsNullOrEmpty(checkpointId))
+        {
+            return null;
+        }
+        return new AgentCheckpointCursor
+        {
+            WorkspaceId = workspaceId,
+            RunId = runId,
+            CheckpointId = checkpointId,
+            LastEventSequence = lastSequence
+        };
+    }
     /// <summary>
     /// P1-4: Compute ContentHash for batch validation (mirrors AgentRunEventChain.ComputeContentHash).
     /// SHA-256 of serialized event DTO with ContentHash excluded.

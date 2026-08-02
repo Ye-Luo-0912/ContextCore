@@ -183,6 +183,7 @@ internal static class AgentExecutionEndpoints
             return Results.Ok(ToRunResponse(run));
         })
         .WithName("GetAgentRun")
+        .RequireWorkspacePermission(WorkspacePermission.AgentRun)
         .WithSummary("获取 Agent Run 状态")
         .Produces<RunResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
@@ -388,8 +389,43 @@ internal static class AgentExecutionEndpoints
             return Results.Empty;
         })
         .WithName("StreamAgentRunEvents")
+        .RequireWorkspacePermission(WorkspacePermission.AgentRun)
         .WithSummary("订阅 Agent Run 事件流（SSE；支持 Last-Event-ID 断线重连）")
         .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
+
+        // ── 管理员审计：读取原始事件流 ───────────────────────────────
+        // P1-10：SSE 公开端点隐藏敏感信息（Tool 参数、原始模型输出、异常堆栈），
+        // 管理员需要完整 Payload 进行审计/调试时通过此端点获取原始 AgentRunEvent。
+        // 需要 WorkspaceRole.Admin 角色（RBAC 强制校验未启用时自动放行，仅记录审计日志）。
+        group.MapGet("/{id}/events/raw", async Task<IResult> (
+            string id,
+            IAgentRunStore runStore,
+            IAgentRunEventStore eventStore,
+            IWorkspaceContextAccessor workspaceContextAccessor,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, null);
+
+            var run = await runStore.GetAsync(workspaceId, id, ct).ConfigureAwait(false);
+            if (run is null)
+            {
+                return ContextCoreHttpResultMapper.NotFound(
+                    httpContext, string.Empty, "agents.runs.events.raw",
+                    $"未找到 RunId='{id}'。");
+            }
+
+            // 读取完整事件流（含 Payload / ContentHash / PrevChainHash，用于审计与哈希链校验）
+            var events = await eventStore.ReadAsync(workspaceId, id, 0, int.MaxValue, ct)
+                .ConfigureAwait(false);
+
+            return Results.Ok(events);
+        })
+        .WithName("GetAgentRunRawEvents")
+        .RequireWorkspaceRole(WorkspaceRole.Admin)
+        .WithSummary("管理员审计：读取 Run 的原始事件流（含完整 Tool 参数、模型输出、异常堆栈）")
+        .Produces<IReadOnlyList<AgentRunEvent>>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         // ── 提交 approval 决策 ───────────────────────────────────────
@@ -649,14 +685,14 @@ internal static class AgentExecutionEndpoints
         var lastSentSequence = -1;
         foreach (var evt in events)
         {
-            // SSE 格式：
+            // P1-10：SSE 序列化公开 DTO（隐藏 Tool 参数/结果、原始模型输出、异常堆栈等敏感信息）。
             //   id: {sequence}
             //   event: {eventType}
             //   data: {json}
             //   (空行结束事件)
             await writer.WriteLineAsync($"id: {evt.Sequence}").ConfigureAwait(false);
             await writer.WriteLineAsync($"event: {evt.EventType}").ConfigureAwait(false);
-            await writer.WriteLineAsync($"data: {JsonSerializer.Serialize(evt)}").ConfigureAwait(false);
+            await writer.WriteLineAsync($"data: {JsonSerializer.Serialize(ToPublicDto(evt))}").ConfigureAwait(false);
             await writer.WriteLineAsync().ConfigureAwait(false);
             lastSentSequence = evt.Sequence;
         }
@@ -697,6 +733,97 @@ internal static class AgentExecutionEndpoints
         await writer.WriteLineAsync().ConfigureAwait(false);
         await writer.FlushAsync(ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// P1-10：将 <see cref="AgentRunEvent"/> 映射为公开 DTO（隐藏敏感信息）。
+    /// 仅保留 UI 显示进度/用量/状态所需的最小字段集：
+    /// <list type="bullet">
+    ///   <item>Tool 名称（用于进度显示），但隐藏 Tool 参数与结果。</item>
+    ///   <item>模型 token 统计（用于用量显示），但隐藏原始模型输出。</item>
+    ///   <item>错误类别与短消息（用于状态显示），但隐藏完整异常堆栈。</item>
+    /// </list>
+    /// Payload 解析失败或字段缺失时静默降级（返回已知字段 + null 敏感字段），
+    /// 不影响 SSE 流的连续性。原始 Payload 仅通过管理员审计端点（/events/raw）暴露。
+    /// </summary>
+    private static AgentRunEventPublicDto ToPublicDto(AgentRunEvent evt)
+    {
+        string? toolName = null;
+        int? promptTokens = null;
+        int? completionTokens = null;
+        string? errorCategory = null;
+        string? errorMessage = null;
+
+        // Payload 为 JSON 字符串；解析失败时静默降级为 null 敏感字段
+        if (!string.IsNullOrEmpty(evt.Payload))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(evt.Payload);
+                var root = doc.RootElement;
+
+                switch (evt.EventType)
+                {
+                    case AgentRunEventType.ToolCallStarted:
+                    case AgentRunEventType.ToolCallCompleted:
+                    case AgentRunEventType.ObservationAppended:
+                        toolName = TryGetString(root, "toolName");
+                        break;
+
+                    case AgentRunEventType.ModelCallCompleted:
+                        // token 统计保留（UI 显示用量）；content（原始模型输出）与 toolCalls.arguments 隐藏
+                        promptTokens = TryGetInt(root, "inputTokens");
+                        completionTokens = TryGetInt(root, "outputTokens");
+                        break;
+
+                    case AgentRunEventType.RunFailed:
+                        // reason 可能含异常堆栈 → 仅保留为短消息（ErrorCategory 标记为 failure）
+                        errorCategory = "failure";
+                        errorMessage = TryGetString(root, "reason");
+                        break;
+                }
+
+                // ToolCallCompleted 失败时：提取 error 短消息 + 标记 errorCategory
+                if (evt.EventType == AgentRunEventType.ToolCallCompleted
+                    && root.TryGetProperty("succeeded", out var succeededProp)
+                    && succeededProp.ValueKind == JsonValueKind.False)
+                {
+                    errorCategory = "tool_failed";
+                    errorMessage = TryGetString(root, "error");
+                }
+            }
+            catch (JsonException)
+            {
+                // Payload 损坏 → 静默降级（敏感字段保持 null）
+            }
+        }
+
+        return new AgentRunEventPublicDto
+        {
+            EventType = evt.EventType.ToString(),
+            RunId = evt.RunId,
+            WorkspaceId = evt.WorkspaceId,
+            Timestamp = evt.OccurredAt,
+            RunState = evt.State.ToString(),
+            ToolName = toolName,
+            PromptTokens = promptTokens,
+            CompletionTokens = completionTokens,
+            ErrorCategory = errorCategory,
+            ErrorMessage = errorMessage
+        };
+    }
+
+    /// <summary>从 JsonElement 安全读取字符串属性（缺失或类型不符时返回 null）。</summary>
+    private static string? TryGetString(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
+            ? prop.GetString()
+            : null;
+
+    /// <summary>从 JsonElement 安全读取 int 属性（缺失或类型不符时返回 null）。</summary>
+    private static int? TryGetInt(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.Number
+            && prop.TryGetInt32(out var value)
+                ? value
+                : null;
 
     /// <summary>
     /// 将 AgentRun 转换为 API 响应 DTO。
@@ -786,6 +913,52 @@ public sealed class CancelRunRequest
 
     /// <summary>操作发起者（可选，用于审计）。</summary>
     public string? Operator { get; init; }
+}
+
+/// <summary>
+/// P1-10：SSE 公开事件 DTO。隐藏敏感数据（Tool 参数、原始模型输出、异常堆栈）。
+/// </summary>
+/// <remarks>
+/// 仅暴露 UI 显示进度 / 用量 / 状态所需的最小字段集：
+/// <list type="bullet">
+///   <item><see cref="ToolName"/>：Tool 名称（进度显示），不含参数与结果。</item>
+///   <item><see cref="PromptTokens"/> / <see cref="CompletionTokens"/>：模型 token 统计（用量显示），不含原始输出。</item>
+///   <item><see cref="ErrorCategory"/> / <see cref="ErrorMessage"/>：错误类别与短消息（状态显示），不含完整堆栈。</item>
+/// </list>
+/// 完整 Payload（含 Tool 参数、模型输出、异常堆栈）仅通过管理员审计端点
+/// <c>GET /api/agents/runs/{id}/events/raw</c> 暴露。
+/// </remarks>
+public sealed record AgentRunEventPublicDto
+{
+    /// <summary>事件类型（RunCreated / StateTransition / ModelCallStarted / ...）。</summary>
+    public required string EventType { get; init; }
+
+    /// <summary>所属 Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>Workspace ID（隔离边界）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>事件时间戳（UTC）。</summary>
+    public required DateTimeOffset Timestamp { get; init; }
+
+    /// <summary>事件发生时的 Run 状态快照。</summary>
+    public required string RunState { get; init; }
+
+    /// <summary>Tool 名称（仅 ToolCallStarted / ToolCallCompleted / ObservationAppended 事件填充；用于 UI 显示进度）。</summary>
+    public string? ToolName { get; init; }
+
+    /// <summary>模型输入 token 数（仅 ModelCallCompleted 事件填充；用于 UI 显示用量）。隐藏原始模型输出。</summary>
+    public int? PromptTokens { get; init; }
+
+    /// <summary>模型输出 token 数（仅 ModelCallCompleted 事件填充；用于 UI 显示用量）。隐藏原始模型输出。</summary>
+    public int? CompletionTokens { get; init; }
+
+    /// <summary>错误类别（仅失败事件填充；如 "failure" / "tool_failed"；用于 UI 显示状态）。隐藏完整异常堆栈。</summary>
+    public string? ErrorCategory { get; init; }
+
+    /// <summary>简短错误消息（仅失败事件填充；不含堆栈）。</summary>
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>提交 approval 决策请求。</summary>

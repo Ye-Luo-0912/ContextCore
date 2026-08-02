@@ -223,7 +223,8 @@ SET state = 'Acked',
     updated_at = @updated_at
 WHERE event_id = @event_id
   AND lease_token = @lease_token
-  AND state = 'Processing';";
+  AND state = 'Processing'
+  AND lease_expires_at > clock_timestamp();";
         command.Parameters.AddWithValue("event_id", eventId);
         command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("processed_at", now);
@@ -325,6 +326,7 @@ FROM unnest(@event_ids, @lease_tokens) AS t(event_id, lease_token)
 WHERE {Table("learning_event_outbox")}.event_id = t.event_id
   AND {Table("learning_event_outbox")}.lease_token = t.lease_token
   AND {Table("learning_event_outbox")}.state = 'Processing'
+  AND {Table("learning_event_outbox")}.lease_expires_at > clock_timestamp()
 RETURNING {Table("learning_event_outbox")}.event_id;";
 
         AddTextArray(command, "event_ids", leases.Select(l => l.EventId).ToArray());

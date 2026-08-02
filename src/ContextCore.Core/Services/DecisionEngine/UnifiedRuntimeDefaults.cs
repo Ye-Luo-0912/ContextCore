@@ -435,12 +435,72 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             completeWorkingSet = hydrationResult.WorkingSet;
         }
 
-        // P0-6：直接使用 Engine 结果，不再二次 Allocate。
-        // R28-B.6：V2 路径下 Engine 已通过 IGlobalAllocator 产出 AllocationDecisions。
-        // Legacy 路径下 Engine 不产出 AllocationDecisions，Runtime 补建。
-        var allocationDecisions = engineResult.AllocationDecisions.Count > 0
+        // P1-7: Rebuild ContextDecisionResult based on HydrationRepairDecision.
+        // When hydrator returns Repair non-null, must rebuild (not just swap WorkingSet),
+        // otherwise SelectedEnvelopes / AllocationDecisions / Outcome.SelectedCount /
+        // EstimatedTokens become inconsistent with actual hydrated inputs.
+        var repair = hydrationResult?.Repair;
+        var rebuildSelected = engineResult.SelectedEnvelopes;
+        var rebuildAllocationDecisions = engineResult.AllocationDecisions.Count > 0
             ? engineResult.AllocationDecisions
             : BuildAllocationDecisions(engineResult.SelectedEnvelopes, engineResult.DroppedEnvelopes);
+        var rebuildSelectedCount = engineResult.Outcome.SelectedCount;
+        var rebuildEstimatedTokens = engineResult.Outcome.EstimatedTokens;
+        if (repair is not null)
+        {
+            // P1-7 fail-closed: mandatory/hard constraint hydration failure in AgentContext/Package must throw.
+            // project_memory: AgentContext fail closed for mandatory/hard constraints,
+            // best-effort for Retrieval, degrade with diagnostics for Package.
+            // Here both AgentContext + Package fail-closed (mandatory content missing cannot degrade);
+            // Retrieval uses best-effort.
+            if (repair.HydrationFailures.Count > 0
+                && (request.Purpose == ContextDecisionPurpose.AgentContext
+                    || request.Purpose == ContextDecisionPurpose.Package))
+            {
+                var mandatoryHydrationFailures = new List<string>();
+                foreach (var envelope in engineResult.SelectedEnvelopes)
+                {
+                    if ((envelope.Safety.IsMandatory || envelope.Safety.IsHardConstraint)
+                        && repair.HydrationFailures.ContainsKey(envelope.CandidateId))
+                    {
+                        mandatoryHydrationFailures.Add(envelope.CandidateId);
+                    }
+                }
+                if (mandatoryHydrationFailures.Count > 0)
+                {
+                    throw new MandatoryHydrationFailedException(mandatoryHydrationFailures, repair.HydrationFailures);
+                }
+            }
+
+            // Remove HydrationDropped candidates from SelectedEnvelopes (retain only kept candidates)
+            if (repair.HydrationDropped.Count > 0)
+            {
+                var droppedIdSet = new HashSet<string>(repair.HydrationDropped, StringComparer.Ordinal);
+                var retained = new List<ContextCandidateEnvelope>(engineResult.SelectedEnvelopes.Count);
+                foreach (var env in engineResult.SelectedEnvelopes)
+                {
+                    if (!droppedIdSet.Contains(env.CandidateId))
+                    {
+                        retained.Add(env);
+                    }
+                }
+                rebuildSelected = retained;
+                rebuildSelectedCount = retained.Count;
+            }
+
+            // Replace AllocationDecisions with Repair's UpdatedAllocationDecisions
+            // (reflects actual hydration results: retained = Selected, dropped = TokenBudgetExceeded)
+            rebuildAllocationDecisions = repair.UpdatedAllocationDecisions;
+
+            // Update EstimatedTokens with ExactTokenCount (recomputed from real content, not estimate)
+            rebuildEstimatedTokens = repair.ExactTokenCount;
+        }
+
+        // P0-6: Use Engine result directly, no second Allocate.
+        // R28-B.6: V2 path Engine already produced AllocationDecisions via IGlobalAllocator.
+        // Legacy path: Engine does not produce AllocationDecisions, Runtime builds them.
+        // P1-7: If hydration occurred, rebuildAllocationDecisions already replaced by Repair.UpdatedAllocationDecisions.
+        var allocationDecisions = rebuildAllocationDecisions;
 
         // Step 9：合并 EarlyRejected + Engine.DroppedEnvelopes（Blocker-6）
         var finalDropped = earlyRejected.Count == 0
@@ -492,6 +552,15 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 {
                     diag["hydration.budgetRepair"] = string.Join(";", repairDiagnostics);
                 }
+                // P1-7: Record hydration failure details (candidate_id -> error) and dropped count.
+                // Must be independent of BudgetRepairDiagnostics: hydration failures (store miss /
+                // read exception) can occur without budget trimming, and droppedCount covers all drops.
+                if (repair is not null && repair.HydrationFailures.Count > 0)
+                {
+                    diag["hydration.failures"] = string.Join("; ",
+                        repair.HydrationFailures.Select(kv => kv.Key + "=" + kv.Value));
+                    diag["hydration.droppedCount"] = repair.HydrationDropped.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
             }
             mergedDiagnostics = diag;
         }
@@ -500,13 +569,15 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         {
             RequestId = engineResult.RequestId,
             DecisionSource = engineResult.DecisionSource,
-            SelectedEnvelopes = engineResult.SelectedEnvelopes,
+            // P1-7: Use actual retained SelectedEnvelopes after hydration (dropped removed)
+            SelectedEnvelopes = rebuildSelected,
             DroppedEnvelopes = finalDropped,
             Outcome = new ContextDecisionOutcomeSummary
             {
-                SelectedCount = engineResult.Outcome.SelectedCount,
+                // P1-7: Use actual selected count and exact token total after hydration
+                SelectedCount = rebuildSelectedCount,
                 DroppedCount = finalDropped.Count,
-                EstimatedTokens = engineResult.Outcome.EstimatedTokens,
+                EstimatedTokens = rebuildEstimatedTokens,
                 TokenBudget = engineResult.Outcome.TokenBudget,
                 Sections = engineResult.Outcome.Sections,
                 SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,

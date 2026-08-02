@@ -28,6 +28,10 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //   Recall（IncludeContent=false）→ Merge → Score → Allocate（SelectedEnvelopes）
 //   → ISelectedCandidateHydrator.HydrateAsync（本实现）
 //   → Projector（消费已 hydrate 的 Material）。
+//
+// P1-7：本实现额外返回 HydrationRepairDecision（HydrationResult.Repair），携带 hydrate 后
+//   真实的 selected / dropped 候选 ID、更新的 AllocationDecisions、精确 token 总数与失败明细，
+//   让 Caller 重建整个 ContextDecisionResult（而非仅替换 WorkingSet）。
 // ===========================================================================
 
 /// <summary>
@@ -89,6 +93,17 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         if (selectedEnvelopes.Count == 0)
         {
             return NoHydration(workingSet);
+        }
+
+        // P1-7：构建 CanonicalKey → CandidateId 映射，用于后续生成 HydrationRepairDecision
+        // （Repair 中的 HydratedSelected / HydrationDropped / HydrationFailures 均使用 CandidateId）。
+        var keyToCandidateId = new Dictionary<CanonicalCandidateKey, string>(selectedEnvelopes.Count);
+        foreach (var env in selectedEnvelopes)
+        {
+            if (env.CanonicalKey.IsValid && !string.IsNullOrEmpty(env.CandidateId))
+            {
+                keyToCandidateId[env.CanonicalKey] = env.CandidateId;
+            }
         }
 
         // 筛出需要 hydrate 的 Selected 候选：
@@ -177,15 +192,36 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         }
         var failedCount = candidateKeys.Count - hydratedCount;
 
-        // 无任何更新 → 返回原 WorkingSet（避免无谓的字典复制）
+        // P1-7：构建 hydration 失败明细（candidateId -> 错误描述）
+        var hydrationFailures = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var candidateKey in candidateKeys)
+        {
+            if (!materialUpdates.ContainsKey(candidateKey)
+                && keyToCandidateId.TryGetValue(candidateKey, out var failedCandidateId))
+            {
+                hydrationFailures[failedCandidateId] = "store miss or empty content";
+            }
+        }
+
+        // 无任何更新 → 仍需返回 Repair 决策（所有需 hydrate 的候选均失败）
         if (materialUpdates.IsEmpty)
         {
+            // P1-7：构建 Repair 决策——所有需 hydrate 的候选均失败，应被 dropped
+            var repair = BuildRepairDecision(
+                selectedEnvelopes,
+                finalMaterials: workingSet.Materials,
+                candidateKeys: candidateKeys,
+                materialUpdates: materialUpdates,
+                droppedKeys: null,
+                keyToCandidateId: keyToCandidateId,
+                hydrationFailures: hydrationFailures);
             return new HydrationResult
             {
                 WorkingSet = workingSet,
                 HydratedCount = 0,
                 FailedCount = failedCount,
-                BudgetExceeded = false
+                BudgetExceeded = false,
+                Repair = repair
             };
         }
 
@@ -227,18 +263,39 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         var (finalWorkingSet, budgetExceeded, repairDiagnostics) = RepairBudget(
             selectedEnvelopes, hydratedWorkingSet, tokenBudget);
 
+        // P1-7：构建 Repair 决策——比较 hydratedWorkingSet.Materials 与 finalWorkingSet.Materials
+        // 得出被预算修复裁剪的候选 keys，结合 candidateKeys / materialUpdates 判断 dropped 集合。
+        var droppedKeys = new HashSet<CanonicalCandidateKey>();
+        foreach (var key in hydratedWorkingSet.Materials.Keys)
+        {
+            if (!finalWorkingSet.Materials.ContainsKey(key))
+            {
+                droppedKeys.Add(key);
+            }
+        }
+
+        var repairDecision = BuildRepairDecision(
+            selectedEnvelopes,
+            finalMaterials: finalWorkingSet.Materials,
+            candidateKeys: candidateKeys,
+            materialUpdates: materialUpdates,
+            droppedKeys: droppedKeys,
+            keyToCandidateId: keyToCandidateId,
+            hydrationFailures: hydrationFailures);
+
         return new HydrationResult
         {
             WorkingSet = finalWorkingSet,
             HydratedCount = hydratedCount,
             FailedCount = failedCount,
             BudgetExceeded = budgetExceeded,
-            BudgetRepairDiagnostics = repairDiagnostics
+            BudgetRepairDiagnostics = repairDiagnostics,
+            Repair = repairDecision
         };
     }
 
     /// <summary>
-    /// P1-1：无 hydrate 发生时的快捷结果（WorkingSet 原样返回，计数全 0）。
+    /// P1-1：无 hydrate 发生时的快捷结果（WorkingSet 原样返回，计数全 0，Repair 为 null）。
     /// </summary>
     private static HydrationResult NoHydration(CandidateWorkingSet workingSet)
     {
@@ -248,6 +305,111 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             HydratedCount = 0,
             FailedCount = 0,
             BudgetExceeded = false
+        };
+    }
+
+    /// <summary>
+    /// P1-7：构建 HydrationRepairDecision。基于 hydrate 后的最终 Materials 状态、
+    /// 需 hydrate 候选集合、hydrate 成功集合与被预算修复裁剪的 keys，分类 selected / dropped，
+    /// 生成 UpdatedAllocationDecisions 与 ExactTokenCount。
+    /// </summary>
+    /// <param name="selectedEnvelopes">Engine 选中的候选 envelope 集合。</param>
+    /// <param name="finalMaterials">hydrate（+ 预算修复）后的最终 Materials 字典。</param>
+    /// <param name="candidateKeys">需要 hydrate 的候选 key 集合（context/memory 且 Content 原为空）。</param>
+    /// <param name="materialUpdates">hydrate 成功的 Material 更新（key -> Material）。</param>
+    /// <param name="droppedKeys">被预算修复裁剪的 key 集合（null 表示未发生预算修复）。</param>
+    /// <param name="keyToCandidateId">CanonicalKey → CandidateId 映射。</param>
+    /// <param name="hydrationFailures">hydrate 失败明细（candidateId -> error）。</param>
+    /// <returns>正式修复决策。</returns>
+    private static HydrationRepairDecision BuildRepairDecision(
+        IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
+        IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> finalMaterials,
+        HashSet<CanonicalCandidateKey> candidateKeys,
+        ConcurrentDictionary<CanonicalCandidateKey, CandidateMaterial> materialUpdates,
+        HashSet<CanonicalCandidateKey>? droppedKeys,
+        Dictionary<CanonicalCandidateKey, string> keyToCandidateId,
+        Dictionary<string, string> hydrationFailures)
+    {
+        var hydratedSelected = new List<string>(selectedEnvelopes.Count);
+        var hydrationDropped = new List<string>(selectedEnvelopes.Count);
+        var updatedDecisions = new List<CandidateAllocationDecision>(selectedEnvelopes.Count);
+        var exactTokenCount = 0;
+
+        foreach (var envelope in selectedEnvelopes)
+        {
+            var key = envelope.CanonicalKey;
+            var cid = envelope.CandidateId;
+            var section = ResolveSectionForAllocation(envelope);
+
+            // 判断候选是否被 dropped：
+            //   1. 被预算修复裁剪（key 在 droppedKeys 中）
+            //   2. 需 hydrate 但失败（key 在 candidateKeys 中但不在 materialUpdates 中）
+            bool isDropped = false;
+            if (droppedKeys is not null && droppedKeys.Contains(key))
+            {
+                isDropped = true;
+            }
+            else if (candidateKeys.Contains(key) && !materialUpdates.ContainsKey(key))
+            {
+                isDropped = true;
+            }
+
+            if (isDropped)
+            {
+                hydrationDropped.Add(cid);
+                updatedDecisions.Add(new CandidateAllocationDecision
+                {
+                    CandidateKey = key,
+                    Section = section,
+                    IncludedTokens = 0,
+                    IsTruncated = false,
+                    ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+                });
+            }
+            else
+            {
+                // Retained：计算精确 token 数（hydrate 后的 Material.TokenCost 优先）
+                hydratedSelected.Add(cid);
+                var tokens = GetEffectiveMaterialTokens(envelope, finalMaterials);
+                exactTokenCount += tokens;
+                var isMandatory = envelope.Safety.IsMandatory || envelope.Safety.IsHardConstraint;
+                updatedDecisions.Add(new CandidateAllocationDecision
+                {
+                    CandidateKey = key,
+                    Section = section,
+                    IncludedTokens = tokens,
+                    IsTruncated = false,
+                    ReasonCode = isMandatory
+                        ? CandidateDecisionReasonCode.SelectedMandatory
+                        : CandidateDecisionReasonCode.SelectedHighestUtility
+                });
+            }
+        }
+
+        return new HydrationRepairDecision
+        {
+            HydratedSelected = hydratedSelected,
+            HydrationDropped = hydrationDropped,
+            UpdatedAllocationDecisions = updatedDecisions,
+            ExactTokenCount = exactTokenCount,
+            HydrationFailures = hydrationFailures
+        };
+    }
+
+    /// <summary>
+    /// P1-7：解析候选所属 section（与 UnifiedRuntimeDefaults.ResolveSectionForAllocation 对齐）。
+    /// 用于在 BuildRepairDecision 中生成 CandidateAllocationDecision.Section。
+    /// </summary>
+    private static string ResolveSectionForAllocation(ContextCandidateEnvelope envelope)
+    {
+        return envelope.Source switch
+        {
+            ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "mandatory",
+            ContextCandidateSource.WorkingMemory or ContextCandidateSource.StableMemory => "memory",
+            ContextCandidateSource.Graph => "relations",
+            ContextCandidateSource.GlobalContext => "global",
+            ContextCandidateSource.RelatedContext => "related",
+            _ => "default"
         };
     }
 

@@ -36,6 +36,8 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
     private readonly ConcurrentDictionary<string, object> _locks = new(StringComparer.Ordinal);
     private readonly IAgentRunStore? _runStore;
     private readonly IAgentCheckpointStore? _checkpointStore;
+    // P1-4: In-memory checkpoint cursor tracking (mirrors agent_runs.last_checkpoint_id/sequence)
+    private readonly ConcurrentDictionary<string, AgentCheckpointCursor> _cursors = new(StringComparer.Ordinal);
 
     /// <summary>初始化无 Run Store 委托的实例（AppendBatchAsync 的 runStateUpdate / checkpointBody 被忽略）。</summary>
     public InMemoryAgentRunEventStore()
@@ -222,7 +224,11 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
             await _runStore.UpdateAsync(runStateUpdate.RunSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
-        // 4. checkpointCursor：InMemory 实现忽略（无 agent_runs 表的 last_checkpoint_id 列）
+        // 4. checkpointCursor：P1-4 InMemory 实现跟踪游标到内存字典（镜像 agent_runs.last_checkpoint_id/sequence）
+        if (checkpointCursor is not null)
+        {
+            _cursors[Key(checkpointCursor.WorkspaceId, checkpointCursor.RunId)] = checkpointCursor;
+        }
     }
 
     /// <inheritdoc />
@@ -281,6 +287,20 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
         {
             return ValueTask.FromResult(list.Count - 1);
         }
+    }
+
+    /// <summary>
+    /// P1-4: 获取指定 Run 的最新 checkpoint 游标（从内存游标字典读取；开发/测试用）。
+    /// </summary>
+    public ValueTask<AgentCheckpointCursor?> GetCheckpointCursorAsync(
+        string workspaceId, string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        var key = Key(workspaceId, runId);
+        return _cursors.TryGetValue(key, out var cursor)
+            ? ValueTask.FromResult<AgentCheckpointCursor?>(cursor)
+            : ValueTask.FromResult<AgentCheckpointCursor?>(null);
     }
 
     private static string Key(string workspaceId, string runId)

@@ -15,7 +15,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 跨进程 RMW 互斥完全交给 FileLockProvider。
 /// metadata cache 带 mtime 双重校验。
 /// </remarks>
-public sealed class FileRelationStore : IRelationStore, IRelationStreamStore
+public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IRelationHydrationStore
 {
     private const int MaxCacheEntries = 256;
 
@@ -487,9 +487,11 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore
     }
 
     /// <summary>
-    /// P1-7：流式枚举关系，逐行读取 JSONL 而非全量载入 List。
+    /// P1-7 / P1-9：流式枚举关系，逐行读取 JSONL 而非全量载入 List。
     /// 跨集合枚举时不保持全局排序——每个集合内部按文件顺序产出。
     /// 调用方（如 ValidateStreamAsync）按需在消费端累积排序状态。
+    /// P1-9：禁止无界扫描——累计产出达到 <see cref="GraphQueryLimits.MaxTotalEdges"/> 即停止，
+    /// 防止病态全表把整张图拉入内存。
     /// </summary>
     public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
         string workspaceId,
@@ -500,13 +502,23 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // P1-9：全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限。
+        var yielded = 0;
         var collectionIds = ResolveCollectionIds(workspaceId, collectionId);
         foreach (var cid in collectionIds)
         {
+            if (yielded >= GraphQueryLimits.MaxTotalEdges)
+            {
+                break;
+            }
             cancellationToken.ThrowIfCancellationRequested();
             var path = _paths.GetRelationsJsonlPath(workspaceId, cid);
             await foreach (var relation in _jsonLines.StreamAsync<ContextRelation>(path, cancellationToken).ConfigureAwait(false))
             {
+                if (yielded >= GraphQueryLimits.MaxTotalEdges)
+                {
+                    break;
+                }
                 // item 过滤在产出前应用，避免无效 yield。
                 if (!string.IsNullOrWhiteSpace(itemId)
                     && !string.Equals(relation.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
@@ -514,10 +526,55 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore
                 {
                     continue;
                 }
+                yielded++;
                 yield return CompositeContextNormalizer.Clone(relation);
             }
         }
 
         await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P1-9：按关系 ID 批量 hydrate 完整 Relation（含 Metadata/SourceRefs 等）。
+    /// FileSystem 实现逐集合读取 JSONL 并按 ID 集合过滤，命中即收集并克隆返回。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextRelation>> HydrateRelationsAsync(
+        string workspaceId,
+        string? collectionId,
+        IReadOnlyList<string> relationIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentNullException.ThrowIfNull(relationIds);
+        if (relationIds.Count == 0)
+        {
+            return Array.Empty<ContextRelation>();
+        }
+
+        var idSet = new HashSet<string>(relationIds, StringComparer.OrdinalIgnoreCase);
+        var results = new List<ContextRelation>(relationIds.Count);
+        var collectionIds = ResolveCollectionIds(workspaceId, collectionId);
+        foreach (var cid in collectionIds)
+        {
+            if (idSet.Count == 0)
+            {
+                break;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = _paths.GetRelationsJsonlPath(workspaceId, cid);
+            await foreach (var relation in _jsonLines.StreamAsync<ContextRelation>(path, cancellationToken).ConfigureAwait(false))
+            {
+                if (idSet.Remove(relation.Id))
+                {
+                    results.Add(CompositeContextNormalizer.Clone(relation));
+                    if (idSet.Count == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return results;
     }
 }

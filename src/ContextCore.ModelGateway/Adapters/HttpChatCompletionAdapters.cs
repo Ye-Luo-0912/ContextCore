@@ -237,12 +237,45 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
             return ChatFailure(operationId, "API 密钥未配置。", "unavailable");
         }
 
-        using var timeoutSource = _options.Timeout > TimeSpan.Zero
+        // P1-3：非法 Tool Schema 不静默降级为 {}，直接返回结构化失败。
+        if (request.Tools.Count > 0)
+        {
+            foreach (var tool in request.Tools)
+            {
+                if (!IsValidJsonSchema(tool.ParametersJsonSchema, out var schemaError))
+                {
+                    return ChatFailure(
+                        operationId,
+                        $"Tool '{tool.Name}' 的 JSON Schema 非法：{schemaError}",
+                        "invalid_schema");
+                }
+            }
+        }
+
+        // P1-3：优先使用 Run 的 DeadlineAt 计算剩余时间，与 Endpoint Timeout 取较小者作为本次调用上限。
+        // DeadlineAt 已过期则立即返回结构化失败，避免发起注定超时的请求。
+        TimeSpan? deadlineRemaining = null;
+        if (request.DeadlineAt is not null)
+        {
+            var remaining = request.DeadlineAt.Value - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                return ChatFailure(operationId, "调用截止时间（DeadlineAt）已过期。", "deadline_exceeded");
+            }
+
+            deadlineRemaining = remaining;
+        }
+
+        var effectiveTimeout = deadlineRemaining is not null
+            ? (_options.Timeout > TimeSpan.Zero ? TimeSpan.FromTicks(Math.Min(deadlineRemaining.Value.Ticks, _options.Timeout.Ticks)) : deadlineRemaining.Value)
+            : _options.Timeout;
+
+        using var timeoutSource = effectiveTimeout > TimeSpan.Zero
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
             : null;
         if (timeoutSource is not null)
         {
-            timeoutSource.CancelAfter(_options.Timeout);
+            timeoutSource.CancelAfter(effectiveTimeout);
         }
 
         var effectiveToken = timeoutSource?.Token ?? cancellationToken;
@@ -346,21 +379,14 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
         };
 
         // 原生 tools 参数（OpenAI function calling 格式）
+        // P1-3：非法 Schema 已在 ChatWithToolsAsync 入口校验，此处不再静默降级为 {}。
         if (request.Tools.Count > 0)
         {
             var tools = new List<Dictionary<string, object?>>(request.Tools.Count);
             foreach (var tool in request.Tools)
             {
-                object? parametersSchema;
-                try
-                {
-                    parametersSchema = JsonSerializer.Deserialize<JsonElement>(
-                        string.IsNullOrWhiteSpace(tool.ParametersJsonSchema) ? "{}" : tool.ParametersJsonSchema);
-                }
-                catch (JsonException)
-                {
-                    parametersSchema = JsonSerializer.Deserialize<JsonElement>("{}");
-                }
+                var parametersSchema = JsonSerializer.Deserialize<JsonElement>(
+                    string.IsNullOrWhiteSpace(tool.ParametersJsonSchema) ? "{}" : tool.ParametersJsonSchema);
 
                 tools.Add(new Dictionary<string, object?>
                 {
@@ -387,69 +413,117 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
         return payload;
     }
 
+    /// <summary>
+    /// P1-3：校验 Tool 的 ParametersJsonSchema 是否为合法 JSON Schema。
+    /// 空/空白视为合法（默认 "{}"）；非空时必须可解析为 JSON 对象且 type 为 object（或未指定 type）。
+    /// </summary>
+    private static bool IsValidJsonSchema(string? schema, out string error)
+    {
+        if (string.IsNullOrWhiteSpace(schema))
+        {
+            error = string.Empty;
+            return true;
+        }
+
+        JsonElement element;
+        try
+        {
+            element = JsonSerializer.Deserialize<JsonElement>(schema);
+        }
+        catch (JsonException ex)
+        {
+            error = $"JSON 解析失败：{ex.Message}";
+            return false;
+        }
+
+        // 必须是 JSON 对象
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            error = $"Schema 必须是 JSON 对象，实际为 {element.ValueKind}。";
+            return false;
+        }
+
+        // 若声明了 type，则必须为 "object"（OpenAI function calling 参数约定）
+        if (element.TryGetProperty("type", out var typeEl))
+        {
+            var typeValue = typeEl.ValueKind == JsonValueKind.String ? typeEl.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(typeValue) && !string.Equals(typeValue, "object", StringComparison.OrdinalIgnoreCase))
+            {
+                error = $"Tool 参数 Schema 的 type 必须为 'object'，实际为 '{typeValue}'。";
+                return false;
+            }
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
     /// <summary>解析 OpenAI 兼容 chat completions 响应（含 tool_calls）。</summary>
     private ModelChatResponse ParseChatResponse(string operationId, string responseText, long latencyMs)
     {
         using var document = JsonDocument.Parse(responseText);
         var root = document.RootElement;
 
+        // P1-3：空 choices 不当作成功 Stop，返回结构化失败
+        if (!root.TryGetProperty("choices", out var choices)
+            || choices.ValueKind != JsonValueKind.Array
+            || choices.GetArrayLength() == 0)
+        {
+            return ChatFailure(operationId, "响应中缺少 choices 或 choices 为空。", "empty_response");
+        }
+
+        var firstChoice = choices[0];
         var content = string.Empty;
         var toolCalls = new List<ModelToolCall>();
         var finishReason = ModelChatFinishReason.Stop;
 
-        if (root.TryGetProperty("choices", out var choices)
-            && choices.ValueKind == JsonValueKind.Array
-            && choices.GetArrayLength() > 0)
+        if (firstChoice.TryGetProperty("message", out var message))
         {
-            var firstChoice = choices[0];
-            if (firstChoice.TryGetProperty("message", out var message))
+            if (message.TryGetProperty("content", out var messageContent))
             {
-                if (message.TryGetProperty("content", out var messageContent))
-                {
-                    content = ReadString(messageContent);
-                }
+                content = ReadString(messageContent);
+            }
 
-                // 解析原生 tool_calls
-                if (message.TryGetProperty("tool_calls", out var toolCallsEl)
-                    && toolCallsEl.ValueKind == JsonValueKind.Array)
+            // 解析原生 tool_calls
+            if (message.TryGetProperty("tool_calls", out var toolCallsEl)
+                && toolCallsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var tc in toolCallsEl.EnumerateArray())
                 {
-                    foreach (var tc in toolCallsEl.EnumerateArray())
+                    var id = tc.TryGetProperty("id", out var idEl) ? ReadString(idEl) : $"call_{Guid.NewGuid():N}";
+                    string? name = null;
+                    string? arguments = null;
+
+                    if (tc.TryGetProperty("function", out var funcEl))
                     {
-                        var id = tc.TryGetProperty("id", out var idEl) ? ReadString(idEl) : $"call_{Guid.NewGuid():N}";
-                        string? name = null;
-                        string? arguments = null;
+                        name = funcEl.TryGetProperty("name", out var nameEl) ? ReadString(nameEl) : null;
+                        arguments = funcEl.TryGetProperty("arguments", out var argsEl) ? ReadString(argsEl) : "{}";
+                    }
 
-                        if (tc.TryGetProperty("function", out var funcEl))
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        toolCalls.Add(new ModelToolCall
                         {
-                            name = funcEl.TryGetProperty("name", out var nameEl) ? ReadString(nameEl) : null;
-                            arguments = funcEl.TryGetProperty("arguments", out var argsEl) ? ReadString(argsEl) : "{}";
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(name))
-                        {
-                            toolCalls.Add(new ModelToolCall
-                            {
-                                Id = id,
-                                Name = name!,
-                                ArgumentsJson = arguments ?? "{}"
-                            });
-                        }
+                            Id = id,
+                            Name = name!,
+                            ArgumentsJson = arguments ?? "{}"
+                        });
                     }
                 }
             }
+        }
 
-            // finish_reason: "tool_calls" → ToolCalls, "stop" → Stop, others → Stop (conservative)
-            if (firstChoice.TryGetProperty("finish_reason", out var finishReasonEl))
+        // finish_reason: "tool_calls" → ToolCalls, "stop" → Stop, "length" → Length, "content_filter" → ContentFilter
+        if (firstChoice.TryGetProperty("finish_reason", out var finishReasonEl))
+        {
+            var fr = ReadString(finishReasonEl);
+            finishReason = fr switch
             {
-                var fr = ReadString(finishReasonEl);
-                finishReason = fr switch
-                {
-                    "tool_calls" => ModelChatFinishReason.ToolCalls,
-                    "length" => ModelChatFinishReason.Length,
-                    "content_filter" => ModelChatFinishReason.ContentFilter,
-                    _ => ModelChatFinishReason.Stop
-                };
-            }
+                "tool_calls" => ModelChatFinishReason.ToolCalls,
+                "length" => ModelChatFinishReason.Length,
+                "content_filter" => ModelChatFinishReason.ContentFilter,
+                _ => ModelChatFinishReason.Stop
+            };
         }
 
         // 如果有 tool_calls 但 finish_reason 未标记，补设为 ToolCalls
@@ -483,6 +557,49 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
         // EstimatedCost = 不考虑缓存折扣的估算费用；BilledCost = 同值（缓存折扣由提供商侧已计入 prompt_tokens）。
         var estimatedCost = (inputTokens * _options.InputTokenPricePerMillionUsd
             + outputTokens * _options.OutputTokenPricePerMillionUsd) / 1_000_000.0;
+
+        // P1-3：length/content_filter 不视为正常最终答案，标记为需复核的结构化失败
+        if (finishReason == ModelChatFinishReason.Length)
+        {
+            metadata["requiresReview"] = "true";
+            metadata["failureReason"] = "length_truncated";
+            return new ModelChatResponse
+            {
+                OperationId = operationId,
+                Content = content,
+                ToolCalls = toolCalls,
+                FinishReason = ModelChatFinishReason.Length,
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                EstimatedCost = estimatedCost,
+                BilledCost = estimatedCost,
+                Succeeded = false,
+                ErrorMessage = "模型输出因长度上限被截断（finish_reason=length），需人工复核。",
+                ModelId = Name,
+                Metadata = metadata
+            };
+        }
+
+        if (finishReason == ModelChatFinishReason.ContentFilter)
+        {
+            metadata["requiresReview"] = "true";
+            metadata["failureReason"] = "content_filter";
+            return new ModelChatResponse
+            {
+                OperationId = operationId,
+                Content = content,
+                ToolCalls = toolCalls,
+                FinishReason = ModelChatFinishReason.ContentFilter,
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                EstimatedCost = estimatedCost,
+                BilledCost = estimatedCost,
+                Succeeded = false,
+                ErrorMessage = "模型输出被内容过滤拦截（finish_reason=content_filter），需人工复核。",
+                ModelId = Name,
+                Metadata = metadata
+            };
+        }
 
         return new ModelChatResponse
         {

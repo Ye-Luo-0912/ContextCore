@@ -101,7 +101,7 @@ public sealed record ToolHandlerResult
 /// <see cref="EchoToolDispatcher"/>。本类通过 <see cref="IToolHandler"/> 注册表
 /// 将 Tool 调用分派到真实实现。
 /// </remarks>
-public sealed class RealToolDispatcher : IToolDispatcher
+public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
 {
     private readonly ConcurrentDictionary<string, IToolHandler> _handlers =
         new(StringComparer.Ordinal);

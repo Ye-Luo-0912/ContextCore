@@ -74,7 +74,10 @@ public interface ISelectedCandidateHydrator
     /// 直到 Selected 候选的 TokenCost 总和回到预算内。
     /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>hydrate 结果（修复后的 WorkingSet + 计数 + 预算修复诊断）；未选中候选保持原样。</returns>
+    /// <returns>
+    /// hydrate 结果（修复后的 WorkingSet + 计数 + 预算修复诊断 + P1-7 正式修复决策 <see cref="HydrationResult.Repair"/>）；
+    /// 未选中候选保持原样。P1-7：Caller 必须基于 <see cref="HydrationRepairDecision"/> 重建 ContextDecisionResult。
+    /// </returns>
     ValueTask<HydrationResult> HydrateAsync(
         IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
         CandidateWorkingSet workingSet,
@@ -88,6 +91,8 @@ public interface ISelectedCandidateHydrator
 /// <remarks>
 /// Caller（DefaultContextDecisionRuntime）将 <see cref="FailedCount"/> / <see cref="BudgetExceeded"/>
 /// 合并进 Outcome.Diagnostics；AgentContext 路径对 hard constraint hydrate 失败 fail-closed。
+/// P1-7：<see cref="Repair"/> 携带正式修复决策，Caller 据此重建 ContextDecisionResult
+/// （移除 dropped、更新 AllocationDecisions / SelectedCount / EstimatedTokens），不能只修改 WorkingSet。
 /// </remarks>
 public sealed record HydrationResult
 {
@@ -105,4 +110,40 @@ public sealed record HydrationResult
 
     /// <summary>P1-1：预算修复诊断（被裁剪的 Material 列表及原因）；未发生修复时为 null。</summary>
     public IReadOnlyList<string>? BudgetRepairDiagnostics { get; init; }
+
+    /// <summary>
+    /// P1-7：正式 hydration 修复决策。非空时 Caller 必须基于此重建 ContextDecisionResult，
+    /// 不能只替换 WorkingSet（否则 SelectedEnvelopes / AllocationDecisions / Outcome.SelectedCount /
+    /// EstimatedTokens 与实际输入不一致）。无 hydrate 发生时（NoHydration 路径）为 null。
+    /// </summary>
+    public HydrationRepairDecision? Repair { get; init; }
+}
+
+/// <summary>
+/// P1-7: Formal hydration repair decision. Returned by hydrator when budget repair is needed.
+/// 携带 hydrate 后真实的 selected / dropped 候选 ID、更新的 AllocationDecisions、精确 token 总数与失败明细，
+/// 让 Caller（DefaultContextDecisionRuntime）能重建整个 ContextDecisionResult 而非仅替换 WorkingSet。
+/// </summary>
+/// <remarks>
+/// 字段语义：
+///   <list type="bullet">
+///   <item><see cref="HydratedSelected"/>：hydrate 成功且未被预算修复裁剪的候选 ID（仍保留在 SelectedEnvelopes）。</item>
+///   <item><see cref="HydrationDropped"/>：因预算修复裁剪或 hydrate 失败被丢弃的候选 ID（需从 SelectedEnvelopes 移除）。</item>
+///   <item><see cref="UpdatedAllocationDecisions"/>：反映 hydrate 后实际结果的分配决策（retained 标 Selected，dropped 标 TokenBudgetExceeded）。</item>
+///   <item><see cref="ExactTokenCount"/>：hydrate 后 retained 候选的精确 token 总数（基于真实正文重算，非估算）。</item>
+///   <item><see cref="HydrationFailures"/>：hydrate 失败的候选 ID → 错误描述（store 未命中 / 读取异常 / 正文为空）。</item>
+///   </list>
+/// </remarks>
+public sealed record HydrationRepairDecision
+{
+    /// <summary>Candidates that were successfully hydrated and retained.</summary>
+    public required IReadOnlyList<string> HydratedSelected { get; init; }
+    /// <summary>Candidates that were dropped due to budget constraints or hydration failure.</summary>
+    public required IReadOnlyList<string> HydrationDropped { get; init; }
+    /// <summary>Updated allocation decisions reflecting actual hydration results.</summary>
+    public required IReadOnlyList<CandidateAllocationDecision> UpdatedAllocationDecisions { get; init; }
+    /// <summary>Exact token count after hydration (not estimate).</summary>
+    public required int ExactTokenCount { get; init; }
+    /// <summary>Failures encountered during hydration (candidate_id -> error).</summary>
+    public required IReadOnlyDictionary<string, string> HydrationFailures { get; init; }
 }

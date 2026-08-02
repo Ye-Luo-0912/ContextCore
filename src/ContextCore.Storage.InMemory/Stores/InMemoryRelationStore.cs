@@ -7,7 +7,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.Storage.InMemory;
 
 /// <summary>基于内存的 <see cref="IRelationStore"/> 实现，适用于测试和短生命周期场景。</summary>
-public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
+public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore, IRelationHydrationStore
 {
     private readonly ConcurrentDictionary<string, ContextRelation> _relations = new();
 
@@ -309,8 +309,10 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
     }
 
     /// <summary>
-    /// P1-7：流式枚举关系，避免一次性将全部关系载入 List。
-    /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc），但不应用 Skip/Take。
+    /// P1-7 / P1-9：流式枚举关系，避免一次性将全部关系载入 List。
+    /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc），但不应用调用方 Skip/Take。
+    /// P1-9：禁止无界扫描——迭代上限 = <see cref="GraphQueryLimits.MaxTotalEdges"/>，
+    /// 防止病态全表把整张图拉入内存。对真正大图请使用 Postgres provider 的流式实现。
     /// </summary>
     public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
         string workspaceId,
@@ -334,6 +336,8 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
             .ThenByDescending(item => item.Confidence)
             .ThenByDescending(item => item.CreatedAt)
             .Select(item => CompositeContextNormalizer.Clone(item))
+            // P1-9：全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限。
+            .Take(GraphQueryLimits.MaxTotalEdges)
             .ToArray();
 
         foreach (var relation in sorted)
@@ -343,5 +347,45 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
         }
 
         await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P1-9：按关系 ID 批量 hydrate 完整 Relation（含 Metadata/SourceRefs 等）。
+    /// InMemory 数据已在内存中，直接按 ID 查找并克隆返回。
+    /// </summary>
+    public Task<IReadOnlyList<ContextRelation>> HydrateRelationsAsync(
+        string workspaceId,
+        string? collectionId,
+        IReadOnlyList<string> relationIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentNullException.ThrowIfNull(relationIds);
+        if (relationIds.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<ContextRelation>>(Array.Empty<ContextRelation>());
+        }
+
+        var idSet = new HashSet<string>(relationIds, StringComparer.OrdinalIgnoreCase);
+        var results = new List<ContextRelation>(relationIds.Count);
+        foreach (var item in _relations.Values)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (!string.IsNullOrWhiteSpace(collectionId)
+                && !string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (idSet.Contains(item.Id))
+            {
+                results.Add(CompositeContextNormalizer.Clone(item));
+            }
+        }
+
+        return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
     }
 }

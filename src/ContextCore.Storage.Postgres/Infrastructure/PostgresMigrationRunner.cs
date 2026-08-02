@@ -114,8 +114,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   （模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复）改为 request_id（稳定调用身份哈希），
     ///   追加 workspace_id / run_id / invocation_id 列与 UNIQUE(workspace_id, run_id, invocation_id) partial 约束，
     ///   防止另一 Run 覆盖已有 Tool Result；tool_call_id / idempotency_key 改为 partial index。
+    /// P1-5：v50 → v51，utility_ledger_entries 追加 (decision_id, candidate_item_id, expert) UNIQUE 索引，
+    ///   防御性兜底 Learning Lease 过期后旧/新 Worker 重复物化产生重复 ledger 条目（entry_id 幂等之外的数据库层约束）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v50";
+    public const string SchemaVersion = "cc-schema-v51";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -356,6 +358,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("utility_ledger_entries", "candidate"),
         ("utility_ledger_entries", "decision"),
         ("utility_ledger_entries", "materialized"),
+        ("utility_ledger_entries", "decision_candidate_kind"),
         ("conflict_sets", "workspace"),
         ("conflict_sets", "status"),
         ("conflict_sets", "candidate"),
@@ -1731,6 +1734,9 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "candidate")} ON {utilityLedgerEntries} (candidate_item_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "decision")} ON {utilityLedgerEntries} (decision_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "materialized")} ON {utilityLedgerEntries} (materialized_at DESC);
+-- P1-5：防御性唯一约束——同一 (decision_id, candidate_item_id, expert) 仅允许一条 ledger 条目，
+-- 防止 Learning Lease 过期后旧 Worker 与新 Worker 重复物化产生重复条目（entry_id 幂等之外的数据库层兜底）。
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "decision_candidate_kind")} ON {utilityLedgerEntries} (decision_id, candidate_item_id, expert);
 
 -- conflict_sets：冲突集合（read-only 公共 API，写入由 materializer 批量插入）
 -- 反规范化 workspace_id / collection_id / kind / decision_id / resolution_status 字段以便索引查询；
