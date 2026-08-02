@@ -238,3 +238,74 @@ public interface IDesiredModelStateStore
     /// <summary>列出所有模型的期望状态（用于 ReconcilerWorker 全量同步）。</summary>
     ValueTask<IReadOnlyList<DesiredModelState>> GetAllAsync(CancellationToken ct = default);
 }
+
+// ===========================================================================
+// P0-9：Cluster Model Slot 契约（单一 Champion 真相源）
+//
+// 目标：
+//   1. 替代按 ModelId 分别保存 Active/Inactive 的 DesiredModelState 模型——
+//      旧模型允许同一时刻多条 Active 记录并存，激活新模型时也没有同事务把旧模型改为 Inactive，
+//      导致 Reconciler 遍历多条 Active 后最终模型取决于查询顺序。
+//   2. 改为单行集群指针：每个 slot（如 "primary"）只有一行记录，由 CAS 原子切换 ActiveModelArtifactId。
+//      激活新模型 = 单次 CAS UPDATE，旧模型自然失效（不再有"旧 Active 记录"）。
+//   3. Revision 字段单调递增，作为 CAS token：TryUpdateAsync 仅当 expectedRevision 匹配当前 revision 时成功。
+//      消除"Get generation → +1 → SetAsync"非原子窗口。
+//
+// 设计边界：
+//   - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+//   - 保留 IDesiredModelStateStore / PostgresDesiredModelStateStore 向后兼容（不再走生产路径）。
+//   - 单模型集群固定 slot_name="primary"；多 slot 留作未来扩展（不影响当前契约）。
+// ===========================================================================
+
+/// <summary>
+/// P0-9: Single champion cluster model slot. The single source of truth for which model is active across the cluster.
+/// Only one row per slot name (e.g., "primary"). CAS updates ensure atomic model switching.
+/// </summary>
+public sealed record ClusterModelSlot
+{
+    /// <summary>Slot name (e.g., "primary"). Fixed to "primary" for single-model clusters.</summary>
+    public required string SlotName { get; init; } = "primary";
+
+    /// <summary>The model artifact ID that should be active.</summary>
+    public string? ActiveModelArtifactId { get; init; }
+
+    /// <summary>Content hash of the model artifact (for drift detection).</summary>
+    public string? ContentHash { get; init; }
+
+    /// <summary>Monotonically increasing revision (CAS token).</summary>
+    public required long Revision { get; init; } = 0;
+
+    /// <summary>Desired status: "Active" or "Inactive".</summary>
+    public required string DesiredStatus { get; init; } = "Inactive";
+
+    /// <summary>When the slot was last updated.</summary>
+    public required DateTimeOffset UpdatedAt { get; init; }
+
+    /// <summary>Who updated the slot (node ID / user ID).</summary>
+    public string? UpdatedBy { get; init; }
+}
+
+/// <summary>
+/// P0-9: Store for the single cluster model slot. All operations use CAS on Revision.
+/// </summary>
+public interface IClusterModelSlotStore
+{
+    /// <summary>Get the current slot state. Returns null if not initialized.</summary>
+    ValueTask<ClusterModelSlot?> GetAsync(string slotName, CancellationToken ct = default);
+
+    /// <summary>
+    /// CAS update: only succeeds if current revision matches expectedRevision.
+    /// On success, returns the updated slot with new revision. On failure (concurrent update), returns null.
+    /// </summary>
+    ValueTask<ClusterModelSlot?> TryUpdateAsync(
+        string slotName,
+        long expectedRevision,
+        string? activeModelArtifactId,
+        string? contentHash,
+        string desiredStatus,
+        string? updatedBy,
+        CancellationToken ct = default);
+
+    /// <summary>Initialize the slot if it doesn't exist. Returns the slot (existing or newly created).</summary>
+    ValueTask<ClusterModelSlot> GetOrCreateAsync(string slotName, CancellationToken ct = default);
+}

@@ -57,6 +57,21 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
     /// <returns>引擎租约（null = 未激活）；调用方必须 Dispose 以递减引用计数。</returns>
     IInferenceEngineLease? AcquireEngineLease();
 
+    /// <summary>
+    /// P0-8：捕获 fallback 引擎的永久租约（不过期）。
+    /// 用于 <see cref="InferenceScheduler"/> 在入队时无 Active Engine 的情况下，
+    /// 固定请求在 fallback 引擎上执行，避免排队期间模型被激活后 cross-generation execution
+    /// （即执行阶段通过动态代理跑到新激活的引擎）。
+    /// </summary>
+    /// <remarks>
+    /// 返回的 lease 引用 fallback 引擎（<see cref="IInferenceEngineLease.Generation"/>=0，
+    /// 0 不会与任何真实激活世代冲突——真实世代自 1 起自增）。
+    /// <see cref="IDisposable.Dispose"/> 为 no-op：fallback 引擎由 DI 容器管理生命周期，
+    /// 无需引用计数。lease 本身可被调用方任意次数 Dispose（幂等安全）。
+    /// </remarks>
+    /// <returns>fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。</returns>
+    IInferenceEngineLease AcquireFallbackEngineLease();
+
     /// <summary>当前已激活的模型工件描述符（null = 未激活）。</summary>
     ModelArtifactDescriptor? ActiveDescriptor { get; }
 

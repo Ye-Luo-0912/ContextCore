@@ -499,6 +499,47 @@ public enum ToolSideEffect : byte
 }
 
 /// <summary>
+/// P0-2: Tool recovery strategy. Determines how to handle Tool calls in Prepared/DispatchingIntent state during crash recovery.
+/// </summary>
+public enum ToolRecoveryStrategy : byte
+{
+    /// <summary>Safe replay: tool is side-effect-free or idempotent, can be re-executed on recovery.</summary>
+    SafeReplay = 0,
+    /// <summary>Use cached result: do not re-execute on recovery, use persisted result (requires reconciliation if missing).</summary>
+    UseCachedResult = 1,
+    /// <summary>Never replay: never re-execute, must use cached result or enter reconciliation.</summary>
+    NeverReplay = 2,
+    /// <summary>Force reconciliation: recovery requires manual or external reconciliation, no automatic handling.</summary>
+    RequireReconciliation = 3
+}
+
+/// <summary>
+/// P0-2: Tool static descriptor. Declares side-effect properties, approval requirements, recovery strategy, etc.
+/// Executor reads this descriptor BEFORE dispatch to decide pre-execution policy;
+/// the SideEffect in execution result is only used to VERIFY actual behavior matches declaration.
+/// </summary>
+public sealed record ToolDescriptor
+{
+    /// <summary>Tool name (matches IToolHandler.ToolName).</summary>
+    public required string Name { get; init; }
+    /// <summary>Declared side-effect type. Executor uses this to decide recovery policy and auto-commit.</summary>
+    public ToolSideEffect DeclaredSideEffect { get; init; } = ToolSideEffect.Unknown;
+    /// <summary>Whether human approval is required. When true, executor must go through IAgentApprovalGate before dispatch.</summary>
+    public bool RequiresApproval { get; init; } = false;
+    /// <summary>Whether idempotency key is required. When true, executor must generate or validate IdempotencyKey before dispatch.</summary>
+    public bool RequiresIdempotencyKey { get; init; } = false;
+    /// <summary>Whether lease fence is required. When true, executor must validate a valid LeaseFence before dispatch.</summary>
+    public bool RequiresLeaseFence { get; init; } = false;
+    /// <summary>Recovery strategy. How to handle unfinished Tool calls during crash recovery.</summary>
+    public ToolRecoveryStrategy RecoveryStrategy { get; init; } = ToolRecoveryStrategy.RequireReconciliation;
+    /// <summary>Reconciliation handler name (optional). When RecoveryStrategy=RequireReconciliation, an externally registered handler performs reconciliation.</summary>
+    public string? ReconciliationHandler { get; init; }
+    /// <summary>Maximum execution time. Tool calls exceeding this are treated as timed out (RequiresReconciliation).</summary>
+    public TimeSpan MaximumExecutionTime { get; init; } = TimeSpan.FromMinutes(5);
+}
+
+
+/// <summary>
 /// R28-C：Tool 分派结果。
 /// </summary>
 public sealed record ToolDispatchResult
@@ -535,20 +576,39 @@ public sealed record ToolDispatchResult
 /// </summary>
 /// <remarks>
 /// 状态流转（不可逆，只能向前）：
-///   <see cref="Prepared"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
+///   <see cref="Prepared"/> → <see cref="DispatchingIntent"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
+///
+/// <b>P0-1：DispatchingIntent 外部副作用边界</b>。
+/// <see cref="DispatchingIntent"/> 在外部 Tool 调用发起<b>前</b>持久化，创建一个 durable 边界：
+/// 若进程在此之后崩溃，恢复时知道外部调用可能已开始。
 ///
 /// 恢复语义：
 ///   - 无 journal 记录 → 安全重新执行（tool 从未被调用）。
-///   - <see cref="Prepared"/> 但未 <see cref="Dispatched"/> → 安全重新执行（tool 未真正执行）。
+///   - <see cref="Prepared"/>（无 DispatchingIntent）→ 安全重新执行（tool 未真正调用）。
+///   - <see cref="DispatchingIntent"/> → <b>模糊状态</b>：外部调用可能已开始但未完成，
+///     需按 <see cref="ToolDescriptor.RecoveryStrategy"/> 决定（SafeReplay 重放 / UseCachedResult 查缓存 / 其他对账）。
 ///   - <see cref="Dispatched"/> 但未 <see cref="Committed"/> → <b>模糊状态</b>：tool 可能已成功执行外部副作用，
 ///     需调用方查询外部系统或人工裁决；不可盲目重新执行。
 ///   - <see cref="Committed"/> 但未 <see cref="ResultDelivered"/> → 结果已持久化，可安全重发到 transport。
 ///   - <see cref="ResultDelivered"/> → 完全完成，无需任何动作。
+///
+/// <b>注意</b>：<see cref="DispatchingIntent"/> 使用数值 4（而非 1），
+/// 以避免破坏数据库中已有的 Dispatched=1 / Committed=2 / ResultDelivered=3 的 byte 映射。
+/// 状态机的"前向推进"判断基于逻辑顺序（Prepared→DispatchingIntent→Dispatched→Committed→ResultDelivered），
+/// 而非数值大小。
 /// </remarks>
 public enum ToolDispatchState : byte
 {
     /// <summary>已准备（journal 已写入 Prepared 条目，但 tool 尚未真正调用）。</summary>
     Prepared = 0,
+
+    /// <summary>
+    /// P0-1：分派意图已持久化（外部调用即将开始但尚未返回）。
+    /// 在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前由
+    /// <see cref="IToolDispatchJournal.MarkDispatchingIntentAsync"/> 写入，
+    /// 创建外部副作用 exactly-once 的 durable 边界。
+    /// </summary>
+    DispatchingIntent = 4,
 
     /// <summary>已分派（tool 已调用并返回，或外部调用已发起但结果未确认）。</summary>
     Dispatched = 1,
@@ -632,11 +692,31 @@ public sealed record ToolDispatchJournalEntry
 /// </remarks>
 public sealed record DurableToolResult
 {
-    /// <summary>Tool 调用 ID（与 ToolCallStarted/Completed 事件中的 toolCallId 一致；作为结果缓存主键）。</summary>
+    /// <summary>
+    /// Tool 调用 ID（与 ToolCallStarted/Completed 事件中的 toolCallId 一致）。
+    /// P0-4：不再作为主键（模型生成，不保证跨 Run/Provider 唯一）；改为 tool_dispatch_results 上的辅助索引列，
+    /// 供旧 <see cref="IDurableToolResultStore.GetAsync"/> 查询路径使用。主键为 <see cref="RequestId"/>。
+    /// </summary>
     public required string ToolCallId { get; init; }
 
-    /// <summary>本次调用的 RequestId（与 Journal request_id 一致）。</summary>
+    /// <summary>本次调用的 RequestId（与 Journal request_id 一致；P0-4 起为 tool_dispatch_results 主键）。</summary>
     public required string RequestId { get; init; }
+
+    /// <summary>
+    /// P0-4：workspace 作用域标识（可选）。
+    /// 与 <see cref="RunId"/> / <see cref="InvocationId"/> 共同构成 tool_dispatch_results 的
+    /// UNIQUE(workspace_id, run_id, invocation_id) 约束，作为 Workspace 隔离键，防止另一 Run 覆盖已有 Tool Result。
+    /// </summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>P0-4：Agent Run 作用域标识（可选；配合 <see cref="WorkspaceId"/> / <see cref="InvocationId"/> 构成隔离键）。</summary>
+    public string? RunId { get; init; }
+
+    /// <summary>
+    /// P0-4：本次调用的 Invocation ID（可选；代码层等同于 <see cref="RequestId"/>，作为稳定调用身份）。
+    /// 非 null 且非空时参与 UNIQUE(workspace_id, run_id, invocation_id) 约束；为空时该行不参与约束（兼容旧数据）。
+    /// </summary>
+    public string? InvocationId { get; init; }
 
     /// <summary>调用方提供的幂等键（可选；用于外部系统去重）。</summary>
     public string? IdempotencyKey { get; init; }
@@ -674,17 +754,46 @@ public sealed record DurableToolResult
 /// </remarks>
 public interface IDurableToolResultStore
 {
-    /// <summary>按 toolCallId 获取缓存结果。</summary>
+    // P0-4：旧方法（按 tool_call_id）保留兼容但已过时——tool_call_id 不保证跨 Run/Provider 唯一，
+    //       不能作为主键。新代码应使用 GetByRequestIdAsync / SaveByRequestIdAsync（按稳定 request_id）。
+
+    /// <summary>
+    /// 按 toolCallId 获取缓存结果（旧路径，已过时）。
+    /// P0-4：tool_call_id 不再是主键，仅为辅助索引；新代码应使用 <see cref="GetByRequestIdAsync"/>。
+    /// </summary>
     /// <param name="toolCallId">Tool 调用 ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>缓存结果；不存在时返回 null。</returns>
     Task<DurableToolResult?> GetAsync(string toolCallId, CancellationToken ct);
 
-    /// <summary>保存缓存结果（按 toolCallId 幂等覆盖）。</summary>
+    /// <summary>
+    /// 保存缓存结果（旧路径，已过时；按 toolCallId 幂等覆盖）。
+    /// P0-4：底层按 <see cref="DurableToolResult.RequestId"/> upsert（tool_call_id 不再唯一）。
+    /// 新代码应使用 <see cref="SaveByRequestIdAsync"/>。
+    /// </summary>
     /// <param name="toolCallId">Tool 调用 ID。</param>
     /// <param name="result">待缓存的结果。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     Task SaveAsync(string toolCallId, DurableToolResult result, CancellationToken ct);
+
+    // P0-4：新方法（按 request_id，稳定调用身份哈希，跨 Run/Provider 唯一）
+
+    /// <summary>
+    /// P0-4：按 RequestId 获取缓存结果（推荐路径）。
+    /// request_id 为 tool_dispatch_results 主键，保证跨 Run/Provider 不覆盖。
+    /// </summary>
+    /// <param name="requestId">Tool 调用 RequestId（与 Journal request_id 一致）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>缓存结果；不存在时返回 null。</returns>
+    Task<DurableToolResult?> GetByRequestIdAsync(string requestId, CancellationToken ct);
+
+    /// <summary>
+    /// P0-4：保存缓存结果（推荐路径；按 RequestId 幂等覆盖）。
+    /// 写入 workspace_id / run_id / invocation_id 等 P0-4 新字段，供 UNIQUE 隔离约束与对账查询使用。
+    /// </summary>
+    /// <param name="result">待缓存的结果（RequestId 作为主键）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task SaveByRequestIdAsync(DurableToolResult result, CancellationToken ct);
 }
 
 /// <summary>
@@ -695,7 +804,7 @@ public interface IDurableToolResultStore
 /// <b>决策矩阵</b>：
 /// <list type="bullet">
 ///   <item><see cref="ShouldDispatch"/>=true（Journal 不存在或 Prepared）→ 调用方应执行 Dispatch。</item>
-///   <item><see cref="NeedsReconciliation"/>=true（Journal = Dispatched）→ 调用方应返回对账结果（携带 <see cref="ExternalOperationId"/>），不重新 Dispatch。</item>
+///   <item><see cref="NeedsReconciliation"/>=true（Journal = DispatchingIntent 或 Dispatched）→ 调用方应返回对账结果（携带 <see cref="ExternalOperationId"/>），不重新 Dispatch。DispatchingIntent 表示外部调用可能已开始但未完成。</item>
 ///   <item><see cref="CachedResult"/> 非空（Journal = Committed/ResultDelivered）→ 调用方应直接返回缓存结果，<b>禁止重新 Dispatch</b>。</item>
 /// </list>
 /// </remarks>
@@ -790,12 +899,24 @@ public interface IToolDispatchJournal
     /// <list type="bullet">
     ///   <item>Journal 不存在（新插入）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
     ///   <item>Journal = Prepared（重复 Prepare）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
+    ///   <item>Journal = DispatchingIntent → <see cref="ToolDispatchPrepareResult.NeedsReconciliation"/>=true（外部调用可能已开始但未完成，需对账）。</item>
     ///   <item>Journal = Dispatched → <see cref="ToolDispatchPrepareResult.NeedsReconciliation"/>=true（外部副作用可能已执行，需对账）。</item>
     ///   <item>Journal = Committed/ResultDelivered → <see cref="ToolDispatchPrepareResult.CachedResult"/> 非空（禁止重新 Dispatch）。</item>
     /// </list>
     /// 调用方（<see cref="IDurableToolExecutor"/>）应根据返回值决定是否 Dispatch、对账或返回缓存结果。
     /// </remarks>
     ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-1: Mark that the external Tool call is about to start. Must be persisted BEFORE the actual external call.
+    /// This creates a durable boundary: if a crash occurs after this point, recovery knows the external call may have started.
+    /// Transitions state from Prepared to DispatchingIntent (CAS). Throws InvalidOperationException if state has already
+    /// advanced past DispatchingIntent (e.g., Dispatched), indicating a concurrent dispatch may have occurred.
+    /// </summary>
+    /// <param name="requestId">Tool RequestId (must already have a Prepared entry).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="InvalidOperationException">request_id missing (MissingPredecessor), or state already past DispatchingIntent (AlreadyAdvanced).</exception>
+    ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 Dispatched（tool 已返回结果）。</summary>
     /// <param name="requestId">Tool RequestId（必须已存在 Prepared 条目）。</param>

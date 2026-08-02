@@ -265,7 +265,8 @@ public sealed class DurableTransportHostingTests
     }
 
     /// <summary>
-    /// P0-4 DI 注册验证：AddDurableTransportHostedServices 注册 4 个 HostedService + 选项。
+    /// P0-4 DI 注册验证：AddDurableTransportHostedServices 注册 3 个 HostedService + 选项。
+    /// P0-6：DurableTransportInstructionPumpService 已退役，不再注册。
     /// </summary>
     [TestMethod]
     public void AddDurableTransportHostedServices_RegistersHostedServicesAndOptions()
@@ -281,7 +282,8 @@ public sealed class DurableTransportHostingTests
 
         var provider = services.BuildServiceProvider();
         var hostedServices = provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ToList();
-        Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "DurableTransportInstructionPumpService"));
+        Assert.IsFalse(hostedServices.Any(h => h.GetType().Name == "DurableTransportInstructionPumpService"),
+            "P0-6：DurableTransportInstructionPumpService 已退役，不应再注册为 HostedService。");
         Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "ResultOutboxReplayService"));
         Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "LeaseReaperService"));
         Assert.IsTrue(hostedServices.Any(h => h.GetType().Name == "PendingCountMetricsService"));

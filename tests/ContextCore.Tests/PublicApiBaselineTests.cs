@@ -87,6 +87,7 @@ public sealed class PublicApiBaselineTests
     /// 默认 [Ignore]，仅在主动调用时执行。
     /// </summary>
     [Ignore("Manual trigger: rewrite baseline file from current reflection snapshot.")]
+    [TestMethod]
     public void PublicApi_RegenerateBaselineFile()
     {
         var actual = BuildCurrentPublicApi();

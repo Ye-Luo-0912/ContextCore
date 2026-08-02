@@ -40,6 +40,19 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     // P0-3：结果缓存（MarkCommittedWithResultAsync 写入，PrepareAsync 读取）
     private readonly ConcurrentDictionary<string, DurableToolResult> _results = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// P0-1→逻辑状态顺序映射。DispatchingIntent=4 的数值大于 Dispatched=1，
+    /// 破坏了基于数值大小的状态顺序判断，因此使用此字典按逻辑顺序判断前向推进。
+    /// </summary>
+    private static readonly Dictionary<ToolDispatchState, int> s_logicalOrder = new()
+    {
+        { ToolDispatchState.Prepared, 0 },
+        { ToolDispatchState.DispatchingIntent, 1 },
+        { ToolDispatchState.Dispatched, 2 },
+        { ToolDispatchState.Committed, 3 },
+        { ToolDispatchState.ResultDelivered, 4 }
+    };
+
     /// <inheritdoc />
     /// <remarks>InMemory 实现仅在进程内缓存结果，不在同事务内持久化到外部存储，返回 false。</remarks>
     public bool PersistsResults => false;
@@ -79,10 +92,66 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         {
             CurrentState = currentState,
             ShouldDispatch = currentState == ToolDispatchState.Prepared,
-            NeedsReconciliation = currentState == ToolDispatchState.Dispatched,
+            NeedsReconciliation = currentState == ToolDispatchState.Dispatched || currentState == ToolDispatchState.DispatchingIntent,
             ExternalOperationId = current?.ExternalOperationId,
             CachedResult = cachedResult
         });
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-1→在外部 Tool 调用发起前持久化 DispatchingIntent 状态，创建 durable 边界。
+    /// 与 MarkDispatchedAsync 不同，本方法在状态已超过 DispatchingIntent 时抛异常（而非幂等成功），
+    /// 因为继续 Dispatch 会导致外部副作用重复执行。
+    /// </remarks>
+    public ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        _entries.AddOrUpdate(
+            requestId,
+            _ =>
+            {
+                throw new InvalidOperationException(
+                    $"Tool dispatch journal 缺失前驱记录（MissingPredecessor）：request_id={requestId}，" +
+                    $"目标状态=DispatchingIntent（期望前驱=Prepared）。" +
+                    $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
+            },
+            (_, existing) =>
+            {
+                if (existing.State == ToolDispatchState.DispatchingIntent)
+                {
+                    return existing;
+                }
+
+                if (existing.State == ToolDispatchState.Prepared)
+                {
+                    return existing with
+                    {
+                        State = ToolDispatchState.DispatchingIntent,
+                        UpdatedAt = now
+                    };
+                }
+
+                if (s_logicalOrder[existing.State] > s_logicalOrder[ToolDispatchState.DispatchingIntent])
+                {
+                    throw new InvalidOperationException(
+                        $"Tool dispatch state 已超过 DispatchingIntent（AlreadyAdvanced）：request_id={requestId}，" +
+                        $"当前={existing.State}，目标=DispatchingIntent。" +
+                        $"状态已被并发推进，外部调用可能已开始，禁止重复 Dispatch。");
+                }
+
+                throw new InvalidOperationException(
+                    $"Tool dispatch state 跨级跳跃（InvalidTransition）：request_id={requestId}，" +
+                    $"当前={existing.State}，期望前驱=Prepared，目标=DispatchingIntent。" +
+                    $"状态机只能逐级向前推进：Prepared → DispatchingIntent → Dispatched → Committed → ResultDelivered。");
+            });
+
+        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -105,7 +174,7 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                     $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) => ApplyTransition(
-                requestId, existing, ToolDispatchState.Prepared, ToolDispatchState.Dispatched, externalOperationId, now));
+                requestId, existing, new[] { ToolDispatchState.Prepared, ToolDispatchState.DispatchingIntent }, ToolDispatchState.Dispatched, externalOperationId, now));
 
         return ValueTask.CompletedTask;
     }
@@ -130,7 +199,7 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                     $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) => ApplyTransition(
-                requestId, existing, ToolDispatchState.Dispatched, ToolDispatchState.Committed, null, now));
+                requestId, existing, new[] { ToolDispatchState.Dispatched }, ToolDispatchState.Committed, null, now));
 
         return ValueTask.CompletedTask;
     }
@@ -156,7 +225,7 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                     $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) => ApplyTransition(
-                requestId, existing, ToolDispatchState.Dispatched, ToolDispatchState.Committed, null, now));
+                requestId, existing, new[] { ToolDispatchState.Dispatched }, ToolDispatchState.Committed, null, now));
 
         // 同事务语义：原子写入结果缓存（InMemory 用 ConcurrentDictionary 模拟）
         _results[requestId] = result;
@@ -184,7 +253,7 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                     $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
             },
             (_, existing) => ApplyTransition(
-                requestId, existing, ToolDispatchState.Committed, ToolDispatchState.ResultDelivered, null, now));
+                requestId, existing, new[] { ToolDispatchState.Committed }, ToolDispatchState.ResultDelivered, null, now));
 
         return ValueTask.CompletedTask;
     }
@@ -213,13 +282,13 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     private static ToolDispatchJournalEntry ApplyTransition(
         string requestId,
         ToolDispatchJournalEntry existing,
-        ToolDispatchState expectedState,
+        IReadOnlyList<ToolDispatchState> expectedStates,
         ToolDispatchState targetState,
         string? externalOperationId,
         DateTimeOffset now)
     {
-        // current == expected → 正常前向推进（Applied）
-        if (existing.State == expectedState)
+        // current == any expected → 正常前向推进（Applied）
+        if (expectedStates.Contains(existing.State))
         {
             return existing with
             {
@@ -237,8 +306,8 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
             return existing;
         }
 
-        // current > target → AlreadyAdvanced（幂等，不修改）
-        if ((int)existing.State > (int)targetState)
+        // current > target (logical) → AlreadyAdvanced（幂等，不修改）
+        if (s_logicalOrder[existing.State] > s_logicalOrder[targetState])
         {
             return existing;
         }
@@ -246,8 +315,8 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         // current < expected → InvalidTransition（跨级跳跃，禁止）
         throw new InvalidOperationException(
             $"Tool dispatch state 跨级跳跃（InvalidTransition）：request_id={requestId}，" +
-            $"当前={existing.State}，期望前驱={expectedState}，目标={targetState}。" +
-            $"状态机只能逐级向前推进：Prepared → Dispatched → Committed → ResultDelivered，" +
+            $"当前={existing.State}，期望前驱={string.Join("/", expectedStates)}，目标={targetState}。" +
+            $"状态机只能逐级向前推进：Prepared → DispatchingIntent → Dispatched → Committed → ResultDelivered，" +
             $"不允许跳过中间状态（如 Prepared → Committed）。");
     }
 

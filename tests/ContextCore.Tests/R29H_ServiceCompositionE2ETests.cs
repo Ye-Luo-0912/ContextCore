@@ -242,15 +242,15 @@ public sealed class R29H_ServiceCompositionE2ETests
         Assert.AreSame(transport, durable,
             "IAgentKernelTransport 与 IDurableTransport 应解析为同一 PostgresDurableTransport singleton。");
 
-        // 断言 3：Durable Transport hosted services 全部注册
+        // 断言 3：Durable Transport hosted services 注册（P0-6：Pump 已退役，不再注册）
         var hostedServiceTypes = services
             .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
             .Select(d => d.ImplementationType)
             .Where(t => t is not null)
             .Select(t => t!.FullName)
             .ToList();
-        CollectionAssert.Contains(hostedServiceTypes, typeof(DurableTransportInstructionPumpService).FullName,
-            "ProductionHA profile 应注册 DurableTransportInstructionPumpService。");
+        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(DurableTransportInstructionPumpService).FullName,
+            "P0-6：ProductionHA profile 不应注册 DurableTransportInstructionPumpService（执行平面已收敛）。");
         CollectionAssert.Contains(hostedServiceTypes, typeof(ResultOutboxReplayService).FullName,
             "ProductionHA profile 应注册 ResultOutboxReplayService。");
         CollectionAssert.Contains(hostedServiceTypes, typeof(LeaseReaperService).FullName,

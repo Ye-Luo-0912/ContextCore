@@ -69,7 +69,7 @@ INSERT INTO {Table("tool_dispatch_results")} (
 VALUES (
     @tool_call_id, @request_id, @idempotency_key, @side_effect, @external_operation_id,
     @result, @succeeded, @error, @duration_ms, @created_at)
-ON CONFLICT (tool_call_id) DO UPDATE SET
+ON CONFLICT (request_id) DO UPDATE SET
     request_id = EXCLUDED.request_id,
     idempotency_key = EXCLUDED.idempotency_key,
     side_effect = EXCLUDED.side_effect,
@@ -82,6 +82,75 @@ ON CONFLICT (tool_call_id) DO UPDATE SET
 """;
         command.Parameters.AddWithValue("tool_call_id", toolCallId);
         command.Parameters.AddWithValue("request_id", result.RequestId);
+        command.Parameters.AddWithValue("idempotency_key", (object?)result.IdempotencyKey ?? DBNull.Value);
+        command.Parameters.AddWithValue("side_effect", result.SideEffect.ToString());
+        command.Parameters.AddWithValue("external_operation_id", (object?)result.ExternalOperationId ?? DBNull.Value);
+        AddJson(command, "result", result);
+        command.Parameters.AddWithValue("succeeded", result.Succeeded);
+        command.Parameters.AddWithValue("error", (object?)result.Error ?? DBNull.Value);
+        command.Parameters.AddWithValue("duration_ms", (long)Math.Round(result.DurationMs));
+        command.Parameters.AddWithValue("created_at", DateTimeOffset.UtcNow);
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<DurableToolResult?> GetByRequestIdAsync(string requestId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            return null;
+        }
+
+        await EnsureMigratedAsync(ct).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT result
+FROM {Table("tool_dispatch_results")}
+WHERE request_id = @request_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("request_id", requestId);
+        return await ExecuteScalarJsonAsync<DurableToolResult>(command, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task SaveByRequestIdAsync(DurableToolResult result, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentException.ThrowIfNullOrWhiteSpace(result.RequestId);
+
+        await EnsureMigratedAsync(ct).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+INSERT INTO {Table("tool_dispatch_results")} (
+    tool_call_id, request_id, workspace_id, run_id, invocation_id, idempotency_key,
+    side_effect, external_operation_id, result, succeeded, error, duration_ms, created_at)
+VALUES (
+    @tool_call_id, @request_id, @workspace_id, @run_id, @invocation_id, @idempotency_key,
+    @side_effect, @external_operation_id, @result, @succeeded, @error, @duration_ms, @created_at)
+ON CONFLICT (request_id) DO UPDATE SET
+    tool_call_id = EXCLUDED.tool_call_id,
+    workspace_id = EXCLUDED.workspace_id,
+    run_id = EXCLUDED.run_id,
+    invocation_id = EXCLUDED.invocation_id,
+    idempotency_key = EXCLUDED.idempotency_key,
+    side_effect = EXCLUDED.side_effect,
+    external_operation_id = EXCLUDED.external_operation_id,
+    result = EXCLUDED.result,
+    succeeded = EXCLUDED.succeeded,
+    error = EXCLUDED.error,
+    duration_ms = EXCLUDED.duration_ms,
+    created_at = EXCLUDED.created_at;
+""";
+        command.Parameters.AddWithValue("tool_call_id", result.ToolCallId);
+        command.Parameters.AddWithValue("request_id", result.RequestId);
+        command.Parameters.AddWithValue("workspace_id", (object?)result.WorkspaceId ?? DBNull.Value);
+        command.Parameters.AddWithValue("run_id", (object?)result.RunId ?? DBNull.Value);
+        command.Parameters.AddWithValue("invocation_id", (object?)result.InvocationId ?? DBNull.Value);
         command.Parameters.AddWithValue("idempotency_key", (object?)result.IdempotencyKey ?? DBNull.Value);
         command.Parameters.AddWithValue("side_effect", result.SideEffect.ToString());
         command.Parameters.AddWithValue("external_operation_id", (object?)result.ExternalOperationId ?? DBNull.Value);

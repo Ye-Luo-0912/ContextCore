@@ -189,8 +189,8 @@ LIMIT 1;
     /// <remarks>
     /// 旧路径 ResolveAsync → AppendAsync → TransitionStateAsync 三步非原子，任一步失败留下不一致状态。
     /// 本方法在单事务内完成：校验 approval.RunId → CAS 裁决审批 → INSERT 事件（哈希链续接）→ CAS 推进 Run 状态。
-    /// 审批裁决 + 事件追加为原子核心（任一失败整事务回滚）；Run 状态推进为 best-effort
-    /// （Run 已被并发推进时 CAS 0 行，审批 + 事件仍提交，<see cref="ApprovalResolveResult.RunStateChanged"/>=false）。
+    /// P0-5：Run 状态 CAS 改为严格规则——0 行时查询当前状态：已处于目标状态则幂等提交，其他状态或不存在则整事务回滚
+    /// （旧版本 best-effort：0 行时仍 COMMIT，审批已裁决但 Run 仍处 AwaitingApproval，外部无法再次 Resolve，Run 永久卡死）。
     /// </remarks>
     public async ValueTask<ApprovalResolveResult> ResolveApprovalAndAdvanceRunAsync(
         string workspaceId,
@@ -389,7 +389,7 @@ ON CONFLICT (workspace_id, run_id, sequence) DO NOTHING;
             }
         }
 
-        // 4. CAS 推进 Run 状态（best-effort：Run 已被并发推进时 0 行，不视为失败）
+        // 4. CAS 推进 Run 状态（P0-5：严格规则 — 0 行时查询当前状态区分幂等成功与冲突失败）
         int runAffected;
         await using (var runUpdateCommand = connection.CreateCommand())
         {
@@ -417,6 +417,64 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             runAffected = await runUpdateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        // P0-5：严格规则 — Run CAS 0 行时查询当前状态，区分幂等成功与冲突失败。
+        // 旧版本（best-effort）：0 行时仍 COMMIT（RunStateChanged=false），审批已裁决但 Run 状态未推进，
+        // 留下半事务状态（Run 仍处 AwaitingApproval，但审批已 Resolved，外部无法再次 Resolve）。
+        if (runAffected == 0)
+        {
+            byte currentRunStateByte;
+            await using (var runStateCommand = connection.CreateCommand())
+            {
+                runStateCommand.Transaction = transaction;
+                runStateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                runStateCommand.CommandText = $"""
+SELECT state FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+                runStateCommand.Parameters.AddWithValue("workspace_id", workspaceId);
+                runStateCommand.Parameters.AddWithValue("run_id", runId);
+                await using var runReader = await runStateCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await runReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    // Run 不存在 — 回滚（审批裁决 + 事件追加一并撤销）
+                    await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    return new ApprovalResolveResult
+                    {
+                        Succeeded = false,
+                        ApprovalResolved = false,
+                        RunStateChanged = false,
+                        FailureReason = $"Run 不存在：workspace_id={workspaceId}, run_id={runId}。审批裁决已回滚。"
+                    };
+                }
+                currentRunStateByte = runReader.GetByte(0);
+            }
+
+            var currentRunState = (AgentRunState)currentRunStateByte;
+            if (currentRunState == newState)
+            {
+                // 幂等成功：Run 已处于目标状态 → 提交事务（审批裁决 + 事件追加生效）
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return new ApprovalResolveResult
+                {
+                    Succeeded = true,
+                    ApprovalResolved = true,
+                    RunStateChanged = true,
+                    NewRunState = newState
+                };
+            }
+
+            // 状态冲突 — 回滚（审批裁决 + 事件追加一并撤销）
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return new ApprovalResolveResult
+            {
+                Succeeded = false,
+                ApprovalResolved = false,
+                RunStateChanged = false,
+                FailureReason = $"Run 状态 CAS 失败：期望={expectedRunState}，目标={newState}，实际={currentRunState}。审批裁决已回滚。"
+            };
+        }
+
         // 5. COMMIT（审批裁决 + 事件追加 + Run 状态推进原子提交）
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -424,8 +482,8 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
         {
             Succeeded = true,
             ApprovalResolved = true,
-            RunStateChanged = runAffected > 0,
-            NewRunState = runAffected > 0 ? newState : null
+            RunStateChanged = true,
+            NewRunState = newState
         };
     }
 }

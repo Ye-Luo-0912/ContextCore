@@ -60,6 +60,12 @@ public interface IToolHandler
     /// <param name="context">Tool 执行上下文（携带 WorkspaceId/RunId/RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>Tool 调用结果（成功/失败 + 输出/错误）。</returns>
+    /// <summary>
+    /// P0-2: Tool static descriptor. Declares side-effect, approval, recovery policy, etc.
+    /// Executor reads this BEFORE dispatch to decide pre-execution policy.
+    /// </summary>
+    ToolDescriptor Descriptor { get; }
+
     ValueTask<ToolHandlerResult> HandleAsync(ToolExecutionContext context, CancellationToken cancellationToken = default);
 }
 
@@ -79,6 +85,12 @@ public sealed record ToolHandlerResult
 
     /// <summary>Tool 副作用类型（用于 durable 恢复时判断是否可安全重放）。</summary>
     public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.None;
+
+    /// <summary>
+    /// P0-3: External operation ID (e.g. external system transaction/job ID).
+    /// Used for reconciliation when dispatch result is ambiguous (timeout/exception).
+    /// </summary>
+    public string? ExternalOperationId { get; init; }
 }
 
 /// <summary>
@@ -241,7 +253,8 @@ public sealed class RealToolDispatcher : IToolDispatcher
                 Succeeded = false,
                 Result = $"[Error] Tool '{request.ToolName}' 未注册。已注册: {string.Join(", ", _handlers.Keys)}",
                 Duration = TimeSpan.Zero,
-                SideEffect = ToolSideEffect.None
+                // P0-3: Unregistered tool is an error - default to RequiresReconciliation.
+                SideEffect = ToolSideEffect.RequiresReconciliation
             };
         }
 
@@ -271,7 +284,8 @@ public sealed class RealToolDispatcher : IToolDispatcher
                     ? handlerResult.Result ?? string.Empty
                     : handlerResult.Error ?? "Tool 处理失败（无错误信息）。",
                 Duration = sw.Elapsed,
-                SideEffect = handlerResult.SideEffect
+                SideEffect = handlerResult.SideEffect,
+                ExternalOperationId = handlerResult.ExternalOperationId
             };
         }
         catch (OperationCanceledException)
@@ -289,7 +303,8 @@ public sealed class RealToolDispatcher : IToolDispatcher
                 Succeeded = false,
                 Result = $"[Exception] Tool '{request.ToolName}' 处理异常：{ex.Message}",
                 Duration = sw.Elapsed,
-                SideEffect = ToolSideEffect.None
+                // P0-3: Exception means external side-effect state is unknown - default to RequiresReconciliation.
+                SideEffect = ToolSideEffect.RequiresReconciliation
             };
         }
     }

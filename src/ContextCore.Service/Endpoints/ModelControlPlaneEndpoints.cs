@@ -377,7 +377,7 @@ internal static class ModelControlPlaneEndpoints
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
             IConfiguration configuration,
-            [FromServices] IDesiredModelStateStore? desiredStateStore,
+            [FromServices] IClusterModelSlotStore? clusterSlotStore,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -399,9 +399,23 @@ internal static class ModelControlPlaneEndpoints
 
             // 记录 previous active（用于审计），必须在激活前捕获。
             var previousActiveId = activationManager.ActiveDescriptor?.ModelArtifactId;
+            var updatedBy = httpContext.User?.Identity?.Name ?? "system";
 
-            // P15：若调用方提供 StagedHandleId（来自 /warmup 端点），优先从 Staged Handle 原子发布。
-            // 否则走 ActivateAsync（直接加载 + warmup + 发布）。
+            // P0-9：CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
+            // 一次 UPDATE 原子完成"旧 Champion 失效 + 新 Champion 激活"，无需同事务改多条 DesiredModelState。
+            var (casConflict, _) = await TryUpdateClusterSlotAsync(
+                clusterSlotStore, id, descriptor.ContentHash, "Active", updatedBy, ct).ConfigureAwait(false);
+            if (casConflict)
+            {
+                return Results.Conflict(new ContextCoreErrorResponse
+                {
+                    Message = "CAS 更新失败：集群模型槽位已被并发修改，请重试。",
+                    ErrorCode = "CasConflict",
+                    OperationId = "models.activate"
+                });
+            }
+
+            // 本地激活（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
             ModelActivationResult result;
             if (!string.IsNullOrWhiteSpace(request.StagedHandleId))
             {
@@ -419,15 +433,16 @@ internal static class ModelControlPlaneEndpoints
 
             if (!result.Success)
             {
-                return ContextCoreHttpResultMapper.InvalidRequest(
-                    httpContext, string.Empty, "models.activate",
-                    $"激活失败：{result.Error}");
+                // CAS 已成功但本地激活失败：期望状态已更新，Reconciler 将异步收敛。
+                return Results.Accepted(value: new ActivateModelResponse
+                {
+                    ModelArtifactId = id,
+                    Succeeded = false,
+                    PreviousModelArtifactId = previousActiveId,
+                    ActiveModelVersion = descriptor.ModelVersion,
+                    ActiveContentHash = descriptor.ContentHash
+                });
             }
-
-
-            // P0-9：写入期望状态到 HA store（单节点模式下 desiredStateStore 为 null，跳过）。
-            await WriteDesiredStateAsync(desiredStateStore, id, "Active", descriptor.ContentHash,
-                httpContext.User?.Identity?.Name ?? "system", ct).ConfigureAwait(false);
 
             return Results.Ok(new ActivateModelResponse
             {
@@ -453,7 +468,7 @@ internal static class ModelControlPlaneEndpoints
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
             IConfiguration configuration,
-            [FromServices] IDesiredModelStateStore? desiredStateStore,
+            [FromServices] IClusterModelSlotStore? clusterSlotStore,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -467,7 +482,7 @@ internal static class ModelControlPlaneEndpoints
 
             // 回滚语义：把 {id}（应为 previous 模型）重新激活为 active。
             // 当前 ModelActivationManager 未持久化 previous 列表，调用方需明确指定回滚目标。
-            // 这里实现为：调用 ActivateAsync(id) 把指定模型激活，记录审计为 Rollback。
+            // 这里实现为：CAS 更新 slot → ActivateAsync(id) 把指定模型激活，记录审计为 Rollback。
             var descriptor = await registry.GetAsync(id, ct).ConfigureAwait(false);
             if (descriptor is null)
             {
@@ -477,6 +492,22 @@ internal static class ModelControlPlaneEndpoints
             }
 
             var previousActiveId = activationManager.ActiveDescriptor?.ModelArtifactId;
+            var updatedBy = httpContext.User?.Identity?.Name ?? "system";
+
+            // P0-9：CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
+            var (casConflict, _) = await TryUpdateClusterSlotAsync(
+                clusterSlotStore, id, descriptor.ContentHash, "Active", updatedBy, ct).ConfigureAwait(false);
+            if (casConflict)
+            {
+                return Results.Conflict(new ContextCoreErrorResponse
+                {
+                    Message = "CAS 更新失败：集群模型槽位已被并发修改，请重试。",
+                    ErrorCode = "CasConflict",
+                    OperationId = "models.rollback"
+                });
+            }
+
+            // 本地激活（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
             // Perf-8：request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
             var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
             var result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
@@ -486,15 +517,15 @@ internal static class ModelControlPlaneEndpoints
 
             if (!result.Success)
             {
-                return ContextCoreHttpResultMapper.InvalidRequest(
-                    httpContext, string.Empty, "models.rollback",
-                    $"回滚失败：{result.Error}");
+                // CAS 已成功但本地激活失败：期望状态已更新，Reconciler 将异步收敛。
+                return Results.Accepted(value: new RollbackModelResponse
+                {
+                    ModelArtifactId = id,
+                    Succeeded = false,
+                    PreviousModelArtifactId = previousActiveId,
+                    ActiveModelVersion = descriptor.ModelVersion
+                });
             }
-
-
-            // P0-9：写入期望状态到 HA store（回滚也是激活操作）。
-            await WriteDesiredStateAsync(desiredStateStore, id, "Active", descriptor.ContentHash,
-                httpContext.User?.Identity?.Name ?? "system", ct).ConfigureAwait(false);
 
             return Results.Ok(new RollbackModelResponse
             {
@@ -520,7 +551,7 @@ internal static class ModelControlPlaneEndpoints
             [FromServices] IModelActivationManager? activationManager,
             [FromServices] ShadowModelManager? shadowManager,
             IModelActivationAuditStore auditStore,
-            [FromServices] IDesiredModelStateStore? desiredStateStore,
+            [FromServices] IClusterModelSlotStore? clusterSlotStore,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -533,50 +564,77 @@ internal static class ModelControlPlaneEndpoints
             }
 
             var previousActiveId = activationManager?.ActiveDescriptor?.ModelArtifactId;
-            var succeeded = true;
-            string? errorMessage = null;
+            var updatedBy = httpContext.User?.Identity?.Name ?? "system";
+            var isActiveModel = activationManager is not null
+                && string.Equals(activationManager.ActiveDescriptor?.ModelArtifactId, id, StringComparison.Ordinal);
 
-            // 若退役的是当前 active 模型，且 activationManager 已注册：
-            // 当前 ModelActivationManager 未提供 DeactivateAsync；只能通过激活其他模型间接实现退役。
-            // 退役语义在此实现为：若退役模型为当前 active，返回 400（需要先激活其他模型或回滚）；
-            // 若退役的是 shadow challenger，清除 shadow。
-            if (activationManager is not null
-                && string.Equals(activationManager.ActiveDescriptor?.ModelArtifactId, id, StringComparison.Ordinal))
+            // P0-9：若退役的是当前 active 模型，CAS 更新 ClusterModelSlot 为 Inactive（单一真相源）。
+            // Reconciler 将异步停用各节点引擎；本地也立即调用 DeactivateAsync。
+            if (isActiveModel)
             {
-                succeeded = false;
-                errorMessage = "不能直接退役当前 active 模型；请先激活其他模型或回滚到上一个版本。";
+                var (casConflict, _) = await TryUpdateClusterSlotAsync(
+                    clusterSlotStore, null, null, "Inactive", updatedBy, ct).ConfigureAwait(false);
+                if (casConflict)
+                {
+                    return Results.Conflict(new ContextCoreErrorResponse
+                    {
+                        Message = "CAS 更新失败：集群模型槽位已被并发修改，请重试。",
+                        ErrorCode = "CasConflict",
+                        OperationId = "models.retire"
+                    });
+                }
+
+                // 本地停用（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
+                if (activationManager is not null)
+                {
+                    var deactivateResult = await activationManager.DeactivateAsync(ct).ConfigureAwait(false);
+                    await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Retire,
+                        deactivateResult.Success, previousActiveId,
+                        request.Operator, request.Reason, httpContext, errorMessage: deactivateResult.Error).ConfigureAwait(false);
+
+                    if (!deactivateResult.Success)
+                    {
+                        return Results.Accepted(value: new RetireModelResponse
+                        {
+                            ModelArtifactId = id,
+                            Succeeded = false,
+                            Note = $"本地停用失败：{deactivateResult.Error}（期望状态已更新，Reconciler 将重试）"
+                        });
+                    }
+                }
+                else
+                {
+                    await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Retire,
+                        true, previousActiveId,
+                        request.Operator, request.Reason, httpContext, errorMessage: null).ConfigureAwait(false);
+                }
             }
-            else if (shadowManager is not null
-                && string.Equals(shadowManager.ShadowDescriptor?.ModelArtifactId, id, StringComparison.Ordinal))
+            else
             {
-                await shadowManager.ClearShadowAsync().ConfigureAwait(false);
+                // 非活跃模型退役：若为 shadow challenger 则清除 shadow；不影响 ClusterModelSlot。
+                if (shadowManager is not null
+                    && string.Equals(shadowManager.ShadowDescriptor?.ModelArtifactId, id, StringComparison.Ordinal))
+                {
+                    await shadowManager.ClearShadowAsync().ConfigureAwait(false);
+                }
+
+                await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Retire,
+                    true, previousActiveId,
+                    request.Operator, request.Reason, httpContext, errorMessage: null).ConfigureAwait(false);
             }
-
-            await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Retire,
-                succeeded, previousActiveId,
-                request.Operator, request.Reason, httpContext, errorMessage: errorMessage).ConfigureAwait(false);
-
-            if (!succeeded)
-            {
-                return ContextCoreHttpResultMapper.InvalidRequest(
-                    httpContext, string.Empty, "models.retire", errorMessage!);
-            }
-
-
-            // P0-9：写入 Inactive 期望状态到 HA store，各节点 Reconciler 将停用该模型。
-            await WriteDesiredStateAsync(desiredStateStore, id, "Inactive", descriptor.ContentHash,
-                httpContext.User?.Identity?.Name ?? "system", ct).ConfigureAwait(false);
 
             return Results.Ok(new RetireModelResponse
             {
                 ModelArtifactId = id,
                 Succeeded = true,
-                Note = "模型已退役；如该模型为 Challenger，已清除 shadow 引擎。"
+                Note = isActiveModel
+                    ? "active 模型已退役；集群期望状态已更新为 Inactive，各节点 Reconciler 将停用。"
+                    : "模型已退役；如该模型为 Challenger，已清除 shadow 引擎。"
             });
         })
         .WithName("RetireModel")
         .RequireWorkspacePermission(WorkspacePermission.ModelRegister)
-        .WithSummary("退役模型（不允许直接退役当前 active 模型）")
+        .WithSummary("退役模型（active 模型退役将 CAS 更新 slot 为 Inactive 并停用）")
         .Produces<RetireModelResponse>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
@@ -836,35 +894,30 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
-    /// P0-9：写入期望模型状态到 IDesiredModelStateStore（HA 真相源）。
-    /// Generation 单调递增（CAS）：读取当前 state.Generation 并 +1，由 store 的 CAS 保证不回滚。
-    /// store 为 null（单节点模式）时跳过，不影响本地激活。
+    /// P0-9：CAS 更新 ClusterModelSlot（单一 HA 真相源）。
+    /// 仅当 store 非空时执行 CAS：GetOrCreate("primary") → TryUpdate(expectedRevision)。
+    /// 返回 (Conflicted, UpdatedSlot)：
+    ///   - Conflicted=true 表示 CAS 失败（并发修改，Revision 不匹配），调用方应返回 409。
+    ///   - Conflicted=false 且 UpdatedSlot 非空表示 CAS 成功。
+    ///   - Conflicted=false 且 UpdatedSlot 为 null 表示 store 为 null（单节点模式），跳过 CAS。
     /// </summary>
-    private static async Task WriteDesiredStateAsync(
-        IDesiredModelStateStore? desiredStateStore,
-        string modelId,
-        string desiredState,
-        string contentHash,
+    private static async Task<(bool Conflicted, ClusterModelSlot? UpdatedSlot)> TryUpdateClusterSlotAsync(
+        IClusterModelSlotStore? clusterSlotStore,
+        string? activeModelArtifactId,
+        string? contentHash,
+        string desiredStatus,
         string updatedBy,
         CancellationToken ct)
     {
-        if (desiredStateStore is null)
+        if (clusterSlotStore is null)
         {
-            return; // 单节点模式：无 HA store，跳过
+            return (false, null); // 单节点模式：无 HA store，跳过 CAS
         }
 
-        var current = await desiredStateStore.GetAsync(modelId, ct).ConfigureAwait(false);
-        var newGeneration = (current?.Generation ?? 0) + 1;
-        var newState = new DesiredModelState
-        {
-            ModelId = modelId,
-            DesiredState = desiredState,
-            Generation = newGeneration,
-            ContentHash = contentHash,
-            UpdatedAt = DateTimeOffset.UtcNow,
-            UpdatedBy = updatedBy
-        };
-        await desiredStateStore.SetAsync(newState, ct).ConfigureAwait(false);
+        var slot = await clusterSlotStore.GetOrCreateAsync("primary", ct).ConfigureAwait(false);
+        var updated = await clusterSlotStore.TryUpdateAsync(
+            "primary", slot.Revision, activeModelArtifactId, contentHash, desiredStatus, updatedBy, ct).ConfigureAwait(false);
+        return (updated is null, updated);
     }
 
     /// <summary>

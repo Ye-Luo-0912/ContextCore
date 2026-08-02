@@ -22,6 +22,7 @@ using ContextCore.Runtime;
 using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
+using ContextCore.Storage.InMemory.Stores;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -747,6 +748,11 @@ internal static class CoreExtensions
 			services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
 		}
 		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
+
+		// P0-9：IClusterModelSlotStore 默认实现（InMemory）—— 单一 Champion 真相源。
+		// TryAddSingleton：不覆盖 Postgres / FileSystem / InMemory provider 已注册的持久化实现。
+		// 供 ModelStateReconcilerWorker 构造注入，以及控制面端点 CAS 更新使用。
+		services.TryAddSingleton<IClusterModelSlotStore, InMemoryClusterModelSlotStore>();
 
 		// R29 WP-A-3：ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
 		// 不抛异常：返回结构化 CalibrationValidationResult（Error / Warning / Info），

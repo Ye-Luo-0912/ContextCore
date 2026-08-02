@@ -40,6 +40,18 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </remarks>
 public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistentToolDispatchJournal
 {
+    /// <summary>
+    /// P0-1→逻辑状态顺序映射。DispatchingIntent=4 的数值大于 Dispatched=1，
+    /// 破坏了基于数值大小的状态顺序判断，因此使用此字典按逻辑顺序判断前向推进。
+    /// </summary>
+    private static readonly Dictionary<ToolDispatchState, int> s_logicalOrder = new()
+    {
+        { ToolDispatchState.Prepared, 0 },
+        { ToolDispatchState.DispatchingIntent, 1 },
+        { ToolDispatchState.Dispatched, 2 },
+        { ToolDispatchState.Committed, 3 },
+        { ToolDispatchState.ResultDelivered, 4 }
+    };
     /// <summary>初始化 Postgres 持久化 Tool Dispatch Journal。</summary>
     public PostgresToolDispatchJournal(
         PostgresConnectionFactory connectionFactory,
@@ -169,10 +181,90 @@ LIMIT 1;
         {
             CurrentState = existingState,
             ShouldDispatch = existingState == ToolDispatchState.Prepared,
-            NeedsReconciliation = existingState == ToolDispatchState.Dispatched,
+            NeedsReconciliation = existingState == ToolDispatchState.Dispatched || existingState == ToolDispatchState.DispatchingIntent,
             ExternalOperationId = existingExternalOperationId,
             CachedResult = null // Postgres 结果缓存由调用方管理
         };
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-1→在外部 Tool 调用发起前持久化 DispatchingIntent 状态，创建 durable 边界。
+    /// 与 MarkDispatchedAsync 不同，本方法在状态已超过 DispatchingIntent 时抛异常（而非幂等成功），
+    /// 因为继续 Dispatch 会导致外部副作用重复执行。
+    /// </remarks>
+    public async ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        // 1. CAS UPDATE: Prepared → DispatchingIntent
+        await using (var updateCommand = connection.CreateCommand())
+        {
+            updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            updateCommand.CommandText = $"""
+UPDATE {Table("tool_dispatch_journal_entries")}
+SET state = @target_state, updated_at = @updated_at
+WHERE request_id = @request_id AND state = @expected_state;
+""";
+            updateCommand.Parameters.AddWithValue("request_id", requestId);
+            updateCommand.Parameters.AddWithValue("expected_state", (byte)ToolDispatchState.Prepared);
+            updateCommand.Parameters.AddWithValue("target_state", (byte)ToolDispatchState.DispatchingIntent);
+            updateCommand.Parameters.AddWithValue("updated_at", now);
+
+            var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            if (affected > 0)
+            {
+                return; // 成功推进（Applied）
+            }
+        }
+
+        // 2. 0 行受影响：读取当前行状态
+        await using var selectCommand = connection.CreateCommand();
+        selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+        selectCommand.CommandText = $"""
+SELECT state FROM {Table("tool_dispatch_journal_entries")}
+WHERE request_id = @request_id
+LIMIT 1;
+""";
+        selectCommand.Parameters.AddWithValue("request_id", requestId);
+        await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                $"Tool dispatch journal 缺失前驱记录（MissingPredecessor）：request_id={requestId}，" +
+                $"目标状态=DispatchingIntent（期望前驱=Prepared）。" +
+                $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。");
+        }
+
+        var currentState = (ToolDispatchState)reader.GetByte(0);
+
+        // state == target → AlreadyApplied（幂等，不报错）
+        if (currentState == ToolDispatchState.DispatchingIntent)
+        {
+            return;
+        }
+
+        // state > DispatchingIntent (logical) → AlreadyAdvanced（抛异常，阻止重复 Dispatch）
+        if (s_logicalOrder[currentState] > s_logicalOrder[ToolDispatchState.DispatchingIntent])
+        {
+            throw new InvalidOperationException(
+                $"Tool dispatch state 已超过 DispatchingIntent（AlreadyAdvanced）：request_id={requestId}，" +
+                $"当前={currentState}，目标=DispatchingIntent。" +
+                $"状态已被并发推进，外部调用可能已开始，禁止重复 Dispatch。");
+        }
+
+        // state < Prepared → InvalidTransition（跨级跳跃，禁止）
+        throw new InvalidOperationException(
+            $"Tool dispatch state 跨级跳跃（InvalidTransition）：request_id={requestId}，" +
+            $"当前={currentState}，期望前驱=Prepared，目标=DispatchingIntent。" +
+            $"状态机只能逐级向前推进：Prepared → DispatchingIntent → Dispatched → Committed → ResultDelivered。");
     }
 
     /// <inheritdoc />
@@ -185,7 +277,7 @@ LIMIT 1;
 
         await TransitionStateAsync(
             requestId,
-            expectedState: ToolDispatchState.Prepared,
+            expectedStates: new[] { ToolDispatchState.Prepared, ToolDispatchState.DispatchingIntent },
             targetState: ToolDispatchState.Dispatched,
             externalOperationId: externalOperationId,
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -201,7 +293,7 @@ LIMIT 1;
 
         await TransitionStateAsync(
             requestId,
-            expectedState: ToolDispatchState.Dispatched,
+            expectedStates: new[] { ToolDispatchState.Dispatched },
             targetState: ToolDispatchState.Committed,
             externalOperationId: null,
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -267,7 +359,7 @@ LIMIT 1;
 
                 var currentState = (ToolDispatchState)reader.GetByte(0);
                 // state == target 或 state > target → 幂等成功（AlreadyApplied/AlreadyAdvanced），继续 UPSERT 结果
-                if ((int)currentState < (int)ToolDispatchState.Dispatched)
+                if (s_logicalOrder[currentState] < s_logicalOrder[ToolDispatchState.Dispatched])
                 {
                     throw new InvalidOperationException(
                         $"Tool dispatch state 跨级跳跃（InvalidTransition）：request_id={requestId}，" +
@@ -285,13 +377,16 @@ LIMIT 1;
                 resultCmd.CommandTimeout = Options.CommandTimeoutSeconds;
                 resultCmd.CommandText = $"""
 INSERT INTO {Table("tool_dispatch_results")} (
-    tool_call_id, request_id, idempotency_key, side_effect, external_operation_id,
-    result, succeeded, error, duration_ms, created_at)
+    tool_call_id, request_id, workspace_id, run_id, invocation_id, idempotency_key,
+    side_effect, external_operation_id, result, succeeded, error, duration_ms, created_at)
 VALUES (
-    @tool_call_id, @request_id, @idempotency_key, @side_effect, @external_operation_id,
-    @result, @succeeded, @error, @duration_ms, @created_at)
-ON CONFLICT (tool_call_id) DO UPDATE SET
-    request_id = EXCLUDED.request_id,
+    @tool_call_id, @request_id, @workspace_id, @run_id, @invocation_id, @idempotency_key,
+    @side_effect, @external_operation_id, @result, @succeeded, @error, @duration_ms, @created_at)
+ON CONFLICT (request_id) DO UPDATE SET
+    tool_call_id = EXCLUDED.tool_call_id,
+    workspace_id = EXCLUDED.workspace_id,
+    run_id = EXCLUDED.run_id,
+    invocation_id = EXCLUDED.invocation_id,
     idempotency_key = EXCLUDED.idempotency_key,
     side_effect = EXCLUDED.side_effect,
     external_operation_id = EXCLUDED.external_operation_id,
@@ -303,6 +398,9 @@ ON CONFLICT (tool_call_id) DO UPDATE SET
 """;
                 resultCmd.Parameters.AddWithValue("tool_call_id", result.ToolCallId);
                 resultCmd.Parameters.AddWithValue("request_id", result.RequestId);
+                resultCmd.Parameters.AddWithValue("workspace_id", (object?)result.WorkspaceId ?? DBNull.Value);
+                resultCmd.Parameters.AddWithValue("run_id", (object?)result.RunId ?? DBNull.Value);
+                resultCmd.Parameters.AddWithValue("invocation_id", (object?)result.InvocationId ?? DBNull.Value);
                 resultCmd.Parameters.AddWithValue("idempotency_key", (object?)result.IdempotencyKey ?? DBNull.Value);
                 resultCmd.Parameters.AddWithValue("side_effect", result.SideEffect.ToString());
                 resultCmd.Parameters.AddWithValue("external_operation_id", (object?)result.ExternalOperationId ?? DBNull.Value);
@@ -333,7 +431,7 @@ ON CONFLICT (tool_call_id) DO UPDATE SET
 
         await TransitionStateAsync(
             requestId,
-            expectedState: ToolDispatchState.Committed,
+            expectedStates: new[] { ToolDispatchState.Committed },
             targetState: ToolDispatchState.ResultDelivered,
             externalOperationId: null,
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -394,7 +492,7 @@ LIMIT 1;
     /// </summary>
     private async Task TransitionStateAsync(
         string requestId,
-        ToolDispatchState expectedState,
+        IReadOnlyList<ToolDispatchState> expectedStates,
         ToolDispatchState targetState,
         string? externalOperationId,
         CancellationToken cancellationToken)
@@ -410,13 +508,18 @@ LIMIT 1;
             var setExternalOp = targetState == ToolDispatchState.Dispatched
                 ? ", external_operation_id = COALESCE(@external_operation_id, external_operation_id)"
                 : string.Empty;
+            var expectedParams = expectedStates.Select((s, i) => $"@expected_{i}").ToArray();
+            var inClause = string.Join(", ", expectedParams);
             updateCommand.CommandText = $"""
 UPDATE {Table("tool_dispatch_journal_entries")}
 SET state = @target_state{setExternalOp}, updated_at = @updated_at
-WHERE request_id = @request_id AND state = @expected_state;
+WHERE request_id = @request_id AND state IN ({inClause});
 """;
             updateCommand.Parameters.AddWithValue("request_id", requestId);
-            updateCommand.Parameters.AddWithValue("expected_state", (byte)expectedState);
+            for (int i = 0; i < expectedStates.Count; i++)
+            {
+                updateCommand.Parameters.AddWithValue($"expected_{i}", (byte)expectedStates[i]);
+            }
             updateCommand.Parameters.AddWithValue("target_state", (byte)targetState);
             updateCommand.Parameters.AddWithValue("updated_at", now);
             if (targetState == ToolDispatchState.Dispatched)
@@ -446,7 +549,7 @@ LIMIT 1;
             // 行不存在 → 审计链断裂（MissingPredecessor）
             throw new InvalidOperationException(
                 $"Tool dispatch journal 缺失前驱记录（MissingPredecessor）：request_id={requestId}，" +
-                $"目标状态={targetState}（期望前驱={expectedState}）。" +
+                $"目标状态={targetState}（期望前驱={string.Join("/", expectedStates)}）。" +
                 $"必须先调用 PrepareAsync 写入 Prepared 条目，再推进状态机。" +
                 $"缺失记录意味着审计链不完整，可能丢失了 Prepare 步骤或数据库状态被外部篡改。");
         }
@@ -459,8 +562,8 @@ LIMIT 1;
             return;
         }
 
-        // state > target → AlreadyAdvanced（幂等，不报错）
-        if ((int)currentState > (int)targetState)
+        // state > target (logical) → AlreadyAdvanced（幂等，不报错）
+        if (s_logicalOrder[currentState] > s_logicalOrder[targetState])
         {
             return;
         }
@@ -468,8 +571,8 @@ LIMIT 1;
         // state < expected → InvalidTransition（跨级跳跃，禁止）
         throw new InvalidOperationException(
             $"Tool dispatch state 跨级跳跃（InvalidTransition）：request_id={requestId}，" +
-            $"当前={currentState}，期望前驱={expectedState}，目标={targetState}。" +
-            $"状态机只能逐级向前推进：Prepared → Dispatched → Committed → ResultDelivered，" +
+            $"当前={currentState}，期望前驱={string.Join("/", expectedStates)}，目标={targetState}。" +
+            $"状态机只能逐级向前推进：Prepared → DispatchingIntent → Dispatched → Committed → ResultDelivered，" +
             $"不允许跳过中间状态（如 Prepared → Committed）。");
     }
 }

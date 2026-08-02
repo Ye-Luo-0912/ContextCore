@@ -177,6 +177,10 @@ public sealed class ModelActivationManager : IModelActivationManager
     private readonly IFeatureRegistry _featureRegistry;
     private readonly IOnnxInferenceSessionFactory _sessionFactory;
     private readonly IFallbackInferenceEngine _fallbackEngine;
+
+    // P0-8：fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。
+    // 在构造时一次性创建并复用，避免每次 AcquireFallbackEngineLease 分配。
+    private readonly FallbackEngineLease _fallbackLease;
     private readonly ICalibrationService? _calibrationService;
 
     // P1：原子 Active Handle — 单个 volatile 字段同时持有 engine + counter + descriptor + generation。
@@ -246,6 +250,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         _featureRegistry = featureRegistry;
         _sessionFactory = sessionFactory;
         _fallbackEngine = fallbackEngine;
+        _fallbackLease = new FallbackEngineLease(fallbackEngine);
         _calibrationService = calibrationService;
 
         // P1-8：启动 TTL 定时器，周期性清理过期 Staged Handle。
@@ -287,6 +292,16 @@ public sealed class ModelActivationManager : IModelActivationManager
         handle.Counter.Increment();
         return new EngineLease(handle);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-8：返回 fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。
+    /// fallback 引擎由 DI 容器管理生命周期，无需引用计数；调用方可任意次数 Dispose
+    /// （<see cref="FallbackEngineLease.Dispose"/> 幂等安全）。
+    /// 用于 <see cref="InferenceScheduler"/> 入队时无 Active Engine 的场景，
+    /// 固定请求在 fallback 引擎上执行，避免排队期间模型激活后 cross-generation execution。
+    /// </remarks>
+    public IInferenceEngineLease AcquireFallbackEngineLease() => _fallbackLease;
 
     /// <inheritdoc />
     public string ModelVersion => (_activeHandle?.Engine ?? _fallbackEngine).ModelVersion;
@@ -1242,6 +1257,28 @@ public sealed class ModelActivationManager : IModelActivationManager
                 return;
             }
             _counter.Decrement();
+        }
+    }
+
+    /// <summary>
+    /// P0-8：fallback 引擎的永久租约 —— Engine 指向 fallback 引擎，Generation=0，
+    /// Dispose 为 no-op（fallback 由 DI 容器管理生命周期，无需引用计数）。
+    /// 幂等：多次 Dispose 安全。
+    /// </summary>
+    private sealed class FallbackEngineLease : IInferenceEngineLease
+    {
+        public FallbackEngineLease(IBatchInferenceEngine fallbackEngine)
+        {
+            Engine = fallbackEngine;
+        }
+
+        public IBatchInferenceEngine Engine { get; }
+
+        public long Generation => 0L;
+
+        public void Dispose()
+        {
+            // no-op：fallback 引擎由 DI 容器管理生命周期。
         }
     }
 }

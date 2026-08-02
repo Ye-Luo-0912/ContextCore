@@ -1529,6 +1529,16 @@ public interface IAgentRunEventNotifier
     void Notify(string workspaceId, string runId, long lastSequence);
 
     /// <summary>
+    /// P0-10：注册订阅句柄（分离订阅注册与事件等待）。
+    /// 让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="fromSequence">订阅起始 sequence（仅推送 &gt;= 此值的 sequence）。</param>
+    /// <returns>订阅句柄（<see cref="IAsyncEnumerable{T}"/> + <see cref="IDisposable"/>）；调用方应在断开时 Dispose。</returns>
+    IAgentRunEventSubscription RegisterSubscription(string workspaceId, string runId, long fromSequence);
+
+    /// <summary>
     /// 订阅指定 Run 从 <paramref name="fromSequence"/> 起的 sequence 推送流。
     /// </summary>
     /// <param name="workspaceId">Workspace ID。</param>
@@ -1537,6 +1547,15 @@ public interface IAgentRunEventNotifier
     /// <param name="cancellationToken">取消令牌（订阅者断开时取消）。</param>
     /// <returns>异步可枚举的 sequence 流；无事件时按超时结束迭代以回退轮询。</returns>
     IAsyncEnumerable<long> SubscribeAsync(string workspaceId, string runId, long fromSequence, CancellationToken ct);
+}
+
+/// <summary>
+/// P0-10：Agent Run 事件订阅句柄。分离订阅注册与事件等待，
+/// 让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。
+/// 实现 <see cref="IAsyncEnumerable{T}"/> 以枚举推送的 sequence，<see cref="IDisposable"/> 以在断开时注销。
+/// </summary>
+public interface IAgentRunEventSubscription : IAsyncEnumerable<long>, IDisposable
+{
 }
 
 // ── Durable Tool Executor（子问题 5）────────────────────────────────────────
@@ -1685,6 +1704,21 @@ public interface IAgentRunLease
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>true = 存在未过期租约；false = 无租约或已过期。</returns>
     ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-7: Atomically mark a Run as Failed if it has no active lease and its deadline has passed.
+    /// This eliminates the check-then-act race between HasActiveLeaseAsync and TransitionStateAsync.
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Agent Run ID。</param>
+    /// <param name="expectedCurrentState">期望的当前状态（CAS 前件）。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>受影响的行数（1 = 成功标记为 Failed；0 = 存在活跃租约或状态不匹配）。</returns>
+    ValueTask<int> MarkFailedIfLeaseExpiredAsync(
+        string workspaceId,
+        string runId,
+        AgentRunState expectedCurrentState,
+        CancellationToken ct = default);
 }
 
 /// <summary>

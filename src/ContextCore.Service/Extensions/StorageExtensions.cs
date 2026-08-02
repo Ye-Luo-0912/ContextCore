@@ -436,6 +436,11 @@ internal static class StorageExtensions
 		services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<InMemoryModelArtifactRegistry>());
 		services.AddSingleton<InMemoryModelActivationAuditStore>();
 		services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<InMemoryModelActivationAuditStore>());
+
+		// P0-9：Cluster Model Slot Store（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// 单行 slot 通过 CAS（Revision）保证原子模型切换，替代 per-model DesiredModelState。
+		services.AddSingleton<InMemoryClusterModelSlotStore>();
+		services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<InMemoryClusterModelSlotStore>());
 	}
 
 	private static void RegisterScopedRelationGovernancePostgresSupport(IServiceCollection services, StorageOptions options)
@@ -525,6 +530,11 @@ internal static class StorageExtensions
 		services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<InMemoryModelArtifactRegistry>());
 		services.AddSingleton<InMemoryModelActivationAuditStore>();
 		services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<InMemoryModelActivationAuditStore>());
+
+		// P0-9：Cluster Model Slot Store（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// 单行 slot 通过 CAS（Revision）保证原子模型切换，替代 per-model DesiredModelState。
+		services.AddSingleton<InMemoryClusterModelSlotStore>();
+		services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<InMemoryClusterModelSlotStore>());
 	}
 }
 

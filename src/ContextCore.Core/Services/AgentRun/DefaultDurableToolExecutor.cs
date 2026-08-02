@@ -199,6 +199,22 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             // 4d. ShouldDispatch=true（Journal 不存在或 Prepared）→ 继续 Dispatch
         }
 
+        // P0-1: Mark dispatching intent BEFORE external call (durable boundary for exactly-once)
+        // 若进程在此之后崩溃，恢复时知道外部调用可能已开始，需对账而非盲目重放。
+        if (_dispatchJournal is not null)
+        {
+            try
+            {
+                await _dispatchJournal.MarkDispatchingIntentAsync(requestId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // 状态已被并发推进（AlreadyAdvanced）→ 返回对账结果，不重新 Dispatch
+                stopwatch.Stop();
+                return BuildReconciliationResult(requestId, idempotencyKey, null, stopwatch.Elapsed);
+            }
+        }
+
         // 5. Dispatch（携带 RequestId + P0-4 执行上下文：WorkspaceId/RunId/IdempotencyKey）
         // P0-4：将 WorkspaceId/RunId/IdempotencyKey 透传到 ToolDispatchRequest，
         // 由 RealToolDispatcher 构造 ToolExecutionContext 传递给 IToolHandler。
@@ -266,10 +282,16 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         if (dispatchResult.SideEffect != ToolSideEffect.Unknown)
         {
             // P0-3：构造 DurableToolResult，用 MarkCommittedWithResultAsync 原子提交 state + result
+            // P0-4：填充 WorkspaceId / RunId / InvocationId，写入 tool_dispatch_results 的隔离键列，
+            //       配合 UNIQUE(workspace_id, run_id, invocation_id) 约束防止另一 Run 覆盖已有 Tool Result。
+            //       InvocationId 取 requestId（代码层 RequestId 即稳定调用身份 InvocationId）。
             var durableResult = new DurableToolResult
             {
                 ToolCallId = toolCallId,
                 RequestId = requestId,
+                WorkspaceId = workspaceId,
+                RunId = runId,
+                InvocationId = requestId,
                 IdempotencyKey = idempotencyKey,
                 SideEffect = dispatchResult.SideEffect,
                 ExternalOperationId = dispatchResult.ExternalOperationId,

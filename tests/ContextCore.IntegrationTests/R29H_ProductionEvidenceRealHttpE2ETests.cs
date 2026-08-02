@@ -398,6 +398,16 @@ public sealed class R29H_ProductionEvidenceRealHttpE2ETests : IAsyncDisposable
         private int _invocationCount;
 
         public string ToolName { get; }
+        public ToolDescriptor Descriptor => new ToolDescriptor
+        {
+            Name = ToolName,
+            DeclaredSideEffect = ToolSideEffect.None,
+            RequiresApproval = false,
+            RequiresIdempotencyKey = false,
+            RequiresLeaseFence = false,
+            RecoveryStrategy = ToolRecoveryStrategy.SafeReplay,
+            MaximumExecutionTime = TimeSpan.FromMinutes(5)
+        };
         public string? Description => $"Test tool: {ToolName}";
         public string? ParametersJsonSchema => """{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""";
         public int InvocationCount => Volatile.Read(ref _invocationCount);

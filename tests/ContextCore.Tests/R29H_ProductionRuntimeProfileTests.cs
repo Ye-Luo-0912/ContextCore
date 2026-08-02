@@ -98,8 +98,8 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
     /// <summary>
     /// ProductionHA profile 下 WorkerRegistry 应包含 Durable Transport 专属 Worker：
-    /// DurableTransportInstructionPumpService / ResultOutboxReplayService /
-    /// LeaseReaperService / PendingCountMetricsService。
+    /// ResultOutboxReplayService / LeaseReaperService / PendingCountMetricsService。
+    /// P0-6：DurableTransportInstructionPumpService 已退役（执行平面收敛到 AgentKernelHost/AgentRunActor）。
     /// </summary>
     [TestMethod]
     public void ProductionHA_Profile_WorkerRegistry_ContainsDurableTransportWorkers()
@@ -120,9 +120,9 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var registry = provider.GetRequiredService<ProductionRuntimeWorkerRegistry>();
         var workerNames = registry.WorkerTypeNames.ToList();
 
-        // 断言：包含 Durable Transport 专属 Worker
-        CollectionAssert.Contains(workerNames, nameof(DurableTransportInstructionPumpService),
-            "ProductionHA profile 应注册 DurableTransportInstructionPumpService。");
+        // 断言：包含 Durable Transport 专属 Worker（P0-6：Pump 已退役，不再注册）
+        CollectionAssert.DoesNotContain(workerNames, nameof(DurableTransportInstructionPumpService),
+            "P0-6：ProductionHA profile 不应注册 DurableTransportInstructionPumpService（执行平面已收敛）。");
         CollectionAssert.Contains(workerNames, nameof(ResultOutboxReplayService),
             "ProductionHA profile 应注册 ResultOutboxReplayService。");
         CollectionAssert.Contains(workerNames, nameof(LeaseReaperService),

@@ -200,6 +200,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresDesiredModelStateStore>();
         services.AddSingleton<IDesiredModelStateStore>(sp => sp.GetRequiredService<PostgresDesiredModelStateStore>());
 
+        // P0-9：Cluster Model Slot Store 持久化（PostgreSQL）—— 单一 Champion 真相源。
+        // 单行表 cluster_model_slots 通过 CAS（Revision）保证原子模型切换，替代 per-model DesiredModelState。
+        // 控制面端点（activate/rollback/retire）通过 CAS 更新此 slot，Reconciler 从此 slot 同步期望状态。
+        services.AddSingleton<PostgresClusterModelSlotStore>();
+        services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<PostgresClusterModelSlotStore>());
+
         // P0-6：Model Activation Audit 持久化（PostgreSQL）。
         // 替代 FileSystem / InMemory provider 下的 InMemory 默认实现，让 HA 场景下
         // 模型生命周期审计记录（Activate / Rollback / Retire / Shadow 等）可跨进程持久化与查询。

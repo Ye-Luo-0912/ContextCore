@@ -38,7 +38,10 @@ public static class DurableTransportServiceCollectionExtensions
             services.Configure(configure);
         }
 
-        services.AddHostedService<DurableTransportInstructionPumpService>();
+        // P0-6：退役 DurableTransportInstructionPumpService 的 hosted service 注册。
+        // 该 Pump 把 PostgreSQL durable inbox 中的指令提交给旧 IAgentKernel inbox，
+        // 与新的 AgentRunStore → AgentKernelHost → AgentRunActor 执行平面冲突。
+        // 移除注册以收敛执行平面；Pump 类型本身保留以备兼容参考。
         services.AddHostedService<ResultOutboxReplayService>();
         services.AddHostedService<LeaseReaperService>();
         services.AddHostedService<PendingCountMetricsService>();

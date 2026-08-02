@@ -110,8 +110,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
     /// P0-3：v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
     ///   让 HA 崩溃恢复时已 Committed/ResultDelivered 的 tool 结果可跨进程读取，防止外部副作用结果丢失）。
+    /// P0-4：v48 → v49，修复 Durable Tool Result 主键结构：tool_dispatch_results 主键由 tool_call_id
+    ///   （模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复）改为 request_id（稳定调用身份哈希），
+    ///   追加 workspace_id / run_id / invocation_id 列与 UNIQUE(workspace_id, run_id, invocation_id) partial 约束，
+    ///   防止另一 Run 覆盖已有 Tool Result；tool_call_id / idempotency_key 改为 partial index。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v48";
+    public const string SchemaVersion = "cc-schema-v50";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -217,7 +221,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "agent_run_approvals",
         "agent_run_leases",
         // R29 WP-A-2：Desired Model State Store 持久化（HA 多节点模型期望状态同步）
-        "desired_model_states"
+        "desired_model_states",
+        // P0-9: Cluster Model Slot (single champion source of truth, single-row table + CAS on revision)
+        "cluster_model_slots"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -356,8 +362,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R29 WP-B-1：Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
         ("tool_dispatch_journal_entries", "state"),
         ("tool_dispatch_journal_entries", "idempotency"),
-        // P0-3：Durable Tool Result 缓存索引（按 request_id 查同源调用结果）
-        ("tool_dispatch_results", "request"),
+        // P0-4：Durable Tool Result 索引（request_id 为 PK 自动索引；以下为辅助索引）
+        ("tool_dispatch_results", "ws_run_invocation"),
+        ("tool_dispatch_results", "tool_call_id"),
+        ("tool_dispatch_results", "idempotency_key"),
         // R29 WP-B-2 / P0-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史 + 租约模型 pending/expired）
         ("kernel_result_outbox", "state"),
         ("kernel_result_outbox", "instruction"),
@@ -519,6 +527,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var toolDispatchJournalEntries = Infrastructure.PostgresNames.Table(options, "tool_dispatch_journal_entries");
         // P0-3：Durable Tool Result 缓存持久化表
         var toolDispatchResults = Infrastructure.PostgresNames.Table(options, "tool_dispatch_results");
+        // P0-4：tool_dispatch_results 主键约束名（Postgres 默认 {table}_pkey），用于 DROP CONSTRAINT
+        var toolDispatchResultsPkey = $"{options.TablePrefix}tool_dispatch_results_pkey";
         // R29 WP-B-2：Kernel Result Outbox 持久化表
         var kernelResultOutbox = Infrastructure.PostgresNames.Table(options, "kernel_result_outbox");
         // R29 WP-B-4：Durable Transport 持久化表（inbox/outbox）
@@ -547,6 +557,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var agentRunApprovals = Infrastructure.PostgresNames.Table(options, "agent_run_approvals");
         var agentRunLeases = Infrastructure.PostgresNames.Table(options, "agent_run_leases");
         var desiredModelStates = Infrastructure.PostgresNames.Table(options, "desired_model_states");
+        // P0-9: Cluster Model Slot (single champion source of truth)
+        var clusterModelSlots = Infrastructure.PostgresNames.Table(options, "cluster_model_slots");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1796,7 +1808,34 @@ CREATE TABLE IF NOT EXISTS {toolDispatchResults} (
     PRIMARY KEY (tool_call_id)
 );
 
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "request")} ON {toolDispatchResults} (request_id);
+-- P0-4：修复 Durable Tool Result 主键结构
+-- 原主键为 tool_call_id（模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复），
+-- 改为 request_id（稳定调用身份哈希），并添加 workspace_id/run_id/invocation_id 列与 UNIQUE 约束。
+-- 1. 添加新列（幂等）
+ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS workspace_id text;
+ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS run_id text;
+ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS invocation_id text;
+
+-- 2. 反向填充：request_id 为 SHA256 hash 无法反解 workspace_id/run_id，对已有数据设为空字符串
+--    （新数据由应用层 DefaultDurableToolExecutor 填充）；invocation_id 设为空字符串使其不参与 UNIQUE 约束
+UPDATE {toolDispatchResults} SET workspace_id = COALESCE(workspace_id, '') WHERE workspace_id IS NULL;
+UPDATE {toolDispatchResults} SET run_id = COALESCE(run_id, '') WHERE run_id IS NULL;
+UPDATE {toolDispatchResults} SET invocation_id = COALESCE(invocation_id, '') WHERE invocation_id IS NULL;
+
+-- 3. 删除旧主键约束与旧 request 索引（request_id 将成为新主键，自动建索引，旧索引冗余）
+ALTER TABLE {toolDispatchResults} DROP CONSTRAINT IF EXISTS {toolDispatchResultsPkey};
+DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "request")};
+
+-- 4. 设置新主键：request_id（稳定调用身份，确保跨 Run/Provider 不覆盖）
+ALTER TABLE {toolDispatchResults} ADD PRIMARY KEY (request_id);
+
+-- 5. UNIQUE 约束：(workspace_id, run_id, invocation_id) — Workspace 隔离键，防止另一 Run 覆盖已有 Tool Result
+--    partial index：仅 invocation_id != '' 时参与唯一约束（兼容旧数据空字符串 + 未提供 invocation 的调用）
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "ws_run_invocation")} ON {toolDispatchResults} (workspace_id, run_id, invocation_id) WHERE invocation_id != '';
+
+-- 6. 辅助索引：tool_call_id（兼容旧 GetAsync 查询路径）+ idempotency_key（外部系统对账）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "tool_call_id")} ON {toolDispatchResults} (tool_call_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "idempotency_key")} ON {toolDispatchResults} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- R29 WP-B-2：Kernel Result Outbox 持久化表（崩溃恢复结果重放）
 -- kernel_result_outbox: outbox_id 主键 — 每个未投递的 AgentKernelResult 一条行
@@ -2431,6 +2470,19 @@ CREATE TABLE IF NOT EXISTS {desiredModelStates} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "desired_model_states", "updated")} ON {desiredModelStates} (updated_at DESC);
+
+-- P0-9: Cluster Model Slot (single champion source of truth)
+-- Single-row table per slot_name (e.g., "primary"). CAS on revision atomically switches ActiveModelArtifactId.
+-- Replaces desired_model_states multi-row Active/Inactive model: one UPDATE invalidates old champion + activates new.
+CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
+    slot_name text PRIMARY KEY DEFAULT 'primary',
+    active_model_artifact_id text,
+    content_hash text,
+    revision bigint NOT NULL DEFAULT 0,
+    desired_status text NOT NULL DEFAULT 'Inactive',
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    updated_by text
+);
 """;
     }
 

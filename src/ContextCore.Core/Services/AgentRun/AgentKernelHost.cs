@@ -82,6 +82,14 @@ public sealed class AgentKernelHost : IAsyncDisposable
         _runLease = runLease;
         _options = options ?? new AgentHostOptions();
         _logger = logger;
+
+        // P0-7：校验 LeaseDuration >= 3 × HeartbeatInterval，确保续租窗口足够，
+        // 否则 Actor 可能在租约过期后仍执行副作用（本地 watchdog 来不及触发）。
+        if (_options.LeaseEnabled && _options.LeaseDuration < TimeSpan.FromTicks(_options.HeartbeatInterval.Ticks * 3))
+        {
+            throw new InvalidOperationException("LeaseDuration 必须 >= 3 × HeartbeatInterval，否则 Actor 可能在租约过期后仍执行。");
+        }
+
         var globalMax = _options.MaxGlobalRuns > 0 ? _options.MaxGlobalRuns : 100;
         _globalSemaphore = new SemaphoreSlim(globalMax, globalMax);
 
@@ -247,7 +255,7 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(activeRun.Cts.Token);
                 // P0-5：传入 workspaceId 以便丢租时推进到 LeaseLost 状态
                 heartbeatTask = RunHeartbeatAsync(
-                    run.WorkspaceId, run.RunId, lease.LeaseToken, activeRun.Cts, heartbeatCts.Token);
+                    run.WorkspaceId, run.RunId, lease.LeaseToken, lease.ExpiresAt, activeRun.Cts, heartbeatCts.Token);
             }
 
             // P0-4：将 leaseToken + fencingToken 传给 Actor，Actor 在每次副作用操作（FlushPendingEventsAsync）
@@ -311,6 +319,7 @@ public sealed class AgentKernelHost : IAsyncDisposable
         string workspaceId,
         string runId,
         string leaseToken,
+        DateTimeOffset initialLeaseExpiresAt,
         CancellationTokenSource actorCts,
         CancellationToken cancellationToken)
     {
@@ -331,6 +340,10 @@ public sealed class AgentKernelHost : IAsyncDisposable
         var consecutiveFailures = 0;
         const int MaxConsecutiveFailures = 3;
 
+        // P0-7：跟踪最后一次确认的租约 ExpiresAt — 续约异常时不更新（保持上一次确认的值）。
+        // 初始值为 lease 获取时的 ExpiresAt；续约成功后更新为 UtcNow + extension。
+        var lastConfirmedLeaseExpiresAt = initialLeaseExpiresAt;
+
         while (!cancellationToken.IsCancellationRequested)
         {
             try
@@ -339,6 +352,22 @@ public sealed class AgentKernelHost : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
+                break;
+            }
+
+            // P0-7：本地 watchdog — 检查最后一次确认的租约是否已过期。
+            // 续约数据库异常不得延长本地期限；租约过期后立即取消 Actor 防止双执行。
+            if (DateTimeOffset.UtcNow >= lastConfirmedLeaseExpiresAt)
+            {
+                _logger?.LogError("Run {RunId} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消 Actor。", runId, lastConfirmedLeaseExpiresAt);
+                try
+                {
+                    actorCts.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Actor 已结束，CTS 已释放 — 无需处理
+                }
                 break;
             }
 
@@ -361,8 +390,9 @@ public sealed class AgentKernelHost : IAsyncDisposable
                     }
                     break;
                 }
-                // 续约成功 → 重置连续异常计数
+                // 续约成功 → 重置连续异常计数 + 更新最后确认的 ExpiresAt
                 consecutiveFailures = 0;
+                lastConfirmedLeaseExpiresAt = DateTimeOffset.UtcNow.Add(extension);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

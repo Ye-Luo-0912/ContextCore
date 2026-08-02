@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ContextCore.Abstractions;
@@ -17,7 +17,9 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 ///     向该 run 的所有订阅者 channel TryWrite 最新 sequence；channel 已满时丢弃（轮询兜底）。</item>
 ///   <item><see cref="SubscribeAsync"/> 等待最多 500ms 读取新 sequence；超时则结束迭代，
 ///     让调用方回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 轮询。</item>
-///   <item>订阅者断开（cancellationToken 取消）时从 per-run 订阅表移除 channel；
+///   <item>P0-10：<see cref="RegisterSubscription"/> 分离订阅注册与事件等待，
+///     让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。</item>
+///   <item>订阅者断开（cancellationToken 取消或 Dispose）时从 per-run 订阅表移除 channel；
 ///     某 run 无订阅者时清理其订阅表条目。</item>
 /// </list>
 ///
@@ -26,7 +28,6 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// </remarks>
 public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
 {
-    private static readonly TimeSpan SubscribeTimeout = TimeSpan.FromMilliseconds(500);
     private const int ChannelCapacity = 256;
 
     // per-run → (subscriberId → channel)。subscriberId 用于订阅者注销时移除自身 channel。
@@ -50,11 +51,7 @@ public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<long> SubscribeAsync(
-        string workspaceId,
-        string runId,
-        long fromSequence,
-        [EnumeratorCancellation] CancellationToken ct)
+    public IAgentRunEventSubscription RegisterSubscription(string workspaceId, string runId, long fromSequence)
     {
         var key = Key(workspaceId, runId);
         var channel = Channel.CreateBounded<long>(new BoundedChannelOptions(ChannelCapacity)
@@ -68,47 +65,120 @@ public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
         var subscribers = _subscribers.GetOrAdd(key, _ => new ConcurrentDictionary<Guid, Channel<long>>());
         subscribers[subscriberId] = channel;
 
+        return new ChannelSubscription(
+            channel, _subscribers, subscribers, key, subscriberId, fromSequence);
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<long> SubscribeAsync(
+        string workspaceId,
+        string runId,
+        long fromSequence,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        // P0-10：委托到 RegisterSubscription，复用分离后的注册逻辑。
+        var subscription = RegisterSubscription(workspaceId, runId, fromSequence);
         try
         {
-            while (!ct.IsCancellationRequested)
+            await foreach (var seq in subscription.WithCancellation(ct).ConfigureAwait(false))
             {
-                // Perf-6：持久订阅——不再 500ms 超时退出，一直等待直到客户端断开或 channel 完成。
-                bool hasData;
-                try
-                {
-                    hasData = await channel.Reader.WaitToReadAsync(ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    yield break;
-                }
-
-                if (!hasData)
-                {
-                    // channel 已完成（不应发生，但防御性处理）。
-                    yield break;
-                }
-
-                while (channel.Reader.TryRead(out var seq))
-                {
-                    if (seq >= fromSequence)
-                    {
-                        yield return seq;
-                    }
-                }
+                yield return seq;
             }
         }
         finally
         {
-            subscribers.TryRemove(subscriberId, out _);
-            // 某 run 无订阅者时清理其订阅表条目，避免内存泄漏。
-            if (subscribers.IsEmpty)
-            {
-                _subscribers.TryRemove(key, out _);
-            }
+            subscription.Dispose();
         }
     }
 
     private static string Key(string workspaceId, string runId)
         => $"{workspaceId}:{runId}";
+
+    /// <summary>
+    /// P0-10：Channel-based 订阅句柄。注册时创建，Dispose 时注销。
+    /// 枚举 IAsyncEnumerable 等待 notifier 推送的 sequence。
+    /// </summary>
+    private sealed class ChannelSubscription : IAgentRunEventSubscription
+    {
+        private readonly Channel<long> _channel;
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Channel<long>>> _outer;
+        private readonly ConcurrentDictionary<Guid, Channel<long>> _inner;
+        private readonly string _key;
+        private readonly Guid _subscriberId;
+        private readonly long _fromSequence;
+        private int _disposed; // 0 = active, 1 = disposed
+
+        internal ChannelSubscription(
+            Channel<long> channel,
+            ConcurrentDictionary<string, ConcurrentDictionary<Guid, Channel<long>>> outer,
+            ConcurrentDictionary<Guid, Channel<long>> inner,
+            string key,
+            Guid subscriberId,
+            long fromSequence)
+        {
+            _channel = channel;
+            _outer = outer;
+            _inner = inner;
+            _key = key;
+            _subscriberId = subscriberId;
+            _fromSequence = fromSequence;
+        }
+
+        public IAsyncEnumerator<long> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+            => EnumerateAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
+
+        private async IAsyncEnumerable<long> EnumerateAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Perf-6：持久订阅——不超时退出，一直等待直到客户端断开、watchdog 超时或 channel 完成。
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    bool hasData;
+                    try
+                    {
+                        hasData = await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        yield break;
+                    }
+
+                    if (!hasData)
+                    {
+                        // channel 已完成（不应发生，但防御性处理）。
+                        yield break;
+                    }
+
+                    while (_channel.Reader.TryRead(out var seq))
+                    {
+                        if (seq >= _fromSequence)
+                        {
+                            yield return seq;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            _inner.TryRemove(_subscriberId, out _);
+            if (_inner.IsEmpty)
+            {
+                _outer.TryRemove(_key, out _);
+            }
+            _channel.Writer.TryComplete();
+        }
+    }
 }

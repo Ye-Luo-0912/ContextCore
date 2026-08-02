@@ -34,6 +34,13 @@ internal static class AgentExecutionEndpoints
 {
     private const string Tag = "AgentExecution";
 
+    /// <summary>
+    /// P0-10：watchdog 补偿间隔。SSE 等待 notifier 推送时，每 30s 强制做一次 DB 补读，
+    /// 防止 notifier 遗漏通知（如 channel 满时 TryWrite 丢弃）导致永久挂起。
+    /// 间隔远大于正常通知间隔，避免频繁 DB 查询。
+    /// </summary>
+    private static readonly TimeSpan WatchdogInterval = TimeSpan.FromSeconds(30);
+
     public static IEndpointRouteBuilder MapAgentExecutionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/agents/runs").WithTags(Tag);
@@ -292,9 +299,21 @@ internal static class AgentExecutionEndpoints
             await writer.WriteLineAsync("retry: 1000").ConfigureAwait(false);
             await writer.FlushAsync(streamCt).ConfigureAwait(false);
 
-            // SSE 轮询循环：读取新事件 → 推送 → 检查终态 → 等待 → 重复
+            // P0-10：SSE 轮询循环（修复永久丢唤醒窗口）：
+            //   a. 先注册 subscription（消除"DB 读取与订阅注册之间事件丢失"竞态）
+            //   b. DB 补读 watermark 之后的事件（catch-up）
+            //   c. 发送补读事件到 SSE 流
+            //   d. 检查终态
+            //   e. 等待 notifier 推送（30s watchdog 补偿，防止遗漏通知导致永久挂起）
             while (!streamCt.IsCancellationRequested)
             {
+                // a. 先注册 subscription——注册时刻 = watermark。
+                //    注册前到 DB 补读之间提交的事件由 DB 补读捕获；
+                //    注册后提交的事件由 notifier 推送捕获。无竞态窗口。
+                using var subscription = eventNotifier?.RegisterSubscription(
+                    workspaceId, id, lastEventSequence + 1);
+
+                // b+c. DB 补读 watermark 之后的事件并发送到 SSE 流
                 int lastSentSequence;
                 try
                 {
@@ -319,7 +338,7 @@ internal static class AgentExecutionEndpoints
                     lastEventSequence = lastSentSequence;
                 }
 
-                // 检查 Run 是否已进入终态 → 关闭连接
+                // d. 检查 Run 是否已进入终态 → 关闭连接
                 var currentRun = await runStore.GetAsync(workspaceId, id, streamCt)
                     .ConfigureAwait(false);
                 if (currentRun is null || AgentRunStateMachine.IsTerminalState(currentRun.State))
@@ -329,17 +348,20 @@ internal static class AgentExecutionEndpoints
                     break;
                 }
 
-                // 2d：等待下一轮事件。优先使用 push 通道（IAgentRunEventNotifier），
-                // 事件到达时立即唤醒读取；500ms 内无事件时 SubscribeAsync 结束迭代，回退到 ReadAsync 轮询。
-                // 未注入 notifier 时回退到原 500ms 固定轮询。
-                if (eventNotifier is not null)
+                // e. 等待下一轮事件。优先使用 push 通道（IAgentRunEventNotifier），
+                // 事件到达时立即唤醒读取。P0-10：添加 30s watchdog 补偿——
+                // 若 notifier 遗漏通知（如 channel 满时 TryWrite 丢弃），watchdog 超时后
+                // 回到循环顶部做 DB 补读，防止永久挂起。
+                // 未注入 notifier 时回退到 500ms 固定轮询。
+                if (subscription is not null)
                 {
+                    using var watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(streamCt);
+                    watchdogCts.CancelAfter(WatchdogInterval);
                     try
                     {
-                        // fromSequence = lastEventSequence + 1：仅关注未发送的新事件。
                         // 收到首个 push 通知即 break，回到循环顶部走 ReadAsync 拉取实际事件并推送。
-                        await foreach (var _ in eventNotifier.SubscribeAsync(
-                            workspaceId, id, lastEventSequence + 1, streamCt).ConfigureAwait(false))
+                        await foreach (var _ in subscription
+                            .WithCancellation(watchdogCts.Token).ConfigureAwait(false))
                         {
                             break;
                         }
@@ -348,6 +370,7 @@ internal static class AgentExecutionEndpoints
                     {
                         break;
                     }
+                    // watchdog 超时（非 streamCt 取消）时正常落到下一轮循环做 DB 补读
                 }
                 else
                 {

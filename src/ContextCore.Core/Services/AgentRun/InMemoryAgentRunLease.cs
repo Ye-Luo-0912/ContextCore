@@ -33,6 +33,17 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     private readonly object _reapLock = new();
     // P0-4：全局 fencing token 计数器（单调递增）。每次成功获取租约（含抢占过期）时递增。
     private long _globalFencingToken;
+    // P0-7：可选的 Run Store，用于 MarkFailedIfLeaseExpiredAsync 原子转移（测试/开发用）。
+    private readonly IAgentRunStore? _runStore;
+
+    /// <summary>
+    /// 初始化 InMemoryAgentRunLease（开发/测试用）。
+    /// </summary>
+    /// <param name="runStore">P0-7：可选的 Run Store，提供时 MarkFailedIfLeaseExpiredAsync 会执行状态转移；null = 仅检查租约。</param>
+    public InMemoryAgentRunLease(IAgentRunStore? runStore = null)
+    {
+        _runStore = runStore;
+    }
 
     /// <inheritdoc />
     public ValueTask<LeasedAgentRun?> TryAcquireAsync(
@@ -182,6 +193,44 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
             return ValueTask.FromResult(entry.ExpiresAt > now);
         }
         return ValueTask.FromResult(false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-7：InMemory 实现 — 检查无活跃租约后通过 IAgentRunStore 推进状态机到 Failed（CAS）。
+    /// 注入 IAgentRunStore 时执行完整转移；未注入时仅返回"可以标记"信号（1=无活跃租约，0=有活跃租约）。
+    /// 进程内单线程场景下无真实竞态，check-then-act 拆分可接受。
+    /// </remarks>
+    public async ValueTask<int> MarkFailedIfLeaseExpiredAsync(
+        string workspaceId,
+        string runId,
+        AgentRunState expectedCurrentState,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+        var now = DateTimeOffset.UtcNow;
+        if (_leases.TryGetValue(runId, out var entry) && entry.ExpiresAt > now)
+        {
+            return 0;
+        }
+
+        if (_runStore is null)
+        {
+            return 1;
+        }
+
+        try
+        {
+            await _runStore.TransitionStateAsync(
+                workspaceId, runId, expectedCurrentState, AgentRunState.Failed, ct).ConfigureAwait(false);
+            return 1;
+        }
+        catch (InvalidOperationException)
+        {
+            return 0;
+        }
     }
 
     /// <summary>当前持有的租约数量（诊断/监控用）。</summary>

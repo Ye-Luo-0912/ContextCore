@@ -346,7 +346,8 @@ internal static class ProductionRuntimeExtensions
             configuration.GetSection("DurableTransport").Bind(opts);
             opts.Enabled = true;
         });
-        workerRegistry.Add<DurableTransportInstructionPumpService>();
+        // P0-6：移除 DurableTransportInstructionPumpService 注册——指令不再通过 durable inbox → 旧 IAgentKernel
+        // inbox 路径，统一走 AgentRunStore → AgentKernelHost → AgentRunActor。Pump 仍保留代码以备兼容参考。
         workerRegistry.Add<ResultOutboxReplayService>();
         workerRegistry.Add<LeaseReaperService>();
         workerRegistry.Add<PendingCountMetricsService>();

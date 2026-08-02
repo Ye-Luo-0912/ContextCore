@@ -226,4 +226,52 @@ LIMIT 1;
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is not null;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// P0-7：单 SQL 原子操作 — 只有无活跃租约 AND 状态匹配时才更新为 Failed。
+    /// 消除 Recovery Worker 中 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
+    /// NOT EXISTS 子查询检查活跃租约（lease_expires_at >= clock_timestamp()）。
+    /// 同步更新 data JSON 中的 State / UpdatedAt / FinishedAt（与 TransitionStateAsync 一致）。
+    /// </remarks>
+    public async ValueTask<int> MarkFailedIfLeaseExpiredAsync(
+        string workspaceId,
+        string runId,
+        AgentRunState expectedCurrentState,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        var now = DateTimeOffset.UtcNow;
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = @failed_state,
+    updated_at = @updated_at,
+    finished_at = @finished_at,
+    data = data || jsonb_build_object('State', to_jsonb(@failed_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND state = @expected_state
+  AND NOT EXISTS (
+      SELECT 1 FROM {Table("agent_run_leases")}
+      WHERE run_id = @run_id
+        AND lease_expires_at >= clock_timestamp()
+  );
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("expected_state", (byte)expectedCurrentState);
+        command.Parameters.AddWithValue("failed_state", (byte)AgentRunState.Failed);
+        command.Parameters.AddWithValue("failed_state_name", AgentRunState.Failed.ToString());
+        command.Parameters.AddWithValue("updated_at", now);
+        command.Parameters.AddWithValue("finished_at", now);
+
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
 }
