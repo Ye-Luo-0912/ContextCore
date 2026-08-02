@@ -150,7 +150,13 @@ public sealed record ContextCoreRuntimeOptions
     /// 是否启用 AgentKernel 主循环 HostedService。
     /// 默认 true。ProductionHA profile 强制 true。
     /// </summary>
-    public bool EnableAgentKernelLoop { get; init; } = true;
+    /// <summary>
+    /// P0-7：是否启动旧 AgentKernelLoop（DefaultAgentKernel 指令队列平面）。
+    /// 默认 false——旧平面的 PG inbox 在生产代码中无写入者，已空转。
+    /// AgentRun 生命周期统一由 AgentKernelHost + AgentRunActor 处理。
+    /// 设为 true 仅用于向后兼容验证（不推荐）。
+    /// </summary>
+    public bool EnableAgentKernelLoop { get; init; } = false;
 
     /// <summary>
     /// 是否启用 AgentRun Recovery Worker。

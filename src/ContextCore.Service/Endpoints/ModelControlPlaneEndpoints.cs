@@ -377,6 +377,7 @@ internal static class ModelControlPlaneEndpoints
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
             IConfiguration configuration,
+            [FromServices] IDesiredModelStateStore? desiredStateStore,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -423,6 +424,11 @@ internal static class ModelControlPlaneEndpoints
                     $"激活失败：{result.Error}");
             }
 
+
+            // P0-9：写入期望状态到 HA store（单节点模式下 desiredStateStore 为 null，跳过）。
+            await WriteDesiredStateAsync(desiredStateStore, id, "Active", descriptor.ContentHash,
+                httpContext.User?.Identity?.Name ?? "system", ct).ConfigureAwait(false);
+
             return Results.Ok(new ActivateModelResponse
             {
                 ModelArtifactId = id,
@@ -447,6 +453,7 @@ internal static class ModelControlPlaneEndpoints
             IModelArtifactRegistry registry,
             [FromServices] IModelActivationManager? activationManager,
             IConfiguration configuration,
+            [FromServices] IDesiredModelStateStore? desiredStateStore,
             IModelActivationAuditStore auditStore,
             HttpContext httpContext,
             CancellationToken ct) =>
@@ -484,6 +491,11 @@ internal static class ModelControlPlaneEndpoints
                     $"回滚失败：{result.Error}");
             }
 
+
+            // P0-9：写入期望状态到 HA store（回滚也是激活操作）。
+            await WriteDesiredStateAsync(desiredStateStore, id, "Active", descriptor.ContentHash,
+                httpContext.User?.Identity?.Name ?? "system", ct).ConfigureAwait(false);
+
             return Results.Ok(new RollbackModelResponse
             {
                 ModelArtifactId = id,
@@ -508,6 +520,7 @@ internal static class ModelControlPlaneEndpoints
             [FromServices] IModelActivationManager? activationManager,
             [FromServices] ShadowModelManager? shadowManager,
             IModelActivationAuditStore auditStore,
+            [FromServices] IDesiredModelStateStore? desiredStateStore,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -548,6 +561,11 @@ internal static class ModelControlPlaneEndpoints
                 return ContextCoreHttpResultMapper.InvalidRequest(
                     httpContext, string.Empty, "models.retire", errorMessage!);
             }
+
+
+            // P0-9：写入 Inactive 期望状态到 HA store，各节点 Reconciler 将停用该模型。
+            await WriteDesiredStateAsync(desiredStateStore, id, "Inactive", descriptor.ContentHash,
+                httpContext.User?.Identity?.Name ?? "system", ct).ConfigureAwait(false);
 
             return Results.Ok(new RetireModelResponse
             {
@@ -815,6 +833,38 @@ internal static class ModelControlPlaneEndpoints
             ScoreOutputName = scoreOutputName,
             EnableWarmup = enableWarmup
         };
+    }
+
+    /// <summary>
+    /// P0-9：写入期望模型状态到 IDesiredModelStateStore（HA 真相源）。
+    /// Generation 单调递增（CAS）：读取当前 state.Generation 并 +1，由 store 的 CAS 保证不回滚。
+    /// store 为 null（单节点模式）时跳过，不影响本地激活。
+    /// </summary>
+    private static async Task WriteDesiredStateAsync(
+        IDesiredModelStateStore? desiredStateStore,
+        string modelId,
+        string desiredState,
+        string contentHash,
+        string updatedBy,
+        CancellationToken ct)
+    {
+        if (desiredStateStore is null)
+        {
+            return; // 单节点模式：无 HA store，跳过
+        }
+
+        var current = await desiredStateStore.GetAsync(modelId, ct).ConfigureAwait(false);
+        var newGeneration = (current?.Generation ?? 0) + 1;
+        var newState = new DesiredModelState
+        {
+            ModelId = modelId,
+            DesiredState = desiredState,
+            Generation = newGeneration,
+            ContentHash = contentHash,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            UpdatedBy = updatedBy
+        };
+        await desiredStateStore.SetAsync(newState, ct).ConfigureAwait(false);
     }
 
     /// <summary>

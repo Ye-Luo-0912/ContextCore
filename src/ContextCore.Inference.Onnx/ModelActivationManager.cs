@@ -433,6 +433,47 @@ public sealed class ModelActivationManager : IModelActivationManager
         return new ValueTask<ModelActivationResult>(published);
     }
 
+    /// <inheritdoc />
+    /// <summary>
+    /// P0-9：停用当前 Active Engine，回退到 fallback。
+    /// 复用 PublishAtomicWithGracePeriod 的 Retired/drain 机制确保 in-flight 请求安全完成。
+    /// 无 Active Engine 时返回 Success（幂等）。
+    /// </summary>
+    public ValueTask<ModelActivationResult> DeactivateAsync(CancellationToken cancellationToken = default)
+    {
+        // P0-9：Dispose 后拒绝停用。
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
+                "ModelActivationManagerDisposed：管理器已 Dispose，拒绝停用。"));
+        }
+
+        ActiveModelHandle? oldActive;
+        lock (_activationLock)
+        {
+            oldActive = _activeHandle;
+            _activeHandle = null; // 回退到 fallback 引擎
+
+            if (oldActive is not null)
+            {
+                oldActive.TransitionTo(ModelSlotState.Retired);
+                lock (_retiredLock)
+                {
+                    _retiredHandles.Add(oldActive);
+                }
+            }
+        }
+
+        // 调度延迟 Dispose oldActive（与 ActivateAsync 切换使用相同的 drain 机制）。
+        // fallback engine 由外部 DI 容器管理，不 Dispose。
+        if (oldActive is not null && !ReferenceEquals(oldActive.Engine, _fallbackEngine))
+        {
+            ScheduleRetiredHandleDrain(oldActive, 30000);
+        }
+
+        return new ValueTask<ModelActivationResult>(ModelActivationResult.Deactivated(oldActive?.Descriptor));
+    }
+
     /// <summary>
     /// P0-8：清理过期的 Staged Handle（StagedAt + TTL 已过）。
     /// 移除后 best-effort Dispose 其引擎，避免资源泄漏。
@@ -793,85 +834,10 @@ public sealed class ModelActivationManager : IModelActivationManager
 
         // P0-8：调度延迟 Dispose oldActive（等待 in-flight 引用归零 + grace period）。
         // fallback engine 由外部 DI 容器管理，这里不 Dispose。
+        // P0-9：复用 ScheduleRetiredHandleDrain（与 DeactivateAsync 共享 drain 逻辑）。
         if (oldActive is not null && !ReferenceEquals(oldActive.Engine, _fallbackEngine))
         {
-            var oldHandleForClosure = oldActive;
-            var drainTask = Task.Run(async () =>
-            {
-                try
-                {
-                    // P0-8：若已 Dispose，立即 best-effort 清理（不再等待 grace period）。
-                    var disposedToken = _disposedCts.Token;
-
-                    // P1：先等待 grace period（时间兜底），再检查旧 handle 引用计数。
-                    // 引用计数（oldHandle.Counter）精确跟踪旧引擎上的 in-flight 请求数；
-                    // 即使新引擎持续接收新请求（新 counter），旧 counter 仍只递减不递增，能精确归零。
-                    try
-                    {
-                        await Task.Delay(gracePeriodMs, disposedToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (disposedToken.IsCancellationRequested)
-                    {
-                        // Manager 已 Dispose：跳过 grace 等待，进入 drain。
-                    }
-
-                    // P0-8：状态机进入 Draining（Retired → Draining）。
-                    if (!oldHandleForClosure.TransitionTo(ModelSlotState.Draining))
-                    {
-                        // 已被其他流程处理（如 DisposeAsync 直接 Dispose）。
-                        return;
-                    }
-
-                    // 自旋等待旧 counter 归零（最多再等 gracePeriodMs，避免无限等待）。
-                    // DisposeAsync 取消时会跳出循环由 DisposeAsync 接管。
-                    var drainDeadline = Stopwatch.GetTimestamp();
-                    var drainTimeoutTicks = TimeSpan.FromMilliseconds(gracePeriodMs).Ticks;
-                    var drainTimedOut = false;
-                    while (oldHandleForClosure.Counter.Count > 0)
-                    {
-                        if (disposedToken.IsCancellationRequested)
-                        {
-                            break;
-                        }
-                        if (Stopwatch.GetElapsedTime(drainDeadline).Ticks > drainTimeoutTicks)
-                        {
-                            // P1-8：超时仍有 in-flight —— 保留旧引擎，不强制 Dispose。
-                            // 宁可临时保留旧 Session 并告警，也不在仍有引用时强制 Dispose。
-                            drainTimedOut = true;
-                            break;
-                        }
-                        try
-                        {
-                            await Task.Delay(10, disposedToken).ConfigureAwait(false);
-                        }
-                        catch (OperationCanceledException) when (disposedToken.IsCancellationRequested)
-                        {
-                            break;
-                        }
-                    }
-
-                    if (drainTimedOut && oldHandleForClosure.Counter.Count > 0)
-                    {
-                        // P1-8：保留 retired handle，等待自然 drain（后续 DisposeAsync 或下次激活时重试）。
-                        System.Diagnostics.Trace.TraceWarning(
-                            "[ModelActivationManager] Retired handle drain timeout: {0} in-flight requests still referencing old engine (gen {1}). " +
-                            "Keeping old engine alive to avoid ORT corruption. It will be disposed when references release.",
-                            oldHandleForClosure.Counter.Count,
-                            oldHandleForClosure.Generation);
-                        // 回退状态：Draining → Retired（继续等待）
-                        oldHandleForClosure.TransitionTo(ModelSlotState.Retired);
-                        return;
-                    }
-
-                    // P0-8：从 _retiredHandles 移除并 Dispose（Draining → Disposed）。
-                    await RetireAndDisposeHandleAsync(oldHandleForClosure).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // best-effort：调度失败不影响激活流程。
-                }
-            });
-            TrackBackgroundDisposeTask(drainTask);
+            ScheduleRetiredHandleDrain(oldActive, gracePeriodMs);
         }
 
         return ModelActivationResult.Succeeded(descriptor, engine, calResult ?? new CalibrationValidationResult
@@ -880,6 +846,83 @@ public sealed class ModelActivationManager : IModelActivationManager
             Error = null,
             Violations = Array.Empty<CalibrationViolation>()
         });
+    }
+
+    /// <summary>
+    /// P0-9：调度 Retired Handle 的延迟 Dispose（等待 grace period + in-flight 引用归零）。
+    /// 从 PublishAtomicWithGracePeriod 提取，供 DeactivateAsync 复用，确保 drain 行为一致。
+    /// </summary>
+    /// <param name="oldHandle">已标记 Retired 的旧 handle。</param>
+    /// <param name="gracePeriodMs">grace period 毫秒数（先等待再 drain）。</param>
+    private void ScheduleRetiredHandleDrain(ActiveModelHandle oldHandle, int gracePeriodMs)
+    {
+        var oldHandleForClosure = oldHandle;
+        var drainTask = Task.Run(async () =>
+        {
+            try
+            {
+                var disposedToken = _disposedCts.Token;
+
+                // P1：先等待 grace period（时间兜底），再检查旧 handle 引用计数。
+                try
+                {
+                    await Task.Delay(gracePeriodMs, disposedToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (disposedToken.IsCancellationRequested)
+                {
+                    // Manager 已 Dispose：跳过 grace 等待，进入 drain。
+                }
+
+                // P0-8：状态机进入 Draining（Retired → Draining）。
+                if (!oldHandleForClosure.TransitionTo(ModelSlotState.Draining))
+                {
+                    return;
+                }
+
+                // 自旋等待旧 counter 归零（最多再等 gracePeriodMs，避免无限等待）。
+                var drainDeadline = Stopwatch.GetTimestamp();
+                var drainTimeoutTicks = TimeSpan.FromMilliseconds(gracePeriodMs).Ticks;
+                var drainTimedOut = false;
+                while (oldHandleForClosure.Counter.Count > 0)
+                {
+                    if (disposedToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    if (Stopwatch.GetElapsedTime(drainDeadline).Ticks > drainTimeoutTicks)
+                    {
+                        drainTimedOut = true;
+                        break;
+                    }
+                    try
+                    {
+                        await Task.Delay(10, disposedToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (disposedToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                }
+
+                if (drainTimedOut && oldHandleForClosure.Counter.Count > 0)
+                {
+                    System.Diagnostics.Trace.TraceWarning(
+                        "[ModelActivationManager] Retired handle drain timeout: {0} in-flight requests still referencing old engine (gen {1}). " +
+                        "Keeping old engine alive to avoid ORT corruption. It will be disposed when references release.",
+                        oldHandleForClosure.Counter.Count,
+                        oldHandleForClosure.Generation);
+                    oldHandleForClosure.TransitionTo(ModelSlotState.Retired);
+                    return;
+                }
+
+                await RetireAndDisposeHandleAsync(oldHandleForClosure).ConfigureAwait(false);
+            }
+            catch
+            {
+                // best-effort：调度失败不影响激活/停用流程。
+            }
+        });
+        TrackBackgroundDisposeTask(drainTask);
     }
 
     /// <summary>

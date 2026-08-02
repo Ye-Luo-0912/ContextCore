@@ -287,6 +287,12 @@ public sealed class LearningMaterializationWorker : BackgroundService
                 // P0-9：复用 PollAndDispatchAsync 已创建并注册的 leaseCts——
                 // 协调器检测到租约丢失时 cancel leaseCts 信号 worker 中止。
                 var leaseCts = queueItem.LeaseCts;
+                // P0-10：创建组合 linked token —— lease 丢失时取消 MaterializeAsync，避免物化继续执行。
+                // leaseCts 已链接 cancellationToken（workerCts.Token → stoppingToken），
+                // 组合后：stoppingToken / workerCts / leaseCts 任一取消 → linkedCts 取消。
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, leaseCts.Token);
+                var linkedToken = linkedCts.Token;
+
 
                 _metrics.IncrementProcessing();
 
@@ -304,11 +310,11 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
                     // 调用 MaterializeAsync。
                     await materializer.MaterializeAsync(
-                        decision, record.WorkspaceId, record.CollectionId, cancellationToken)
+                        decision, record.WorkspaceId, record.CollectionId, linkedToken)
                         .ConfigureAwait(false);
 
                     // Ack（需 lease_token 匹配——若 lease 已被抢占则 acked=false，当前 worker 应放弃该记录）。
-                    var acked = await outboxStore.MarkAckedAsync(record.EventId, record.LeaseToken, cancellationToken).ConfigureAwait(false);
+                    var acked = await outboxStore.MarkAckedAsync(record.EventId, record.LeaseToken, linkedToken).ConfigureAwait(false);
                     if (acked)
                     {
                         var lagMs = (DateTimeOffset.UtcNow - record.CreatedAt).TotalMilliseconds;

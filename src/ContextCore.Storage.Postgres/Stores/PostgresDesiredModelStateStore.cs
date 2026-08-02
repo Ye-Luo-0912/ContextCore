@@ -52,7 +52,7 @@ WHERE model_id = @model_id;
         };
     }
 
-    public async ValueTask SetAsync(DesiredModelState state, CancellationToken ct = default)
+    public async ValueTask<bool> SetAsync(DesiredModelState state, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -60,6 +60,9 @@ WHERE model_id = @model_id;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // P0-9 CAS：仅当新 Generation > 已存在 Generation 时才更新（Generation 单调递增防回滚）。
+        // INSERT ... ON CONFLICT DO UPDATE WHERE 确保旧写入不会覆盖新写入；
+        // xmax = 0 判断行是否为本次 INSERT（true）而非 UPDATE（false），以正确返回是否应用。
         command.CommandText = $"""
 INSERT INTO {Table("desired_model_states")} (
     model_id, desired_state, generation, content_hash, updated_at, updated_by, data)
@@ -71,7 +74,9 @@ ON CONFLICT (model_id) DO UPDATE SET
     content_hash = EXCLUDED.content_hash,
     updated_at = EXCLUDED.updated_at,
     updated_by = EXCLUDED.updated_by,
-    data = EXCLUDED.data;
+    data = EXCLUDED.data
+WHERE desired_model_states.generation < EXCLUDED.generation
+RETURNING (xmax = 0) AS inserted;
 """;
         command.Parameters.AddWithValue("model_id", state.ModelId);
         command.Parameters.AddWithValue("desired_state", state.DesiredState);
@@ -81,7 +86,15 @@ ON CONFLICT (model_id) DO UPDATE SET
         command.Parameters.AddWithValue("updated_by", state.UpdatedBy);
         AddJson(command, "data", state);
 
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        // RETURNING：INSERT 返回 inserted=true；UPDATE（Generation 更高）返回 inserted=false（已应用）；
+        // 无返回行（WHERE 不满足，Generation 过旧）表示未应用（stale write）。
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            return false; // Generation 过旧，未更新
+        }
+        // 行已写入（无论 INSERT 还是 UPDATE），返回 true。
+        return true;
     }
 
     public async ValueTask<IReadOnlyList<DesiredModelState>> GetAllAsync(CancellationToken ct = default)

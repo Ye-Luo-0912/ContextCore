@@ -55,9 +55,10 @@ public sealed class ProductionRuntimeOptions
 
     /// <summary>
     /// 是否启用 AgentKernel 主循环 HostedService（<see cref="AgentKernelLoopHostedService"/>）。
-    /// 默认 true。设为 false 可在测试场景中手动控制 Kernel 循环。
+    /// P0-7：默认 false。旧 AgentKernelLoop 平面已退役，AgentRun 统一由 AgentKernelHost 处理。
+    /// 设为 true 仅用于向后兼容验证（不推荐）。
     /// </summary>
-    public bool EnableAgentKernelLoop { get; set; } = true;
+    public bool EnableAgentKernelLoop { get; set; } = false;
 
     /// <summary>
     /// 是否启用 AgentRun Recovery Worker（<see cref="AgentRunRecoveryWorker"/>）。
@@ -558,13 +559,7 @@ internal static class ProductionRuntimeExtensions
                     "但当前为空。请配置连接字符串（支持 env:VAR_NAME 格式）。");
             }
 
-            if (!options.EnableAgentKernelLoop)
-            {
-                throw new InvalidOperationException(
-                    "[FATAL] ProductionRuntime:Profile=ProductionHA 要求 ProductionRuntime:EnableAgentKernelLoop=true，" +
-                    "但当前为 false。ProductionHA 依赖 AgentKernelLoopHostedService 处理 Durable Transport 中的指令。" +
-                    "如需禁用 Kernel 循环（如测试场景），请切换到 Development 或 SingleNode profile。");
-            }
+            // P0-7：移除 ProductionHA 对 EnableAgentKernelLoop 的强制校验——旧平面已退役。
         }
 
         // EnableModelActivation=true 时要求 IModelArtifactRegistry 已注册
@@ -614,11 +609,7 @@ internal sealed class ProductionRuntimeOptionsValidator : IValidateOptions<Produ
                 "支持的值：Development (0), SingleNode (1), ProductionHA (2)。");
         }
 
-        if (options.Profile == RuntimeProfile.ProductionHA && !options.EnableAgentKernelLoop)
-        {
-            return ValidateOptionsResult.Fail(
-                "ProductionRuntime:Profile=ProductionHA 要求 EnableAgentKernelLoop=true。");
-        }
+        // P0-7：移除 ProductionHA 对 EnableAgentKernelLoop 的强制校验。
 
         return ValidateOptionsResult.Success;
     }

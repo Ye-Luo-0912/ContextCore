@@ -1872,14 +1872,46 @@ public sealed class AgentRunActor
             // 3c：flush 失败时清除 checkpoint 本体，避免 FailAsync/TryTransitionToCancelledAsync
             // 重试时再次尝试保存已失败的 checkpoint（导致终态 flush 也失败、事件丢失）。
             // checkpoint 本体保存失败不应阻止事件流（含 RunFailed/RunCancelled）的终态持久化。
-            // 注意：CheckpointSaved 事件仍在 _pendingTurnEvents 中，将在重试时被持久化。
+            // P0-11：同步移除 CheckpointSaved 事件并重建哈希链，避免重试时持久化声明不存在的 checkpoint 的孤立事件。
+            // 事件链是 SHA-256 哈希链，RemoveEventsAndRebuildChain 全链重建 Sequence/PrevChainHash/ContentHash。
+            // 其他事件（StateTransition/RunFailed/RunCancelled 等）保留，确保终态可持久化。
             _pendingTurnCheckpoint = null;
+            RemoveEventsAndRebuildChain(_pendingTurnEvents, AgentRunEventType.CheckpointSaved);
             throw;
         }
 
         _pendingTurnEvents.Clear();
         _turnStartState = run.State;
         _pendingTurnCheckpoint = null;
+    }
+
+    /// <summary>
+    /// P0-11：从待提交事件列表中移除指定类型的事件，并重建 SHA-256 哈希链。
+    /// 事件链的 Sequence 单调递增、PrevChainHash 指向前一事件 ContentHash、ContentHash 包含 Sequence。
+    /// 直接删除中间事件会破坏三者一致性，必须全链重建。
+    /// </summary>
+    private static void RemoveEventsAndRebuildChain(List<AgentRunEvent> events, AgentRunEventType typeToRemove)
+    {
+        if (events.Count == 0) return;
+        var hasTarget = false;
+        foreach (var e in events) { if (e.EventType == typeToRemove) { hasTarget = true; break; } }
+        if (!hasTarget) return;
+        var startSequence = events[0].Sequence;
+        var startPrevChainHash = events[0].PrevChainHash;
+        var runId = events[0].RunId;
+        var workspaceId = events[0].WorkspaceId;
+        var filtered = new List<AgentRunEvent>(events.Count);
+        foreach (var e in events) { if (e.EventType != typeToRemove) filtered.Add(e); }
+        events.Clear();
+        var prevChainHash = startPrevChainHash;
+        var sequence = startSequence;
+        foreach (var evt in filtered)
+        {
+            var rebuilt = AgentRunEventChain.BuildEvent(runId, workspaceId, sequence, evt.EventType, evt.State, evt.Payload, prevChainHash);
+            events.Add(rebuilt);
+            prevChainHash = rebuilt.ContentHash;
+            sequence++;
+        }
     }
 
     /// <summary>将 Run 标记为 Failed 并记录 RunFailed 事件。</summary>

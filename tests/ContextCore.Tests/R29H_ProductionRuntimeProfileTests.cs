@@ -131,8 +131,9 @@ public sealed class R29H_ProductionRuntimeProfileTests
             "ProductionHA profile 应注册 PendingCountMetricsService。");
 
         // 断言：也包含通用 Worker
-        CollectionAssert.Contains(workerNames, nameof(AgentKernelLoopHostedService),
-            "ProductionHA profile 应注册 AgentKernelLoopHostedService。");
+        // P0-7：AgentKernelLoop 默认禁用；P0-9：ModelStateReconcilerWorker 为 HA 模式期望状态同步 Worker。
+        CollectionAssert.Contains(workerNames, nameof(ModelStateReconcilerWorker),
+            "ProductionHA profile 应注册 ModelStateReconcilerWorker。");
         CollectionAssert.Contains(workerNames, nameof(LearningMaterializationWorker),
             "ProductionHA profile 应注册 LearningMaterializationWorker。");
         CollectionAssert.Contains(workerNames, nameof(CanaryProgressionHostedService),
@@ -591,11 +592,11 @@ public sealed class R29H_ProductionRuntimeProfileTests
     }
 
     /// <summary>
-    /// ProductionHA profile 配合 EnableAgentKernelLoop=false 应 fail-fast。
-    /// （ProductionHA 要求 AgentKernelLoop 处理 Durable Transport 指令）
+    /// P0-7：ProductionHA profile 配合 EnableAgentKernelLoop=false 不再 fail-fast。
+    /// 旧 AgentKernelLoop 已默认禁用，由 AgentRunActor 接管执行平面。
     /// </summary>
     [TestMethod]
-    public void ProductionHA_DisableAgentKernelLoop_ThrowsFailFast()
+    public void ProductionHA_DisableAgentKernelLoop_DoesNotThrow()
     {
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -608,9 +609,8 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var services = new ServiceCollection();
         services.AddContextCore();
 
-        Assert.ThrowsException<InvalidOperationException>(() =>
-            services.AddContextCoreProductionRuntime(config),
-            "ProductionHA + EnableAgentKernelLoop=false 应 fail-fast。");
+        // P0-7：验证不抛异常（validation 已移除）。
+        services.AddContextCoreProductionRuntime(config);
     }
 
     /// <summary>

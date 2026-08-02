@@ -116,6 +116,16 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
     ValueTask<ModelActivationResult> PromoteStagedAsync(
         string stagedHandleId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-9：停用当前 Active Engine，回退到 fallback 引擎。
+    /// 用于 HA Reconciler 收敛 Inactive 期望状态。
+    /// 旧 Active Handle 进入 Retired 列表并按 grace period drain（与 ActivateAsync 切换一致），
+    /// 确保 in-flight 请求不会在引擎 Dispose 后失败。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>停用结果（Success=true 表示已回退到 fallback；无 Active Engine 时也返回 Success）。</returns>
+    ValueTask<ModelActivationResult> DeactivateAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -214,6 +224,17 @@ public sealed record ModelActivationResult
         Descriptor = descriptor,
         Engine = engine,
         CalibrationValidation = calResult,
+        SchemaValidationError = null
+    };
+
+    /// <summary>P0-9：构造停用成功结果（Engine/Descriptor/Calibration 均为 null，表示已回退到 fallback）。</summary>
+    internal static ModelActivationResult Deactivated(ModelArtifactDescriptor? previousDescriptor) => new()
+    {
+        Success = true,
+        Error = null,
+        Descriptor = previousDescriptor,
+        Engine = null,
+        CalibrationValidation = null,
         SchemaValidationError = null
     };
 

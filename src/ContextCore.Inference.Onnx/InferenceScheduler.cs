@@ -495,7 +495,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             return;
         }
 
-        var key = ComputeBatchKey(req.Batch);
+        var key = ComputeBatchKey(req);
         var rows = req.Batch.RowCount;
 
         if (!pending.TryGetValue(key, out var group))
@@ -910,22 +910,34 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     /// <summary>
-    /// 计算 FeatureBatch 的 BatchKey。
+    /// 计算请求的 BatchKey。
     /// FeatureNamesHash 为顺序敏感哈希；NamesEqual 在加入分组时二次校验防止碰撞误合并。
-    /// P0-7：ModelGeneration 每次从 IModelActivationManager 动态获取（若 inner 实现该接口），
-    /// 以感知模型热切换；非 IModelActivationManager 的 inner 使用 0L（行为不变）。
+    /// P0-8：ModelGeneration 使用入队时捕获的 CapturedLease.Generation（而非当前 ActiveGeneration），
+    /// 避免热切换后请求被错误分组：
+    ///   - CapturedLease 非 null：使用 lease.Generation（请求实际执行的引擎世代）；
+    ///   - CapturedLease 为 null（未激活或 _inner 非 IModelActivationManager）：
+    ///     _inner 非 IModelActivationManager 时用 0L（无世代概念，行为不变）；
+    ///     _inner 是 IModelActivationManager 但未激活时用 -1L 哨兵（行为不变）。
+    /// 关键：BatchKey 必须与执行时使用的引擎世代一致（ExecuteGroupAsync 用 active[0].CapturedLease.Engine），
+    /// 否则同组请求会执行在首个请求的引擎上而与其他请求的捕获引擎不同，导致跨世代合并。
     /// </summary>
-    private InferenceBatchKey ComputeBatchKey(FeatureBatch batch)
+    private InferenceBatchKey ComputeBatchKey(InferenceRequest req)
     {
-        // P0-7：动态获取当前 Active Generation。
-        // inner 为 IModelActivationManager 时，世代号随激活切换自增；
-        // 无激活（ActiveGeneration==null）时用 -1L 哨兵值（与有激活的 0 区分）。
-        long modelGeneration = 0L;
-        if (_inner is IModelActivationManager activationManager)
+        long modelGeneration;
+        if (req.CapturedLease is { } lease)
         {
-            modelGeneration = activationManager.ActiveGeneration ?? -1L;
+            modelGeneration = lease.Generation;
+        }
+        else if (_inner is IModelActivationManager)
+        {
+            modelGeneration = -1L; // 未激活哨兵（lease 为 null 表示入队时无 Active Engine）
+        }
+        else
+        {
+            modelGeneration = 0L; // 非 IModelActivationManager（无世代概念）
         }
 
+        var batch = req.Batch;
         return new InferenceBatchKey(
             ModelGeneration: modelGeneration,
             SchemaVersion: batch.SchemaVersion,

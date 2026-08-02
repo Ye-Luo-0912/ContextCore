@@ -229,8 +229,11 @@ public interface IDesiredModelStateStore
     /// <summary>按 ModelId 获取期望状态；不存在时返回 null。</summary>
     ValueTask<DesiredModelState?> GetAsync(string modelId, CancellationToken ct = default);
 
-    /// <summary>写入期望状态（覆盖式更新，Generation 由调用方保证单调递增）。</summary>
-    ValueTask SetAsync(DesiredModelState state, CancellationToken ct = default);
+    /// <summary>
+    /// 写入期望状态（CAS：仅当 state.Generation > 已存在 Generation 时才更新）。
+    /// </summary>
+    /// <returns>true 表示已应用；false 表示 Generation 过旧（已被更高 Generation 的写入覆盖），未更新。</returns>
+    ValueTask<bool> SetAsync(DesiredModelState state, CancellationToken ct = default);
 
     /// <summary>列出所有模型的期望状态（用于 ReconcilerWorker 全量同步）。</summary>
     ValueTask<IReadOnlyList<DesiredModelState>> GetAllAsync(CancellationToken ct = default);
