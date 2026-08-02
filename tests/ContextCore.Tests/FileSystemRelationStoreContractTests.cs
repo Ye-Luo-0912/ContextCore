@@ -34,7 +34,7 @@ public sealed class FileSystemRelationStoreContractTests : RelationStoreContract
     }
 
     /// <summary>
-    /// P5-0.3: 验证 QueryNeighborsAsync 先排序再 Take(maxScan)，
+    /// 验证 QueryNeighborsAsync 先排序再 Take(maxScan)，
     /// 文件后部的高权重关系也能进入结果（修复前会被提前 Take 丢弃）。
     /// </summary>
     [TestMethod]
@@ -96,7 +96,7 @@ public sealed class FileSystemRelationStoreContractTests : RelationStoreContract
     }
 
     /// <summary>
-    /// P5-0.3: 验证排序后的前 N 条确实是权重最高的 N 条。
+    /// 验证排序后的前 N 条确实是权重最高的 N 条。
     /// </summary>
     [TestMethod]
     public async Task QueryNeighbors_ReturnsTopWeightedRelations()

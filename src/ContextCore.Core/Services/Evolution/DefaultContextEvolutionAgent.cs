@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Evolution;
 
 /// <summary>
-/// R16 默认 <see cref="IContextEvolutionAgent"/> 实现：
+/// 默认 <see cref="IContextEvolutionAgent"/> 实现：
 /// 基于 <see cref="IAgentObservationSource"/> 采集指标并按目标组件模板生成 <see cref="OptimizationProposal"/>。
 /// </summary>
 /// <remarks>

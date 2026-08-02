@@ -204,7 +204,7 @@ public sealed class ContextPackageBuildResult
     public RetrievalPlan? Plan { get; init; }
 
     /// <summary>
-    /// R13.2 #4：本次构建的读路径查询计划，记录各 store 调用次数与去重命中。
+    /// #4：本次构建的读路径查询计划，记录各 store 调用次数与去重命中。
     /// null 表示构建未走 PackageInputLoader 路径（如缓存命中或测试桩）。
     /// </summary>
     public PackageReadPlan? ReadPlan { get; init; }
@@ -267,7 +267,7 @@ public sealed class ContextPackageUncertainty
 
     public IReadOnlyList<string> ItemRefs { get; init; } = Array.Empty<string>();
 
-    // P0-5.4: Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
+    // Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 }
 
@@ -318,7 +318,7 @@ public sealed class ContextPackageDecision
 
     public IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
 
-    // P0-5.4: Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
+    // Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     /// <summary>详细评分明细（13 个子分维度），可用于 PackageBuildTrace 可观测输出。Working Memory 项会填充此字段。</summary>
@@ -362,7 +362,7 @@ public sealed class DroppedContextItem
 
     public IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
 
-    // P0-5.4: Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
+    // Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 }
 

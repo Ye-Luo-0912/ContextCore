@@ -88,7 +88,7 @@ public sealed partial class ControlRoomService
             var modelAdapters = ModelAdapterFactory.CreateAdapters(modelOptions, apiKeyResolver);
             var modelUsageLogStore = new InMemoryModelUsageLogStore();
             var tokenizerResolver = new DefaultContextTokenizerResolver();
-            // R29 WP-E-3：本地 Direct 模式使用 InMemoryUtilityLedgerStore 作为训练数据 ledger。
+            // 本地 Direct 模式使用 InMemoryUtilityLedgerStore 作为训练数据 ledger。
             // 生产路径应由 Service 端 PostgresUtilityLedgerStore 维护；本地仅用于离线导出。
             var utilityLedgerStore = new InMemoryUtilityLedgerStore();
             var runtime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
@@ -104,7 +104,7 @@ public sealed partial class ControlRoomService
                 TokenizerResolver = tokenizerResolver,
                 PromotionRecordStore = memoryStore,
                 WorkingMemoryService = memoryStore,
-                // R13.3 #2：注入 InMemory 能力契约，驱动 Retrieval fanout
+                // 注入 InMemory 能力契约，驱动 Retrieval fanout
                 Capabilities = new StoreRuntimeCapabilities(StorageProviderKind.InMemory),
             });
 
@@ -173,7 +173,7 @@ public sealed partial class ControlRoomService
         var fileModelAdapters = ModelAdapterFactory.CreateAdapters(fileModelOptions, fileApiKeyResolver);
         var fileModelUsageLogStore = new InMemoryModelUsageLogStore();
         var fileTokenizerResolver = new DefaultContextTokenizerResolver();
-        // R29 WP-E-3：FileSystem 模式下同样使用 InMemoryUtilityLedgerStore 作为本地 ledger
+        // FileSystem 模式下同样使用 InMemoryUtilityLedgerStore 作为本地 ledger
         // （FileSystem 当前未实现 IUtilityLedgerStore；生产 ledger 由 Service 端 Postgres 维护）。
         var fileUtilityLedgerStore = new InMemoryUtilityLedgerStore();
         var fileRuntime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
@@ -189,7 +189,7 @@ public sealed partial class ControlRoomService
             TokenizerResolver = fileTokenizerResolver,
             PromotionRecordStore = fileMemoryStore,
             WorkingMemoryService = fileMemoryStore,
-            // R13.3 #2：注入 FileSystem 能力契约，驱动 Retrieval fanout
+            // 注入 FileSystem 能力契约，驱动 Retrieval fanout
             Capabilities = new StoreRuntimeCapabilities(StorageProviderKind.FileSystem),
         });
 
@@ -263,7 +263,7 @@ public sealed partial class ControlRoomService
 
         var client = new ContextCoreClient(httpClient);
 
-        // P5-4: Service Mode 不再创建本地运行时对象——所有操作通过 ServiceClient 远程调用。
+        // Service Mode 不再创建本地运行时对象——所有操作通过 ServiceClient 远程调用。
         return new ControlRoomState
         {
             Mode = ControlRoomMode.Service,

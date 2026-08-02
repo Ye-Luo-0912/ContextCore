@@ -4,7 +4,7 @@ namespace ContextCore.Storage.FileSystem;
 /// 文件系统存储的配置选项。
 /// </summary>
 /// <remarks>
-/// P0-9.4：FileSystem 后端定位为 Alpha / 本地开发后端。
+/// FileSystem 后端定位为 Alpha / 本地开发后端。
 /// 并发边界（R13.1 #6）：单文件写入经 <see cref="FileLockProvider"/> 跨进程原子（Enqueue/Dequeue/Ack/Nack/Upsert/Update），
 /// 读取经 FileShare.ReadWrite；但跨文件一致性（raw content + metadata 双文件）无事务原子性，
 /// 进程崩溃可能留下 orphan raw 或 metadata 指向不存在的 raw。

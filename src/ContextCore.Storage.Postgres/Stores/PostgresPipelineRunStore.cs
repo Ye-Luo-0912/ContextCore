@@ -5,7 +5,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL Pipeline Run 持久化存储。
-/// R27-2：替代 <see cref="ContextCore.Core.Services.Evolution.InMemoryPipelineRunStore"/>，
+/// 替代 <see cref="ContextCore.Core.Services.Evolution.InMemoryPipelineRunStore"/>，
 /// 让 Postgres provider 在 HA 场景下能持久化 Evolution Pipeline 运行状态与审计记录。
 /// </summary>
 /// <remarks>
@@ -78,7 +78,7 @@ ON CONFLICT (run_id) DO UPDATE SET
         command.Parameters.AddWithValue("updated_at", snapshot.UpdatedAt);
         command.Parameters.AddWithValue("completed_at", (object?)snapshot.CompletedAt ?? DBNull.Value);
         command.Parameters.AddWithValue("rollback_reason", (object?)snapshot.RollbackReason ?? DBNull.Value);
-        // P0-7：HA 字段
+        // HA 字段
         command.Parameters.AddWithValue("revision", snapshot.Revision);
         command.Parameters.AddWithValue("lease_owner", (object?)snapshot.LeaseOwner ?? DBNull.Value);
         command.Parameters.AddWithValue("lease_expires_at", (object?)snapshot.LeaseExpiresAt ?? DBNull.Value);
@@ -221,7 +221,7 @@ WHERE run_id = @run_id;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：在单事务内完成：
+    /// 在单事务内完成：
     /// <list type="number">
     /// <item>SELECT FOR UPDATE 锁定 run 行（防止并发修改）。</item>
     /// <item>读取当前 data，反序列化为 <see cref="PipelineRunSnapshot"/>。</item>
@@ -604,7 +604,7 @@ ORDER BY compared_at DESC, comparison_id DESC;
 
     /// <inheritdoc />
     /// <remarks>
-    /// R28-B.8：stage_transitions 表使用与 pipeline_runs 等表一致的“反规范化索引列 + data jsonb”模式。
+    /// stage_transitions 表使用与 pipeline_runs 等表一致的“反规范化索引列 + data jsonb”模式。
     /// from_stage / to_stage 列存百分比值的文本形式（与迁移 DDL 的 text 类型一致），完整记录保存在 data jsonb。
     /// ON CONFLICT (transition_id) DO UPDATE 实现同 TransitionId 覆盖（幂等）。
     /// </remarks>

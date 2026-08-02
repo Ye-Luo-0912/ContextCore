@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R28-F P3-2：Default Inference Result Validator
+// Default Inference Result Validator
 //
 // 目标：在 Scorer 把模型分数应用到 Allocator 排序键之前，对 BatchInferenceResult
 // 执行严格验证，防止异常模型输出污染排序。
@@ -24,7 +24,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R28-F P3-2：默认推理输出验证器。
+/// 默认推理输出验证器。
 /// </summary>
 public sealed class DefaultInferenceResultValidator : IInferenceResultValidator
 {
@@ -98,7 +98,7 @@ public sealed class DefaultInferenceResultValidator : IInferenceResultValidator
     }
 
     /// <summary>
-    /// R28-F P3-2：ScoreWeights 验证（w_d / w_m 非负且和为预期值）。
+    /// ScoreWeights 验证（w_d / w_m 非负且和为预期值）。
     /// 调用方在 Scorer 中应用 FinalScore = w_d * Det + w_m * Model 前调用此方法。
     /// </summary>
     /// <param name="deterministicWeight">w_d（DeterministicWeight）。</param>

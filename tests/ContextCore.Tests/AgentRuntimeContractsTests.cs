@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-1：Agent Runtime Integration 契约测试。
+/// Agent Runtime Integration 契约测试。
 ///
 /// 验证目标：
 ///   1. AgentRuntimeKind 枚举（5 值，byte 底层，Unknown=0）

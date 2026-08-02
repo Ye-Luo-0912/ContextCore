@@ -11,7 +11,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// P0-3：PostgreSQL 跨 store 写入事务作用域集成测试。
+/// PostgreSQL 跨 store 写入事务作用域集成测试。
 /// 验证：
 /// <list type="bullet">
 ///   <item>CommitAsync 成功后所有 store 写入持久化。</item>
@@ -41,7 +41,7 @@ public sealed class PostgresWriteTransactionScopeTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // R14-PG 收口：直接尝试启动容器（与 PostgresHATests 一致），避免 IsDockerAvailableAsync 误判。
+        // 收口：直接尝试启动容器（与 PostgresHATests 一致），避免 IsDockerAvailableAsync 误判。
         try
         {
             _container = new PostgreSqlBuilder(PgVectorImage)
@@ -60,7 +60,7 @@ public sealed class PostgresWriteTransactionScopeTests
             return;
         }
 
-        // P0 冻结：迁移只运行一次（CREATE TABLE IF NOT EXISTS 幂等）。
+        // 冻结：迁移只运行一次（CREATE TABLE IF NOT EXISTS 幂等）。
         // 原实现每个测试用 GUID 前缀 + 重新迁移，导致 Docker Desktop 上 50+ 表 × 10 测试 = 500+ DDL，
         // 持续触发 socket read timeout。各测试使用唯一 ID（item-commit / item-rollback / ...），
         // 共享表不会相互冲突。

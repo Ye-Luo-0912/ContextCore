@@ -101,7 +101,7 @@ public sealed partial class ContextCoreClient
     }
 
     /// <summary>
-    /// P1-7：流式获取 relation graph 诊断。调用 <c>GET /api/relations/diagnostics/stream</c>，
+    /// 流式获取 relation graph 诊断。调用 <c>GET /api/relations/diagnostics/stream</c>，
     /// 以 NDJSON（每行一个 JSON 对象）形式逐条返回 <see cref="RelationGraphDiagnostic"/>，避免一次性将整张
     /// 关系图载入内存。客户端按需消费枚举，HTTP 流在枚举释放时自动关闭。
     /// </summary>

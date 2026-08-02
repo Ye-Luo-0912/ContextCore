@@ -140,7 +140,7 @@ public static class ContextDecisionProjector
     }
 
     /// <summary>
-    /// R14-1：使用 <see cref="CandidateDecisionReasonCodeMapper"/> 从候选的 Reason 字段
+    /// 使用 <see cref="CandidateDecisionReasonCodeMapper"/> 从候选的 Reason 字段
     /// 填充 <see cref="ContextDecisionCandidate.ReasonCode"/> 与 SecondaryReasonCodes。
     /// 幂等：不修改已设置的 ReasonCode；不修改候选的其他字段。
     /// </summary>
@@ -157,7 +157,7 @@ public static class ContextDecisionProjector
     }
 
     /// <summary>
-    /// R14-1：将 <see cref="ItemScoreBreakdown"/> 转换为字典形式，
+    /// 将 <see cref="ItemScoreBreakdown"/> 转换为字典形式，
     /// 便于 V2 工具链基于维度名聚合分析评分贡献。
     /// </summary>
     private static IReadOnlyDictionary<string, double> ConvertScoreBreakdown(ItemScoreBreakdown? breakdown)
@@ -185,7 +185,7 @@ public static class ContextDecisionProjector
     }
 
     /// <summary>
-    /// R14-1：从检索候选的 Kind 与 Metadata 推断来源 channel。
+    /// 从检索候选的 Kind 与 Metadata 推断来源 channel。
     /// 同一候选可能由多个 channel 贡献，此处返回单元素列表（向后兼容）。
     /// </summary>
     private static IReadOnlyList<string> ResolveRetrievalChannelSources(ContextRetrievalCandidate candidate)
@@ -208,7 +208,7 @@ public static class ContextDecisionProjector
     }
 
     /// <summary>
-    /// R14-1：从检索决策的 Kind 与 Metadata 推断来源 channel（重载，用于 dropped items）。
+    /// 从检索决策的 Kind 与 Metadata 推断来源 channel（重载，用于 dropped items）。
     /// </summary>
     private static IReadOnlyList<string> ResolveRetrievalChannelSources(ContextRetrievalDecision decision)
     {
@@ -230,11 +230,11 @@ public static class ContextDecisionProjector
     }
 
     // =========================================================================
-    // R18-2：envelope-to-decision 投影路径（新增，不替换 ProjectPackage/ProjectRetrieval）
+    // envelope-to-decision 投影路径（新增，不替换 ProjectPackage/ProjectRetrieval）
     // =========================================================================
 
     /// <summary>
-    /// R18-2：从 <see cref="ContextDecisionResult"/>（envelope 集合）投影决策记录。
+    /// 从 <see cref="ContextDecisionResult"/>（envelope 集合）投影决策记录。
     /// 与 <see cref="ProjectPackage"/> / <see cref="ProjectRetrieval"/> 并存，
     /// 用于 R18-3 / R18-4 阶段的 adapter 路径。envelope 集合保持不变。
     /// </summary>

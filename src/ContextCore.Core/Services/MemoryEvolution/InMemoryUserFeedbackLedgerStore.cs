@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R29 WP-E-5：<see cref="IUserFeedbackLedger"/> 的 in-memory 实现。
+/// <see cref="IUserFeedbackLedger"/> 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 设计原则：

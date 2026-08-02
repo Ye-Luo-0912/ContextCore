@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.BoundedContext;
 
 /// <summary>
-/// R22-2：默认 <see cref="IContextRepairDetector"/> 实现。
+/// 默认 <see cref="IContextRepairDetector"/> 实现。
 /// 基于 <see cref="PackageQualityReport"/> 8 个指标检测 7 类确定性异常。
 /// </summary>
 /// <remarks>

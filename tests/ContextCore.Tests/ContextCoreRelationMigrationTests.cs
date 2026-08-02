@@ -8,7 +8,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P3.1-e：关系迁移测试 — 验证 collection 范围、dry-run、幂等性和批量节点加载。
+/// 关系迁移测试 — 验证 collection 范围、dry-run、幂等性和批量节点加载。
 /// </summary>
 [TestClass]
 public class ContextCoreRelationMigrationTests

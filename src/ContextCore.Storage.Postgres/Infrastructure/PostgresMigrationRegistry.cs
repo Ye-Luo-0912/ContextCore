@@ -4,7 +4,7 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
 /// 版本化 migration 注册表，按版本顺序排列。
-/// R14-PG-8：当前只包含基线 migration（cumulative idempotent），未来可追加按版本切分的 migration。
+/// 当前只包含基线 migration（cumulative idempotent），未来可追加按版本切分的 migration。
 /// 注册表是不可变的，启动时构建一次。
 /// </summary>
 public static class PostgresMigrationRegistry

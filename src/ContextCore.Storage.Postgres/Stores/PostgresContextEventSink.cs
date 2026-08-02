@@ -19,7 +19,7 @@ public sealed class PostgresContextEventSink : PostgresStoreBase, IContextEventS
     }
 
     /// <summary>
-    /// P0-8：审计事件必须落盘。PostgresContextEventSink 声明为 <see cref="ContextEventSinkKind.Required"/>，
+    /// 审计事件必须落盘。PostgresContextEventSink 声明为 <see cref="ContextEventSinkKind.Required"/>，
     /// 使 <see cref="CompositeContextEventSink"/> 的 Kind 升级为 Required，
     /// 外层 <see cref="BoundedChannelContextEventSink"/> 绕过有界通道、直接同步写入 PostgreSQL。
     /// 审计事件不会因通道满而丢失。
@@ -64,7 +64,7 @@ public sealed class PostgresContextEventSink : PostgresStoreBase, IContextEventS
     }
 
     /// <summary>
-    /// R13.4 #1：批量写入路径。在单个连接 + 单个事务内通过 multi-row VALUES INSERT
+    /// 批量写入路径。在单个连接 + 单个事务内通过 multi-row VALUES INSERT
     /// 一次性写入所有事件，避免逐行 round-trip 开销。
     /// 事件分块提交以避免单条 SQL 参数数量超过 PostgreSQL 65535 限制
     /// （每行 13 个参数，分块上限 4000 行留出余量）。

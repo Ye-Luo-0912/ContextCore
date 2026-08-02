@@ -5,7 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate Benchmark CI 验收测试
+// Benchmark CI 验收测试
 //
 // 验证 Benchmark CI 基线的两个硬门控：
 //   1. 已提交的 benchmark JSON 基线每个 case 的样本数 N >= 15

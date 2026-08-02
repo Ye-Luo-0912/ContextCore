@@ -115,7 +115,7 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
         ArgumentNullException.ThrowIfNull(request.Messages);
         ArgumentNullException.ThrowIfNull(request.Tools);
 
-        // P0-1 关键修复：IModelGateway 未注册 → 抛异常（让 Run 进入 Failed），不再包装为最终文本。
+        // 关键修复：IModelGateway 未注册 → 抛异常（让 Run 进入 Failed），不再包装为最终文本。
         if (_modelGateway is null)
         {
             _logger?.LogError(
@@ -140,7 +140,7 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
         catch (Exception ex)
         {
             sw.Stop();
-            // P0-1 关键修复：模型网关调用异常 → 抛异常（让 Run 进入 Failed），不包装为最终文本。
+            // 关键修复：模型网关调用异常 → 抛异常（让 Run 进入 Failed），不包装为最终文本。
             _logger?.LogError(ex,
                 "ModelGateway ChatWithTools 调用异常。runId={RunId} modelArtifactId={ModelArtifactId}",
                 request.RunId, request.ModelArtifactId);

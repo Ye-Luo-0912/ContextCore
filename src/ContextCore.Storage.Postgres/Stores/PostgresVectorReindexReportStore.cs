@@ -6,7 +6,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL vector reindex 报告存储。
-/// R14-PG-5：替代 UnsupportedVectorReindexReportStore，让 Postgres provider 在 HA 场景下能持久化 reindex 执行报告。
+/// 替代 UnsupportedVectorReindexReportStore，让 Postgres provider 在 HA 场景下能持久化 reindex 执行报告。
 /// </summary>
 public sealed class PostgresVectorReindexReportStore : PostgresStoreBase, IVectorReindexReportStore
 {

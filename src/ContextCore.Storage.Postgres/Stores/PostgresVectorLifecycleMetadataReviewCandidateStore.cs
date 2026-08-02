@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL vector lifecycle metadata review candidate 存储。
-/// R14-PG-5：替代 UnsupportedVectorLifecycleMetadataReviewCandidateStore，让 Postgres provider 在 HA 场景下能持久化人工 review 队列。
+/// 替代 UnsupportedVectorLifecycleMetadataReviewCandidateStore，让 Postgres provider 在 HA 场景下能持久化人工 review 队列。
 /// </summary>
 public sealed class PostgresVectorLifecycleMetadataReviewCandidateStore : PostgresStoreBase, IVectorLifecycleMetadataReviewCandidateStore
 {

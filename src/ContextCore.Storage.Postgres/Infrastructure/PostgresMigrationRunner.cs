@@ -13,30 +13,30 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// <summary>
     /// 当前 schema 版本标识符。每次修改 DDL（新增表/列/索引）时需递增此版本。
     /// 格式：<c>cc-schema-vN</c>，N 为单调递增整数。
-    /// P1-5：v7 → v8，新增 relation_outbox 表与索引。
-    /// R14-PG-2：v8 → v9，新增 decision_traces 表与索引。
-    /// R14-PG-3：v9 → v10，新增 short-term memory / promotion / candidate review 表与索引。
-    /// R14-PG-4：v10 → v11，新增 context learning / governance review 表与索引。
-    /// R14-PG-5：v11 → v12，新增 vector lifecycle + artifact 表与索引。
-    /// R14-PG-6：v12 → v13，新增 context_state_versions 表用于分布式版本号。
-    /// R26-1：v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
-    /// R27-1：v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
-    /// P0-7：v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
+    /// v7 → v8，新增 relation_outbox 表与索引。
+    /// v8 → v9，新增 decision_traces 表与索引。
+    /// v9 → v10，新增 short-term memory / promotion / candidate review 表与索引。
+    /// v10 → v11，新增 context learning / governance review 表与索引。
+    /// v11 → v12，新增 vector lifecycle + artifact 表与索引。
+    /// v12 → v13，新增 context_state_versions 表用于分布式版本号。
+    /// v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
+    /// v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
+    /// v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
     /// WS-A：v16 → v17，新增 policy_bundles + policy_activations 表与索引（Postgres Policy Registry 持久化 + CAS 激活）。
-    /// R28-B.6 阶段 E：v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
-    /// R28-B.8：v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
-    /// R28-E：v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
-    /// R29 WP-B-1：v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
-    /// R29 WP-A-1：v23 → v24，新增 model_artifacts 表与索引（Model Artifact Registry 持久化，集中管理 ModelArtifactDescriptor 的注册与查询）。
-    /// R29 WP-E-3：v24 → v25，新增 vw_utility_ledger_training_data 视图（训练数据导出 SQL 接口，供 ad-hoc 查询与 BI 工具直接消费）。
-    /// R29 WP-E-4：v25 → v26，新增 vw_utility_ledger_calibration_data 视图（校准数据导出 SQL 接口，predicted / observed / weight 三段式）。
-    /// R29 WP-E-5：v26 → v27，新增 user_feedback_entries 表与索引（用户显式反馈接入 ledger：thumbs up/down + 评分修正 + 文本反馈）。
-    /// P0-3：v27 → v28，tool_dispatch_journal_entries.idempotency_key 索引由普通 index 升级为 UNIQUE partial index，
+    /// 阶段 E：v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
+    /// v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
+    /// v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
+    /// v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
+    /// v23 → v24，新增 model_artifacts 表与索引（Model Artifact Registry 持久化，集中管理 ModelArtifactDescriptor 的注册与查询）。
+    /// v24 → v25，新增 vw_utility_ledger_training_data 视图（训练数据导出 SQL 接口，供 ad-hoc 查询与 BI 工具直接消费）。
+    /// v25 → v26，新增 vw_utility_ledger_calibration_data 视图（校准数据导出 SQL 接口，predicted / observed / weight 三段式）。
+    /// v26 → v27，新增 user_feedback_entries 表与索引（用户显式反馈接入 ledger：thumbs up/down + 评分修正 + 文本反馈）。
+    /// v27 → v28，tool_dispatch_journal_entries.idempotency_key 索引由普通 index 升级为 UNIQUE partial index，
     ///       防止不同 request_id 使用相同幂等键分别执行（外部副作用 exactly-once 的数据库层兜底）。
     /// 任务 F：v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
     /// 任务 D：v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
     ///       （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
-    /// P0-3 CAS-2：v32 → v33，tool_dispatch_journal_entries 追加 payload_digest / workspace_id / run_id 列，
+    /// CAS-2：v32 → v33，tool_dispatch_journal_entries 追加 payload_digest / workspace_id / run_id 列，
     ///       支持 PrepareAsync 语义等价校验，防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
     /// Learning Loop Durable Outbox：v33 → v34，新增 learning_event_outbox 表与索引。
     ///       将 Utility Ledger 物化从 fire-and-forget Task.Run 改为 Durable Outbox 模式：
@@ -48,7 +48,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///       - 每次 UPSERT 覆盖该实例最新累计值（不再追加行），聚合时只汇总当前 epoch 的最新快照
     ///       - 修复 SUM(total_observations) 重复累计、InstanceCount=COUNT(*) 误算样本行数、
     ///         旧 Canary 阶段数据污染新阶段、表无限增长等问题。
-    /// P0-6：v37 → v38，新增 model_activation_audit 表与索引（Model Control Plane 激活审计持久化，
+    /// v37 → v38，新增 model_activation_audit 表与索引（Model Control Plane 激活审计持久化，
     ///   记录 Activate/Rollback/Retire/Shadow/Warmup 等模型生命周期事件，含 previous_model_id /
     ///   operator / reason / node_id 等业务字段，支持 HA 多节点对账与 Champion/Challenger 推进追溯）。
     /// 运行时能力补齐：v38 → v39，新增 agent_run_approvals + agent_run_leases 表与索引：
@@ -56,18 +56,18 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///     让进程崩溃恢复后可重新加载未决审批，外部审批系统通过 approval_id 提交决策。
     ///   - agent_run_leases：HA Run Owner Lease（PostgreSQL-backed CAS 租约），
     ///     确保同一时刻仅一个 Host 实例处理同一 Run，复用 canary_leader_leases 模式。
-    /// P0-8：v39 → v40，learning_event_outbox 追加 lease_token 列。AcquirePendingAsync 生成唯一 token
+    /// v39 → v40，learning_event_outbox 追加 lease_token 列。AcquirePendingAsync 生成唯一 token
     ///   并写入数据库；MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 lease_token CAS 校验
     ///   仅持有者可 Ack/Nack/Renew——修复旧 Worker lease 过期被抢占后越权 Ack 新 Worker lease 的问题。
-    /// P0-4：v40 → v41，agent_run_leases 追加 fencing_token bigint 列（单调递增），用于 Agent Run
+    /// v40 → v41，agent_run_leases 追加 fencing_token bigint 列（单调递增），用于 Agent Run
     ///   副作用操作（状态转换 / 事件追加 / Tool dispatch）的 lease fencing 校验，修复 HA Lease 无法
     ///   防止双执行的问题（旧 lease 被抢占后，过期持有者的 UPDATE 因 fencing_token 不匹配而影响 0 行）。
-    /// P3：v41 → v42，context_items 追加 search_vector tsvector 生成列 + GIN 索引，
+    /// v41 → v42，context_items 追加 search_vector tsvector 生成列 + GIN 索引，
     ///   Lexical 检索由 (data->>'Content') ILIKE '%query%' 全表扫描改为
     ///   websearch_to_tsquery + ts_rank_cd 走 GIN 索引。
-    /// P6：v41 → v42，context_items 追加 content_hash / content_token_cost 列，
+    /// v41 → v42，context_items 追加 content_hash / content_token_cost 列，
     ///   摄取阶段持久化 SHA-256 与精确 token cost，Provider 直接读取不再在线重复计算。
-    /// P10/P11/P12：v42 → v43，Canary 与性能真相三项修复：
+    /// v42 → v43，Canary 与性能真相三项修复：
     ///   - P10：canary_metrics_samples 追加 v2_latency_sketch / legacy_latency_sketch bytea 列，
     ///     各实例持久化 DDSketch 字节，Leader 聚合时 MergeFrom 合并后查询总体 P95，
     ///     替代对单实例 P95 加权平均（加权平均会低估尾延迟）。
@@ -77,7 +77,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   - P12：canary_leader_leases 追加 fencing_token bigint 列（单调递增），
     ///     每次 TryAcquireAsync 成功获取（含抢占过期）时递增；AdvanceEpochAsync 的 UPDATE
     ///     校验 WHERE fencing_token <= @fencingToken，旧 Leader（fencing token 较小）推进失败。
-    /// WP-2：v43 → v44，agent_runs 追加 idempotency_key text 列与 partial UNIQUE 索引
+    /// v43 → v44，agent_runs 追加 idempotency_key text 列与 partial UNIQUE 索引
     ///   (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL，
     ///   让 POST /api/agents/runs 在提供 IdempotencyKey 时返回已有 Run（200 OK）而非创建重复 Run，
     ///   防止客户端重试/网络抖动导致同一业务意图被多次执行。
@@ -95,13 +95,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// Perf-5：v45 → v46，context_items 启用 pg_trgm 扩展；search_vector 改为 CJK 预分词
     ///   （regexp_replace 在每个 CJK 字符后插入空格，simple 配置即可按字符切分）；
     ///   新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
-    /// P0-3：v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
+    /// v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
     ///   让 HA 崩溃恢复时已 Committed/ResultDelivered 的 tool 结果可跨进程读取，防止外部副作用结果丢失）。
-    /// P0-4：v48 → v49，修复 Durable Tool Result 主键结构：tool_dispatch_results 主键由 tool_call_id
+    /// v48 → v49，修复 Durable Tool Result 主键结构：tool_dispatch_results 主键由 tool_call_id
     ///   （模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复）改为 request_id（稳定调用身份哈希），
     ///   追加 workspace_id / run_id / invocation_id 列与 UNIQUE(workspace_id, run_id, invocation_id) partial 约束，
     ///   防止另一 Run 覆盖已有 Tool Result；tool_call_id / idempotency_key 改为 partial index。
-    /// P1-5：v50 → v51，utility_ledger_entries 追加 (decision_id, candidate_item_id, expert) UNIQUE 索引，
+    /// v50 → v51，utility_ledger_entries 追加 (decision_id, candidate_item_id, expert) UNIQUE 索引，
     ///   防御性兜底 Learning Lease 过期后旧/新 Worker 重复物化产生重复 ledger 条目（entry_id 幂等之外的数据库层约束）。
     /// </summary>
     public const string SchemaVersion = "cc-schema-v51";
@@ -150,19 +150,19 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "candidate_constraint_reviews",
         "constraint_gap_candidates",
         "constraint_gap_reviews",
-        // R14-PG-5：vector lifecycle + artifact 表
+        // vector lifecycle + artifact 表
         "artifacts",
         "vector_lifecycle_metadata_review_candidates",
         "vector_lifecycle_metadata_reviews",
         "vector_lifecycle_sidecar_metadata",
         "vector_reindex_reports",
-        // R14-PG-6：分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
+        // 分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
         "context_state_versions",
         "context_schema_migrations",
-        // R26-1：Agent Runtime 持久化（checkpoint + task state）
+        // Agent Runtime 持久化（checkpoint + task state）
         "agent_checkpoints",
         "agent_task_states",
-        // R27-1：Evolution Pipeline 持久化（run state + 3 audit tables）
+        // Evolution Pipeline 持久化（run state + 3 audit tables）
         "pipeline_runs",
         "pipeline_canary_assignments",
         "pipeline_rollback_records",
@@ -170,20 +170,20 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // WS-A：Policy Registry 持久化（bundle 注册 + activation CAS 激活）
         "policy_bundles",
         "policy_activations",
-        // R28-B.6 阶段 E：Experiment Recorder 持久化（replay fixture 存储）
+        // 阶段 E：Experiment Recorder 持久化（replay fixture 存储）
         "experiment_replay_fixtures",
-        // R28-B.8：Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit，记录每次 stage 推进的完整历史）
+        // Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit，记录每次 stage 推进的完整历史）
         "stage_transitions",
-        // R28-E：Durable Memory Governance 持久化（Utility Ledger + ConflictSet durable projection）
+        // Durable Memory Governance 持久化（Utility Ledger + ConflictSet durable projection）
         "utility_ledger_entries",
         "conflict_sets",
-        // R29 WP-B-1：Tool Dispatch Journal 持久化（HA 崩溃恢复 exactly-once）
+        // Tool Dispatch Journal 持久化（HA 崩溃恢复 exactly-once）
         "tool_dispatch_journal_entries",
-        // P0-3：Durable Tool Result 缓存持久化（已 Committed/ResultDelivered 的 tool 结果跨进程读取）
+        // Durable Tool Result 缓存持久化（已 Committed/ResultDelivered 的 tool 结果跨进程读取）
         "tool_dispatch_results",
-        // R29 WP-A-1：Model Artifact Registry 持久化（集中管理 ModelArtifactDescriptor 注册与查询）
+        // Model Artifact Registry 持久化（集中管理 ModelArtifactDescriptor 注册与查询）
         "model_artifacts",
-        // R29 WP-E-5：User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）
+        // User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）
         "user_feedback_entries",
         // 任务 F：Agent Run 状态机 + 事件流哈希链持久化
         "agent_runs",
@@ -197,14 +197,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "canary_transition_audit",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
         "learning_event_outbox",
-        // P0-6：Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
+        // Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
         "model_activation_audit",
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化
         "agent_run_approvals",
         "agent_run_leases",
-        // R29 WP-A-2：Desired Model State Store 持久化（HA 多节点模型期望状态同步）
+        // Desired Model State Store 持久化（HA 多节点模型期望状态同步）
         "desired_model_states",
-        // P0-9: Cluster Model Slot (single champion source of truth, single-row table + CAS on revision)
+        // Cluster Model Slot (single champion source of truth, single-row table + CAS on revision)
         "cluster_model_slots"
     ];
 
@@ -299,7 +299,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("constraint_gap_candidates", "status"),
         ("constraint_gap_reviews", "gap"),
         ("constraint_gap_reviews", "reviewed"),
-        // R14-PG-5：vector lifecycle + artifact 索引
+        // vector lifecycle + artifact 索引
         ("artifacts", "kind"),
         ("artifacts", "updated"),
         ("vector_lifecycle_metadata_review_candidates", "created"),
@@ -308,12 +308,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("vector_lifecycle_metadata_reviews", "reviewed"),
         ("vector_lifecycle_sidecar_metadata", "created"),
         ("vector_reindex_reports", "created"),
-        // R26-1：Agent Runtime 持久化索引
+        // Agent Runtime 持久化索引
         ("agent_checkpoints", "session"),
         ("agent_checkpoints", "created"),
         ("agent_task_states", "session"),
         ("agent_task_states", "updated"),
-        // R27-1：Evolution Pipeline 持久化索引
+        // Evolution Pipeline 持久化索引
         ("pipeline_runs", "proposal"),
         ("pipeline_runs", "status"),
         ("pipeline_runs", "updated"),
@@ -327,13 +327,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("policy_bundles", "bundle"),
         ("policy_bundles", "superseded"),
         ("policy_activations", "bundle"),
-        // R28-B.6 阶段 E：experiment_replay_fixtures 索引（按时间倒序 + 按 purpose 过滤）
+        // 阶段 E：experiment_replay_fixtures 索引（按时间倒序 + 按 purpose 过滤）
         ("experiment_replay_fixtures", "recorded"),
         ("experiment_replay_fixtures", "purpose"),
-        // R28-B.8：stage_transitions 索引（按 run_id 查历史 + 按 idempotency_key 去重）
+        // stage_transitions 索引（按 run_id 查历史 + 按 idempotency_key 去重）
         ("stage_transitions", "run_id"),
         ("stage_transitions", "idempotency"),
-        // R28-E：Durable Memory Governance 索引（utility_ledger 按作用域/候选/决策/时间查；conflict_sets 按作用域/状态/候选查）
+        // Durable Memory Governance 索引（utility_ledger 按作用域/候选/决策/时间查；conflict_sets 按作用域/状态/候选查）
         ("utility_ledger_entries", "workspace"),
         ("utility_ledger_entries", "candidate"),
         ("utility_ledger_entries", "decision"),
@@ -342,17 +342,17 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("conflict_sets", "workspace"),
         ("conflict_sets", "status"),
         ("conflict_sets", "candidate"),
-        // R29 WP-B-1：Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
+        // Tool Dispatch Journal 索引（按 state 查待恢复条目 + 按 idempotency_key 去重）
         ("tool_dispatch_journal_entries", "state"),
         ("tool_dispatch_journal_entries", "idempotency"),
-        // P0-4：Durable Tool Result 索引（request_id 为 PK 自动索引；以下为辅助索引）
+        // Durable Tool Result 索引（request_id 为 PK 自动索引；以下为辅助索引）
         ("tool_dispatch_results", "ws_run_invocation"),
         ("tool_dispatch_results", "tool_call_id"),
         ("tool_dispatch_results", "idempotency_key"),
-        // R29 WP-A-1：Model Artifact Registry 索引（按 model_name + registered_at 查最新版本 / 列举所有版本）
+        // Model Artifact Registry 索引（按 model_name + registered_at 查最新版本 / 列举所有版本）
         ("model_artifacts", "model_name"),
         ("model_artifacts", "registered"),
-        // R29 WP-E-5：User Feedback Ledger 索引（按作用域/决策/候选/反馈者/时间查 + 按 idempotency_key 去重）
+        // User Feedback Ledger 索引（按作用域/决策/候选/反馈者/时间查 + 按 idempotency_key 去重）
         ("user_feedback_entries", "workspace"),
         ("user_feedback_entries", "decision"),
         ("user_feedback_entries", "candidate"),
@@ -362,7 +362,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // 任务 F：Agent Run 索引（按 session 列举 + 按 state 拉取待处理；events 主键已覆盖按 run 查询）
         ("agent_runs", "session"),
         ("agent_runs", "state"),
-        // WP-2：idempotency_key partial UNIQUE 索引（按 workspace + idempotency_key 点查 + 去重）
+        // idempotency_key partial UNIQUE 索引（按 workspace + idempotency_key 点查 + 去重）
         ("agent_runs", "idempotency"),
         // 任务 D：Canary HA 聚合索引
         // canary_metrics_samples：按 run + recorded_at 查最新样本（聚合器 SELECT）+ 按 run + instance 去重
@@ -377,7 +377,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("learning_event_outbox", "state"),
         ("learning_event_outbox", "lease"),
         ("learning_event_outbox", "workspace"),
-        // P0-6：model_activation_audit 索引（按 model_artifact_id 查历史 + 按 operation 过滤 + 按时间倒序列举）
+        // model_activation_audit 索引（按 model_artifact_id 查历史 + 按 operation 过滤 + 按时间倒序列举）
         ("model_activation_audit", "model"),
         ("model_activation_audit", "operation"),
         ("model_activation_audit", "timestamp"),
@@ -387,7 +387,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("agent_run_approvals", "run"),
         // agent_run_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
         ("agent_run_leases", "expires"),
-        // R29 WP-A-2：Desired Model State Store 索引（按 updated_at 倒序列举全部状态）
+        // Desired Model State Store 索引（按 updated_at 倒序列举全部状态）
         ("desired_model_states", "updated")
     ];
 
@@ -458,18 +458,18 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var contextJobEvents = Infrastructure.PostgresNames.Table(options, "context_job_events");
         var vectorIndexEntries = Infrastructure.PostgresNames.Table(options, "vector_index_entries");
         var vectorIndexManifests = Infrastructure.PostgresNames.Table(options, "vector_index_manifests");
-        // R14-PG-5：vector lifecycle + artifact 表
+        // vector lifecycle + artifact 表
         var vectorReindexReports = Infrastructure.PostgresNames.Table(options, "vector_reindex_reports");
         var vectorLifecycleMetadataReviewCandidates = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_metadata_review_candidates");
         var vectorLifecycleMetadataReviews = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_metadata_reviews");
         var vectorLifecycleSidecarMetadata = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_sidecar_metadata");
         var artifacts = Infrastructure.PostgresNames.Table(options, "artifacts");
-        // R14-PG-6：分布式 context state 版本号表
+        // 分布式 context state 版本号表
         var contextStateVersions = Infrastructure.PostgresNames.Table(options, "context_state_versions");
-        // R26-1：Agent Runtime 持久化表
+        // Agent Runtime 持久化表
         var agentCheckpoints = Infrastructure.PostgresNames.Table(options, "agent_checkpoints");
         var agentTaskStates = Infrastructure.PostgresNames.Table(options, "agent_task_states");
-        // R27-1：Evolution Pipeline 持久化表
+        // Evolution Pipeline 持久化表
         var pipelineRuns = Infrastructure.PostgresNames.Table(options, "pipeline_runs");
         var pipelineCanaryAssignments = Infrastructure.PostgresNames.Table(options, "pipeline_canary_assignments");
         var pipelineRollbackRecords = Infrastructure.PostgresNames.Table(options, "pipeline_rollback_records");
@@ -477,22 +477,22 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // WS-A：Policy Registry 持久化表
         var policyBundles = Infrastructure.PostgresNames.Table(options, "policy_bundles");
         var policyActivations = Infrastructure.PostgresNames.Table(options, "policy_activations");
-        // R28-B.6 阶段 E：Experiment Recorder 持久化表
+        // 阶段 E：Experiment Recorder 持久化表
         var experimentReplayFixtures = Infrastructure.PostgresNames.Table(options, "experiment_replay_fixtures");
-        // R28-B.8：Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit）
+        // Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit）
         var stageTransitions = Infrastructure.PostgresNames.Table(options, "stage_transitions");
-        // R28-E：Durable Memory Governance 持久化表
+        // Durable Memory Governance 持久化表
         var utilityLedgerEntries = Infrastructure.PostgresNames.Table(options, "utility_ledger_entries");
         var conflictSets = Infrastructure.PostgresNames.Table(options, "conflict_sets");
-        // R29 WP-B-1：Tool Dispatch Journal 持久化表
+        // Tool Dispatch Journal 持久化表
         var toolDispatchJournalEntries = Infrastructure.PostgresNames.Table(options, "tool_dispatch_journal_entries");
-        // P0-3：Durable Tool Result 缓存持久化表
+        // Durable Tool Result 缓存持久化表
         var toolDispatchResults = Infrastructure.PostgresNames.Table(options, "tool_dispatch_results");
-        // P0-4：tool_dispatch_results 主键约束名（Postgres 默认 {table}_pkey），用于 DROP CONSTRAINT
+        // tool_dispatch_results 主键约束名（Postgres 默认 {table}_pkey），用于 DROP CONSTRAINT
         var toolDispatchResultsPkey = $"{options.TablePrefix}tool_dispatch_results_pkey";
-        // R29 WP-A-1：Model Artifact Registry 持久化表
+        // Model Artifact Registry 持久化表
         var modelArtifacts = Infrastructure.PostgresNames.Table(options, "model_artifacts");
-        // R29 WP-E-5：User Feedback Ledger 持久化表
+        // User Feedback Ledger 持久化表
         var userFeedbackEntries = Infrastructure.PostgresNames.Table(options, "user_feedback_entries");
         // 任务 F：Agent Run 状态机 + 事件流哈希链持久化表
         var agentRuns = Infrastructure.PostgresNames.Table(options, "agent_runs");
@@ -505,13 +505,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var canaryPipelines = Infrastructure.PostgresNames.Table(options, "canary_pipelines");
         var canaryTransitionAudit = Infrastructure.PostgresNames.Table(options, "canary_transition_audit");
         var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
-        // P0-6：Model Control Plane 激活审计持久化表
+        // Model Control Plane 激活审计持久化表
         var modelActivationAudit = Infrastructure.PostgresNames.Table(options, "model_activation_audit");
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化表
         var agentRunApprovals = Infrastructure.PostgresNames.Table(options, "agent_run_approvals");
         var agentRunLeases = Infrastructure.PostgresNames.Table(options, "agent_run_leases");
         var desiredModelStates = Infrastructure.PostgresNames.Table(options, "desired_model_states");
-        // P0-9: Cluster Model Slot (single champion source of truth)
+        // Cluster Model Slot (single champion source of truth)
         var clusterModelSlots = Infrastructure.PostgresNames.Table(options, "cluster_model_slots");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
@@ -2300,7 +2300,7 @@ CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
 
     public IReadOnlyList<PostgresStoreMigration> ListMigrations()
     {
-        // R14-PG-8：从版本化注册表读取，避免重复维护。
+        // 从版本化注册表读取，避免重复维护。
         return PostgresMigrationRegistry.ToStoreMigrationList();
     }
 
@@ -2354,7 +2354,7 @@ CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
     /// <summary>执行建表迁移。该方法幂等，可在服务启动或首次访问存储时调用。</summary>
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
-        // P0 冻结：版本已匹配时跳过完整 DDL 批次，避免重复执行 150+ CREATE TABLE IF NOT EXISTS。
+        // 冻结：版本已匹配时跳过完整 DDL 批次，避免重复执行 150+ CREATE TABLE IF NOT EXISTS。
         // Docker Desktop / WSL2 上即使幂等重跑也需要 3+ 分钟，会触发 socket read timeout。
         // 首次迁移成功后 schema_versions 表会记录 SchemaVersion，后续调用直接 short-circuit 返回。
         var appliedVersion = await GetAppliedVersionAsync(cancellationToken).ConfigureAwait(false);
@@ -2651,7 +2651,7 @@ CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
     }
 
     /// <summary>
-    /// R14-PG-8：查询 context_schema_migrations 表中已应用的 migration 历史，按 applied_at 升序。
+    /// 查询 context_schema_migrations 表中已应用的 migration 历史，按 applied_at 升序。
     /// 表不存在时返回空列表（数据库尚未迁移）。
     /// </summary>
     public async Task<IReadOnlyList<PostgresMigrationHistoryEntry>> GetMigrationHistoryAsync(CancellationToken cancellationToken = default)
@@ -2689,7 +2689,7 @@ ORDER BY applied_at ASC;
     }
 
     /// <summary>
-    /// R14-PG-8：回滚到指定 schema 版本。
+    /// 回滚到指定 schema 版本。
     /// 当前 baseline migration 不支持真实回滚（cumulative idempotent DDL），调用会返回 RolledBack=false
     /// 并在 Diagnostics 中说明原因。未来按版本切分的 SupportsRollback=true 的 migration 实现后，
     /// 此方法将调用其 DownAsync 并更新 context_schema_migrations。

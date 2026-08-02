@@ -24,7 +24,7 @@ public enum InferencePhase : byte
 }
 
 /// <summary>
-/// R29 WP-A-2：OnnxInferenceEngine 配置。
+/// OnnxInferenceEngine 配置。
 /// 控制 ONNX 模型加载与推理的输入/输出张量映射、线程数与超时。
 /// </summary>
 /// <remarks>
@@ -127,7 +127,7 @@ public sealed class OnnxInferenceEngineOptions
     public bool EnableMemoryPattern { get; init; } = true;
 
     /// <summary>
-    /// P3 步骤3：单次 session.Run 的最大行数限制。
+    /// 单次 session.Run 的最大行数限制。
     /// 默认 0 = 不限制（不分片）。
     /// 大于 0 时，当 FeatureBatch.RowCount 超过此值，OnnxInferenceEngine 会按 MaxBatchSize
     /// 分片调用 session，合并各片输出。这避免 large batch 一次性加载到 GPU 显存导致 OOM。
@@ -139,7 +139,7 @@ public sealed class OnnxInferenceEngineOptions
     public int MaxBatchSize { get; init; } = 0;
 
     /// <summary>
-    /// P3 步骤4：是否在引擎构造后自动执行 warmup。
+    /// 是否在引擎构造后自动执行 warmup。
     /// 默认 true；warmup 用一个 1 行全 0 的 dummy FeatureBatch 调用一次 session.InferBatchAsync，
     /// 让 ORT 完成 graph optimization 与内存分配，避免首次真实推理的冷启动延迟。
     /// </summary>
@@ -243,7 +243,7 @@ public sealed class OnnxInferenceEngineOptions
     public int MaxOrphanedInferences { get; init; } = 0;
 
     /// <summary>
-    /// P5 热路径优化：推理阶段耗时回调。
+    /// 热路径优化：推理阶段耗时回调。
     /// 非空时，<see cref="OnnxInferenceEngine"/> 在每次推理的各阶段（Queue/Copy/Run/Parse）
     /// 完成后调用此回调，上报阶段级耗时。
     /// </summary>

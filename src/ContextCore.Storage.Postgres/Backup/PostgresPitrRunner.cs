@@ -5,7 +5,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Backup;
 
 /// <summary>
-/// R14-PG-10：PostgreSQL PITR（Point-In-Time Recovery）执行器。
+/// PostgreSQL PITR（Point-In-Time Recovery）执行器。
 /// 通过 <c>ALTER SYSTEM</c> 启用 WAL 归档，<c>pg_basebackup</c> 创建基础备份，
 /// 再通过 <c>recovery.signal</c> + <c>restore_command</c> 在目标实例上重放 WAL 至指定时间点。
 /// </summary>

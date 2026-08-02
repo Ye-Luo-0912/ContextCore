@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ========================================================================================
-// P8 — Learning Loop V1 契约（Dataset / Model Registry / Canary / Rollback）
+// — Learning Loop V1 契约（Dataset / Model Registry / Canary / Rollback）
 //
 // 硬边界（来自 project memory）：
 // - 学习闭环第一条：PromotionJudge 验证训练与部署基础设施（最小作用域）

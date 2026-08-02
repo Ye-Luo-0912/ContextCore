@@ -6,7 +6,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R14-2 Package Quality 指标测试。验证 8 个确定性指标的计算逻辑与边界条件。
+/// Package Quality 指标测试。验证 8 个确定性指标的计算逻辑与边界条件。
 /// </summary>
 [TestClass]
 [TestCategory("Unit")]

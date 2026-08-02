@@ -10,7 +10,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <summary>
 /// PostgreSQL 短期记忆存储，负责保存短期原始事件、工作项并提供只读摘要。
 /// active 与 archive 分表保存，archive 为保留而非删除。
-/// R14-PG-3：替代 UnsupportedShortTermMemoryStore，让 Postgres provider 在 HA 场景下能持久化短期记忆。
+/// 替代 UnsupportedShortTermMemoryStore，让 Postgres provider 在 HA 场景下能持久化短期记忆。
 /// </summary>
 public sealed class PostgresShortTermMemoryStore : PostgresStoreBase, IShortTermMemoryStore
 {

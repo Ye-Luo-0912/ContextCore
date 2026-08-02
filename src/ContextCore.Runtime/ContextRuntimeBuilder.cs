@@ -25,7 +25,7 @@ public static class ContextRuntimeBuilder
         ArgumentNullException.ThrowIfNull(options);
 
         // 关系扩展主链
-        // P0-10.4: 优先使用 options 注入的 RelationTypeRegistry（Service DI singleton），
+        // 优先使用 options 注入的 RelationTypeRegistry（Service DI singleton），
         // 缺省时回退到本地 new，保持 ControlRoom / Evaluation 路径无需显式提供。
         var relationTypeRegistry = options.RelationTypeRegistry ?? new RelationTypeRegistry();
         var relationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
@@ -55,7 +55,7 @@ public static class ContextRuntimeBuilder
             cacheAccessor: options.CacheAccessor);
 
         // 检索器（Full profile 传入 trace stores / decision trace）
-        // R13.3 #2：优先使用 capabilities 派生 fanout；为 null 时由 HybridContextRetriever 回退到 namespace 推断
+        // 优先使用 capabilities 派生 fanout；为 null 时由 HybridContextRetriever 回退到 namespace 推断
         RetrievalFanoutOptions? fanoutOptions = null;
         if (options.Capabilities is { } capabilities)
         {

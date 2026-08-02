@@ -15,7 +15,7 @@ using ContextCore.Storage.Postgres.Stores;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// R29-Hard-Gate P5：Production Evidence 真实 HTTP Adapter 完整循环 E2E 测试
+// Production Evidence 真实 HTTP Adapter 完整循环 E2E 测试
 //
 // 目标：补齐 WP-5 关键缺口——验证真实 HTTP Adapter（OpenAiCompatibleModelAdapter）
 // 的完整 Agent 循环（User → Assistant tool_call → Tool result → Assistant final），
@@ -115,7 +115,7 @@ public sealed class R29H_ProductionEvidenceRealHttpE2ETests : IAsyncDisposable
                 ApiKey = "test-api-key-realhttp",
                 Enabled = true,
                 Timeout = TimeSpan.FromSeconds(30),
-                // WP-0 需求 7：配置 token 单价，验证 ParseChatResponse 的成本计算
+                // 需求 7：配置 token 单价，验证 ParseChatResponse 的成本计算
                 InputTokenPricePerMillionUsd = 1.0,
                 OutputTokenPricePerMillionUsd = 2.0,
                 Metadata = new Dictionary<string, string>

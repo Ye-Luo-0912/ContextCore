@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-4：CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter 测试。
+/// CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter 测试。
 ///
 /// 覆盖：
 ///   1. RuntimeId / RuntimeKind 正确

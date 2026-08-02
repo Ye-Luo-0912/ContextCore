@@ -80,14 +80,14 @@ public enum AgentRunState : byte
     Cancelled = 9,
 
     /// <summary>
-    /// P0-5：租约丢失（lease 续约失败被其他实例抢占，或 heartbeat 连续异常触发本地 watchdog）。
+    /// 租约丢失（lease 续约失败被其他实例抢占，或 heartbeat 连续异常触发本地 watchdog）。
     /// 区别于用户主动取消的 <see cref="Cancelled"/>：LeaseLost 表示运行时检测到自身不再持有租约，
     /// 可能已有其他实例接管处理；应立即停止副作用操作。
     /// </summary>
     LeaseLost = 10,
 
     /// <summary>
-    /// P0-2：审批通过后待执行原 Tool。
+    /// 审批通过后待执行原 Tool。
     /// Actor 从 AwaitingApproval 恢复时进入此状态，直接执行 ApprovalRequested 事件中保存的
     /// <see cref="PendingToolCommand"/>（不重新调用模型），执行完成后进入 Observing 继续循环。
     /// 确保被批准的 Tool 确定性执行，不依赖模型重生成。
@@ -96,7 +96,7 @@ public enum AgentRunState : byte
 }
 
 /// <summary>
-/// P0-2：待执行的 Tool 命令（审批恢复用）。
+/// 待执行的 Tool 命令（审批恢复用）。
 /// </summary>
 /// <remarks>
 /// 当 Actor 遇到需审批的 Tool 时，将完整 Tool 调用信息持久化到 ApprovalRequested 事件 payload。
@@ -201,20 +201,20 @@ public sealed record AgentRun
     public AgentCostBudget? CostBudget { get; init; }
 
     /// <summary>
-    /// P0-5：模型工件 ID（从 API 入参写入 Run，Actor 按此限定模型）。
+    /// 模型工件 ID（从 API 入参写入 Run，Actor 按此限定模型）。
     /// null = 未限定（由 IAgentModelTransport 自行决定）。
     /// </summary>
     public string? ModelArtifactId { get; init; }
 
     /// <summary>
-    /// P0-5：允许调用的 Tool ID 集合（从 API 入参写入 Run）。
+    /// 允许调用的 Tool ID 集合（从 API 入参写入 Run）。
     /// 空集合 = 未限定（允许所有 Tool）；非空集合 = 仅允许集合中的 Tool。
     /// Actor 在 DispatchToolsAsync 中对每个 ToolCall 检查是否在集合中。
     /// </summary>
     public HashSet<string> AllowedToolIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// P0-5：Run 执行截止时间（UTC）。
+    /// Run 执行截止时间（UTC）。
     /// 从 API 入参 TimeoutSeconds 计算（DeadlineAt = CreatedAt + TimeoutSeconds）。
     /// Actor 在每次模型调用前检查；超过则 Fail。
     /// 替代旧路径中 StartRunAsync 返回后立即 Dispose 的 linked CTS。
@@ -222,14 +222,14 @@ public sealed record AgentRun
     public DateTimeOffset? DeadlineAt { get; init; }
 
     /// <summary>
-    /// P0-5：模型上下文 Token 预算上限。
+    /// 模型上下文 Token 预算上限。
     /// IAgentModelContextProjector.Project 按此截断投影后的消息列表。
     /// 默认 8192；0 或负数 = 不限制（兼容旧路径）。
     /// </summary>
     public int ModelContextTokenBudget { get; init; } = 8192;
 
     /// <summary>
-    /// P0-5：幂等键（从 API 入参写入 Run，用于外部系统去重）。
+    /// 幂等键（从 API 入参写入 Run，用于外部系统去重）。
     /// </summary>
     public string? IdempotencyKey { get; init; }
 }
@@ -400,7 +400,7 @@ public sealed record AgentToolCallRequest
     public string? IdempotencyKey { get; init; }
 
     /// <summary>
-    /// P0-1：模型返回的 Tool 调用 ID（可选）。
+    /// 模型返回的 Tool 调用 ID（可选）。
     /// 真实 LLM function calling 路径下由模型分配（如 OpenAI 的 tool_call_id），
     /// 用于将后续 Tool 观察结果与本次调用关联。确定性 fallback 路径可留空。
     /// </summary>
@@ -408,7 +408,7 @@ public sealed record AgentToolCallRequest
 }
 
 /// <summary>
-/// P1-2: Immutable normalized tool call. Generated once when model response enters Actor.
+/// Immutable normalized tool call. Generated once when model response enters Actor.
 /// All subsequent references (approval, events, journal, tool messages) use this same object.
 /// </summary>
 /// <remarks>
@@ -442,7 +442,7 @@ public sealed record NormalizedToolCall
 }
 
 /// <summary>
-/// P0-1：Agent Tool 定义（用于向模型声明可调用的 Tool 及其参数 schema）。
+/// Agent Tool 定义（用于向模型声明可调用的 Tool 及其参数 schema）。
 /// </summary>
 /// <remarks>
 /// 由调用方（AgentRunActor / RealToolDispatcher）从已注册的 IToolHandler 集合
@@ -466,7 +466,7 @@ public sealed record AgentToolDefinition
 }
 
 /// <summary>
-/// P0-1：Agent 模型调用请求（携带原生 messages + Tool 定义 + 模型工件 + 截止时间）。
+/// Agent 模型调用请求（携带原生 messages + Tool 定义 + 模型工件 + 截止时间）。
 /// </summary>
 /// <remarks>
 /// 替代旧路径 <see cref="IAgentModelTransport.CallAsync(string, IReadOnlyList{AgentMessage}, CancellationToken)"/>
@@ -498,7 +498,7 @@ public sealed record AgentModelRequest
 }
 
 /// <summary>
-/// P0-4：Agent Run 租约围栏（Lease Fence）。
+/// Agent Run 租约围栏（Lease Fence）。
 /// 携带 lease token + fencing token，用于 Tool 执行期间的 fencing 校验，
 /// 确保仅持有最新租约的实例能执行副作用 Tool 调用。
 /// </summary>
@@ -547,7 +547,7 @@ public enum AgentMessageRole : byte
 }
 
 /// <summary>
-/// P0-2：Assistant 消息携带的 Tool 调用条目（原生 function calling 协议）。
+/// Assistant 消息携带的 Tool 调用条目（原生 function calling 协议）。
 /// </summary>
 /// <remarks>
 /// 当模型返回 Tool 调用时，Assistant 消息的 <see cref="AgentMessage.ToolCalls"/> 填充此条目列表。
@@ -596,14 +596,14 @@ public sealed record AgentMessage
     public string? ToolName { get; init; }
 
     /// <summary>
-    /// P0-2：Tool 调用 ID（仅 Role=Tool 时填充；与引发本次观察的 Assistant 消息的
+    /// Tool 调用 ID（仅 Role=Tool 时填充；与引发本次观察的 Assistant 消息的
     /// <see cref="ToolCalls"/>[].<see cref="AgentToolCallEntry.Id"/> 对应）。
     /// 用于多轮 Tool 调用协议中关联 Tool 请求与观察结果（OpenAI / Anthropic 兼容）。
     /// </summary>
     public string? ToolCallId { get; init; }
 
     /// <summary>
-    /// P0-2：Tool 调用列表（仅 Role=Assistant 时填充；模型请求的 Tool 调用）。
+    /// Tool 调用列表（仅 Role=Assistant 时填充；模型请求的 Tool 调用）。
     /// 原生 function calling 响应可能 Content 为空但 ToolCalls 非空。
     /// null = 非 Assistant 消息或无 Tool 调用。
     /// </summary>
@@ -768,7 +768,7 @@ public sealed record AgentContextState
     public List<ToolObservation> ToolObservations { get; init; } = new();
 
     /// <summary>
-    /// P0-1：统一对话流（按时间顺序存储所有对话消息，含 Assistant 与 Tool 角色）。
+    /// 统一对话流（按时间顺序存储所有对话消息，含 Assistant 与 Tool 角色）。
     /// 投影器从此列表按原子协议单元（AssistantToolCallTurn + ToolResultTurn）保序裁剪，
     /// 避免 Messages 与 ToolObservations 分离投影导致 Function Calling 消息顺序破坏。
     /// Actor 在 CallModelAsync/DispatchToolsAsync 中同步追加；RebuildStateFromEventsAsync 重建。
@@ -840,7 +840,7 @@ public sealed record AgentContextState
         }
 
         // 5-6. Conversation / Messages + ToolObservations：根据预算截断
-        // P0-1：优先使用 Conversation（按时间顺序保持 "assistant tool_calls → tool result" 因果顺序）。
+        // 优先使用 Conversation（按时间顺序保持 "assistant tool_calls → tool result" 因果顺序）。
         // Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容）。
         if (tokenBudget <= 0)
         {
@@ -866,7 +866,7 @@ public sealed record AgentContextState
 
         if (Conversation.Count > 0)
         {
-            // P0-1：从 Conversation 按时间顺序纳入（简单截断，不含原子单元逻辑——
+            // 从 Conversation 按时间顺序纳入（简单截断，不含原子单元逻辑——
             // 完整的原子单元裁剪由 DefaultAgentModelContextProjector.ProjectConversation 处理）。
             var recent = new List<AgentMessage>();
             for (var i = Conversation.Count - 1; i >= 0; i--)
@@ -919,7 +919,7 @@ public sealed record AgentContextState
     }
 
     /// <summary>
-    /// P0-1：估算单条消息的 token 数，包含 Content + ToolCalls + ToolName/ToolCallId 开销。
+    /// 估算单条消息的 token 数，包含 Content + ToolCalls + ToolName/ToolCallId 开销。
     /// </summary>
     private int EstimateMessageTokensLocal(AgentMessage msg)
     {
@@ -1003,7 +1003,7 @@ public sealed record AgentApprovalResult
     public required DateTimeOffset DecidedAt { get; init; }
 
     /// <summary>
-    /// P0-6：是否为"等待审批"结果（Pending）。
+    /// 是否为"等待审批"结果（Pending）。
     /// true = 审批已持久化为 Pending 状态，等待外部 ResolveAsync；
     ///        Actor 应转入 AwaitingApproval 状态并退出执行槽（释放 Worker/Semaphore）。
     /// false = 已有决策（Approved=true 或 Approved=false 的拒绝）。
@@ -1012,7 +1012,7 @@ public sealed record AgentApprovalResult
     public bool PendingApproval { get; init; }
 
     /// <summary>
-    /// P0-6：审批记录 ID（PendingApproval=true 时填充，供外部 POST approval 端点定位审批记录）。
+    /// 审批记录 ID（PendingApproval=true 时填充，供外部 POST approval 端点定位审批记录）。
     /// 由 IAgentApprovalGate 生成并持久化到 IAgentApprovalStore。
     /// </summary>
     public string? ApprovalId { get; init; }
@@ -1079,7 +1079,7 @@ public sealed record AgentCostBudget
 // ── 6 个核心接口 ────────────────────────────────────────────────────────────
 
 /// <summary>
-/// P0-3：Agent 模型上下文投影器抽象。
+/// Agent 模型上下文投影器抽象。
 /// 将 AgentRun + ContextDecisionExecutionResult + AgentContextState 投影为
 /// 最终发送给模型的消息列表，确保从 WorkingSet.Materials 取出正文（不只是 ID）。
 /// </summary>
@@ -1121,7 +1121,7 @@ public interface IAgentModelContextProjector
 }
 
 /// <summary>
-/// P0-3：模型上下文投影结果。
+/// 模型上下文投影结果。
 /// </summary>
 public sealed record AgentModelContextProjection
 {
@@ -1183,7 +1183,7 @@ public interface IAgentModelTransport
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-1：以完整 AgentModelRequest 调用模型（携带原生 messages + Tool 定义 + 模型工件 + 截止时间）。
+    /// 以完整 AgentModelRequest 调用模型（携带原生 messages + Tool 定义 + 模型工件 + 截止时间）。
     /// </summary>
     /// <param name="request">模型调用请求（含 messages / tools / modelArtifactId / deadlineAt）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -1230,7 +1230,7 @@ public interface IAgentLoopPolicy
 }
 
 /// <summary>
-/// P1-5: Result of CreateOrGetByIdempotencyKeyAsync (idempotent run creation).
+/// Result of CreateOrGetByIdempotencyKeyAsync (idempotent run creation).
 /// </summary>
 public sealed record AgentRunCreateResult
 {
@@ -1262,7 +1262,7 @@ public interface IAgentRunStore
     ValueTask<AgentRun?> GetAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// WP-2：按 IdempotencyKey 获取 Run 元数据。
+    /// 按 IdempotencyKey 获取 Run 元数据。
     /// 仅当 <see cref="AgentRun.IdempotencyKey"/> 非空时匹配；null 键不参与查询。
     /// </summary>
     /// <param name="workspaceId">Workspace ID（隔离边界）。</param>
@@ -1272,7 +1272,7 @@ public interface IAgentRunStore
     ValueTask<AgentRun?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P1-5: Atomically create a run or return existing one by idempotency key.
+    /// Atomically create a run or return existing one by idempotency key.
     /// Eliminates the TOCTOU race between GetByIdempotencyKeyAsync + CreateAsync.
     /// </summary>
     /// <param name="run">The run to create (must have IdempotencyKey set for idempotent behavior).</param>
@@ -1288,7 +1288,7 @@ public interface IAgentRunStore
     /// <param name="newState">目标状态。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="leaseToken">
-    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
+    /// 可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
     /// UPDATE 的 WHERE 子句追加 lease_token + fencing_token 校验；lease 已被抢占时 0 行受影响，
     /// 抛 <see cref="InvalidOperationException"/>（与 CAS 失败语义一致）。null = 不校验（外部取消/恢复 Worker 等无 lease 路径）。
     /// </param>
@@ -1393,7 +1393,7 @@ public interface IAgentRunEventStore
     /// <param name="event">事件（ContentHash 应已计算填入）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="leaseToken">
-    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
+    /// 可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
     /// 追加事件前校验 lease 仍由当前实例持有；lease 已被抢占时抛 <see cref="InvalidOperationException"/>。
     /// null = 不校验（无 lease 路径）。
     /// </param>
@@ -1464,7 +1464,7 @@ public interface IAgentRunEventStore
     ValueTask<int> GetLastSequenceAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P1-4: Get the latest checkpoint cursor for a Run (used to determine recovery start position).
+    /// Get the latest checkpoint cursor for a Run (used to determine recovery start position).
     /// </summary>
     /// <param name="workspaceId">Workspace ID.</param>
     /// <param name="runId">Run ID.</param>
@@ -1486,7 +1486,7 @@ public interface IAgentRunEventStore
 /// <remarks>
 /// 将原本由 <see cref="IAgentRunStore.TransitionStateAsync"/> + <see cref="IAgentRunStore.UpdateAsync"/>
 /// 分两次网络往返完成的操作合并到事件批量提交的同一事务内，Postgres 实现走单事务。
-/// P0-4 修复双执行：新增 <see cref="LeaseToken"/> + <see cref="FencingToken"/> 可选字段，
+/// 修复双执行：新增 <see cref="LeaseToken"/> + <see cref="FencingToken"/> 可选字段，
 /// 提供时 AppendBatchAsync 在事件追加与状态 CAS 的 WHERE 子句中追加 lease 校验。
 /// </remarks>
 public sealed record AgentRunStateUpdate
@@ -1510,7 +1510,7 @@ public sealed record AgentRunStateUpdate
     public required AgentRun RunSnapshot { get; init; }
 
     /// <summary>
-    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <see cref="FencingToken"/> 同时提供），
+    /// 可选 lease token，用于 fencing 校验。提供时（与 <see cref="FencingToken"/> 同时提供），
     /// AppendBatchAsync 在事件追加与状态 CAS 的 WHERE 子句追加 lease 校验；lease 已被抢占时
     /// 事务回滚并抛 <see cref="InvalidOperationException"/>。null = 不校验（无 lease 路径）。
     /// </summary>
@@ -1579,7 +1579,7 @@ public interface IAgentRunEventNotifier
     void Notify(string workspaceId, string runId, long lastSequence);
 
     /// <summary>
-    /// P0-10：注册订阅句柄（分离订阅注册与事件等待）。
+    /// 注册订阅句柄（分离订阅注册与事件等待）。
     /// 让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。
     /// </summary>
     /// <param name="workspaceId">Workspace ID。</param>
@@ -1600,7 +1600,7 @@ public interface IAgentRunEventNotifier
 }
 
 /// <summary>
-/// P0-10：Agent Run 事件订阅句柄。分离订阅注册与事件等待，
+/// Agent Run 事件订阅句柄。分离订阅注册与事件等待，
 /// 让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。
 /// 实现 <see cref="IAsyncEnumerable{T}"/> 以枚举推送的 sequence，<see cref="IDisposable"/> 以在断开时注销。
 /// </summary>
@@ -1635,7 +1635,7 @@ public interface IDurableToolExecutor
     /// <param name="workspaceId">Workspace ID（journal 作用域校验）。</param>
     /// <param name="toolCall">模型请求的 Tool 调用（含 ToolName + Arguments + 可选 IdempotencyKey）。</param>
     /// <param name="modelTurn">
-    /// P0-6：当前执行期内的模型轮次（每次 IAgentModelTransport.CallAsync 后递增的计数，每次 ExecuteAsync 重置为 0）。
+    /// 当前执行期内的模型轮次（每次 IAgentModelTransport.CallAsync 后递增的计数，每次 ExecuteAsync 重置为 0）。
     /// 参与 RequestId 哈希计算，确保同一执行内不同轮次的相同 Tool 调用产生不同 RequestId，
     /// 避免误将第二次调用作为重复去重（业务级 IdempotencyKey 由 <paramref name="toolCall"/> 单独承载）。
     /// <b>必须是执行期内的相对计数</b>（非累积 ModelCallsUsed），确保崩溃恢复后同一逻辑轮次产生相同 RequestId，
@@ -1747,7 +1747,7 @@ public interface IAgentRunLease
     ValueTask<int> ReapExpiredAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-6：查询指定 Run 是否存在有效（未过期）的活跃租约。
+    /// 查询指定 Run 是否存在有效（未过期）的活跃租约。
     /// Recovery Worker 在原子标记 Run 为 LeaseLost 前校验，避免误杀正被活跃 Actor 持有合法租约的 Run。
     /// </summary>
     /// <param name="runId">Agent Run ID。</param>
@@ -1756,7 +1756,7 @@ public interface IAgentRunLease
     ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-7: Atomically mark a Run as LeaseLost if it has no active lease and its state matches.
+    /// Atomically mark a Run as LeaseLost if it has no active lease and its state matches.
     /// 用于 Recovery Worker 的超时回收：Run 在非终态停留超过 RunExecutionTimeout 且无人持有租约，
     /// 说明原 owner 已丢租（崩溃/网络分区）且未及时被接管——原子写入终态 LeaseLost（区别于 Failed）。
     /// 单条 SQL 原子操作消除 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
@@ -1793,7 +1793,7 @@ public interface IAgentRunLease
 /// 子问题 9：Agent Run 租约信息（TryAcquireAsync 返回值）。
 /// </summary>
 /// <remarks>
-/// P0-4 修复双执行：新增 <see cref="FencingToken"/>（单调递增），用于所有副作用操作
+/// 修复双执行：新增 <see cref="FencingToken"/>（单调递增），用于所有副作用操作
 /// （状态转换 / 事件追加 / Tool dispatch）的 lease 校验。每次租约被重新获取（新持有者或过期抢占）
 /// 时 fencing_token 递增；续约不递增。调用方在每次副作用 UPDATE 时带上 lease_token + fencing_token，
 /// lease 已被抢占时 UPDATE 影响 0 行，调用方检测并中止。
@@ -1813,7 +1813,7 @@ public sealed record LeasedAgentRun
     public required DateTimeOffset ExpiresAt { get; init; }
 
     /// <summary>
-    /// P0-4：Fencing token（单调递增，从 1 开始）。
+    /// Fencing token（单调递增，从 1 开始）。
     /// 每次 TryAcquireAsync 成功获取（含抢占过期租约）时递增；RenewAsync 不递增。
     /// 用于副作用操作的 lease 校验：UPDATE WHERE lease_token + fencing_token 匹配，
     /// lease 被抢占时 0 行受影响，调用方检测并中止。
@@ -1996,7 +1996,7 @@ public interface IAgentApprovalStore
 public interface IPersistentAgentApprovalStore : IAgentApprovalStore
 {
     /// <summary>
-    /// P0-4：原子裁决审批 + 追加审批事件 + CAS 推进 Run 状态（单事务提交）。
+    /// 原子裁决审批 + 追加审批事件 + CAS 推进 Run 状态（单事务提交）。
     /// </summary>
     /// <remarks>
     /// 旧路径分三步（ResolveAsync → AppendAsync 事件 → TransitionStateAsync）非原子提交，
@@ -2034,7 +2034,7 @@ public interface IPersistentAgentApprovalStore : IAgentApprovalStore
 }
 
 /// <summary>
-/// P0-4：原子裁决审批 + Run 状态推进的结果。
+/// 原子裁决审批 + Run 状态推进的结果。
 /// </summary>
 public sealed record ApprovalResolveResult
 {

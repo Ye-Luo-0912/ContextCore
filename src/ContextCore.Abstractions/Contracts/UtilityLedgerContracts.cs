@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R21-2：Utility Ledger + ConflictSet 契约
+// Utility Ledger + ConflictSet 契约
 //
 // 目标：
 //   为 R20 Multi-Expert 选择系统提供"per-Expert per-Candidate utility 贡献账本"
@@ -34,9 +34,9 @@ namespace ContextCore.Abstractions;
 //     ConflictSet 引用关系类型常量
 //
 // 子阶段进度：
-//   R21-2（当前）：契约定义（UtilityLedgerEntry / UtilityLedgerQuery / IUtilityLedgerStore /
+//   （当前）：契约定义（UtilityLedgerEntry / UtilityLedgerQuery / IUtilityLedgerStore /
 //      ConflictSetKind / ConflictSetEntry / ConflictSet / ConflictSetQuery / IConflictSetStore）。
-//   R21-3：完整状态机 + Materializer 实现 + Postgres/InMemory store 实现。
+//   完整状态机 + Materializer 实现 + Postgres/InMemory store 实现。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ namespace ContextCore.Abstractions;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-2：Utility Ledger 条目。记录单个 Candidate 的 per-Expert utility 贡献快照。
+/// Utility Ledger 条目。记录单个 Candidate 的 per-Expert utility 贡献快照。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -118,7 +118,7 @@ public sealed record UtilityLedgerEntry
 }
 
 /// <summary>
-/// R21-2：Utility Ledger 查询条件。
+/// Utility Ledger 查询条件。
 /// </summary>
 public sealed record UtilityLedgerQuery
 {
@@ -151,7 +151,7 @@ public sealed record UtilityLedgerQuery
 }
 
 /// <summary>
-/// R21-2：Utility Ledger 存储接口（read-only）。
+/// Utility Ledger 存储接口（read-only）。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐澄清 #4）：
@@ -187,7 +187,7 @@ public interface IUtilityLedgerStore
 }
 
 /// <summary>
-/// R29 WP-E-1：Utility Ledger 读写契约。继承 <see cref="IUtilityLedgerStore"/> 的读 API，
+/// Utility Ledger 读写契约。继承 <see cref="IUtilityLedgerStore"/> 的读 API，
 /// 并追加异步批量写入方法，供 <c>UtilityLedgerMaterializer</c> 在生产路径（Postgres）与
 /// 开发路径（InMemory）上以统一方式物化决策结果。
 /// </summary>
@@ -213,7 +213,7 @@ public interface IUtilityLedger : IUtilityLedgerStore
 }
 
 /// <summary>
-/// R29 WP-E-2：IUtilityLedger 的可选事务能力接口。
+/// IUtilityLedger 的可选事务能力接口。
 /// 实现 <see cref="IUtilityLedger"/> 的 store 若同时实现此接口，表示可在 <see cref="IWriteTransactionScope"/>
 /// 内执行写入——与 <see cref="ITransactionalConflictSetLedger"/> 共享同一事务，保证 ledger + ConflictSet
 /// 原子提交（避免一边成功、一边失败导致数据不一致）。
@@ -243,7 +243,7 @@ public interface ITransactionalUtilityLedger
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-2：冲突类型枚举。
+/// 冲突类型枚举。
 /// 对齐 ContextRelationTypes（Contradicts / Duplicates / ConflictsWith）+
 /// CandidateDecisionReasonCode（DuplicateSuppressed / SupersededByCurrentVersion）。
 /// </summary>
@@ -272,7 +272,7 @@ public enum ConflictSetKind : byte
 }
 
 /// <summary>
-/// R21-2：ConflictSet 中的单个候选条目。
+/// ConflictSet 中的单个候选条目。
 /// </summary>
 public sealed record ConflictSetEntry
 {
@@ -296,7 +296,7 @@ public sealed record ConflictSetEntry
 }
 
 /// <summary>
-/// R21-2：冲突集合。记录一次决策中互相冲突的候选组。
+/// 冲突集合。记录一次决策中互相冲突的候选组。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -360,7 +360,7 @@ public sealed record ConflictSet
 }
 
 /// <summary>
-/// R21-5b：ConflictSet 解决状态。对齐用户规格中的"resolution status"字段。
+/// ConflictSet 解决状态。对齐用户规格中的"resolution status"字段。
 /// </summary>
 public enum ConflictResolutionStatus : byte
 {
@@ -381,7 +381,7 @@ public enum ConflictResolutionStatus : byte
 }
 
 /// <summary>
-/// R21-2：ConflictSet 查询条件。
+/// ConflictSet 查询条件。
 /// </summary>
 public sealed record ConflictSetQuery
 {
@@ -414,7 +414,7 @@ public sealed record ConflictSetQuery
 }
 
 /// <summary>
-/// R21-2：ConflictSet 存储接口（read-only）。
+/// ConflictSet 存储接口（read-only）。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐澄清 #4）：
@@ -448,7 +448,7 @@ public interface IConflictSetStore
 }
 
 /// <summary>
-/// R29 WP-E-1：ConflictSet 读写契约。继承 <see cref="IConflictSetStore"/> 的读 API，
+/// ConflictSet 读写契约。继承 <see cref="IConflictSetStore"/> 的读 API，
 /// 并追加异步批量写入方法，与 <see cref="IUtilityLedger"/> 对称地供
 /// <c>UtilityLedgerMaterializer</c> 在生产 / 开发路径上统一物化冲突集合。
 /// </summary>
@@ -472,7 +472,7 @@ public interface IConflictSetLedger : IConflictSetStore
 }
 
 /// <summary>
-/// R29 WP-E-2：IConflictSetLedger 的可选事务能力接口。
+/// IConflictSetLedger 的可选事务能力接口。
 /// 实现 <see cref="IConflictSetLedger"/> 的 store 若同时实现此接口，表示可在 <see cref="IWriteTransactionScope"/>
 /// 内执行写入——与 <see cref="ITransactionalUtilityLedger"/> 共享同一事务，保证 ledger + ConflictSet 原子提交。
 /// </summary>
@@ -496,7 +496,7 @@ public interface ITransactionalConflictSetLedger
 }
 
 // ===========================================================================
-// R29 WP-E-5：User Feedback Signal（用户显式反馈接入）
+// User Feedback Signal（用户显式反馈接入）
 //
 // 目标：
 //   将用户对决策结果的显式反馈（thumbs up / thumbs down / 评分修正）写入独立 ledger，
@@ -517,7 +517,7 @@ public interface ITransactionalConflictSetLedger
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-E-5：用户反馈类型。对齐 thumbs up/down 语义 + 评分修正 + 文本反馈。
+/// 用户反馈类型。对齐 thumbs up/down 语义 + 评分修正 + 文本反馈。
 /// </summary>
 public enum UserFeedbackKind : byte
 {
@@ -541,7 +541,7 @@ public enum UserFeedbackKind : byte
 }
 
 /// <summary>
-/// R29 WP-E-5：用户反馈信号条目。与 UtilityLedgerEntry 通过 (DecisionId, CandidateItemId) 关联。
+/// 用户反馈信号条目。与 UtilityLedgerEntry 通过 (DecisionId, CandidateItemId) 关联。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -601,7 +601,7 @@ public sealed record UserFeedbackEntry
 }
 
 /// <summary>
-/// R29 WP-E-5：用户反馈查询条件。
+/// 用户反馈查询条件。
 /// </summary>
 public sealed record UserFeedbackQuery
 {
@@ -634,7 +634,7 @@ public sealed record UserFeedbackQuery
 }
 
 /// <summary>
-/// R29 WP-E-5：用户反馈 Ledger 接口（读 + 写）。
+/// 用户反馈 Ledger 接口（读 + 写）。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -670,7 +670,7 @@ public interface IUserFeedbackLedger
 }
 
 /// <summary>
-/// R29 WP-E-5：用户反馈提交请求（API 入口层 DTO）。
+/// 用户反馈提交请求（API 入口层 DTO）。
 /// 与 <see cref="UserFeedbackEntry"/> 分离，便于入口层做目标类型校验后再映射到 ledger 条目。
 /// </summary>
 /// <remarks>
@@ -725,7 +725,7 @@ public sealed class UserFeedbackSubmitRequest
 }
 
 /// <summary>
-/// R29 WP-E-5：用户反馈提交结果。
+/// 用户反馈提交结果。
 /// </summary>
 public sealed class UserFeedbackSubmitResult
 {

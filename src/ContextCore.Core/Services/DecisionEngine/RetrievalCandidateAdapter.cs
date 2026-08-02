@@ -6,7 +6,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R18-3：Retrieval 候选适配器（ContextRetrievalCandidate → ContextCandidateEnvelope）
+// Retrieval 候选适配器（ContextRetrievalCandidate → ContextCandidateEnvelope）
 //
 // 目标：
 //   让现有 HybridContextRetriever 路径产出的 ContextRetrievalCandidate 集合
@@ -43,7 +43,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R18-3：Retrieval 候选适配器。将 <see cref="ContextRetrievalCandidate"/>
+/// Retrieval 候选适配器。将 <see cref="ContextRetrievalCandidate"/>
 /// 集合转换为 <see cref="ContextCandidateEnvelope"/> 集合，作为现有 Retrieval
 /// 路径与统一 Engine 之间的桥梁。
 /// </summary>
@@ -71,7 +71,7 @@ public static class RetrievalCandidateAdapter
         var constraintLevel = ResolveConstraintLevel(candidate);
         var lifecycleState = ResolveLifecycleState(candidate);
 
-        // P0-5：填充 CanonicalKey / Origins / ExpertContributions / PolicyReference
+        // 填充 CanonicalKey / Origins / ExpertContributions / PolicyReference
         var expertKind = MapSourceToExpertKind(source);
         var canonicalKey = CanonicalCandidateKey.Create(
             workspaceId: context.WorkspaceId,
@@ -99,7 +99,7 @@ public static class RetrievalCandidateAdapter
             PolicyReference = context.PolicyReference,
             Safety = new CandidateSafetyState
             {
-                // P1-1：不再把 Constraint 来源一律视为 hard。
+                // 不再把 Constraint 来源一律视为 hard。
                 // IsMandatory：metadata mandatory 标记 || ConstraintLevel is Hard or System。
                 // IsHardConstraint：仅当 ConstraintLevel == Hard（与 PackageCandidateAdapter 对齐）。
                 // soft_constraint（Soft）与 merged_constraint（Mixed）均不免预算。
@@ -123,7 +123,7 @@ public static class RetrievalCandidateAdapter
             {
                 ChannelSources = ResolveChannelSources(candidate)
             },
-            // P0-5：使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
+            // 使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
             ProvenanceRefs = candidate.SourceRefs
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => new EvidenceRef
@@ -183,7 +183,7 @@ public static class RetrievalCandidateAdapter
         allEnvelopes.AddRange(selectedEnvelopes);
         allEnvelopes.AddRange(droppedEnvelopes);
 
-        // P0-5：填充 WorkspaceId / CollectionId / QueryText / RequestId
+        // 填充 WorkspaceId / CollectionId / QueryText / RequestId
         return new ContextDecisionRequest
         {
             RequestId = string.IsNullOrEmpty(context.RequestId) ? result.OperationId : context.RequestId,
@@ -227,7 +227,7 @@ public static class RetrievalCandidateAdapter
     }
 
     /// <summary>
-    /// P1-1：从 Retrieval 候选的 Metadata 解析约束强制级别。
+    /// 从 Retrieval 候选的 Metadata 解析约束强制级别。
     /// 优先读取 metadata["constraintLevel"]（强类型字段），其次从 metadata["source"] 推导。
     /// 非 Constraint 来源返回 null。
     /// </summary>
@@ -287,7 +287,7 @@ public static class RetrievalCandidateAdapter
     }
 
     /// <summary>
-    /// P0-4：将 dropped 的 <see cref="ContextRetrievalDecision"/> 转换为
+    /// 将 dropped 的 <see cref="ContextRetrievalDecision"/> 转换为
     /// <see cref="ContextCandidateEnvelope"/>，用于 parity 对比中 Legacy dropped 集合。
     /// </summary>
     public static ContextCandidateEnvelope ToEnvelopeFromDecisionPublic(
@@ -301,7 +301,7 @@ public static class RetrievalCandidateAdapter
             ? ContextCandidateSource.WorkingMemory
             : ContextCandidateSource.Lexical;
 
-        // P0-5：填充 CanonicalKey（required）
+        // 填充 CanonicalKey（required）
         var expertKind = MapSourceToExpertKind(source);
         var canonicalKey = CanonicalCandidateKey.Create(
             workspaceId: context.WorkspaceId,
@@ -335,7 +335,7 @@ public static class RetrievalCandidateAdapter
                 ModelConfidence = 0.0,
                 ReasonCode = "dropped-by-retrieval"
             },
-            // P1-2：dropped envelope 填充 workspace/collection/provenance（与 selected 路径一致）
+            // dropped envelope 填充 workspace/collection/provenance（与 selected 路径一致）
             // ContextRetrievalDecision 不含 SourceRefs，故 ProvenanceRefs 仅携带 context 指纹
             ProvenanceRefs = new List<EvidenceRef>
             {
@@ -355,11 +355,11 @@ public static class RetrievalCandidateAdapter
     }
 
     // ----------------------------------------------------------------------
-    // P0-5：CanonicalKey / Expert 派生辅助方法
+    // CanonicalKey / Expert 派生辅助方法
     // ----------------------------------------------------------------------
 
     /// <summary>
-    /// P0-5：将 ContextCandidateSource 映射到 ExpertKind（用于 Origins/ExpertContributions）。
+    /// 将 ContextCandidateSource 映射到 ExpertKind（用于 Origins/ExpertContributions）。
     /// </summary>
     private static ExpertKind MapSourceToExpertKind(ContextCandidateSource source) => source switch
     {
@@ -377,7 +377,7 @@ public static class RetrievalCandidateAdapter
     };
 
     /// <summary>
-    /// P0-5：解析 EntityKind。优先使用 candidate.Type（业务类型），
+    /// 解析 EntityKind。优先使用 candidate.Type（业务类型），
     /// 退回 candidate.Kind 枚举名，最后退回 Source 枚举名。
     /// </summary>
     private static string ResolveEntityKind(ContextRetrievalCandidate candidate, ContextCandidateSource source)
@@ -387,7 +387,7 @@ public static class RetrievalCandidateAdapter
     }
 
     /// <summary>
-    /// P0-5：解析 EntityVersion。优先使用 metadata["version"] / metadata["entityVersion"]，
+    /// 解析 EntityVersion。优先使用 metadata["version"] / metadata["entityVersion"]，
     /// 否则使用 candidate.Content 的 stable content hash。
     /// </summary>
     private static string ResolveEntityVersion(ContextRetrievalCandidate candidate)
@@ -403,7 +403,7 @@ public static class RetrievalCandidateAdapter
     }
 
     /// <summary>
-    /// P0-5：计算 stable content hash（SHA256，截取前 16 字符）。
+    /// 计算 stable content hash（SHA256，截取前 16 字符）。
     /// 用于 EntityVersion 在无显式版本号时的稳定回退。
     /// </summary>
     internal static string ComputeStableContentHash(params object[] parts)

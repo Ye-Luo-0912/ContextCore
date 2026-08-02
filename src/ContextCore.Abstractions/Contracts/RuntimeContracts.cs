@@ -119,7 +119,7 @@ public interface IContextEventSink
     Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// R13.4 #1：批量写入路径。实现应覆盖以利用 File/Postgres 的批量 I/O（单次锁、单次 round-trip）。
+    /// 批量写入路径。实现应覆盖以利用 File/Postgres 的批量 I/O（单次锁、单次 round-trip）。
     /// 默认实现为逐条调用 <see cref="EmitAsync"/>，适用于不支持批量写入的 sink。
     /// </summary>
     /// <param name="events">要批量写入的事件列表。</param>

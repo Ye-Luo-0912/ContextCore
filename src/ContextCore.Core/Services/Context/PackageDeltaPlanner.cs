@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core;
 
 /// <summary>
-/// R15 增量上下文包：默认 delta 规划器实现。
+/// 增量上下文包：默认 delta 规划器实现。
 /// 比较前一个快照与当前请求指纹/store 版本向量，输出 delta 计划。
 /// </summary>
 /// <remarks>
@@ -15,7 +15,7 @@ namespace ContextCore.Core;
 /// <item>部分 store scope 版本变化 → <see cref="PackageDeltaKind.PartialSectionChange"/>（仅受影响 section 重载）</item>
 /// <item>结构性变化或无法判断 → <see cref="PackageDeltaKind.FullRebuildRequired"/>（全量重建）</item>
 /// </list>
-/// R15 V1 实现策略：<see cref="PackageDeltaKind.PartialSectionChange"/> 仍委托到全量构建，
+/// V1 实现策略：<see cref="PackageDeltaKind.PartialSectionChange"/> 仍委托到全量构建，
 /// 仅 <see cref="PackageDeltaKind.NoChange"/> 路径真正复用快照（性能优化）。
 /// 这种保守策略保证等价性：增量构建输出与全量构建输出在所有维度完全一致。
 /// </remarks>
@@ -49,8 +49,8 @@ public sealed class PackageDeltaPlanner : IPackageDeltaPlanner
             var affectedSections = ResolveAffectedSections(previous.SectionDependencies, changedScopes);
             if (affectedSections.Count > 0 && affectedSections.Count < previous.SectionDependencies.Count)
             {
-                // R15 V1: 部分变化也委托全量构建（保守策略保证等价性）
-                // R15 V2 可在此分支实现真正的选择性重载
+                // V1: 部分变化也委托全量构建（保守策略保证等价性）
+                // V2 可在此分支实现真正的选择性重载
                 var reason = $"部分 store scope 变化（{changedScopes.Count} 个 scope），影响 sections: {string.Join(", ", affectedSections)}；R15 V1 委托全量构建";
                 return new PackageDeltaPlan(
                     PackageDeltaKind.PartialSectionChange,

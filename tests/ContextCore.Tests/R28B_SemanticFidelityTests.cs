@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B.7 语义保真硬验收测试（25 项）
+// 语义保真硬验收测试（25 项）
 //
 // 覆盖范围（7 个测试类）：
 //   A. RequestSemanticsAcceptanceTests — RetrievalInput Include 开关 + 必需字段传播（8 项）
@@ -768,7 +768,7 @@ public sealed class ExperimentQueueAcceptanceTests
 }
 
 /// <summary>
-/// R28-B.7 测试 Stub：RecordAsync 始终抛异常的 IExperimentRecorder。
+/// 测试 Stub：RecordAsync 始终抛异常的 IExperimentRecorder。
 /// 用于验证 bounded 队列的重试 + dead-letter 机制。
 /// </summary>
 internal sealed class ThrowingExperimentRecorder : IExperimentRecorder
@@ -862,7 +862,7 @@ public sealed class OtherAcceptanceTests
     public async Task CancellationPropagatesWithoutFallbackInV2OnlyPath()
     {
         // V2 抛出 OperationCanceledException → 必须传播，不转为 fallback success
-        // R28-B.7 验证：Authoritative Runtime 不捕获取消异常
+        // 验证：Authoritative Runtime 不捕获取消异常
         var trackingStore = new CallTrackingContextStore();
         var legacyRetriever = new HybridContextRetriever(trackingStore);
         var throwingV2 = new ThrowingDecisionRuntime(new OperationCanceledException());

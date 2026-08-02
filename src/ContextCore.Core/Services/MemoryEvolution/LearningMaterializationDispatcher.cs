@@ -122,7 +122,7 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
     }
 
     /// <summary>
-    /// P0-9：入队一次 Decision 物化事件并<b>等待持久化完成</b>（Durable Outbox 路径下等待 PostgreSQL INSERT 完成）。
+    /// 入队一次 Decision 物化事件并<b>等待持久化完成</b>（Durable Outbox 路径下等待 PostgreSQL INSERT 完成）。
     /// </summary>
     /// <remarks>
     /// <para>
@@ -165,14 +165,14 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
 
         if (_useOutbox)
         {
-            // P0-9：Durable 路径——直接调用 _outboxStore.EnqueueAsync 并让其异常向上抛，
+            // Durable 路径——直接调用 _outboxStore.EnqueueAsync 并让其异常向上抛，
             // 不走 EnqueueToOutboxAsync 的 try-catch fallback 语义。确保返回前 PostgreSQL 已确认写入。
             await EnqueueToOutboxDurablyAsync(decision, workspaceId, collectionId, cancellationToken)
                 .ConfigureAwait(false);
         }
         else if (_channel is not null)
         {
-            // P0-9：Channel 路径——await WriteAsync 完成，ChannelClosedException 向上抛（不降级）。
+            // Channel 路径——await WriteAsync 完成，ChannelClosedException 向上抛（不降级）。
             var workItem = new LearningMaterializationWorkItem(
                 decision, workspaceId, collectionId, DateTimeOffset.UtcNow);
             await _channel.Writer.WriteAsync(workItem, cancellationToken).ConfigureAwait(false);
@@ -181,7 +181,7 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
     }
 
     /// <summary>
-    /// P0-9：入队一次 Decision 物化事件（best-effort，失败不抛出）。
+    /// 入队一次 Decision 物化事件（best-effort，失败不抛出）。
     /// </summary>
     /// <remarks>
     /// <para>
@@ -207,12 +207,12 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
         string? collectionId = null,
         CancellationToken cancellationToken = default)
     {
-        // P0-9：与原 EnqueueAsync 行为完全一致——内部 try-catch 降级 + FallbackDirectMaterialize。
+        // 与原 EnqueueAsync 行为完全一致——内部 try-catch 降级 + FallbackDirectMaterialize。
         await EnqueueAsync(decision, workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// P0-9：Durable 路径专用——直接调用 outbox store 持久化，失败时异常向上抛（不降级、不 fallback）。
+    /// Durable 路径专用——直接调用 outbox store 持久化，失败时异常向上抛（不降级、不 fallback）。
     /// 与 <see cref="EnqueueToOutboxAsync"/> 的差异：异常向上抛而非调用 <see cref="FallbackDirectMaterializeAsync"/>。
     /// </summary>
     private async Task EnqueueToOutboxDurablyAsync(
@@ -236,7 +236,7 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
             UpdatedAt = now
         };
 
-        // P0-9：失败直接抛出——_outboxStore.EnqueueAsync 内部已包含事务 Commit，
+        // 失败直接抛出——_outboxStore.EnqueueAsync 内部已包含事务 Commit，
         // Commit 成功才返回；任何异常都意味着 PostgreSQL 未确认写入，必须让调用方感知。
         await _outboxStore!.EnqueueAsync(record, null, cancellationToken).ConfigureAwait(false);
         _metrics.IncrementPending();

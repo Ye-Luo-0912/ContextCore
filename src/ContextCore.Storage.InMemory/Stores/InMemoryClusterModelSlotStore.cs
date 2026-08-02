@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>
-/// P0-9：IClusterModelSlotStore 的 in-memory 实现。
+/// IClusterModelSlotStore 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 与 PostgresClusterModelSlotStore 实现同一契约，让 FileSystem / InMemory provider

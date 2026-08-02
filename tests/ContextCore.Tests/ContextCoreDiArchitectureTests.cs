@@ -91,7 +91,7 @@ public sealed class ContextCoreDiArchitectureTests
         typeof(IContextPackagePolicyStore),
         // 4. 多实现注册（按能力多注册，非覆盖语义）
         typeof(IContextJobProcessor),
-        // R28-B.6：7 个 ICandidateProvider（每个 ExpertKind 一个）按能力多注册
+        // 7 个 ICandidateProvider（每个 ExpertKind 一个）按能力多注册
         typeof(ICandidateProvider),
     };
 
@@ -175,7 +175,7 @@ public sealed class ContextCoreDiArchitectureTests
     [TestMethod]
     public async Task Postgres_NoStoreResolvesToUnsupportedPlaceholder()
     {
-        // R14-PG-5 完成后，Postgres provider 的所有原生注册接口都应解析为真实实现，
+        // 完成后，Postgres provider 的所有原生注册接口都应解析为真实实现，
         // 不应有 Unsupported*Store 实例（包括 IArtifactStore 由 PostgresArtifactStore 实现）
         var services = new ServiceCollection();
         services.AddLogging();

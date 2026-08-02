@@ -2079,7 +2079,7 @@ public sealed class ServiceApiIntegrationTests
         }
     }
 
-    // R12.4A #9: Event Sink fail-open——作业成功后 sink 发射失败不得导致作业被 Nack 或标记为失败。
+    // #9: Event Sink fail-open——作业成功后 sink 发射失败不得导致作业被 Nack 或标记为失败。
     // 之前 success-path EmitAsync 抛出会落入外层 catch，触发 NackAsync（CAS 下为 no-op）和误导性的 Error 事件。
     [TestMethod]
     public async Task JobWorker_EventSinkThrowsOnSuccess_JobStillSucceeds()
@@ -2145,7 +2145,7 @@ public sealed class ServiceApiIntegrationTests
     }
 
     /// <summary>
-    /// R12.4A #9: 测试用 Event Sink——所有 EmitAsync 调用均抛出 InvalidOperationException。
+    /// #9: 测试用 Event Sink——所有 EmitAsync 调用均抛出 InvalidOperationException。
     /// 用于验证 JobWorker 的 fail-open 行为。
     /// </summary>
     private sealed class ThrowingEventSink : IContextEventSink

@@ -105,7 +105,7 @@ internal static class RelationEndpoints
 	.WithSummary("获取 relation graph 全局诊断")
 	.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
 
-	// P1-7：流式诊断端点（NDJSON）。必须注册在 {itemId} 参数路由之前，否则 "stream" 会被当成 itemId。
+	// 流式诊断端点（NDJSON）。必须注册在 {itemId} 参数路由之前，否则 "stream" 会被当成 itemId。
 	// 每行一个 RelationGraphDiagnostic JSON 对象，避免一次性将整张关系图载入内存。
 	app.MapGet("/api/relations/diagnostics/stream", async Task<IResult> (
 		string workspaceId,

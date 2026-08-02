@@ -15,15 +15,15 @@ using Microsoft.Extensions.Options;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-S4：Model HA 与推理租约 —— 验收测试
+// Model HA 与推理租约 —— 验收测试
 //
 // 覆盖范围：
-//   §1 Model State Reconciler：Desired State 先写、节点后 reconcile；
+//   Model State Reconciler：Desired State 先写、节点后 reconcile；
 //      全新节点首次启动立即应用 Champion 模型（不等待 Revision 变更）；
 //      期望状态更新（Revision CAS）后节点自动切换模型。
-//   §2 Engine Lease 释放：OnnxInferenceEngine 实现 IAsyncDisposable 且幂等；
+//   Engine Lease 释放：OnnxInferenceEngine 实现 IAsyncDisposable 且幂等；
 //      ModelActivationManager 停用时释放 native ONNX session（修复泄漏）。
-//   §3 结构化失败：length / content_filter / empty_choices 不再落入瞬态
+//   结构化失败：length / content_filter / empty_choices 不再落入瞬态
 //      Unavailable 分类——网关不重试、不触发回退，失败原因精确传播。
 // ===========================================================================
 
@@ -36,7 +36,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
     private const string CalibrationVersion = "s4-cal-v1";
 
     // ===========================================================================
-    // §1 Model State Reconciler：首次启动立即应用 + Desired State 先写
+    // Model State Reconciler：首次启动立即应用 + Desired State 先写
     // ===========================================================================
 
     [TestMethod]
@@ -129,7 +129,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
     }
 
     // ===========================================================================
-    // §2 Engine Lease 释放：DisposeAsync 幂等 + 停用释放 native session
+    // Engine Lease 释放：DisposeAsync 幂等 + 停用释放 native session
     // ===========================================================================
 
     [TestMethod]
@@ -174,7 +174,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
     }
 
     // ===========================================================================
-    // §3 结构化失败：length / content_filter / empty_choices 非瞬态
+    // 结构化失败：length / content_filter / empty_choices 非瞬态
     // ===========================================================================
 
     [TestMethod]

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Service.Tests;
 
 /// <summary>
-/// P0-4：验证 ContextJobWorker 在租约路径与 Dequeue 回退路径下的行为。
+/// 验证 ContextJobWorker 在租约路径与 Dequeue 回退路径下的行为。
 /// 覆盖：
 /// 1. 队列实现 ILeasedJobQueue → worker 使用 AcquireLeaseAsync + 心跳续约，作业成功后 Ack。
 /// 2. 心跳续约返回 false（租约丢失）→ worker 取消 DispatchAsync 且不 Ack/Nack。

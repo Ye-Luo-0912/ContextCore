@@ -3,7 +3,7 @@ using System.Globalization;
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// R28-G P1-6：DDSketch — 相对误差分位数草图
+// DDSketch — 相对误差分位数草图
 //
 // 用于 Canary 样本的 P95 latency 估计，替代全量排序。
 //
@@ -26,13 +26,13 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// R28-G P1-6：相对误差分位数草图（DDSketch）。
+/// 相对误差分位数草图（DDSketch）。
 /// 用于 Canary 样本的 P95 latency 估计，替代全量排序。
 /// </summary>
 /// <remarks>
 /// 线程安全性：本类型不是线程安全的；调用方需自行加锁（CanaryMetricsCollector 的 ObservationBucket 已加锁）。
 /// <para>
-/// P10 修复：支持跨实例合并（<see cref="MergeFrom"/>）与二进制序列化（<see cref="Serialize"/>/<see cref="Deserialize"/>）。
+/// 修复：支持跨实例合并（<see cref="MergeFrom"/>）与二进制序列化（<see cref="Serialize"/>/<see cref="Deserialize"/>）。
 /// 各实例持久化自己的 DDSketch 字节到 canary_metrics_samples.v2_latency_sketch / legacy_latency_sketch bytea 列，
 /// Leader 聚合时读取所有实例的 sketch 字节，反序列化后 MergeFrom 合并，再从合并后的 sketch 查询 P95，
 /// 替代原来对单实例 P95 做加权平均的错误做法（加权平均会低估尾延迟）。
@@ -177,11 +177,11 @@ public sealed class DDSketch
     }
 
     // -----------------------------------------------------------------------
-    // P10 修复：跨实例 DDSketch 合并 + 二进制序列化
+    // 修复：跨实例 DDSketch 合并 + 二进制序列化
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// P10：将另一个 DDSketch 的 bucket 计数合并到当前 sketch。
+    /// 将另一个 DDSketch 的 bucket 计数合并到当前 sketch。
     /// </summary>
     /// <param name="other">被合并的源 sketch（不会被修改）。</param>
     /// <remarks>
@@ -212,7 +212,7 @@ public sealed class DDSketch
     }
 
     /// <summary>
-    /// P10：将 DDSketch 状态序列化为二进制字节，用于持久化到 bytea 列。
+    /// 将 DDSketch 状态序列化为二进制字节，用于持久化到 bytea 列。
     /// </summary>
     /// <returns>二进制表示；空 sketch（totalCount=0）返回空数组。</returns>
     /// <remarks>
@@ -252,7 +252,7 @@ public sealed class DDSketch
     }
 
     /// <summary>
-    /// P10：从二进制字节反序列化 DDSketch。
+    /// 从二进制字节反序列化 DDSketch。
     /// </summary>
     /// <param name="bytes">序列化字节（由 <see cref="Serialize"/> 产生）。</param>
     /// <returns>反序列化的 DDSketch；null/空数组返回 null（表示无 sketch 数据）。</returns>

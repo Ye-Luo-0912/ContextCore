@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R27-2：PostgresPipelineRunStore 单元测试。
+/// PostgresPipelineRunStore 单元测试。
 ///
 /// 不连接真实 PostgreSQL 数据库；仅验证：
 ///   1. 构造函数与服务注册
@@ -312,7 +312,7 @@ public sealed class PostgresPipelineRunStoreTests
     [TestMethod]
     public async Task AddContextCorePostgresStorage_PostgresImplOverridesInMemory()
     {
-        // R27-3：模拟完整启动顺序 — 先注册 InMemory（AddInMemoryPipelineRunStore 默认路径），
+        // 模拟完整启动顺序 — 先注册 InMemory（AddInMemoryPipelineRunStore 默认路径），
         // 再 AddContextCorePostgresStorage（postgres provider），后注册者胜出。
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineRunStore, InMemoryPipelineRunStore>();
@@ -369,7 +369,7 @@ public sealed class PostgresPipelineRunStoreTests
         Status = PipelineRunStatus.Running,
         StartedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
-        // P0-7：HA 字段（Revision 为 required，必须显式赋值）
+        // HA 字段（Revision 为 required，必须显式赋值）
         Revision = revision,
         LastTransitionId = lastTransitionId
     };

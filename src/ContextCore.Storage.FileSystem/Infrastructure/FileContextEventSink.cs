@@ -29,7 +29,7 @@ public sealed class FileContextEventSink : IContextEventSink
     }
 
     /// <summary>
-    /// P0-8：审计事件必须落盘。FileContextEventSink 声明为 <see cref="ContextEventSinkKind.Required"/>，
+    /// 审计事件必须落盘。FileContextEventSink 声明为 <see cref="ContextEventSinkKind.Required"/>，
     /// 使 <see cref="CompositeContextEventSink"/> 的 Kind 升级为 Required，
     /// 外层 <see cref="BoundedChannelContextEventSink"/> 绕过有界通道、直接同步写入文件。
     /// 审计事件不会因通道满而丢失。
@@ -54,7 +54,7 @@ public sealed class FileContextEventSink : IContextEventSink
     }
 
     /// <summary>
-    /// R13.4 #1：批量写入路径。按工作空间分组后，每组一次性调用 <see cref="FileSystemWriter.AppendLinesAsync"/>
+    /// 批量写入路径。按工作空间分组后，每组一次性调用 <see cref="FileSystemWriter.AppendLinesAsync"/>
     /// 在单个写锁内追加所有行，避免逐行获取锁的开销。
     /// </summary>
     public async Task EmitBatchAsync(

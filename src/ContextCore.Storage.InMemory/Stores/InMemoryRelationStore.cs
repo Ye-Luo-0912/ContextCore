@@ -73,7 +73,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
         var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
             ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
             : null;
-        // P3-02：多类型过滤优先于单类型
+        // 多类型过滤优先于单类型
         var allowedTypes = query.AllowedRelationTypes.Count > 0
             ? new HashSet<string>(query.AllowedRelationTypes, StringComparer.OrdinalIgnoreCase)
             : null;
@@ -119,7 +119,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
             filtered = filtered.Where(item => !excludedReviewStatuses.Contains(item.ReviewStatus ?? string.Empty));
         }
 
-        // P0-2：先排序再 Take(maxScan)，避免高权重关系因未排序集合被截断而漏掉。
+        // 先排序再 Take(maxScan)，避免高权重关系因未排序集合被截断而漏掉。
         // 与 FileRelationStore 一致；Postgres 端通过 SQL ORDER BY ... LIMIT @max_scan 实现。
         var results = filtered
             .OrderByDescending(item => item.Weight)
@@ -168,7 +168,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
     }
 
     /// <summary>
-    /// P1-6：批量邻居查询。单次扫描 _relations.Values，按种子 ID 分桶；
+    /// 批量邻居查询。单次扫描 _relations.Values，按种子 ID 分桶；
     /// per-seed 排序 + MaxScan + Skip + Take。
     /// </summary>
     public Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
@@ -347,9 +347,9 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
     }
 
     /// <summary>
-    /// P1-7 / P1-9：流式枚举关系，避免一次性将全部关系载入 List。
+    /// 流式枚举关系，避免一次性将全部关系载入 List。
     /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc），但不应用调用方 Skip/Take。
-    /// P1-9：禁止无界扫描——迭代上限 = <see cref="GraphQueryLimits.MaxTotalEdges"/>，
+    /// 禁止无界扫描——迭代上限 = <see cref="GraphQueryLimits.MaxTotalEdges"/>，
     /// 防止病态全表把整张图拉入内存。对真正大图请使用 Postgres provider 的流式实现。
     /// </summary>
     public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
@@ -374,7 +374,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
             .ThenByDescending(item => item.Confidence)
             .ThenByDescending(item => item.CreatedAt)
             .Select(item => CompositeContextNormalizer.Clone(item))
-            // P1-9：全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限。
+            // 全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限。
             .Take(GraphQueryLimits.MaxTotalEdges)
             .ToArray();
 
@@ -388,7 +388,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
     }
 
     /// <summary>
-    /// P1-9：按关系 ID 批量 hydrate 完整 Relation（含 Metadata/SourceRefs 等）。
+    /// 按关系 ID 批量 hydrate 完整 Relation（含 Metadata/SourceRefs 等）。
     /// InMemory 数据已在内存中，直接按 ID 查找并克隆返回。
     /// </summary>
     public Task<IReadOnlyList<ContextRelation>> HydrateRelationsAsync(

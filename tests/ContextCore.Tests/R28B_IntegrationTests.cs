@@ -9,7 +9,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B 集成测试 — V2 端到端管线 + Cutover 切换
+// 集成测试 — V2 端到端管线 + Cutover 切换
 //
 // 覆盖范围（3 个测试类）：
 //   1. V2RetrievalIntegrationTests — Retrieval 端到端管线（真实 Runtime + InMemory Store）

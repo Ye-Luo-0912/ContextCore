@@ -7,7 +7,7 @@ namespace ContextCore.Core;
 /// <summary>
 /// 将各类上下文条目（约束、记忆、全局项、原始上下文、近期项、丢弃项、不确定性、证据）
 /// 格式化为 section 内容字符串。所有方法均为纯函数，不持有状态。
-/// R17-A+B 后 section 格式化统一走 Format*Segments 方法返回 CandidateSegment。
+/// +B 后 section 格式化统一走 Format*Segments 方法返回 CandidateSegment。
 /// </summary>
 internal static class PackageSectionFormatter
 {
@@ -18,7 +18,7 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(constraints.Count);
         foreach (var item in constraints)
         {
-            // P0-6.2: 携带候选级 SourceRefs/ItemRefs，供 Section refs 按接受状态聚合
+            // 携带候选级 SourceRefs/ItemRefs，供 Section refs 按接受状态聚合
             var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id };
             segments.Add(new CandidateSegment(
                 item.Id,
@@ -84,7 +84,7 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(constraints.Count);
         foreach (var item in constraints)
         {
-            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            // 携带候选级 SourceRefs/ItemRefs
             var sourceRefs = item.Constraint.SourceRefs.Count > 0
                 ? item.Constraint.SourceRefs.ToArray()
                 : new[] { item.Constraint.Id };
@@ -104,7 +104,7 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
-            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            // 携带候选级 SourceRefs/ItemRefs
             var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id };
             segments.Add(new CandidateSegment(
                 item.Id,
@@ -120,7 +120,7 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
-            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            // 携带候选级 SourceRefs/ItemRefs
             var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id };
             segments.Add(new CandidateSegment(
                 item.Id,
@@ -136,7 +136,7 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
-            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            // 携带候选级 SourceRefs/ItemRefs
             segments.Add(new CandidateSegment(
                 item.Id,
                 $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}",
@@ -153,7 +153,7 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
-            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            // 携带候选级 SourceRefs/ItemRefs
             var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.SourceItemId };
             segments.Add(new CandidateSegment(
                 item.SourceItemId,

@@ -9,7 +9,7 @@ using ContextCore.Storage.Postgres.Stores;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// WP-S6 Production Evidence：事件流规模恢复集成测试
+// 事件流规模恢复集成测试
 //
 // 目标：证明"10,000 条以上事件可以分页恢复"：
 //   1. 通过 AppendBatchAsync 分 10 批写入 10,000 条事件（哈希链连续）；

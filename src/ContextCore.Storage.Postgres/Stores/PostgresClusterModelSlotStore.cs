@@ -4,7 +4,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// P0-9：PostgreSQL 持久化 Cluster Model Slot Store。
+/// PostgreSQL 持久化 Cluster Model Slot Store。
 /// 单行集群指针（single champion）：每个 slot_name（如 "primary"）至多一行记录，
 /// 通过 CAS on revision 原子切换 ActiveModelArtifactId，确保集群内同一时刻只有一个 Champion 模型。
 /// </summary>
@@ -68,7 +68,7 @@ WHERE slot_name = @slot_name;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // P0-9 CAS：仅当当前 revision = expectedRevision 时才更新，revision 自增到 revision+1。
+        // CAS：仅当当前 revision = expectedRevision 时才更新，revision 自增到 revision+1。
         // 并发更新（expectedRevision 过旧）时 WHERE 不匹配，RETURNING 无行 → 返回 null。
         // 一次 UPDATE 原子完成"旧 Champion 失效 + 新 Champion 激活"，无需同事务改多条 DesiredModelState。
         command.CommandText = $"""

@@ -25,7 +25,7 @@ public interface IStoreMigrationRunner
     Task<IReadOnlyList<PostgresMigrationHistoryEntry>> GetMigrationHistoryAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// R14-PG-8：回滚到指定 schema 版本。
+    /// 回滚到指定 schema 版本。
     /// 当前 baseline migration 不支持真实回滚（cumulative idempotent DDL），调用会返回 RolledBack=false
     /// 并在 Diagnostics 中说明原因。未来按版本切分的 migration 可支持真实 down DDL。
     /// </summary>

@@ -9,7 +9,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B.8.1：Allocator V2.1 验收测试（section rollover + MMR diversity）
+// Allocator V2.1 验收测试（section rollover + MMR diversity）
 //
 // 覆盖：
 //   1. 空候选 / mandatory 优先 / 预算截断 / section 顺序
@@ -26,7 +26,7 @@ namespace ContextCore.Tests;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8.1：Allocator V2.1 验收测试。
+/// Allocator V2.1 验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R28")]

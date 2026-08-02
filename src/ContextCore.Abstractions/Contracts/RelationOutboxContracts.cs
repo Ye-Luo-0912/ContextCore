@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// P1-5：关系写入 outbox 操作类型。标识 outbox 记录对应的写入语义。
+/// 关系写入 outbox 操作类型。标识 outbox 记录对应的写入语义。
 /// </summary>
 public enum RelationOutboxOperationKind
 {
@@ -15,7 +15,7 @@ public enum RelationOutboxOperationKind
 }
 
 /// <summary>
-/// P1-5：关系写入 outbox 记录。承载单条关系的写入意图与生命周期元数据。
+/// 关系写入 outbox 记录。承载单条关系的写入意图与生命周期元数据。
 /// </summary>
 /// <remarks>
 /// 语义：
@@ -108,7 +108,7 @@ public static class RelationOutboxStates
 }
 
 /// <summary>
-/// P1-5：关系写入 outbox 存储契约。
+/// 关系写入 outbox 存储契约。
 /// Postgres provider 注册此接口；FileSystem/InMemory 不注册，worker 检测到 null 时跳过 outbox 调度。
 /// </summary>
 /// <remarks>

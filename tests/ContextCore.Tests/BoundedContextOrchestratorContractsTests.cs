@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R22-1：Bounded Context Orchestrator 契约测试。
+/// Bounded Context Orchestrator 契约测试。
 ///
 /// 验证目标：
 ///   1. ContextRepairReason 枚举 8 值（byte 底层 + Unknown=0 + 7 类确定性异常）

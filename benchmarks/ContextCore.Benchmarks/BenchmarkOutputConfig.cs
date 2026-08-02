@@ -9,7 +9,7 @@ using BenchmarkDotNet.Loggers;
 namespace ContextCore.Benchmarks;
 
 /// <summary>
-/// P0-11：统一基准输出配置。
+/// 统一基准输出配置。
 /// 固定 artifacts 路径到 <c>benchmarks/results/</c>，确保每次运行产生 JSON + Markdown 报告，
 /// 便于建立 baseline/current 对比工作流：
 /// <list type="bullet">
@@ -36,7 +36,7 @@ public class BenchmarkOutputConfig : ManualConfig
             System.AppContext.BaseDirectory, "..", "..", "..", "..", "results"));
         ArtifactsPath = resultsPath;
 
-        // P0-9：集中化 Job 配置，提供可靠的迭代次数下限，
+        // 集中化 Job 配置，提供可靠的迭代次数下限，
         // 避免 CI 因样本数不足 / 噪声触发假阳性回归告警。
         // 各 benchmark 类不再声明 [SimpleJob]，统一由此处决定测量参数，
         // 防止 config Job 与 attribute Job 并存导致重复运行。

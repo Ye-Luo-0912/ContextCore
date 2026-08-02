@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 namespace ContextCore.Storage.FileSystem;
 
 /// <summary>
-/// R13.1 #6：FileSystem 单实例与多进程支持边界守护（advisory，不阻断）。
+/// #6：FileSystem 单实例与多进程支持边界守护（advisory，不阻断）。
 /// </summary>
 /// <remarks>
 /// FileSystem 后端的并发边界（R13.1 #1–#5 后）：

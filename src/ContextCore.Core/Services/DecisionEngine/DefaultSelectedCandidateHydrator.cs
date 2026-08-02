@@ -29,7 +29,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //   → ISelectedCandidateHydrator.HydrateAsync（本实现）
 //   → Projector（消费已 hydrate 的 Material）。
 //
-// P1-7：本实现额外返回 HydrationRepairDecision（HydrationResult.Repair），携带 hydrate 后
+// 本实现额外返回 HydrationRepairDecision（HydrationResult.Repair），携带 hydrate 后
 //   真实的 selected / dropped 候选 ID、更新的 AllocationDecisions、精确 token 总数与失败明细，
 //   让 Caller 重建整个 ContextDecisionResult（而非仅替换 WorkingSet）。
 // ===========================================================================
@@ -53,7 +53,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
 
     private readonly IContextStoreBatchLookup? _contextBatchLookup;
     private readonly IMemoryStoreBatchLookup? _memoryBatchLookup;
-    // P3 Fix-5：可选 tokenizer，用于 hydrate 后重算 TokenCost（null 时回退到 length/4 估算）。
+    // Fix-5：可选 tokenizer，用于 hydrate 后重算 TokenCost（null 时回退到 length/4 估算）。
     private readonly IContextTokenizerResolver? _tokenizerResolver;
     private readonly string? _tokenizerModelName;
 
@@ -95,7 +95,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             return NoHydration(workingSet);
         }
 
-        // P1-7：构建 CanonicalKey → CandidateId 映射，用于后续生成 HydrationRepairDecision
+        // 构建 CanonicalKey → CandidateId 映射，用于后续生成 HydrationRepairDecision
         // （Repair 中的 HydratedSelected / HydrationDropped / HydrationFailures 均使用 CandidateId）。
         var keyToCandidateId = new Dictionary<CanonicalCandidateKey, string>(selectedEnvelopes.Count);
         foreach (var env in selectedEnvelopes)
@@ -114,7 +114,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // 内部对 string 字段使用 ordinal 比较，与 StringComparer.Ordinal 等价。
         var contextGroups = new Dictionary<(string WorkspaceId, string CollectionId), List<ContextCandidateEnvelope>>();
         var memoryGroups = new Dictionary<(string WorkspaceId, string CollectionId), List<ContextCandidateEnvelope>>();
-        // P1-1：hydrate 候选键集合（成功/失败计数基数；仅 context/memory 且未 hydrate 的候选）
+        // hydrate 候选键集合（成功/失败计数基数；仅 context/memory 且未 hydrate 的候选）
         var candidateKeys = new HashSet<CanonicalCandidateKey>();
 
         foreach (var envelope in selectedEnvelopes)
@@ -181,7 +181,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             await Task.WhenAll(tasks).ConfigureAwait(false);
         }
 
-        // P1-1：hydrate 成功/失败计数（失败 = 候选未出现在 materialUpdates：store 未命中 / 读取异常 / 正文为空）
+        // hydrate 成功/失败计数（失败 = 候选未出现在 materialUpdates：store 未命中 / 读取异常 / 正文为空）
         var hydratedCount = 0;
         foreach (var candidateKey in candidateKeys)
         {
@@ -192,7 +192,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         }
         var failedCount = candidateKeys.Count - hydratedCount;
 
-        // P1-7：构建 hydration 失败明细（candidateId -> 错误描述）
+        // 构建 hydration 失败明细（candidateId -> 错误描述）
         var hydrationFailures = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var candidateKey in candidateKeys)
         {
@@ -206,7 +206,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // 无任何更新 → 仍需返回 Repair 决策（所有需 hydrate 的候选均失败）
         if (materialUpdates.IsEmpty)
         {
-            // P1-7：构建 Repair 决策——所有需 hydrate 的候选均失败，应被 dropped
+            // 构建 Repair 决策——所有需 hydrate 的候选均失败，应被 dropped
             var repair = BuildRepairDecision(
                 selectedEnvelopes,
                 finalMaterials: workingSet.Materials,
@@ -230,14 +230,14 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         // CandidateMaterial.Content 的 init accessor 仅在 _contentHash 为空时计算 hash，
         // 使用 with { Content = ... } 会跳过重算（_contentHash 已从原对象复制），导致 hash 与新内容不一致。
         // 因此此处显式构造新 CandidateMaterial，让 ContentHash 由 init accessor 正确计算。
-        // P3 Fix-5：hydrate 后 Content 已变更，原 TokenCost（recall 阶段基于空/旧正文计算）已过期，
+        // Fix-5：hydrate 后 Content 已变更，原 TokenCost（recall 阶段基于空/旧正文计算）已过期，
         // 需从 hydrate 后的正文重新计算 TokenCost，让 Projector / Allocator 看到准确 token 数。
         var mergedMaterials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(workingSet.Materials, comparer: null);
         foreach (var kvp in materialUpdates)
         {
             if (mergedMaterials.TryGetValue(kvp.Key, out var original))
             {
-                // P3 Fix-5：用 hydrate 后的正文重算 TokenCost（tokenizer 可用时精确计数，否则 length/4 估算）
+                // Fix-5：用 hydrate 后的正文重算 TokenCost（tokenizer 可用时精确计数，否则 length/4 估算）
                 var hydratedTokenCost = TokenCostHelper.ComputeTokenCost(
                     kvp.Value.Content, _tokenizerResolver, _tokenizerModelName);
                 // 保留原 Material 的 NativeKind / SourceRefs，仅用 hydrate 后的 Content + 重算的 TokenCost 替换
@@ -258,12 +258,12 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
 
         var hydratedWorkingSet = workingSet with { Materials = mergedMaterials };
 
-        // P1-1：最终预算修复 — hydrate 后真实 TokenCost 总和可能超出 Engine 基于召回估算的预算分配，
+        // 最终预算修复 — hydrate 后真实 TokenCost 总和可能超出 Engine 基于召回估算的预算分配，
         // 按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪）。
         var (finalWorkingSet, budgetExceeded, repairDiagnostics) = RepairBudget(
             selectedEnvelopes, hydratedWorkingSet, tokenBudget);
 
-        // P1-7：构建 Repair 决策——比较 hydratedWorkingSet.Materials 与 finalWorkingSet.Materials
+        // 构建 Repair 决策——比较 hydratedWorkingSet.Materials 与 finalWorkingSet.Materials
         // 得出被预算修复裁剪的候选 keys，结合 candidateKeys / materialUpdates 判断 dropped 集合。
         var droppedKeys = new HashSet<CanonicalCandidateKey>();
         foreach (var key in hydratedWorkingSet.Materials.Keys)
@@ -295,7 +295,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
     }
 
     /// <summary>
-    /// P1-1：无 hydrate 发生时的快捷结果（WorkingSet 原样返回，计数全 0，Repair 为 null）。
+    /// 无 hydrate 发生时的快捷结果（WorkingSet 原样返回，计数全 0，Repair 为 null）。
     /// </summary>
     private static HydrationResult NoHydration(CandidateWorkingSet workingSet)
     {
@@ -309,7 +309,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
     }
 
     /// <summary>
-    /// P1-7：构建 HydrationRepairDecision。基于 hydrate 后的最终 Materials 状态、
+    /// 构建 HydrationRepairDecision。基于 hydrate 后的最终 Materials 状态、
     /// 需 hydrate 候选集合、hydrate 成功集合与被预算修复裁剪的 keys，分类 selected / dropped，
     /// 生成 UpdatedAllocationDecisions 与 ExactTokenCount。
     /// </summary>
@@ -397,7 +397,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
     }
 
     /// <summary>
-    /// P1-7：解析候选所属 section（与 UnifiedRuntimeDefaults.ResolveSectionForAllocation 对齐）。
+    /// 解析候选所属 section（与 UnifiedRuntimeDefaults.ResolveSectionForAllocation 对齐）。
     /// 用于在 BuildRepairDecision 中生成 CandidateAllocationDecision.Section。
     /// </summary>
     private static string ResolveSectionForAllocation(ContextCandidateEnvelope envelope)
@@ -414,7 +414,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
     }
 
     /// <summary>
-    /// P1-1：最终预算修复。hydrate 后正文的真实 TokenCost 总和可能超出 Engine 基于召回估算值
+    /// 最终预算修复。hydrate 后正文的真实 TokenCost 总和可能超出 Engine 基于召回估算值
     /// 做出的预算分配（Recall 阶段 IncludeContent=false 时 TokenCost 为估算或缺失）。
     /// 超限时按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪），
     /// 直到 Selected 候选的 TokenCost 总和回到预算内；全为 mandatory 时直接返回 BudgetExceeded=true。
@@ -487,7 +487,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
     }
 
     /// <summary>
-    /// P1-1：获取选中候选的有效 token 数。hydrate 后的 Material.TokenCost 优先（基于真实正文重算），
+    /// 获取选中候选的有效 token 数。hydrate 后的 Material.TokenCost 优先（基于真实正文重算），
     /// 回退到 envelope.TokenCost（recall 阶段估算）；两者都缺失时计 0（无正文不占预算）。
     /// </summary>
     private static int GetEffectiveMaterialTokens(

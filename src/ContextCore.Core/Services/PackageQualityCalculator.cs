@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services;
 
 /// <summary>
-/// R14-2：Package Quality 指标计算器。基于 <see cref="ContextPackageBuildResult"/> 在投影过程中
+/// Package Quality 指标计算器。基于 <see cref="ContextPackageBuildResult"/> 在投影过程中
 /// 一次性计算 8 个确定性指标，不触发任何运行时变更。
 /// </summary>
 /// <remarks>

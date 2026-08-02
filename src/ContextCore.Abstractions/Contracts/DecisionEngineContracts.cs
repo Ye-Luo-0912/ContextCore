@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R18-1：统一决策内核契约（Context Decision Engine Contracts）
+// 统一决策内核契约（Context Decision Engine Contracts）
 //
 // 目标：
 //   为 Retrieval 与 Package 两条决策主链建立统一的候选中间模型
@@ -26,15 +26,15 @@ namespace ContextCore.Abstractions;
 //      精确回退到 deterministic policy（Features + Safety 仍可用）。
 //
 // 子阶段进度：
-//   R18-1（当前）：契约定义 + 单元测试验证可实施性。不触碰
+//   （当前）：契约定义 + 单元测试验证可实施性。不触碰
 //                  HybridContextRetriever / BasicContextPackageBuilder。
-//   R18-2：IContextDecisionEngine 接口 + Planner + Projector。
-//   R18-3：Retrieval adapter（ContextRetrievalCandidate → Envelope）。
-//   R18-4：Package adapter（PackageTraceCandidate → Envelope）。
+//   IContextDecisionEngine 接口 + Planner + Projector。
+//   Retrieval adapter（ContextRetrievalCandidate → Envelope）。
+//   Package adapter（PackageTraceCandidate → Envelope）。
 // ===========================================================================
 
 /// <summary>
-/// R18-1：候选来源类型。统一替代 Retrieval 路径的 ContextRetrievalCandidateKind
+/// 候选来源类型。统一替代 Retrieval 路径的 ContextRetrievalCandidateKind
 /// 与 Package 路径的字符串 Kind。8 个 Expert 概念对齐 R20 Multi-Expert。
 /// </summary>
 /// <remarks>
@@ -86,7 +86,7 @@ public enum ContextCandidateSource : byte
 }
 
 /// <summary>
-/// R18-1：候选安全状态。统一 lifecycle / deprecation / required-tag /
+/// 候选安全状态。统一 lifecycle / deprecation / required-tag /
 /// duplicate 等"是否准入"判定，替代分散在 Retrieval / Package 路径的
 /// 各类 metadata["mandatory"] / metadata["lifecycleStatus"] 检查。
 /// </summary>
@@ -100,7 +100,7 @@ public sealed record CandidateSafetyState
     /// 约束强制级别（P0-1 修复新增）。仅当候选 <see cref="ContextCandidateSource.Constraint"/> 时填充。
     /// </summary>
     /// <remarks>
-    /// P0-1 修复：不再从 <see cref="ContextCandidateSource"/> 推导约束强制级别。
+    /// 修复：不再从 <see cref="ContextCandidateSource"/> 推导约束强制级别。
     /// hard_constraint → <see cref="ConstraintLevel.Hard"/>
     /// soft_constraint → <see cref="ConstraintLevel.Soft"/>
     /// merged_constraint → <see cref="ConstraintLevel.Mixed"/>（不可直接免预算）
@@ -112,7 +112,7 @@ public sealed record CandidateSafetyState
     /// 候选是否为 mandatory（hard constraint / required tag / system constraint）。
     /// </summary>
     /// <remarks>
-    /// P0-1 修复：当 <see cref="ConstraintLevel"/> 非空时，由 Engine 根据
+    /// 修复：当 <see cref="ConstraintLevel"/> 非空时，由 Engine 根据
     /// ConstraintLevel is Hard or System or Mixed 推导；adapter 仍可直接设置
     /// 此字段以表达 Mandatory 来源（required tag）的强制选中语义。
     /// </remarks>
@@ -122,7 +122,7 @@ public sealed record CandidateSafetyState
     /// 候选是否为 hard constraint（仅 ConstraintLevel == Hard）。
     /// </summary>
     /// <remarks>
-    /// P0-1 修复：adapter 必须基于 <see cref="ConstraintLevel"/> 设置此字段，
+    /// 修复：adapter 必须基于 <see cref="ConstraintLevel"/> 设置此字段，
     /// 不可对 soft_constraint / merged_constraint 设置为 true。
     /// </remarks>
     public bool IsHardConstraint { get; init; }
@@ -160,7 +160,7 @@ public sealed record CandidateSafetyState
 }
 
 /// <summary>
-/// R18-1：候选特征向量。统一替代 Retrieval 路径的 RetrievalChannelCandidate.ScoreBreakdown
+/// 候选特征向量。统一替代 Retrieval 路径的 RetrievalChannelCandidate.ScoreBreakdown
 /// 与 Package 路径的 ItemScoreBreakdown，提供跨路径可比较的特征矩阵。
 /// </summary>
 /// <remarks>
@@ -207,7 +207,7 @@ public sealed record CandidateFeatureVector
 }
 
 /// <summary>
-/// R18-1：候选效用评分。统一替代 Retrieval 路径的 ContextRetrievalCandidate.Score
+/// 候选效用评分。统一替代 Retrieval 路径的 ContextRetrievalCandidate.Score
 /// 与 Package 路径的 ContextPackageDecision.Score，分离 deterministic / model 评分。
 /// </summary>
 /// <remarks>
@@ -246,20 +246,20 @@ public sealed record CandidateUtilityScore
     public string? ModelArtifactRef { get; init; }
 
     /// <summary>
-    /// R28-D P0-1：模型是否被尝试过（即 EnableModelScoring=true 且引擎/registry 可用）。
+    /// 模型是否被尝试过（即 EnableModelScoring=true 且引擎/registry 可用）。
     /// true 不代表模型分数已应用，仅代表走过模型路径。
     /// 区分"未启用模型"和"启用但失败"。
     /// </summary>
     public bool ModelAttempted { get; init; }
 
     /// <summary>
-    /// R28-D P0-1：模型分数是否实际参与了 FinalScore 加权。
+    /// 模型分数是否实际参与了 FinalScore 加权。
     /// 仅当 ModelAttempted=true 且 confidence >= threshold 且推理成功时为 true。
     /// </summary>
     public bool ModelApplied { get; init; }
 
     /// <summary>
-    /// R28-D P0-1：模型降级原因（ModelAttempted=true 但 ModelApplied=false 时填充）。
+    /// 模型降级原因（ModelAttempted=true 但 ModelApplied=false 时填充）。
     /// 取值如 "engine-unavailable" / "schema-not-found" / "inference-failed" /
     /// "inference-succeeded-false" / "confidence-below-threshold" / "deterministic-replay-skipped"。
     /// ModelApplied=true 时为 null。
@@ -268,7 +268,7 @@ public sealed record CandidateUtilityScore
 }
 
 /// <summary>
-/// R18-1：证据引用。统一候选的来源溯源链，替代分散在 Retrieval / Package
+/// 证据引用。统一候选的来源溯源链，替代分散在 Retrieval / Package
 /// 路径的 SourceRefs 字符串列表。
 /// </summary>
 /// <remarks>
@@ -300,7 +300,7 @@ public sealed record EvidenceRef
 }
 
 /// <summary>
-/// R18-1：候选信封（Context Candidate Envelope）。
+/// 候选信封（Context Candidate Envelope）。
 /// 统一中间模型，让 Retrieval 与 Package 两条路径共享候选身份、特征、
 /// safety gate、utility score、token cost、policy/model version、decision evidence。
 /// </summary>
@@ -340,7 +340,7 @@ public sealed record ContextCandidateEnvelope
 
     /// <summary>候选估算 token 数（截断前）。</summary>
     /// <remarks>
-    /// R29 WP-D-3：已标记 [Obsolete]。此字段使用 length/4 粗略估算，
+    /// 已标记 [Obsolete]。此字段使用 length/4 粗略估算，
     /// 对中文/代码/JSON 场景严重低估 token 成本。
     /// 新代码应通过 <see cref="TokenCost"/>?.ContentTokens 读取（由 Provider 经
     /// <c>EnrichTokenCost</c> 填充），或使用 <c>GetEffectiveTokens</c> helper。
@@ -377,7 +377,7 @@ public sealed record ContextCandidateEnvelope
 
     /// <summary>R28-B：规范化候选标识（跨 Expert 合并去重键）。</summary>
     /// <remarks>
-    /// P0-5：required。Adapter/Provider 必须填充，不得使用默认空 struct。
+    /// required。Adapter/Provider 必须填充，不得使用默认空 struct。
     /// 空 CanonicalKey 会导致 WorkingSetTee 中多个候选互相覆盖。
     /// </remarks>
     public required CanonicalCandidateKey CanonicalKey { get; init; }
@@ -394,11 +394,11 @@ public sealed record ContextCandidateEnvelope
 }
 
 // ---------------------------------------------------------------------------
-// P0-5：CandidateAdaptationContext
+// CandidateAdaptationContext
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// P0-5：候选适配上下文。封装适配器（PackageCandidateAdapter / RetrievalCandidateAdapter）
+/// 候选适配上下文。封装适配器（PackageCandidateAdapter / RetrievalCandidateAdapter）
 /// 在将原始候选（PackageTraceCandidate / ContextRetrievalCandidate）转换为
 /// <see cref="ContextCandidateEnvelope"/> 时所需的作用域信息与时间戳。
 /// </summary>
@@ -432,7 +432,7 @@ public sealed record CandidateAdaptationContext
     /// <summary>
     /// 观察时间（UTC）。由调用方在请求入口处传入，用于填充
     /// <see cref="EvidenceRef.GeneratedAt"/>。适配器不读取系统时间。
-    /// P1-2：改为 required，删除默认 UtcNow，强制调用方显式传入以保证确定性。
+    /// 改为 required，删除默认 UtcNow，强制调用方显式传入以保证确定性。
     /// </summary>
     public required DateTimeOffset ObservedAt { get; init; }
 
@@ -443,7 +443,7 @@ public sealed record CandidateAdaptationContext
     public ResolvedPolicySnapshot? PolicySnapshot { get; init; }
 
     /// <summary>
-    /// P0-5：完整策略引用（可选）。Adapter 将其复制到 Envelope.PolicyReference。
+    /// 完整策略引用（可选）。Adapter 将其复制到 Envelope.PolicyReference。
     /// 包含 BundleId + BundleVersion + BundleContentHash + ActivationEpoch。
     /// null 时 Envelope.PolicyReference 也为 null（未绑定到有效策略快照）。
     /// </summary>
@@ -451,7 +451,7 @@ public sealed record CandidateAdaptationContext
 }
 
 /// <summary>
-/// P0-5：已解析的策略快照引用。仅承载 BundleId + Version，
+/// 已解析的策略快照引用。仅承载 BundleId + Version，
 /// 不携带完整 bundle 内容（避免适配器耦合具体策略）。
 /// </summary>
 public sealed record ResolvedPolicySnapshot

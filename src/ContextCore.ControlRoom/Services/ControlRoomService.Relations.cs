@@ -161,7 +161,7 @@ public sealed partial class ControlRoomService
     }
 
     /// <summary>
-    /// P3.1-d：关系旧数据迁移 — 回填 NodeKind/Provenance/Lifecycle/ReviewStatus 正式字段。
+    /// 关系旧数据迁移 — 回填 NodeKind/Provenance/Lifecycle/ReviewStatus 正式字段。
     /// 支持 collection 范围限定、dry-run（默认）/--apply 实际写入、批量节点加载。
     /// 从 Metadata fallback 读取值写入正式字段，从 MemoryStore/ContextStore 批量推断 NodeKind，
     /// 从 Metadata createdFrom/source/generatedBy 推断 Provenance。
@@ -180,7 +180,7 @@ public sealed partial class ControlRoomService
             Take = int.MaxValue
         }, cancellationToken).ConfigureAwait(false);
 
-        // P3.1-d: 批量加载节点类型查找表（按关系所属 collection 分组），避免 N+1 GetAsync 调用。
+        // 批量加载节点类型查找表（按关系所属 collection 分组），避免 N+1 GetAsync 调用。
         var nodeKindLookups = await BuildNodeKindLookupsAsync(relations, cancellationToken).ConfigureAwait(false);
 
         var toUpdate = new List<ContextRelation>();
@@ -288,7 +288,7 @@ public sealed partial class ControlRoomService
             }
         }
 
-        // P3.1-d: 仅在显式 --apply 时写入，dry-run 不落盘
+        // 仅在显式 --apply 时写入，dry-run 不落盘
         if (options.Apply && toUpdate.Count > 0)
         {
             await _state.RelationStore!.BatchUpsertAsync(toUpdate, cancellationToken).ConfigureAwait(false);

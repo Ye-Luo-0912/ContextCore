@@ -4,13 +4,13 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R28-D / R28-F P3-3：Platt Calibration Service
+// / R28-F P3-3：Platt Calibration Service
 //
 // 目标：
 //   提供 ICalibrationService 的默认 Platt scaling 实现，把任意 raw score
 //   映射为 [0, 1] 概率：calibrated = 1 / (1 + exp(-(A * raw + B)))。
 //
-// R28-F P3-3 重构：
+// 重构：
 //   - 旧版默认 A=1, B=0 被称为 "identity-like"，但实际执行 sigmoid，导致 raw=0 → 0.5 而非 0。
 //   - 现在默认参数 Kind=Identity，Calibrate 直接返回 raw（真正恒等）。
 //   - 调用 RegisterPlattParameters / RegisterTemperatureParameters / RegisterIsotonicParameters
@@ -30,7 +30,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R28-D / R28-F P3-3：默认校准服务（支持 Identity/Platt/Temperature/Isotonic）。
+/// / R28-F P3-3：默认校准服务（支持 Identity/Platt/Temperature/Isotonic）。
 /// </summary>
 /// <remarks>
 /// 默认 Identity：未配置参数时 calibrated = rawScore。
@@ -101,7 +101,7 @@ public sealed class PlattCalibrationService : ICalibrationService
 
     /// <inheritdoc />
     /// <remarks>
-    /// WP-5：精确版本匹配。先按 modelName 查找参数，再校验 Version 与传入 version 精确一致；
+    /// 精确版本匹配。先按 modelName 查找参数，再校验 Version 与传入 version 精确一致；
     /// 不一致或未命中时返回 null（fail-closed 由调用方处理，不在此处 fallback）。
     /// </remarks>
     public CalibrationParameters? GetParametersForVersion(string? modelName, string version)
@@ -113,7 +113,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     }
 
     /// <summary>
-    /// R28-F P3-3：注册 Platt (A, B) 参数。null modelName 表示更新全局默认。
+    /// 注册 Platt (A, B) 参数。null modelName 表示更新全局默认。
     /// 已存在同名模型参数时覆盖（与 FeatureRegistry 不同——校准参数允许 refit）。
     /// </summary>
     /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
@@ -134,7 +134,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     }
 
     /// <summary>
-    /// R28-F P3-3：注册 Temperature T 参数。T 必须 > 0。
+    /// 注册 Temperature T 参数。T 必须 > 0。
     /// </summary>
     /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
     public void RegisterTemperatureParameters(double t, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
@@ -157,7 +157,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     }
 
     /// <summary>
-    /// R28-F P3-3：注册 Isotonic 回归点。points 必须按 Input 升序，否则抛 ArgumentException。
+    /// 注册 Isotonic 回归点。points 必须按 Input 升序，否则抛 ArgumentException。
     /// </summary>
     /// <param name="version">WP-5：校准参数版本号（默认 "default-v1"，生产路径应与 descriptor.CalibrationVersion 一致）。</param>
     public void RegisterIsotonicParameters(IReadOnlyList<IsotonicPoint> points, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
@@ -205,7 +205,7 @@ public sealed class PlattCalibrationService : ICalibrationService
     }
 
     /// <summary>
-    /// R28-D 兼容入口：等价于 RegisterPlattParameters(a, b, modelName, fittedAt, version)。
+    /// 兼容入口：等价于 RegisterPlattParameters(a, b, modelName, fittedAt, version)。
     /// </summary>
     public void RegisterParameters(double a, double b, string? modelName = null, DateTimeOffset? fittedAt = null, string version = "default-v1")
         => RegisterPlattParameters(a, b, modelName, fittedAt, version);

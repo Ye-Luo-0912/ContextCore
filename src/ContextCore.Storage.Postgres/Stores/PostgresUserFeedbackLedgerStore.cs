@@ -6,7 +6,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// R29 WP-E-5：PostgreSQL User Feedback Ledger 持久化实现。
+/// PostgreSQL User Feedback Ledger 持久化实现。
 /// </summary>
 /// <remarks>
 /// 设计原则：

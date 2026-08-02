@@ -10,7 +10,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-E-2：Utility Ledger Materialization 验收测试
+// Utility Ledger Materialization 验收测试
 //
 // 目标：
 //   验证 DefaultContextDecisionRuntime 在决策完成后异步触发 UtilityLedgerMaterializer，

@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL vector lifecycle metadata review 历史存储。
-/// R14-PG-5：替代 UnsupportedVectorLifecycleMetadataReviewStore，让 Postgres provider 在 HA 场景下能持久化人工决策记录。
+/// 替代 UnsupportedVectorLifecycleMetadataReviewStore，让 Postgres provider 在 HA 场景下能持久化人工决策记录。
 /// </summary>
 public sealed class PostgresVectorLifecycleMetadataReviewStore : PostgresStoreBase, IVectorLifecycleMetadataReviewStore
 {

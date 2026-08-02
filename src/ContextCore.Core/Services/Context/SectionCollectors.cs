@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Learning.V14_0;
 namespace ContextCore.Core;
 
 /// <summary>
-/// P0-6.4: 跨 SectionCollector 共享的可变局部状态。承载 collector 之间传递的中间产物
+/// 跨 SectionCollector 共享的可变局部状态。承载 collector 之间传递的中间产物
 /// （anchors / retrievalPlan / workingMemory / includedRecent / excludedRecent），
 /// 使 <see cref="CandidateSelector"/> 编排层无需逐 collector 传递十几个 ref 参数。
 /// </summary>
@@ -28,7 +28,7 @@ internal sealed class SelectionContext
 }
 
 /// <summary>
-/// P0-6.4: SectionCollector 基类，封装所有 collector 共享的依赖（assembler / traceRecorder / estimateTokens）
+/// SectionCollector 基类，封装所有 collector 共享的依赖（assembler / traceRecorder / estimateTokens）
 /// 与 section 装配 + 决策记录的重复序列 <see cref="CommitSection"/>。
 /// </summary>
 internal abstract class SectionCollectorBase
@@ -96,7 +96,7 @@ internal abstract class SectionCollectorBase
 }
 
 /// <summary>
-/// P0-6.4: 短期信号收集器。处理 current_task、recent filter + anchors + retrievalPlan、
+/// 短期信号收集器。处理 current_task、recent filter + anchors + retrievalPlan、
 /// hard_constraints、working_memory、historical_context。
 /// 产出 <see cref="SelectionContext"/> 的 anchors / retrievalPlan / workingMemory / includedRecent / excludedRecent，
 /// 供后续 Recall 与 Expansion collector 消费。
@@ -352,7 +352,7 @@ internal sealed class ShortTermSignalCollector : SectionCollectorBase
 }
 
 /// <summary>
-/// P0-6.4: 召回类 section 收集器。处理 global_context、recent_context section、stable_memory、
+/// 召回类 section 收集器。处理 global_context、recent_context section、stable_memory、
 /// soft_constraints、merged constraints(constraints section)。消费 ShortTermSignalCollector 产出的
 /// anchors / workingMemory / includedRecent / excludedRecent。
 /// </summary>
@@ -556,7 +556,7 @@ internal sealed class RecallSectionCollector : SectionCollectorBase
 }
 
 /// <summary>
-/// P0-6.4: 图谱扩展与诊断 section 收集器。处理 related_context（graph 扩展，async）、evidence、
+/// 图谱扩展与诊断 section 收集器。处理 related_context（graph 扩展，async）、evidence、
 /// excluded、uncertainties。消费 ShortTermSignalCollector 产出的 anchors / workingMemory 与 state.SelectedSourceIds。
 /// 返回 uncertainties 供 SelectionResult 使用。
 /// </summary>

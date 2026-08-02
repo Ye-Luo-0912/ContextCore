@@ -1,7 +1,7 @@
 namespace ContextCore.Embedding.Utilities;
 
 /// <summary>
-/// P0-7.6: Embedding 文本组合器，单一负责 instruction + text 的拼接格式。
+/// Embedding 文本组合器，单一负责 instruction + text 的拼接格式。
 /// 调用方（Retrieval 层）通过 <c>EmbeddingInput.Instruction</c> 传入指令，
 /// Provider 通过本类统一拼接，避免 Retrieval 层与 Embedding Provider 各自拼接导致双重 instruction。
 /// 规范格式：<c>instruction + "\n\n" + text</c>（instruction 非空时）。

@@ -52,15 +52,15 @@ builder.Services.AddSingleton(embeddingProviderOptions);
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(embeddingProviderOptions));
 builder.Services.Configure<JobWorkerOptions>(builder.Configuration.GetSection("JobWorker"));
 builder.Services.Configure<ShortTermMaintenanceOptions>(builder.Configuration.GetSection("ShortTermMaintenance"));
-// P1-5：RelationReconciliation worker 配置。默认 Enabled=false；启用前需确认 Storage:Provider=postgres
+// RelationReconciliation worker 配置。默认 Enabled=false；启用前需确认 Storage:Provider=postgres
 // （IRelationOutboxStore 仅 Postgres provider 注册；其他 provider 时 worker 启动后即退出 no-op）。
 builder.Services.Configure<RelationReconciliationOptions>(builder.Configuration.GetSection("RelationReconciliation"));
-// R13-F：Package Template Cache Canary 配置。默认关闭（Enabled=false）；
+// Package Template Cache Canary 配置。默认关闭（Enabled=false）；
 // 启用时仅缓存 AllowedWorkspaces 列出的工作空间，并通过 ContextStateCacheAccessor.canaryGate 控制按工作空间粒度缓存。
 builder.Services.Configure<PackageTemplateCacheOptions>(builder.Configuration.GetSection("PackageTemplateCache"));
 builder.Services.AddHostedService<ContextJobWorker>();
 builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
-// P1-5：RelationReconciliation worker。默认 Enabled=false；启用时周期性调度 outbox pending 记录。
+// RelationReconciliation worker。默认 Enabled=false；启用时周期性调度 outbox pending 记录。
 // FileSystem/InMemory provider 时 worker 内部检测 IRelationOutboxStore=null 后立即退出（no-op）。
 builder.Services.AddHostedService<RelationReconciliationWorker>();
 // LearningMaterializationWorker 由 AddContextCoreRuntime 统一注册（按 Profile 分发）。
@@ -88,7 +88,7 @@ builder.Services
 		});
 	})
 	.AddContextStorage(storageOptions)
-	// P0-1：统一入口 AddContextCoreRuntime（唯一运行时配置入口，替代旧双入口）。
+	// 统一入口 AddContextCoreRuntime（唯一运行时配置入口，替代旧双入口）。
 	// 该方法内部按 ContextCoreRuntime:ModelMode 选择 ModelExecutionOptions 调用 AddContextCore，
 	// 再按 ContextCoreRuntime:Profile 分发 HostedService / Run Lease / Canary 注册。
 	// 必须在 AddContextStorage 之后调用（依赖其注册的 IModelArtifactRegistry / IAgentRunStore 等）。
@@ -322,7 +322,7 @@ if (storageOptions.IsPostgres)
 
 		var migrationRunner = app.Services.GetRequiredService<PostgresMigrationRunner>();
 
-		// P0-6：AutoBootstrap=true（默认）时先应用幂等 baseline migration。
+		// AutoBootstrap=true（默认）时先应用幂等 baseline migration。
 		// 新数据库 schema 缺失会被自动创建，打破缺 schema → 服务退出 → 无法访问迁移接口的自锁。
 		// 已存在 schema 的数据库上 MigrateAsync 是 no-op（CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS）。
 		// 设 AutoBootstrap=false 回退到原 fail-fast 行为，DBA 严格管控 schema 时使用。

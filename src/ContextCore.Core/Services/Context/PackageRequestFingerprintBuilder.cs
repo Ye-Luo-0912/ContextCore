@@ -10,9 +10,9 @@ namespace ContextCore.Core;
 /// 指纹仅包含影响构建输出的字段，排除 OperationId/RequestId（per-call GUID）。
 /// 相同指纹的请求产生相同 package（在依赖 scope 未变更的前提下）。
 /// 使用长度前缀编码防止分隔符碰撞（输入值中包含 | 或 : 不会导致不同输入产生相同指纹）。
-/// P0-5.5: 纳入时间桶（5 分钟窗口），确保 Working Memory 评分依赖的时间边界（24h/7d/30d）
+/// 纳入时间桶（5 分钟窗口），确保 Working Memory 评分依赖的时间边界（24h/7d/30d）
 /// 跨越后缓存自动失效。P0-5.6: <see cref="BuildHashed"/> 输出 SHA-256 固定长度哈希，避免明文驻留。
-/// R13.0 #7: semantic metadata fingerprint——request.Metadata 中仅纳入语义字段
+/// #7: semantic metadata fingerprint——request.Metadata 中仅纳入语义字段
 /// （影响 package 模板的字段），排除操作性字段（requestId/traceId 等 per-call 标识）。
 /// 语义字段（mustHit/currentTask/tokenizerModel/anchor metadata）已显式提取，
 /// 剩余 metadata 按 denylist 排除已知操作性 key，其余视为语义字段纳入指纹。
@@ -23,7 +23,7 @@ internal static class PackageRequestFingerprintBuilder
     private const long TimeBucketSeconds = 300;
 
     /// <summary>
-    /// R13.0 #7: 操作性 metadata key denylist——这些 key 是 per-call 标识/诊断字段，
+    /// #7: 操作性 metadata key denylist——这些 key 是 per-call 标识/诊断字段，
     /// 不影响 package 模板内容（仅用于追踪/日志/响应元数据回显）。
     /// 排除后避免相同语义请求因不同 requestId/traceId 导致缓存 miss。
     /// 使用 Ordinal 比较器匹配大小写敏感的 key。
@@ -42,8 +42,8 @@ internal static class PackageRequestFingerprintBuilder
 
     /// <summary>
     /// 构建请求指纹：仅包含影响构建输出的字段，排除 OperationId/RequestId（per-call GUID）。
-    /// P0-5.5: 末尾追加时间桶，确保时间依赖评分跨越边界后缓存自动失效。
-    /// R13.0 #7: request.Metadata 按 denylist 排除操作性 key，仅纳入语义字段。
+    /// 末尾追加时间桶，确保时间依赖评分跨越边界后缓存自动失效。
+    /// #7: request.Metadata 按 denylist 排除操作性 key，仅纳入语义字段。
     /// </summary>
     internal static string Build(ContextPackageRequest request, ContextPackagePolicy policy)
     {
@@ -87,13 +87,13 @@ internal static class PackageRequestFingerprintBuilder
         AppendSortedKeyValuePairs(sb, policy.SectionPriorities);
         AppendSortedKeyValuePairs(sb, policy.SectionTokenBudgets);
         AppendSortedStringDictionary(sb, policy.Metadata);
-        // R13.0 #7: request.Metadata 按 denylist 排除操作性 key（requestId/traceId 等）。
+        // #7: request.Metadata 按 denylist 排除操作性 key（requestId/traceId 等）。
         // 语义字段（mustHit/currentTask/tokenizerModel）已显式提取，anchor metadata key
         // （mode/taskKind/intent/project 等）不在 denylist 中，仍纳入指纹。
         // 响应 metadata 在 ProjectResult 中从当前 request 重建，缓存命中时使用新 request 的 metadata，
         // 因此操作性 key 不需要进入指纹（不影响模板，仅影响 per-call 响应回显）。
         AppendSemanticMetadata(sb, request.Metadata);
-        // P0-5.5: 时间桶 — Working Memory 评分依赖当前时间（24h/7d/30d 边界），
+        // 时间桶 — Working Memory 评分依赖当前时间（24h/7d/30d 边界），
         // 将 UtcNow 按 5 分钟取整纳入指纹，确保跨时间边界后缓存自动失效。
         var timeBucket = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / TimeBucketSeconds;
         AppendField(sb, timeBucket.ToString());
@@ -102,7 +102,7 @@ internal static class PackageRequestFingerprintBuilder
 
     /// <summary>
     /// 构建固定长度的哈希指纹（SHA-256，64 字符 hex）。
-    /// P0-5.6: 用于缓存 key，避免明文查询/metadata 驻留与超长 dictionary key。
+    /// 用于缓存 key，避免明文查询/metadata 驻留与超长 dictionary key。
     /// 相同输入产生相同哈希；不同输入碰撞概率可忽略（2^-128）。
     /// </summary>
     internal static string BuildHashed(ContextPackageRequest request, ContextPackagePolicy policy)
@@ -203,7 +203,7 @@ internal static class PackageRequestFingerprintBuilder
     }
 
     /// <summary>
-    /// R13.0 #7: 将 request.Metadata 中语义字段（非操作性 key）按 Ordinal 排序后写入指纹。
+    /// #7: 将 request.Metadata 中语义字段（非操作性 key）按 Ordinal 排序后写入指纹。
     /// 排除 <see cref="OperationalMetadataKeys"/> 中的 per-call 标识/诊断字段（requestId/traceId 等），
     /// 仅保留影响 package 模板的语义字段（如 mode/taskKind/intent/project/desiredOutputFormat/timeRange
     /// 及未在 denylist 中的自定义业务字段）。

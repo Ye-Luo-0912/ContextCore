@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WP-S6：CI 证据门禁 —— 拒绝 Inconclusive 测试结果掩盖缺失证据。
+"""CI 证据门禁 —— 拒绝 Inconclusive 测试结果掩盖缺失证据。
 
 用法：gate-no-inconclusive.py <trx 文件或目录>...
 

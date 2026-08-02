@@ -6,7 +6,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R28-D / R28-F：Deterministic Batch Inference Engine
+// / R28-F：Deterministic Batch Inference Engine
 //
 // 目标：
 //   提供 IBatchInferenceEngine 的 fallback 实现，不调用真实模型，
@@ -15,7 +15,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 //     2. 基础设施测试与本地预览（无需 GPU / 远程服务）
 //     3. 单元测试中验证调用契约（输入顺序、超时、取消）
 //
-// R28-F P4-1/P4-2 优化：
+// 优化：
 //   - 新增 InferBatchAsync(FeatureBatch, ct)：直接消费连续 float 内存，避免装箱。
 //   - 新增 ContentHash / CalibrationVersion 属性（接口要求）。
 //   - ComputeFeatureHash 优化：消除 StringBuilder + string[] + 排序 + UTF-8 byte[] 分配，
@@ -34,11 +34,11 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R28-D / R28-F：确定性批量推理引擎（fallback 实现）。
+/// / R28-F：确定性批量推理引擎（fallback 实现）。
 /// </summary>
 /// <remarks>
 /// 相同输入始终产出相同分数；不调用真实模型，适合作为 fallback 或基础设施测试实现。
-/// R28-F：同时支持字典路径（InferAsync）与连续内存路径（InferBatchAsync）。
+/// 同时支持字典路径（InferAsync）与连续内存路径（InferBatchAsync）。
 /// 子问题1：实现 <see cref="IFallbackInferenceEngine"/> 标记接口，
 /// 让 ModelActivationManager 通过 IFallbackInferenceEngine 注入本引擎，
 /// 避免 DI 容器解析 IBatchInferenceEngine 时回到 ModelActivationManager 自身（循环依赖）。
@@ -47,7 +47,7 @@ public sealed class DeterministicBatchInferenceEngine : IFallbackInferenceEngine
 {
     private const string DefaultModelVersion = "deterministic-hash-v1";
 
-    // R28-F P3-1：ContentHash 固定字符串（本引擎实现稳定，无外部工件）。
+    // ContentHash 固定字符串（本引擎实现稳定，无外部工件）。
     // 真实模型实现应返回 ONNX/序列化模型的 SHA-256。
     private const string EngineContentHash = "deterministic-hash-v1:fnv1a-64";
 
@@ -57,18 +57,18 @@ public sealed class DeterministicBatchInferenceEngine : IFallbackInferenceEngine
     public string ModelVersion => DefaultModelVersion;
 
     /// <summary>
-    /// R28-D P0-1：引擎类型 = DeterministicReplay。
+    /// 引擎类型 = DeterministicReplay。
     /// 该引擎仅产出 feature hash，不调用真实模型；默认配置下不得改变 FinalScore。
     /// </summary>
     public InferenceEngineKind Kind => InferenceEngineKind.DeterministicReplay;
 
     /// <summary>
-    /// R28-F P3-1：本引擎实现的内容哈希（固定值，无外部工件）。
+    /// 本引擎实现的内容哈希（固定值，无外部工件）。
     /// </summary>
     public string ContentHash => EngineContentHash;
 
     /// <summary>
-    /// R28-F P3-1：绑定的校准版本号。
+    /// 绑定的校准版本号。
     /// </summary>
     public string CalibrationVersion => EngineCalibrationVersion;
 
@@ -102,7 +102,7 @@ public sealed class DeterministicBatchInferenceEngine : IFallbackInferenceEngine
     }
 
     /// <summary>
-    /// R28-F P4-1：基于连续 float 内存的批量推理。
+    /// 基于连续 float 内存的批量推理。
     /// 比 InferAsync 减少 Boxing 与字典查找开销，适合高频推理。
     /// </summary>
     public ValueTask<BatchInferenceResult> InferBatchAsync(FeatureBatch batch, CancellationToken ct = default)
@@ -182,11 +182,11 @@ public sealed class DeterministicBatchInferenceEngine : IFallbackInferenceEngine
     }
 
     // -----------------------------------------------------------------------
-    // R28-F P4-2：优化后的 hash 路径
+    // 优化后的 hash 路径
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// R28-F P4-2：基于字典路径的 hash（向后兼容路径）。
+    /// 基于字典路径的 hash（向后兼容路径）。
     /// 优化点：不再构建中间字符串；按 key 排序后逐个 key/value 写入 FNV-1a。
     /// 仍需 1 次 string[] 分配用于排序（无法避免，除非调用方提供有序字典）。
     /// </summary>
@@ -229,7 +229,7 @@ public sealed class DeterministicBatchInferenceEngine : IFallbackInferenceEngine
     }
 
     /// <summary>
-    /// R28-F P4-2：基于连续 float 内存的高性能 hash（推荐路径）。
+    /// 基于连续 float 内存的高性能 hash（推荐路径）。
     /// 0 托管分配：直接遍历 float 缓冲的字节表示 + SchemaVersion UTF-8 字节。
     /// 字节顺序由 MemoryMarshal.Cast 决定（小端序，x86/x64 一致；跨架构需注意）。
     /// </summary>

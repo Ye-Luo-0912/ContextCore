@@ -8,7 +8,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R15 增量上下文包：随机 differential testing 验收测试。
+/// 增量上下文包：随机 differential testing 验收测试。
 /// 核心验收契约：IncrementalBuild(snapshot, request) == FullBuild(request) 在随机状态序列下成立。
 /// </summary>
 /// <remarks>
@@ -19,7 +19,7 @@ namespace ContextCore.Tests;
 /// <item>同时执行 IncrementalBuild（基于前一个快照）与 FullBuild（独立 builder，无缓存）</item>
 /// <item>比较两者输出在 6 个维度完全等价：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs</item>
 /// </list>
-/// R15 V1：所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。
+/// V1：所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。
 /// 这些测试为 R15 V2 的选择性重载提供安全网 — V2 实现后，相同测试应继续通过。
 /// </remarks>
 [TestClass]
@@ -152,7 +152,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// R15 V2 大规模 differential testing：100 步随机 mutation 序列。
+    /// V2 大规模 differential testing：100 步随机 mutation 序列。
     /// 验证长期运行下 IncrementalBuild == FullBuild 在每一步均成立。
     /// </summary>
     [TestMethod]
@@ -164,7 +164,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// R15 V2 多种子大规模 differential testing：3 个种子 × 50 步。
+    /// V2 多种子大规模 differential testing：3 个种子 × 50 步。
     /// </summary>
     [TestMethod]
     public async Task Differential_LargeScale_MultipleSeeds_50Steps_IncrementalEqualsFull()
@@ -176,7 +176,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// R15 V2 NoChange 路径真正复用 PackageTemplate：
+    /// V2 NoChange 路径真正复用 PackageTemplate：
     /// 使用 CallTrackingBuilder 包装，验证 NoChange delta 时 RebuildFromSnapshotAsync 被调用，
     /// BuildDetailedAsync 未被调用。其他 delta kind 时反之。
     /// </summary>
@@ -209,7 +209,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// R15 V2 NoChange 路径连续多次复用同一快照：
+    /// V2 NoChange 路径连续多次复用同一快照：
     /// 验证 5 次连续 NoChange 增量构建均等价于全量构建。
     /// </summary>
     [TestMethod]
@@ -229,7 +229,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// R15 V2 混合序列：NoChange 与 store 变化交替，验证快照在变化后必须重新捕获。
+    /// V2 混合序列：NoChange 与 store 变化交替，验证快照在变化后必须重新捕获。
     /// </summary>
     [TestMethod]
     public async Task Differential_MixedNoChangeAndMutations_IncrementalEqualsFull()
@@ -384,7 +384,7 @@ public sealed class IncrementalPackageDifferentialTests
     }
 
     /// <summary>
-    /// R15 V2：使用预先捕获的快照执行 IncrementalBuild，验证与 FullBuild 等价。
+    /// V2：使用预先捕获的快照执行 IncrementalBuild，验证与 FullBuild 等价。
     /// 用于 NoChange 路径连续复用同一快照的场景。
     /// </summary>
     private static async Task AssertIncrementalEqualsFullWithSnapshotAsync(
@@ -664,7 +664,7 @@ internal sealed class InMemoryContextStateVersionStore : IContextStateVersionSto
 }
 
 /// <summary>
-/// R15 V2 测试夹具：包装 ISnapshotCapablePackageBuilder，统计 RebuildFromSnapshotAsync
+/// V2 测试夹具：包装 ISnapshotCapablePackageBuilder，统计 RebuildFromSnapshotAsync
 /// 与 BuildDetailedAsync 的调用次数，用于验证 NoChange 路径真的走了快照复用。
 /// </summary>
 internal sealed class CallTrackingBuilder : ISnapshotCapablePackageBuilder

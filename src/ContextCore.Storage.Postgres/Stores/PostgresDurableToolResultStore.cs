@@ -4,7 +4,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// P0-3：PostgreSQL 持久化 Durable Tool Result 缓存。
+/// PostgreSQL 持久化 Durable Tool Result 缓存。
 /// 让 HA 场景下已 Committed/ResultDelivered 的 tool 结果可跨进程持久化与崩溃恢复读取，
 /// 防止崩溃恢复时已执行的外部副作用结果丢失（被迫重新 Dispatch）。
 /// </summary>

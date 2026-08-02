@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：IUtilityLedger 的 in-memory 实现。
+/// IUtilityLedger 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐澄清 #4 + R29 WP-E-1）：

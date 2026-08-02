@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-3：InMemoryAgentCheckpointStore — Agent checkpoint 内存存储实现。
+// InMemoryAgentCheckpointStore — Agent checkpoint 内存存储实现。
 //
 // 目标（对齐 R23 规格）：
 //   1. 实现 IAgentCheckpointStore 的 4 个方法（Save / Get / List / Delete）。
@@ -15,14 +15,14 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R23-3：<see cref="IAgentCheckpointStore"/> 的 in-memory 实现。
+/// <see cref="IAgentCheckpointStore"/> 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 适用于测试 / 演示 / 单机开发场景。生产场景需替换为持久化实现。
 /// </remarks>
 public sealed class InMemoryAgentCheckpointStore : IAgentCheckpointStore
 {
-    // P0-6：主键改为复合 (workspace_id, checkpoint_id)
+    // 主键改为复合 (workspace_id, checkpoint_id)
     private readonly ConcurrentDictionary<string, AgentCheckpoint> _checkpoints
         = new(StringComparer.Ordinal);
 

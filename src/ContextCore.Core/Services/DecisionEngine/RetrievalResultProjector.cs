@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R18-2：Retrieval 结果投影器
+// Retrieval 结果投影器
 //
 // 将 ContextDecisionResult 投影为 ContextRetrievalResult，作为 Engine 输出
 // 与现有 Retrieval 主链出口 DTO 之间的桥梁。R18-2 阶段仅做格式投影，
@@ -19,11 +19,11 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R18-2：Retrieval 结果投影器。将 Engine 输出的 envelope 集合投影为
+/// Retrieval 结果投影器。将 Engine 输出的 envelope 集合投影为
 /// <see cref="ContextRetrievalResult"/>，保持与现有 Retrieval 主链出口 DTO 兼容。
 /// </summary>
 /// <remarks>
-/// R28-B.6 Impl-1：当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
+/// Impl-1：当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
 /// 真正截断 Material.Content，并重新计算 ActualTokens。
 /// </remarks>
 public sealed class RetrievalResultProjector : IResultProjector<ContextRetrievalResult>
@@ -34,10 +34,10 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
     /// 构造 RetrievalResultProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// R28-B.6 Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
+    /// Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
     /// <param name="tokenizerResolver">
-    /// R28-B.6 P0-6：tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
+    /// tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
     /// 使用 <see cref="TokenizerContentTruncator"/>（真正按 BPE/CJK 截断）。
     /// </param>
     /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
@@ -46,7 +46,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
         IContextTokenizerResolver? tokenizerResolver = null,
         string? modelName = null)
     {
-        // R28-B.6 P0-6：优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
+        // 优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
         _contentTruncator = contentTruncator
             ?? (tokenizerResolver is not null
                 ? new TokenizerContentTruncator(tokenizerResolver, modelName)
@@ -87,7 +87,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
     }
 
     /// <summary>
-    /// R28-B.7 P0-6：从完整执行结果投影为 ContextRetrievalResult。
+    /// 从完整执行结果投影为 ContextRetrievalResult。
     /// </summary>
     /// <remarks>
     /// 便捷重载：从 execution 提取 Decision + WorkingSet，委托到
@@ -101,17 +101,17 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
     }
 
     /// <summary>
-    /// P0-7：将决策结果 + 候选正文 sidecar 投影为 ContextRetrievalResult。
+    /// 将决策结果 + 候选正文 sidecar 投影为 ContextRetrievalResult。
     /// 从 workingSet.Materials 恢复候选 Content；从 result.AllocationDecisions
     /// 消费 Section / IncludedTokens / IsTruncated（如有）。
-    /// R28-B.6 Impl-1：当 IsTruncated=true 时，使用 IContentTruncator 截断 Content 并重算 ActualTokens。
+    /// Impl-1：当 IsTruncated=true 时，使用 IContentTruncator 截断 Content 并重算 ActualTokens。
     /// </summary>
     public ContextRetrievalResult Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(workingSet);
 
-        // P0-7：构建 CanonicalKey → AllocationDecision 索引，用于恢复 Section / IncludedTokens
+        // 构建 CanonicalKey → AllocationDecision 索引，用于恢复 Section / IncludedTokens
         var allocationByKey = result.AllocationDecisions
             .ToDictionary(d => d.CandidateKey, d => d);
 
@@ -123,14 +123,14 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             .Select(ProjectToRetrievalDecision)
             .ToList();
 
-        // R28-B.7 P0-4：重算总 token 数（含 section 分隔符 token）
+        // 重算总 token 数（含 section 分隔符 token）
         // Engine Outcome.EstimatedTokens 仅含候选 token 之和，不计分隔符；
         // Projector 输出时附加分隔符 token（每个候选间一个 "\n---\n" 约 3 token）。
         var candidateTokenSum = selectedItems.Sum(c => c.EstimatedTokens);
         var totalTokensWithSeparators = TokenCostHelper.CountWithSeparators(
             candidateTokenSum, selectedItems.Count);
 
-        // R28-B.7 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
+        // 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
         // 诊断键加 "diag." 前缀以避免与既有 Metadata 键冲突。
         var metadata = new Dictionary<string, string>
         {
@@ -150,7 +150,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             Succeeded = true,
             SelectedItems = selectedItems,
             DroppedItems = droppedItems,
-            // R28-B.7 P0-4：使用含分隔符的总 token 数（比 Engine Outcome 更精确）
+            // 使用含分隔符的总 token 数（比 Engine Outcome 更精确）
             EstimatedTokens = totalTokensWithSeparators,
             CreatedAt = result.DecidedAt,
             Metadata = metadata
@@ -162,15 +162,15 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
         CandidateWorkingSet workingSet,
         IReadOnlyDictionary<CanonicalCandidateKey, CandidateAllocationDecision> allocationByKey)
     {
-        // P0-7：从 Material sidecar 恢复 Content
+        // 从 Material sidecar 恢复 Content
         string content = string.Empty;
         if (workingSet.Materials.TryGetValue(envelope.CanonicalKey, out var material))
         {
             content = material.Content;
         }
 
-        // P0-7：从 AllocationDecision 恢复 IncludedTokens / IsTruncated（如有）
-        // R28-B.7 P0-4：优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
+        // 从 AllocationDecision 恢复 IncludedTokens / IsTruncated（如有）
+        // 优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
         var includedTokens = envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
         var isTruncated = false;
         if (allocationByKey.TryGetValue(envelope.CanonicalKey, out var decision))
@@ -179,7 +179,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             isTruncated = decision.IsTruncated;
         }
 
-        // R28-B.6 Impl-1：当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
+        // Impl-1：当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
         if (isTruncated && !string.IsNullOrEmpty(content) && includedTokens > 0)
         {
             var truncation = _contentTruncator.Truncate(content, includedTokens);

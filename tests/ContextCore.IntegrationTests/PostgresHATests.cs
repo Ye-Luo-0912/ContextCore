@@ -5,7 +5,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// R14-PG-9：PostgreSQL HA（高可用）场景集成测试。
+/// PostgreSQL HA（高可用）场景集成测试。
 /// 覆盖 failover（容器重启）、连接池耗尽、慢查询超时、事务回滚恢复。
 /// 使用 Testcontainers 启动 pgvector/pgvector:pg17 镜像；Docker 不可用时跳过（Inconclusive）。
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class PostgresHATests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // R14-PG-9：直接尝试启动容器——失败时设 _connectionString=null 让测试 Inconclusive。
+        // 直接尝试启动容器——失败时设 _connectionString=null 让测试 Inconclusive。
         // 不复用 PostgresIntegrationTests.IsDockerAvailableAsync，因其内部 3 秒 CancellationToken
         // 在 pgvector 镜像首次拉取/启动时可能误判 Docker 不可用。
         try
@@ -56,7 +56,7 @@ public sealed class PostgresHATests
     private static bool ShouldSkip => _connectionString is null;
 
     /// <summary>
-    /// R14-PG-9：模拟 DB failover——停止容器再启动，验证恢复后可重新建立连接。
+    /// 模拟 DB failover——停止容器再启动，验证恢复后可重新建立连接。
     /// NpgsqlDataSource 内部维护连接池，重启后旧连接失效；Testcontainers 在 Stop/Start 后
     /// 可能重新分配主机端口，因此重启后需重新获取 connection string 并用新 factory 验证。
     /// 这模拟真实 HA 场景：failover 后服务发现更新端点，应用用新连接配置重连。
@@ -122,7 +122,7 @@ public sealed class PostgresHATests
     }
 
     /// <summary>
-    /// R14-PG-9：CommandTimeoutSeconds 应在慢查询时触发 NpgsqlException（超时）。
+    /// CommandTimeoutSeconds 应在慢查询时触发 NpgsqlException（超时）。
     /// 用 pg_sleep(5) 模拟慢查询，CommandTimeoutSeconds=1 让超时在 1 秒内触发。
     /// 验证：抛 NpgsqlException，且耗时在 [1s, 4s) 区间内。
     /// </summary>
@@ -162,7 +162,7 @@ public sealed class PostgresHATests
     }
 
     /// <summary>
-    /// R14-PG-9：MaxPoolSize=N 时，N 个并发连接占满池后，第 N+1 个连接应等待或失败。
+    /// MaxPoolSize=N 时，N 个并发连接占满池后，第 N+1 个连接应等待或失败。
     /// Npgsql 在池耗尽时会等待（默认 Timeout=15 秒），超时后抛 NpgsqlException。
     /// 这里设置 Timeout=3 让测试快失败。
     /// </summary>
@@ -220,7 +220,7 @@ public sealed class PostgresHATests
     }
 
     /// <summary>
-    /// R14-PG-9：事务失败回滚后，后续操作应能正常进行（连接池未损坏）。
+    /// 事务失败回滚后，后续操作应能正常进行（连接池未损坏）。
     /// 故意触发 PostgresException（重复主键）后回滚事务，
     /// 验证后续从连接池获取新连接执行 SELECT 1 仍能成功。
     /// </summary>

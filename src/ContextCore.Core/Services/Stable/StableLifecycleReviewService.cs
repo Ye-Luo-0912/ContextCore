@@ -528,7 +528,7 @@ public sealed class StableLifecycleReviewService
             return Task.CompletedTask;
         }
 
-        // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
+        // 0: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
         // 若未注入 writer，跳过写入（不回退到 BatchUpsertAsync，避免跳过验证）。
         if (_projectionWriter is not null)
         {

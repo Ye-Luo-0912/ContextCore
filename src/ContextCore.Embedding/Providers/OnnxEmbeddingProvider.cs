@@ -47,7 +47,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
             ? _options.ModelName
             : request.ModelName!;
 
-        // P0-7.6: instruction 拼接由 EmbeddingTextComposer 统一负责，避免 Retrieval 层与 Provider 双重拼接。
+        // instruction 拼接由 EmbeddingTextComposer 统一负责，避免 Retrieval 层与 Provider 双重拼接。
         // 优先级：per-input Instruction（调用方传入）> options.QueryInstruction（Provider 自身配置）。
         // 非_query 输入不附加 options.QueryInstruction（保持旧行为），但仍尊重 per-input Instruction。
         var fallbackInstruction = request.InputKind == EmbeddingInputKind.Query
@@ -60,7 +60,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
         var cacheHits = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        // P5-0.2: 预建 inputId -> inputIndex 字典，排序复杂度从 O(n²) 降为 O(n log n)
+        // 预建 inputId -> inputIndex 字典，排序复杂度从 O(n²) 降为 O(n log n)
         var inputOrder = new Dictionary<string, int>(request.Inputs.Count, StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < request.Inputs.Count; i++)
         {
@@ -74,7 +74,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
         {
             foreach (var input in request.Inputs)
             {
-                // P0-7.6: per-input Instruction 优先，缺省回退到 options.QueryInstruction
+                // per-input Instruction 优先，缺省回退到 options.QueryInstruction
                 var instruction = !string.IsNullOrEmpty(input.Instruction)
                     ? input.Instruction
                     : fallbackInstruction;
@@ -252,7 +252,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
     }
 
     /// <summary>
-    /// P5-0.2: 按输入顺序排序向量。使用预建的 inputOrder 字典，复杂度 O(n log n)。
+    /// 按输入顺序排序向量。使用预建的 inputOrder 字典，复杂度 O(n log n)。
     /// 未找到 inputId 的向量排在末尾（保持稳定顺序）。
     /// </summary>
     private static EmbeddingVector[] SortByInputOrder(

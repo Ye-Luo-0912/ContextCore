@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R21-4：Memory Evolution 统一契约测试。
+/// Memory Evolution 统一契约测试。
 ///
 /// 验证目标：
 ///   1. MemoryState 枚举 8 值（byte 底层）

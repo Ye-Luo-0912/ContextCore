@@ -7,7 +7,7 @@ using ContextCore.Service;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// R29-Hard-Gate P5：Production Evidence HTTP 端点 E2E 测试
+// Production Evidence HTTP 端点 E2E 测试
 //
 // 目标：补齐现有 4 个 E2E 测试的缺口——通过真实 HTTP API（而非直接构造 Actor/Store）
 // 验证完整 ASP.NET Core 主机 + 真实 PostgreSQL 后端的端到端可用性。

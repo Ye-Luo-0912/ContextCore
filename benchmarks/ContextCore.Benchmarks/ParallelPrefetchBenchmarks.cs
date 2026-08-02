@@ -223,7 +223,7 @@ public class ParallelPrefetchBenchmarks
         _ = result.Package.Sections.Count;
     }
 
-    // P0-11：并发场景直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
+    // 并发场景直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
     // 避免 Task.Run 将 ThreadPool 调度成本混入业务测量。
     [Benchmark]
     public async Task WithDelay_Concurrent4_ParallelPrefetch()

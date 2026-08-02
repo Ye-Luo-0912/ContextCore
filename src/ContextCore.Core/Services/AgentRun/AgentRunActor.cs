@@ -31,7 +31,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   - 子问题 5：通过 IDurableToolExecutor 走 Durable Journal（不再直接调 IToolDispatcher）
 //   - 子问题 6：ToolCallCompleted payload 含完整 Tool 身份（RequestId/SideEffect/IdempotencyKey）
 //
-// P0-2 修复：
+// 修复：
 //   - 引入 AgentRunExecutionState 统一管理执行期可变状态（Run/Messages/LastModelResponse/
 //     LastCheckpoint/EventSequence/EventChainHash），消除散落实例字段
 //   - Bug 3：每次模型调用都计为一次 Turn（TurnBudget 递减），防止无 Tool 的模型循环无限运行
@@ -62,16 +62,16 @@ public sealed class AgentRunActor
     private readonly IAgentCheckpointStore? _checkpointStore;
     // 子问题 5：Durable Tool Executor（封装 journal + dispatch）
     private readonly IDurableToolExecutor? _durableToolExecutor;
-    // P0-3：模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
+    // 模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
     private readonly IAgentModelContextProjector? _modelContextProjector;
-    // P0-1：Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
+    // Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
     private IReadOnlyList<AgentToolDefinition> _toolDefinitions;  // P1-1: mutable for AllowedToolIds filtering in ExecuteAsync
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
     // 子问题 2：模型调用次数计数（防止无限循环）
     private int _modelCallsUsed;
-    // P0-6：当前执行期内的模型轮次计数（每次 ExecuteAsync 重置为 0）。
+    // 当前执行期内的模型轮次计数（每次 ExecuteAsync 重置为 0）。
     // 用于 ComputeRequestId 的 modelTurn 参数，确保同一逻辑轮次在崩溃恢复后产生相同 RequestId
     // （_modelCallsUsed 是累积值，恢复后不重置，会导致同一逻辑轮次产生不同 modelTurn → 误重新 Dispatch）。
     private int _executionModelTurn;
@@ -86,12 +86,12 @@ public sealed class AgentRunActor
     private AgentCheckpoint? _pendingTurnCheckpoint;
     // G4：批量提交阈值（超过则 mid-turn 强制 flush）
     private const int PendingEventsFlushThreshold = 32;
-    // P1-4: 强制 checkpoint 阈值 — 未 checkpoint 事件数达到此值时强制创建 checkpoint，
+    // 强制 checkpoint 阈值 — 未 checkpoint 事件数达到此值时强制创建 checkpoint，
     // 防止事件流无限增长导致恢复时重放代价过大。
     private const int ForcedCheckpointEventThreshold = 1000;
-    // P1-4: 事件恢复 keyset pagination 页大小（基于 sequence 索引的分页读取）。
+    // 事件恢复 keyset pagination 页大小（基于 sequence 索引的分页读取）。
     private const int RecoveryEventPageSize = 500;
-    // P1-4: 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
+    // 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
     private int _eventsSinceLastCheckpoint;
 
     // 当前 Run 的 lease token 与 fencing token（由 AgentKernelHost 在 ExecuteAsync 时注入）。
@@ -106,7 +106,7 @@ public sealed class AgentRunActor
     private Func<DateTimeOffset?>? _leaseExpiresAtProvider;
 
     /// <summary>
-    /// P0-2 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
+    /// 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
     /// 统一管理 Run 元数据 / 结构化上下文 / 模型响应 / checkpoint / 事件序列与哈希链。
     /// </summary>
     private sealed record AgentRunExecutionState
@@ -125,7 +125,7 @@ public sealed class AgentRunActor
         public AgentModelResponse? LastModelResponse { get; init; }
 
         /// <summary>
-        /// P1-2：最近一次模型响应的规范化 Tool 调用列表（与 <see cref="LastModelResponse"/> 同步生成）。
+        /// 最近一次模型响应的规范化 Tool 调用列表（与 <see cref="LastModelResponse"/> 同步生成）。
         /// null = 尚未调用模型或模型响应已分派完毕（DispatchToolsAsync 结束后置 null）。
         /// 非空时，<see cref="DispatchToolsAsync"/> 按 ordinal 索引取出 <see cref="NormalizedToolCall.InvocationId"/>
         /// 作为统一的 ToolCallId，确保 Assistant 消息 / 事件 / Journal / Tool Message 引用同一 ID。
@@ -133,7 +133,7 @@ public sealed class AgentRunActor
         public List<NormalizedToolCall>? NormalizedToolCalls { get; init; }
 
         /// <summary>
-        /// P0-3：最近一次 Context Decision Runtime 的执行结果（含 WorkingSet.Materials）。
+        /// 最近一次 Context Decision Runtime 的执行结果（含 WorkingSet.Materials）。
         /// null = 未注入决策运行时或本轮未调用。
         /// 由 IAgentModelContextProjector 在投影时从 Materials 取出候选正文。
         /// </summary>
@@ -149,7 +149,7 @@ public sealed class AgentRunActor
         public string? EventChainHash { get; init; }
 
         /// <summary>
-        /// WP-1#6：待执行的 Tool 命令列表（审批恢复用）。
+        /// #6：待执行的 Tool 命令列表（审批恢复用）。
         /// 当 Run 从 AwaitingApproval 恢复（审批通过 → PendingToolExecution）时，
         /// 从 ApprovalRequested 事件 payload 重建此字段，Actor 据此依次执行所有 Pending 命令。
         /// 列表首项为被审批的 Tool；后续项为审批中断时未处理的同轮 Tool Call（旧路径单数时会丢弃）。
@@ -202,7 +202,7 @@ public sealed class AgentRunActor
         _checkpointStore = checkpointStore;
         _durableToolExecutor = durableToolExecutor;
         _modelContextProjector = modelContextProjector;
-        // P0-1：从 RealToolDispatcher 构建 Tool 定义（原生 function calling）；
+        // 从 RealToolDispatcher 构建 Tool 定义（原生 function calling）；
         // EchoToolDispatcher 或其他实现无 Tool 定义 → 空列表（模型不感知 Tool）。
         _toolDefinitions = (toolDispatcher as RealToolDispatcher)?.GetToolDefinitions()
             ?? Array.Empty<AgentToolDefinition>();
@@ -216,7 +216,7 @@ public sealed class AgentRunActor
     /// <param name="run">待执行的 Run 元数据。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="leaseToken">
-    /// P0-4：可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
+    /// 可选 lease token，用于 fencing 校验。提供时（与 <paramref name="fencingToken"/> 同时提供），
     /// 所有副作用操作（状态 CAS / 事件追加）的 WHERE 子句将追加 lease_token + fencing_token 校验；
     /// lease 已被抢占时副作用失败，Actor 应中止。null = 无 lease 路径（测试 / 外部取消等）。
     /// </param>
@@ -252,7 +252,7 @@ public sealed class AgentRunActor
         // run.State != Created 表示 Run 之前已开始执行（崩溃/重启后由 RecoveryWorker 重新入队）
         var isResume = run.State != AgentRunState.Created;
 
-        // P1-1锛氭寜 Run.AllowedToolIds 杩囨护妯″瀷鍙鐨?Tool Definitions锛堝湪妯″瀷璋冪敤鍓嶈繃婊わ級
+        // 锛氭寜 Run.AllowedToolIds 杩囨护妯″瀷鍙鐨?Tool Definitions锛堝湪妯″瀷璋冪敤鍓嶈繃婊わ級
         if (run.AllowedToolIds.Count > 0 && _toolDefinitions.Count > 0)
         {
             _toolDefinitions = _toolDefinitions
@@ -260,7 +260,7 @@ public sealed class AgentRunActor
                 .ToList();
         }
 
-        // P0-2 重构：初始化 AgentRunExecutionState（统一管理执行期状态）
+        // 重构：初始化 AgentRunExecutionState（统一管理执行期状态）
         // G5：用 AgentContextState 替代旧 List<AgentMessage> Messages，
         // CurrentTask 在初始化时设置为 run.Task，后续由 ProjectForModel 投影为 User 消息
         var state = new AgentRunExecutionState
@@ -281,7 +281,7 @@ public sealed class AgentRunActor
         _currentTurn = run.Turn;
         // 子问题 2：从 Run 元数据恢复 ModelCallsUsed（支持崩溃恢复后续跑）
         _modelCallsUsed = run.ModelCallsUsed;
-        // P0-5：_executionModelTurn 先重置为 0，Resume 时由 RebuildStateFromEventsAsync
+        // _executionModelTurn 先重置为 0，Resume 时由 RebuildStateFromEventsAsync
         // 从 ModelCallCompleted 事件流统计重建——避免恢复后从 0 重新计数导致 RequestId 改变。
         _executionModelTurn = 0;
         // G4：记录 Turn 起始状态，用于批量提交时的 state CAS
@@ -290,7 +290,7 @@ public sealed class AgentRunActor
         _turnStartState = run.State;
         _pendingTurnEvents.Clear();
         _pendingTurnCheckpoint = null;
-        // P1-4: 重置未 checkpoint 事件计数
+        // 重置未 checkpoint 事件计数
         _eventsSinceLastCheckpoint = 0;
 
         if (isResume)
@@ -322,8 +322,8 @@ public sealed class AgentRunActor
             // 主循环
             while (!AgentRunStateMachine.IsTerminalState(state.Run.State) && !cancellationToken.IsCancellationRequested)
             {
-                // P0-2：审批通过后从 PendingToolExecution 状态恢复——直接执行原 Tool，不重新调用模型。
-                // WP-1#6：PendingToolCommands 为列表，依次执行同轮所有未完成 Tool Call。
+                // 审批通过后从 PendingToolExecution 状态恢复——直接执行原 Tool，不重新调用模型。
+                // #6：PendingToolCommands 为列表，依次执行同轮所有未完成 Tool Call。
                 if (state.Run.State == AgentRunState.PendingToolExecution && state.PendingToolCommands is { Count: > 0 })
                 {
                     state = await ExecutePendingToolAsync(state, cancellationToken).ConfigureAwait(false);
@@ -346,7 +346,7 @@ public sealed class AgentRunActor
                         if (_pendingTurnEvents.Count >= PendingEventsFlushThreshold)
                         {
                             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
-                            // P1-4: 强制 checkpoint 阈值检查 — 未 checkpoint 事件达阈值时记录警告。
+                            // 强制 checkpoint 阈值检查 — 未 checkpoint 事件达阈值时记录警告。
                             // ModelCalling 状态无法直接进入 Checkpointing（状态机仅允许 Observing → Checkpointing），
                             // checkpoint 将在下一个 Observing 状态（DispatchToolsAsync Turn 结束）时创建并重置计数。
                             if (_eventsSinceLastCheckpoint >= ForcedCheckpointEventThreshold && _checkpointFactory is not null)
@@ -361,7 +361,7 @@ public sealed class AgentRunActor
 
                     case AgentLoopDecision.DispatchTool:
                         state = await DispatchToolsAsync(state, cancellationToken).ConfigureAwait(false);
-                        // P0-6：若审批挂起（DispatchToolsAsync 已 flush 并返回 AwaitingApproval 状态），
+                        // 若审批挂起（DispatchToolsAsync 已 flush 并返回 AwaitingApproval 状态），
                         // 退出执行槽（释放 Worker/Semaphore/Lease）。Run 已持久化为 AwaitingApproval；
                         // 外部审批决策通过 POST /approvals/{approvalId} 端点提交，
                         // RecoveryWorker 会重新入队执行。
@@ -606,7 +606,7 @@ public sealed class AgentRunActor
 
         var events = allEvents;
 
-        // P0-2：从事件流按时间顺序无损重建 Conversation（Assistant + Tool 消息）。
+        // 从事件流按时间顺序无损重建 Conversation（Assistant + Tool 消息）。
         // ModelCallCompleted 事件携带完整模型响应（content + toolCalls[]），重建 Assistant 消息；
         // ToolCallCompleted 事件携带 Tool 执行结果，重建 Tool 消息。
         // 按事件 Sequence 顺序遍历，保证 "assistant tool_calls → tool result" 因果顺序。
@@ -625,7 +625,7 @@ public sealed class AgentRunActor
         // 避免恢复后从 0 重新计数导致 RequestId 改变（Journal 无法识别原调用）。
         _executionModelTurn = RebuildExecutionModelTurn(events);
 
-        // P0-2：审批通过后从 PendingToolExecution 状态恢复——不规范化为 ContextBuilding，
+        // 审批通过后从 PendingToolExecution 状态恢复——不规范化为 ContextBuilding，
         // 而是从最后一个 ApprovalRequested 事件提取 PendingToolCommands，让主循环直接执行原 Tool。
         // 审批 API 在裁决时将 Run 状态推进到 PendingToolExecution（批准）或 Failed（拒绝）；
         // 此处仅处理 PendingToolExecution（Failed 已是终态，不会进入 resume）。
@@ -916,7 +916,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// WP-1#6：从事件流中提取最后一个 ApprovalRequested 事件的 PendingToolCommands 列表。
+    /// #6：从事件流中提取最后一个 ApprovalRequested 事件的 PendingToolCommands 列表。
     /// 审批通过后恢复时，Actor 据此依次执行所有 Pending Tool Call（不依赖模型重生成）。
     /// 兼容旧版单数 pendingToolCommand payload（P0-2 之前的事件）。
     /// </summary>
@@ -938,7 +938,7 @@ public sealed class AgentRunActor
                 using var doc = JsonDocument.Parse(evt.Payload);
                 var root = doc.RootElement;
 
-                // WP-1#6：优先读取 pendingToolCommands（数组），兼容旧版 pendingToolCommand（单数）
+                // #6：优先读取 pendingToolCommands（数组），兼容旧版 pendingToolCommand（单数）
                 if (root.TryGetProperty("pendingToolCommands", out var ptcsProp) && ptcsProp.ValueKind == JsonValueKind.Array)
                 {
                     var list = new List<PendingToolCommand>();
@@ -973,7 +973,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// WP-1#6：从 JSON 元素解析单个 PendingToolCommand。
+    /// #6：从 JSON 元素解析单个 PendingToolCommand。
     /// </summary>
     private static PendingToolCommand? ParsePendingToolCommand(JsonElement ptc)
     {
@@ -999,13 +999,13 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// WP-1#6：直接执行审批通过后的所有 Pending Tool（不重新调用模型）。
+    /// #6：直接执行审批通过后的所有 Pending Tool（不重新调用模型）。
     /// 从 <see cref="AgentRunExecutionState.PendingToolCommands"/> 依次提取完整 Tool 调用信息，
     /// 通过 <see cref="IDurableToolExecutor"/>（或回退到 <see cref="IToolDispatcher"/>）执行，
     /// 记录 ToolCallStarted/Completed/ObservationAppended 事件，然后进入 Observing 继续循环。
     /// </summary>
     /// <remarks>
-    /// WP-1#7：ToolCallStarted 事件必须在外部执行前持久化（先日志后执行）。
+    /// #7：ToolCallStarted 事件必须在外部执行前持久化（先日志后执行）。
     /// 确保被批准的 Tool 确定性执行：审批前 Actor 已退出，模型上下文已丢失；
     /// 此处不重置为 ContextBuilding 重新调用模型，而是直接执行 ApprovalRequested 事件中保存的 Tool。
     /// </remarks>
@@ -1017,7 +1017,7 @@ public sealed class AgentRunActor
             ?? throw new InvalidOperationException(
                 "PendingToolExecution 状态下 PendingToolCommands 为 null（状态不一致）。");
 
-        // P0-3：首项为被审批的 Tool（已通过审批），直接执行。
+        // 首项为被审批的 Tool（已通过审批），直接执行。
         // 后续项为同轮未处理的 Tool Call，必须逐个走独立校验+审批流程，
         // 不能因首项审批通过而隐式批准后续命令。
         for (var cmdIndex = 0; cmdIndex < pendingCommands.Count; cmdIndex++)
@@ -1031,10 +1031,10 @@ public sealed class AgentRunActor
                 ToolCallId = pendingCommand.ToolCallId
             };
 
-            // P0-3：后续 Tool Call（非首项）必须走独立校验+审批流程
+            // 后续 Tool Call（非首项）必须走独立校验+审批流程
             if (cmdIndex > 0)
             {
-                // P0-3：AllowedToolIds 检查
+                // AllowedToolIds 检查
                 if (state.Run.AllowedToolIds.Count > 0
                     && !string.IsNullOrWhiteSpace(toolCall.ToolName)
                     && !state.Run.AllowedToolIds.Contains(toolCall.ToolName))
@@ -1054,7 +1054,7 @@ public sealed class AgentRunActor
                     continue;
                 }
 
-                // P0-3：Tool Schema 校验
+                // Tool Schema 校验
                 if (_toolCallValidator is not null)
                 {
                     var validation = await _toolCallValidator.ValidateAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
@@ -1075,7 +1075,7 @@ public sealed class AgentRunActor
                         continue;
                     }
 
-                    // P0-3：后续 Tool Call 需要独立审批——不能因首项审批通过而隐式批准
+                    // 后续 Tool Call 需要独立审批——不能因首项审批通过而隐式批准
                     if (validation.RequiresApproval && _approvalGate is not null)
                     {
                         state = TransitionStateLocal(state, AgentRunState.AwaitingApproval);
@@ -1112,7 +1112,7 @@ public sealed class AgentRunActor
 
                             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
-                            // P0-3：保存剩余 PendingToolCommands（含当前需审批的 Tool），供恢复后执行
+                            // 保存剩余 PendingToolCommands（含当前需审批的 Tool），供恢复后执行
                             state = state with { PendingToolCommands = newPendingCommands };
                             return state;
                         }
@@ -1137,7 +1137,7 @@ public sealed class AgentRunActor
                 }
             }
 
-            // WP-1#7：先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
+            // #7：先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
             var requestId = (_durableToolExecutor is not null)
                 ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
                 : pendingCommand.ToolCallId;
@@ -1151,7 +1151,7 @@ public sealed class AgentRunActor
                 resumedFromApproval = cmdIndex == 0
             }));
 
-            // WP-1#7：flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
+            // #7：flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
             // 执行 Tool（复用 DurableToolExecutor 或回退到直接 Dispatcher）
@@ -1229,7 +1229,7 @@ public sealed class AgentRunActor
                 Succeeded = toolResult.Succeeded
             };
             state.Context.ToolObservations.Add(resumedObservation);
-            // P0-1：同步追加到统一对话流（审批恢复路径同样需要保持因果顺序）。
+            // 同步追加到统一对话流（审批恢复路径同样需要保持因果顺序）。
             state.Context.Conversation.Add(resumedObservation.ToAgentMessage());
 
             state = BufferEvent(state, AgentRunEventType.ObservationAppended, JsonSerializer.Serialize(new
@@ -1248,7 +1248,7 @@ public sealed class AgentRunActor
         // 所有 Pending Tool 执行完成 → Observing（G4：本地推进）
         state = TransitionStateLocal(state, AgentRunState.Observing);
 
-        // P1-4: Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        // Checkpointing（若有工厂）→ ContextBuilding（下一轮）
         // 强制 checkpoint 阈值由 _eventsSinceLastCheckpoint 跟踪：Turn 结束的 checkpoint 会重置计数。
         if (_checkpointFactory is not null)
         {
@@ -1306,7 +1306,7 @@ public sealed class AgentRunActor
     /// <summary>执行 CallModel 阶段。</summary>
     private async Task<AgentRunExecutionState> CallModelAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
-        // P0-5：在调用模型前检查 DeadlineAt（超时则 Fail，替代旧路径中 StartRunAsync 返回后立即 Dispose 的 linked CTS）。
+        // 在调用模型前检查 DeadlineAt（超时则 Fail，替代旧路径中 StartRunAsync 返回后立即 Dispose 的 linked CTS）。
         // 旧路径 linked CTS 在 HTTP 请求结束时被 Dispose，导致 Actor 收到 ObjectDisposedException；
         // 新路径由 Run.DeadlineAt 字段承载超时控制，Actor 在每次模型调用前检查。
         if (state.Run.DeadlineAt is not null && DateTimeOffset.UtcNow > state.Run.DeadlineAt)
@@ -1335,7 +1335,7 @@ public sealed class AgentRunActor
                 Duration = TimeSpan.Zero
             };
             // G5：同步更新 Context.LastModelTurn 和 LastModelResponse（后者供 IAgentLoopPolicy 使用）
-            // P1-2：degraded 响应无 ToolCalls，NormalizedToolCalls 置空避免上一轮残留。
+            // degraded 响应无 ToolCalls，NormalizedToolCalls 置空避免上一轮残留。
             state = state with
             {
                 LastModelResponse = degradedResponse,
@@ -1353,7 +1353,7 @@ public sealed class AgentRunActor
             return TransitionStateLocal(state, AgentRunState.ContextBuilding);
         }
 
-        // P0-3：由 IAgentModelContextProjector 投影最终模型输入（从 WorkingSet.Materials 取正文 + Token 预算控制）。
+        // 由 IAgentModelContextProjector 投影最终模型输入（从 WorkingSet.Materials 取正文 + Token 预算控制）。
         // 未注入投影器时回退到 AgentContextState.ProjectForModel（旧路径，无 Material 正文）。
         // tokenBudget 使用 Run.ModelContextTokenBudget（默认 8192）；0 或负数 = 不限制。
         var tokenBudget = state.Run.ModelContextTokenBudget;
@@ -1380,7 +1380,7 @@ public sealed class AgentRunActor
             contextLength
         }));
 
-        // P0-1：调用 AgentModelRequest 重载（携带 Tool 定义 + 模型工件 + 截止时间，支持原生 function calling）。
+        // 调用 AgentModelRequest 重载（携带 Tool 定义 + 模型工件 + 截止时间，支持原生 function calling）。
         // 旧路径仅传 messages，模型无法发起 function calling；新路径将 _toolDefinitions（从 RealToolDispatcher 构建）
         // 传给 Transport，让真实 LLM 能声明并调用 Tool。
         var modelRequest = new AgentModelRequest
@@ -1401,10 +1401,10 @@ public sealed class AgentRunActor
 
         // 子问题 2：递增模型调用计数
         _modelCallsUsed++;
-        // P0-6：递增执行期内模型轮次计数（用于 RequestId 的 modelTurn）
+        // 递增执行期内模型轮次计数（用于 RequestId 的 modelTurn）
         _executionModelTurn++;
 
-        // P1-2：模型响应进入 Actor 后立刻生成不可变的 NormalizedToolCall 列表。
+        // 模型响应进入 Actor 后立刻生成不可变的 NormalizedToolCall 列表。
         // InvocationId = {runId}_{executionModelTurn}_{ordinal}（确定性、可重建），
         // 后续 Assistant 消息 / ModelCallCompleted 事件 / DispatchToolsAsync / 审批 / Journal / Tool Message
         // 全部引用此 InvocationId，消除两条路径分别 Guid.NewGuid() 产生不同 ID 的问题。
@@ -1428,7 +1428,7 @@ public sealed class AgentRunActor
             _turnBudget = _turnBudget with { ModelCallsUsed = _modelCallsUsed };
         }
 
-        // P0-2 Bug 3 修复：每次模型调用都计为一次 Turn（TurnBudget 递减），
+        // Bug 3 修复：每次模型调用都计为一次 Turn（TurnBudget 递减），
         // 防止模型连续返回"非最终答案且无 ToolCalls"时 Turn 不增长导致无限循环
         _currentTurn++;
         if (_turnBudget is not null)
@@ -1436,10 +1436,10 @@ public sealed class AgentRunActor
             _turnBudget = _turnBudget with { TurnsUsed = _turnBudget.TurnsUsed + 1 };
         }
 
-        // P0-2：始终追加 Assistant 消息（原生 function calling 响应可能 Content 为空 + ToolCalls 非空）。
+        // 始终追加 Assistant 消息（原生 function calling 响应可能 Content 为空 + ToolCalls 非空）。
         // 旧路径仅在 Content 非空时追加，导致多轮 Tool 调用协议中断——模型在下一轮看不到自己上一轮
         // 发起的 Tool 调用请求，OpenAI / Anthropic 兼容 API 会拒绝无前置 Assistant tool_calls 的 Tool 消息。
-        // P1-2：ToolCalls[].Id 使用 NormalizedToolCall.InvocationId（确定性、与分派路径一致），
+        // ToolCalls[].Id 使用 NormalizedToolCall.InvocationId（确定性、与分派路径一致），
         // 替代旧路径的 tc.ToolCallId ?? tc.ToolName ?? Guid.NewGuid().ToString("N")。
         var assistantMessage = new AgentMessage
         {
@@ -1456,12 +1456,12 @@ public sealed class AgentRunActor
                 : null
         };
         state.Context.Messages.Add(assistantMessage);
-        // P0-1：同步追加到统一对话流，保持 Function Calling 消息因果顺序。
+        // 同步追加到统一对话流，保持 Function Calling 消息因果顺序。
         // 投影器从 Conversation 按原子协议单元保序裁剪，避免 Messages 与 ToolObservations 分离投影。
         state.Context.Conversation.Add(assistantMessage);
 
         // G4：更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
-        // P0-2 Bug 3 修复：同步 run.CostBudget（从模型响应中获取实际 token cost）
+        // Bug 3 修复：同步 run.CostBudget（从模型响应中获取实际 token cost）
         var updatedRun = state.Run with
         {
             ModelCallsUsed = _modelCallsUsed,
@@ -1485,13 +1485,13 @@ public sealed class AgentRunActor
             estimatedCost = response.EstimatedCost,
             billedCost = response.BilledCost,
             modelCallsUsed = _modelCallsUsed,
-            // P0-5：持久化执行期模型轮次，支持崩溃恢复时重建 _executionModelTurn，
+            // 持久化执行期模型轮次，支持崩溃恢复时重建 _executionModelTurn，
             // 避免恢复后从 0 重新计数导致 RequestId 改变（Journal 无法识别原调用）。
             executionModelTurn = _executionModelTurn,
             durationMs = response.Duration.TotalMilliseconds,
-            // P0-2：持久化完整模型响应，支持崩溃恢复时无损重建 Conversation。
+            // 持久化完整模型响应，支持崩溃恢复时无损重建 Conversation。
             // 旧事件缺少此字段时恢复路径跳过 Assistant 重建（仅恢复 Tool 消息，向后兼容）。
-            // P1-2：toolCalls[].id 使用 NormalizedToolCall.InvocationId（与 Assistant 消息 / 分派路径一致）。
+            // toolCalls[].id 使用 NormalizedToolCall.InvocationId（与 Assistant 消息 / 分派路径一致）。
             content = response.Content ?? string.Empty,
             toolCalls = response.ToolCalls.Count > 0
                 ? response.ToolCalls.Select((tc, idx) => new
@@ -1510,7 +1510,7 @@ public sealed class AgentRunActor
     /// G1/G5：构建结构化上下文。
     /// G5：User(run.Task) 不再追加到 Messages，而是由 AgentContextState.CurrentTask 持有，
     ///     ProjectForModel 投影时合成 User 消息（消除 hasUserMessage 去重检查）。
-    /// P0-3：若 IContextDecisionRuntime 注入，执行决策并存储 ContextDecisionExecutionResult 到
+    /// 若 IContextDecisionRuntime 注入，执行决策并存储 ContextDecisionExecutionResult 到
     ///       state.LastDecisionResult，由 IAgentModelContextProjector 在投影时从 WorkingSet.Materials
     ///       取出候选正文。不再每轮追加 System(retrievedContext) 消息（避免重复 + 让投影器统一管理）。
     /// </summary>
@@ -1522,13 +1522,13 @@ public sealed class AgentRunActor
         // ProjectForModel 会将其投影为 User 消息，无需在此追加。
         // 旧路径的 hasUserMessage 去重检查随之移除（CurrentTask 是单值字段，天然不会重复）。
 
-        // P0-3：若 IContextDecisionRuntime 注入，执行决策获取 WorkingSet（含 Materials 正文）
+        // 若 IContextDecisionRuntime 注入，执行决策获取 WorkingSet（含 Materials 正文）
         if (_decisionRuntime is not null)
         {
             var decisionResult = await TryExecuteDecisionAsync(state.Run, cancellationToken).ConfigureAwait(false);
             if (decisionResult is not null)
             {
-                // P0-3：存储决策结果供投影器使用（不再追加 System 消息摘要到 Messages）
+                // 存储决策结果供投影器使用（不再追加 System 消息摘要到 Messages）
                 state = state with { LastDecisionResult = decisionResult };
             }
             else
@@ -1542,7 +1542,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// P0-3：调用 IContextDecisionRuntime 执行决策，返回含 WorkingSet.Materials 的完整执行结果。
+    /// 调用 IContextDecisionRuntime 执行决策，返回含 WorkingSet.Materials 的完整执行结果。
     /// 失败时返回 null（降级为仅 Task + History，投影器不注入 Retrieved Materials）。
     /// </summary>
     private async Task<ContextDecisionExecutionResult?> TryExecuteDecisionAsync(AgentRun run, CancellationToken cancellationToken)
@@ -1571,7 +1571,7 @@ public sealed class AgentRunActor
                 QueryText = run.Task,
                 TokenBudget = 0,
                 TopK = 0,
-                // P3 Fix-1：激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
+                // Fix-1：激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
                 // Engine 选出 SelectedEnvelopes 后由 ISelectedCandidateHydrator 批量 hydrate 正文，
                 // 避免对未选中候选做无用正文 I/O。
                 RetrievalInput = new RetrievalInput { IncludeContent = false },
@@ -1582,11 +1582,11 @@ public sealed class AgentRunActor
                 }
             };
 
-            // P0-3：使用 ExecuteWithWorkingSetAsync 获取完整 WorkingSet（Envelopes + Materials）
+            // 使用 ExecuteWithWorkingSetAsync 获取完整 WorkingSet（Envelopes + Materials）
             // 让投影器从 Materials 恢复候选正文，而不只是 CandidateId/Type/Score 摘要
             var result = await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
 
-            // P1-1：hydration 失败严重度处理。
+            // hydration 失败严重度处理。
             // 1) 日志：hydration.failedCount > 0 / hydration.budgetExceeded 时记录 Trace 警告（可观测性）。
             // 2) fail-closed：任一 Selected hard constraint / mandatory 候选正文为空时，
             //    决策结果不可用（模型绝不能在缺失 mandatory 上下文的情况下运行），返回 null 降级。
@@ -1604,7 +1604,7 @@ public sealed class AgentRunActor
                         diagnostics.ContainsKey("hydration.budgetExceeded"));
                 }
 
-                // P1-1：AgentContext fail-closed — 预算修复后 mandatory 独占仍超限
+                // AgentContext fail-closed — 预算修复后 mandatory 独占仍超限
                 // （exact tokenize 后实际 token 数 > 模型上下文窗口），决策结果不可用。
                 if (diagnostics.ContainsKey("hydration.budgetExceeded"))
                 {
@@ -1658,12 +1658,12 @@ public sealed class AgentRunActor
         {
             var toolCall = state.LastModelResponse.ToolCalls[toolIndex];
 
-            // P0-2 Bug 5 修复：在循环开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
+            // Bug 5 修复：在循环开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
             // 确保 ToolCallStarted 事件和 ToolCallCompleted 事件的审计 ID 一致。
-            // P0-2 多轮协议修复：优先使用模型返回的 ToolCallId（如 OpenAI 的 tool_call_id），
+            // 多轮协议修复：优先使用模型返回的 ToolCallId（如 OpenAI 的 tool_call_id），
             // 确保 Tool 观察消息的 tool_call_id 与 Assistant 消息的 tool_calls[].id 一致——
             // OpenAI / Anthropic 兼容 API 要求二者匹配，否则第二轮调用会被拒绝。
-            // P1-2：优先使用 NormalizedToolCall.InvocationId（由 CallModelAsync 在模型响应进入 Actor
+            // 优先使用 NormalizedToolCall.InvocationId（由 CallModelAsync 在模型响应进入 Actor
             // 后立即生成，与 Assistant 消息 / ModelCallCompleted 事件 / Tool Message 引用同一 ID）。
             // 回退到 toolCall.ToolCallId / Guid 仅为防御性兼容（如 resume 路径未重建 NormalizedToolCalls）。
             var normalized = (state.NormalizedToolCalls is not null && toolIndex < state.NormalizedToolCalls.Count)
@@ -1671,7 +1671,7 @@ public sealed class AgentRunActor
                 : null;
             var toolCallId = normalized?.InvocationId ?? toolCall.ToolCallId ?? Guid.NewGuid().ToString("N");
 
-            // P0-5：强制 Run 约束的 Tool 白名单（AllowedToolIds 非空时仅允许集合中的 Tool）。
+            // 强制 Run 约束的 Tool 白名单（AllowedToolIds 非空时仅允许集合中的 Tool）。
             // 旧路径未写入 AllowedToolIds，Actor 无法按 Run 限定 Tool 集；新路径从 API 入参写入并在此强制。
             if (state.Run.AllowedToolIds.Count > 0
                 && !string.IsNullOrWhiteSpace(toolCall.ToolName)
@@ -1719,7 +1719,7 @@ public sealed class AgentRunActor
                 {
                     state = TransitionStateLocal(state, AgentRunState.AwaitingApproval);
 
-                    // P0-2：持久化完整 PendingToolCommand 到 ApprovalRequested 事件 payload，
+                    // 持久化完整 PendingToolCommand 到 ApprovalRequested 事件 payload，
                     // 让审批通过后恢复时可直接执行原 Tool（不依赖模型重生成）。
                     // 包含 ToolCallId / ToolName / ArgumentsJson / IdempotencyKey / ModelTurnRevision。
                     var pendingCommand = new PendingToolCommand
@@ -1731,9 +1731,9 @@ public sealed class AgentRunActor
                         ModelTurnRevision = _executionModelTurn
                     };
 
-                    // WP-1#6：构建完整 PendingToolCommands 列表（当前 + 同轮后续未处理的 Tool Call）。
+                    // #6：构建完整 PendingToolCommands 列表（当前 + 同轮后续未处理的 Tool Call）。
                     // 旧路径仅保存单数 PendingToolCommand，审批中断时同轮后续 Tool Call 被丢弃。
-                    // P1-2：remainingToolCallId 优先使用 NormalizedToolCall.InvocationId，确保审批恢复后
+                    // remainingToolCallId 优先使用 NormalizedToolCall.InvocationId，确保审批恢复后
                     // ExecutePendingToolAsync 使用的 ID 与原 Assistant 消息 / 事件一致。
                     var pendingCommands = new List<PendingToolCommand> { pendingCommand };
                     for (var j = toolIndex + 1; j < state.LastModelResponse.ToolCalls.Count; j++)
@@ -1770,14 +1770,14 @@ public sealed class AgentRunActor
                     var approval = await _approvalGate.RequestApprovalAsync(
                         state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
 
-                    // P0-6：区分三种审批结果——PendingApproval（挂起等待人工）/ Approved（批准）/ Rejected（拒绝）
+                    // 区分三种审批结果——PendingApproval（挂起等待人工）/ Approved（批准）/ Rejected（拒绝）
                     if (approval.PendingApproval)
                     {
                         // 使用 Gate 返回的 ApprovalId 作为外部 POST 端点定位键。
                         // 未注入 store 时（测试模式）Gate 不生成持久化记录，回退到 Actor 的 toolCallId 仅用于事件流审计。
                         var effectiveApprovalId = approval.ApprovalId ?? toolCallId;
 
-                        // P0-6：审批挂起 — 记录 ApprovalResolved(pending) 事件 + approvalId，
+                        // 审批挂起 — 记录 ApprovalResolved(pending) 事件 + approvalId，
                         // flush 持久化 AwaitingApproval 状态，然后退出执行槽（释放 Worker/Semaphore）。
                         // 旧路径返回 Approved=false 导致 Actor 跳过 Tool 继续执行——不是真正的 Human-in-the-loop。
                         // 外部通过 POST /approvals/{approvalId} 端点提交决策；
@@ -1795,7 +1795,7 @@ public sealed class AgentRunActor
                         // 立即 flush：将 AwaitingApproval 状态 + 事件持久化（单事务）
                         await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
-                        // WP-1#6：将完整 PendingToolCommands 列表保存到执行状态，供恢复时依次执行。
+                        // #6：将完整 PendingToolCommands 列表保存到执行状态，供恢复时依次执行。
                         state = state with { PendingToolCommands = pendingCommands };
 
                         // 退出执行槽：返回 AwaitingApproval 状态，主循环检测后 return
@@ -1821,7 +1821,7 @@ public sealed class AgentRunActor
                 }
             }
 
-            // WP-1#7：先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
+            // #7：先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
             // 旧路径在执行后才缓冲 ToolCallStarted，崩溃时无法审计已发起的调用。
             var requestIdForStart = (_durableToolExecutor is not null)
                 ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, toolCall, _executionModelTurn)
@@ -1835,7 +1835,7 @@ public sealed class AgentRunActor
                 idempotencyKey = toolCall.IdempotencyKey
             }));
 
-            // WP-1#7：flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
+            // #7：flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
             // 子问题 5：通过 IDurableToolExecutor 执行（若注入），否则回退到直接 IToolDispatcher
@@ -1859,7 +1859,7 @@ public sealed class AgentRunActor
             else
             {
                 // 回退路径：直接调 IToolDispatcher（无 journal，无 durable 保证）
-                // P0-2 Bug 5 修复：使用预生成的 toolCallId 作为 RequestId（与 ToolCallStarted/Completed 一致）
+                // Bug 5 修复：使用预生成的 toolCallId 作为 RequestId（与 ToolCallStarted/Completed 一致）
                 var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
                 {
                     ToolName = toolCall.ToolName,
@@ -1911,7 +1911,7 @@ public sealed class AgentRunActor
                 Succeeded = toolResult.Succeeded
             };
             state.Context.ToolObservations.Add(toolObservation);
-            // P0-1：同步追加 Tool 消息到统一对话流，紧随引发它的 Assistant ToolCall 之后，
+            // 同步追加 Tool 消息到统一对话流，紧随引发它的 Assistant ToolCall 之后，
             // 保持 "assistant tool_calls → tool result" 因果顺序（OpenAI/Anthropic 协议要求）。
             state.Context.Conversation.Add(toolObservation.ToAgentMessage());
 
@@ -1935,10 +1935,10 @@ public sealed class AgentRunActor
         // 清除 LastModelResponse：Tool 已分派完毕，下一轮应由 LoopPolicy 决定 CallModel
         // （而非重复 DispatchTool）。未清除会导致 ContextBuilding → ToolDispatching 非法转换。
         // Context.LastModelTurn 保留（供 ProjectForModel 投影历史上下文）。
-        // P1-2：同步清除 NormalizedToolCalls（已分派完毕，避免下一轮残留）。
+        // 同步清除 NormalizedToolCalls（已分派完毕，避免下一轮残留）。
         state = state with { LastModelResponse = null, NormalizedToolCalls = null };
 
-        // P0-2 Bug 3 修复：Turn 已在 CallModelAsync 中递增（每次模型调用计为一次 Turn）
+        // Bug 3 修复：Turn 已在 CallModelAsync 中递增（每次模型调用计为一次 Turn）
         // 此处不再重复递增 Turn（避免双重计数）
 
         // G4：更新本地 Run 副本（不再单独调 _runStore.UpdateAsync；CAS + 字段更新延后到批量提交）
@@ -1952,7 +1952,7 @@ public sealed class AgentRunActor
         };
         state = state with { Run = updatedRun };
 
-        // P1-4: Checkpointing（若有工厂）→ ContextBuilding（下一轮）
+        // Checkpointing（若有工厂）→ ContextBuilding（下一轮）
         // 强制 checkpoint 阈值由 _eventsSinceLastCheckpoint 跟踪：Turn 结束的 checkpoint 会重置计数。
         // 若 _checkpointFactory 为 null 但未 checkpoint 事件已达阈值，记录警告（无法强制 checkpoint）。
         if (_checkpointFactory is not null)
@@ -2028,7 +2028,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// P1-2：将模型响应的 ToolCalls 规范化为不可变 <see cref="NormalizedToolCall"/> 列表。
+    /// 将模型响应的 ToolCalls 规范化为不可变 <see cref="NormalizedToolCall"/> 列表。
     /// 在模型响应进入 Actor 后立即调用一次，生成确定性 InvocationId（{runId}_{turn}_{ordinal}）。
     /// 后续 Assistant 消息 / 事件 / 审批 / Journal / Tool Message 全部引用此 InvocationId。
     /// </summary>
@@ -2068,7 +2068,7 @@ public sealed class AgentRunActor
     /// 子问题 4：Create checkpoint → Save checkpoint（IAgentCheckpointStore.SaveAsync）→
     /// 缓冲 CheckpointSaved event → 本地推进到 ContextBuilding。
     /// 顺序必须是保存成功后才记录事件（不能先记录成功事件再保存）。
-    /// P0-2 Bug 4 修复：SaveAsync 失败时显式捕获异常，转 Failed 状态，不记录 CheckpointSaved 事件。
+    /// Bug 4 修复：SaveAsync 失败时显式捕获异常，转 Failed 状态，不记录 CheckpointSaved 事件。
     /// G4：状态推进与事件均缓冲到 _pendingTurnEvents，CAS 延后到 Turn 结束批量提交。
     /// </remarks>
     private async Task<AgentRunExecutionState> PersistCheckpointAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
@@ -2103,10 +2103,10 @@ public sealed class AgentRunActor
             // 随 Turn 结束的 AppendBatchAsync 在同一事务内持久化（Postgres：INSERT agent_checkpoints；
             // InMemory：委托注入的 IAgentCheckpointStore）。事件与 checkpoint 原子提交，顺序保证更强。
             //
-            // P0-2 Bug 4 修复语义保留：若批量提交（含 checkpoint INSERT）失败，CheckpointSaved 事件
+            // Bug 4 修复语义保留：若批量提交（含 checkpoint INSERT）失败，CheckpointSaved 事件
             // 也在同一批中回滚，不会出现"事件已记录但 checkpoint 未保存"的不一致。
 
-            // P0-2 重构：更新 state.LastCheckpoint
+            // 重构：更新 state.LastCheckpoint
             state = state with { LastCheckpoint = checkpoint };
 
             // G4：记录 Turn 内最新 checkpoint，用于批量提交时的 checkpoint cursor + checkpoint 本体
@@ -2230,7 +2230,7 @@ public sealed class AgentRunActor
             return;
         }
 
-        // P1-4: 记录本批 flush 的事件数与是否含 checkpoint，用于成功后更新 _eventsSinceLastCheckpoint。
+        // 记录本批 flush 的事件数与是否含 checkpoint，用于成功后更新 _eventsSinceLastCheckpoint。
         var eventsBeingFlushed = _pendingTurnEvents.Count;
         var hasCheckpoint = _pendingTurnCheckpoint is not null;
 
@@ -2241,7 +2241,7 @@ public sealed class AgentRunActor
             ExpectedCurrentState = _turnStartState,
             NewState = run.State,
             RunSnapshot = run,
-            // P0-4：透传 lease token + fencing token，Postgres 实现在状态 CAS 与事件追加的
+            // 透传 lease token + fencing token，Postgres 实现在状态 CAS 与事件追加的
             // WHERE 子句中校验 lease 仍由当前实例持有；lease 被抢占时事务回滚并抛异常。
             LeaseToken = _leaseToken,
             FencingToken = _fencingToken
@@ -2269,7 +2269,7 @@ public sealed class AgentRunActor
             // 3c：flush 失败时清除 checkpoint 本体，避免 FailAsync/TryTransitionToCancelledAsync
             // 重试时再次尝试保存已失败的 checkpoint（导致终态 flush 也失败、事件丢失）。
             // checkpoint 本体保存失败不应阻止事件流（含 RunFailed/RunCancelled）的终态持久化。
-            // P0-11：同步移除 CheckpointSaved 事件并重建哈希链，避免重试时持久化声明不存在的 checkpoint 的孤立事件。
+            // 同步移除 CheckpointSaved 事件并重建哈希链，避免重试时持久化声明不存在的 checkpoint 的孤立事件。
             // 事件链是 SHA-256 哈希链，RemoveEventsAndRebuildChain 全链重建 Sequence/PrevChainHash/ContentHash。
             // 其他事件（StateTransition/RunFailed/RunCancelled 等）保留，确保终态可持久化。
             _pendingTurnCheckpoint = null;
@@ -2281,7 +2281,7 @@ public sealed class AgentRunActor
         _turnStartState = run.State;
         _pendingTurnCheckpoint = null;
 
-        // P1-4: 更新未 checkpoint 事件计数。
+        // 更新未 checkpoint 事件计数。
         // 本批含 checkpoint → 计数归零（所有事件已被 checkpoint 覆盖）；
         // 本批无 checkpoint → 累加本批事件数（mid-turn flush 的事件仍未 checkpoint）。
         if (hasCheckpoint)
@@ -2295,7 +2295,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// P0-11：从待提交事件列表中移除指定类型的事件，并重建 SHA-256 哈希链。
+    /// 从待提交事件列表中移除指定类型的事件，并重建 SHA-256 哈希链。
     /// 事件链的 Sequence 单调递增、PrevChainHash 指向前一事件 ContentHash、ContentHash 包含 Sequence。
     /// 直接删除中间事件会破坏三者一致性，必须全链重建。
     /// </summary>

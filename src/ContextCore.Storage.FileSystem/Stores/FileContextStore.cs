@@ -9,7 +9,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 集合元数据以 JSON 文件保存，条目内容单独存储并通过 JSONL 元数据索引管理。
 /// </summary>
 /// <remarks>
-/// P0-fix: 读路径恢复 SemaphoreSlim 保证内容与 metadata 跨文件一致性。
+/// -fix: 读路径恢复 SemaphoreSlim 保证内容与 metadata 跨文件一致性。
 /// 原子替换只保证单文件完整，不保证 content+metadata 组成同一快照。
 /// collection 级 metadata cache 带 mtime 双重校验和容量上限。
 /// </remarks>
@@ -24,7 +24,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     private readonly FileSystemWriter _writer;
 
     // collection 级 immutable metadata cache, keyed by items.jsonl path.
-    // P0-fix: mtime 双重校验（读前+读后），容量上限 256 防止无限增长。
+    // -fix: mtime 双重校验（读前+读后），容量上限 256 防止无限增长。
     private readonly ConcurrentDictionary<string, MetadataCacheEntry> _metadataCache = new(StringComparer.OrdinalIgnoreCase);
 
     private sealed record MetadataCacheEntry(
@@ -59,7 +59,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
             var itemsPath = _paths.GetItemsJsonlPath(item.WorkspaceId, item.CollectionId);
             var ctx = new SaveContext();
 
-            // P1-1: 在跨进程写锁内执行完整 RMW——读取既有 metadata、计算更新、原子替换 metadata 文件、
+            // 在跨进程写锁内执行完整 RMW——读取既有 metadata、计算更新、原子替换 metadata 文件、
             // 最后写入 raw content 副作用文件。锁路径即 items.jsonl 本身，
             // 确保两个进程不会各自读到旧 metadata 后互相覆盖（lost update）。
             await _writer.UpdateWithSideEffectsAsync(
@@ -123,7 +123,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     /// <summary>
-    /// P1-1: SaveAsync 的 RMW 上下文。ExistingMetadata 在 read 阶段填充，
+    /// SaveAsync 的 RMW 上下文。ExistingMetadata 在 read 阶段填充，
     /// 其余字段在 modify 阶段填充、write 阶段消费（跨进程锁内原子完成）。
     /// </summary>
     private sealed class SaveContext
@@ -135,7 +135,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     /// <summary>
-    /// P0-fix: 读路径加锁，保证 metadata 与 content 跨文件一致性。
+    /// -fix: 读路径加锁，保证 metadata 与 content 跨文件一致性。
     /// </summary>
     public async Task<ContextItem?> GetAsync(
         string workspaceId,
@@ -213,7 +213,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     /// <summary>
-    /// P0-fix: 读路径加锁，保证 metadata 与 content 跨文件一致性。
+    /// -fix: 读路径加锁，保证 metadata 与 content 跨文件一致性。
     /// Two-phase query: filter+paginate metadata first, read content only for final candidates.
     /// </summary>
     public async Task<IReadOnlyList<ContextItem>> QueryAsync(
@@ -320,7 +320,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
             var itemsPath = _paths.GetItemsJsonlPath(workspaceId, collectionId);
             var ctx = new DeleteContext();
 
-            // P1-1: 跨进程锁内完整 RMW——读取 metadata 以决定 raw 删除路径、原子替换 metadata、删除 raw。
+            // 跨进程锁内完整 RMW——读取 metadata 以决定 raw 删除路径、原子替换 metadata、删除 raw。
             await _writer.UpdateWithSideEffectsAsync(
                 itemsPath,
                 read: async ct =>
@@ -364,7 +364,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     /// <summary>
-    /// P1-1: DeleteAsync 的 RMW 上下文。ExistingMetadata 在 read 阶段填充，
+    /// DeleteAsync 的 RMW 上下文。ExistingMetadata 在 read 阶段填充，
     /// RawPathToDelete 在 modify 阶段填充、write 阶段消费。
     /// </summary>
     private sealed class DeleteContext
@@ -441,7 +441,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     /// <summary>
-    /// P0-fix: 调用方已持有 _gate 锁。带 mtime 缓存和读后复核。
+    /// -fix: 调用方已持有 _gate 锁。带 mtime 缓存和读后复核。
     /// </summary>
     private async Task<IReadOnlyList<ContextItemMetadata>> ReadItemMetadataLockedAsync(
         string workspaceId,
@@ -469,7 +469,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
             .Cast<ContextItemMetadata>()
             .ToArray();
 
-        // P0-fix: 读后复核 mtime；持锁期间不会有并发写，但防御性校验
+        // -fix: 读后复核 mtime；持锁期间不会有并发写，但防御性校验
         var mtimeAfter = TryGetLastWriteUtc(path);
         if (mtimeBefore is not null && mtimeAfter is not null && mtimeBefore == mtimeAfter)
         {

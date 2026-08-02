@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R18-1：统一决策内核契约可实施性验证。
+/// 统一决策内核契约可实施性验证。
 ///
 /// 验证目标：
 ///   1. ContextCandidateEnvelope + 4 个子 record 可正常构造（默认值 + with 表达式增强）
@@ -122,7 +122,7 @@ public sealed class DecisionEngineContractsTests
     [TestMethod]
     public void ContextCandidateSource_IncludesAllR20ExpertTypes()
     {
-        // R20 Expert 划分：Mandatory / Lexical / Semantic / WorkingMemory / StableMemory / Graph / Recency / Constraint
+        // Expert 划分：Mandatory / Lexical / Semantic / WorkingMemory / StableMemory / Graph / Recency / Constraint
         // 验证所有 8 个 Expert 都有对应枚举值
         Assert.AreEqual(ContextCandidateSource.Mandatory, (ContextCandidateSource)1);
         Assert.AreEqual(ContextCandidateSource.Lexical, (ContextCandidateSource)2);

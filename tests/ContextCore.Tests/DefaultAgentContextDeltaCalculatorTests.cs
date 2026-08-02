@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-6：DefaultAgentContextDeltaCalculator 实现测试。
+/// DefaultAgentContextDeltaCalculator 实现测试。
 ///
 /// 覆盖：
 ///   1. null 输入抛异常

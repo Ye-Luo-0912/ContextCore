@@ -115,7 +115,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
                 var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
                 ConstraintGapCandidate? updatedGap = null;
 
-                // P1-1: TryUpdateAsync 在跨进程锁内 RMW——未匹配到 gapId 时返回 null 跳过写入，
+                // TryUpdateAsync 在跨进程锁内 RMW——未匹配到 gapId 时返回 null 跳过写入，
                 // 避免对未创建/未变更的 candidates.jsonl 创建空文件。
                 var written = await _jsonLines.TryUpdateAsync<ConstraintGapCandidate>(
                     path,

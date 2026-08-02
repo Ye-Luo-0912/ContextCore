@@ -2,7 +2,7 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
 /// 单个 migration 的不可变描述符，用于版本化迁移注册表和回滚判断。
-/// R14-PG-8：为既有 cumulative idempotent baseline 引入版本化与回滚元数据。
+/// 为既有 cumulative idempotent baseline 引入版本化与回滚元数据。
 /// </summary>
 public sealed record PostgresMigrationDescriptor
 {

@@ -10,7 +10,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-D-1：V2.1 Allocator 主链接入验收测试
+// V2.1 Allocator 主链接入验收测试
 //
 // 覆盖：
 //   1. Engine 路径选择：V2.1 AllocateWithDiversity vs V2.0 Allocate fallback
@@ -26,7 +26,7 @@ namespace ContextCore.Tests;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-D-1：V2.1 Allocator 主链接入验收测试。
+/// V2.1 Allocator 主链接入验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R29")]
@@ -364,7 +364,7 @@ public sealed class R29D_AllocatorV2_1MainChainTests
 }
 
 // ===========================================================================
-// R29 WP-D-2：MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试
+// MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试
 //
 // 覆盖：
 //   1. FailClosed + mandatory 超预算 → 抛 MandatoryContextWindowExceededException
@@ -379,7 +379,7 @@ public sealed class R29D_AllocatorV2_1MainChainTests
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-D-2：MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试。
+/// MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R29")]
@@ -554,7 +554,7 @@ public sealed class R29D_MandatoryOverflowPolicyTests
 }
 
 // ===========================================================================
-// R29 WP-D-3：TokenCost 权威化验收测试
+// TokenCost 权威化验收测试
 //
 // 覆盖：
 //   1. Engine Legacy 路径使用 TokenCost.ContentTokens（而非 EstimatedTokens）
@@ -568,7 +568,7 @@ public sealed class R29D_MandatoryOverflowPolicyTests
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-D-3：TokenCost 权威化验收测试。
+/// TokenCost 权威化验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R29")]
@@ -696,7 +696,7 @@ public sealed class R29D_TokenCostAuthorityTests
 }
 
 // ===========================================================================
-// R29 WP-D-3：Provider EnrichTokenCost fail-fast 验收测试
+// Provider EnrichTokenCost fail-fast 验收测试
 //
 // 覆盖：
 //   1. Provider 未注入 tokenizer + 非空内容 → 抛 InvalidOperationException
@@ -711,7 +711,7 @@ public sealed class R29D_TokenCostAuthorityTests
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-D-3：Provider EnrichTokenCost fail-fast 验收测试。
+/// Provider EnrichTokenCost fail-fast 验收测试。
 /// </summary>
 [TestClass]
 [TestCategory("R29")]

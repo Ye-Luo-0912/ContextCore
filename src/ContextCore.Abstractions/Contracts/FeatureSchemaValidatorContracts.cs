@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R29 WP-A-4：Feature Schema Validator 契约
+// Feature Schema Validator 契约
 //
 // 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
 //   在推理前严格校验输入特征与 FeatureSchema 一致性，防止 schema drift
@@ -27,7 +27,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-4：特征 schema 验证器。
+/// 特征 schema 验证器。
 /// 在推理前对输入特征与 <see cref="FeatureSchema"/> 执行严格匹配验证。
 /// </summary>
 /// <remarks>
@@ -82,7 +82,7 @@ public interface IFeatureSchemaValidator
 }
 
 /// <summary>
-/// R29 WP-A-4：特征 schema 验证结果。
+/// 特征 schema 验证结果。
 /// </summary>
 public sealed record FeatureSchemaValidationResult
 {
@@ -103,7 +103,7 @@ public sealed record FeatureSchemaValidationResult
 }
 
 /// <summary>
-/// R29 WP-A-4：单条特征 schema 违规。
+/// 单条特征 schema 违规。
 /// </summary>
 public sealed record FeatureSchemaViolation
 {
@@ -124,7 +124,7 @@ public sealed record FeatureSchemaViolation
 }
 
 /// <summary>
-/// R29 WP-A-4：特征 schema 违规严重程度。
+/// 特征 schema 违规严重程度。
 /// </summary>
 public enum FeatureSchemaViolationSeverity : byte
 {

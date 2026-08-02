@@ -26,7 +26,7 @@ public sealed class ControlRoomState
     public string StorageKind { get; init; } = "filesystem";
 
     /// <summary>
-    /// R14-PG-10：Postgres 存储配置（仅在 StorageKind = "postgres" 时填充）。
+    /// Postgres 存储配置（仅在 StorageKind = "postgres" 时填充）。
     /// 当 ControlRoom 直接以 Postgres 模式启动时由 CreateState 设置；
     /// 由 BackupCommand pg-* 子命令消费，用于在不重复 CLI 注入连接串的情况下复用配置。
     /// </summary>
@@ -38,7 +38,7 @@ public sealed class ControlRoomState
 
     public ContextCoreClient? ServiceClient { get; init; }
 
-    // P5-4: Service Mode 不再创建本地运行时对象，这些属性在 Service Mode 下为 null。
+    // Service Mode 不再创建本地运行时对象，这些属性在 Service Mode 下为 null。
     // Direct Mode（InMemory/FileSystem）会完整赋值；Service Mode 通过 ServiceClient 远程调用。
     public IContextStore? ContextStore { get; init; }
 
@@ -87,13 +87,13 @@ public sealed class ControlRoomState
     public IModelUsageLogStore? ModelUsageLogStore { get; init; }
 
     /// <summary>
-    /// R29 WP-E-3：训练数据导出器（Direct 模式可用）。
+    /// 训练数据导出器（Direct 模式可用）。
     /// Service 模式下为 null（CLI 通过 Service API 远程调用，不走本地导出）。
     /// </summary>
     public ITrainingDataExporter? TrainingDataExporter { get; init; }
 
     /// <summary>
-    /// R29 WP-E-4：校准数据导出器（Direct 模式可用）。
+    /// 校准数据导出器（Direct 模式可用）。
     /// Service 模式下为 null（CLI 通过 Service API 远程调用，不走本地导出）。
     /// </summary>
     public ICalibrationDataExporter? CalibrationDataExporter { get; init; }

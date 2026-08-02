@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Evolution;
 
 /// <summary>
-/// R16 默认 <see cref="IAgentObservationSource"/>：内存指标源，
+/// 默认 <see cref="IAgentObservationSource"/>：内存指标源，
 /// 支持外部通过 <see cref="RecordMetricsAsync"/> 写入指标，供 <see cref="DefaultContextEvolutionAgent"/> 在测试与离线诊断中读取。
 /// </summary>
 /// <remarks>

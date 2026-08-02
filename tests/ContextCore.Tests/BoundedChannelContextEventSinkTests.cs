@@ -6,7 +6,7 @@ using ContextCore.Storage.FileSystem;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.4 #1：覆盖 BoundedChannelContextEventSink 与 FileContextEventSink.EmitBatchAsync 的批量写入、
+/// 覆盖 BoundedChannelContextEventSink 与 FileContextEventSink.EmitBatchAsync 的批量写入、
 /// 有界通道背压、BestEffort fail-open、Required fail-closed、graceful drain 行为。
 /// </summary>
 [TestClass]
@@ -310,7 +310,7 @@ public sealed class BoundedChannelContextEventSinkTests
 
     /// <summary>
     /// 复合场景：Composite 包含 BestEffort + Required 子 sink，
-    /// P0-8：Composite.Kind 取最严格值——只要有一个子 sink 为 Required，Composite.Kind = Required。
+    /// Composite.Kind 取最严格值——只要有一个子 sink 为 Required，Composite.Kind = Required。
     /// 外层 BoundedChannelContextEventSink 检测到 Required 后绕过通道、同步转发事件，
     /// 确保审计事件（Required 子 sink）在通道压力下也不被丢弃。
     /// Composite.EmitAsync 内部仍按子 sink 的 Kind 分别处理失败：
@@ -323,7 +323,7 @@ public sealed class BoundedChannelContextEventSinkTests
         var requiredInner = new RequiredInMemorySink();
         var composite = new CompositeContextEventSink(new IContextEventSink[] { bestEffortInner, requiredInner });
 
-        // P0-8：Composite 包含 Required 子 sink → Composite.Kind = Required → 外层装饰器绕过通道
+        // Composite 包含 Required 子 sink → Composite.Kind = Required → 外层装饰器绕过通道
         await using var sink = new BoundedChannelContextEventSink(composite, capacity: 100, batchSize: 8);
         Assert.AreEqual(ContextEventSinkKind.Required, sink.Kind, "Composite 含 Required 子 sink 时 Kind 应升级为 Required");
 
@@ -341,7 +341,7 @@ public sealed class BoundedChannelContextEventSinkTests
     }
 
     /// <summary>
-    /// P0-8 生产场景模拟：Composite 包含 Required 审计 sink（如 FileContextEventSink），
+    /// 生产场景模拟：Composite 包含 Required 审计 sink（如 FileContextEventSink），
     /// 外层 BoundedChannelContextEventSink 应绕过通道，审计事件在通道压力下也不丢失。
     /// 使用低容量通道 + 高吞吐事件验证：若走通道必然丢弃，走 Required 路径则全部落盘。
     /// </summary>
@@ -369,7 +369,7 @@ public sealed class BoundedChannelContextEventSinkTests
     }
 
     /// <summary>
-    /// P0-8 反向验证：当 Composite 仅含 BestEffort 子 sink 时，Composite.Kind = BestEffort，
+    /// 反向验证：当 Composite 仅含 BestEffort 子 sink 时，Composite.Kind = BestEffort，
     /// 外层 BoundedChannelContextEventSink 走通道 + 后台批量消费路径（保留 R13.4 #1 的批量 I/O 优化）。
     /// </summary>
     [TestMethod]
@@ -395,7 +395,7 @@ public sealed class BoundedChannelContextEventSinkTests
     }
 
     /// <summary>
-    /// R13.4 #2：验证 BoundedChannelContextEventSink 的 drop/error/batch_emit 计数
+    /// 验证 BoundedChannelContextEventSink 的 drop/error/batch_emit 计数
     /// 通过 CoreMetrics 的 OTel Counter 发布，可用 MeterListener 捕获。
     /// queue 深度（PendingCount）作为实例属性保留供进程内观察（与 InMemoryContextStateCache 一致）。
     /// </summary>

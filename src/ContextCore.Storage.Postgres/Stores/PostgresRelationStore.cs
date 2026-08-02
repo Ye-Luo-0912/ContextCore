@@ -67,7 +67,7 @@ LIMIT 1;
     }
 
     /// <summary>
-    /// P0-3：在指定事务作用域内删除单条边。复用 scope 持有的连接与事务，不开启新连接。
+    /// 在指定事务作用域内删除单条边。复用 scope 持有的连接与事务，不开启新连接。
     /// scope 必须是 <see cref="PostgresWriteTransactionScope"/>。提交由调用方通过 scope.CommitAsync 完成。
     /// </summary>
     public async Task<bool> DeleteAsync(
@@ -158,7 +158,7 @@ WHERE workspace_id = @workspace_id
     }
 
     /// <summary>
-    /// P0-3：在指定事务作用域内批量 upsert 关系。复用 scope 持有的连接与事务。
+    /// 在指定事务作用域内批量 upsert 关系。复用 scope 持有的连接与事务。
     /// 提交由调用方通过 scope.CommitAsync 完成；此方法只执行 batch，不自行提交或回滚。
     /// </summary>
     public async Task BatchUpsertAsync(
@@ -247,7 +247,7 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     }
 
     /// <summary>
-    /// P0-3：在指定事务作用域内查询关系。读共享同一事务视图，避免读到其他事务未提交的数据。
+    /// 在指定事务作用域内查询关系。读共享同一事务视图，避免读到其他事务未提交的数据。
     /// </summary>
     public async Task<IReadOnlyList<ContextRelation>> QueryAsync(
         ContextRelationQuery query,
@@ -358,12 +358,12 @@ LIMIT @take OFFSET @skip;
 
         if (!string.IsNullOrWhiteSpace(query.RelationType))
         {
-            // P0-2：使用真实列 relation_type 而非 JSON 提取（既有索引，且避免大小写敏感问题）
+            // 使用真实列 relation_type 而非 JSON 提取（既有索引，且避免大小写敏感问题）
             filters.Add("relation_type = @relation_type");
             command.Parameters.AddWithValue("relation_type", query.RelationType);
         }
 
-        // P3-02：多类型过滤优先于单类型，在 LIMIT 前下推到 SQL
+        // 多类型过滤优先于单类型，在 LIMIT 前下推到 SQL
         if (query.AllowedRelationTypes.Count > 0)
         {
             var paramNames = new List<string>();
@@ -373,13 +373,13 @@ LIMIT @take OFFSET @skip;
                 paramNames.Add($"@{paramName}");
                 command.Parameters.AddWithValue(paramName, query.AllowedRelationTypes[i]);
             }
-            // P0-2：使用真实列 relation_type
+            // 使用真实列 relation_type
             filters.Add($"relation_type IN ({string.Join(", ", paramNames)})");
         }
 
         if (query.MinConfidence > 0)
         {
-            // P0-2：修复 cast 优先级 bug。
+            // 修复 cast 优先级 bug。
             // 旧：data ->> 'Confidence'::numeric 实际解析为 data ->> ('Confidence'::numeric)，
             // 即先 cast 字面量 'Confidence' 为 numeric（运行时抛错），而非 cast JSON 提取值。
             // 新：直接使用真实列 confidence（double precision，既有索引）。
@@ -418,7 +418,7 @@ LIMIT @take OFFSET @skip;
         command.Parameters.AddWithValue("skip", effectiveSkip);
         command.Parameters.AddWithValue("max_scan", maxScan);
 
-        // P0-2：修复 3 个 SQL bug：
+        // 修复 3 个 SQL bug：
         //   1) 旧：data ->> 'Confidence'::numeric（cast 优先级错误，运行时抛错）→ 改用真实列 confidence
         //   2) 旧：ORDER BY data ->> 'Weight'（字符串排序，"10" 排在 "9" 之前）→ 改用真实列 weight（double precision）
         //   3) 旧：内层 LIMIT @max_scan 无 ORDER BY（截断未排序集合，可能漏掉高权重边）
@@ -438,7 +438,7 @@ LIMIT @take OFFSET @skip;
     }
 
     /// <summary>
-    /// P1-6 / P7 / P1-9：批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
+    /// / P7 / P1-9：批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
     /// 每个种子独立扫描 + 排序 + LIMIT @per_seed_scan，命中 (workspace_id, source_id) / (workspace_id, target_id) 索引。
     /// </summary>
     /// <remarks>
@@ -475,7 +475,7 @@ LIMIT @take OFFSET @skip;
             return Array.Empty<RelationNeighborBatchResult>();
         }
 
-        // P1-3：全局硬上限 — 种子数超出 GraphQueryLimits.MaxSeeds 直接截断（保留原序）。
+        // 全局硬上限 — 种子数超出 GraphQueryLimits.MaxSeeds 直接截断（保留原序）。
         if (seeds.Count > GraphQueryLimits.MaxSeeds)
         {
             seeds.RemoveRange(GraphQueryLimits.MaxSeeds, seeds.Count - GraphQueryLimits.MaxSeeds);
@@ -484,9 +484,9 @@ LIMIT @take OFFSET @skip;
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        // P7：per-seed 扫描上限 = MaxScan（不超过 MaxTotalEdges）。
+        // per-seed 扫描上限 = MaxScan（不超过 MaxTotalEdges）。
         var maxScan = Math.Min(query.MaxScan > 0 ? query.MaxScan : 1000, GraphQueryLimits.MaxTotalEdges);
-        // P1-3：per-seed 返回边数不得超过 MaxEdgesPerSeed 硬上限。
+        // per-seed 返回边数不得超过 MaxEdgesPerSeed 硬上限。
         var effectiveTake = Math.Min(query.Take > 0 ? query.Take : 100, GraphQueryLimits.MaxEdgesPerSeed);
         var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
 
@@ -496,19 +496,19 @@ LIMIT @take OFFSET @skip;
             ? Math.Min(query.GlobalEdgeLimit, GraphQueryLimits.MaxTotalEdges)
             : GraphQueryLimits.MaxTotalEdges;
 
-        // P7：读取 (seed_id, 结构列) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
+        // 读取 (seed_id, 结构列) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
         var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var seed in seeds)
         {
             buckets[seed] = new List<ContextRelation>();
         }
 
-        // P1-3 / P1-9：全局硬上限 — 总读取边数达到 MaxTotalEdges 即停止读取，截断信号传播到 cutoff 种子。
+        // 全局硬上限 — 总读取边数达到 MaxTotalEdges 即停止读取，截断信号传播到 cutoff 种子。
         var totalRead = 0;
         var globalCapHit = false;
         string? lastReadSeedId = null;
 
-        // P1-9：Seed 分批执行，避免单次 LATERAL unnest(@item_ids) 过大。
+        // Seed 分批执行，避免单次 LATERAL unnest(@item_ids) 过大。
         // 全局 LIMIT @global_limit 下推到 SQL：每批 = 全局上限（GlobalEdgeLimit）- totalRead 的剩余预算，
         // 数据库只需为每批排序/生成 ≤ remainingBudget 行结构列。
         const int SeedBatchSize = 10;
@@ -521,7 +521,7 @@ LIMIT @take OFFSET @skip;
             await using var command = connection.CreateCommand();
             command.CommandTimeout = Options.CommandTimeoutSeconds;
 
-            // P7：LATERAL 内部 WHERE 引用外层 seed.id（correlated subquery）。
+            // LATERAL 内部 WHERE 引用外层 seed.id（correlated subquery）。
             // 过滤条件全部下推到 LATERAL 内，每个种子独立使用 (workspace_id, source_id) / (workspace_id, target_id) 索引。
             var filters = new List<string> { "workspace_id = @workspace_id" };
             command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
@@ -532,7 +532,7 @@ LIMIT @take OFFSET @skip;
                 command.Parameters.AddWithValue("collection_id", query.CollectionId);
             }
 
-            // P7：方向过滤改为与 seed.id 的等值比较（替代 ANY(@item_ids)），让 LATERAL 走索引。
+            // 方向过滤改为与 seed.id 的等值比较（替代 ANY(@item_ids)），让 LATERAL 走索引。
             switch (query.Direction)
             {
                 case RelationDirection.Outgoing:
@@ -600,7 +600,7 @@ LIMIT @take OFFSET @skip;
             command.Parameters.AddWithValue("global_limit", remainingBudget);
             command.Parameters.AddWithValue("item_ids", batchSeeds);
 
-            // P1-9：SELECT 只返回结构列 + 廉价 JSON 提取，不返回完整 data jsonb。
+            // SELECT 只返回结构列 + 廉价 JSON 提取，不返回完整 data jsonb。
             // 外层 LIMIT @global_limit 把全局上限下推到 SQL，DB 不再为剩余候选生成/序列化行。
             command.CommandText = $"""
 SELECT seed.id AS seed_id,
@@ -659,10 +659,10 @@ LIMIT @global_limit;
         foreach (var seed in seeds)
         {
             var bucket = buckets[seed];
-            // P7：truncated 信号来自 LATERAL LIMIT 命中。
+            // truncated 信号来自 LATERAL LIMIT 命中。
             // bucket.Count >= maxScan 表示 LATERAL 返回了 maxScan 行（达到 LIMIT 上限），可能还有更多低权重行未读。
             // bucket.Count < maxScan 表示该种子所有匹配行已读全（无截断）。
-            // P1-9：globalCapHit 时 cutoff 种子（最后读取的）保守标记 truncated，与单批语义一致。
+            // globalCapHit 时 cutoff 种子（最后读取的）保守标记 truncated，与单批语义一致。
             var truncated = bucket.Count >= maxScan
                 || (globalCapHit && string.Equals(seed, lastReadSeedId, StringComparison.OrdinalIgnoreCase));
             // 桶内已排序（LATERAL 内 ORDER BY），直接 Skip + Take 完成分页。
@@ -685,7 +685,7 @@ LIMIT @global_limit;
     }
 
     /// <summary>
-    /// P1-9：从结构列 + 廉价 JSON 提取构造 <see cref="ContextRelation"/>，不反序列化完整 data jsonb。
+    /// 从结构列 + 廉价 JSON 提取构造 <see cref="ContextRelation"/>，不反序列化完整 data jsonb。
     /// Metadata/SourceRefs/Provenance/UpdatedAt 留空——由 <see cref="HydrateRelationsAsync"/> 在 Selected 后补全。
     /// 列序：0=seed_id, 1=collection_id, 2=id, 3=source_id, 4=target_id, 5=relation_type,
     /// 6=weight, 7=confidence, 8=created_at, 9=lifecycle, 10=review_status, 11=source_node_kind, 12=target_node_kind。
@@ -864,10 +864,10 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
     }
 
     /// <summary>
-    /// P1-7 / P1-9：流式枚举关系，使用 NpgsqlDataReader.ReadAsync 逐行读取，避免一次性将全部结果缓冲到 List。
+    /// 流式枚举关系，使用 NpgsqlDataReader.ReadAsync 逐行读取，避免一次性将全部结果缓冲到 List。
     /// 不应用调用方提供的 Skip/Take——返回完整候选集，由消费方按需裁剪。
     /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc）。
-    /// P1-9：禁止无界扫描——SQL 强制 LIMIT @maxTotalEdges（= <see cref="GraphQueryLimits.MaxTotalEdges"/>），
+    /// 禁止无界扫描——SQL 强制 LIMIT @maxTotalEdges（= <see cref="GraphQueryLimits.MaxTotalEdges"/>），
     /// 防止病态全表把整张图拉入内存。在线主链不得调用本方法做候选枚举。
     /// </summary>
     public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
@@ -897,7 +897,7 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
             command.Parameters.AddWithValue("item_id", itemId);
         }
 
-        // P1-9：强制全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限，
+        // 强制全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限，
         // 防止无界扫描把整张关系图拉入内存。
         command.Parameters.AddWithValue("max_total_edges", GraphQueryLimits.MaxTotalEdges);
 
@@ -922,7 +922,7 @@ LIMIT @max_total_edges;
     }
 
     /// <summary>
-    /// P1-9：按关系 ID 批量 hydrate 完整 Relation Metadata（data jsonb 反序列化）。
+    /// 按关系 ID 批量 hydrate 完整 Relation Metadata（data jsonb 反序列化）。
     /// 供客户端 Selected 特定 edges 后补全 Metadata/SourceRefs/Provenance 等字段。
     /// 在线主链的 <see cref="QueryNeighborsBatchAsync"/> 只返回结构列，不反序列化完整 JSON。
     /// </summary>
@@ -953,7 +953,7 @@ LIMIT @max_total_edges;
             command.Parameters.AddWithValue("collection_id", collectionId);
         }
 
-        // P1-9：hydration 路径命中主键索引 (workspace_id, collection_id, id)；无 collection_id 时
+        // hydration 路径命中主键索引 (workspace_id, collection_id, id)；无 collection_id 时
         // 走 (workspace_id, id) 的 ANY 展开 + 索引扫描。结果集大小由调用方控制（已 Selected 的 edges）。
         command.CommandText = $"""
 SELECT data

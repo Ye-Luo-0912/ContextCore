@@ -7,11 +7,11 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// R29 WP-B-3：PostgresAgentCheckpointStore 端到端集成测试（Testcontainers）。
+/// PostgresAgentCheckpointStore 端到端集成测试（Testcontainers）。
 /// 验证持久化 Agent Checkpoint Store 的 Full/Delta 链路持久化与崩溃恢复。
 /// </summary>
 /// <remarks>
-/// R28-G P1-5 delta 链路由恢复路径（事件流 + checkpoint 链）通过标准 IAgentCheckpointStore.GetAsync 走链，
+/// delta 链路由恢复路径（事件流 + checkpoint 链）通过标准 IAgentCheckpointStore.GetAsync 走链，
 /// Store 不需感知 delta 语义 — 只持久化完整 AgentCheckpoint blob。本测试验证 Store 正确持久化
 /// Full/Delta 两种 checkpoint，且通过 GetAsync 可恢复整条链。
 /// </remarks>

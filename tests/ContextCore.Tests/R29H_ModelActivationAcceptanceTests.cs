@@ -8,7 +8,7 @@ using ContextCore.Inference.Onnx;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Model Activation 硬验收门测试
+// Model Activation 硬验收门测试
 //
 // 验证任务D 修复后的六个核心模型激活保证：
 //   1. ActualModelFile_HashMatches_Descriptor
@@ -298,7 +298,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
         var resultB = await manager.ActivateAsync("old-engine-b", options);
         Assert.IsTrue(resultB.Success, $"模型 B 激活应成功：{resultB.Error}");
 
-        // P0-8：_previousHandle 已升级为 _retiredHandles（List<ActiveModelHandle>），
+        // _previousHandle 已升级为 _retiredHandles（List<ActiveModelHandle>），
         // 每个 Retired handle 独立等待引用归零后 Dispose。
         var retiredHandlesField = typeof(ModelActivationManager)
             .GetField("_retiredHandles", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -431,7 +431,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
 
     /// <summary>
     /// 构建测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
-    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
     /// 本 helper 让校准验证通过，使测试聚焦于 warmup/probe/hotswap 等被测逻辑。
     /// </summary>
     private static ICalibrationService BuildCalibrationService() => new TestCalibrationService();
@@ -671,7 +671,7 @@ public sealed class R29H_ModelActivationAcceptanceTests
 
     /// <summary>
     /// 测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
-    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
     /// 此实现让校准验证始终通过，使测试聚焦于 warmup/probe/hotswap 等被测逻辑。
     /// </summary>
     private sealed class TestCalibrationService : ICalibrationService

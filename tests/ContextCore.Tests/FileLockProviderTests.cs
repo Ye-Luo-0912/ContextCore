@@ -5,7 +5,7 @@ using ContextCore.Storage.FileSystem;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.1 #1: FileLockProvider retired-entry 竞态修复测试。
+/// FileLockProvider retired-entry 竞态修复测试。
 /// 验证 GetOrAdd + RefCount++ 原子化后：
 /// - 同进程 Gate 互斥正确（并发 acquirer 共享同一 LockEntry）
 /// - retire + recreate 不残留已退休 entry（RefCount 会计正确）
@@ -57,7 +57,7 @@ public sealed class FileLockProviderTests
     // ── 基本正确性 ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// R13.1 #1: 基本获取-释放。释放后 entry 从 LocalLocks 回收（RefCount 归零）。
+    /// 基本获取-释放。释放后 entry 从 LocalLocks 回收（RefCount 归零）。
     /// </summary>
     [TestMethod]
     public async Task AcquireAndRelease_EntryRetiredAfterRelease()
@@ -76,7 +76,7 @@ public sealed class FileLockProviderTests
     }
 
     /// <summary>
-    /// R13.1 #1: 持有期间 entry 保留在 LocalLocks（RefCount > 0）。
+    /// 持有期间 entry 保留在 LocalLocks（RefCount > 0）。
     /// </summary>
     [TestMethod]
     public async Task Acquire_EntryRetainedWhileHeld()
@@ -101,7 +101,7 @@ public sealed class FileLockProviderTests
     }
 
     /// <summary>
-    /// R13.1 #1: retire 后重新 acquire 创建全新 LockEntry（不复活已退休 entry）。
+    /// retire 后重新 acquire 创建全新 LockEntry（不复活已退休 entry）。
     /// 验证两次 acquire 获取不同的 LockEntry 实例（旧 entry 已被 GC 回收）。
     /// </summary>
     [TestMethod]
@@ -135,7 +135,7 @@ public sealed class FileLockProviderTests
     // ── 并发互斥：同路径 Gate 串行化 ─────────────────────────────────────
 
     /// <summary>
-    /// R13.1 #1: 同路径并发 acquire 必须串行化——同一时刻只有一个持有者。
+    /// 同路径并发 acquire 必须串行化——同一时刻只有一个持有者。
     /// 用共享计数器验证互斥：进入临界区时 counter++（应==1），退出时 counter--。
     /// 若进程内 Gate 互斥失效（retired-entry 竞态），counter 可能在某时刻 > 1。
     /// 注：.lock 文件（FileShare.None）提供兜底，但 Gate 失效会导致 25ms 文件锁自旋性能退化；
@@ -184,7 +184,7 @@ public sealed class FileLockProviderTests
     }
 
     /// <summary>
-    /// R13.1 #1: 并发 acquirer 共享同一 LockEntry——验证进程内 Gate 互斥的结构性前提。
+    /// 并发 acquirer 共享同一 LockEntry——验证进程内 Gate 互斥的结构性前提。
     /// 线程 A 持有 lease 时，线程 B 尝试 acquire 应阻塞在 A 的 Gate 上（而非创建新 entry）。
     /// 通过反射验证 LocalLocks 中该路径只有一个 entry（A 和 B 共享）。
     /// </summary>
@@ -250,7 +250,7 @@ public sealed class FileLockProviderTests
     // ── 高并发 retire+recreate 压力（竞态高发场景）──────────────────────
 
     /// <summary>
-    /// R13.1 #1: 高并发快速 acquire/release 循环——这是 retired-entry 竞态的高发场景
+    /// 高并发快速 acquire/release 循环——这是 retired-entry 竞态的高发场景
     /// （每次 release 后 RefCount 归零 → entry 退休 → 下次 acquire 创建新 entry）。
     /// 验证：(1) 无异常；(2) 最终 LocalLocks 为空（无 entry 泄漏）；(3) RefCount 会计正确。
     /// 若竞态存在，可能出现 entry 泄漏（已退休 entry 的 RefCount 被复活后无法回收）或互斥失效。
@@ -291,7 +291,7 @@ public sealed class FileLockProviderTests
     }
 
     /// <summary>
-    /// R13.1 #1: 多路径并发无干扰——不同路径的 acquire 互不阻塞。
+    /// 多路径并发无干扰——不同路径的 acquire 互不阻塞。
     /// 验证全局锁 lock(LocalLocks) 不过度串行化不同路径（临界区仅 O(1) 查找+自增）。
     /// </summary>
     [TestMethod]
@@ -321,7 +321,7 @@ public sealed class FileLockProviderTests
     }
 
     /// <summary>
-    /// R13.1 #1: 取消等待中的 acquire 不破坏 RefCount 会计。
+    /// 取消等待中的 acquire 不破坏 RefCount 会计。
     /// WaitAsync 被取消时递减 RefCount 并回收（若归零）。
     /// </summary>
     [TestMethod]

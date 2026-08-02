@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R24-1：Agent Context Bridge 契约
+// Agent Context Bridge 契约
 //
 // 目标（对齐 R24 规格）：
 //   1. 桥接 Agent Runtime 与 ContextCore 检索/打包管线：
@@ -25,7 +25,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R24-1：Agent Context 桥接器。将 ContextCore 检索/打包结果转换为 <see cref="AgentContextSnapshot"/>。
+/// Agent Context 桥接器。将 ContextCore 检索/打包结果转换为 <see cref="AgentContextSnapshot"/>。
 /// </summary>
 /// <remarks>
 /// 桥接 Agent Runtime（R23）与 ContextCore 上下文构建管线。

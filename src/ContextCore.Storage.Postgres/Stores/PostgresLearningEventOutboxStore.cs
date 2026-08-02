@@ -146,7 +146,7 @@ ON CONFLICT (event_id) DO NOTHING;
 
         var now = DateTimeOffset.UtcNow;
         var leaseUntil = now.Add(leaseDuration);
-        // P0-8：每次 AcquirePending 生成唯一 lease_token，写入数据库并随记录返回。
+        // 每次 AcquirePending 生成唯一 lease_token，写入数据库并随记录返回。
         // 后续 MarkAcked / MarkFailed / RenewLease 必须回传此 token，store 通过 CAS 校验
         // 仅持有者可 Ack/Nack/Renew——防止旧 Worker 在 lease 过期被抢占后越权 Ack 新 Worker 的 lease。
         var leaseToken = Guid.NewGuid().ToString("N");
@@ -211,7 +211,7 @@ RETURNING
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // P0-8：CAS——仅当 state=Processing 且 lease_token 匹配时才转为 Acked。
+        // CAS——仅当 state=Processing 且 lease_token 匹配时才转为 Acked。
         // 0 行受影响表示 lease 已被其他 worker 抢占或已 Ack/Nack——调用方应放弃该记录。
         command.CommandText = $@"
 UPDATE {Table("learning_event_outbox")}
@@ -247,7 +247,7 @@ WHERE event_id = @event_id
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // P0-8：CAS——仅当 state=Processing 且 lease_token 匹配时才转换为 DeadLettered 或 Pending。
+        // CAS——仅当 state=Processing 且 lease_token 匹配时才转换为 DeadLettered 或 Pending。
         // 达到 max 时转 DeadLettered（retry_count + 1 >= max_retry_count），未达到则回退 Pending 等待重试。
         // 0 行受影响表示 lease 已被其他 worker 抢占或已 Ack/Nack——调用方应放弃该记录。
         command.CommandText = $@"
@@ -285,7 +285,7 @@ WHERE event_id = @event_id
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // P0-8：CAS——仅当 lease_token 匹配且 state=Processing 时才续约。
+        // CAS——仅当 lease_token 匹配且 state=Processing 时才续约。
         // 用 lease_token 替代原 lease_owner 校验更严格（owner 名可能复用，token 全局唯一）。
         command.CommandText = $@"
 UPDATE {Table("learning_event_outbox")}

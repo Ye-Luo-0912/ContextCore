@@ -10,7 +10,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P1-2：备份清单 / SHA-256 / 验证 / 恢复演练单元测试。
+/// 备份清单 / SHA-256 / 验证 / 恢复演练单元测试。
 /// 覆盖 BackupManifestGenerator、BackupVerifier、BackupDrillRunner 与 Sha256Utility 的核心行为。
 /// </summary>
 [TestClass]

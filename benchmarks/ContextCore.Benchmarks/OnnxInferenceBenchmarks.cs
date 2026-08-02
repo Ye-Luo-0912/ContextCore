@@ -8,13 +8,13 @@ using ContextCore.Inference.Onnx;
 namespace ContextCore.Benchmarks;
 
 // ===========================================================================
-// P3 步骤6：ONNX 推理路径微基准
+// ONNX 推理路径微基准
 //
 // 覆盖：
-//   §1 InferAsync_DictionaryPath：传统 Dictionary<string,object> 路径（对照组，含 boxing）
-//   §2 InferBatchAsync_ContinuousMemory：新 FeatureBatch 连续内存路径（P3 优化目标）
-//   §3 InferBatchAsync_BatchSize_{1,8,32,128}：不同 batch size 下的连续内存路径
-//   §4 InferBatchAsync_LargeBatchSplitting：RowCount=256 + MaxBatchSize=32 验证分片开销
+//   InferAsync_DictionaryPath：传统 Dictionary<string,object> 路径（对照组，含 boxing）
+//   InferBatchAsync_ContinuousMemory：新 FeatureBatch 连续内存路径（P3 优化目标）
+//   InferBatchAsync_BatchSize_{1,8,32,128}：不同 batch size 下的连续内存路径
+//   InferBatchAsync_LargeBatchSplitting：RowCount=256 + MaxBatchSize=32 验证分片开销
 //
 // 引擎：DeterministicBatchInferenceEngine（无真实 ONNX 文件依赖，纯内存 hash 计算）。
 // 分片场景：OnnxInferenceEngine + MockInferenceSession（包装 DeterministicBatchInferenceEngine）。
@@ -24,7 +24,7 @@ namespace ContextCore.Benchmarks;
 // ===========================================================================
 
 /// <summary>
-/// P3 步骤6：ONNX 推理路径微基准。
+/// ONNX 推理路径微基准。
 /// 对比 Dictionary 路径（boxing）与 FeatureBatch 连续内存路径（无 boxing）的吞吐与分配。
 /// </summary>
 [MemoryDiagnoser]
@@ -85,7 +85,7 @@ public class OnnxInferenceBenchmarks
         ArrayPool<float>.Shared.Return(_largeBatchBuffer);
     }
 
-    // §1 传统 Dictionary 路径（对照组，含 boxing double→object）
+    // 传统 Dictionary 路径（对照组，含 boxing double→object）
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Dictionary")]
     public async Task InferAsync_DictionaryPath()
@@ -94,7 +94,7 @@ public class OnnxInferenceBenchmarks
         _ = result.Succeeded;
     }
 
-    // §2 新 FeatureBatch 连续内存路径（P3 优化目标，无 boxing）
+    // 新 FeatureBatch 连续内存路径（P3 优化目标，无 boxing）
     [Benchmark]
     [BenchmarkCategory("FeatureBatch")]
     public async Task InferBatchAsync_ContinuousMemory()
@@ -103,7 +103,7 @@ public class OnnxInferenceBenchmarks
         _ = result.Succeeded;
     }
 
-    // §4 Large batch splitting：RowCount=256 + MaxBatchSize=32 验证分片开销
+    // Large batch splitting：RowCount=256 + MaxBatchSize=32 验证分片开销
     // 固定 256 行（不随 BatchSize 参数变化），对比 §2 同规模无分片路径
     [Benchmark]
     [BenchmarkCategory("Splitting")]
@@ -168,7 +168,7 @@ public class OnnxInferenceBenchmarks
 }
 
 /// <summary>
-/// P3 步骤6：Mock IOnnxInferenceSession，包装 DeterministicBatchInferenceEngine。
+/// Mock IOnnxInferenceSession，包装 DeterministicBatchInferenceEngine。
 /// 用于 OnnxInferenceEngine 分片 benchmark，无需真实 ONNX 模型文件。
 /// </summary>
 internal sealed class MockInferenceSession : IOnnxInferenceSession

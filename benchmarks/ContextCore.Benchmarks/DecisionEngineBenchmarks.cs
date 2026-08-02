@@ -8,15 +8,15 @@ using ContextCore.Core.Services.Policy;
 namespace ContextCore.Benchmarks;
 
 // ===========================================================================
-// R29 WP-F-1：Decision Engine 微基准
+// Decision Engine 微基准
 //
 // 覆盖：
-//   §1 DefaultGlobalAllocator.Allocate（V2.0 基线）
-//   §2 DefaultAllocatorV2_1.AllocateWithDiversity（V2.1 主链：section rollover + MMR）
-//   §3 MmrDiversityScorer.RerankWithMmr（MMR 重排序微基准）
-//   §4 DefaultCanonicalCandidateMerger.Merge（跨 Expert 合并 + 去重）
-//   §5 RetrievalResultProjector.Project（V2 → Legacy Retrieval DTO 投影）
-//   §6 PackageResultProjector.Project（V2 → Legacy Package DTO 投影）
+//   DefaultGlobalAllocator.Allocate（V2.0 基线）
+//   DefaultAllocatorV2_1.AllocateWithDiversity（V2.1 主链：section rollover + MMR）
+//   MmrDiversityScorer.RerankWithMmr（MMR 重排序微基准）
+//   DefaultCanonicalCandidateMerger.Merge（跨 Expert 合并 + 去重）
+//   RetrievalResultProjector.Project（V2 → Legacy Retrieval DTO 投影）
+//   PackageResultProjector.Project（V2 → Legacy Package DTO 投影）
 //
 // 数据规模：[Params(10, 100, 1000)] 覆盖小/中/大候选集
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
@@ -26,7 +26,7 @@ namespace ContextCore.Benchmarks;
 // ===========================================================================
 
 /// <summary>
-/// WP-F-1 §1+§2+§3：Allocator 微基准（V2.0 / V2.1 / MMR）。
+/// Allocator 微基准（V2.0 / V2.1 / MMR）。
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -69,19 +69,19 @@ public class AllocatorBenchmarks
         _v21Allocator = new DefaultAllocatorV2_1(_v2Allocator);
     }
 
-    // §1 V2.0 Allocator 基线
+    // V2.0 Allocator 基线
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("V20")]
     public AllocationResult Allocate_V20()
         => _v2Allocator.Allocate(_envelopes, _snapshot, _allocationContext);
 
-    // §2 V2.1 Allocator 主链（section rollover + MMR diversity）
+    // V2.1 Allocator 主链（section rollover + MMR diversity）
     [Benchmark]
     [BenchmarkCategory("V21")]
     public AllocationResult Allocate_V21_WithDiversity()
         => _v21Allocator.AllocateWithDiversity(_envelopes, _allocationContext, _diversityOptions);
 
-    // §3 MMR 直接调用（绕过 Allocator 测纯 MMR 性能）
+    // MMR 直接调用（绕过 Allocator 测纯 MMR 性能）
     [Benchmark]
     [BenchmarkCategory("MMR")]
     public IReadOnlyList<ContextCandidateEnvelope> Mmr_Rerank()
@@ -168,7 +168,7 @@ public class AllocatorBenchmarks
 }
 
 /// <summary>
-/// WP-F-1 §4：CanonicalCandidateMerger 微基准。
+/// CanonicalCandidateMerger 微基准。
 /// </summary>
 [MemoryDiagnoser]
 public class CanonicalMergerBenchmarks
@@ -271,7 +271,7 @@ public class CanonicalMergerBenchmarks
 }
 
 /// <summary>
-/// WP-F-1 §5+§6：Projector 微基准（Retrieval / Package）。
+/// Projector 微基准（Retrieval / Package）。
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]

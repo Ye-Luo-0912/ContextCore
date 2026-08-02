@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-4c：IMemoryDecayEvaluator 的默认实现。根据 MemoryUtilityStats 评估 item 是否需要降权。
+/// IMemoryDecayEvaluator 的默认实现。根据 MemoryUtilityStats 评估 item 是否需要降权。
 /// </summary>
 /// <remarks>
 /// 降权因素优先级（高 → 低）：

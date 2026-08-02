@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B.6 Authoritative Closure Gate — 验收测试（25 项）
+// Authoritative Closure Gate — 验收测试（25 项）
 //
 // 覆盖范围（7 个测试类，对应规格 A-G）：
 //   A. ProviderNetworkAcceptanceTests — Provider 网络真实召回（4 项）
@@ -172,7 +172,7 @@ public sealed class PolicyResolutionAcceptanceTests
     [TestMethod]
     public async Task ResolvedPolicyUsesPinnedWorkspaceActivation()
     {
-        // R28-B.6 测试缺陷修复说明：此测试验证 DefaultResolvedPolicyProvider（B-1 骨架），
+        // 测试缺陷修复说明：此测试验证 DefaultResolvedPolicyProvider（B-1 骨架），
         // 它使用固定 epoch=1 + 固定 DefaultContentHash，不接入 IPolicyRegistry。
         // 生产路径 PostgresResolvedPolicyProvider 的 CAS epoch 验证见
         // PostgresResolvedPolicyProvider_UsesRegistryActivationEpoch 测试。
@@ -199,7 +199,7 @@ public sealed class PolicyResolutionAcceptanceTests
     [TestMethod]
     public async Task PostgresResolvedPolicyProvider_UsesRegistryActivationEpoch()
     {
-        // R28-B.6 测试缺陷修复：验证 PostgresResolvedPolicyProvider 接入 IPolicyRegistry，
+        // 测试缺陷修复：验证 PostgresResolvedPolicyProvider 接入 IPolicyRegistry，
         // 从 GetActivationAsync 返回的 PolicyActivation 读取 Epoch / BundleContentHash，
         // 精确加载 bundle（GetBundleAsync）并校验 content hash（fail-closed）。
         var bundle = ContextCore.Core.Services.Policy.DefaultPolicyBundleFactory.Create();
@@ -248,7 +248,7 @@ public sealed class PolicyResolutionAcceptanceTests
     [TestMethod]
     public async Task PostgresResolvedPolicyProvider_HashMismatchFailsClosed()
     {
-        // R28-B.6 测试缺陷修复：验证 content hash 不一致时 fail-closed（抛异常，不静默回退）
+        // 测试缺陷修复：验证 content hash 不一致时 fail-closed（抛异常，不静默回退）
         var bundle = ContextCore.Core.Services.Policy.DefaultPolicyBundleFactory.Create();
         var mockRegistry = new MockPolicyRegistry(
             activation: new PolicyActivation
@@ -699,7 +699,7 @@ public sealed class CutoverAndDiAcceptanceTests
     [TestMethod]
     public async Task HundredPercentCutoverDoesNotExecuteLegacy()
     {
-        // R28-B.6 测试缺陷修复：改用真实 DefaultContextDecisionRuntime + AuthoritativeRetrievalRuntime，
+        // 测试缺陷修复：改用真实 DefaultContextDecisionRuntime + AuthoritativeRetrievalRuntime，
         // 验证 V2-only 路径端到端产出含 Content 的 SelectedItems（而非仅用预制 stub V2 Result）。
         // 100% cutover → V2-only 路径 → Legacy store 永不被查询
         var trackingStore = new CallTrackingContextStore();
@@ -894,7 +894,7 @@ public sealed class ProjectorAcceptanceTests
         Assert.AreEqual(1, dto.SelectedItems.Count, "Package 必须包含 selected 候选。");
         var item = dto.SelectedItems[0];
         Assert.AreEqual("working_memory", item.SectionName, "Section 从 AllocationDecision 恢复。");
-        // R28-B.6 Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数），
+        // Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数），
         // 不再等于 AllocationDecision.IncludedTokens（150）。"package body content" 估算 ~5 tokens。
         Assert.IsTrue(item.EstimatedTokens > 0, "EstimatedTokens 必须大于 0（由 truncator 重算）。");
         Assert.IsTrue(item.EstimatedTokens <= 150, "EstimatedTokens 不应超过 AllocationDecision.IncludedTokens。");
@@ -913,7 +913,7 @@ public sealed class ProjectorAcceptanceTests
         // Budget 检查
         Assert.IsNotNull(dto.Budget, "Package 必须构建完整 Budget。");
         Assert.AreEqual(1000, dto.Budget.TokenBudget);
-        // R28-B.7：Budget.UsedTokens 使用 Projector 截断后的真实 token 数，
+        // Budget.UsedTokens 使用 Projector 截断后的真实 token 数，
         // 不再等于 result.Outcome.EstimatedTokens（150）。
         // "package body content"（20 chars）经 DefaultContentTruncator 估算 = 20/4 = 5 tokens。
         Assert.AreEqual(dto.Package.EstimatedTokens, dto.Budget.UsedTokens, "Budget.UsedTokens 必须与 Package.EstimatedTokens 一致（同源）。");
@@ -1074,7 +1074,7 @@ internal sealed class RecordingDecisionRuntime : IContextDecisionRuntime
         return ValueTask.FromResult(_result);
     }
 
-    // R28-B.6 Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
+    // Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
     public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default)
@@ -1104,7 +1104,7 @@ internal sealed class ThrowingDecisionRuntime : IContextDecisionRuntime
         CancellationToken cancellationToken = default)
         => throw _exception;
 
-    // R28-B.6 Blocker-1：ExecuteWithWorkingSetAsync 同样抛出预设异常（取消异常必须传播）
+    // Blocker-1：ExecuteWithWorkingSetAsync 同样抛出预设异常（取消异常必须传播）
     public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default)
@@ -1143,7 +1143,7 @@ internal sealed class CallTrackingContextStore : IContextStore
 }
 
 /// <summary>
-/// R28-B.6 测试缺陷修复：Mock IPolicyRegistry。
+/// 测试缺陷修复：Mock IPolicyRegistry。
 /// 返回预设的 PolicyActivation + ContextPolicyBundle，统计 GetActivationAsync / GetBundleAsync 调用次数。
 /// 用于验证 PostgresResolvedPolicyProvider 正确接入 IPolicyRegistry（CAS epoch + content hash 校验）。
 /// </summary>

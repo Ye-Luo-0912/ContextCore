@@ -10,7 +10,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.2 #5：Package 冷路径 p95 与 allocation gate——
+/// #5：Package 冷路径 p95 与 allocation gate——
 /// 建立 InMemory 与 FileSystem 冷构建路径的回归闸门，避免 R13.2 之后的变更意外恶化性能。
 ///
 /// 设计原则：
@@ -19,13 +19,13 @@ namespace ContextCore.Tests;
 /// - 所有测试使用 [DoNotParallelize] 避免并行执行污染 GC 测量。
 /// - 测试体 warmup 3 次后再测量，消除 JIT 编译开销。
 ///
-/// R12-F.1 基线（dbf963f, 2026-07-17）：
+/// 基线（dbf963f, 2026-07-17）：
 ///   BuildDetailed_Cold / InMemory / 50 items  : 2846.6 μs mean, 924.54 KB allocated
 ///   BuildDetailed_Cold / InMemory / 200 items : 5823.6 μs mean, 1605.76 KB allocated
 ///   FileSystem_AppCacheMiss_OsFileCacheWarm / 50 items  : 19015.1 μs mean, 1538.63 KB allocated
 ///   FileSystem_AppCacheMiss_OsFileCacheWarm / 200 items : 72199.4 μs mean, 4272.09 KB allocated
 ///
-/// R13.2 后预期：
+/// 后预期：
 /// - InMemory 分配应保持或略降（dedup 减少中间 list，但 PackageReadPlan 新增少量字段，互相抵消）
 /// - FileSystem 分配应下降（R13.2 #2 snapshot cache 减少 4 次重复文件读取与反序列化）
 /// </summary>
@@ -41,8 +41,8 @@ public sealed class PackageColdPathPerformanceGateTests
     private const int LatencySampleCount = 20;
 
     /// <summary>
-    /// R12-F.1 基线 InMemory 50 items 924 KB → gate 2000 KB（×2.2 头部空间）。
-    /// R13.2 应保持在此线下，验证 #1+#3+#4 的 dedup 与 PackageReadPlan 新增字段未引入分配恶化。
+    /// 基线 InMemory 50 items 924 KB → gate 2000 KB（×2.2 头部空间）。
+    /// 应保持在此线下，验证 #1+#3+#4 的 dedup 与 PackageReadPlan 新增字段未引入分配恶化。
     /// </summary>
     [TestMethod]
     [DoNotParallelize]
@@ -75,7 +75,7 @@ public sealed class PackageColdPathPerformanceGateTests
     }
 
     /// <summary>
-    /// R12-F.1 基线 InMemory 200 items 1605 KB → gate 3200 KB（×2 头部空间）。
+    /// 基线 InMemory 200 items 1605 KB → gate 3200 KB（×2 头部空间）。
     /// </summary>
     [TestMethod]
     [DoNotParallelize]
@@ -106,8 +106,8 @@ public sealed class PackageColdPathPerformanceGateTests
     }
 
     /// <summary>
-    /// R12-F.1 基线 FileSystem 50 items 1538 KB → gate 3000 KB（×2 头部空间）。
-    /// R13.2 #2 后应明显下降（snapshot cache 减少 4 次重复反序列化），gate 仍维持 ×2 防止回归。
+    /// 基线 FileSystem 50 items 1538 KB → gate 3000 KB（×2 头部空间）。
+    /// 后应明显下降（snapshot cache 减少 4 次重复反序列化），gate 仍维持 ×2 防止回归。
     /// </summary>
     [TestMethod]
     [DoNotParallelize]

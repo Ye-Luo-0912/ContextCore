@@ -9,7 +9,7 @@ using ContextCore.Inference.Onnx;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 Final Closure — 25 项硬验收测试
+// Final Closure — 25 项硬验收测试
 //
 // 覆盖五条工作流（B-F）的核心契约：
 //   B. Tool 副作用安全（Tool Effect Safety）：Journal 状态机 + expected-state CAS
@@ -305,7 +305,7 @@ public sealed class WorkflowD_ModelActivationAcceptanceTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 schema 验证步骤
+        // fail-closed：提供有效校准参数以便流程越过校准检查到达 schema 验证步骤
         var cal = new PlattCalibrationService();
         cal.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: "bad-schema-model", version: CalibrationVersion);
 
@@ -388,7 +388,7 @@ public sealed class WorkflowD_ModelActivationAcceptanceTests
         var factory = new FailingSessionFactory();
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
-        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 session 创建步骤
+        // fail-closed：提供有效校准参数以便流程越过校准检查到达 session 创建步骤
         var cal = new PlattCalibrationService();
         cal.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelArtifactId, version: CalibrationVersion);
         return new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, cal);

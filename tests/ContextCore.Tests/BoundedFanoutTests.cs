@@ -6,7 +6,7 @@ using ContextCore.Storage.FileSystem;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P0-7.2: 验证 BoundedFanout 节流和 RetrievalFanoutOptions 自动解析。
+/// 验证 BoundedFanout 节流和 RetrievalFanoutOptions 自动解析。
 /// 在 Batch API 落地前，所有 Task.WhenAll 回退路径必须经过 SemaphoreSlim 上限，避免 Postgres 连接池击穿。
 /// </summary>
 [TestClass]
@@ -167,8 +167,8 @@ public sealed class BoundedFanoutTests
 }
 
 /// <summary>
-/// P0-7.2: 验证 RetrievalFanoutOptions.Resolve 按 store namespace 自动推断 fanout 上限。
-/// R13.3 #2：扩展为优先消费 IStoreRuntimeCapabilities，namespace 推断退化为回退路径。
+/// 验证 RetrievalFanoutOptions.Resolve 按 store namespace 自动推断 fanout 上限。
+/// 扩展为优先消费 IStoreRuntimeCapabilities，namespace 推断退化为回退路径。
 /// </summary>
 [TestClass]
 [TestCategory("Infrastructure")]

@@ -31,7 +31,7 @@ public sealed class PostgresPerformanceTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // R14-PG 收口：直接尝试启动容器（与 PostgresHATests 一致），避免 IsDockerAvailableAsync 误判。
+        // 收口：直接尝试启动容器（与 PostgresHATests 一致），避免 IsDockerAvailableAsync 误判。
         try
         {
             _container = new PostgreSqlBuilder(PgVectorImage)

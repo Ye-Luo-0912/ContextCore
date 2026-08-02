@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.Retrieval;
 
 // ===========================================================================
-// R20-2：DefaultRetrievalRouter 实现。
+// DefaultRetrievalRouter 实现。
 //
 // 目标：
 //   实现 IRetrievalRouter 接口，将 (Request, Mask, PolicyBundle) 三元组
@@ -30,13 +30,13 @@ namespace ContextCore.Core.Services.Retrieval;
 //   5. V1 简化：平均分配；V2+ 可加入 per-Expert 质量—成本曲线模型。
 //
 // 与 Engine 集成：
-//   R20-2 阶段不强制 Engine 调用 Router；Router 可独立使用。
+//   阶段不强制 Engine 调用 Router；Router 可独立使用。
 //   Engine 可在 DecideAsync 前调用 Router，按 ExpertRoutingDecisionSet
 //   对 envelope 分组应用 TopK / TokenBudget 上限（留待 R20-3+）。
 // ===========================================================================
 
 /// <summary>
-/// R20-2：默认 Multi-Expert 检索路由器实现。
+/// 默认 Multi-Expert 检索路由器实现。
 /// </summary>
 /// <remarks>
 /// V1 简化版：Budget-Aware TopK 模拟为非 Mandatory Expert 平均分配。
@@ -69,7 +69,7 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
         cancellationToken.ThrowIfCancellationRequested();
 
         // 1. 解析 routing / budget profile
-        //    P0-3 修复：原 `request.PolicyOverride?.RoutingOverride ?? bundle?.Routing` 会
+        //    修复：原 `request.PolicyOverride?.RoutingOverride ?? bundle?.Routing` 会
         //    完整替换 RoutingProfile，允许 Request 修改 ModelArtifactId / 模型权重 / confidence
         //    threshold / EnabledExperts。现改为 ApplyRoutingOverride 仅合并 EnableModelScoring 字段，
         //    其余字段保留 bundle 默认（与 DefaultContextDecisionEngine.ApplyRoutingOverride 对齐）。
@@ -286,11 +286,11 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
     }
 
     // -----------------------------------------------------------------------
-    // P0-3：受限 override 合并（与 DefaultContextDecisionEngine 对齐）
+    // 受限 override 合并（与 DefaultContextDecisionEngine 对齐）
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// P0-3：将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
+    /// 将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
     /// 仅覆盖非空字段（TokenBudget / TopK / SectionRatios），不替换整个 profile。
     /// </summary>
     private static BudgetProfile? ApplyBudgetOverride(
@@ -308,7 +308,7 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
     }
 
     /// <summary>
-    /// P0-3：将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
+    /// 将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
     /// 仅覆盖 EnableModelScoring（非空时），不替换整个 profile。
     /// </summary>
     private static RoutingProfile? ApplyRoutingOverride(

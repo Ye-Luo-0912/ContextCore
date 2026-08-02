@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// P0-7 / P0-8：Model Activation Manager 实现
+// Model Activation Manager 实现
 //
 // 目标：
 //   1. 权威编排模型激活流程：IModelArtifactRegistry 读取 descriptor
@@ -23,21 +23,21 @@ namespace ContextCore.Inference.Onnx;
 //   3. schema 不存在时拒绝激活（防止推理时 schema drift）。
 //   4. 不捕获 OperationCanceledException（与项目约束一致）。
 //
-// P1：原子 Active Handle
+// 原子 Active Handle
 //   - 用单个 volatile ActiveModelHandle 替换分开的 _activeEngine / _activeCounter，
 //     推理时只读取一次 handle（Volatile.Read），确保 engine 与 counter 来自同一世代，
 //     避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter。
 //   - 激活时创建新 handle（Generation+1），旧 handle 注册到延迟清理队列；
 //     不在激活时立即 Dispose 旧引擎。
 //
-// P15：LoadAndWarmupAsync
+// LoadAndWarmupAsync
 //   - 加载并 warmup 模型但不发布为 active；返回 StagedModelHandle。
 //   - 用于 /warmup 端点：预热不应替换当前 active 模型。
 //   - PromoteStagedAsync 将 Staged Handle 原子发布为 active。
 // ===========================================================================
 
 /// <summary>
-/// P0-8：模型槽状态机。
+/// 模型槽状态机。
 /// Loading → Staged → Active → Retired → Draining → Disposed
 ///   - Loading：session 创建中（瞬时，构造完成即离开）
 ///   - Staged：已 warmup 但未发布为 Active（由 LoadAndWarmupAsync 产生）
@@ -57,12 +57,12 @@ internal enum ModelSlotState : byte
 }
 
 /// <summary>
-/// P1：原子 Active Handle — 把引擎、descriptor、引用计数器、世代号与槽状态绑定为单个可变对象。
+/// 原子 Active Handle — 把引擎、descriptor、引用计数器、世代号与槽状态绑定为单个可变对象。
 /// 推理路径通过 Volatile.Read 一次性读取整个 handle，确保 engine 与 counter 始终来自同一世代，
 /// 避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter（进而让旧 Session 被提前释放）。
 /// </summary>
 /// <remarks>
-/// P0-8：State 字段使用 <see cref="Interlocked"/> 原子更新，实现 Loading → Staged → Active →
+/// State 字段使用 <see cref="Interlocked"/> 原子更新，实现 Loading → Staged → Active →
 /// Retired → Draining → Disposed 状态机。TransitionTo 仅允许合法转换，非法转换返回 false。
 /// </remarks>
 internal sealed class ActiveModelHandle
@@ -142,7 +142,7 @@ internal sealed class ActiveModelHandle
 }
 
 /// <summary>
-/// P1：引用计数器 — 跟踪某个引擎实例上的 in-flight 推理请求数。
+/// 引用计数器 — 跟踪某个引擎实例上的 in-flight 推理请求数。
 /// 每个 ActiveModelHandle 关联一个独立 counter；请求开始时捕获 handle 引用并 Increment，
 /// 结束时 Decrement 同一 counter。热切换后旧请求递减的是旧 handle 的 counter（引用已捕获），
 /// 新请求递增新 handle 的 counter，互不干扰。Dispose 任务等待旧 counter 归零后才释放旧引擎。
@@ -162,7 +162,7 @@ internal sealed class ModelReferenceCounter
 }
 
 /// <summary>
-/// P0-7：权威模型激活管理器实现。
+/// 权威模型激活管理器实现。
 /// 编排模型工件加载 → 验证 → ONNX 引擎激活的完整流程。
 /// </summary>
 /// <remarks>
@@ -178,17 +178,17 @@ public sealed class ModelActivationManager : IModelActivationManager
     private readonly IOnnxInferenceSessionFactory _sessionFactory;
     private readonly IFallbackInferenceEngine _fallbackEngine;
 
-    // P0-8：fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。
+    // fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。
     // 在构造时一次性创建并复用，避免每次 AcquireFallbackEngineLease 分配。
     private readonly FallbackEngineLease _fallbackLease;
     private readonly ICalibrationService? _calibrationService;
 
-    // P1：原子 Active Handle — 单个 volatile 字段同时持有 engine + counter + descriptor + generation。
+    // 原子 Active Handle — 单个 volatile 字段同时持有 engine + counter + descriptor + generation。
     // 推理路径通过 Volatile.Read 一次性读取整个 handle，保证 engine 与 counter 来自同一世代。
     private volatile ActiveModelHandle? _activeHandle;
     private long _generation;
 
-    // P0-8：Retired Handle 列表 — 所有已被新 Active 替换但仍在等待 in-flight 引用归零的旧 handle。
+    // Retired Handle 列表 — 所有已被新 Active 替换但仍在等待 in-flight 引用归零的旧 handle。
     // 替代原先的单一 _previousHandle：快速连续激活时更早的 oldPrevious 不再被立即 Dispose，
     // 而是加入此列表，由各自独立的延迟 Dispose 任务等待 counter 归零后再清理。
     private readonly List<ActiveModelHandle> _retiredHandles = new();
@@ -196,27 +196,27 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     private readonly object _activationLock = new();
 
-    // P0-8：统一追踪后台 Dispose Task。DisposeAsync 时 await 全部完成，避免请求泄漏。
+    // 统一追踪后台 Dispose Task。DisposeAsync 时 await 全部完成，避免请求泄漏。
     private readonly List<Task> _backgroundDisposeTasks = new();
     private readonly object _backgroundTasksLock = new();
 
-    // P0-8：Dispose 取消令牌 — 用于取消所有后台 Dispose 任务的等待循环。
+    // Dispose 取消令牌 — 用于取消所有后台 Dispose 任务的等待循环。
     private readonly CancellationTokenSource _disposedCts = new();
     private int _disposed;
 
-    // P0-8：Staged Handle 配置。
+    // Staged Handle 配置。
     //   - MaxStagedHandles：暂存表容量上限（防止 warmup 端点被滥用导致 OOM）。
     //   - StagedHandleTtl：Staged Handle 生存时间；超过后自动从暂存表移除并 Dispose。
     private const int MaxStagedHandles = 2;
     private static readonly TimeSpan StagedHandleTtl = TimeSpan.FromMinutes(5);
 
-    // P15：Staged Handle 暂存表 — LoadAndWarmupAsync 把已 warmup 的 handle 存入此表，
+    // Staged Handle 暂存表 — LoadAndWarmupAsync 把已 warmup 的 handle 存入此表，
     // 调用方可通过 PromoteStagedAsync(handleId) 原子发布为 active。
-    // P0-8：包含容量上限与 TTL 自动清理。
+    // 包含容量上限与 TTL 自动清理。
     private readonly ConcurrentDictionary<string, StagedModelHandle> _stagedHandles = new();
     private readonly object _stagedHandlesLock = new();
 
-    // P1-8：TTL 定时器 — 主动清理过期 Staged Handle，避免依赖被动调用 EvictExpiredStagedHandles。
+    // TTL 定时器 — 主动清理过期 Staged Handle，避免依赖被动调用 EvictExpiredStagedHandles。
     private readonly Timer? _stagedHandleTtlTimer;
     private static readonly TimeSpan StagedHandleTtlCheckInterval = TimeSpan.FromMinutes(1);
 
@@ -253,7 +253,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         _fallbackLease = new FallbackEngineLease(fallbackEngine);
         _calibrationService = calibrationService;
 
-        // P1-8：启动 TTL 定时器，周期性清理过期 Staged Handle。
+        // 启动 TTL 定时器，周期性清理过期 Staged Handle。
         _stagedHandleTtlTimer = new Timer(
             _ => EvictExpiredStagedHandles(),
             null,
@@ -269,21 +269,21 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：暴露当前 Active Handle 的世代号，让 <see cref="InferenceScheduler"/> 等上层组件
+    /// 暴露当前 Active Handle 的世代号，让 <see cref="InferenceScheduler"/> 等上层组件
     /// 感知模型热切换。世代号变化时，已攒批的请求不应与新请求合并到同一 BatchKey。
     /// </remarks>
     public long? ActiveGeneration => _activeHandle?.Generation;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-8：捕获当前 Active Handle 的引擎并递增引用计数。返回的 lease 持有 counter 引用，
+    /// 捕获当前 Active Handle 的引擎并递增引用计数。返回的 lease 持有 counter 引用，
     /// Dispose 时递减。这保证捕获的引擎在 lease 存活期间不会被 Dispose（drain 任务等待 counter 归零）。
     /// <see cref="InferenceScheduler"/> 在入队时调用本方法捕获引擎，确保请求在入队时的世代上执行，
     /// 避免热切换后请求在新引擎上执行（cross-generation execution）。
     /// </remarks>
     public IInferenceEngineLease? AcquireEngineLease()
     {
-        // P1：与 InferBatchAsync 一致 — 单次 Volatile.Read 捕获 handle（_activeHandle 字段已 volatile）。
+        // 与 InferBatchAsync 一致 — 单次 Volatile.Read 捕获 handle（_activeHandle 字段已 volatile）。
         var handle = _activeHandle;
         if (handle is null)
         {
@@ -295,7 +295,7 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-8：返回 fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。
+    /// 返回 fallback 引擎的永久租约（Generation=0，Dispose 为 no-op）。
     /// fallback 引擎由 DI 容器管理生命周期，无需引用计数；调用方可任意次数 Dispose
     /// （<see cref="FallbackEngineLease.Dispose"/> 幂等安全）。
     /// 用于 <see cref="InferenceScheduler"/> 入队时无 Active Engine 的场景，
@@ -362,7 +362,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         ArgumentException.ThrowIfNullOrWhiteSpace(modelArtifactId);
         ArgumentNullException.ThrowIfNull(options);
 
-        // P0-8：Dispose 后拒绝新请求。
+        // Dispose 后拒绝新请求。
         if (Volatile.Read(ref _disposed) != 0)
         {
             return StagedModelHandle.Failed(
@@ -395,9 +395,9 @@ public sealed class ModelActivationManager : IModelActivationManager
             descriptor,
             loaded.CalibrationValidation);
 
-        // P0-8 / P1-8：容量限制 + TTL 清理后再插入。
+        // 容量限制 + TTL 清理后再插入。
         // 先清理过期 Staged Handle（释放槽位），再检查容量；超出上限时 Dispose 新加载的引擎并返回失败。
-        // P1-8：check-then-insert 必须在锁内原子完成，防止并发 Warmup 超过 MaxStagedHandles。
+        // check-then-insert 必须在锁内原子完成，防止并发 Warmup 超过 MaxStagedHandles。
         EvictExpiredStagedHandles();
         lock (_stagedHandlesLock)
         {
@@ -427,7 +427,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stagedHandleId);
 
-        // P0-8：原子移除 —— 使用 TryRemove 返回值确保并发 Promote 只有一个成功。
+        // 原子移除 —— 使用 TryRemove 返回值确保并发 Promote 只有一个成功。
         // 两个并发 PromoteStagedAsync 都可能先 TryGetValue 读到同一个 staged，
         // 但 TryRemove 是原子的：只有一个返回 true，另一个返回 false 后立即失败返回。
         if (!_stagedHandles.TryRemove(stagedHandleId, out var staged) || !staged.Success || staged.Engine is null)
@@ -450,13 +450,13 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <inheritdoc />
     /// <summary>
-    /// P0-9：停用当前 Active Engine，回退到 fallback。
+    /// 停用当前 Active Engine，回退到 fallback。
     /// 复用 PublishAtomicWithGracePeriod 的 Retired/drain 机制确保 in-flight 请求安全完成。
     /// 无 Active Engine 时返回 Success（幂等）。
     /// </summary>
     public ValueTask<ModelActivationResult> DeactivateAsync(CancellationToken cancellationToken = default)
     {
-        // P0-9：Dispose 后拒绝停用。
+        // Dispose 后拒绝停用。
         if (Volatile.Read(ref _disposed) != 0)
         {
             return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
@@ -490,7 +490,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P0-8：清理过期的 Staged Handle（StagedAt + TTL 已过）。
+    /// 清理过期的 Staged Handle（StagedAt + TTL 已过）。
     /// 移除后 best-effort Dispose 其引擎，避免资源泄漏。
     /// </summary>
     private void EvictExpiredStagedHandles()
@@ -515,7 +515,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         BatchInferenceRequest request,
         CancellationToken ct = default)
     {
-        // P1：通过 Volatile.Read 一次性捕获整个 ActiveModelHandle（engine + counter + generation）。
+        // 通过 Volatile.Read 一次性捕获整个 ActiveModelHandle（engine + counter + generation）。
         // 热切换发生在读取之后时，本次请求继续使用旧 handle 的 engine 与 counter，
         // 旧 counter 仅被本次请求递减，不会污染新 counter；新 counter 也不会被本次请求递减。
         var handle = _activeHandle;
@@ -540,7 +540,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         FeatureBatch batch,
         CancellationToken ct = default)
     {
-        // P1：与 InferAsync 一致 — 单次 Volatile.Read 捕获 handle，避免 engine/counter 错配。
+        // 与 InferAsync 一致 — 单次 Volatile.Read 捕获 handle，避免 engine/counter 错配。
         var handle = _activeHandle;
         if (handle is null)
         {
@@ -567,8 +567,8 @@ public sealed class ModelActivationManager : IModelActivationManager
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken)
     {
-        // P0-8 Step 1：校准验证
-        // WP-5：精确 CalibrationVersion 绑定 + fail-closed。
+        // Step 1：校准验证
+        // 精确 CalibrationVersion 绑定 + fail-closed。
         //   - descriptor.CalibrationVersion == "default-v1"：保留兼容路径（calibrationService 缺失或参数未注册时跳过严格校验）
         //   - 非 default-v1：必须找到 Version 精确匹配的参数；未命中即拒绝激活（fail-closed）
         var calValidation = ValidateCalibrationForDescriptor(descriptor);
@@ -582,7 +582,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         }
         var calResult = calValidation?.Result;
 
-        // P0-8 Step 2：schema 存在性验证（descriptor.FeatureSchemaVersion 必须在 IFeatureRegistry 中已注册）
+        // Step 2：schema 存在性验证（descriptor.FeatureSchemaVersion 必须在 IFeatureRegistry 中已注册）
         var schema = _featureRegistry.Get(descriptor.FeatureSchemaVersion);
         if (schema is null)
         {
@@ -595,7 +595,7 @@ public sealed class ModelActivationManager : IModelActivationManager
                 schemaError);
         }
 
-        // P0-7 Step 3：创建 ONNX session
+        // Step 3：创建 ONNX session
         IOnnxInferenceSession session;
         try
         {
@@ -626,7 +626,7 @@ public sealed class ModelActivationManager : IModelActivationManager
                 calResult);
         }
 
-        // P0-7 Step 4：构造 OnnxInferenceEngine
+        // Step 4：构造 OnnxInferenceEngine
         var engine = new OnnxInferenceEngine(
             session,
             options,
@@ -650,7 +650,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P15：LoadAndWarmupCoreAsync — 执行校准 + schema + session + Golden Probe warmup，
+    /// LoadAndWarmupCoreAsync — 执行校准 + schema + session + Golden Probe warmup，
     /// 但不发布为 active。返回 (Success, Engine, Error, CalibrationValidation) 元组式结果。
     /// </summary>
     private async ValueTask<(bool Success, IBatchInferenceEngine? Engine, string? Error, CalibrationValidationResult? CalibrationValidation)> LoadAndWarmupCoreAsync(
@@ -658,7 +658,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         OnnxInferenceEngineOptions options,
         CancellationToken cancellationToken)
     {
-        // P0-8 Step 1：校准验证（WP-5：精确 CalibrationVersion 绑定 + fail-closed）
+        // Step 1：校准验证（WP-5：精确 CalibrationVersion 绑定 + fail-closed）
         var calValidation = ValidateCalibrationForDescriptor(descriptor);
         if (calValidation is { IsFailed: true } failed)
         {
@@ -666,7 +666,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         }
         var calResult = calValidation?.Result;
 
-        // P0-8 Step 2：schema 存在性验证
+        // Step 2：schema 存在性验证
         var schema = _featureRegistry.Get(descriptor.FeatureSchemaVersion);
         if (schema is null)
         {
@@ -711,12 +711,12 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// WP-5：校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
+    /// 校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
     /// 返回 Failed=true 表示校准失败（应拒绝激活）；
     /// 返回 Failed=false + Result 非空表示校验通过（含 Warning/Info 级违规但仍允许激活）。
     /// </summary>
     /// <remarks>
-    /// P0-8：真正 fail-closed —— 不再做 default-v1 例外。
+    /// 真正 fail-closed —— 不再做 default-v1 例外。
     /// <list type="bullet">
     /// <item>calibrationService 为 null → 拒绝激活（不再因 default-v1 跳过）。</item>
     /// <item>GetParametersForVersion 未命中 → 拒绝激活（不再因 default-v1 跳过）。</item>
@@ -731,7 +731,7 @@ public sealed class ModelActivationManager : IModelActivationManager
             ? defaultVersion
             : descriptor.CalibrationVersion;
 
-        // P0-8：fail-closed —— calibrationService 缺失即拒绝激活，不再为 default-v1 开例外。
+        // fail-closed —— calibrationService 缺失即拒绝激活，不再为 default-v1 开例外。
         if (_calibrationService is null)
         {
             return CalibrationValidationOutcome.Failed(
@@ -741,11 +741,11 @@ public sealed class ModelActivationManager : IModelActivationManager
                 calResult: null);
         }
 
-        // WP-5：精确版本绑定 — 通过 GetParametersForVersion 按 modelName + version 精确查找
+        // 精确版本绑定 — 通过 GetParametersForVersion 按 modelName + version 精确查找
         var parameters = _calibrationService.GetParametersForVersion(descriptor.ModelArtifactId, expectedVersion)
             ?? _calibrationService.GetParametersForVersion(descriptor.ModelName, expectedVersion);
 
-        // P0-8：fail-closed —— 参数未命中即拒绝激活，不再为 default-v1 开例外。
+        // fail-closed —— 参数未命中即拒绝激活，不再为 default-v1 开例外。
         if (parameters is null)
         {
             return CalibrationValidationOutcome.Failed(
@@ -781,7 +781,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P1：原子发布 — 把已 warmup 的引擎切到 _activeHandle（Generation+1），
+    /// 原子发布 — 把已 warmup 的引擎切到 _activeHandle（Generation+1），
     /// 旧 handle 加入 <see cref="_retiredHandles"/> 并标记 Retired，调度延迟 Dispose（等待 in-flight 引用归零）。
     /// </summary>
     private ModelActivationResult PublishAtomic(
@@ -795,7 +795,7 @@ public sealed class ModelActivationManager : IModelActivationManager
 
     /// <summary>P1：原子发布的内部实现，直接传入 gracePeriodMs。</summary>
     /// <remarks>
-    /// P0-8：使用 <see cref="_retiredHandles"/> 列表管理所有被替换的旧 handle，
+    /// 使用 <see cref="_retiredHandles"/> 列表管理所有被替换的旧 handle，
     /// 每个 handle 独立等待其 counter 归零后再 Dispose。快速连续激活时更早的 oldPrevious
     /// 不再被立即 Dispose，而是各自走自己的 drain 流程，避免误删仍有 in-flight 请求的引擎。
     /// </remarks>
@@ -805,7 +805,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         CalibrationValidationResult? calResult,
         int gracePeriodMs)
     {
-        // P0-8：Dispose 后拒绝激活。
+        // Dispose 后拒绝激活。
         if (Volatile.Read(ref _disposed) != 0)
         {
             return ModelActivationResult.Failed(
@@ -817,7 +817,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         ActiveModelHandle? oldActive;
         ActiveModelHandle newHandle;
 
-        // P1-8：在 lock 内原子递增 Generation 并切换 _activeHandle，确保 Generation 与 handle 切换的原子性。
+        // 在 lock 内原子递增 Generation 并切换 _activeHandle，确保 Generation 与 handle 切换的原子性。
         lock (_activationLock)
         {
             var newGeneration = unchecked(Interlocked.Increment(ref _generation));
@@ -829,13 +829,13 @@ public sealed class ModelActivationManager : IModelActivationManager
 
             oldActive = _activeHandle;
 
-            // P0-8：新 handle 转为 Active（从 Loading）。
+            // 新 handle 转为 Active（从 Loading）。
             newHandle.TransitionTo(ModelSlotState.Active);
             // 用 volatile 写保证 _activeHandle 的写入对其他线程可见：
             // _activeHandle 字段本身已声明 volatile，赋值即 release 屏障。
             _activeHandle = newHandle;
 
-            // P0-8：把 oldActive 加入 Retired 列表并标记 Retired 状态。
+            // 把 oldActive 加入 Retired 列表并标记 Retired 状态。
             // 每个 Retired handle 独立 drain，不再用单一 _previousHandle 互相覆盖。
             if (oldActive is not null)
             {
@@ -847,9 +847,9 @@ public sealed class ModelActivationManager : IModelActivationManager
             }
         }
 
-        // P0-8：调度延迟 Dispose oldActive（等待 in-flight 引用归零 + grace period）。
+        // 调度延迟 Dispose oldActive（等待 in-flight 引用归零 + grace period）。
         // fallback engine 由外部 DI 容器管理，这里不 Dispose。
-        // P0-9：复用 ScheduleRetiredHandleDrain（与 DeactivateAsync 共享 drain 逻辑）。
+        // 复用 ScheduleRetiredHandleDrain（与 DeactivateAsync 共享 drain 逻辑）。
         if (oldActive is not null && !ReferenceEquals(oldActive.Engine, _fallbackEngine))
         {
             ScheduleRetiredHandleDrain(oldActive, gracePeriodMs);
@@ -864,7 +864,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P0-9：调度 Retired Handle 的延迟 Dispose（等待 grace period + in-flight 引用归零）。
+    /// 调度 Retired Handle 的延迟 Dispose（等待 grace period + in-flight 引用归零）。
     /// 从 PublishAtomicWithGracePeriod 提取，供 DeactivateAsync 复用，确保 drain 行为一致。
     /// </summary>
     /// <param name="oldHandle">已标记 Retired 的旧 handle。</param>
@@ -878,7 +878,7 @@ public sealed class ModelActivationManager : IModelActivationManager
             {
                 var disposedToken = _disposedCts.Token;
 
-                // P1：先等待 grace period（时间兜底），再检查旧 handle 引用计数。
+                // 先等待 grace period（时间兜底），再检查旧 handle 引用计数。
                 try
                 {
                     await Task.Delay(gracePeriodMs, disposedToken).ConfigureAwait(false);
@@ -888,7 +888,7 @@ public sealed class ModelActivationManager : IModelActivationManager
                     // Manager 已 Dispose：跳过 grace 等待，进入 drain。
                 }
 
-                // P0-8：状态机进入 Draining（Retired → Draining）。
+                // 状态机进入 Draining（Retired → Draining）。
                 if (!oldHandleForClosure.TransitionTo(ModelSlotState.Draining))
                 {
                     return;
@@ -941,7 +941,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P0-8：从 <see cref="_retiredHandles"/> 移除指定 handle 并 Dispose 其引擎（Draining → Disposed）。
+    /// 从 <see cref="_retiredHandles"/> 移除指定 handle 并 Dispose 其引擎（Draining → Disposed）。
     /// 幂等：若 handle 已 Disposed 则直接返回。
     /// </summary>
     private async ValueTask RetireAndDisposeHandleAsync(ActiveModelHandle handle)
@@ -960,7 +960,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P0-8：追踪后台 Dispose Task，DisposeAsync 时统一 await。
+    /// 追踪后台 Dispose Task，DisposeAsync 时统一 await。
     /// 清理已完成任务，防止列表无界增长。
     /// </summary>
     private void TrackBackgroundDisposeTask(Task t)
@@ -1006,7 +1006,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         {
             // schema 无特征列：跳过 Golden Probe（无法构造 warmup batch），不视为失败。
             // 标记引擎为已 warmup，跳过后续 lazy warmup。
-            // P1-8：await WarmupAsync 确保 warmup 完成，避免 fire-and-forget 导致的资源泄漏。
+            // await WarmupAsync 确保 warmup 完成，避免 fire-and-forget 导致的资源泄漏。
             await engine.WarmupAsync(cancellationToken).ConfigureAwait(false);
             return null;
         }
@@ -1118,13 +1118,13 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P1：best-effort Dispose 整个 ActiveModelHandle（实际仅 Dispose Engine；counter 无需释放）。
+    /// best-effort Dispose 整个 ActiveModelHandle（实际仅 Dispose Engine；counter 无需释放）。
     /// </summary>
     private static ValueTask SafeDisposeHandleAsync(ActiveModelHandle handle)
         => SafeDisposeEngineAsync(handle.Engine);
 
     /// <summary>
-    /// P0-8：Dispose ModelActivationManager。
+    /// Dispose ModelActivationManager。
     /// 取消所有后台 Dispose Task 的等待，等待所有 Retired Handle 引用归零后 Dispose，
     /// 最后 Dispose 当前 Active Handle 与 fallback（若可 Dispose）。
     /// 幂等：多次调用安全。
@@ -1145,7 +1145,7 @@ public sealed class ModelActivationManager : IModelActivationManager
             return;
         }
 
-        // P1-8：停止 TTL 定时器。
+        // 停止 TTL 定时器。
         if (_stagedHandleTtlTimer is not null)
         {
             await _stagedHandleTtlTimer.DisposeAsync().ConfigureAwait(false);
@@ -1230,7 +1230,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P0-8：引擎租约实现 —— 捕获 ActiveModelHandle 的引擎与 counter 引用。
+    /// 引擎租约实现 —— 捕获 ActiveModelHandle 的引擎与 counter 引用。
     /// Dispose 时递减 counter，允许 drain 任务在引用归零后 Dispose 引擎。
     /// 幂等：多次 Dispose 安全（仅第一次递减）。
     /// </summary>
@@ -1261,7 +1261,7 @@ public sealed class ModelActivationManager : IModelActivationManager
     }
 
     /// <summary>
-    /// P0-8：fallback 引擎的永久租约 —— Engine 指向 fallback 引擎，Generation=0，
+    /// fallback 引擎的永久租约 —— Engine 指向 fallback 引擎，Generation=0，
     /// Dispose 为 no-op（fallback 由 DI 容器管理生命周期，无需引用计数）。
     /// 幂等：多次 Dispose 安全。
     /// </summary>

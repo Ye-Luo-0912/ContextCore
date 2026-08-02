@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// R29 WP-E-3：训练数据导出器接口。
+/// 训练数据导出器接口。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -25,7 +25,7 @@ public interface ITrainingDataExporter
 }
 
 /// <summary>
-/// R29 WP-E-3：训练数据导出请求。
+/// 训练数据导出请求。
 /// </summary>
 public sealed record TrainingDataExportRequest
 {
@@ -70,7 +70,7 @@ public sealed record TrainingDataExportRequest
 }
 
 /// <summary>
-/// R29 WP-E-3：训练数据导出结果。
+/// 训练数据导出结果。
 /// </summary>
 public sealed record TrainingDataExportResult
 {
@@ -106,7 +106,7 @@ public sealed record TrainingDataExportResult
 }
 
 /// <summary>
-/// R29 WP-E-3：训练数据样本记录（JSONL 每行一条）。
+/// 训练数据样本记录（JSONL 每行一条）。
 /// </summary>
 /// <remarks>
 /// 字段分类对齐 ML 训练流水线：
@@ -157,7 +157,7 @@ public sealed record TrainingDataRecord
 }
 
 /// <summary>
-/// R29 WP-E-3：训练数据导出清单（sidecar JSON，含校验信息）。
+/// 训练数据导出清单（sidecar JSON，含校验信息）。
 /// </summary>
 public sealed record TrainingDataExportManifest
 {

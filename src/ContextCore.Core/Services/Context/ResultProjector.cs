@@ -54,7 +54,7 @@ internal sealed class ResultProjector
         var budget = PackageBudgetProjector.BuildBudgetReport(tempPackage, tokenBudget, request);
         var output = PackageBudgetProjector.BuildStandardOutput(tempPackage, selection.DroppedItems, resolvedUncertainties, budget);
 
-        // R13.0 #3: 所有集合字段转为 ImmutableArray，确保运行期不可变（无法 cast 回可变数组）。
+        // #3: 所有集合字段转为 ImmutableArray，确保运行期不可变（无法 cast 回可变数组）。
         // 投影阶段读取时仍做防御性 ToArray 拷贝，保证返回结果对象的独立性。
         return new PackageTemplate(
             OrderedSections: orderedSections.ToImmutableArray(),
@@ -109,7 +109,7 @@ internal sealed class ResultProjector
             PackageId = Guid.NewGuid().ToString("N"),
             WorkspaceId = workspaceId,
             CollectionId = collectionId ?? string.Empty,
-            // P0-5.4: 防御性数组拷贝，避免调用方修改结果数组元素污染缓存的 PackageTemplate。
+            // 防御性数组拷贝，避免调用方修改结果数组元素污染缓存的 PackageTemplate。
             Sections = template.OrderedSections.ToArray(),
             EstimatedTokens = template.EstimatedTokens,
             SourceRefs = template.SourceRefs.ToArray(),
@@ -130,7 +130,7 @@ internal sealed class ResultProjector
         {
             BuildId = package.PackageId,
             Package = package,
-            // P0-5.4: 防御性数组拷贝，避免调用方修改结果数组元素污染缓存的 PackageTemplate。
+            // 防御性数组拷贝，避免调用方修改结果数组元素污染缓存的 PackageTemplate。
             SelectedItems = template.SortedSelectedItems.ToArray(),
             ItemReferences = template.ItemReferences.ToArray(),
             DroppedItems = template.DroppedItems.ToArray(),

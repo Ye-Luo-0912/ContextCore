@@ -12,7 +12,7 @@ public sealed class FileConstraintStore : IConstraintStore
     private readonly FileJsonLineStore _jsonLines;
 
     /// <summary>
-    /// R13.2 #2：Provider 内按 Level/Layer 复用快照——
+    /// Provider 内按 Level/Layer 复用快照——
     /// 单次 build 内 Hard/Soft/All 三次 Query 会读同一份 global + collection JSONL，
     /// 通过 last-write-time 校验复用反序列化结果，避免 3 次重复文件 I/O。
     /// key = 文件绝对路径；value = (LastWriteTimeUtc, Items)。
@@ -47,7 +47,7 @@ public sealed class FileConstraintStore : IConstraintStore
         await _jsonLines.UpsertAsync(path, normalized, item => item.Id, cancellationToken)
             .ConfigureAwait(false);
 
-        // R13.2 #2：写入后该路径快照必然 stale（last-write-time 已变），显式移除避免下次查询残留旧版本。
+        // 写入后该路径快照必然 stale（last-write-time 已变），显式移除避免下次查询残留旧版本。
         // 即使不显式移除，下次查询也会因 last-write-time 不一致而 miss；这里只是省一次 stat。
         _snapshots.TryRemove(path, out _);
     }
@@ -125,7 +125,7 @@ public sealed class FileConstraintStore : IConstraintStore
     }
 
     /// <summary>
-    /// R13.2 #2：读取约束文件并按 last-write-time 复用快照。
+    /// 读取约束文件并按 last-write-time 复用快照。
     /// 文件不存在时返回空列表且缓存该空结果（last-write-time = DateTime.MinValue），
     /// 避免反复 File.Exists 检查；写入后 last-write-time 改变，自动 miss。
     /// </summary>

@@ -7,7 +7,7 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Agent Actor 生产化验收测试（6 项）
+// Agent Actor 生产化验收测试（6 项）
 //
 // 验证任务C 修复后的 AgentRunActor 生产化行为：
 //   1. FirstModelCall_ContainsTaskAndBuiltContext — 第一次模型调用包含 Task + 上下文
@@ -287,14 +287,14 @@ public sealed class R29H_AgentActorAcceptanceTests
         // 3c：Optimization 3 后语义变化——CheckpointSaved 事件在 PersistCheckpointAsync 中已被缓冲，
         // flush 时 AppendBatchAsync 先尝试 SaveAsync（失败）→ 抛异常 → 不追加事件 → ExecuteAsync catch → FailAsync。
         // FailAsync 重试 flush 时 _pendingTurnCheckpoint 已被清除（不再尝试 SaveAsync），
-        // P0-11：CheckpointSaved 事件已被同步移除，不会随 RunFailed 事件持久化（避免孤立事件）。
+        // CheckpointSaved 事件已被同步移除，不会随 RunFailed 事件持久化（避免孤立事件）。
         // 关键保证：checkpoint 本体未被持久化，CheckpointSaved 事件也不被持久化，Run 进入 Failed 终态。
         var finalRun2 = await runStore2.GetAsync(run2.WorkspaceId, run2.RunId);
         Assert.IsNotNull(finalRun2);
         Assert.AreEqual(AgentRunState.Failed, finalRun2!.State,
             "checkpoint 持久化失败应导致 Run 进入 Failed 终态。");
 
-        // P0-11 断言：失败路径下不应持久化 CheckpointSaved 事件（checkpoint 本体未保存）
+        // 断言：失败路径下不应持久化 CheckpointSaved 事件（checkpoint 本体未保存）
         var events2 = await eventStore2.ReadAsync(run2.WorkspaceId, run2.RunId);
         var checkpointSavedEvents2 = events2
             .Where(e => e.EventType == AgentRunEventType.CheckpointSaved)

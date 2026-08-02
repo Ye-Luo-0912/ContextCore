@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R18-2：统一决策引擎接口契约（Context Decision Engine Interface Contracts）
+// 统一决策引擎接口契约（Context Decision Engine Interface Contracts）
 //
 // 目标：
 //   在 R18-1 envelope 契约之上定义 Engine 接口，让 Retrieval 与 Package
@@ -26,14 +26,14 @@ namespace ContextCore.Abstractions;
 //   5. 复用 ContextDecisionSource 枚举区分 Package/Retrieval 输出方向。
 //
 // 子阶段进度：
-//   R18-2（当前）：Engine 接口 + Planner 骨架 + Projector 投影路径。
+//   （当前）：Engine 接口 + Planner 骨架 + Projector 投影路径。
 //                  不替换两条主链，只新增 envelope-to-decision 投影。
-//   R18-3：Retrieval adapter（ContextRetrievalCandidate → Envelope）。
-//   R18-4：Package adapter（PackageTraceCandidate → Envelope）。
+//   Retrieval adapter（ContextRetrievalCandidate → Envelope）。
+//   Package adapter（PackageTraceCandidate → Envelope）。
 // ===========================================================================
 
 /// <summary>
-/// R18-2：决策引擎请求。统一 Retrieval 与 Package 两条路径的入口请求，
+/// 决策引擎请求。统一 Retrieval 与 Package 两条路径的入口请求，
 /// 携带 envelope 集合 + 可选的 PolicyBundle 引用 + workspace/collection 作用域。
 /// </summary>
 /// <remarks>
@@ -96,7 +96,7 @@ public sealed class ContextDecisionRequest
     public bool EnableModel { get; init; } = true;
 
     /// <summary>
-    /// R19-3：per-request 受限策略 override。
+    /// per-request 受限策略 override。
     /// </summary>
     /// <remarks>
     /// 设计澄清（用户澄清 #3）：
@@ -109,7 +109,7 @@ public sealed class ContextDecisionRequest
     public ContextPolicyOverride? PolicyOverride { get; init; }
 
     /// <summary>
-    /// R28-B.6：有效策略快照（V2 路径专用）。
+    /// 有效策略快照（V2 路径专用）。
     /// </summary>
     /// <remarks>
     /// 由 DefaultContextDecisionRuntime 在委托 Engine 前设置。
@@ -119,7 +119,7 @@ public sealed class ContextDecisionRequest
     public EffectivePolicySnapshot? PolicySnapshot { get; init; }
 
     /// <summary>
-    /// R28-B.6 P0-5：分配上下文（V2 路径专用）。
+    /// 分配上下文（V2 路径专用）。
     /// </summary>
     /// <remarks>
     /// 由 DefaultContextDecisionRuntime 在委托 Engine 前设置，携带 Purpose + MandatoryOverflowPolicy。
@@ -129,7 +129,7 @@ public sealed class ContextDecisionRequest
     public AllocationContext? AllocationContext { get; init; }
 
     /// <summary>
-    /// R29 WP-D-1：Diversity 配置（V2.1 Allocator 路径专用）。
+    /// Diversity 配置（V2.1 Allocator 路径专用）。
     /// </summary>
     /// <remarks>
     /// 由 DefaultContextDecisionRuntime 从 EffectivePolicySnapshot.DiversityOptions 读取并设置。
@@ -142,7 +142,7 @@ public sealed class ContextDecisionRequest
 }
 
 /// <summary>
-/// R18-2：决策引擎结果。统一 Retrieval 与 Package 两条路径的输出，
+/// 决策引擎结果。统一 Retrieval 与 Package 两条路径的输出，
 /// 携带选中的 envelope 集合 + 丢弃的 envelope 集合 + 整体产出摘要。
 /// </summary>
 /// <remarks>
@@ -196,7 +196,7 @@ public sealed class ContextDecisionResult
 }
 
 /// <summary>
-/// R18-2：决策产出摘要。复用 ContextDecisionOutcome 的核心字段但适配 envelope 集合语义。
+/// 决策产出摘要。复用 ContextDecisionOutcome 的核心字段但适配 envelope 集合语义。
 /// </summary>
 public sealed class ContextDecisionOutcomeSummary
 {
@@ -208,7 +208,7 @@ public sealed class ContextDecisionOutcomeSummary
 
     /// <summary>选中候选的有效 token 总数（基于 TokenCost.ContentTokens 精确计算）。</summary>
     /// <remarks>
-    /// R29 WP-D-3：权威 token 汇总字段。Allocator / Projector 应基于此字段做预算验证。
+    /// 权威 token 汇总字段。Allocator / Projector 应基于此字段做预算验证。
     /// 旧字段 <see cref="EstimatedTokens"/> 保留为 [Obsolete] 别名，委托到此字段。
     /// </remarks>
     public int EffectiveTokens { get; init; }
@@ -234,7 +234,7 @@ public sealed class ContextDecisionOutcomeSummary
     public int BudgetExceededCount { get; init; }
 
     /// <summary>
-    /// R28-B.6 Impl-2：决策诊断字典。记录 mandatory overflow / hard window violation 等
+    /// Impl-2：决策诊断字典。记录 mandatory overflow / hard window violation 等
     /// 无法用标量字段表达的诊断信息（key=诊断名，value=字符串值）。
     /// </summary>
     public IReadOnlyDictionary<string, string> Diagnostics { get; init; }
@@ -242,7 +242,7 @@ public sealed class ContextDecisionOutcomeSummary
 }
 
 /// <summary>
-/// R18-2：统一决策引擎接口。编排 envelope 集合的 safety gate → utility scoring →
+/// 统一决策引擎接口。编排 envelope 集合的 safety gate → utility scoring →
 /// budget allocation 五个阶段，输出 SelectedEnvelopes + DroppedEnvelopes 集合。
 /// </summary>
 /// <remarks>
@@ -271,7 +271,7 @@ public interface IContextDecisionEngine
 }
 
 /// <summary>
-/// R18-2：结果投影器接口。让 Retrieval 与 Package 两条路径可以独立投影
+/// 结果投影器接口。让 Retrieval 与 Package 两条路径可以独立投影
 /// envelope 集合到现有 DTO（ContextRetrievalResult / ContextPackageBuildResult）。
 /// </summary>
 /// <typeparam name="TResult">目标 DTO 类型（ContextRetrievalResult / ContextPackageBuildResult）。</typeparam>
@@ -291,7 +291,7 @@ public interface IResultProjector<TResult>
     TResult Project(ContextDecisionResult result);
 
     /// <summary>
-    /// P0-7：将决策结果 + 候选正文 sidecar 投影为目标 DTO。
+    /// 将决策结果 + 候选正文 sidecar 投影为目标 DTO。
     /// Projector 从 workingSet.Materials 恢复候选 Content，从 result.AllocationDecisions
     /// 消费 Section / IncludedTokens / IsTruncated。
     /// </summary>
@@ -302,7 +302,7 @@ public interface IResultProjector<TResult>
 }
 
 // ===========================================================================
-// R29 WP-F-3：性能监控 + 自动回退阈值契约
+// 性能监控 + 自动回退阈值契约
 //
 // 目标：
 //   1. 提供 IPerformanceMonitor 抽象，让 DefaultContextDecisionEngine 在 V2 路径
@@ -322,12 +322,12 @@ public interface IResultProjector<TResult>
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-F-3：性能监控 + 自动回退阈值配置。
+/// 性能监控 + 自动回退阈值配置。
 /// </summary>
 /// <remarks>
 /// 当 V2 路径执行时间超过 <see cref="ThresholdMs"/> 时，标记该 scope 需要 V2.0 回退；
 /// <see cref="RecoverySamples"/> 个连续低于阈值的样本后解除回退状态（自愈）。
-/// P5：新增 <see cref="ComponentPolicies"/> 支持组件级回退阈值（每组件独立 P95 阈值），
+/// 新增 <see cref="ComponentPolicies"/> 支持组件级回退阈值（每组件独立 P95 阈值），
 /// 与整体 V2 路径阈值 <see cref="ThresholdMs"/> 共存：整体阈值作为兜底，
 /// 组件阈值用于细粒度归因与回退（由 IComponentHealthRegistry 使用）。
 /// </remarks>
@@ -346,14 +346,14 @@ public sealed record PerformanceFallbackOptions
     public int RecoverySamples { get; init; } = 5;
 
     /// <summary>
-    /// P5：组件级回退策略（每组件独立 P95 阈值）。由 IComponentHealthRegistry 使用。
+    /// 组件级回退策略（每组件独立 P95 阈值）。由 IComponentHealthRegistry 使用。
     /// 为 null 或空时使用 ComponentFallbackOptions.Default 默认策略。
     /// 保留 <see cref="ThresholdMs"/> 等 V2 整体阈值作为兜底（IPerformanceMonitor 使用）。
     /// </summary>
     public Dictionary<ComponentKind, ComponentFallbackPolicy>? ComponentPolicies { get; init; }
 
     /// <summary>
-    /// P5：获取指定组件的回退策略。
+    /// 获取指定组件的回退策略。
     /// 优先使用 <see cref="ComponentPolicies"/>；未配置时回退到 <see cref="ComponentFallbackOptions.Default"/> 默认策略。
     /// </summary>
     /// <param name="kind">组件类型。</param>
@@ -372,7 +372,7 @@ public sealed record PerformanceFallbackOptions
 }
 
 /// <summary>
-/// R29 WP-F-3：性能监控抽象。让 Engine 在 V2 路径执行前查询是否应回退到 V2.0 Allocator，
+/// 性能监控抽象。让 Engine 在 V2 路径执行前查询是否应回退到 V2.0 Allocator，
 /// 执行后记录耗时。实现可选择任意 metric store（in-memory ring buffer / DDSketch / Prometheus）。
 /// </summary>
 /// <remarks>

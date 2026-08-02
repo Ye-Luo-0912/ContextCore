@@ -5,7 +5,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL Agent checkpoint 持久化存储。
-/// R26-2：替代 <see cref="ContextCore.Core.Services.Agent.InMemoryAgentCheckpointStore"/>，
+/// 替代 <see cref="ContextCore.Core.Services.Agent.InMemoryAgentCheckpointStore"/>，
 /// 让 Postgres provider 在 HA 场景下能持久化 agent session checkpoint 以支持跨进程 resume。
 /// </summary>
 /// <remarks>
@@ -69,7 +69,7 @@ ON CONFLICT (workspace_id, checkpoint_id) DO UPDATE SET
         string checkpointId,
         CancellationToken cancellationToken = default)
     {
-        // P0-6：必须同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读
+        // 必须同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
@@ -123,7 +123,7 @@ LIMIT @take;
         string checkpointId,
         CancellationToken cancellationToken = default)
     {
-        // P0-6：必须同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误删
+        // 必须同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误删
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);

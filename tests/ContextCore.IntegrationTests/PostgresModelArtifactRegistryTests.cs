@@ -7,7 +7,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// R29 WP-A-1：PostgresModelArtifactRegistry 端到端集成测试（Testcontainers）。
+/// PostgresModelArtifactRegistry 端到端集成测试（Testcontainers）。
 /// 验证持久化 Model Artifact Registry 的注册、查询、不可变约束与崩溃恢复。
 /// </summary>
 [TestClass]

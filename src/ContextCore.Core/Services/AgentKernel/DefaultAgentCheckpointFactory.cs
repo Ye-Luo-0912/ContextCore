@@ -6,21 +6,21 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentKernel;
 
 // ===========================================================================
-// R28-E P1-1 / R28-G P1-5 / P4：DefaultAgentCheckpointFactory
+// DefaultAgentCheckpointFactory
 //
 // 统一手动 Checkpoint 指令与自动 AutoCheckpoint 的状态格式。
 // 两者均通过此工厂构建 AgentCheckpoint，序列化 KernelCheckpointState
 // （CommittedResults + PendingResults + SnapshotId + Mode + LastSequence）
 // 到 StateJson，确保 ResumeAsync 可靠恢复。
 //
-// R28-G P1-5 delta checkpoint 设计：
+// delta checkpoint 设计：
 //   - 工厂读取 accessor 的 _lastCheckpointSequence（cursor）。
 //   - cursor == 0：emit Full 模式（序列化所有 in-memory committed results）。
 //   - cursor > 0：emit Delta 模式（仅序列化 Sequence > cursor 的新增条目）。
 //   - StateJson 中 Mode=Delta 时附带 BaseCheckpointId 链接前一 checkpoint。
 //   - Kernel.ResumeAsync 在 Delta 模式下递归加载 BaseCheckpoint 重建完整状态。
 //
-// P4 cursor checkpoint 设计（最轻量，优先级最高）：
+// cursor checkpoint 设计（最轻量，优先级最高）：
 //   - 优势：避免每次 checkpoint 复制完整结果集合；历史 Tool 结果放在
 //     IAgentRunEventStore（事件流为真相源），checkpoint 仅记录事件 cursor
 //     （LastEventSequence）+ ActiveSnapshotId + BudgetCounters + PendingResults。
@@ -47,7 +47,7 @@ namespace ContextCore.Core.Services.AgentKernel;
 // ===========================================================================
 
 /// <summary>
-/// R28-E P1-1 / R28-G P1-5：默认 Agent Checkpoint 工厂实现。
+/// 默认 Agent Checkpoint 工厂实现。
 /// 统一所有 checkpoint 入口（手动/自动）的状态格式，支持 delta checkpoint。
 /// </summary>
 public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
@@ -81,12 +81,12 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         var lastCheckpointId = _stateAccessor.GetLastCheckpointId();
         var lastCheckpointContentHash = _stateAccessor.GetLastCheckpointContentHash();
 
-        // P4：读取 EventStore cursor + 活跃 snapshot + 预算计数器（Cursor 模式专用字段）
+        // 读取 EventStore cursor + 活跃 snapshot + 预算计数器（Cursor 模式专用字段）
         var lastEventSequence = _stateAccessor.GetLastEventSequence();
         var activeSnapshotId = _stateAccessor.GetActiveSnapshotId();
         var budgetCounters = _stateAccessor.GetBudgetCounters();
 
-        // P4：模式选择——Cursor > Delta > Full（Cursor 最轻量）
+        // 模式选择——Cursor > Delta > Full（Cursor 最轻量）
         //   - Cursor：EventStore 已注入（lastEventSequence != null），不序列化 CommittedResults
         //   - Delta：上次 checkpoint cursor > 0，仅序列化新增 CommittedResults
         //   - Full：首次 checkpoint 或 cursor == 0，序列化全部 CommittedResults
@@ -97,7 +97,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
                   : CheckpointMode.Full;
 
         // 计算本次 checkpoint 的 LastSequence（= 当前最大 Sequence，若无则保持 cursor）
-        // P4：Cursor 模式下 LastSequence 仅用于 cursor 推进语义（与 EventStore 序号解耦）
+        // Cursor 模式下 LastSequence 仅用于 cursor 推进语义（与 EventStore 序号解耦）
         var currentMaxSequence = sequences.Count > 0 ? sequences.Values.Max() : lastCheckpointSequence;
 
         // 过滤要序列化的 committed results
@@ -107,7 +107,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         List<CommittedToolResultDto> committedDtos;
         if (isCursor)
         {
-            // P4：Cursor 模式不序列化 CommittedResults——假设可从 AgentRunEventStore 重建
+            // Cursor 模式不序列化 CommittedResults——假设可从 AgentRunEventStore 重建
             // （读取 sequence <= LastEventSequence 的 ToolCallCompleted 事件）
             committedDtos = new List<CommittedToolResultDto>();
         }
@@ -141,8 +141,8 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
                 .ToList();
         }
 
-        // R28-G P1-5：始终序列化 pending results（量小，未提交，必须随 checkpoint 持久化以恢复 Unknown 副作用状态）
-        // P4：Cursor 模式下 PendingResults 仍需保留——Unknown 副作用状态不能从 EventStore 重建
+        // 始终序列化 pending results（量小，未提交，必须随 checkpoint 持久化以恢复 Unknown 副作用状态）
+        // Cursor 模式下 PendingResults 仍需保留——Unknown 副作用状态不能从 EventStore 重建
         var pendingDtos = pendingResults
             .Select(kv => new CommittedToolResultDto
             {
@@ -155,12 +155,12 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
             })
             .ToList();
 
-        // P0-5：构建 hash chain 字段
+        // 构建 hash chain 字段
         // - BaseLastSequence：Delta 模式下记录当前 cursor（apply 时校验 base.LastSequence == BaseLastSequence）
         // - PrevChainHash：Delta 模式下指向 base 的 ContentHash（检测 base 被篡改/替换）
         // - ChainSessionId：本次 checkpoint 所属 session（校验 base 与 delta 同 session）
         // - ContentHash：自身 StateJson（不含 ContentHash 字段）的 SHA-256（检测存储层篡改）
-        // P4：Cursor 模式下 BaseCheckpointId / PrevChainHash / BaseLastSequence 均为 null/0
+        // Cursor 模式下 BaseCheckpointId / PrevChainHash / BaseLastSequence 均为 null/0
         // （Cursor 模式恢复时无需递归加载 base checkpoint 链——事件流是完整真相源）
         var baseLastSequence = isDelta ? lastCheckpointSequence : 0;
         var prevChainHash = isDelta ? lastCheckpointContentHash : null;
@@ -168,7 +168,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
 
         // 先构建不含 ContentHash 的 DTO，计算 SHA-256 后再填入 ContentHash。
         // 校验方：反序列化 → 将 ContentHash 置 null → 重新序列化 → 重算哈希 → 与存储的 ContentHash 比对。
-        // P4：新字段（LastEventSequence / ActiveSnapshotId / BudgetCounters）纳入哈希计算，
+        // 新字段（LastEventSequence / ActiveSnapshotId / BudgetCounters）纳入哈希计算，
         // 确保任何字段被篡改均能被检测。
         var stateForHash = new KernelCheckpointStateDto
         {
@@ -227,7 +227,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
     }
 
     /// <summary>
-    /// P0-5：计算 StateJson 的 SHA-256 内容哈希（小写 hex）。
+    /// 计算 StateJson 的 SHA-256 内容哈希（小写 hex）。
     /// 用于 ContentHash / PrevChainHash 校验，检测存储层篡改。
     /// </summary>
     /// <param name="json">不含 ContentHash 字段的 StateJson。</param>
@@ -239,7 +239,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
     }
 
     /// <summary>
-    /// P0-5：校验 checkpoint StateJson 的 ContentHash 一致性。
+    /// 校验 checkpoint StateJson 的 ContentHash 一致性。
     /// 反序列化 → 将 ContentHash 置 null → 重新序列化 → 重算哈希 → 与存储的 ContentHash 比对。
     /// 旧 checkpoint（无 ContentHash）跳过校验（向后兼容）。
     /// </summary>
@@ -273,7 +273,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         }
 
         // 重建不含 ContentHash 的 DTO 重新计算哈希
-        // P4：新字段（LastEventSequence / ActiveSnapshotId / BudgetCounters）纳入哈希计算
+        // 新字段（LastEventSequence / ActiveSnapshotId / BudgetCounters）纳入哈希计算
         var stateForHash = new KernelCheckpointStateDto
         {
             SnapshotId = state.SnapshotId,
@@ -300,7 +300,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
     /// <remarks>
     /// 通过委托避免直接暴露状态持有方内部字段；工厂构造时由状态持有方注入。
     /// 新增（P1-5）的访问器委托可为 null（兼容旧调用方）；null 时退回默认值（cursor=0 → Full 模式）。
-    /// P4 新增委托：GetLastEventSequence / GetActiveSnapshotId / GetBudgetCounters。
+    /// 新增委托：GetLastEventSequence / GetActiveSnapshotId / GetBudgetCounters。
     /// </remarks>
     public sealed class KernelStateAccessor
     {
@@ -408,7 +408,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         Delta = 1,
 
         /// <summary>
-        /// P4：事件游标——不序列化 CommittedResults，仅记录 AgentRunEventStore 的 LastEventSequence。
+        /// 事件游标——不序列化 CommittedResults，仅记录 AgentRunEventStore 的 LastEventSequence。
         /// ResumeAsync 时从 EventStore 读取 sequence <= LastEventSequence 的 ToolCallCompleted 事件重建。
         /// 前提：IAgentRunEventStore 已注入且可靠。
         /// </summary>
@@ -438,33 +438,33 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         public List<CommittedToolResultDto> PendingResults { get; init; } = new();
 
         /// <summary>
-        /// P0-5：Delta 模式下记录 base checkpoint 的 LastSequence，用于 apply 时校验
+        /// Delta 模式下记录 base checkpoint 的 LastSequence，用于 apply 时校验
         /// <c>base.LastSequence &lt; delta.min(Sequence) &lt;= delta.LastSequence</c>。
         /// Full 模式下为 0（不校验）。
         /// </summary>
         public long BaseLastSequence { get; init; }
 
         /// <summary>
-        /// P0-5：前驱 checkpoint 的内容哈希（StateJson 的 SHA-256）。
+        /// 前驱 checkpoint 的内容哈希（StateJson 的 SHA-256）。
         /// Full 模式下为 null（无前驱）；Delta 模式下指向 base 的 ContentHash，用于检测 base 被篡改。
         /// </summary>
         public string? PrevChainHash { get; init; }
 
         /// <summary>
-        /// P0-5：自身 StateJson（不含 ContentHash 字段本身）的 SHA-256，用于校验序列化完整性。
+        /// 自身 StateJson（不含 ContentHash 字段本身）的 SHA-256，用于校验序列化完整性。
         /// ResumeAsync apply 前校验 ContentHash 与重新计算的哈希一致，检测存储层篡改。
         /// 旧 checkpoint（P0-5 之前）无此字段 → null，ResumeAsync 跳过校验（向后兼容）。
         /// </summary>
         public string? ContentHash { get; init; }
 
         /// <summary>
-        /// P0-5：链所属 session 标识，用于校验 base 与 delta 属于同一 session（防跨 session 链接）。
+        /// 链所属 session 标识，用于校验 base 与 delta 属于同一 session（防跨 session 链接）。
         /// 旧 checkpoint 无此字段 → null，ResumeAsync 跳过校验。
         /// </summary>
         public string? ChainSessionId { get; init; }
 
         /// <summary>
-        /// P4：AgentRunEventStore 的最后事件序列号（Cursor 模式的核心字段）。
+        /// AgentRunEventStore 的最后事件序列号（Cursor 模式的核心字段）。
         /// Cursor 模式下 ResumeAsync 从 EventStore 读取 sequence &lt;= LastEventSequence 的
         /// ToolCallCompleted 事件重建 CommittedResults（事件流为完整真相源）。
         /// 非 Cursor 模式（Full/Delta）下为 null（不使用事件流重建）。
@@ -473,14 +473,14 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
         public int? LastEventSequence { get; init; }
 
         /// <summary>
-        /// P4：当前活跃的 AgentContextSnapshot ID（替代嵌入完整 snapshot）。
+        /// 当前活跃的 AgentContextSnapshot ID（替代嵌入完整 snapshot）。
         /// Cursor 模式下恢复路径通过此 ID 从快照存储恢复活跃快照。
         /// 非 Cursor 模式下为 null（使用 SnapshotId 字段，向后兼容）。
         /// </summary>
         public string? ActiveSnapshotId { get; init; }
 
         /// <summary>
-        /// P4：turn budget + cost budget 的当前计数快照（替代嵌入完整结果集合用于预算追踪）。
+        /// turn budget + cost budget 的当前计数快照（替代嵌入完整结果集合用于预算追踪）。
         /// Cursor 模式下 ResumeAsync 据此恢复 Kernel 的预算计数器。
         /// 非 Cursor 模式下为 null（Kernel 不维护预算计数器时也返回 null）。
         /// </summary>
@@ -488,7 +488,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
     }
 
     /// <summary>
-    /// P4：预算计数器快照（turn budget + cost budget 的当前计数）。
+    /// 预算计数器快照（turn budget + cost budget 的当前计数）。
     /// 用于 Cursor 模式 checkpoint 持久化预算状态，避免嵌入完整结果集合。
     /// </summary>
     /// <param name="TurnsUsed">已使用的循环轮次数。</param>

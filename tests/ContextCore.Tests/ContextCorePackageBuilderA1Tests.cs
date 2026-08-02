@@ -1286,7 +1286,7 @@ public sealed class ContextCorePackageBuilderA1Tests
             && item.Kind == "merged_constraint"));
     }
 
-    // R12.4A #2：Package 合并查询保持 per-level 配额。
+    // Package 合并查询保持 per-level 配额。
     // 旧实现用 Level=null + Take=N 单一查询：InMemoryConstraintStore 按 Hard 优先排序，
     // 当 Hard 数量 >= Take 时 Soft 完全缺席 merged section。
     // 新实现并行查询 Hard + Soft + All，各自独立 Take 预算，合并后按 ID 去重。

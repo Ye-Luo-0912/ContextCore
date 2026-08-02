@@ -3,7 +3,7 @@ namespace ContextCore.Core;
 /// <summary>
 /// 单个候选的格式化文本段，携带候选 ID、对应文本以及该候选的 SourceRefs/ItemRefs，
 /// 供 Packer 按 segment 粒度截断并精确归属。
-/// P0-6.2: 携带 SourceRefs/ItemRefs，使 Section refs 只从 accepted + partially accepted segments 聚合，
+/// 携带 SourceRefs/ItemRefs，使 Section refs 只从 accepted + partially accepted segments 聚合，
 /// 避免被拒绝候选的 refs 仍写入 section。
 /// </summary>
 internal sealed record CandidateSegment(
@@ -76,7 +76,7 @@ internal sealed class SectionPackingResult
     public IReadOnlyList<string> RejectedCandidateIds { get; }
 
     /// <summary>
-    /// P0-6.3: PartiallyAcceptedCandidateId 实际保留进 section 输出的 token 数（截断后）。
+    /// PartiallyAcceptedCandidateId 实际保留进 section 输出的 token 数（截断后）。
     /// 无 partially accepted 候选时为 0。供 PackageTraceRecorder 写入 trace row 的 IncludedTokens 字段，
     /// 使下游诊断能观察到部分截断候选的精确保留量（而不仅是"被截断"布尔标志）。
     /// </summary>

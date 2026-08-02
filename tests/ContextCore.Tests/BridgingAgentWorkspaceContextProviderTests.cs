@@ -6,7 +6,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R25：BridgingAgentWorkspaceContextProvider 实现测试。
+/// BridgingAgentWorkspaceContextProvider 实现测试。
 ///
 /// 覆盖：
 ///   1. 构造函数 null bridge / null inner 抛异常

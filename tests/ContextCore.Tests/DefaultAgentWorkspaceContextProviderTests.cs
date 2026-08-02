@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-3：DefaultAgentWorkspaceContextProvider 实现测试。
+/// DefaultAgentWorkspaceContextProvider 实现测试。
 ///
 /// 覆盖：
 ///   1. 构造函数 null adapter 抛异常

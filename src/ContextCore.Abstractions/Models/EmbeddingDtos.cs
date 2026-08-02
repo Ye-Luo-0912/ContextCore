@@ -68,7 +68,7 @@ public sealed class EmbeddingInput
     public string Text { get; init; } = string.Empty;
 
     /// <summary>
-    /// P0-7.6: 查询指令前缀（如 BGE 的 "为这个句子生成表示以用于检索相关文章："）。
+    /// 查询指令前缀（如 BGE 的 "为这个句子生成表示以用于检索相关文章："）。
     /// 由调用方（Retrieval 层）传入，由 Embedding Provider 通过
     /// <c>EmbeddingTextComposer</c> 统一拼接到 <see cref="Text"/> 前，
     /// 避免调用方与 Provider 各自拼接导致双重 instruction。

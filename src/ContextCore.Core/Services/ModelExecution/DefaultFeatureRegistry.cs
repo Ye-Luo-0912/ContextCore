@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R28-D：Feature Registry 默认实现
+// Feature Registry 默认实现
 //
 // 目标：
 //   把 IFeatureRegistry 契约落到 Core 层，提供可立即注入 DI 的 in-memory 实现。
@@ -19,7 +19,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R28-D：默认 Feature Registry（in-memory，线程安全）。
+/// 默认 Feature Registry（in-memory，线程安全）。
 /// </summary>
 /// <remarks>
 /// 生产部署应替换为持久化实现；契约不变。

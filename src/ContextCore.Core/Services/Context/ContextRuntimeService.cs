@@ -26,7 +26,7 @@ public sealed class ContextRuntimeService : IContextRuntimeService
         IContextValidationService? validationService = null,
         IContextEventSink? eventSink = null)
     {
-        // P0-10.3: 移除未使用的 IContextStore contextStore 参数（旧组合遗留，无字段保存也无引用）。
+        // 移除未使用的 IContextStore contextStore 参数（旧组合遗留，无字段保存也无引用）。
         _inputIngestionService = inputIngestionService;
         _memoryStore = memoryStore;
         _promotionService = promotionService;

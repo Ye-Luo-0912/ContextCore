@@ -170,7 +170,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     private readonly CancellationTokenSource _stopCts;
     private int _disposed;
 
-    // P0-7：ModelGeneration 不再缓存为常量 —— 每次执行时从 IModelActivationManager 获取当前 Active Generation，
+    // ModelGeneration 不再缓存为常量 —— 每次执行时从 IModelActivationManager 获取当前 Active Generation，
     // 以感知模型热切换。世代号变化时新请求会进入新的 BatchKey，自然与旧世代已攒批的请求分离。
     // _executionProvider 仍为常量（IBatchInferenceEngine 接口未暴露 EP，调度器层无法动态获取）。
     private readonly string _executionProvider = string.Empty;
@@ -283,9 +283,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         }
 
         // 构造请求并写入 channel。
-        // P0-7：deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移导致
+        // deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移导致
         // 请求被错误地判定为未过期/已过期。Deadline (DateTimeOffset) 仅保留用于错误消息显示。
-        // P0-8：入队时捕获当前 Active Engine 的租约，确保请求在入队时的世代上执行，
+        // 入队时捕获当前 Active Engine 的租约，确保请求在入队时的世代上执行，
         // 避免热切换后请求在新引擎上执行（cross-generation execution）。
         var nowTimestamp = Stopwatch.GetTimestamp();
         var deadline = DateTimeOffset.UtcNow + _options.RequestDeadline;
@@ -294,7 +294,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         IInferenceEngineLease? capturedLease = null;
         if (_inner is IModelActivationManager activationManager)
         {
-            // P0-8：捕获当前 Active Engine 租约；未激活时使用 fallback 永久租约，
+            // 捕获当前 Active Engine 租约；未激活时使用 fallback 永久租约，
             // 固定请求在 fallback 引擎上执行，避免排队期间模型被激活后 cross-generation execution。
             capturedLease = activationManager.AcquireEngineLease()
                 ?? activationManager.AcquireFallbackEngineLease();
@@ -311,14 +311,14 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             CapturedLease = capturedLease
         };
 
-        // P0-7：注册外部取消 —— 保存 CancellationTokenRegistration 以便请求完成后 Dispose，
+        // 注册外部取消 —— 保存 CancellationTokenRegistration 以便请求完成后 Dispose，
         // 避免 ct 长期存活时回调注册泄漏。即使 TryWrite 失败也要正确清理。
         if (ct.CanBeCanceled)
         {
             request.CancellationRegistration = ct.Register(static state =>
             {
                 var req = (InferenceRequest)state!;
-                // P0-8：CallerCompletion —— 完成调用方 Task（让调用方收到取消异常），
+                // CallerCompletion —— 完成调用方 Task（让调用方收到取消异常），
                 // 但不释放 Engine Lease：lease 生命周期由内部执行管理（InternalExecutionCompletion）。
                 // 请求继续留在队列中等待内部执行；内部执行检查 CallerCancelled 标志后跳过引擎调用并释放 lease。
                 // 这避免请求已进入正在执行的微批时，lease 释放导致旧引擎引用计数归零被 drain/dispose。
@@ -328,12 +328,12 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         }
 
         // 写入 bounded channel：满时 TryWrite 返回 false，立即返回 QueueFull 失败（backpressure）。
-        // P0-7：Wait 模式下 TryWrite 满时返回 false（不阻塞），由这里返回 QueueFull，
+        // Wait 模式下 TryWrite 满时返回 false（不阻塞），由这里返回 QueueFull，
         // 保证请求不会因 DropWrite 被静默丢弃导致 TaskCompletionSource 永久挂起。
         if (!_channel.Writer.TryWrite(request))
         {
             request.CancellationRegistration.Dispose();
-            // P0-8：入队失败时释放租约（递减引用计数 / fallback lease no-op）。
+            // 入队失败时释放租约（递减引用计数 / fallback lease no-op）。
             request.CapturedLease?.Dispose();
             // DropWrite 策略：返回 Dropped 结果（语义为"已丢弃"而非"错误"），递增计数器。
             if (_options.EnableDropWrite)
@@ -344,7 +344,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             return new ValueTask<BatchInferenceResult>(BuildQueueFullResult());
         }
 
-        // P0-8：Engine Lease 生命周期与调用方 Task 解耦 ——
+        // Engine Lease 生命周期与调用方 Task 解耦 ——
         // 不再通过 ContinueWith 在 CallerCompletion 时释放 lease。
         // lease 由内部执行出口释放（InternalExecutionCompletion）：
         //   - 正常执行完成（成功/失败/异常）后 FinalizeRequest 释放；
@@ -484,7 +484,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         Dictionary<InferenceBatchKey, PendingGroup> pending,
         CancellationToken stopToken)
     {
-        // P0-8：已被外部 ct 取消（CallerCancelled）或已失败：跳过攒批。
+        // 已被外部 ct 取消（CallerCancelled）或已失败：跳过攒批。
         // 外部取消时 lease 尚未释放（由内部执行管理），此处 FinalizeRequest 释放 lease + 取消注册。
         if (req.Completion.Task.IsCompleted)
         {
@@ -493,7 +493,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         }
 
         // 已过 deadline：立即失败通知，不进入微批。
-        // P0-7：使用 Stopwatch 单调时钟判断过期，避免 wall clock 漂移。
+        // 使用 Stopwatch 单调时钟判断过期，避免 wall clock 漂移。
         if (Stopwatch.GetTimestamp() >= req.DeadlineTimestamp)
         {
             req.Completion.TrySetResult(BuildExpiredResult(req));
@@ -652,7 +652,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         var featureCount = group[0].Batch.FeatureCount;
 
         // 二次检查 deadline：在等待并发槽位期间可能已有请求过期；同时丢弃已被外部 ct 取消的请求。
-        // P0-7：使用 Stopwatch 单调时钟判断过期。
+        // 使用 Stopwatch 单调时钟判断过期。
         var nowTimestamp = Stopwatch.GetTimestamp();
         var active = new List<InferenceRequest>(group.Count);
         for (var i = 0; i < group.Count; i++)
@@ -665,7 +665,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             }
             else if (req.Completion.Task.IsCompleted)
             {
-                // P0-8：已被外部 ct 取消（CallerCancelled）—— 释放 lease，不参与合并，不调用引擎。
+                // 已被外部 ct 取消（CallerCancelled）—— 释放 lease，不参与合并，不调用引擎。
                 FinalizeRequest(req);
             }
             else
@@ -692,7 +692,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         var rowOffsets = new int[active.Count + 1];
         try
         {
-            // P0-7：ArrayPool 安全 —— 后续 CopyTo 会完整覆盖 [0, requiredLength) 区域，
+            // ArrayPool 安全 —— 后续 CopyTo 会完整覆盖 [0, requiredLength) 区域，
             // 无需预先 Clear（原先整段 Clear 后又完整覆盖是冗余操作）。
             // 合并为连续 float 内存：[totalRows × featureCount] row-major。
             var offset = 0;
@@ -718,7 +718,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
             // deadline 贯穿推理：以最早 deadline 构造 CTS，与 stopToken 链接后传入内部引擎。
             // 微批内请求均在 BatchWaitWindow 内到达、共享同一 RequestDeadline，最早到期≈全员到期。
-            // P0-7：使用 Stopwatch 单调时钟计算 dueIn，避免 wall clock 漂移。
+            // 使用 Stopwatch 单调时钟计算 dueIn，避免 wall clock 漂移。
             var earliest = active[0].DeadlineTimestamp;
             for (var i = 1; i < active.Count; i++)
             {
@@ -737,7 +737,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             using var deadlineCts = new CancellationTokenSource(dueIn);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopToken, deadlineCts.Token);
 
-            // P0-8：使用入队时捕获的引擎执行（避免热切换后 cross-generation execution）。
+            // 使用入队时捕获的引擎执行（避免热切换后 cross-generation execution）。
             // 同组所有请求共享同一 BatchKey（含 ModelGeneration），故捕获的引擎一致；
             // _inner 为 IModelActivationManager 时 CapturedLease 永远非 null（激活或 fallback lease），
             // 故未激活时使用 fallback 引擎执行（稳定引用），不会因排队期间模型激活而跑到新引擎。
@@ -749,7 +749,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             BatchInferenceResult result;
             try
             {
-                // P0-7：单请求/合并后总行数 > MaxBatchSize 时分片调用内部引擎，避免单次推理超过引擎分片上限。
+                // 单请求/合并后总行数 > MaxBatchSize 时分片调用内部引擎，避免单次推理超过引擎分片上限。
                 // 每个 shard 行数 ≤ MaxBatchSize；结果按行顺序合并为一个 BatchInferenceResult。
                 if (_options.MaxBatchSize > 0 && totalRows > _options.MaxBatchSize)
                 {
@@ -794,7 +794,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             }
 
             // 推理成功：按 rowOffsets 拆分 Outputs 给各请求。
-            // P0-7：严格相等验证 —— 引擎返回的 Outputs 数量必须 == totalRows，否则视为异常（不只是 < totalRows）。
+            // 严格相等验证 —— 引擎返回的 Outputs 数量必须 == totalRows，否则视为异常（不只是 < totalRows）。
             if (result.Outputs.Count != totalRows)
             {
                 var mismatchError = $"微批推理输出数量({result.Outputs.Count}) != 请求总行数({totalRows})，无法拆分。";
@@ -827,7 +827,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
                     Error = null,
                     Duration = result.Duration
                 });
-                // P0-8：InternalExecutionCompletion —— 推理成功后释放 lease + 取消注册。
+                // InternalExecutionCompletion —— 推理成功后释放 lease + 取消注册。
                 FinalizeRequest(active[i]);
             }
         }
@@ -838,7 +838,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     /// <summary>
-    /// P0-7：分片推理 —— 当合并后总行数超过 MaxBatchSize 时，按 MaxBatchSize 拆分为多个子 batch，
+    /// 分片推理 —— 当合并后总行数超过 MaxBatchSize 时，按 MaxBatchSize 拆分为多个子 batch，
     /// 依次调用内部引擎，按行顺序合并所有 shard 的 Outputs 为单个 BatchInferenceResult。
     /// 任一 shard 失败/抛异常即返回失败（已执行的 shard 结果丢弃）。
     /// </summary>
@@ -893,7 +893,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
                     };
                 }
 
-                // P0-7：严格相等验证 —— shard 输出行数必须 == shardRows。
+                // 严格相等验证 —— shard 输出行数必须 == shardRows。
                 if (shardResult.Outputs.Count != shardRows)
                 {
                     return new BatchInferenceResult
@@ -927,7 +927,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     /// <summary>
     /// 计算请求的 BatchKey。
     /// FeatureNamesHash 为顺序敏感哈希；NamesEqual 在加入分组时二次校验防止碰撞误合并。
-    /// P0-8：ModelGeneration 使用入队时捕获的 CapturedLease.Generation（而非当前 ActiveGeneration），
+    /// ModelGeneration 使用入队时捕获的 CapturedLease.Generation（而非当前 ActiveGeneration），
     /// 避免热切换后请求被错误分组：
     ///   - CapturedLease 非 null：使用 lease.Generation（请求实际执行的引擎世代）；
     ///     _inner 为 IModelActivationManager 时 CapturedLease 永远非 null
@@ -941,7 +941,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         long modelGeneration;
         if (req.CapturedLease is { } lease)
         {
-            // P0-8：使用入队时捕获的 lease.Generation。
+            // 使用入队时捕获的 lease.Generation。
             // _inner 为 IModelActivationManager 时 CapturedLease 永远非 null（激活=真实世代，未激活=fallback lease Generation=0）。
             // fallback lease Generation=0 不会与真实激活世代冲突（真实世代自 1 起自增）。
             modelGeneration = lease.Generation;
@@ -1045,7 +1045,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     }
 
     /// <summary>
-    /// P0-8：请求终结 —— Dispose CancellationRegistration 与 CapturedLease。
+    /// 请求终结 —— Dispose CancellationRegistration 与 CapturedLease。
     /// 在请求离开内部执行的每个出口调用（成功/失败/取消/过期/跳过/shutdown）。
     /// 这是 InternalExecutionCompletion：lease 生命周期由内部执行管理，
     /// 与调用方 Task（CallerCompletion）生命周期解耦。
@@ -1063,7 +1063,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         for (var i = 0; i < reqs.Count; i++)
         {
             reqs[i].Completion.TrySetResult(result);
-            // P0-8：InternalExecutionCompletion —— 失败路径同样释放 lease + 取消注册。
+            // InternalExecutionCompletion —— 失败路径同样释放 lease + 取消注册。
             // 对已被 caller 取消（IsCompleted）的请求，TrySetResult 为 no-op，FinalizeRequest 仍释放 lease。
             FinalizeRequest(reqs[i]);
         }
@@ -1077,7 +1077,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         while (_channel.Reader.TryRead(out var req))
         {
             req.Completion.TrySetResult(BuildShutdownResult());
-            // P0-8：shutdown 路径释放 lease + 取消注册。
+            // shutdown 路径释放 lease + 取消注册。
             FinalizeRequest(req);
         }
     }
@@ -1210,9 +1210,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
     /// <summary>
     /// 内部推理请求载体：携带 FeatureBatch、deadline 与 TaskCompletionSource。
-    /// P0-7：deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移；
+    /// deadline 使用 Stopwatch 单调时钟（DeadlineTimestamp）避免 wall clock 漂移；
     /// 保留 Deadline (DateTimeOffset) 仅用于错误消息显示。
-    /// P0-8：CapturedLease 在入队时捕获当前 Active Engine 引用（含引用计数），
+    /// CapturedLease 在入队时捕获当前 Active Engine 引用（含引用计数），
     /// 确保请求在捕获的世代上执行，避免热切换后 cross-generation execution。
     /// </summary>
     private sealed class InferenceRequest
@@ -1225,23 +1225,23 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         public required CancellationToken CancellationToken { get; init; }
         public required TaskCompletionSource<BatchInferenceResult> Completion { get; init; }
         /// <summary>
-        /// P0-7：外部 ct 取消注册句柄。请求完成（成功/失败/取消）后必须 Dispose，
+        /// 外部 ct 取消注册句柄。请求完成（成功/失败/取消）后必须 Dispose，
         /// 否则 ct 永远存活时注册回调也永远存活（内存泄漏）。
         /// </summary>
         public CancellationTokenRegistration CancellationRegistration;
         /// <summary>
-        /// P0-8：入队时捕获的引擎租约。
+        /// 入队时捕获的引擎租约。
         /// _inner 为 IModelActivationManager 时永远非 null：
         ///   - 已激活：Active Engine 租约（引用计数，Dispose 递减）；
         ///   - 未激活：fallback 永久租约（Generation=0，Dispose 为 no-op）。
         /// _inner 非 IModelActivationManager 时为 null（执行时回退到 _inner）。
         /// 执行时使用 lease.Engine 而非 _inner，确保请求在入队时的世代上执行。
-        /// P0-8：lease 由内部执行出口（FinalizeRequest）释放，与调用方 Task 生命周期解耦。
+        /// lease 由内部执行出口（FinalizeRequest）释放，与调用方 Task 生命周期解耦。
         /// </summary>
         public IInferenceEngineLease? CapturedLease;
 
         /// <summary>
-        /// P0-8：调用方取消标志（1 = 已被外部 ct 取消）。
+        /// 调用方取消标志（1 = 已被外部 ct 取消）。
         /// 外部取消回调设置此标志并完成 Caller 的 TaskCompletionSource（TrySetCanceled），
         /// 但不释放 Engine Lease —— lease 由内部执行出口（FinalizeRequest）释放。
         /// 内部执行检查此标志（或 Completion.Task.IsCompleted）：若已取消，跳过引擎调用并释放 lease。

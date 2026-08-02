@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-4：IConsolidationETL 的默认实现。把 superseded/replaced items 从 active store
+/// IConsolidationETL 的默认实现。把 superseded/replaced items 从 active store
 /// 推进到 Replaced → Archived，通过 IMemoryStateStore 的事件流驱动状态迁移。
 /// </summary>
 /// <remarks>

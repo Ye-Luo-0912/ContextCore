@@ -8,7 +8,7 @@ using NpgsqlTypes;
 namespace ContextCore.Storage.Postgres.Backup;
 
 /// <summary>
-/// P1-2-4：PostgreSQL 备份执行器。包装 <c>pg_dump</c> / <c>pg_restore</c> CLI，
+/// PostgreSQL 备份执行器。包装 <c>pg_dump</c> / <c>pg_restore</c> CLI，
 /// 并通过 Npgsql 查询元数据以生成备份清单条目。
 /// </summary>
 /// <remarks>

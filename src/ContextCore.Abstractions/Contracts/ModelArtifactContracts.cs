@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R29 WP-A-1：Model Artifact Registry 契约
+// Model Artifact Registry 契约
 //
 // 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
 //   1. 把 ModelExecutionSnapshot 中的 ModelArtifactId / ModelVersion / FeatureSchemaVersion /
@@ -24,7 +24,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-1：Model Artifact 注册表 — 管理模型工件描述符的注册与查询。
+/// Model Artifact 注册表 — 管理模型工件描述符的注册与查询。
 /// </summary>
 /// <remarks>
 /// <b>使用模式</b>：
@@ -70,7 +70,7 @@ public interface IModelArtifactRegistry
 }
 
 /// <summary>
-/// R29 WP-A-1：模型工件描述符。描述一次模型注册的完整元数据，
+/// 模型工件描述符。描述一次模型注册的完整元数据，
 /// 对应 <see cref="ModelExecutionSnapshot"/> 中的六个字段。
 /// </summary>
 /// <remarks>
@@ -139,7 +139,7 @@ public sealed record ModelArtifactDescriptor
 }
 
 /// <summary>
-/// R29 WP-A-1：持久化模型工件注册表标记接口。
+/// 持久化模型工件注册表标记接口。
 /// 不添加成员；让消费方（如 HA 部署的 OnnxInferenceEngine 启动加载器）显式区分
 /// 持久化 registry（PostgreSQL）与 in-memory 默认实现。
 /// </summary>
@@ -153,7 +153,7 @@ public interface IPersistentModelArtifactRegistry : IModelArtifactRegistry
 }
 
 // ===========================================================================
-// R29 WP-A-2：Desired Model State Store 契约（HA 多节点一致性）
+// Desired Model State Store 契约（HA 多节点一致性）
 //
 // 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
 //   1. 在 HA 部署中，Model Control Plane 的 Activate/Deactivate 操作需跨节点同步。
@@ -168,7 +168,7 @@ public interface IPersistentModelArtifactRegistry : IModelArtifactRegistry
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-2：期望模型状态。描述某模型在 HA 集群中的目标状态。
+/// 期望模型状态。描述某模型在 HA 集群中的目标状态。
 /// </summary>
 /// <remarks>
 /// 不可变 record：状态变更通过写入新记录实现（与 ModelArtifactDescriptor 不可变语义一致）。
@@ -202,7 +202,7 @@ public sealed record DesiredModelState
 }
 
 /// <summary>
-/// R29 WP-A-2：Desired Model State Store — 存储 HA 集群中各模型的期望状态。
+/// Desired Model State Store — 存储 HA 集群中各模型的期望状态。
 /// </summary>
 /// <remarks>
 /// <b>使用模式</b>：
@@ -240,7 +240,7 @@ public interface IDesiredModelStateStore
 }
 
 // ===========================================================================
-// P0-9：Cluster Model Slot 契约（单一 Champion 真相源）
+// Cluster Model Slot 契约（单一 Champion 真相源）
 //
 // 目标：
 //   1. 替代按 ModelId 分别保存 Active/Inactive 的 DesiredModelState 模型——
@@ -258,7 +258,7 @@ public interface IDesiredModelStateStore
 // ===========================================================================
 
 /// <summary>
-/// P0-9: Single champion cluster model slot. The single source of truth for which model is active across the cluster.
+/// Single champion cluster model slot. The single source of truth for which model is active across the cluster.
 /// Only one row per slot name (e.g., "primary"). CAS updates ensure atomic model switching.
 /// </summary>
 public sealed record ClusterModelSlot
@@ -286,7 +286,7 @@ public sealed record ClusterModelSlot
 }
 
 /// <summary>
-/// P0-9: Store for the single cluster model slot. All operations use CAS on Revision.
+/// Store for the single cluster model slot. All operations use CAS on Revision.
 /// </summary>
 public interface IClusterModelSlotStore
 {

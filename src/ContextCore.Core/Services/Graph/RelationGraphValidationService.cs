@@ -67,7 +67,7 @@ public sealed class RelationGraphValidationService
     }
 
     /// <summary>
-    /// P1-7：流式诊断，避免一次性将整张关系图和全部 item store 载入内存。
+    /// 流式诊断，避免一次性将整张关系图和全部 item store 载入内存。
     /// <para>
     /// 实现策略——两阶段流式：
     /// <list type="bullet">
@@ -127,7 +127,7 @@ public sealed class RelationGraphValidationService
 
         // ── 阶段 1：流式枚举，yield 不依赖 item 的诊断，累积跨关系状态 ──
         var itemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // P1-7 fix：relationKeys 存储 (source, target, normalizedType) 作为每条关系的规范签名。
+        // fix：relationKeys 存储 (source, target, normalizedType) 作为每条关系的规范签名。
         // MissingInverseRelation 查找时用 (target, source, inverseType) 来匹配真实存在的 inverse 关系签名，
         // 避免与每条关系自身贡献的 key 重合（旧实现总是命中自己，导致漏报）。
         var relationKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

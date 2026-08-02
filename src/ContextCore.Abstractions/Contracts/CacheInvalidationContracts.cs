@@ -15,9 +15,9 @@ public readonly record struct CacheInvalidationKey(
 /// 缓存失效信号接收器。在 Store 写入成功后触发，供 ContextStateCache 订阅。
 /// </summary>
 /// <remarks>
-/// R10-2 失效边界抽象。Store Decorator 在写入成功后调用此接口发出失效信号。
-/// R11-P6：由 <see cref="IContextStateCache"/> 实现同时订阅此信号，移除受影响的缓存项。
-/// P0 返工：提交后失效必须完成，Decorator 在 commit point 后使用 <see cref="CancellationToken.None"/>。
+/// 失效边界抽象。Store Decorator 在写入成功后调用此接口发出失效信号。
+/// 由 <see cref="IContextStateCache"/> 实现同时订阅此信号，移除受影响的缓存项。
+/// 返工：提交后失效必须完成，Decorator 在 commit point 后使用 <see cref="CancellationToken.None"/>。
 /// </remarks>
 public interface IStateCacheInvalidator
 {
@@ -29,7 +29,7 @@ public interface IStateCacheInvalidator
 
 /// <summary>
 /// 结构化缓存键，标识一个缓存条目的逻辑身份。
-/// P0 返工：取代裸 string，避免无 scope 写入。
+/// 返工：取代裸 string，避免无 scope 写入。
 /// </summary>
 public readonly record struct StateCacheKey(string Value)
 {
@@ -51,7 +51,7 @@ public readonly record struct StateCacheKey(string Value)
 /// 缓存条目的依赖 scope 集合。任一 scope 失效时，条目即失效。
 /// </summary>
 /// <remarks>
-/// P0 返工：取代单 scope 绑定，支持跨 Store 的组合依赖。
+/// 返工：取代单 scope 绑定，支持跨 Store 的组合依赖。
 /// 例如 Package Builder 可同时依赖 Context/Memory/Constraint/Global/Relation 五个 scope，
 /// 任一 Store 写入失效对应 scope 时，该缓存条目都会被移除。
 /// 必须包含至少一个 scope，无 scope 缓存无法被安全失效。

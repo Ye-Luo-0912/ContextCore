@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-3/R23-4：Agent Runtime Adapter 实现
+// /R23-4：Agent Runtime Adapter 实现
 //
 // 设计原则（对齐 R23 规格）：
 //   1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型
@@ -13,7 +13,7 @@ namespace ContextCore.Core.Services.Agent;
 //   2. Adapter 持有 session 状态（events / injections / tool results / snapshots），
 //      保存在 ConcurrentDictionary；同一 process 内多线程访问安全。
 //   3. R23-3 提供 GenericToolAgentAdapter（通用 in-memory 实现）；
-//      R23-4 提供 CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter
+//      提供 CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter
 //      （不依赖 SDK，仅命名空间占位 + RuntimeId/RuntimeKind 标识）。
 //   4. 三个 adapter 共享 AgentRuntimeBase 基类（session 状态管理 + 事件流），
 //      避免代码重复；各 adapter sealed 防止进一步继承污染。
@@ -27,7 +27,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R23-4：Agent Runtime Adapter 抽象基类。
+/// Agent Runtime Adapter 抽象基类。
 /// 提供 session 状态管理 + 事件流的通用实现，供具体 adapter（GenericTool/Codex/Claude）继承。
 /// </summary>
 /// <remarks>
@@ -200,7 +200,7 @@ public abstract class AgentRuntimeBase : IAgentRuntime
 }
 
 /// <summary>
-/// R23-3：通用 Agent 适配器。提供 <see cref="IAgentRuntime"/> 的 in-memory 实现。
+/// 通用 Agent 适配器。提供 <see cref="IAgentRuntime"/> 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 适用于不需要 Agent SDK 适配的场景（如本地工具型 Agent / 测试 / 演示）。
@@ -223,7 +223,7 @@ public sealed class GenericToolAgentAdapter : AgentRuntimeBase
 }
 
 /// <summary>
-/// R23-3：Agent session 内部状态记录。由 <see cref="AgentRuntimeBase"/> 管理。
+/// Agent session 内部状态记录。由 <see cref="AgentRuntimeBase"/> 管理。
 /// </summary>
 /// <remarks>
 /// 暴露为 public 仅供 provider（<see cref="DefaultAgentWorkspaceContextProvider"/>）访问；
@@ -273,7 +273,7 @@ public sealed class AgentSessionRecord
 }
 
 /// <summary>
-/// R23-3：Tool 调用结果记录。由 <see cref="IAgentSession.RecordToolCallResultAsync"/> 写入。
+/// Tool 调用结果记录。由 <see cref="IAgentSession.RecordToolCallResultAsync"/> 写入。
 /// </summary>
 public sealed class AgentToolResultRecord
 {
@@ -291,7 +291,7 @@ public sealed class AgentToolResultRecord
 }
 
 /// <summary>
-/// R23-3：<see cref="IAgentSession"/> + <see cref="IAgentEventStream"/> 的 in-memory 实现。
+/// <see cref="IAgentSession"/> + <see cref="IAgentEventStream"/> 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// Session 视图本身不持有状态副本；所有操作通过 adapter 共享状态完成。

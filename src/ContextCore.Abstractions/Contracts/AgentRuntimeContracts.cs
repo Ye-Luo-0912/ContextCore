@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R23：Agent Runtime Integration 契约
+// Agent Runtime Integration 契约
 //
 // 目标（对齐用户规格第六节）：
 //   当 Context Decision Runtime 稳定后，ContextCore 作为 Codex / Claude Code /
@@ -20,15 +20,15 @@ namespace ContextCore.Abstractions;
 //      token-budget-aware package。
 //
 // 子阶段进度：
-//   R23-1（当前）：5 个核心接口契约 + AgentRuntimeKind 枚举 + AgentSessionId +
+//   （当前）：5 个核心接口契约 + AgentRuntimeKind 枚举 + AgentSessionId +
 //                  AgentEvent 类型（最小可实施集）。
-//   R23-2：AgentContextSnapshot / AgentTaskState / AgentContextDelta 数据契约。
-//   R23-3：GenericToolAgentAdapter + DefaultAgentWorkspaceContextProvider 实现。
-//   R23-4：CodexAgentRuntimeAdapter / ClaudeAgentRuntimeAdapter + 全量测试。
+//   AgentContextSnapshot / AgentTaskState / AgentContextDelta 数据契约。
+//   GenericToolAgentAdapter + DefaultAgentWorkspaceContextProvider 实现。
+//   CodexAgentRuntimeAdapter / ClaudeAgentRuntimeAdapter + 全量测试。
 // ===========================================================================
 
 /// <summary>
-/// R23-1：Agent Runtime 类型。标识当前接入的 Agent SDK 来源。
+/// Agent Runtime 类型。标识当前接入的 Agent SDK 来源。
 /// </summary>
 /// <remarks>
 /// 用于 <see cref="IAgentRuntime"/>) 的标识与路由；ContextCore 内部不依赖此枚举
@@ -53,7 +53,7 @@ public enum AgentRuntimeKind : byte
 }
 
 /// <summary>
-/// R23-1：Agent Session 标识。跨 turn 唯一标识一次 agent 会话。
+/// Agent Session 标识。跨 turn 唯一标识一次 agent 会话。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -81,7 +81,7 @@ public sealed record AgentSessionId
 }
 
 /// <summary>
-/// R23-1：Agent 事件类型。覆盖 Agent 生命周期与决策关键节点。
+/// Agent 事件类型。覆盖 Agent 生命周期与决策关键节点。
 /// </summary>
 /// <remarks>
 /// 用于 <see cref="IAgentEventStream"/> 的事件分类与过滤；
@@ -133,7 +133,7 @@ public enum AgentEventKind : byte
 }
 
 /// <summary>
-/// R23-1：Agent 事件严重级别。复用 <see cref="ContextEventLevel"/> 语义但单独定义，
+/// Agent 事件严重级别。复用 <see cref="ContextEventLevel"/> 语义但单独定义，
 /// 避免与 ContextRuntime 内部事件混合。
 /// </summary>
 public enum AgentEventLevel : byte
@@ -152,7 +152,7 @@ public enum AgentEventLevel : byte
 }
 
 /// <summary>
-/// R23-1：Agent 事件记录。由 <see cref="IAgentEventStream"/> 推送。
+/// Agent 事件记录。由 <see cref="IAgentEventStream"/> 推送。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -193,7 +193,7 @@ public sealed record AgentEvent
 }
 
 /// <summary>
-/// R23-1：Agent Runtime 接口。ContextCore 接入 Agent SDK 的统一入口。
+/// Agent Runtime 接口。ContextCore 接入 Agent SDK 的统一入口。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐用户规格）：
@@ -241,7 +241,7 @@ public interface IAgentRuntime
 }
 
 /// <summary>
-/// R23-1：Agent Session 创建请求。
+/// Agent Session 创建请求。
 /// </summary>
 public sealed record AgentSessionRequest
 {
@@ -260,7 +260,7 @@ public sealed record AgentSessionRequest
 }
 
 /// <summary>
-/// R23-1：Agent Session 接口。管理一次 agent 会话的状态与事件流。
+/// Agent Session 接口。管理一次 agent 会话的状态与事件流。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -304,7 +304,7 @@ public interface IAgentSession
 }
 
 /// <summary>
-/// R23-1：Agent Event Stream 接口。订阅 session 内事件。
+/// Agent Event Stream 接口。订阅 session 内事件。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -334,7 +334,7 @@ public interface IAgentEventStream
 }
 
 /// <summary>
-/// R23-1：Agent 事件查询条件。
+/// Agent 事件查询条件。
 /// </summary>
 public sealed record AgentEventQuery
 {
@@ -364,7 +364,7 @@ public sealed record AgentEventQuery
 }
 
 /// <summary>
-/// R23-1：Agent Workspace Context Provider 接口。
+/// Agent Workspace Context Provider 接口。
 /// 向 Agent 提供 ContextCore 的能力（snapshot / task state / decision injection）。
 /// </summary>
 /// <remarks>
@@ -421,8 +421,8 @@ public interface IAgentWorkspaceContextProvider
 }
 
 /// <summary>
-/// R23-1：Agent Context Snapshot 引用。
-/// R23-1 阶段仅定义引用类型；具体 snapshot 内容由 R23-2 定义。
+/// Agent Context Snapshot 引用。
+/// 阶段仅定义引用类型；具体 snapshot 内容由 R23-2 定义。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -456,8 +456,8 @@ public sealed record AgentContextSnapshotRef
 }
 
 /// <summary>
-/// R23-1：Agent Context Injection。向 context 注入决策与约束。
-/// R23-1 阶段仅定义注入载体；具体注入内容由 R23-2 定义。
+/// Agent Context Injection。向 context 注入决策与约束。
+/// 阶段仅定义注入载体；具体注入内容由 R23-2 定义。
 /// </summary>
 public sealed record AgentContextInjection
 {
@@ -484,7 +484,7 @@ public sealed record AgentContextInjection
 }
 
 /// <summary>
-/// R23-1：Agent Checkpoint Store 接口。持久化 session 状态以支持 checkpoint/resume。
+/// Agent Checkpoint Store 接口。持久化 session 状态以支持 checkpoint/resume。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -544,7 +544,7 @@ public interface IAgentCheckpointStore
 }
 
 /// <summary>
-/// R23-1：Agent Checkpoint 数据。
+/// Agent Checkpoint 数据。
 /// </summary>
 /// <remarks>
 /// 设计原则：

@@ -4,7 +4,7 @@ using Npgsql;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R14-PG-9：PostgresOptions HA 友好配置与连接字符串关键字解析单元测试。
+/// PostgresOptions HA 友好配置与连接字符串关键字解析单元测试。
 /// 不依赖 Docker，验证配置正确传递给 NpgsqlConnectionStringBuilder。
 /// </summary>
 [TestClass]
@@ -12,7 +12,7 @@ namespace ContextCore.Tests;
 public sealed class PostgresHAOptionsTests
 {
     /// <summary>
-    /// R14-PG-9：验证 PostgresOptions 默认值符合 HA 运行时要求。
+    /// 验证 PostgresOptions 默认值符合 HA 运行时要求。
     /// CommandTimeoutSeconds 默认 30 秒与 Npgsql 一致，避免长查询无限制占用连接池。
     /// AutoMigrate/EnablePgVectorExtension 默认开启，避免首次启动时缺失表或扩展。
     /// </summary>
@@ -27,7 +27,7 @@ public sealed class PostgresHAOptionsTests
     }
 
     /// <summary>
-    /// R14-PG-9：连接字符串中的连接池设置应被 NpgsqlConnectionStringBuilder 正确解析。
+    /// 连接字符串中的连接池设置应被 NpgsqlConnectionStringBuilder 正确解析。
     /// 覆盖 MaxPoolSize/MinPoolSize/ConnectionIdleLifetime/Timeout——这四个关键字直接决定
     /// HA 场景下连接池在故障/恢复时的行为。
     /// </summary>
@@ -44,7 +44,7 @@ public sealed class PostgresHAOptionsTests
     }
 
     /// <summary>
-    /// R14-PG-9：多 host 连接字符串支持 failover。
+    /// 多 host 连接字符串支持 failover。
     /// Npgsql 10 中 Host 接受逗号分隔多 host；TargetSessionAttributes 属性对应的连接字符串关键字
     /// 是 "Target Session Attributes"（含空格）；HostRecheckSeconds 关键字是 "Host Recheck Seconds"；
     /// LoadBalanceHosts 关键字是 "Load Balance Hosts"（bool，启用 round-robin 负载均衡）。
@@ -87,7 +87,7 @@ public sealed class PostgresHAOptionsTests
     }
 
     /// <summary>
-    /// R14-PG-9：连接不可达时 PingAsync 应返回 (false, errorMessage) 而非抛异常。
+    /// 连接不可达时 PingAsync 应返回 (false, errorMessage) 而非抛异常。
     /// 这是 HA 健康检查的核心要求：上层调用方依赖 PingAsync 的失败返回值而非异常来判定后端可用性。
     /// 使用不可达端口 9（discard 协议端口，不会有 PostgreSQL 监听）；Timeout=2 避免测试卡住。
     /// </summary>
@@ -110,7 +110,7 @@ public sealed class PostgresHAOptionsTests
     }
 
     /// <summary>
-    /// R14-PG-9：PostgresOptions.CommandTimeoutSeconds 与 Npgsql 连接字符串的 CommandTimeout 解耦。
+    /// PostgresOptions.CommandTimeoutSeconds 与 Npgsql 连接字符串的 CommandTimeout 解耦。
     /// 各 Postgres store 在每个 command 上显式赋值 command.CommandTimeout = Options.CommandTimeoutSeconds，
     /// 覆盖 Npgsql 默认值——这种显式赋值确保超时行为可预测，不依赖连接字符串配置。
     /// 此测试验证：连接字符串不含 CommandTimeout 时 NpgsqlCommand.CommandTimeout 默认值是 30，

@@ -59,7 +59,7 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
     /// 相比旧版 SELECT+INSERT 两次往返，成功路径降为 1 次往返；校验失败或并发冲突时（affected=0）
     /// 再回退到 SELECT 给出精确错误信息（错误路径 2 次往返，可接受）。
     /// ON CONFLICT DO NOTHING 兜底防并发重序列号。
-    /// P0-4：提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 agent_run_leases，
+    /// 提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 agent_run_leases，
     /// lease 被抢占后 0 行插入 → 抛 <see cref="InvalidOperationException"/>。
     /// </remarks>
     public async ValueTask AppendAsync(
@@ -75,7 +75,7 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
 
         // 单条 SQL：CTE 读取 last_event；WHERE 校验 sequence 连续性 + prev_hash 链接；
         // ON CONFLICT DO NOTHING 兜底；RETURNING 用于判断是否插入成功。
-        // P0-4 + P0-5：leaseValidated 时 WHERE 追加 lease EXISTS 子句，
+        // + P0-5：leaseValidated 时 WHERE 追加 lease EXISTS 子句，
         // 同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能写入。
         await using var insertCommand = connection.CreateCommand();
         insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -139,7 +139,7 @@ RETURNING sequence;
         }
 
         // affected=0：校验失败或并发冲突。执行 SELECT 给出精确错误信息。
-        // P0-4：若 lease 校验启用，优先检查 lease 是否已被抢占（这是最严重的双执行风险）。
+        // 若 lease 校验启用，优先检查 lease 是否已被抢占（这是最严重的双执行风险）。
         if (leaseValidated)
         {
             await using var leaseCheckCommand = connection.CreateCommand();
@@ -162,7 +162,7 @@ LIMIT 1;
             }
         }
 
-        // P1-4: Wrap diagnostic SELECT in try-catch to prevent secondary errors from masking the original insert failure
+        // Wrap diagnostic SELECT in try-catch to prevent secondary errors from masking the original insert failure
         string? expectedPrevHash = null;
         int expectedSequence = -1;
         try
@@ -295,7 +295,7 @@ LIMIT 1;
                         $"事件哈希链被破坏或乱序。");
                 }
 
-                // P1-4: Validate batch-internal hash chain
+                // Validate batch-internal hash chain
                 for (var i = 0; i < events.Count; i++)
                 {
                     var evt = events[i];
@@ -404,7 +404,7 @@ RETURNING sequence;
             }
 
             // 3. Run 状态 CAS + 可变字段更新（若提供）
-            //    P0-4：提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 lease 仍由当前实例持有。
+            //    提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 lease 仍由当前实例持有。
             if (runStateUpdate is not null)
             {
                 var snapshot = runStateUpdate.RunSnapshot;
@@ -419,8 +419,8 @@ RETURNING sequence;
                 updateCommand.Transaction = transaction;
                 updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
                 var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
-                // P0-4 + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
-                // P0-5：同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能通过 CAS
+                // + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+                // 同时校验 lease_expires_at > clock_timestamp() 防止过期租约仍能通过 CAS
                 var leaseClause = leaseValidated
                     ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
                     : string.Empty;
@@ -479,7 +479,7 @@ LIMIT 1;
                     if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     {
                         var currentState = (AgentRunState)reader.GetByte(0);
-                        // P0-4：lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
+                        // lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
                         if (leaseValidated && currentState == runStateUpdate.ExpectedCurrentState)
                         {
                             throw new InvalidOperationException(
@@ -634,7 +634,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
     }
 
     /// <summary>
-    /// P1-4: 获取指定 Run 的最新 checkpoint 游标（从 agent_runs 表的 last_checkpoint_id / last_checkpoint_sequence 列读取）。
+    /// 获取指定 Run 的最新 checkpoint 游标（从 agent_runs 表的 last_checkpoint_id / last_checkpoint_sequence 列读取）。
     /// </summary>
     public async ValueTask<AgentCheckpointCursor?> GetCheckpointCursorAsync(
         string workspaceId, string runId, CancellationToken cancellationToken = default)
@@ -677,7 +677,7 @@ LIMIT 1;
         };
     }
     /// <summary>
-    /// P1-4: Compute ContentHash for batch validation (mirrors AgentRunEventChain.ComputeContentHash).
+    /// Compute ContentHash for batch validation (mirrors AgentRunEventChain.ComputeContentHash).
     /// SHA-256 of serialized event DTO with ContentHash excluded.
     /// </summary>
     private static string ComputeContentHash(AgentRunEvent evt)

@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Evolution;
 
 /// <summary>
-/// R16 默认 hypothesis 模板表：为每个 <see cref="OptimizationTargetComponent"/> 提供预定义的
+/// 默认 hypothesis 模板表：为每个 <see cref="OptimizationTargetComponent"/> 提供预定义的
 /// 标题、假设正文、预期收益、风险评估、回滚条件。
 /// </summary>
 /// <remarks>

@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R20-2：Multi-Expert 路由器接口契约（Retrieval Router Interface Contracts）
+// Multi-Expert 路由器接口契约（Retrieval Router Interface Contracts）
 //
 // 目标：
 //   在 R20-1 RetrievalExpert 契约之上定义 Router 接口，让调用方可以
@@ -37,13 +37,13 @@ namespace ContextCore.Abstractions;
 //      或 EvaluationHost）可以独立使用。
 //
 // 子阶段进度：
-//   R20-1：RetrievalExpert 枚举 + ExpertRoutingDecision + Mask + 5 channel 对齐。
-//   R20-2（当前）：IRetrievalRouter 接口 + DefaultRetrievalRouter 实现。
-//   R20-3+：Router 接入 HybridContextRetriever（可选）+ per-Expert 质量—成本曲线模型。
+//   RetrievalExpert 枚举 + ExpertRoutingDecision + Mask + 5 channel 对齐。
+//   （当前）：IRetrievalRouter 接口 + DefaultRetrievalRouter 实现。
+//   +：Router 接入 HybridContextRetriever（可选）+ per-Expert 质量—成本曲线模型。
 // ===========================================================================
 
 /// <summary>
-/// R20-2：Multi-Expert 检索路由器接口。
+/// Multi-Expert 检索路由器接口。
 /// 将 (Request, Mask, PolicyBundle) 三元组解析为 per-Expert 的 ExpertRoutingDecisionSet。
 /// </summary>
 /// <remarks>

@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core;
 
 /// <summary>
-/// R13.4 #1：BestEffort 路径的有界 Channel 装饰器。
+/// BestEffort 路径的有界 Channel 装饰器。
 /// 使用 <see cref="Channel{T}"/> 作为有界缓冲区，将单条 <see cref="EmitAsync"/> 入队，
 /// 由后台消费者按批调用 <see cref="IContextEventSink.EmitBatchAsync"/>，利用 File/Postgres 的批量 I/O。
 /// </summary>

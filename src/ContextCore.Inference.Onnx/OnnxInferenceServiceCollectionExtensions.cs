@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// R29 WP-A-2 / P0-7：OnnxInferenceServiceCollectionExtensions
+// OnnxInferenceServiceCollectionExtensions
 //
 // 目标：
 //   为 ContextCore.Inference.Onnx 提供 DI 注册扩展，让 Service 层能在启动时
@@ -22,14 +22,14 @@ namespace ContextCore.Inference.Onnx;
 //   3. IBatchInferenceEngine 绑定到 OnnxInferenceEngine；不替代 DeterministicBatchInferenceEngine
 //      （后者仍作为 fallback 注入到 IPerformanceMonitor 等路径）。
 //
-// P0-7 新增：
+// 新增：
 //   AddModelActivationManager 方法注册 IModelActivationManager 作为 IBatchInferenceEngine 的实现，
 //   以 DeterministicBatchInferenceEngine 为 fallback，运行时通过 ActivateAsync 切换到 OnnxInferenceEngine。
 //   消费方注入 IBatchInferenceEngine 无需感知激活状态。
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-2 / P0-7：注册 ContextCore ONNX 推理引擎。
+/// 注册 ContextCore ONNX 推理引擎。
 /// </summary>
 public static class OnnxInferenceServiceCollectionExtensions
 {
@@ -101,11 +101,11 @@ public static class OnnxInferenceServiceCollectionExtensions
     }
 
     /// <summary>
-    /// P0-7：注册 <see cref="IModelActivationManager"/> 为 <see cref="IBatchInferenceEngine"/> 的实现。
+    /// 注册 <see cref="IModelActivationManager"/> 为 <see cref="IBatchInferenceEngine"/> 的实现。
     /// 未激活时委托给 fallback（由 fallbackEngineFactory 提供），激活后委托给 OnnxInferenceEngine。
     /// </summary>
     /// <remarks>
-    /// P0-8：此注册将 <see cref="ICalibrationValidator"/> 纳入模型激活（加载）路径，
+    /// 此注册将 <see cref="ICalibrationValidator"/> 纳入模型激活（加载）路径，
     /// 在 <see cref="IModelActivationManager.ActivateAsync"/> 调用时验证校准参数统计有效性。
     /// <see cref="IFeatureSchemaValidator"/> 应由上游消费方在推理前调用（生产推理路径）。
     /// 子问题1：fallback 引擎注册为 <see cref="IFallbackInferenceEngine"/>（而非 IBatchInferenceEngine），

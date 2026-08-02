@@ -13,24 +13,24 @@ namespace ContextCore.Core;
 /// ConcurrentDictionary.GetOrAdd 可能多次调用 value factory，但 Lazy&lt;T&gt; 保证
 /// 内部 task 只初始化一次。
 /// <para>
-/// P0-5.1 poisoned key 修复：共享 task 完成后（成功/失败/取消）通过 ContinueWith
+/// poisoned key 修复：共享 task 完成后（成功/失败/取消）通过 ContinueWith
 /// 自动从 _inflightTasks 移除条目。factory 抛异常后 key 不再永久驻留，后续请求可重试。
 /// 条件删除（key+value 匹配）避免删除已被新 task 替换的条目。
 /// </para>
 /// <para>
-/// P0-5.2 调用方取消隔离：共享 factory 使用内部 token（shutdown token），
+/// 调用方取消隔离：共享 factory 使用内部 token（shutdown token），
 /// 不绑定任何单一调用方的 token。调用方通过 WaitAsync(callerToken) 等待共享 task，
 /// 取消只放弃当前调用方的等待，不影响共享计算和其他等待者。
 /// </para>
 /// <para>
-/// R13.0 #1/#2：factory 前后版本向量比较 + stale computation 丢弃或单次重试。
+/// factory 前后版本向量比较 + stale computation 丢弃或单次重试。
 /// factory 执行前取版本快照（beforeVersions），完成后取版本快照（afterVersions）。
 /// 若版本变化（说明 factory 执行期间发生了写入），结果为 stale——丢弃不写入缓存，
 /// 单次重试（重新执行 factory）。重试后仍 stale 则放弃缓存，直接返回结果（不缓存）。
 /// 避免将 stale 结果锁在缓存中造成后续命中读到过期数据。
 /// </para>
 /// <para>
-/// R13.0 #4：factory shutdown token 与 timeout。共享 factory 使用 _shutdownCts.Token
+/// #4：factory shutdown token 与 timeout。共享 factory 使用 _shutdownCts.Token
 /// （而非 CancellationToken.None），允许进程停机时取消正在执行的 factory。可选的 factoryTimeout
 /// 通过 per-call linked CTS 限制单次 factory 执行时长，避免长时间挂起。cache GetAsync/SetAsync
 /// 仍使用 CancellationToken.None（快速 in-memory 操作，需保证 SetAsync 完成以避免丢失计算结果）。
@@ -41,11 +41,11 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     private readonly IContextStateCache _cache;
     private readonly IContextStateVersionStore? _versionStore;
     private readonly TimeSpan? _factoryTimeout;
-    // R13.0 #4: shutdown token——进程停机时取消正在执行的 factory
+    // #4: shutdown token——进程停机时取消正在执行的 factory
     private readonly CancellationTokenSource _shutdownCts = new();
     // single-flight：per-key 共享 in-flight task（Lazy 包装确保只初始化一次）
     private readonly ConcurrentDictionary<string, Lazy<Task<object?>>> _inflightTasks = new();
-    // R13-F：可选的 canary gate。返回 false 时跳过缓存路径（直接调用 factory，不写缓存），
+    // 可选的 canary gate。返回 false 时跳过缓存路径（直接调用 factory，不写缓存），
     // 用于按工作空间粒度控制缓存启用范围。null 表示所有请求都走缓存路径。
     private readonly Func<DependencyScopeSet, bool>? _canaryGate;
     private int _disposed;
@@ -55,7 +55,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     /// <param name="versionStore">可选的版本存储，用于 factory 前后版本向量比较（R13.0 #1/#2）。</param>
     /// <param name="factoryTimeout">可选的 factory 执行超时（per-call）。null 表示仅依赖 shutdown 取消。</param>
     /// <param name="canaryGate">
-    /// R13-F：可选的 canary gate 谓词。返回 true 时该请求走缓存路径（命中/未命中/写入缓存）；
+    /// 可选的 canary gate 谓词。返回 true 时该请求走缓存路径（命中/未命中/写入缓存）；
     /// 返回 false 时跳过缓存——直接调用 factory 并返回结果，不查询缓存也不写入缓存。
     /// 用于按工作空间粒度控制缓存启用范围（仅缓存 canary 工作空间，其余仍走全量流水线）。
     /// null 表示所有请求都走缓存路径（R13.0 之前的原有行为）。
@@ -78,7 +78,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// R13.0 #4: 触发 shutdown，取消所有正在执行的 factory。
+    /// #4: 触发 shutdown，取消所有正在执行的 factory。
     /// 后续 GetOrAddAsync 调用会立即在 factory 阶段收到 OperationCanceledException。
     /// 幂等：多次调用安全。DisposeAsync 也会触发 shutdown。
     /// </summary>
@@ -115,7 +115,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
         ArgumentNullException.ThrowIfNull(scopes);
         ArgumentNullException.ThrowIfNull(factory);
 
-        // R13-F：canary gate——返回 false 时跳过缓存路径，直接执行 factory。
+        // canary gate——返回 false 时跳过缓存路径，直接执行 factory。
         // 用于按工作空间粒度控制缓存启用范围：canary 工作空间走缓存，其余走全量流水线。
         // factory 使用与缓存路径相同的 shutdown token（+ 可选 timeout），保证取消语义一致。
         if (_canaryGate is not null && !_canaryGate(scopes))
@@ -134,8 +134,8 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
         // Lazy<Task> 保证即使 GetOrAdd 多次调用 value factory，task 也只初始化一次
         var lazy = _inflightTasks.GetOrAdd(key.Value, _ => CreateLazyEntry(key, scopes, factory));
 
-        // P0-5.2: 调用方用自己的 token 等待共享 task；取消只放弃等待，不取消共享计算。
-        // R13.0 #4: factory 内部使用 shutdown token（+ 可选 timeout），不受调用方取消影响。
+        // 调用方用自己的 token 等待共享 task；取消只放弃等待，不取消共享计算。
+        // #4: factory 内部使用 shutdown token（+ 可选 timeout），不受调用方取消影响。
         var result = await lazy.Value.WaitAsync(ct).ConfigureAwait(false);
         return (T)result!;
     }
@@ -156,7 +156,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
         lazyRef = new Lazy<Task<object?>>(() =>
         {
             var task = CreateInflightTask(key, scopes, factory);
-            // P0-5.1: task 完成后（成功/失败/取消）自动移除 in-flight 记录，防止 poisoned key。
+            // task 完成后（成功/失败/取消）自动移除 in-flight 记录，防止 poisoned key。
             // 条件删除（key+value）：仅当字典中仍为当前 lazy 时才移除，避免删除重试后的新条目。
             // ExecuteSynchronously：在完成 task 的线程上同步运行，避免调度开销。
             task.ContinueWith(
@@ -173,10 +173,10 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     /// 返回 object? 以便存储在 Lazy&lt;Task&lt;object?&gt;&gt; 中。
     /// </summary>
     /// <remarks>
-    /// P0-5.2: 共享计算不绑定任何调用方的 token，避免首个调用方取消导致所有等待者失败。
+    /// 共享计算不绑定任何调用方的 token，避免首个调用方取消导致所有等待者失败。
     /// 调用方取消仅放弃自身等待（通过 WaitAsync）。
-    /// R13.0 #1/#2: factory 前后版本向量比较，stale 结果丢弃并单次重试。
-    /// R13.0 #4: factory 使用 shutdown token（+ 可选 timeout），cache GetAsync/SetAsync
+    /// factory 前后版本向量比较，stale 结果丢弃并单次重试。
+    /// #4: factory 使用 shutdown token（+ 可选 timeout），cache GetAsync/SetAsync
     /// 仍使用 CancellationToken.None（快速 in-memory 操作，SetAsync 必须完成以持久化计算结果）。
     /// </remarks>
     private async Task<object?> CreateInflightTask<T>(
@@ -191,18 +191,18 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
             return cached;
         }
 
-        // R13.0 #1/#2: 版本向量比较——factory 执行前后比较版本，stale 则丢弃并单次重试。
+        // 版本向量比较——factory 执行前后比较版本，stale 则丢弃并单次重试。
         var versionScopes = ExtractVersionScopes(scopes);
         var beforeVersions = await CaptureVersionsAsync(versionScopes).ConfigureAwait(false);
 
-        // R13.0 #4: factory 使用 shutdown token（+ 可选 timeout），不绑定调用方 token
+        // #4: factory 使用 shutdown token（+ 可选 timeout），不绑定调用方 token
         var value = await InvokeFactoryAsync(factory).ConfigureAwait(false);
 
-        // R13.0 #1: factory 执行后比较版本向量——若变化则结果为 stale
+        // factory 执行后比较版本向量——若变化则结果为 stale
         var afterVersions = await CaptureVersionsAsync(versionScopes).ConfigureAwait(false);
         if (VersionsChanged(beforeVersions, afterVersions))
         {
-            // R13.0 #2: stale computation 丢弃——不写入缓存，单次重试
+            // stale computation 丢弃——不写入缓存，单次重试
             beforeVersions = afterVersions;
             value = await InvokeFactoryAsync(factory).ConfigureAwait(false);
             afterVersions = await CaptureVersionsAsync(versionScopes).ConfigureAwait(false);
@@ -219,7 +219,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// R13.0 #4: 调用 factory 并应用 shutdown token + 可选 timeout。
+    /// #4: 调用 factory 并应用 shutdown token + 可选 timeout。
     /// 有 factoryTimeout 时创建 per-call linked CTS（shutdown + timeout），方法返回时 dispose。
     /// 无 factoryTimeout 时直接传 _shutdownCts.Token，避免 per-call 分配。
     /// </summary>
@@ -291,7 +291,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// R13.0 #4: 同步释放——触发 shutdown 并释放 _shutdownCts。
+    /// #4: 同步释放——触发 shutdown 并释放 _shutdownCts。
     /// 用于 using 语法和同步 DI 容器释放路径。优先使用 <see cref="DisposeAsync"/>。
     /// 幂等：多次调用安全（通过 _disposed 标志保护，与 DisposeAsync 共享）。
     /// </summary>
@@ -315,7 +315,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// R13.0 #4: 异步释放——触发 shutdown 取消正在执行的 factory，并释放 _shutdownCts。
+    /// #4: 异步释放——触发 shutdown 取消正在执行的 factory，并释放 _shutdownCts。
     /// 幂等：多次调用安全（通过 _disposed 标志保护，与 Dispose 共享）。
     /// 不等待 in-flight task 完成：factory 收到 OperationCanceledException 后会自行传播，
     /// 等待方通过 WaitAsync(callerToken) 已收到取消异常。等待会阻塞宿主关闭。

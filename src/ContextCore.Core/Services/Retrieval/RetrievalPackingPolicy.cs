@@ -11,8 +11,8 @@ internal static class RetrievalPackingPolicy
 {
     /// <summary>
     /// 合并主召回通道和仅关系扩展通道的候选项，并按统一规则重排。
-    /// P0-7.4: 关系独有候选先取一个上限（cap）参与最终竞争。
-    /// R12.4A #8: 实际的 TopK 预留配额在 <see cref="Pack"/> 阶段实施；
+    /// 关系独有候选先取一个上限（cap）参与最终竞争。
+    /// #8: 实际的 TopK 预留配额在 <see cref="Pack"/> 阶段实施；
     /// 此处的 cap 仅作为噪声过滤，避免过多低分 relation-only 候选进入排序。
     /// </summary>
     public static IReadOnlyList<ContextRetrievalCandidate> BuildRankedCandidates(
@@ -22,11 +22,11 @@ internal static class RetrievalPackingPolicy
     {
         var topK = request.TopK > 0 ? request.TopK : 10;
         var orderedMain = OrderCandidates(mainCandidates);
-        // R12.4A #7: relation-only 候选也必须使用确定性 tie-break（CandidateId 升序），
+        // #7: relation-only 候选也必须使用确定性 tie-break（CandidateId 升序），
         // 否则同 Score 候选的 cap 选择依赖输入枚举顺序，跨 Provider/并发 Channel 不稳定。
         var orderedRelationOnly = OrderCandidates(relationOnlyCandidates);
 
-        // P0-7.4 + R12.4A #8: 这是 cap（上限），用于限制进入统一排序的 relation-only 候选数量。
+        // + R12.4A #8: 这是 cap（上限），用于限制进入统一排序的 relation-only 候选数量。
         // Pack 阶段会显式为 relation-only 候选预留 TopK 名额；此处的 cap 仅做噪声过滤。
         var relationCandidateCap = Math.Min(orderedRelationOnly.Length, Math.Max(2, topK / 3));
         var cappedRelationCandidates = orderedRelationOnly.Take(relationCandidateCap).ToArray();
@@ -43,7 +43,7 @@ internal static class RetrievalPackingPolicy
     /// <summary>
     /// 在 TopK 和 token budget 约束下选择最终结果，并输出选中/丢弃决策。
     /// 强制项可突破预算限制，但会占用后续候选的剩余预算。
-    /// R12.4A #8: 当 <paramref name="relationOnlyCandidateIds"/> 非空时，为 relation-only 候选
+    /// #8: 当 <paramref name="relationOnlyCandidateIds"/> 非空时，为 relation-only 候选
     /// 显式预留 TopK 名额（min(relationOnlyInRanked, max(2, topK/3))，不超过 topK/2），
     /// 确保关系扩展结果不会被高分主通道候选全部挤掉。任一侧未填满的槽位按分数顺序滚入另一侧。
     /// </summary>
@@ -55,7 +55,7 @@ internal static class RetrievalPackingPolicy
         var topK = request.TopK > 0 ? request.TopK : 10;
         var tokenBudget = request.TokenBudget > 0 ? request.TokenBudget : int.MaxValue;
 
-        // R12.4A #8: Relation quota 语义修正——Pack 阶段显式为 relation-only 候选预留 TopK 名额。
+        // #8: Relation quota 语义修正——Pack 阶段显式为 relation-only 候选预留 TopK 名额。
         // 之前 BuildRankedCandidates 只做 cap（上限），Pack 阶段无差别裁剪可能让关系独有候选被全部裁掉，
         // 与 HybridContextRetriever 注释 "为关系独有条目预留保证槽位" 不一致。
         // 预留量 = min(实际参与排序的 relation-only 数, max(2, topK/3))，且不超过 topK/2（确保 main 至少保留一半）。
@@ -174,7 +174,7 @@ internal static class RetrievalPackingPolicy
 
     private static ContextRetrievalCandidate[] OrderCandidates(IEnumerable<ContextRetrievalCandidate> candidates)
     {
-        // P0-7.5: 最终确定性 tie-break 使用 CandidateId 升序。
+        // 最终确定性 tie-break 使用 CandidateId 升序。
         // 在 Mandatory/Score/EstimatedTokens 全部相同时保证跨 Provider/并发 Channel 的稳定排序，
         // 避免依赖输入枚举顺序导致结果不稳定。
         return candidates

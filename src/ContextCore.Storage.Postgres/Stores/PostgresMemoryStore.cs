@@ -127,7 +127,7 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
     }
 
     /// <summary>
-    /// P0-7.1: 批量查询记忆条目。使用 WHERE id = ANY(@ids) 单次 SQL 替代 N 次 GetAsync 并行，
+    /// 批量查询记忆条目。使用 WHERE id = ANY(@ids) 单次 SQL 替代 N 次 GetAsync 并行，
     /// 命中主键 B-tree 索引 (workspace_id, collection_id, id)。
     /// 返回列表只包含命中的条目，顺序不保证；未命中条目静默丢弃。
     /// 语义与 FileMemoryStore.BatchGetAsync / InMemoryMemoryStore.BatchGetAsync 保持一致。

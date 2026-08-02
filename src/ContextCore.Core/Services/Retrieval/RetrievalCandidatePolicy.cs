@@ -42,7 +42,7 @@ internal static class RetrievalCandidatePolicy
     }
 
     /// <summary>
-    /// R12.4A #1：记忆召回候选评分（与 Keyword Recall 解耦）。
+    /// 记忆召回候选评分（与 Keyword Recall 解耦）。
     /// 不再用关键词命中作为硬过滤——记忆条目只要通过 lifecycle 过滤（CanUseMemoryItem）即可参与评分。
     /// 查询文本命中只作为加分项（CalculateTextScore），不命中时仍保留 base + importance + confidence + anchor bonus。
     /// 这与 Package Build 路径（WorkingMemoryRecaller.ScoreWorkingMemoryForAnchors）的 anchor-based 评分语义一致：

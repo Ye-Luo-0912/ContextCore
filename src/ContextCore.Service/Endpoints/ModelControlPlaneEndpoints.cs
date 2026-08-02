@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Service.Endpoints;
 
 // ===========================================================================
-// P0-6：Model Control Plane API
+// Model Control Plane API
 //
 // 目标（对齐 P0-6 Model Control Plane API 规范）：
 //   提供完整的模型生命周期管理 REST API：
@@ -37,7 +37,7 @@ namespace ContextCore.Service.Endpoints;
 // ===========================================================================
 
 /// <summary>
-/// P0-6：Model Control Plane API 端点。
+/// Model Control Plane API 端点。
 /// </summary>
 internal static class ModelControlPlaneEndpoints
 {
@@ -68,7 +68,7 @@ internal static class ModelControlPlaneEndpoints
                     field: "request");
             }
 
-            // P13：ArtifactPath 安全边界校验。
+            // ArtifactPath 安全边界校验。
             // 客户端提交的 ArtifactPath 必须解析为配置的 ArtifactRoot 内的路径，或为对象存储 URI。
             // 拒绝包含 ".." 的路径、非配置根目录的绝对路径，防止路径穿越攻击读取服务器任意文件。
             string? artifactPath = request.ArtifactPath;
@@ -195,7 +195,7 @@ internal static class ModelControlPlaneEndpoints
                 }
             }
 
-            // P14：ONNX 格式验证 — 通过 ONNX Runtime 加载 metadata（InputMetadata / OutputMetadata），
+            // ONNX 格式验证 — 通过 ONNX Runtime 加载 metadata（InputMetadata / OutputMetadata），
             // 验证输入输出 schema 后立即 Dispose。加载失败则验证失败。
             // 不再使用不可靠的 magic byte 校验（ONNX 是 protobuf，没有可依赖的通用文件 magic）。
             var onnxFormatOk = true;
@@ -279,7 +279,7 @@ internal static class ModelControlPlaneEndpoints
                     $"未找到 ModelArtifactId='{id}'。");
             }
 
-            // P15：warmup 不再调用 ActivateAsync（会替换 ActiveEngine），改为 LoadAndWarmupAsync。
+            // warmup 不再调用 ActivateAsync（会替换 ActiveEngine），改为 LoadAndWarmupAsync。
             // LoadAndWarmupAsync 加载模型并执行 Golden Probe warmup，但不发布为 active；
             // 返回 Staged Handle 供后续 /activate 端点（接受 stagedHandleId）原子发布。
             // Perf-8：tensor 名从配置读取，避免硬编码 "input" / "score"。
@@ -401,7 +401,7 @@ internal static class ModelControlPlaneEndpoints
             var previousActiveId = activationManager.ActiveDescriptor?.ModelArtifactId;
             var updatedBy = httpContext.User?.Identity?.Name ?? "system";
 
-            // P0-9：CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
+            // CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
             // 一次 UPDATE 原子完成"旧 Champion 失效 + 新 Champion 激活"，无需同事务改多条 DesiredModelState。
             var (casConflict, _) = await TryUpdateClusterSlotAsync(
                 clusterSlotStore, id, descriptor.ContentHash, "Active", updatedBy, ct).ConfigureAwait(false);
@@ -494,7 +494,7 @@ internal static class ModelControlPlaneEndpoints
             var previousActiveId = activationManager.ActiveDescriptor?.ModelArtifactId;
             var updatedBy = httpContext.User?.Identity?.Name ?? "system";
 
-            // P0-9：CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
+            // CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
             var (casConflict, _) = await TryUpdateClusterSlotAsync(
                 clusterSlotStore, id, descriptor.ContentHash, "Active", updatedBy, ct).ConfigureAwait(false);
             if (casConflict)
@@ -568,7 +568,7 @@ internal static class ModelControlPlaneEndpoints
             var isActiveModel = activationManager is not null
                 && string.Equals(activationManager.ActiveDescriptor?.ModelArtifactId, id, StringComparison.Ordinal);
 
-            // P0-9：若退役的是当前 active 模型，CAS 更新 ClusterModelSlot 为 Inactive（单一真相源）。
+            // 若退役的是当前 active 模型，CAS 更新 ClusterModelSlot 为 Inactive（单一真相源）。
             // Reconciler 将异步停用各节点引擎；本地也立即调用 DeactivateAsync。
             if (isActiveModel)
             {
@@ -835,7 +835,7 @@ internal static class ModelControlPlaneEndpoints
     }
 
     // -----------------------------------------------------------------------
-    // P13：ArtifactPath 安全边界
+    // ArtifactPath 安全边界
     // -----------------------------------------------------------------------
 
     /// <summary>
@@ -894,7 +894,7 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
-    /// P0-9：CAS 更新 ClusterModelSlot（单一 HA 真相源）。
+    /// CAS 更新 ClusterModelSlot（单一 HA 真相源）。
     /// 仅当 store 非空时执行 CAS：GetOrCreate("primary") → TryUpdate(expectedRevision)。
     /// 返回 (Conflicted, UpdatedSlot)：
     ///   - Conflicted=true 表示 CAS 失败（并发修改，Revision 不匹配），调用方应返回 409。
@@ -921,7 +921,7 @@ internal static class ModelControlPlaneEndpoints
     }
 
     /// <summary>
-    /// P13：校验客户端提交的 ArtifactPath 是否合法。
+    /// 校验客户端提交的 ArtifactPath 是否合法。
     /// 合法路径需满足以下条件之一：
     ///   1. 对象存储 URI（s3:// / gs:// / az:// / abfs:// / abfss:// / https:// / http://）
     ///   2. 解析为完整路径后位于配置的 ArtifactRoot 目录内
@@ -1155,7 +1155,7 @@ internal static class ModelControlPlaneEndpoints
 }
 
 // ---------------------------------------------------------------------------
-// P0-6：Model Control Plane API 请求 / 响应 DTO
+// Model Control Plane API 请求 / 响应 DTO
 // ---------------------------------------------------------------------------
 
 /// <summary>注册模型请求。</summary>

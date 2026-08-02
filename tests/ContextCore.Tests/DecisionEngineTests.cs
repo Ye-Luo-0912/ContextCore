@@ -6,7 +6,7 @@ using ContextCore.Core.Services.DecisionEngine;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R18-2：统一决策引擎接口 + Planner + Projectors 验证。
+/// 统一决策引擎接口 + Planner + Projectors 验证。
 ///
 /// 验证目标：
 ///   1. DefaultContextDecisionEngine 三阶段编排（safety gate → utility scoring → budget allocation）

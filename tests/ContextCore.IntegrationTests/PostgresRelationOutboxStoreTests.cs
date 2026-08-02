@@ -8,7 +8,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// P1-5：PostgreSQL 关系写入 outbox 存储集成测试。
+/// PostgreSQL 关系写入 outbox 存储集成测试。
 /// 验证：
 /// <list type="bullet">
 ///   <item>EnqueueAsync 与事务原子提交/回滚（scope-aware）。</item>
@@ -34,7 +34,7 @@ public sealed class PostgresRelationOutboxStoreTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // R14-PG 收口：直接尝试启动容器——失败时设 _connectionString=null 让测试 Inconclusive。
+        // 收口：直接尝试启动容器——失败时设 _connectionString=null 让测试 Inconclusive。
         // 不复用 PostgresIntegrationTests.IsDockerAvailableAsync，因其内部 3 秒 CancellationToken
         // 在 pgvector 镜像首次拉取/启动时可能误判 Docker 不可用（与 PostgresHATests 一致）。
         try

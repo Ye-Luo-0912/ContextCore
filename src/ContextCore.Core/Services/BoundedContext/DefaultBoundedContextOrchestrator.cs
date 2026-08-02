@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.BoundedContext;
 
 /// <summary>
-/// R22-3：默认 <see cref="IBoundedContextOrchestrator"/> 实现。
+/// 默认 <see cref="IBoundedContextOrchestrator"/> 实现。
 /// 编排单次有界修复循环：Plan → Decide → Build → Quality Evaluate → Optional Single Repair → Finalize。
 /// </summary>
 /// <remarks>

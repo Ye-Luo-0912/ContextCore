@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// P0-7：Model Activation Manager 契约
+// Model Activation Manager 契约
 //
 // 目标（权威模型激活管理器）：
 //   1. 编排从 IModelArtifactRegistry 读取 descriptor → 校准验证（ICalibrationValidator）
@@ -13,14 +13,14 @@ namespace ContextCore.Inference.Onnx;
 //      激活后委托给 OnnxInferenceEngine，让消费方无需感知激活切换。
 //   3. 线程安全：ActivateAsync 可在运行时调用，无缝切换引擎。
 //
-// P0-8 集成：
+// 集成：
 //   ICalibrationValidator 在激活流程中被调用，确保校准参数在模型加载时通过统计有效性验证。
 //   IFeatureRegistry.Get 验证 descriptor.FeatureSchemaVersion 已注册，防止推理时 schema drift。
 //   IFeatureSchemaValidator 由上游消费方在推理前调用（生产推理路径），验证输入特征与 schema 一致性。
 // ===========================================================================
 
 /// <summary>
-/// P0-8：推理引擎租约 —— 捕获当前 Active Engine 并递增引用计数，
+/// 推理引擎租约 —— 捕获当前 Active Engine 并递增引用计数，
 /// 防止引擎在执行期间被 Dispose。调用方必须通过 <see cref="Dispose"/> 释放（递减引用计数）。
 /// </summary>
 /// <remarks>
@@ -37,7 +37,7 @@ public interface IInferenceEngineLease : IDisposable
 }
 
 /// <summary>
-/// P0-7：权威模型激活管理器。编排模型工件加载 → 验证 → ONNX 引擎激活的完整流程。
+/// 权威模型激活管理器。编排模型工件加载 → 验证 → ONNX 引擎激活的完整流程。
 /// </summary>
 /// <remarks>
 /// 同时实现 <see cref="IBatchInferenceEngine"/> 作为代理：
@@ -51,14 +51,14 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
     IBatchInferenceEngine? ActiveEngine { get; }
 
     /// <summary>
-    /// P0-8：捕获当前 Active Engine 并递增引用计数。调用方必须通过返回的 lease 释放。
+    /// 捕获当前 Active Engine 并递增引用计数。调用方必须通过返回的 lease 释放。
     /// 未激活时返回 null（调用方应回退到 <see cref="IBatchInferenceEngine.InferBatchAsync"/> 走 fallback）。
     /// </summary>
     /// <returns>引擎租约（null = 未激活）；调用方必须 Dispose 以递减引用计数。</returns>
     IInferenceEngineLease? AcquireEngineLease();
 
     /// <summary>
-    /// P0-8：捕获 fallback 引擎的永久租约（不过期）。
+    /// 捕获 fallback 引擎的永久租约（不过期）。
     /// 用于 <see cref="InferenceScheduler"/> 在入队时无 Active Engine 的情况下，
     /// 固定请求在 fallback 引擎上执行，避免排队期间模型被激活后 cross-generation execution
     /// （即执行阶段通过动态代理跑到新激活的引擎）。
@@ -76,7 +76,7 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
     ModelArtifactDescriptor? ActiveDescriptor { get; }
 
     /// <summary>
-    /// P0-7：当前 Active Handle 的世代号（每次激活自增；null = 未激活）。
+    /// 当前 Active Handle 的世代号（每次激活自增；null = 未激活）。
     /// 调用方（如 <see cref="InferenceScheduler"/>）据此感知模型热切换：
     /// 世代号变化意味着底层引擎已替换，已攒批的请求不能与新请求合并到同一 BatchKey。
     /// </summary>
@@ -108,7 +108,7 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P15：加载并预热模型，但不发布为 ActiveEngine。
+    /// 加载并预热模型，但不发布为 ActiveEngine。
     /// 返回一个 Staged Handle，调用方可随后通过 <see cref="PromoteStagedAsync"/> 将其原子发布为 active，
     /// 或直接丢弃（Dispose）。本方法用于 /warmup 端点：预热不应替换当前 active 模型。
     /// </summary>
@@ -122,7 +122,7 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P15：将先前 <see cref="LoadAndWarmupAsync"/> 产生的 Staged Handle 原子发布为 active。
+    /// 将先前 <see cref="LoadAndWarmupAsync"/> 产生的 Staged Handle 原子发布为 active。
     /// 未找到 handleId 时返回 Failed。成功后 Staged Handle 从内部暂存表中移除。
     /// </summary>
     /// <param name="stagedHandleId">由 <see cref="LoadAndWarmupAsync"/> 返回的 handle id。</param>
@@ -133,7 +133,7 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-9：停用当前 Active Engine，回退到 fallback 引擎。
+    /// 停用当前 Active Engine，回退到 fallback 引擎。
     /// 用于 HA Reconciler 收敛 Inactive 期望状态。
     /// 旧 Active Handle 进入 Retired 列表并按 grace period drain（与 ActivateAsync 切换一致），
     /// 确保 in-flight 请求不会在引擎 Dispose 后失败。
@@ -144,7 +144,7 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
 }
 
 /// <summary>
-/// P15：Staged Model Handle — 由 <see cref="IModelActivationManager.LoadAndWarmupAsync"/> 返回。
+/// Staged Model Handle — 由 <see cref="IModelActivationManager.LoadAndWarmupAsync"/> 返回。
 /// 表示已加载并 warmup 但尚未发布为 active 的引擎。调用方应在使用完毕后 Dispose；
 /// 或通过 <see cref="IModelActivationManager.PromoteStagedAsync"/> 提升为 active。
 /// Success=false 时 Engine 为 null，调用方应检查 <see cref="Success"/> 后再使用 Engine。
@@ -206,7 +206,7 @@ public sealed record StagedModelHandle
 }
 
 /// <summary>
-/// P0-7：模型激活结果。包含激活是否成功、验证明细和已激活的引擎。
+/// 模型激活结果。包含激活是否成功、验证明细和已激活的引擎。
 /// </summary>
 public sealed record ModelActivationResult
 {

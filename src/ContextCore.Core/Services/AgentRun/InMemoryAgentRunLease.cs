@@ -31,9 +31,9 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 {
     private readonly ConcurrentDictionary<string, LeaseEntry> _leases = new(StringComparer.Ordinal);
     private readonly object _reapLock = new();
-    // P0-4：全局 fencing token 计数器（单调递增）。每次成功获取租约（含抢占过期）时递增。
+    // 全局 fencing token 计数器（单调递增）。每次成功获取租约（含抢占过期）时递增。
     private long _globalFencingToken;
-    // P0-7：可选的 Run Store，用于 MarkLeaseLostIfLeaseExpiredAsync 原子转移（测试/开发用）。
+    // 可选的 Run Store，用于 MarkLeaseLostIfLeaseExpiredAsync 原子转移（测试/开发用）。
     private readonly IAgentRunStore? _runStore;
 
     /// <summary>
@@ -62,7 +62,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         var expiresAt = now + leaseDuration;
         var leaseToken = Guid.NewGuid().ToString("N");
 
-        // P0-4：预分配 fencing token（仅当实际获取成功时才生效）。
+        // 预分配 fencing token（仅当实际获取成功时才生效）。
         // 使用 Interlocked.Increment 保证单调递增；即使并发获取失败也不会回退（可接受，fencing token 只需单调）。
         var fencingToken = Interlocked.Increment(ref _globalFencingToken);
         var acquired = false;
@@ -239,7 +239,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：InMemory 实现 — 检查无活跃租约后通过 IAgentRunStore 推进状态机到 LeaseLost（CAS）。
+    /// InMemory 实现 — 检查无活跃租约后通过 IAgentRunStore 推进状态机到 LeaseLost（CAS）。
     /// 注入 IAgentRunStore 时执行完整转移；未注入时仅返回"可以标记"信号（1=无活跃租约，0=有活跃租约）。
     /// 进程内单线程场景下无真实竞态，check-then-act 拆分可接受。
     /// 终态取 LeaseLost：Run 在非终态停留超时且无人持有租约，说明原 owner 丢租后未被接管。

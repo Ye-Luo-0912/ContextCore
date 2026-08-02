@@ -6,7 +6,7 @@ using System.Linq;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R19-2：默认策略包注册表 + 默认 bundle 工厂验证。
+/// 默认策略包注册表 + 默认 bundle 工厂验证。
 ///
 /// 验证目标：
 ///   1. DefaultPolicyBundleFactory.Create 返回非 null bundle 且各字段填充正确
@@ -206,7 +206,7 @@ public sealed class DefaultPolicyRegistryTests
             BundleVersion = "1.0.0",
             BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow,
-            // P1-4：override 使用受限类型 RequestBudgetOverride / RequestRoutingOverride。
+            // override 使用受限类型 RequestBudgetOverride / RequestRoutingOverride。
             BudgetOverride = new RequestBudgetOverride
             {
                 TokenBudget = 2000,
@@ -293,7 +293,7 @@ public sealed class DefaultPolicyRegistryTests
     [TestMethod]
     public async Task RegisterBundleAsync_SameIdAndVersionTwice_Throws()
     {
-        // P0-4 修复：insert-if-absent 语义。相同 (BundleId, Version) 已存在时抛 InvalidOperationException，
+        // 修复：insert-if-absent 语义。相同 (BundleId, Version) 已存在时抛 InvalidOperationException，
         // 不再静默覆盖。Bundle 全局不可变；supersede 通过新建 bundle 实现。
         var registry = new DefaultPolicyRegistry();
         var original = new ContextPolicyBundle { BundleId = "bundle-1", Version = "1.0.0" };
@@ -313,7 +313,7 @@ public sealed class DefaultPolicyRegistryTests
     [TestMethod]
     public async Task RegisterBundleAsync_SameIdDifferentVersion_RegistersBoth()
     {
-        // P0-4：(BundleId, Version) 为复合主键。同一 BundleId 不同 Version 视为不同 bundle，
+        // (BundleId, Version) 为复合主键。同一 BundleId 不同 Version 视为不同 bundle，
         // 都允许注册（用于支持 supersede：新版本注册后激活，旧版本保留为历史）。
         var registry = new DefaultPolicyRegistry();
         var v1 = new ContextPolicyBundle { BundleId = "bundle-1", Version = "1.0.0" };

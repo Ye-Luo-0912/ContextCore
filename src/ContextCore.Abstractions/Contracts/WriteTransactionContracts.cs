@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// P0-3：跨 store 写入事务作用域。表示一个开放的、可跨多个 store 的原子写入单元。
+/// 跨 store 写入事务作用域。表示一个开放的、可跨多个 store 的原子写入单元。
 /// 实现负责持有底层连接/事务（如 NpgsqlConnection + NpgsqlTransaction），
 /// 在 <see cref="CommitAsync"/> 时一次性提交所有参与 store 的写入；
 /// <see cref="RollbackAsync"/> 或 <see cref="DisposeAsync"/> 时全部回滚。
@@ -37,7 +37,7 @@ public interface IWriteTransactionScope : IAsyncDisposable
 }
 
 /// <summary>
-/// P0-3：跨 store 写入事务作用域工厂。注入到需要事务包裹的 pipeline 中。
+/// 跨 store 写入事务作用域工厂。注入到需要事务包裹的 pipeline 中。
 /// 实现决定底层事务策略：Postgres 返回真实事务作用域，InMemory/FileSystem 返回 no-op 作用域。
 /// </summary>
 public interface IWriteTransactionScopeFactory
@@ -49,7 +49,7 @@ public interface IWriteTransactionScopeFactory
 }
 
 /// <summary>
-/// P0-3：IContextStore 的可选事务能力接口。
+/// IContextStore 的可选事务能力接口。
 /// 实现 IContextStore 的 store 若同时实现此接口，表示可在 <see cref="IWriteTransactionScope"/> 内执行写入。
 /// pipeline 通过 <c>store is ITransactionalContextStore</c> 检测并切换到事务路径。
 /// 未实现此接口的 store（如 InMemory/FileSystem）走原有无事务路径。
@@ -62,7 +62,7 @@ public interface ITransactionalContextStore
 }
 
 /// <summary>
-/// P0-3：IRelationStore 的可选事务能力接口。
+/// IRelationStore 的可选事务能力接口。
 /// 提供 BatchUpsert/Delete/Query 的事务感知重载，使图边写入与 ContextStore 写入共享同一事务。
 /// </summary>
 public interface ITransactionalRelationStore
@@ -92,7 +92,7 @@ public interface ITransactionalRelationStore
 }
 
 /// <summary>
-/// P0-3：IRelationProjectionWriter 的可选事务能力接口。
+/// IRelationProjectionWriter 的可选事务能力接口。
 /// 让投影写入边界能在事务作用域内委托底层 BatchUpsertAsync。
 /// </summary>
 public interface ITransactionalRelationProjectionWriter

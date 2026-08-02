@@ -7,7 +7,7 @@ using NpgsqlTypes;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// R28-E / R29 WP-E-1：PostgreSQL ConflictSet Store 持久化实现。
+/// / R29 WP-E-1：PostgreSQL ConflictSet Store 持久化实现。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐 R21-2 契约澄清 #4 + R29 学习闭环）：

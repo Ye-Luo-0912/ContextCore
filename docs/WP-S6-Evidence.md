@@ -55,7 +55,7 @@
 | 5 | 旧 Owner 超过真实 lease expiry 后不能执行副作用 | `E2E_TwoHosts_LeaseHandover_...`；`E2E_DbNetworkPartition_...`；WP-S3 `ToolExecution_ExpiredLeaseFence_BlocksSideEffect` |
 | 6 | ProductionHA 只有一个 Agent 执行平面 | `E2E_TwoHosts_SameRun_ExactlyOneExecutionPlane` |
 | 7 | 节点重启后自动加载集群唯一 Champion | WP-S4 Reconciler 三测试（FirstStart 立即激活 + DesiredState 先写 + 更高 revision 切换） |
-| 8 | SSE 在读取/订阅竞争窗口不丢最终事件 | `E2E_Http_Sse_LastEventIdReplay_NoLostWakeup`；端点 P0-10 注册-后-读取设计 |
+| 8 | SSE 在读取/订阅竞争窗口不丢最终事件 | `E2E_Http_Sse_LastEventIdReplay_NoLostWakeup`；端点注册-后-读取设计 |
 | 9 | 10,000 条以上事件可以分页恢复 | `E2E_TenThousandEvents_PaginatedRecovery_ChainIntact` |
 | 10 | Late Hydration 后 Decision 与实际输入一致 | WP-S5 既有（HydrationRepairDecision） |
 | 11 | FTS 第二页及后续页正确 | WP-S5 既有（FTS keyset 三存储分页） |

@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// P0-6：Shadow Model Manager — Champion / Challenger 影子模式支持
+// Shadow Model Manager — Champion / Challenger 影子模式支持
 //
 // 目标（对齐 P0-6 Model Control Plane API §4 Champion/Challenger）：
 //   1. 维护一个独立于 ActiveEngine 的影子推理引擎（Challenger），
@@ -25,7 +25,7 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 
 /// <summary>
-/// P0-6：影子模型管理器。维护独立于 ActiveEngine 的 Challenger 引擎，支持 Champion/Challenger 对比。
+/// 影子模型管理器。维护独立于 ActiveEngine 的 Challenger 引擎，支持 Champion/Challenger 对比。
 /// </summary>
 /// <remarks>
 /// 在 DI 中注册为 Singleton。当 ModelExecutionMode != RealModel 时不注册（无 ONNX session 工厂可用）。
@@ -85,7 +85,7 @@ public sealed class ShadowModelManager
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(options);
 
-        // WP-5：校准验证（与 ModelActivationManager.ActivateCoreAsync 路径一致 — 精确 CalibrationVersion 绑定 + fail-closed）
+        // 校准验证（与 ModelActivationManager.ActivateCoreAsync 路径一致 — 精确 CalibrationVersion 绑定 + fail-closed）
         var calValidation = ValidateCalibrationForDescriptor(descriptor);
         if (calValidation is { IsFailed: true } failed)
         {
@@ -206,7 +206,7 @@ public sealed class ShadowModelManager
     }
 
     /// <summary>
-    /// WP-5：校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
+    /// 校准验证辅助方法 — 精确 CalibrationVersion 绑定 + fail-closed。
     /// 与 ModelActivationManager.ValidateCalibrationForDescriptor 行为一致。
     /// </summary>
     private CalibrationValidationOutcome? ValidateCalibrationForDescriptor(ModelArtifactDescriptor descriptor)
@@ -281,7 +281,7 @@ public sealed class ShadowModelManager
 }
 
 /// <summary>
-/// P0-6：Challenger 加载结果。
+/// Challenger 加载结果。
 /// </summary>
 public sealed record ShadowActivationResult
 {

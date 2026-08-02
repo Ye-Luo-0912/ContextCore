@@ -6,14 +6,14 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Benchmarks;
 
 // ===========================================================================
-// R29 WP-F-1：Canary Metrics 微基准
+// Canary Metrics 微基准
 //
 // 覆盖：
-//   §1 DefaultCanaryMetricsCollector.RecordObservation（ring buffer + 滚动计数器）
+//   DefaultCanaryMetricsCollector.RecordObservation（ring buffer + 滚动计数器）
 //      - 小规模（n=100）/ 中规模（n=1000）/ 大规模（n=10000）
 //      - 包含容量内 vs 容量溢出（触发 EvictOldest）两条路径
-//   §2 DefaultCanaryMetricsCollector.GetAggregatedMetrics（聚合 + DDSketch quantile）
-//   §3 DDSketch.Add + GetQuantile（P95 估算微基准，绕过 collector 测纯 sketch 性能）
+//   DefaultCanaryMetricsCollector.GetAggregatedMetrics（聚合 + DDSketch quantile）
+//   DDSketch.Add + GetQuantile（P95 估算微基准，绕过 collector 测纯 sketch 性能）
 //
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
 //
@@ -24,7 +24,7 @@ namespace ContextCore.Benchmarks;
 // ===========================================================================
 
 /// <summary>
-/// WP-F-1 §1+§2：Canary Metrics Collector 微基准。
+/// Canary Metrics Collector 微基准。
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -84,7 +84,7 @@ public class CanaryMetricsCollectorBenchmarks
         }
     }
 
-    // §1 RecordObservation：写入 N 次观察（含 ring buffer eviction 路径）
+    // RecordObservation：写入 N 次观察（含 ring buffer eviction 路径）
     [Benchmark]
     [BenchmarkCategory("Record")]
     public void RecordObservations()
@@ -104,7 +104,7 @@ public class CanaryMetricsCollectorBenchmarks
         }
     }
 
-    // §2 GetAggregatedMetrics：写入 N 次后聚合查询
+    // GetAggregatedMetrics：写入 N 次后聚合查询
     [Benchmark]
     [BenchmarkCategory("Aggregate")]
     public CanaryObservationMetrics GetAggregatedMetrics()
@@ -125,7 +125,7 @@ public class CanaryMetricsCollectorBenchmarks
         return collector.GetAggregatedMetrics(runId);
     }
 
-    // §2b GetAggregatedMetrics 在满载 ring buffer 后查询（触发 DDSketch quantile 估算）
+    // GetAggregatedMetrics 在满载 ring buffer 后查询（触发 DDSketch quantile 估算）
     [Benchmark]
     [BenchmarkCategory("Aggregate")]
     public CanaryObservationMetrics GetAggregatedMetrics_AfterEviction()
@@ -149,7 +149,7 @@ public class CanaryMetricsCollectorBenchmarks
 }
 
 /// <summary>
-/// WP-F-1 §3：DDSketch 微基准（绕过 collector 测纯 sketch 性能）。
+/// DDSketch 微基准（绕过 collector 测纯 sketch 性能）。
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -176,7 +176,7 @@ public class DDSketchBenchmarks
         }
     }
 
-    // §3a Add：写入 N 个值
+    // Add：写入 N 个值
     [Benchmark]
     [BenchmarkCategory("Add")]
     public double AddMany()
@@ -189,7 +189,7 @@ public class DDSketchBenchmarks
         return sketch.TotalCount;
     }
 
-    // §3b Add + GetQuantile：写入后查询 P95
+    // Add + GetQuantile：写入后查询 P95
     [Benchmark]
     [BenchmarkCategory("Query")]
     public double AddAndGetP95()
@@ -202,7 +202,7 @@ public class DDSketchBenchmarks
         return sketch.GetQuantile(0.95);
     }
 
-    // §3c GetQuantile 在已填充 sketch 上查询多次（测 quantile 估算本身开销）
+    // GetQuantile 在已填充 sketch 上查询多次（测 quantile 估算本身开销）
     [Benchmark]
     [BenchmarkCategory("Query")]
     public double QueryP95MultipleTimes()

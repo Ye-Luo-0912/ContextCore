@@ -4,7 +4,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// P0-6：PostgreSQL 持久化 Model Activation Audit Store。
+/// PostgreSQL 持久化 Model Activation Audit Store。
 /// 让 HA 场景下模型生命周期审计记录（Activate/Rollback/Retire/Shadow 等）可跨进程持久化与查询。
 /// </summary>
 /// <remarks>

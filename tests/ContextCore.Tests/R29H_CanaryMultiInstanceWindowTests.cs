@@ -7,7 +7,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Canary 多实例窗口聚合生产验收测试
+// Canary 多实例窗口聚合生产验收测试
 //
 // 验证 CanaryMetricsAggregator 在多实例部署时的窗口聚合正确性，覆盖：
 //   1. MultiInstance_SampleRecording_AggregatesCorrectly — 多实例样本记录后聚合正确
@@ -545,7 +545,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
                 : epochSamples.Sum(kvp => kvp.Value.AverageQualityScore * kvp.Value.TotalObservations) / totalObservations;
 
             // 外部指标：AVG 跳过 NULL
-            // P11：TaskSuccessRate / ToolSuccessRate 改为 SUM(分子)/SUM(分母) 替代 AVG(rate)；
+            // TaskSuccessRate / ToolSuccessRate 改为 SUM(分子)/SUM(分母) 替代 AVG(rate)；
             //   sum/count 为 null 时回退到 AVG(rate)（向后兼容未填充 sum/count 的旧样本）
             var taskSuccess = SumDivSum(epochSamples, s => s.TaskSuccessSum, s => s.TaskSuccessCount)
                 ?? AvgNullable(epochSamples, s => s.TaskSuccessRate);
@@ -563,7 +563,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
             var windowStart = epochSamples.Min(kvp => kvp.Value.WindowStart);
             var windowEnd = epochSamples.Max(kvp => kvp.Value.WindowEnd);
 
-            // P10：收集各实例的 DDSketch 字节（供 Leader MergeFrom 合并查询总体 P95）
+            // 收集各实例的 DDSketch 字节（供 Leader MergeFrom 合并查询总体 P95）
             List<byte[]>? v2InstanceSketches = null;
             List<byte[]>? legacyInstanceSketches = null;
             foreach (var kvp in epochSamples)
@@ -617,7 +617,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
                 CurrentStageEpoch = currentEpoch,
                 WindowStart = windowStart,
                 WindowEnd = windowEnd,
-                // P10：各实例 DDSketch 字节列表（供 Leader MergeFrom 合并）
+                // 各实例 DDSketch 字节列表（供 Leader MergeFrom 合并）
                 V2InstanceSketches = v2InstanceSketches,
                 LegacyInstanceSketches = legacyInstanceSketches
             });
@@ -685,7 +685,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
         }
 
         /// <summary>
-        /// P11：SUM(分子) / SUM(分母) 聚合（跳过 null sum/count 对）。
+        /// SUM(分子) / SUM(分母) 聚合（跳过 null sum/count 对）。
         /// 所有样本的 sum/count 都为 null 时返回 null（调用方回退到 AVG(rate)）。
         /// </summary>
         private static double? SumDivSum(

@@ -7,7 +7,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.2 验收：Package Read Plan 行为——merged constraint 去重、current_task 并行化、Store call count 跟踪。
+/// 验收：Package Read Plan 行为——merged constraint 去重、current_task 并行化、Store call count 跟踪。
 /// </summary>
 [TestClass]
 [TestCategory("Package")]
@@ -16,7 +16,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_WhenMergedAndHardSectionBothEnabled_DedupHitsIncrement()
     {
-        // R13.2 #1：merged 与 hard_constraints section 同时启用 Hard 时应去重，DedupHits 至少为 1。
+        // merged 与 hard_constraints section 同时启用 Hard 时应去重，DedupHits 至少为 1。
         var constraintStore = new InMemoryConstraintStore();
         var builder = new BasicContextPackageBuilder(
             new InMemoryContextStore(),
@@ -64,7 +64,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_WhenMergedAndSoftSectionBothEnabled_DedupHitsIncrement()
     {
-        // R13.2 #1：merged 与 soft_constraints section 同时启用 Soft 时应去重。
+        // merged 与 soft_constraints section 同时启用 Soft 时应去重。
         var constraintStore = new InMemoryConstraintStore();
         var builder = new BasicContextPackageBuilder(
             new InMemoryContextStore(),
@@ -111,7 +111,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_WhenMergedAndBothHardSoftSectionsEnabled_DedupHitsIsTwo()
     {
-        // R13.2 #1：Hard + Soft section + merged 全启用时，DedupHits = 2（Hard 和 Soft 各去重一次）。
+        // Hard + Soft section + merged 全启用时，DedupHits = 2（Hard 和 Soft 各去重一次）。
         var constraintStore = new InMemoryConstraintStore();
         var builder = new BasicContextPackageBuilder(
             new InMemoryContextStore(),
@@ -158,7 +158,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_WhenMergedOnlyNoSections_QueriesOnlyAllLevel()
     {
-        // R13.2 #1：仅 merged 启用，section 都关闭时，无 DedupHits，但 Hard/Soft 仍需查询供 merged 用。
+        // 仅 merged 启用，section 都关闭时，无 DedupHits，但 Hard/Soft 仍需查询供 merged 用。
         var constraintStore = new InMemoryConstraintStore();
         var builder = new BasicContextPackageBuilder(
             new InMemoryContextStore(),
@@ -204,7 +204,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_TracksContextStoreAndMemoryStoreCalls()
     {
-        // R13.2 #4：验证 ReadPlan 记录 ContextStore / MemoryStore / GlobalContextStore 调用。
+        // #4：验证 ReadPlan 记录 ContextStore / MemoryStore / GlobalContextStore 调用。
         var now = DateTimeOffset.UtcNow;
         var contextStore = new InMemoryContextStore();
         var memoryStore = new InMemoryMemoryStore();
@@ -273,7 +273,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_TracksCurrentTaskServiceCall()
     {
-        // R13.2 #3 + #4：current_task 解析应记录 WorkingMemoryService.GetCurrentTask 调用。
+        // #3 + #4：current_task 解析应记录 WorkingMemoryService.GetCurrentTask 调用。
         // InMemoryMemoryStore 同时实现 IMemoryStore + IWorkingMemoryService（共享存储）。
         var workingMemoryService = new InMemoryMemoryStore();
         var builder = new BasicContextPackageBuilder(

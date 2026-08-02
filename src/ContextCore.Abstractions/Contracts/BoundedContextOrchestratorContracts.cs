@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R22：Bounded Context Orchestrator 契约
+// Bounded Context Orchestrator 契约
 //
 // 设计原则（对齐用户规格）：
 //   1. 不使用无限循环（Build → Evaluate → Refine → Evaluate → ...）；
@@ -32,7 +32,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R22-1：context repair 触发原因（7 类确定性异常）。
+/// context repair 触发原因（7 类确定性异常）。
 /// </summary>
 public enum ContextRepairReason : byte
 {
@@ -62,7 +62,7 @@ public enum ContextRepairReason : byte
 }
 
 /// <summary>
-/// R22-1：context repair 预算。修复操作的硬性限制，防止修复循环失控。
+/// context repair 预算。修复操作的硬性限制，防止修复循环失控。
 /// </summary>
 /// <remarks>
 /// 对齐用户规格：
@@ -95,7 +95,7 @@ public sealed record ContextRepairBudget
 }
 
 /// <summary>
-/// R22-1：context repair 触发的诊断结果。由 RepairDetector 输出，作为修复请求的输入。
+/// context repair 触发的诊断结果。由 RepairDetector 输出，作为修复请求的输入。
 /// </summary>
 public sealed record ContextRepairDiagnosis
 {
@@ -139,7 +139,7 @@ public sealed record ContextRepairDiagnosis
 }
 
 /// <summary>
-/// R22-1：context repair 请求。修复循环触发后，由 orchestrator 发起的修复操作请求。
+/// context repair 请求。修复循环触发后，由 orchestrator 发起的修复操作请求。
 /// </summary>
 public sealed record ContextRepairRequest
 {
@@ -166,7 +166,7 @@ public sealed record ContextRepairRequest
 }
 
 /// <summary>
-/// R22-1：context repair 响应。修复循环的最终输出。
+/// context repair 响应。修复循环的最终输出。
 /// </summary>
 public sealed record ContextRepairResponse
 {
@@ -199,7 +199,7 @@ public sealed record ContextRepairResponse
 }
 
 /// <summary>
-/// R22-1：context repair detector 接口。检查 DecisionResult + QualityReport 是否触发修复。
+/// context repair detector 接口。检查 DecisionResult + QualityReport 是否触发修复。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -223,7 +223,7 @@ public interface IContextRepairDetector
 }
 
 /// <summary>
-/// R22-1：context repair executor 接口。执行单个修复请求，输出修复后的 DecisionResult。
+/// context repair executor 接口。执行单个修复请求，输出修复后的 DecisionResult。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -242,7 +242,7 @@ public interface IContextRepairExecutor
 }
 
 /// <summary>
-/// R22-1：Bounded Context Orchestrator 接口。编排单次有界修复循环。
+/// Bounded Context Orchestrator 接口。编排单次有界修复循环。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐用户规格）：
@@ -281,7 +281,7 @@ public interface IBoundedContextOrchestrator
 }
 
 /// <summary>
-/// R22-1：Bounded Context Orchestrator 编排结果。
+/// Bounded Context Orchestrator 编排结果。
 /// </summary>
 public sealed record BoundedContextOrchestrationResult
 {

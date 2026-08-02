@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R20-1：Multi-Expert Retrieval Routing 契约测试。
+/// Multi-Expert Retrieval Routing 契约测试。
 ///
 /// 验证目标：
 ///   1. RetrievalExpert 枚举 8 值（Unknown + 8 Expert）与 ContextCandidateSource 对齐

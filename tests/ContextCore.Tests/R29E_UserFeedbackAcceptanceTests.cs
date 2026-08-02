@@ -4,7 +4,7 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-E-5：用户反馈接入（API + ledger 写入）验收测试
+// 用户反馈接入（API + ledger 写入）验收测试
 //
 // 目标：
 //   验证用户显式反馈（thumbs up/down / 评分修正 / 文本反馈 / 举报）通过 UserFeedbackService

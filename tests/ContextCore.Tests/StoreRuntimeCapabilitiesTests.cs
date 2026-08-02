@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.3 #1：IStoreRuntimeCapabilities / StorageExecutionProfile 单元测试。
+/// IStoreRuntimeCapabilities / StorageExecutionProfile 单元测试。
 /// 验证各 provider 的能力描述与 DI 注册路径。
 /// </summary>
 [TestClass]
@@ -101,7 +101,7 @@ public sealed class StoreRuntimeCapabilitiesTests
     }
 
     /// <summary>
-    /// R13.3 #1 关键：通过 AddContextStorage 注册后，IStoreRuntimeCapabilities 可从 DI 解析。
+    /// 关键：通过 AddContextStorage 注册后，IStoreRuntimeCapabilities 可从 DI 解析。
     /// FileSystem provider → Profile.ProviderKind == FileSystem。
     /// </summary>
     [TestMethod]

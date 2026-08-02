@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-3：DefaultAgentWorkspaceContextProvider — 默认 Agent 工作空间上下文 provider。
+// DefaultAgentWorkspaceContextProvider — 默认 Agent 工作空间上下文 provider。
 //
 // 目标（对齐 R23 规格）：
 //   1. 实现 IAgentWorkspaceContextProvider 的 3 个方法：
@@ -24,7 +24,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R23-3：默认 <see cref="IAgentWorkspaceContextProvider"/> 实现。
+/// 默认 <see cref="IAgentWorkspaceContextProvider"/> 实现。
 /// </summary>
 /// <remarks>
 /// 将 agent 注入内容与 tool 结果打包为 token-budget-bounded snapshot。

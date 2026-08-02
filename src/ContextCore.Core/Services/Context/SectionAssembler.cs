@@ -11,7 +11,7 @@ namespace ContextCore.Core;
 internal sealed class SectionAssembler
 {
     /// <summary>
-    /// R12.4A #4: section 内 block/segment 之间的固定分隔符。
+    /// #4: section 内 block/segment 之间的固定分隔符。
     /// 必须与 <see cref="_estimateTokens"/> 调用使用的字符串完全一致，
     /// 否则 <c>separatorTokens</c> 估算与实际追加的字符数不匹配，
     /// 导致 Windows 上 <c>AppendLine()</c> 追加 "\r\n\r\n"（4 字符）而估算仍按 "\n\n"（2 字符），
@@ -206,8 +206,8 @@ internal sealed class SectionAssembler
     /// 按 segment 边界截断，直接得到精确的 AcceptedCandidateIds /
     /// PartiallyAcceptedCandidateId / RejectedCandidateIds，无需 AddSectionDecisionsWithDedup 中的启发式猜测。
     /// 当 segments 为空时使用 fallbackContent（如"所有X已在此前去重包含"），此时无候选级归属。
-    /// P0-6.1: 安全兜底截断后根据实际字符串边界重新计算 accepted/partial/rejected attribution。
-    /// P0-6.2: Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合，
+    /// 安全兜底截断后根据实际字符串边界重新计算 accepted/partial/rejected attribution。
+    /// Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合，
     /// 被拒绝候选的 refs 不再写入 section。
     /// </summary>
     internal SectionPackingResult AddSectionFromSegments(
@@ -245,7 +245,7 @@ internal sealed class SectionAssembler
         var acceptedIds = new List<string>();
         var rejectedIds = new List<string>();
         string? partiallyAcceptedId = null;
-        // P0-6.1: 跟踪已接受 segment 的字符边界，供安全兜底截断后重算 attribution
+        // 跟踪已接受 segment 的字符边界，供安全兜底截断后重算 attribution
         var acceptedSegments = new List<(CandidateSegment Segment, int Start, int End)>();
 
         if (segments.Count == 0)
@@ -359,7 +359,7 @@ internal sealed class SectionAssembler
             safetyTrimOccurred = true;
         }
 
-        // P0-6.1: 安全兜底截断后根据实际字符串边界重新计算 attribution。
+        // 安全兜底截断后根据实际字符串边界重新计算 attribution。
         // 安全截断可能切掉已接受 segment 的尾部，需将其降级为 partially accepted，
         // 其后的已接受 segment 移入 rejected。
         if (safetyTrimOccurred && acceptedSegments.Count > 0)
@@ -420,7 +420,7 @@ internal sealed class SectionAssembler
             partiallyAcceptedId = newPartialId;
         }
 
-        // P0-6.2: Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合。
+        // Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合。
         // 当 segments 为空（fallback 内容）时，使用传入的 section 级 refs。
         IReadOnlyList<string> effectiveSourceRefs;
         IReadOnlyList<string> effectiveItemRefs;
@@ -464,7 +464,7 @@ internal sealed class SectionAssembler
 
         estimatedTokens += sectionTokens;
 
-        // P0-6.3: 计算 PartiallyAccepted 候选实际保留进 section 输出的 token 数。
+        // 计算 PartiallyAccepted 候选实际保留进 section 输出的 token 数。
         // 使用最终（安全截断后）的 sectionContent 与 acceptedSegments 的字符边界：
         // retainedLength = min(end, contentLength) - start，对保留子串重新估算 token。
         // Accepted 候选 IncludedTokens = 其 OriginalTokens（由 PackageTraceRecorder 处理），

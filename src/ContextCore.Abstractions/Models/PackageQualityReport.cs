@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions.Models;
 
 /// <summary>
-/// R14-2：Package Quality 指标集合。第一版保持确定性，由 ContextDecisionProjector
+/// Package Quality 指标集合。第一版保持确定性，由 ContextDecisionProjector
 /// 在 ProjectPackage 投影过程中一次性计算。所有指标为 [0,1] 区间的归一化分数（1.0 = 最优）。
 /// </summary>
 /// <remarks>

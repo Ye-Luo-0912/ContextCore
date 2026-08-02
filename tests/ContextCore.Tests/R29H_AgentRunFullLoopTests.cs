@@ -7,7 +7,7 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Agent Run 完整执行循环生产验收测试
+// Agent Run 完整执行循环生产验收测试
 //
 // 验证 AgentRunActor 的完整生命周期（ContextBuilding → ModelCalling →
 // ToolDispatching → Observing → Checkpointing → Completed），覆盖：

@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P8 Learning Loop V1 契约测试：覆盖 Dataset / Model Registry / Canary / Rollback / BaselineComparison 所有公共类型。
+/// Learning Loop V1 契约测试：覆盖 Dataset / Model Registry / Canary / Rollback / BaselineComparison 所有公共类型。
 /// 验证构造函数、字段约束、版本递增、with 表达式不可变性、null 防御。
 /// </summary>
 [TestClass]

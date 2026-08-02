@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R28-B B-3：Shadow Gate 多维度验收
+// B-3：Shadow Gate 多维度验收
 //
 // 目标（B-3 阶段：Hard parity 验收 + replay fixtures）：
 //   1. ShadowGate：基于 ParityReport 的验收门控。
@@ -21,11 +21,11 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// §8.1 ShadowGate — Parity 验收门控
+// ShadowGate — Parity 验收门控
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-3：Shadow Gate 验收门控。
+/// B-3：Shadow Gate 验收门控。
 /// 基于 ParityReport 判定是否可安全执行 Authoritative cutover。
 /// </summary>
 /// <remarks>
@@ -48,7 +48,7 @@ public sealed class ShadowGate
 
     /// <summary>构造 ShadowGate，使用默认验收阈值。</summary>
     /// <remarks>
-    /// P0-4 修复：Hard parity 阈值从 0.99 改为 1.0（要求集合完全相同）。
+    /// 修复：Hard parity 阈值从 0.99 改为 1.0（要求集合完全相同）。
     /// 0.99 允许 1% 候选不一致，不足以作为权威切换门。
     /// </remarks>
     public ShadowGate()
@@ -94,7 +94,7 @@ public sealed class ShadowGate
         var dimensions = new List<ShadowGateDimensionResult>(3);
 
         // 维度 1：Jaccard 一致性
-        // P0-4：Hard parity 要求 Jaccard=1.0（集合完全相同），不再使用 0.99
+        // Hard parity 要求 Jaccard=1.0（集合完全相同），不再使用 0.99
         var jaccardLevel = report.JaccardIndex switch
         {
             1.0 when report.JaccardIndex >= _hardJaccardThreshold => ParityLevel.Hard,
@@ -174,15 +174,15 @@ public sealed record ShadowGateResult(
     string Summary);
 
 // ---------------------------------------------------------------------------
-// §8.2 ReplayFixture — 可重放的 parity fixture
+// ReplayFixture — 可重放的 parity fixture
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-3：可重放的 parity fixture。
+/// B-3：可重放的 parity fixture。
 /// 序列化为 JSON 供回归测试和 CI 验收消费。
 /// </summary>
 /// <remarks>
-/// P0-9 修复：除聚合标量外，fixture 现在携带完整重放数据（WorkingSet + V2Result），
+/// 修复：除聚合标量外，fixture 现在携带完整重放数据（WorkingSet + V2Result），
 /// 使回归测试和离线 replay 可以重建决策现场，而不仅依赖计数摘要。
 /// </remarks>
 public sealed record ReplayFixture(
@@ -293,7 +293,7 @@ public sealed record ReplayFixture(
     }
 
     /// <summary>
-    /// P0-9：从完整 shadow 报告构建 ReplayFixture，携带 WorkingSet + V2Result 用于离线 replay。
+    /// 从完整 shadow 报告构建 ReplayFixture，携带 WorkingSet + V2Result 用于离线 replay。
     /// </summary>
     public static ReplayFixture FromShadowReport(
         ParityReport report,
@@ -312,7 +312,7 @@ public sealed record ReplayFixture(
     }
 
     /// <summary>
-    /// R28-B.7 P0-3 / 工作包 E：从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
+    /// / 工作包 E：从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
     /// </summary>
     /// <remarks>
     /// 填充 StoredWorkingSet / StoredPolicySnapshot / StoredProviderOutputs +
@@ -337,7 +337,7 @@ public sealed record ReplayFixture(
         var fixture = FromShadowReport(report, execution?.WorkingSet, execution?.Decision, fixtureId, purpose, notes);
         if (execution is null) return fixture;
 
-        // R28-B.7 工作包 E：从 Execution 提取完整 artifact 字段，让 replay 能离线重放且可校验版本漂移。
+        // 工作包 E：从 Execution 提取完整 artifact 字段，让 replay 能离线重放且可校验版本漂移。
         // FinalTokenCost 直接取自 execution（由 Runtime 在执行时填充）；未填充时为 null，replay 侧降级跳过校验。
         return fixture with
         {
@@ -355,11 +355,11 @@ public sealed record ReplayFixture(
 }
 
 // ---------------------------------------------------------------------------
-// §8.3 ShadowGateEvaluator — 批量评估 + cutover 就绪判定
+// ShadowGateEvaluator — 批量评估 + cutover 就绪判定
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-3：批量评估多个 Shadow 报告，产出 cutover 就绪判定。
+/// B-3：批量评估多个 Shadow 报告，产出 cutover 就绪判定。
 /// </summary>
 /// <remarks>
 /// 用于 CI 验收：批量运行 Shadow tee，收集所有 ParityReport，

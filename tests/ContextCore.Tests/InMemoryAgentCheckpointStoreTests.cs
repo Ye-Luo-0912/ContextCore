@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-3：InMemoryAgentCheckpointStore 实现测试。
+/// InMemoryAgentCheckpointStore 实现测试。
 ///
 /// 覆盖：
 ///   1. SaveAsync null / GetAsync null / ListAsync null 抛异常
@@ -46,7 +46,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     [TestMethod]
     public async Task SaveAsync_SameWorkspaceAndId_Overwrites()
     {
-        // P0-6：主键 (workspace_id, checkpoint_id) — 同 workspace 同 id 覆盖
+        // 主键 (workspace_id, checkpoint_id) — 同 workspace 同 id 覆盖
         var store = new InMemoryAgentCheckpointStore();
         var cp1 = MakeCheckpoint("ckpt-1", "session-1", stateJson: "v1");
         var cp2 = MakeCheckpoint("ckpt-1", "session-1", stateJson: "v2");
@@ -241,7 +241,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     [TestMethod]
     public async Task CrossWorkspace_SameCheckpointId_RemainsIsolated()
     {
-        // P0-6：两个 workspace 各自保存同 ID checkpoint，应互不可见
+        // 两个 workspace 各自保存同 ID checkpoint，应互不可见
         var store = new InMemoryAgentCheckpointStore();
         var ws1Cp = MakeCheckpoint("ckpt-shared", "session-ws1", stateJson: "ws1-state", workspaceId: "ws-1");
         var ws2Cp = MakeCheckpoint("ckpt-shared", "session-ws2", stateJson: "ws2-state", workspaceId: "ws-2");
@@ -268,7 +268,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     [TestMethod]
     public async Task CrossWorkspace_GetAsync_UnknownWorkspace_ReturnsNull()
     {
-        // P0-6：ws-1 的 checkpoint，ws-2 看不到（不会误读）
+        // ws-1 的 checkpoint，ws-2 看不到（不会误读）
         var store = new InMemoryAgentCheckpointStore();
         await store.SaveAsync(MakeCheckpoint("ckpt-1", "session-ws1", workspaceId: "ws-1"));
 
@@ -279,7 +279,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     [TestMethod]
     public async Task CrossWorkspace_DeleteAsync_DoesNotAffectOtherWorkspace()
     {
-        // P0-6：删除 ws-1 的 checkpoint 不影响 ws-2 的同 ID checkpoint
+        // 删除 ws-1 的 checkpoint 不影响 ws-2 的同 ID checkpoint
         var store = new InMemoryAgentCheckpointStore();
         await store.SaveAsync(MakeCheckpoint("ckpt-shared", "session-ws1", workspaceId: "ws-1"));
         await store.SaveAsync(MakeCheckpoint("ckpt-shared", "session-ws2", workspaceId: "ws-2"));
@@ -297,7 +297,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     [TestMethod]
     public async Task CrossWorkspace_DeleteAsync_UnknownWorkspace_ReturnsFalse()
     {
-        // P0-6：尝试用 ws-2 删除 ws-1 的 checkpoint 应返回 false（未删除任何记录）
+        // 尝试用 ws-2 删除 ws-1 的 checkpoint 应返回 false（未删除任何记录）
         var store = new InMemoryAgentCheckpointStore();
         await store.SaveAsync(MakeCheckpoint("ckpt-1", "session-ws1", workspaceId: "ws-1"));
 
@@ -313,7 +313,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
     [TestMethod]
     public async Task CrossWorkspace_DuplicateIdAcrossWorkspaces_RemainsIsolated()
     {
-        // P0-6：边界场景 — 在两个 workspace 中保存相同 ID，应共存而不互相覆盖
+        // 边界场景 — 在两个 workspace 中保存相同 ID，应共存而不互相覆盖
         var store = new InMemoryAgentCheckpointStore();
         var ws1Cp = MakeCheckpoint("ckpt-dup", "session-1", stateJson: "ws1", workspaceId: "ws-1");
         var ws2Cp = MakeCheckpoint("ckpt-dup", "session-2", stateJson: "ws2", workspaceId: "ws-2");

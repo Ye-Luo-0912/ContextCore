@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Learning.V14_0;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P0-6.3 验收测试：PackageTraceRecorder 写入的 trace row 携带精确的
+/// 验收测试：PackageTraceRecorder 写入的 trace row 携带精确的
 /// CandidateOutcome + IncludedTokens/OriginalTokens/TruncationRatio，
 /// 使下游诊断能区分 Accepted/PartiallyAccepted/Rejected/Dropped 并观察截断比率。
 /// </summary>
@@ -64,7 +64,7 @@ public sealed class ContextCoreTraceOutcomeTests
     }
 
     /// <summary>
-    /// P0-6.3: Accepted 候选的 trace row 应有 Outcome=Accepted,
+    /// Accepted 候选的 trace row 应有 Outcome=Accepted,
     /// IncludedTokens=OriginalTokens, TruncationRatio=1.0, IncludedInPackage=true。
     /// </summary>
     [TestMethod]
@@ -102,7 +102,7 @@ public sealed class ContextCoreTraceOutcomeTests
     }
 
     /// <summary>
-    /// P0-6.3: PartiallyAccepted 候选的 trace row 应有 Outcome=PartiallyAccepted,
+    /// PartiallyAccepted 候选的 trace row 应有 Outcome=PartiallyAccepted,
     /// IncludedTokens=PartiallyAcceptedIncludedTokens, 0 &lt; TruncationRatio &lt; 1。
     /// 同一 section 内的 Rejected 候选应有 Outcome=Rejected, IncludedTokens=0, TruncationRatio=0。
     /// </summary>
@@ -161,7 +161,7 @@ public sealed class ContextCoreTraceOutcomeTests
     }
 
     /// <summary>
-    /// P0-6.3: Section 被 Dropped（如预算耗尽）时，所有候选 Outcome=Dropped,
+    /// Section 被 Dropped（如预算耗尽）时，所有候选 Outcome=Dropped,
     /// IncludedTokens=0, TruncationRatio=0, IncludedInPackage=false, SelectedByScoring=false。
     /// </summary>
     [TestMethod]
@@ -188,7 +188,7 @@ public sealed class ContextCoreTraceOutcomeTests
     }
 
     /// <summary>
-    /// P0-6.3: 被其他 section 已选入的重复候选在本 section 应标记为 Rejected（section-level attribution），
+    /// 被其他 section 已选入的重复候选在本 section 应标记为 Rejected（section-level attribution），
     /// 且 IncludedTokens=0。验证 globalSelectedIds 路径的 outcome 分配。
     /// </summary>
     [TestMethod]
@@ -231,7 +231,7 @@ public sealed class ContextCoreTraceOutcomeTests
     }
 
     /// <summary>
-    /// P0-6.3: ToJsonLine 应包含 outcome/originalTokens/includedTokens/truncationRatio 四个新字段。
+    /// ToJsonLine 应包含 outcome/originalTokens/includedTokens/truncationRatio 四个新字段。
     /// 验证 trace 行 JSON 序列化对下游诊断消费者可见。
     /// </summary>
     [TestMethod]
@@ -265,7 +265,7 @@ public sealed class ContextCoreTraceOutcomeTests
     }
 
     /// <summary>
-    /// P0-6.3: OriginalTokens=0 时 TruncationRatio 应为 0（不除零）。
+    /// OriginalTokens=0 时 TruncationRatio 应为 0（不除零）。
     /// 验证 WriteTraceRow 内部的 TruncationRatio 计算对零原始 token 安全。
     /// </summary>
     [TestMethod]

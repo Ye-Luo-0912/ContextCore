@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core;
 
 /// <summary>
-/// R15 增量上下文包：section 依赖映射器。
+/// 增量上下文包：section 依赖映射器。
 /// 基于 section 名称与策略推断该 section 依赖的 VersionScope 集合。
 /// </summary>
 /// <remarks>
@@ -121,7 +121,7 @@ internal static class SectionDependencyMapper
 }
 
 /// <summary>
-/// R15 增量上下文包：包状态快照捕获扩展。
+/// 增量上下文包：包状态快照捕获扩展。
 /// 在 <see cref="IContextPackageBuilder.BuildDetailedAsync"/> 完成后调用，捕获不可变快照。
 /// </summary>
 internal static class PackageStateSnapshotCapture

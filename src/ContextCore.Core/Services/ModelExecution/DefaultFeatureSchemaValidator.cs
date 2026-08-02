@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R29 WP-A-4：Default Feature Schema Validator
+// Default Feature Schema Validator
 //
 // 目标：
 //   在推理前对输入特征与 FeatureSchema 执行严格匹配验证：
@@ -23,7 +23,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-4：默认特征 schema 验证器。
+/// 默认特征 schema 验证器。
 /// </summary>
 public sealed class DefaultFeatureSchemaValidator : IFeatureSchemaValidator
 {
@@ -428,7 +428,7 @@ public sealed class DefaultFeatureSchemaValidator : IFeatureSchemaValidator
 }
 
 /// <summary>
-/// R29 WP-A-4：FeatureSchemaValidator 配置选项。
+/// FeatureSchemaValidator 配置选项。
 /// </summary>
 public sealed class FeatureSchemaValidatorOptions
 {

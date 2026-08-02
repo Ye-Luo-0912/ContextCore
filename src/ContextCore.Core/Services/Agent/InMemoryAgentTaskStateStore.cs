@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R24-2：InMemoryAgentTaskStateStore — Agent 任务状态内存存储实现。
+// InMemoryAgentTaskStateStore — Agent 任务状态内存存储实现。
 //
 // 实现 IAgentTaskStateStore：
 //   - ConcurrentDictionary<string, AgentTaskState> 后端
@@ -16,14 +16,14 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R24-2：<see cref="IAgentTaskStateStore"/> 的 in-memory 实现。
+/// <see cref="IAgentTaskStateStore"/> 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 适用于测试 / 演示 / 单机开发场景。生产场景需替换为持久化实现（如 PostgresAgentTaskStateStore）。
 /// </remarks>
 public sealed class InMemoryAgentTaskStateStore : IAgentTaskStateStore
 {
-    // P0-6：主键改为复合 (workspace_id, task_id)
+    // 主键改为复合 (workspace_id, task_id)
     private readonly ConcurrentDictionary<string, AgentTaskState> _tasks = new(StringComparer.Ordinal);
 
     /// <inheritdoc />

@@ -50,7 +50,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     /// null = 不持久化（保持原行为，向后兼容）。
     /// </param>
     /// <param name="logger">
-    /// P0-3：可选日志器。注入后持久化失败会记录为错误并抛出异常（fail-closed，由 Actor 的 FailAsync 处理）。
+    /// 可选日志器。注入后持久化失败会记录为错误并抛出异常（fail-closed，由 Actor 的 FailAsync 处理）。
     /// null = 不记录日志（向后兼容测试场景）。
     /// </param>
     public DefaultAgentApprovalGate(
@@ -74,7 +74,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     {
         ArgumentNullException.ThrowIfNull(toolCall);
 
-        // P0-5：ApprovalId 独立生成（审批记录主键），ToolCallId 复用模型返回的 ID（保留与事件流的关联）。
+        // ApprovalId 独立生成（审批记录主键），ToolCallId 复用模型返回的 ID（保留与事件流的关联）。
         // 旧版本生成单个 toolCallId 同时用作 ApprovalId 与 ToolCallId，丢失原模型 ToolCallId 的直接关联。
         var approvalId = Guid.NewGuid().ToString("N");
         var now = DateTimeOffset.UtcNow;
@@ -113,7 +113,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
             await TryPersistApprovalAsync(workspaceId, runId, toolCall, approvalId, AgentApprovalStatus.Pending,
                 approverId: null, rejectionReason: null, createdAt: now, cancellationToken).ConfigureAwait(false);
 
-            // P0-6：返回 PendingApproval=true + ApprovalId，让 Actor 进入 AwaitingApproval 状态并退出执行槽。
+            // 返回 PendingApproval=true + ApprovalId，让 Actor 进入 AwaitingApproval 状态并退出执行槽。
             // 旧路径返回 Approved=false（等价于默认拒绝），导致 Actor 跳过 Tool 继续执行——这不是真正的 Human-in-the-loop。
             // 外部通过 POST /approvals/{approvalId} 端点提交决策（approve/reject），
             // 决策后 Run 状态推进到 ToolDispatching（批准）或 Failed（拒绝），由 RecoveryWorker 重新入队。
@@ -144,7 +144,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     /// 运行时能力补齐：尝试持久化审批记录（store=null 时静默跳过）。
     /// 自动批准时直接创建并裁决（Pending → Approved/Rejected 留下完整审计轨迹）；
     /// 需人工审批时仅创建 Pending 记录，等待外部 ResolveAsync。
-    /// P0-5：持久化失败时 fail-closed（抛出异常），让 Actor 的 FailAsync 将 Run 推进到 Failed。
+    /// 持久化失败时 fail-closed（抛出异常），让 Actor 的 FailAsync 将 Run 推进到 Failed。
     /// </summary>
     private async ValueTask TryPersistApprovalAsync(
         string workspaceId,
@@ -162,7 +162,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
             return;
         }
 
-        // P0-3：使用调用方传入的 workspaceId（来自 IAgentApprovalGate.RequestApprovalAsync 签名），
+        // 使用调用方传入的 workspaceId（来自 IAgentApprovalGate.RequestApprovalAsync 签名），
         // 替代旧版硬编码 "default"。Gate 是审批记录的唯一创建者（Actor 不再直接写 Store）。
         var approval = new AgentApproval
         {
@@ -193,7 +193,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
         }
         catch (Exception ex)
         {
-            // P0-5：fail-closed — 持久化失败时抛出异常，让 Actor 的 FailAsync 将 Run 推进到 Failed。
+            // fail-closed — 持久化失败时抛出异常，让 Actor 的 FailAsync 将 Run 推进到 Failed。
             // 旧版本（fail-open）仅 LogWarning 后返回 PendingApproval，Actor 将 Run 持久化为 AwaitingApproval
             // 但数据库无对应审批记录，外部永远无法 Resolve，导致 Run 永久卡死。
             _logger?.LogError(ex,

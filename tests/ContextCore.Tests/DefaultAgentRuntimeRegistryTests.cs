@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-5：DefaultAgentRuntimeRegistry 实现测试。
+/// DefaultAgentRuntimeRegistry 实现测试。
 ///
 /// 覆盖：
 ///   1. RegisterAsync null 抛异常

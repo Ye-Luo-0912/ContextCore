@@ -12,7 +12,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// R29-Hard-Gate P5：Production Evidence E2E 测试
+// Production Evidence E2E 测试
 //
 // 目标：证明系统端到端可用——真实 PostgreSQL + 真实 Agent Tool Loop + 持久化 Journal。
 // 不使用 mock stub 和 in-memory stores，而是：

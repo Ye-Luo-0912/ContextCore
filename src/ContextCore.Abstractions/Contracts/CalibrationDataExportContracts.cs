@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// R29 WP-E-4：校准数据导出器接口。
+/// 校准数据导出器接口。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐 R29 §9.1 校准数据导出目标）：
@@ -30,7 +30,7 @@ public interface ICalibrationDataExporter
 }
 
 /// <summary>
-/// R29 WP-E-4：校准数据导出请求。
+/// 校准数据导出请求。
 /// </summary>
 public sealed record CalibrationDataExportRequest
 {
@@ -81,7 +81,7 @@ public sealed record CalibrationDataExportRequest
 }
 
 /// <summary>
-/// R29 WP-E-4：校准数据导出结果。
+/// 校准数据导出结果。
 /// </summary>
 public sealed record CalibrationDataExportResult
 {
@@ -129,7 +129,7 @@ public sealed record CalibrationDataExportResult
 }
 
 /// <summary>
-/// R29 WP-E-4：校准数据样本记录（JSONL 每行一条）。
+/// 校准数据样本记录（JSONL 每行一条）。
 /// </summary>
 /// <remarks>
 /// 字段分类对齐 ML 校准流水线（Platt / Temperature / Isotonic）：
@@ -189,7 +189,7 @@ public sealed record CalibrationDataRecord
 }
 
 /// <summary>
-/// R29 WP-E-4：校准数据导出清单（sidecar JSON，含校验信息与正负样本统计）。
+/// 校准数据导出清单（sidecar JSON，含校验信息与正负样本统计）。
 /// </summary>
 public sealed record CalibrationDataExportManifest
 {

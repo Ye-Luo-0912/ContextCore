@@ -9,7 +9,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R14-PG-10：PostgresPitrRunner + PostgresPitrOptions + BackupManifestGenerator.ForPostgresDumpAsync + StripCredentials 单元测试。
+/// PostgresPitrRunner + PostgresPitrOptions + BackupManifestGenerator.ForPostgresDumpAsync + StripCredentials 单元测试。
 /// 仅覆盖不依赖真实 PostgreSQL 实例的逻辑；端到端流程由 PostgresBackupIntegrationTests 覆盖。
 /// </summary>
 [TestClass]

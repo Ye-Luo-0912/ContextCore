@@ -5,7 +5,7 @@ using ContextCore.Core.Services.DecisionEngine;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R18-3：Retrieval 候选适配器验证。
+/// Retrieval 候选适配器验证。
 ///
 /// 验证目标：
 ///   1. ContextRetrievalCandidate → ContextCandidateEnvelope 字段映射正确
@@ -368,7 +368,7 @@ public sealed class RetrievalCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_WithContext_FillsWorkspaceAndCollectionAndObservedAt()
     {
-        // P0-5：context 提供 WorkspaceId/CollectionId/ObservedAt，适配器不应读系统时间
+        // context 提供 WorkspaceId/CollectionId/ObservedAt，适配器不应读系统时间
         var candidate = new ContextRetrievalCandidate
         {
             CandidateId = "ctx-1",
@@ -397,7 +397,7 @@ public sealed class RetrievalCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_WithContext_IsDeterministic_SameInputProducesSameOutput()
     {
-        // P0-5：相同候选 + 相同 context 应产生完全相同的 envelope（幂等性）
+        // 相同候选 + 相同 context 应产生完全相同的 envelope（幂等性）
         var candidate = new ContextRetrievalCandidate
         {
             CandidateId = "det-1",
@@ -452,7 +452,7 @@ public sealed class RetrievalCandidateAdapterTests
     [TestMethod]
     public void ToDecisionRequest_WithContext_FillsWorkspaceCollectionQueryText()
     {
-        // P0-5：ToDecisionRequest 必须填充 WorkspaceId/CollectionId/QueryText，
+        // ToDecisionRequest 必须填充 WorkspaceId/CollectionId/QueryText，
         // 避免 PolicyRegistry 按空 workspace 解析默认 Bundle
         var result = new ContextRetrievalResult
         {
@@ -491,7 +491,7 @@ public sealed class RetrievalCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_WithContext_UsesContextObservedAtAndScope()
     {
-        // P1-2：旧无 context 重载已标记 [Obsolete(error: true)]，所有调用必须显式传 context。
+        // 旧无 context 重载已标记 [Obsolete(error: true)]，所有调用必须显式传 context。
         // context 中的 ObservedAt / WorkspaceId / CollectionId 必须原样传播到 envelope，
         // 不再回退到 DateTimeOffset.UtcNow 或空字符串（保证确定性 + 作用域可追溯）。
         var candidate = new ContextRetrievalCandidate

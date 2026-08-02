@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R24-2：Agent Task State Store 契约
+// Agent Task State Store 契约
 //
 // 目标（对齐 R24 规格）：
 //   1. 持久化 AgentTaskState（R23-2 定义），支持跨 turn / 跨请求恢复任务状态。
@@ -19,7 +19,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R24-2：Agent 任务状态存储。持久化 <see cref="AgentTaskState"/> 以支持跨请求恢复。
+/// Agent 任务状态存储。持久化 <see cref="AgentTaskState"/> 以支持跨请求恢复。
 /// </summary>
 /// <remarks>
 /// 适用于需要跨 turn 持久化任务状态的场景（如长任务恢复、断点续传）。

@@ -6,7 +6,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL 分布式 <see cref="IContextStateVersionStore"/> 实现。
-/// R14-PG-6：替代 InMemoryContextStateVersionStore，让多实例 Worker 通过 Postgres 行级锁共享同一份单调递增的版本号，
+/// 替代 InMemoryContextStateVersionStore，让多实例 Worker 通过 Postgres 行级锁共享同一份单调递增的版本号，
 /// 支持跨实例 cache invalidation。版本号持久化在 context_state_versions 表中，重启不丢失。
 /// </summary>
 /// <remarks>

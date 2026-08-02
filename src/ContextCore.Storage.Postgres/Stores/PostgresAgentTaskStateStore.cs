@@ -5,7 +5,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL Agent task state 持久化存储。
-/// R26-2：替代 <see cref="ContextCore.Core.Services.Agent.InMemoryAgentTaskStateStore"/>，
+/// 替代 <see cref="ContextCore.Core.Services.Agent.InMemoryAgentTaskStateStore"/>，
 /// 让 Postgres provider 在 HA 场景下能持久化 agent task state 以支持跨请求恢复。
 /// </summary>
 /// <remarks>
@@ -67,7 +67,7 @@ ON CONFLICT (workspace_id, task_id) DO UPDATE SET
         string taskId,
         CancellationToken cancellationToken = default)
     {
-        // P0-6：必须同时匹配 (workspace_id, task_id)，避免跨 workspace 误读
+        // 必须同时匹配 (workspace_id, task_id)，避免跨 workspace 误读
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
@@ -113,7 +113,7 @@ ORDER BY updated_at DESC, task_id DESC;
         string taskId,
         CancellationToken cancellationToken = default)
     {
-        // P0-6：必须同时匹配 (workspace_id, task_id)，避免跨 workspace 误删
+        // 必须同时匹配 (workspace_id, task_id)，避免跨 workspace 误删
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);

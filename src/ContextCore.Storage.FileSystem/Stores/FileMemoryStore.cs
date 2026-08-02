@@ -41,7 +41,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // P1-1: 跨进程锁内 RMW——从所有可写 layer 移除同 ID 项，避免跨 layer 重复。
+            // 跨进程锁内 RMW——从所有可写 layer 移除同 ID 项，避免跨 layer 重复。
             foreach (var path in GetWritableMemoryPaths(normalized.WorkspaceId, normalized.CollectionId))
             {
                 await _jsonLines.UpdateAsync<ContextMemoryItem>(
@@ -52,7 +52,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                     cancellationToken).ConfigureAwait(false);
             }
 
-            // P1-1: 目标 layer 走同样的跨进程锁 RMW——过滤同 ID 后追加新值并按 UpdatedAt 排序。
+            // 目标 layer 走同样的跨进程锁 RMW——过滤同 ID 后追加新值并按 UpdatedAt 排序。
             var targetPath = GetMemoryPath(normalized.WorkspaceId, normalized.CollectionId, normalized.Layer);
             await _jsonLines.UpdateAsync<ContextMemoryItem>(
                 targetPath,
@@ -454,7 +454,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // P1-1: append-only 文件——AppendAsync 内部走 FileLockProvider 跨进程锁，
+            // append-only 文件——AppendAsync 内部走 FileLockProvider 跨进程锁，
             // 原子追加一行，避免 read+rewrite 在多进程下互相覆盖。
             await _jsonLines.AppendAsync(path, record, cancellationToken).ConfigureAwait(false);
         }
@@ -507,7 +507,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // P1-1: 跨进程锁内 upsert——过滤同 ID 后追加新值并排序。
+            // 跨进程锁内 upsert——过滤同 ID 后追加新值并排序。
             await _jsonLines.UpdateAsync<PromotionCandidate>(
                 path,
                 existing => existing
@@ -589,7 +589,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // P1-1: TryUpdateAsync 在跨进程锁内 RMW——未匹配到 id 时返回 null 跳过写入，
+            // TryUpdateAsync 在跨进程锁内 RMW——未匹配到 id 时返回 null 跳过写入，
             // 文件不存在或候选不存在时不创建空文件。
             PromotionCandidate? updatedCandidate = null;
             await _jsonLines.TryUpdateAsync<PromotionCandidate>(

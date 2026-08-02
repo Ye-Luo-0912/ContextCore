@@ -6,7 +6,7 @@ using ContextCore.Service.Infrastructure;
 namespace ContextCore.Service.Endpoints;
 
 /// <summary>
-/// R29 WP-E-5：Utility Ledger 用户反馈接入端点。
+/// Utility Ledger 用户反馈接入端点。
 /// </summary>
 /// <remarks>
 /// 设计原则：

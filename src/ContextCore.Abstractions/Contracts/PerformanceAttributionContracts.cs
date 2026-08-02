@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// P5：性能自动回退按组件归因契约
+// 性能自动回退按组件归因契约
 //
 // 目标：
 //   1. 在 IPerformanceMonitor（整体 V2 路径耗时监控）之上，提供更细粒度的组件级
@@ -29,7 +29,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// P5：V2 路径组件归因枚举。覆盖 V2 决策路径的 7 个核心组件。
+/// V2 路径组件归因枚举。覆盖 V2 决策路径的 7 个核心组件。
 /// </summary>
 /// <remarks>
 /// 组件边界与 V2 路径调用链对应：
@@ -66,7 +66,7 @@ public enum ComponentKind
 }
 
 /// <summary>
-/// P5：单个组件一次执行的指标快照。
+/// 单个组件一次执行的指标快照。
 /// </summary>
 /// <param name="Kind">组件类型。</param>
 /// <param name="DurationMs">本次执行耗时（毫秒）。</param>
@@ -79,7 +79,7 @@ public sealed record ComponentMetrics(
     int SampleCount);
 
 /// <summary>
-/// P5：组件健康状态。
+/// 组件健康状态。
 /// </summary>
 /// <remarks>
 /// 状态转移：
@@ -104,7 +104,7 @@ public enum ComponentHealthState
 }
 
 /// <summary>
-/// P5：组件健康注册表抽象。提供 per-scope per-component 的耗时记录与健康状态查询。
+/// 组件健康注册表抽象。提供 per-scope per-component 的耗时记录与健康状态查询。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -176,7 +176,7 @@ public interface IComponentHealthRegistry
 }
 
 /// <summary>
-/// P5：单个组件的回退策略配置。
+/// 单个组件的回退策略配置。
 /// </summary>
 /// <param name="Kind">组件类型。</param>
 /// <param name="MaxP95Ms">触发回退的 P95 阈值（毫秒）。</param>
@@ -189,7 +189,7 @@ public sealed record ComponentFallbackPolicy(
     int RecoverySamplesRequired = 5);
 
 /// <summary>
-/// P5：组件级回退配置。包含每个组件的独立阈值策略。
+/// 组件级回退配置。包含每个组件的独立阈值策略。
 /// </summary>
 /// <remarks>
 /// 默认策略基于组件性质设定不同阈值：

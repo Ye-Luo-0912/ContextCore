@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-4：IMemoryStateStore 的 in-memory 实现。append-only 事件流；线程安全。
+/// IMemoryStateStore 的 in-memory 实现。append-only 事件流；线程安全。
 /// </summary>
 /// <remarks>
 /// 设计原则：

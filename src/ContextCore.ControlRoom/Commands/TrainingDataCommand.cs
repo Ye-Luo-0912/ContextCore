@@ -5,7 +5,7 @@ using ContextCore.ControlRoom.Services;
 namespace ContextCore.ControlRoom.Commands;
 
 /// <summary>
-/// R29 WP-E-3：训练数据导出命令。
+/// 训练数据导出命令。
 /// </summary>
 /// <remarks>
 /// 用法：

@@ -4,7 +4,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// R29 WP-A-2：PostgreSQL 持久化 Desired Model State Store。
+/// PostgreSQL 持久化 Desired Model State Store。
 /// 存储 HA 集群中各模型的期望状态（Active/Inactive），由各节点的 ReconcilerWorker 定期拉取并应用。
 /// </summary>
 public sealed class PostgresDesiredModelStateStore : PostgresStoreBase, IDesiredModelStateStore
@@ -60,7 +60,7 @@ WHERE model_id = @model_id;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // P0-9 CAS：仅当新 Generation > 已存在 Generation 时才更新（Generation 单调递增防回滚）。
+        // CAS：仅当新 Generation > 已存在 Generation 时才更新（Generation 单调递增防回滚）。
         // INSERT ... ON CONFLICT DO UPDATE WHERE 确保旧写入不会覆盖新写入；
         // xmax = 0 判断行是否为本次 INSERT（true）而非 UPDATE（false），以正确返回是否应用。
         command.CommandText = $"""

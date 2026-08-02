@@ -8,7 +8,7 @@ namespace ContextCore.Tests;
 /// 同一套断言在 InMemory / FileSystem / Postgres 三个 provider 上运行，验证核心契约一致：
 /// Get/Delete/BatchUpsert 行为，以及 QueryNeighborsAsync(RelationNeighborQuery) 的方向、类型、
 /// 置信度、生命周期、ReviewStatus 过滤和 Take 分页语义。
-/// P1-6：新增 QueryNeighborsBatchAsync(RelationNeighborBatchQuery) 批量邻居查询契约。
+/// 新增 QueryNeighborsBatchAsync(RelationNeighborBatchQuery) 批量邻居查询契约。
 /// </summary>
 /// <remarks>
 /// 派生类必须实现 <see cref="CreateStoreAsync"/> 返回一个干净的 store 实例。
@@ -346,7 +346,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P0-2 回归：验证 weight 排序为数值降序，而非字符串排序。
+    /// 回归：验证 weight 排序为数值降序，而非字符串排序。
     /// 旧实现 ORDER BY data ->> 'Weight' 在 PostgreSQL 中是字符串比较，
     /// "10" 会排在 "9" 之前。此测试用 weight=9.0 和 weight=10.0 验证数值排序正确。
     /// </summary>
@@ -385,7 +385,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P0-2 回归：验证内层 LIMIT（max_scan）发生在 ORDER BY 之后，
+    /// 回归：验证内层 LIMIT（max_scan）发生在 ORDER BY 之后，
     /// 不会在排序前截断未排序集合导致漏掉高权重边。
     /// 旧实现：内层 SELECT ... LIMIT @max_scan 无 ORDER BY → 截断未排序集合 →
     /// 高权重边可能被丢弃，外层 ORDER BY 后取不到它们。
@@ -425,7 +425,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P0-2 回归：验证 Skip+Take 分页在数值排序基础上正确翻页。
+    /// 回归：验证 Skip+Take 分页在数值排序基础上正确翻页。
     /// </summary>
     [TestMethod]
     public async Task QueryNeighbors_SkipTake_PaginatesByWeightDesc()
@@ -714,7 +714,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P1-6 关键契约：单个种子的 batch 结果应与 single-seed QueryNeighborsAsync 一致
+    /// 关键契约：单个种子的 batch 结果应与 single-seed QueryNeighborsAsync 一致
     /// （方向、过滤、排序、Take/MaxScan 语义都应一致）。
     /// </summary>
     [TestMethod]
@@ -763,7 +763,7 @@ public abstract class RelationStoreContractBase
     // ── P1-4：高基数邻居查询语义 + Truncated 信号 ─────────────────────────
 
     /// <summary>
-    /// P1-4：种子邻居数超过 MaxScan 时，结果应标记 Truncated=true。
+    /// 种子邻居数超过 MaxScan 时，结果应标记 Truncated=true。
     /// 三个 provider 应一致：InMemory/FileSystem 全量扫描后判定；
     /// Postgres 用 LIMIT global_limit+1 探测，命中时 Truncated=true。
     /// </summary>
@@ -798,7 +798,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P1-4：种子邻居数远低于 MaxScan 时，结果应标记 Truncated=false。
+    /// 种子邻居数远低于 MaxScan 时，结果应标记 Truncated=false。
     /// </summary>
     [TestMethod]
     public async Task QueryNeighborsBatch_LowCardinality_SetsTruncatedFalse()
@@ -831,7 +831,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P1-4：种子邻居数恰好等于 MaxScan 时，Truncated 应为 false（边界，不算截断）。
+    /// 种子邻居数恰好等于 MaxScan 时，Truncated 应为 false（边界，不算截断）。
     /// Postgres 用 +1 探测保证此边界正确，不发生假阳性。
     /// </summary>
     [TestMethod]
@@ -867,7 +867,7 @@ public abstract class RelationStoreContractBase
     }
 
     /// <summary>
-    /// P1-4：批量查询中，per-seed Truncated 应独立标记。
+    /// 批量查询中，per-seed Truncated 应独立标记。
     /// 一个高基数种子 + 一个低基数种子，分别得到 Truncated=true 和 Truncated=false。
     /// </summary>
     [TestMethod]

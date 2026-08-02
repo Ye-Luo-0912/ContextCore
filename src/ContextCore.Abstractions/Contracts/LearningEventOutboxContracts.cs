@@ -72,7 +72,7 @@ public sealed class LearningEventOutboxRecord
     public DateTimeOffset? LeaseExpiresAt { get; init; }
 
     /// <summary>
-    /// P0-8：当前租约的唯一 token（每次 AcquirePendingAsync 生成新 GUID）。
+    /// 当前租约的唯一 token（每次 AcquirePendingAsync 生成新 GUID）。
     /// <see cref="ILearningEventOutboxStore.MarkAckedAsync"/> / <see cref="ILearningEventOutboxStore.MarkFailedAsync"/>
     /// / <see cref="ILearningEventOutboxStore.RenewLeaseAsync"/> 必须传入此 token，store 通过 CAS 校验
     /// 仅持有者可 Ack/Nack/Renew——防止旧 Worker 在 lease 过期被抢占后越权 Ack 新 Worker 的 lease。

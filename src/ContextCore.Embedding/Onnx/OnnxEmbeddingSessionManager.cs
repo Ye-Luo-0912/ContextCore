@@ -2,7 +2,7 @@ namespace ContextCore.Embedding;
 
 /// <summary>按需加载并在空闲后卸载 ONNX embedding 会话。</summary>
 /// <remarks>
-/// P5-0.1：使用 SemaphoreSlim 实现 single-flight 加载，确保同一时刻只有一个 Session 被创建。
+/// 使用 SemaphoreSlim 实现 single-flight 加载，确保同一时刻只有一个 Session 被创建。
 /// 并发请求中，loser 创建的 Session 会被释放，避免原生内存和模型资源泄漏。
 /// </remarks>
 public sealed class OnnxEmbeddingSessionManager

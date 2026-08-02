@@ -7,7 +7,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <summary>
 /// PostgreSQL 决策 Trace 存储，用于持久化 V17.0 统一上下文决策记录。
 /// 该 store 只写只读 trace artifact，不参与 retrieval/package/planning 运行时决策。
-/// R14-PG-2：替代 UnsupportedDecisionTraceStore，让 Postgres provider 在 HA 场景下能持久化决策审计。
+/// 替代 UnsupportedDecisionTraceStore，让 Postgres provider 在 HA 场景下能持久化决策审计。
 /// </summary>
 public sealed class PostgresDecisionTraceStore : PostgresStoreBase, IDecisionTraceStore
 {

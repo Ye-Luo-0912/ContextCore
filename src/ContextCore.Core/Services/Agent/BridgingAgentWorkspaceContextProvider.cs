@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R25：BridgingAgentWorkspaceContextProvider — 装饰器，合并 Bridge snapshot + base provider injection。
+// BridgingAgentWorkspaceContextProvider — 装饰器，合并 Bridge snapshot + base provider injection。
 //
 // 设计目标（对齐 R23/R24 规格）：
 //   1. 装饰任意 IAgentWorkspaceContextProvider（如 DefaultAgentWorkspaceContextProvider）；
@@ -21,7 +21,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R25：<see cref="IAgentWorkspaceContextProvider"/> 的装饰器实现。
+/// <see cref="IAgentWorkspaceContextProvider"/> 的装饰器实现。
 /// 将 ContextCore 检索（通过 Bridge）与 session 级注入（inner provider）合并为统一 snapshot。
 /// </summary>
 /// <remarks>

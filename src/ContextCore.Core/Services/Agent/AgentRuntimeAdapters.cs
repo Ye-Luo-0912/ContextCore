@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-4：Codex / Claude Code Agent Runtime Adapter
+// Codex / Claude Code Agent Runtime Adapter
 //
 // 目标（对齐 R23 规格）：
 //   1. 提供 AgentRuntimeKind=Codex / ClaudeCode 的具体 adapter 实现；
@@ -20,7 +20,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R23-4：OpenAI Codex Agent Runtime Adapter。
+/// OpenAI Codex Agent Runtime Adapter。
 /// </summary>
 /// <remarks>
 /// 提供 <see cref="AgentRuntimeKind.Codex"/> 标识 + 共享 base 实现。
@@ -46,7 +46,7 @@ public sealed class CodexAgentRuntimeAdapter : AgentRuntimeBase
 }
 
 /// <summary>
-/// R23-4：Anthropic Claude Code Agent Runtime Adapter。
+/// Anthropic Claude Code Agent Runtime Adapter。
 /// </summary>
 /// <remarks>
 /// 提供 <see cref="AgentRuntimeKind.ClaudeCode"/> 标识 + 共享 base 实现。

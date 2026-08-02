@@ -4,7 +4,7 @@ using ContextCore.Core.Services.ModelExecution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-D：Model Execution Runtime 验收测试
+// Model Execution Runtime 验收测试
 //
 // 覆盖范围（6 个验收用例）：
 //   1. FeatureRegistry_RegisterAndGet_ReturnsSchema          —— 注册后按版本号取回
@@ -207,7 +207,7 @@ public sealed class R28B_ModelExecutionTests
     {
         var service = new PlattCalibrationService();
 
-        // R28-F P3-3：默认 Identity（raw 原样返回，不调用 sigmoid）。
+        // 默认 Identity（raw 原样返回，不调用 sigmoid）。
         // 要复用旧 sigmoid 语义，需显式注册 Platt(A=1, B=0)。
         service.RegisterPlattParameters(a: 1.0, b: 0.0);
         // 默认参数现在应反映 Platt 注册
@@ -278,7 +278,7 @@ public sealed class R28B_ModelExecutionTests
     public void Calibration_UnknownModel_FallsBackToDefault()
     {
         var service = new PlattCalibrationService();
-        // R28-F P3-3：默认参数现在是 Identity（raw 原样返回），不再执行 sigmoid。
+        // 默认参数现在是 Identity（raw 原样返回），不再执行 sigmoid。
         // 未注册的模型名应回退到默认参数。
         var calibrated = service.Calibrate(0.0, "never-registered");
         Assert.AreEqual(0.0, calibrated, 1e-12);
@@ -292,7 +292,7 @@ public sealed class R28B_ModelExecutionTests
     [TestMethod]
     public void Calibration_DefaultIdentity_Identity_NoTransformApplied()
     {
-        // R28-F P3-3：新增测试 — 默认 Identity 不调用 Math.Exp，原样返回 raw score。
+        // 新增测试 — 默认 Identity 不调用 Math.Exp，原样返回 raw score。
         var service = new PlattCalibrationService();
         var parameters = service.GetParameters();
         Assert.IsNotNull(parameters);
@@ -314,7 +314,7 @@ public sealed class R28B_ModelExecutionTests
 }
 
 /// <summary>
-/// R28-D 测试辅助：构建 FeatureSchema / FeatureVector。
+/// 测试辅助：构建 FeatureSchema / FeatureVector。
 /// </summary>
 internal static class ModelExecutionTestHelpers
 {

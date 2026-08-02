@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R27-2：InMemoryPipelineRunStore 实现测试。
+/// InMemoryPipelineRunStore 实现测试。
 ///
 /// 覆盖：
 ///   1. SaveRunAsync null / GetRunAsync null / ListRunsByProposalAsync null 抛异常
@@ -280,7 +280,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_RevisionAndStageMatch_ReturnsNext()
     {
-        // P0-7：CAS 成功 — revision=1 + stage=OfflineExperiment 匹配 → 推进到 Shadow
+        // CAS 成功 — revision=1 + stage=OfflineExperiment 匹配 → 推进到 Shadow
         var store = new InMemoryPipelineRunStore();
         await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.OfflineExperiment, revision: 1));
         var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
@@ -299,7 +299,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_RevisionMismatch_ReturnsNull()
     {
-        // P0-7：CAS 失败 — 当前 revision=2，但 expectedRevision=1 → 返回 null
+        // CAS 失败 — 当前 revision=2，但 expectedRevision=1 → 返回 null
         var store = new InMemoryPipelineRunStore();
         await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 2));
         var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 3);
@@ -316,7 +316,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_StageMismatch_ReturnsNull()
     {
-        // P0-7：CAS 失败 — revision 匹配但 stage 不匹配（已被并发推进到 Shadow）
+        // CAS 失败 — revision 匹配但 stage 不匹配（已被并发推进到 Shadow）
         var store = new InMemoryPipelineRunStore();
         await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2));
         var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.ScopedCanary, revision: 3);
@@ -331,7 +331,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_AuditBatchWrittenAtomically()
     {
-        // P0-7：CAS 成功时，BaselineComparison + RollbackRecord 应在同事务内写入
+        // CAS 成功时，BaselineComparison + RollbackRecord 应在同事务内写入
         var store = new InMemoryPipelineRunStore();
         await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 1));
         var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
@@ -355,7 +355,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_CasFailure_AuditNotWritten()
     {
-        // P0-7：CAS 失败时，audit 批量不应写入
+        // CAS 失败时，audit 批量不应写入
         var store = new InMemoryPipelineRunStore();
         await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 5));
         var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 6);
@@ -371,7 +371,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_IdempotentRetry_SameTransitionId_ReturnsCurrent()
     {
-        // P0-7：幂等重试 — next.LastTransitionId 与 current.LastTransitionId 相同 → 返回当前快照
+        // 幂等重试 — next.LastTransitionId 与 current.LastTransitionId 相同 → 返回当前快照
         var store = new InMemoryPipelineRunStore();
         var current = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2, lastTransitionId: "t-123");
         await store.SaveRunAsync(current);
@@ -390,7 +390,7 @@ public sealed class InMemoryPipelineRunStoreTests
     [TestMethod]
     public async Task TryTransitionAsync_ConcurrentTransition_SecondFails()
     {
-        // P0-7：模拟并发推进 — 两个调用方同时推进同一 run，只有一个成功
+        // 模拟并发推进 — 两个调用方同时推进同一 run，只有一个成功
         var store = new InMemoryPipelineRunStore();
         await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 1));
         var next1 = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2, lastTransitionId: "t-1");
@@ -438,7 +438,7 @@ public sealed class InMemoryPipelineRunStoreTests
         Status = PipelineRunStatus.Running,
         StartedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
-        // P0-7：HA 字段
+        // HA 字段
         Revision = revision,
         LastTransitionId = lastTransitionId
     };

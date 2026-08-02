@@ -256,7 +256,7 @@ public sealed class ContextCoreEmbeddingAbstractionTests
     [TestMethod]
     public async Task OnnxEmbeddingSessionManager_ConcurrentLoad_CreatesOnlyOneSession()
     {
-        // P5-0.1: 验证 single-flight —— 并发请求只创建一个 Session，loser Session 被释放
+        // 验证 single-flight —— 并发请求只创建一个 Session，loser Session 被释放
         var factory = new FakeOnnxEmbeddingSessionFactory(dimensions: 3);
         var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
         {
@@ -288,7 +288,7 @@ public sealed class ContextCoreEmbeddingAbstractionTests
     [TestMethod]
     public async Task OnnxEmbeddingSessionManager_ConcurrentLoad_AfterUnload_ReloadsOnce()
     {
-        // P5-0.1: 验证卸载后并发重载仍然 single-flight
+        // 验证卸载后并发重载仍然 single-flight
         var factory = new FakeOnnxEmbeddingSessionFactory(dimensions: 3);
         var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
         {
@@ -322,7 +322,7 @@ public sealed class ContextCoreEmbeddingAbstractionTests
     [TestMethod]
     public async Task OnnxEmbeddingSessionManager_SlowFactory_ConcurrentLoad_DisposesLosers()
     {
-        // P5-0.1: 验证 slow factory 场景下 loser session 被正确释放
+        // 验证 slow factory 场景下 loser session 被正确释放
         var factory = new SlowFakeOnnxEmbeddingSessionFactory(dimensions: 3, delay: TimeSpan.FromMilliseconds(50));
         var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
         {

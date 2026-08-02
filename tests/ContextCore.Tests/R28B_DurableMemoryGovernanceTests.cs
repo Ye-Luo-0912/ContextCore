@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R28-E：Durable Memory Governance Persistence 验收测试。
+/// Durable Memory Governance Persistence 验收测试。
 ///
 /// 覆盖：
 ///   1. InMemoryUtilityLedgerStore：写入 / 查询 / 过滤 / 排序 / Take / GetLatestEntry / GetExpertContributions / 参数校验
@@ -615,7 +615,7 @@ public sealed class R28B_DurableMemoryGovernanceTests
 
         Assert.IsTrue(services.Any(s => s.ServiceType == typeof(PostgresUtilityLedgerStore)));
         Assert.IsTrue(services.Any(s => s.ServiceType == typeof(IUtilityLedgerStore)));
-        // R29 WP-E-1：写契约 IUtilityLedger 也绑定到同一 Postgres singleton。
+        // 写契约 IUtilityLedger 也绑定到同一 Postgres singleton。
         Assert.IsTrue(services.Any(s => s.ServiceType == typeof(IUtilityLedger)));
 
         await using var sp = services.BuildServiceProvider();
@@ -651,7 +651,7 @@ public sealed class R28B_DurableMemoryGovernanceTests
     [TestMethod]
     public async Task AddContextCorePostgresStorage_RegistersPostgresConflictSetStoreAndWriteLedger()
     {
-        // R29 WP-E-1：验证 IConflictSetStore + IConflictSetLedger 均绑定到 PostgresConflictSetStore singleton。
+        // 验证 IConflictSetStore + IConflictSetLedger 均绑定到 PostgresConflictSetStore singleton。
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(new PostgresOptions
         {
@@ -822,7 +822,7 @@ public sealed class R28B_DurableMemoryGovernanceTests
     [TestMethod]
     public void SchemaVersion_IsV30()
     {
-        // P0-2：v29 → v30，kernel_result_outbox 追加 lease_owner / lease_expires_at / lease_token 列与配套索引，
+        // v29 → v30，kernel_result_outbox 追加 lease_owner / lease_expires_at / lease_token 列与配套索引，
         // 将 DequeueAsync 的 Dispatched 终态改为租约模型（Pending → Leased → Acked），
         // 避免 consumer 崩溃后 Dispatched 行永久滞留。
         // 历史：v28 → v29（P0-1：kernel_transport_inbox/outbox 租约模型）；
@@ -870,7 +870,7 @@ public sealed class R28B_DurableMemoryGovernanceTests
             indexSuffixes);
     }
 
-    // R29 WP-E-5：User Feedback Ledger 表与索引验证
+    // User Feedback Ledger 表与索引验证
     [TestMethod]
     public void RequiredTables_IncludeUserFeedbackEntries()
     {

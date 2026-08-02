@@ -9,7 +9,7 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Learning Event 硬验收门测试
+// Learning Event 硬验收门测试
 //
 // 背景：
 //   任务 E 修复了 Learning Loop 静默丢训练数据问题——将 fire-and-forget
@@ -376,7 +376,7 @@ public sealed class R29H_LearningEventAcceptanceTests
 
             var now = DateTimeOffset.UtcNow;
             var leaseUntil = now.Add(leaseDuration);
-            // P0-8：每次 AcquirePending 生成唯一 lease_token，与 Postgres 实现保持一致。
+            // 每次 AcquirePending 生成唯一 lease_token，与 Postgres 实现保持一致。
             var leaseToken = Guid.NewGuid().ToString("N");
 
             lock (_lock)
@@ -426,7 +426,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                     || r.State != LearningEventOutboxStates.Processing
                     || r.LeaseToken != leaseToken)
                 {
-                    // P0-8：lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
+                    // lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
                     return Task.FromResult(false);
                 }
 
@@ -462,7 +462,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                     || r.State != LearningEventOutboxStates.Processing
                     || r.LeaseToken != leaseToken)
                 {
-                    // P0-8：lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
+                    // lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
                     return Task.FromResult(false);
                 }
 
@@ -497,7 +497,7 @@ public sealed class R29H_LearningEventAcceptanceTests
 
             lock (_lock)
             {
-                // P0-8：用 lease_token 替代 lease_owner 校验更严格（token 全局唯一）。
+                // 用 lease_token 替代 lease_owner 校验更严格（token 全局唯一）。
                 if (!_records.TryGetValue(eventId, out var r)
                     || r.State != LearningEventOutboxStates.Processing
                     || r.LeaseToken != leaseToken)

@@ -36,7 +36,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
     private readonly ConcurrentDictionary<string, object> _locks = new(StringComparer.Ordinal);
     private readonly IAgentRunStore? _runStore;
     private readonly IAgentCheckpointStore? _checkpointStore;
-    // P1-4: In-memory checkpoint cursor tracking (mirrors agent_runs.last_checkpoint_id/sequence)
+    // In-memory checkpoint cursor tracking (mirrors agent_runs.last_checkpoint_id/sequence)
     private readonly ConcurrentDictionary<string, AgentCheckpointCursor> _cursors = new(StringComparer.Ordinal);
 
     /// <summary>初始化无 Run Store 委托的实例（AppendBatchAsync 的 runStateUpdate / checkpointBody 被忽略）。</summary>
@@ -67,7 +67,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
         long? fencingToken = null)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        // P0-4：InMemory 实现不维护 lease 注册表，leaseToken/fencingToken 仅用于接口对齐；
+        // InMemory 实现不维护 lease 注册表，leaseToken/fencingToken 仅用于接口对齐；
         // 实际 fencing 校验由 Postgres 实现完成。
         _ = leaseToken;
         _ = fencingToken;
@@ -167,7 +167,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
                         $"事件哈希链被破坏或乱序。");
                 }
 
-                // P1-4: Validate batch-internal same-Run consistency + ContentHash integrity
+                // Validate batch-internal same-Run consistency + ContentHash integrity
                 for (var i = 0; i < events.Count; i++)
                 {
                     var evt = events[i];
@@ -209,7 +209,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
 
         // 3. 委托 Run 状态 CAS + 字段更新到 IAgentRunStore（若注入）
         //    注意：InMemory 路径下事件追加与状态更新非原子（无共享事务）；仅供开发/测试。
-        //    P0-4：透传 leaseToken/fencingToken（InMemory store 接受但不强制校验）。
+        //    透传 leaseToken/fencingToken（InMemory store 接受但不强制校验）。
         if (runStateUpdate is not null && _runStore is not null)
         {
             await _runStore.TransitionStateAsync(
@@ -290,7 +290,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
     }
 
     /// <summary>
-    /// P1-4: 获取指定 Run 的最新 checkpoint 游标（从内存游标字典读取；开发/测试用）。
+    /// 获取指定 Run 的最新 checkpoint 游标（从内存游标字典读取；开发/测试用）。
     /// </summary>
     public ValueTask<AgentCheckpointCursor?> GetCheckpointCursorAsync(
         string workspaceId, string runId, CancellationToken cancellationToken = default)

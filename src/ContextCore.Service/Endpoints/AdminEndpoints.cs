@@ -119,7 +119,7 @@ internal static class AdminEndpoints
 
             if (storage.IsPostgres)
             {
-                // R14-PG-10：检测 PostgresBackupRunner 是否已注册，并返回最近 dump 文件信息（若默认备份目录中存在）。
+                // 检测 PostgresBackupRunner 是否已注册，并返回最近 dump 文件信息（若默认备份目录中存在）。
                 var runnerRegistered = sp.GetService<PostgresBackupRunner>() is not null;
 
                 // 默认备份目录：与 ControlRoom BackupCommand 一致——<data-root>/../_backups/
@@ -469,7 +469,7 @@ internal static class AdminEndpoints
                 CodeVersion = PostgresMigrationRunner.SchemaVersion,
                 AppliedVersion = appliedVersion,
                 UpToDate = appliedVersion == PostgresMigrationRunner.SchemaVersion,
-                // P0-6：暴露真实 AutoBootstrap 配置值（默认 true）；保留 AutoMigrate=true 仅为向后兼容。
+                // 暴露真实 AutoBootstrap 配置值（默认 true）；保留 AutoMigrate=true 仅为向后兼容。
                 AutoMigrate = true,
                 AutoBootstrap = storage.AutoBootstrap
             });

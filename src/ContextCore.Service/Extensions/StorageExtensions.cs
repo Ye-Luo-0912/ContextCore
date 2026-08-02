@@ -139,7 +139,7 @@ internal static class StorageExtensions
 				$"未知存储提供商 '{options.Provider}'。支持的 provider: filesystem, memory, postgres。");
 		}
 
-		// R28-B.6 阶段 E：按 provider 注册 IExperimentRecorder。
+		// 阶段 E：按 provider 注册 IExperimentRecorder。
 		// 显式 env CC_EXPERIMENT_RECORDER_BACKEND 可覆盖默认选择（memory/filesystem/postgres）。
 		// 未注入时 CoreExtensions 的 TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder> 回退。
 		RegisterExperimentRecorder(services, options);
@@ -148,7 +148,7 @@ internal static class StorageExtensions
 	}
 
 	/// <summary>
-	/// R28-B.6 阶段 E：按 storage provider 注册 IExperimentRecorder。
+	/// 阶段 E：按 storage provider 注册 IExperimentRecorder。
 	/// 默认映射：postgres → PostgresExperimentRecorder，filesystem → FileSystemExperimentRecorder，memory → 不注册（回退到 InMemory）。
 	/// 显式 env CC_EXPERIMENT_RECORDER_BACKEND 可覆盖：memory=强制 InMemory，filesystem=强制 FileSystem，postgres=强制 Postgres。
 	/// </summary>
@@ -218,7 +218,7 @@ internal static class StorageExtensions
 	}
 
 	/// <summary>
-	/// R13.3 #1：注册 IStoreRuntimeCapabilities 单例，按当前 provider 提供能力描述。
+	/// 注册 IStoreRuntimeCapabilities 单例，按当前 provider 提供能力描述。
 	/// 替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断，调用方一次 DI 注入即可查询能力。
 	/// </summary>
 	private static void RegisterCapabilities(IServiceCollection services, StorageProviderKind providerKind)
@@ -244,16 +244,16 @@ internal static class StorageExtensions
 		};
 
 		services.AddContextCorePostgresStorage(pgOptions);
-		// R14-PG-1：ILearningFeedbackStore / ILearningFeedbackReviewStore 已由 PostgresServiceCollectionExtensions
+		// ILearningFeedbackStore / ILearningFeedbackReviewStore 已由 PostgresServiceCollectionExtensions
 		// 正式绑定 Postgres 实现，不再需要 Unsupported 覆盖。
-		// R14-PG-2：IDecisionTraceStore 已由 PostgresServiceCollectionExtensions 正式绑定 PostgresDecisionTraceStore。
-		// R14-PG-3：IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
-		// R14-PG-4：IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
-		// R14-PG-5 完成：全部 16 个 Postgres store 已正式绑定原生实现，无 Unsupported 覆盖。
-		// R28-E：IUtilityLedgerStore / IConflictSetStore 已由 PostgresServiceCollectionExtensions
+		// IDecisionTraceStore 已由 PostgresServiceCollectionExtensions 正式绑定 PostgresDecisionTraceStore。
+		// IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
+		// IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
+		// 完成：全部 16 个 Postgres store 已正式绑定原生实现，无 Unsupported 覆盖。
+		// IUtilityLedgerStore / IConflictSetStore 已由 PostgresServiceCollectionExtensions
 		// 正式绑定 PostgresUtilityLedgerStore / PostgresConflictSetStore（read-only 持久化，无需失效 Decorator）。
 
-		// R10-2：在 Postgres 实现之上叠加失效边界 Decorator（覆盖 AddContextCorePostgresStorage 的原始注册）。
+		// 在 Postgres 实现之上叠加失效边界 Decorator（覆盖 AddContextCorePostgresStorage 的原始注册）。
 	// 失效 Decorator 位于最外层，写入成功后向 IStateCacheInvalidator 发出失效信号。
 	// 仅保留 Data Plane Store 的 Decorator（读路径可能被缓存的 Store）。
 		services.AddDecoratedService<IContextStore, PostgresContextStore>((inner, inv, vs) => new InvalidatingContextStoreDecorator(inner, inv, vs));
@@ -393,7 +393,7 @@ internal static class StorageExtensions
 					sp.GetRequiredService<PostgresRelationStore>(),
 					switchOptions,
 					sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
-			// R10-2：失效边界 Decorator 位于最外层（在 dual-write 之上），写入成功后发出失效信号。
+			// 失效边界 Decorator 位于最外层（在 dual-write 之上），写入成功后发出失效信号。
 			return new InvalidatingRelationStoreDecorator(inner, GetInvalidator(sp), GetVersionStore(sp));
 		});
 
@@ -412,7 +412,7 @@ internal static class StorageExtensions
 			return new FileContextEventSink(logsRoot);
 		});
 
-		// R29 WP-E-2/E-3：Utility Ledger + ConflictSet Ledger（FileSystem 模式回退到 InMemory 实现）。
+		// /E-3：Utility Ledger + ConflictSet Ledger（FileSystem 模式回退到 InMemory 实现）。
 		// FileSystem 当前未提供持久化 ledger 实现；生产路径应使用 Postgres 模式。
 		// 这里注册 InMemory 实现以保证 Service 端 UtilityLedgerMaterializer / TrainingDataExporter
 		// 在 FileSystem 模式下仍可解析（物化数据为进程内临时状态，重启后丢失）。
@@ -423,12 +423,12 @@ internal static class StorageExtensions
 		services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
 		services.AddSingleton<IConflictSetLedger>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
 
-		// R29 WP-E-5：User Feedback Ledger（FileSystem 模式回退到 InMemory 实现）。
+		// User Feedback Ledger（FileSystem 模式回退到 InMemory 实现）。
 		// Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 写入。
 		services.AddSingleton<InMemoryUserFeedbackLedgerStore>();
 		services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<InMemoryUserFeedbackLedgerStore>());
 
-		// P0-6：Model Control Plane — FileSystem 模式回退到 InMemory 实现。
+		// Model Control Plane — FileSystem 模式回退到 InMemory 实现。
 		// Service API 端点 /api/models/* 通过 IModelArtifactRegistry / IModelActivationAuditStore
 		// 注册与查询模型工件描述符及激活审计记录。FileSystem 当前未提供持久化实现，使用 InMemory
 		// 让本地开发 / 单元测试场景仍可运行 Model Control Plane API（数据在进程重启后丢失）。
@@ -437,7 +437,7 @@ internal static class StorageExtensions
 		services.AddSingleton<InMemoryModelActivationAuditStore>();
 		services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<InMemoryModelActivationAuditStore>());
 
-		// P0-9：Cluster Model Slot Store（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// Cluster Model Slot Store（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
 		// 单行 slot 通过 CAS（Revision）保证原子模型切换，替代 per-model DesiredModelState。
 		services.AddSingleton<InMemoryClusterModelSlotStore>();
 		services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<InMemoryClusterModelSlotStore>());
@@ -509,7 +509,7 @@ internal static class StorageExtensions
 		services.AddPlain<IContextJobQueue, InMemoryJobQueue>();
 		services.AddForwardedService<IContextJobQueryStore, InMemoryJobQueue>();
 
-		// R29 WP-E-1/E-2：Utility Ledger + ConflictSet Ledger（InMemory 实现）。
+		// /E-2：Utility Ledger + ConflictSet Ledger（InMemory 实现）。
 		// 生产路径由 PostgresServiceCollectionExtensions 注册 Postgres 实现（同一 IUtilityLedger / IConflictSetLedger 契约）。
 		// IUtilityLedgerStore / IConflictSetStore 旧读 API 也由同一实现提供（向后兼容）。
 		services.AddSingleton<InMemoryUtilityLedgerStore>();
@@ -519,11 +519,11 @@ internal static class StorageExtensions
 		services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
 		services.AddSingleton<IConflictSetLedger>(sp => sp.GetRequiredService<InMemoryConflictSetStore>());
 
-		// R29 WP-E-5：User Feedback Ledger（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// User Feedback Ledger（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
 		services.AddSingleton<InMemoryUserFeedbackLedgerStore>();
 		services.AddSingleton<IUserFeedbackLedger>(sp => sp.GetRequiredService<InMemoryUserFeedbackLedgerStore>());
 
-		// P0-6：Model Control Plane（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// Model Control Plane（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
 		// Service API 端点 /api/models/* 通过 IModelArtifactRegistry / IModelActivationAuditStore
 		// 注册与查询模型工件描述符及激活审计记录。
 		services.AddSingleton<InMemoryModelArtifactRegistry>();
@@ -531,7 +531,7 @@ internal static class StorageExtensions
 		services.AddSingleton<InMemoryModelActivationAuditStore>();
 		services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<InMemoryModelActivationAuditStore>());
 
-		// P0-9：Cluster Model Slot Store（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
+		// Cluster Model Slot Store（InMemory 实现；Postgres 路径由 PostgresServiceCollectionExtensions 注册）。
 		// 单行 slot 通过 CAS（Revision）保证原子模型切换，替代 per-model DesiredModelState。
 		services.AddSingleton<InMemoryClusterModelSlotStore>();
 		services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<InMemoryClusterModelSlotStore>());

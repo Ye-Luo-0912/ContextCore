@@ -7,7 +7,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL CandidateConstraint activate / reject 审核历史存储。
-/// R14-PG-4：替代 UnsupportedCandidateConstraintReviewStore，让 Postgres provider 在 HA 场景下能持久化候选约束审核记录。
+/// 替代 UnsupportedCandidateConstraintReviewStore，让 Postgres provider 在 HA 场景下能持久化候选约束审核记录。
 /// </summary>
 public sealed class PostgresCandidateConstraintReviewStore : PostgresStoreBase, ICandidateConstraintReviewStore
 {

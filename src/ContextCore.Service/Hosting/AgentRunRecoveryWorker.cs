@@ -44,7 +44,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// 需要扫描恢复的非终态状态列表。
     /// </summary>
     /// <remarks>
-    /// P0-2：AwaitingApproval 不在此列表中——等待审批的 Run 不应被 Recovery Worker 周期性重启。
+    /// AwaitingApproval 不在此列表中——等待审批的 Run 不应被 Recovery Worker 周期性重启。
     /// 审批决策由外部 POST /approvals/{approvalId} 端点提交，端点将状态推进到
     /// PendingToolExecution（批准）或 Failed（拒绝）后才由 Recovery Worker 重新入队执行。
     /// 周期性重启 AwaitingApproval 会导致 Actor 重复加载审批状态、重复持久化 ApprovalRequested 事件。
@@ -169,7 +169,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                     var elapsed = now - run.UpdatedAt;
                     if (elapsed > timeout)
                     {
-                        // P0-6：DeadlineAt 校验——Run 自身超时未到期时不标记失败
+                        // DeadlineAt 校验——Run 自身超时未到期时不标记失败
                         if (run.DeadlineAt is not null && run.DeadlineAt > now)
                         {
                             _logger.LogDebug(
@@ -178,7 +178,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                             continue;
                         }
 
-                        // P0-7：单 SQL 原子转移 — 消除 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
+                        // 单 SQL 原子转移 — 消除 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
                         // 只有无活跃租约 AND 状态匹配时才更新为 Failed，避免误杀正被活跃 Actor 持有合法租约的 Run。
                         var runLease = scope.ServiceProvider.GetService<IAgentRunLease>();
                         if (runLease is not null)

@@ -13,7 +13,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Agent Run 进程重启恢复生产验收测试
+// Agent Run 进程重启恢复生产验收测试
 //
 // 验证 AgentRun 在进程重启后的恢复能力，覆盖：
 //   1. Restart_NonTerminalRun_CanBeResumedByNewActor — 非终态 Run 可由新 Actor 恢复执行

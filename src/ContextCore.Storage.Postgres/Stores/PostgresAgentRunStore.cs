@@ -121,7 +121,7 @@ LIMIT 1;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P1-5: Atomic create-or-get. INSERT ... ON CONFLICT DO NOTHING with RETURNING;
+    /// Atomic create-or-get. INSERT ... ON CONFLICT DO NOTHING with RETURNING;
     /// if no row returned, SELECT existing by idempotency_key or primary key.
     /// </remarks>
     public async ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(
@@ -206,7 +206,7 @@ RETURNING data;
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
-        // P0-4：lease 校验要求 leaseToken + fencingToken 同时提供（或同时为 null）
+        // lease 校验要求 leaseToken + fencingToken 同时提供（或同时为 null）
         var leaseValidated = leaseToken is not null && fencingToken is not null;
 
         var now = DateTimeOffset.UtcNow;
@@ -219,11 +219,11 @@ RETURNING data;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         // 1. expected-state CAS：UPDATE WHERE workspace_id AND run_id AND state = expected
-        // P0-3 修复双真源：同一 UPDATE 语句中同步更新 state 列与 data JSON 中的
+        // 修复双真源：同一 UPDATE 语句中同步更新 state 列与 data JSON 中的
         // State / UpdatedAt / FinishedAt 字段，消除"state 列 ≠ data JSON.State"的不一致。
         // data JSON 的 State 字段使用枚举名字符串（与 PostgresJsonSerializer 的 JsonStringEnumConverter 一致）。
         // 使用 jsonb || jsonb_build_object 合并覆盖（原子操作，无 read-before-write）。
-        // P0-4：当 leaseToken + fencingToken 提供时，WHERE 追加 EXISTS 子查询校验 agent_run_leases
+        // 当 leaseToken + fencingToken 提供时，WHERE 追加 EXISTS 子查询校验 agent_run_leases
         // 中仍由当前实例持有该 lease；lease 被抢占后 fencing_token 不匹配 → 0 行受影响 → 抛异常。
         await using (var updateCommand = connection.CreateCommand())
         {
@@ -233,8 +233,8 @@ RETURNING data;
             var dataMerge = isTerminal
                 ? "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))"
                 : "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))";
-            // P0-4 + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
-            // P0-5：同时校验 lease_expires_at > clock_timestamp()，防止已过期但未被 reaper 清理的租约
+            // + P0-5：lease fencing 校验子句（EXISTS 子查询到 agent_run_leases）
+            // 同时校验 lease_expires_at > clock_timestamp()，防止已过期但未被 reaper 清理的租约
             // 仍能通过 fencing 校验（fencing_token 匹配但租约实际已过期 → 仍应拒绝写入）。
             var leaseClause = leaseValidated
                 ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
@@ -281,7 +281,7 @@ LIMIT 1;
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var currentState = (AgentRunState)reader.GetByte(0);
-            // P0-4：lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
+            // lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
             if (leaseValidated && currentState == expectedCurrentState)
             {
                 throw new InvalidOperationException(

@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R18-2：Package 结果投影器
+// Package 结果投影器
 //
 // 将 ContextDecisionResult 投影为 ContextPackageBuildResult，作为 Engine 输出
 // 与现有 Package 主链出口 DTO 之间的桥梁。R18-2 阶段仅做格式投影，
@@ -21,11 +21,11 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R18-2：Package 结果投影器。将 Engine 输出的 envelope 集合投影为
+/// Package 结果投影器。将 Engine 输出的 envelope 集合投影为
 /// <see cref="ContextPackageBuildResult"/>，保持与现有 Package 主链出口 DTO 兼容。
 /// </summary>
 /// <remarks>
-/// R28-B.6 Impl-1：当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
+/// Impl-1：当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
 /// 真正截断 Material.Content，并重新计算 ActualTokens（section content + SelectedItems）。
 /// </remarks>
 public sealed class PackageResultProjector : IResultProjector<ContextPackageBuildResult>
@@ -37,10 +37,10 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// 构造 PackageResultProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// R28-B.6 Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
+    /// Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
     /// <param name="tokenizerResolver">
-    /// R28-B.6 P0-6：tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
+    /// tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
     /// 使用 <see cref="TokenizerContentTruncator"/>（真正按 BPE/CJK 截断）。
     /// </param>
     /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
@@ -49,12 +49,12 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         IContextTokenizerResolver? tokenizerResolver = null,
         string? modelName = null)
     {
-        // R28-B.6 P0-6：优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
+        // 优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
         _contentTruncator = contentTruncator
             ?? (tokenizerResolver is not null
                 ? new TokenizerContentTruncator(tokenizerResolver, modelName)
                 : new DefaultContentTruncator());
-        // R28-B.7：保存 modelName，用于 CountTokens 统一口径计算
+        // 保存 modelName，用于 CountTokens 统一口径计算
         _modelName = modelName;
     }
 
@@ -89,14 +89,14 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// P0-7：将决策结果 + 候选正文 sidecar 投影为 ContextPackageBuildResult。
+    /// 将决策结果 + 候选正文 sidecar 投影为 ContextPackageBuildResult。
     /// 从 workingSet.Materials 恢复候选 Content；从 result.AllocationDecisions
     /// 消费 Section / IncludedTokens / IsTruncated 构建 section + token 分配。
-    /// R28-B.6 Blocker-2：真正构建 ContextPackage（含 Sections/PackageId/SourceRefs/CreatedAt）+
+    /// Blocker-2：真正构建 ContextPackage（含 Sections/PackageId/SourceRefs/CreatedAt）+
     /// ContextPackageStandardOutput，赋值到 BuildResult.Package。
     /// </summary>
     /// <remarks>
-    /// R28-B.7：此重载不携带 Scope，空 Package 时 WorkspaceId/CollectionId 将为空。
+    /// 此重载不携带 Scope，空 Package 时 WorkspaceId/CollectionId 将为空。
     /// 调用方应优先使用 <see cref="Project(ContextDecisionResult, CandidateWorkingSet, ContextDecisionScope)"/>
     /// 传入真实 Scope，避免空 Package 丢失 Scope。
     /// </remarks>
@@ -106,29 +106,29 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// R28-B.7 P0-6：从完整执行结果投影为 ContextPackageBuildResult。
+    /// 从完整执行结果投影为 ContextPackageBuildResult。
     /// </summary>
     /// <remarks>
     /// 便捷重载：从 execution 提取 Decision + WorkingSet + Scope。
     /// 关键修复：使用 execution.Scope 而非 default，避免空 Package 丢失 Scope
     /// （候选为空时仍能从 execution.Scope 获取 WorkspaceId/CollectionId）。
-    /// R28-B.7 工作包 B-2：从 execution.NormalizedRequest.PackageInput 提取
+    /// 工作包 B-2：从 execution.NormalizedRequest.PackageInput 提取
     /// Mode/Policy/IncludeRecent/IsAuditMode 语义，传递给内部 Project 重载，
     /// 让 Projector 能按调用方意图过滤 recent_context section 并写入审计/模式元数据。
     /// </remarks>
     public ContextPackageBuildResult Project(ContextDecisionExecutionResult execution)
     {
         ArgumentNullException.ThrowIfNull(execution);
-        // R28-B.7 工作包 B-2：从标准化请求中提取 PackageInput 语义
+        // 工作包 B-2：从标准化请求中提取 PackageInput 语义
         var packageInput = execution.NormalizedRequest?.PackageInput;
         return Project(execution.Decision, execution.WorkingSet, execution.Scope, packageInput);
     }
 
     /// <summary>
-    /// R28-B.7：将决策结果 + 候选正文 sidecar + 作用域投影为 ContextPackageBuildResult。
+    /// 将决策结果 + 候选正文 sidecar + 作用域投影为 ContextPackageBuildResult。
     /// 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非从候选反推
     /// （候选为空时反推会丢失 Scope）。
-    /// R28-B.7 工作包 B-2：此重载不携带 PackageInput，等价于 packageInput=null（不做
+    /// 工作包 B-2：此重载不携带 PackageInput，等价于 packageInput=null（不做
     /// recent_context 过滤、不写 mode/auditMode 元数据），保持向后兼容。
     /// </summary>
     public ContextPackageBuildResult Project(
@@ -140,7 +140,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// R28-B.7 工作包 B-2：将决策结果 + 候选正文 sidecar + 作用域 + PackageInput 语义
+    /// 工作包 B-2：将决策结果 + 候选正文 sidecar + 作用域 + PackageInput 语义
     /// 投影为 ContextPackageBuildResult。
     /// </summary>
     /// <remarks>
@@ -162,7 +162,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(workingSet);
 
-        // P0-7：构建 CanonicalKey → AllocationDecision 索引
+        // 构建 CanonicalKey → AllocationDecision 索引
         var allocationByKey = result.AllocationDecisions
             .ToDictionary(d => d.CandidateKey, d => d);
 
@@ -174,7 +174,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             .Select(ProjectToDroppedItem)
             .ToList();
 
-        // P0-7：从 AllocationDecisions 构建完整 section 列表 + token 分配
+        // 从 AllocationDecisions 构建完整 section 列表 + token 分配
         var sectionBudgets = result.AllocationDecisions
             .GroupBy(d => d.Section)
             .Select(g => new ContextPackageSectionBudget
@@ -188,12 +188,12 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             })
             .ToList();
 
-        // R28-B.6 Blocker-2：按 AllocationDecision.Section 分组，构建 ContextPackageSection 列表
+        // Blocker-2：按 AllocationDecision.Section 分组，构建 ContextPackageSection 列表
         var sectionGroups = result.SelectedEnvelopes
             .Select(env =>
             {
                 var section = ResolveSectionName(env.Source);
-                // R28-B.7 P0-4：优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
+                // 优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
                 var includedTokens = env.TokenCost?.ContentTokens ?? env.EstimatedTokens;
                 var isTruncated = false;
                 if (allocationByKey.TryGetValue(env.CanonicalKey, out var decision))
@@ -233,7 +233,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                 // 从 Material sidecar 恢复正文
                 if (workingSet.Materials.TryGetValue(item.Envelope.CanonicalKey, out var material))
                 {
-                    // R28-B.6 P0-6：分隔符 "\n\n" 的 token 预留（2 token/候选，避免后续追加时超出预算）
+                    // 分隔符 "\n\n" 的 token 预留（2 token/候选，避免后续追加时超出预算）
                     var isNotFirst = sectionContentBuilder.Length > 0;
                     if (isNotFirst)
                     {
@@ -241,7 +241,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                         separatorTokens += 2;
                     }
 
-                    // R28-B.6 Impl-1 + P0-6：当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens。
+                    // Impl-1 + P0-6：当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens。
                     // 截断时减去分隔符预留预算（2 token），确保 section 总 token 不超出 IncludedTokens。
                     var contentToAppend = material.Content;
                     if (item.IsTruncated && !string.IsNullOrEmpty(contentToAppend) && item.IncludedTokens > 0)
@@ -281,7 +281,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                 }
             }
 
-            // R28-B.6 P0-6：section 总 token = 候选正文 token + 分隔符预留 token
+            // section 总 token = 候选正文 token + 分隔符预留 token
             var totalSectionTokens = sectionTokens + separatorTokens;
             sections.Add(new ContextPackageSection
             {
@@ -296,7 +296,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             totalUsedTokens += totalSectionTokens;
         }
 
-        // R28-B.7 工作包 B-2：消费 PackageInput.IncludeRecent 语义。
+        // 工作包 B-2：消费 PackageInput.IncludeRecent 语义。
         // IncludeRecent=false 时过滤掉 recent_context section（与 Legacy
         // BasicContextPackageBuilder 中 IncludeRecentRawContext=false 行为对齐），
         // 并从 totalUsedTokens 中扣除被过滤 section 的 token 数，保持 token 计账一致。
@@ -322,14 +322,14 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             }
         }
 
-        // R28-B.6 Blocker-2：构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）
-        // R28-B.7：空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非候选反推
+        // Blocker-2：构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）
+        // 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非候选反推
         // （候选为空时 firstEnvelope 为 null，反推会丢失 Scope）
         var firstEnvelope = result.SelectedEnvelopes.FirstOrDefault();
         var packageWorkspaceId = firstEnvelope?.CanonicalKey.WorkspaceId ?? scope.WorkspaceId;
         var packageCollectionId = firstEnvelope?.CanonicalKey.CollectionId ?? scope.CollectionId;
 
-        // R28-B.7 工作包 B-2：解析 PackageInput 语义为 metadata 键值，供下游 trace/审计消费。
+        // 工作包 B-2：解析 PackageInput 语义为 metadata 键值，供下游 trace/审计消费。
         var packageMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["policyVersion"] = result.PolicyVersion,
@@ -351,17 +351,17 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             CreatedAt = result.DecidedAt
         };
 
-        // R28-B.7：BuildResult 的 token 字段使用 Projector 截断后的真实 token 数
+        // BuildResult 的 token 字段使用 Projector 截断后的真实 token 数
         // （package.EstimatedTokens = totalUsedTokens），而非 Allocator 的预估值
         // （result.Outcome.EstimatedTokens）。统一事实源，避免双重报告。
         var actualUsedTokens = package.EstimatedTokens;
 
-        // R28-B.6 Blocker-2：构建稳定的 ContextPackageStandardOutput
+        // Blocker-2：构建稳定的 ContextPackageStandardOutput
         var standardOutput = BuildStandardOutput(result, sections, actualUsedTokens);
 
-        // R28-B.7 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
+        // 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
         // 诊断键加 "diag." 前缀以避免与既有 Metadata 键冲突。
-        // R28-B.7 工作包 B-2：同时传播 PackageInput 语义（mode/isAuditMode/packagePolicyId）。
+        // 工作包 B-2：同时传播 PackageInput 语义（mode/isAuditMode/packagePolicyId）。
         var metadata = new Dictionary<string, string>
         {
             ["policyVersion"] = result.PolicyVersion,
@@ -400,7 +400,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// R28-B.7：重建 ContextPackageSection，替换 Content 和 EstimatedTokens。
+    /// 重建 ContextPackageSection，替换 Content 和 EstimatedTokens。
     /// ContextPackageSection 是 class with init，无法原地修改，需创建新实例。
     /// </summary>
     private static ContextPackageSection RebuildSection(ContextPackageSection section, string content, int tokens)
@@ -418,7 +418,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// R28-B.7 工作包 B-2：判断 section 是否属于 recent_context 分组。
+    /// 工作包 B-2：判断 section 是否属于 recent_context 分组。
     /// 与 <see cref="BuildStandardOutput"/> 中 recent_context 分组映射保持一致，
     /// 包含 recent_context / global / global_context / related 几个历史别名。
     /// </summary>
@@ -432,7 +432,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// R28-B.7 工作包 B-2：将 PackageInput 语义写入 metadata 字典（原地修改）。
+    /// 工作包 B-2：将 PackageInput 语义写入 metadata 字典（原地修改）。
     /// 仅写入有意义的字段，避免在 metadata 中留下空值或 None 噪音。
     /// </summary>
     /// <remarks>
@@ -470,10 +470,10 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// R28-B.6 Blocker-2：构建稳定的 ContextPackageStandardOutput。
+    /// Blocker-2：构建稳定的 ContextPackageStandardOutput。
     /// 按 section 名称映射到标准 schema 的 7 个分组（CurrentTask/RecentContext/WorkingState/
     /// StableBackground/Constraints/Entities/Relations/Evidence）。
-    /// R28-B.7：Budget 的 token 字段使用 Projector 截断后的真实 token 数（actualUsedTokens），
+    /// Budget 的 token 字段使用 Projector 截断后的真实 token 数（actualUsedTokens），
     /// 而非 Allocator 预估值（result.Outcome.EstimatedTokens）。
     /// </summary>
     private static ContextPackageStandardOutput BuildStandardOutput(
@@ -558,9 +558,9 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         CandidateWorkingSet workingSet,
         IReadOnlyDictionary<CanonicalCandidateKey, CandidateAllocationDecision> allocationByKey)
     {
-        // P0-7：从 AllocationDecision 消费 Section / IncludedTokens / IsTruncated
+        // 从 AllocationDecision 消费 Section / IncludedTokens / IsTruncated
         var section = ResolveSectionName(envelope.Source);
-        // R28-B.7 P0-4：优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
+        // 优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
         var includedTokens = envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
         var isTruncated = false;
         if (allocationByKey.TryGetValue(envelope.CanonicalKey, out var decision))
@@ -570,14 +570,14 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             isTruncated = decision.IsTruncated;
         }
 
-        // P0-7：从 Material sidecar 恢复候选 Content
+        // 从 Material sidecar 恢复候选 Content
         string content = string.Empty;
         if (workingSet.Materials.TryGetValue(envelope.CanonicalKey, out var material))
         {
             content = material.Content;
         }
 
-        // R28-B.6 Impl-1：当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
+        // Impl-1：当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
         if (isTruncated && !string.IsNullOrEmpty(content) && includedTokens > 0)
         {
             var truncation = _contentTruncator.Truncate(content, includedTokens);
@@ -635,7 +635,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         };
     }
 
-    // P0-7 修复：不再将 Mandatory / Constraint 重新映射为 "hard_constraint" / "hard_constraints" section。
+    // 修复：不再将 Mandatory / Constraint 重新映射为 "hard_constraint" / "hard_constraints" section。
     // 之前已修复 Soft/Mixed Constraint 升硬语义；此处保持 source 原始语义，
     // 由 ConstraintLevel（通过 ResolveConstraintLevel(candidate.Metadata)）决定 IsMandatory / IsHardConstraint。
     // Section / Kind 按候选来源类型映射，不引入 "hard_constraint" 字面量。
@@ -668,12 +668,12 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
 
     private static string ResolveSelectReason(ContextCandidateEnvelope envelope)
     {
-        // P0-7：保留 Safety.IsMandatory / IsHardConstraint 的语义判定，
+        // 保留 Safety.IsMandatory / IsHardConstraint 的语义判定，
         // 但不通过 Kind/Section 字面量升硬；仅用于 Reason 文本。
         if (envelope.Source == ContextCandidateSource.Mandatory || envelope.Safety.IsMandatory) return "mandatory";
         if (envelope.Source == ContextCandidateSource.Constraint || envelope.Safety.IsHardConstraint)
         {
-            // R28-B.7：根据 ConstraintLevel 返回不同解释，区分 hard/soft/mixed/system
+            // 根据 ConstraintLevel 返回不同解释，区分 hard/soft/mixed/system
             // （之前统一返回 "hard constraint"，导致 soft constraint 被误报为 hard）
             return envelope.Safety.ConstraintLevel switch
             {

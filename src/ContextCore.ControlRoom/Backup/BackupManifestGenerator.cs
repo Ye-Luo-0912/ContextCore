@@ -9,7 +9,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.ControlRoom.Backup;
 
 /// <summary>
-/// P1-2-3：备份清单生成器。遍历数据根目录、计算每个文件的 SHA-256，
+/// 备份清单生成器。遍历数据根目录、计算每个文件的 SHA-256，
 /// 同时为归档（ZIP）本身计算整体哈希，生成 <see cref="BackupManifest"/>。
 /// </summary>
 /// <remarks>

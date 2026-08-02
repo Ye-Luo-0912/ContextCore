@@ -334,14 +334,14 @@ public sealed class RelationExpansionProfile
     public Dictionary<string, double> WeightByRelationType { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// P1-8：每跳衰减因子（0, 1]。默认 1.0 = 不衰减。
+    /// 每跳衰减因子（0, 1]。默认 1.0 = 不衰减。
     /// childScore = parentScore * DecayFactor * weightFactor * confidenceFactor。
     /// 设为 0.7 时，2 跳路径的分数为 seed.Score * 0.7^2 * weight * confidence。
     /// </summary>
     public double DecayFactor { get; init; } = 1.0;
 
     /// <summary>
-    /// P1-8：是否启用 weight/confidence 传播到 child score。默认 true。
+    /// 是否启用 weight/confidence 传播到 child score。默认 true。
     /// false 时 childScore = parentScore * DecayFactor（仅路径衰减，无边质量传播），
     /// 保持与旧版完全等价的排序语义。
     /// </summary>
@@ -884,7 +884,7 @@ public sealed class RelationNeighborQuery
     public string? RelationType { get; init; }
 
     /// <summary>
-    /// P3-02：筛选多个关系类型（可选）。非空时优先于 <see cref="RelationType"/>，
+    /// 筛选多个关系类型（可选）。非空时优先于 <see cref="RelationType"/>，
     /// 存储层在 Take/排序前按列表过滤，避免高权重非允许边把合法边挤出窗口。
     /// </summary>
     public IReadOnlyList<string> AllowedRelationTypes { get; init; } = Array.Empty<string>();
@@ -909,7 +909,7 @@ public sealed class RelationNeighborQuery
 }
 
 /// <summary>
-/// P1-3：Graph 查询全局硬上限。所有图查询路径（store / traversal engine）必须遵守，
+/// Graph 查询全局硬上限。所有图查询路径（store / traversal engine）必须遵守，
 /// 防止病态查询（超大种子集 × 高扇出）导致全局扫描或结果集爆炸。
 /// </summary>
 /// <remarks>
@@ -995,9 +995,9 @@ public sealed class RelationNeighborBatchQuery
 }
 
 /// <summary>
-/// P1-6：单个种子的批量邻居查询结果。
+/// 单个种子的批量邻居查询结果。
 /// 引擎按 <see cref="ItemId"/> 索引结果以扩展 BFS frontier。
-/// P1-4：新增 <see cref="Truncated"/> 信号，标记存储层是否因 <c>MaxScan</c>（或 Postgres 全局 LIMIT）
+/// 新增 <see cref="Truncated"/> 信号，标记存储层是否因 <c>MaxScan</c>（或 Postgres 全局 LIMIT）
 /// 截断了该种子的候选集。true 表示返回的 <see cref="Relations"/> 可能不完整，
 /// 调用方（如 BFS 引擎）应据此设置自身的 Truncated 标记并向用户告警。
 /// </summary>
@@ -1010,7 +1010,7 @@ public sealed class RelationNeighborBatchResult
     public required IReadOnlyList<ContextRelation> Relations { get; init; }
 
     /// <summary>
-    /// P1-4：true 表示存储层对该种子的候选集进行了截断，<see cref="Relations"/> 可能不完整。
+    /// true 表示存储层对该种子的候选集进行了截断，<see cref="Relations"/> 可能不完整。
     /// 触发条件（任一即置 true）：
     /// <list type="bullet">
     /// <item>InMemory/FileSystem：该种子过滤后的候选数大于 <c>MaxScan</c>。</item>

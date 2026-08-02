@@ -7,12 +7,12 @@ using ContextCore.Core.Services.AgentKernel;
 namespace ContextCore.Benchmarks;
 
 // ===========================================================================
-// R29 WP-F-1：Agent Kernel 微基准
+// Agent Kernel 微基准
 //
 // 覆盖：
-//   §1 InMemoryToolDispatchJournal 状态机（Prepared → Dispatched → Committed → ResultDelivered）
-//   §2 DefaultAgentCheckpointFactory.CreateCheckpointAsync（Full + Delta 模式）
-//   §3 InMemoryAgentCheckpointStore SaveAsync / GetAsync 往返
+//   InMemoryToolDispatchJournal 状态机（Prepared → Dispatched → Committed → ResultDelivered）
+//   DefaultAgentCheckpointFactory.CreateCheckpointAsync（Full + Delta 模式）
+//   InMemoryAgentCheckpointStore SaveAsync / GetAsync 往返
 //
 // 数据规模：[Params(1, 10, 100)] 覆盖单 turn / 小批次 / 大批次指令
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
@@ -24,7 +24,7 @@ namespace ContextCore.Benchmarks;
 // ===========================================================================
 
 /// <summary>
-/// WP-F-1 §1：ToolDispatchJournal 状态机微基准。
+/// ToolDispatchJournal 状态机微基准。
 /// 测量 Prepared → Dispatched → Committed → ResultDelivered 全状态机推进。
 /// </summary>
 [MemoryDiagnoser]
@@ -79,7 +79,7 @@ public class ToolDispatchJournalBenchmarks
 }
 
 /// <summary>
-/// WP-F-1 §2：Agent Checkpoint Factory 微基准。
+/// Agent Checkpoint Factory 微基准。
 /// 测量 Full / Delta 两种 checkpoint 模式的创建开销。
 /// </summary>
 [MemoryDiagnoser]
@@ -152,7 +152,7 @@ public class CheckpointFactoryBenchmarks
 }
 
 /// <summary>
-/// WP-F-1 §3：Checkpoint Store Save + Get 往返。
+/// Checkpoint Store Save + Get 往返。
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]

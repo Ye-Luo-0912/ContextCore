@@ -237,7 +237,7 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
             return ChatFailure(operationId, "API 密钥未配置。", "unavailable");
         }
 
-        // P1-3：非法 Tool Schema 不静默降级为 {}，直接返回结构化失败。
+        // 非法 Tool Schema 不静默降级为 {}，直接返回结构化失败。
         if (request.Tools.Count > 0)
         {
             foreach (var tool in request.Tools)
@@ -252,7 +252,7 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
             }
         }
 
-        // P1-3：优先使用 Run 的 DeadlineAt 计算剩余时间，与 Endpoint Timeout 取较小者作为本次调用上限。
+        // 优先使用 Run 的 DeadlineAt 计算剩余时间，与 Endpoint Timeout 取较小者作为本次调用上限。
         // DeadlineAt 已过期则立即返回结构化失败，避免发起注定超时的请求。
         TimeSpan? deadlineRemaining = null;
         if (request.DeadlineAt is not null)
@@ -353,7 +353,7 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
                 msgObj["tool_call_id"] = msg.ToolCallId;
             }
 
-            // P0-2：Assistant 消息携带 tool_calls 时按 OpenAI 规范输出
+            // Assistant 消息携带 tool_calls 时按 OpenAI 规范输出
             if (msg.Role == ModelChatRole.Assistant && msg.ToolCalls is not null && msg.ToolCalls.Count > 0)
             {
                 msgObj["tool_calls"] = msg.ToolCalls.Select(tc => new
@@ -379,7 +379,7 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
         };
 
         // 原生 tools 参数（OpenAI function calling 格式）
-        // P1-3：非法 Schema 已在 ChatWithToolsAsync 入口校验，此处不再静默降级为 {}。
+        // 非法 Schema 已在 ChatWithToolsAsync 入口校验，此处不再静默降级为 {}。
         if (request.Tools.Count > 0)
         {
             var tools = new List<Dictionary<string, object?>>(request.Tools.Count);
@@ -414,7 +414,7 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
     }
 
     /// <summary>
-    /// P1-3：校验 Tool 的 ParametersJsonSchema 是否为合法 JSON Schema。
+    /// 校验 Tool 的 ParametersJsonSchema 是否为合法 JSON Schema。
     /// 空/空白视为合法（默认 "{}"）；非空时必须可解析为 JSON 对象且 type 为 object（或未指定 type）。
     /// </summary>
     private static bool IsValidJsonSchema(string? schema, out string error)
@@ -553,12 +553,12 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
             metadata["responseModel"] = ReadString(responseModel);
         }
 
-        // WP-0需求7：按模型配置的 token 单价计算 cost（美元）。
+        // 需求7：按模型配置的 token 单价计算 cost（美元）。
         // EstimatedCost = 不考虑缓存折扣的估算费用；BilledCost = 同值（缓存折扣由提供商侧已计入 prompt_tokens）。
         var estimatedCost = (inputTokens * _options.InputTokenPricePerMillionUsd
             + outputTokens * _options.OutputTokenPricePerMillionUsd) / 1_000_000.0;
 
-        // P1-3：length/content_filter 不视为正常最终答案，标记为需复核的结构化失败
+        // length/content_filter 不视为正常最终答案，标记为需复核的结构化失败
         if (finishReason == ModelChatFinishReason.Length)
         {
             metadata["requiresReview"] = "true";

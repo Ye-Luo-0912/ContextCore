@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R19-1：策略包契约（Context Policy Bundle Contracts）
+// 策略包契约（Context Policy Bundle Contracts）
 //
 // 目标：
 //   把分散在 ContextDecisionPolicyVersions（5 个版本常量）+ 各处
@@ -26,15 +26,15 @@ namespace ContextCore.Abstractions;
 //      PolicyRegistry 接口允许实现层注入 Postgres / InMemory store。
 //
 // 子阶段进度：
-//   R19-1（当前）：契约定义 + 单元测试验证可实施性。
-//   R19-2：PolicyBundle Provider 适配（从 ContextDecisionPolicyVersions
+//   （当前）：契约定义 + 单元测试验证可实施性。
+//   PolicyBundle Provider 适配（从 ContextDecisionPolicyVersions
 //          静态常量 + 现有 hardcoded profile 迁移到 ContextPolicyBundle）。
-//   R19-3：Pipeline 集成（Engine.DecideAsync 读取 PolicyBundleId →
+//   Pipeline 集成（Engine.DecideAsync 读取 PolicyBundleId →
 //          通过 IPolicyRegistry 解析 → 应用 Safety/Budget/Routing profile）。
 // ===========================================================================
 
 /// <summary>
-/// R19-1：策略包版本集合。复用 <see cref="ContextDecisionPolicyVersions"/> 5 个版本常量，
+/// 策略包版本集合。复用 <see cref="ContextDecisionPolicyVersions"/> 5 个版本常量，
 /// 把"能力作用域的版本字符串集合"显式提升为 bundle 内部字段。
 /// </summary>
 /// <remarks>
@@ -61,7 +61,7 @@ public sealed record ContextPolicySet
 }
 
 /// <summary>
-/// R19-1：模型 artifact 引用。表示 bundle 内部引用的模型版本，
+/// 模型 artifact 引用。表示 bundle 内部引用的模型版本，
 /// 用于 trace 溯源 + canary shadow 跟踪。
 /// </summary>
 /// <remarks>
@@ -99,7 +99,7 @@ public sealed record ModelArtifactReference
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R19-1：安全策略 profile。承载 safety gate 判定所需参数。
+/// 安全策略 profile。承载 safety gate 判定所需参数。
 /// 此 profile 由 bundle 全局决定，**不允许 per-request override**（用户澄清 #3）。
 /// </summary>
 public sealed record SafetyProfile
@@ -125,7 +125,7 @@ public sealed record SafetyProfile
 }
 
 /// <summary>
-/// R19-1：预算策略 profile。承载 token budget + TopK + section 比例分配。
+/// 预算策略 profile。承载 token budget + TopK + section 比例分配。
 /// 此 profile 由 bundle 决定，但 **允许 per-request override**（用户澄清 #3）。
 /// </summary>
 public sealed record BudgetProfile
@@ -149,7 +149,7 @@ public sealed record BudgetProfile
 }
 
 /// <summary>
-/// R19-1：路由策略 profile。控制模型启用 + 专家开关 + 置信度阈值。
+/// 路由策略 profile。控制模型启用 + 专家开关 + 置信度阈值。
 /// 此 profile 由 bundle 决定，但 **允许 per-request 部分字段 override**（用户澄清 #3）。
 /// </summary>
 /// <remarks>
@@ -186,7 +186,7 @@ public sealed record RoutingProfile
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R19-1：策略包 rollout 策略。控制 bundle 从 shadow → canary → promoted 的生命周期。
+/// 策略包 rollout 策略。控制 bundle 从 shadow → canary → promoted 的生命周期。
 /// </summary>
 /// <remarks>
 /// 复用 R16 EvolutionContracts.RollbackCondition；任一 condition 命中 →
@@ -218,7 +218,7 @@ public sealed record RolloutPolicy
 }
 
 /// <summary>
-/// R19-1：策略包 rollout 阶段。对齐 R17 OptimizationStage 但作用域限制在 bundle。
+/// 策略包 rollout 阶段。对齐 R17 OptimizationStage 但作用域限制在 bundle。
 /// </summary>
 public enum PolicyRolloutStrategy : byte
 {
@@ -239,7 +239,7 @@ public enum PolicyRolloutStrategy : byte
 }
 
 /// <summary>
-/// R19-1：策略包（Context Policy Bundle）。
+/// 策略包（Context Policy Bundle）。
 /// 全局不可变，包含 PolicySet + 3 个 Profile + ModelArtifacts + RolloutPolicy。
 /// </summary>
 /// <remarks>
@@ -294,17 +294,17 @@ public sealed record ContextPolicyBundle
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R19-1：策略激活记录。表示某 workspace/collection 当前激活的 bundle + 可选 profile override。
+/// 策略激活记录。表示某 workspace/collection 当前激活的 bundle + 可选 profile override。
 /// </summary>
 /// <remarks>
 /// 设计原则（用户澄清 #2）：
 ///   - Activation 按 workspace/collection 隔离；同一 workspace+collection 同一时刻只有一个 active bundle。
 ///   - Profile override 受限：不允许替换 SafetyProfile；BudgetProfile / RoutingProfile 仅允许
 ///     部分字段 override（用户澄清 #3）。
-/// P0-4 修复：新增 <see cref="Epoch"/> 单调递增版本号，支持 compare-and-swap 原子激活。
-/// P1-3 修复：新增 <see cref="BundleVersion"/> + <see cref="BundleContentHash"/> required 字段，
+/// 修复：新增 <see cref="Epoch"/> 单调递增版本号，支持 compare-and-swap 原子激活。
+/// 修复：新增 <see cref="BundleVersion"/> + <see cref="BundleContentHash"/> required 字段，
 ///   GetActiveBundleAsync 必须精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
-/// P1-4 修复：BudgetOverride / RoutingOverride 改用受限类型
+/// 修复：BudgetOverride / RoutingOverride 改用受限类型
 ///   (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
 ///   从类型系统上禁止控制面注入 ModelArtifactId / 模型权重 / confidence threshold / EnabledExperts。
 /// </remarks>
@@ -320,13 +320,13 @@ public sealed record PolicyActivation
     public required string BundleId { get; init; }
 
     /// <summary>
-    /// P1-3：激活的 bundle 版本号（必填）。
+    /// 激活的 bundle 版本号（必填）。
     /// GetActiveBundleAsync 必须精确读取 (BundleId, BundleVersion)，不漂移到"最新版本"。
     /// </summary>
     public required string BundleVersion { get; init; }
 
     /// <summary>
-    /// P1-3：bundle 内容哈希（必填）。用于验证 bundle 不可变性 —
+    /// bundle 内容哈希（必填）。用于验证 bundle 不可变性 —
     /// 注册新版本后，旧 activation 的 BundleContentHash 不变，确保不会自动漂移。
     /// </summary>
     public required string BundleContentHash { get; init; }
@@ -341,27 +341,27 @@ public sealed record PolicyActivation
     public PolicyRolloutStrategy RolloutStatus { get; init; } = PolicyRolloutStrategy.Promoted;
 
     /// <summary>
-    /// P0-4：激活 epoch（单调递增版本号）。每次 TryActivateAsync 成功时 +1。
+    /// 激活 epoch（单调递增版本号）。每次 TryActivateAsync 成功时 +1。
     /// 用于 compare-and-swap：调用方传入 expectedEpoch，仅当当前 epoch 匹配时才激活。
     /// 首次激活时 epoch = 1。
     /// </summary>
     public long Epoch { get; init; } = 1;
 
     /// <summary>
-    /// P1-4：预算 override（受限类型）。仅允许调整 TokenBudget / TopK / SectionRatios。
+    /// 预算 override（受限类型）。仅允许调整 TokenBudget / TopK / SectionRatios。
     /// null = 使用 bundle 中的 BudgetProfile。
     /// </summary>
     public RequestBudgetOverride? BudgetOverride { get; init; }
 
     /// <summary>
-    /// P1-4：路由 override（受限类型）。仅允许调整 EnableModelScoring。
+    /// 路由 override（受限类型）。仅允许调整 EnableModelScoring。
     /// null = 使用 bundle 中的 RoutingProfile。
     /// </summary>
     public RequestRoutingOverride? RoutingOverride { get; init; }
 }
 
 /// <summary>
-/// R19-1：策略包注册表接口。负责解析给定 workspace+collection 当前激活的 bundle。
+/// 策略包注册表接口。负责解析给定 workspace+collection 当前激活的 bundle。
 /// </summary>
 /// <remarks>
 /// 接口契约：
@@ -388,7 +388,7 @@ public interface IPolicyRegistry
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-2：按 bundleId + version 精确加载 bundle。
+    /// 按 bundleId + version 精确加载 bundle。
     /// </summary>
     /// <param name="bundleId">bundle 唯一 ID。</param>
     /// <param name="version">
@@ -400,7 +400,7 @@ public interface IPolicyRegistry
     /// 匹配的 bundle；未找到返回 null（fail-closed：调用方必须显式处理，不可静默回退默认 bundle）。
     /// </returns>
     /// <remarks>
-    /// P0-2 修复：当调用方显式指定 PolicyBundleId 时，Engine 通过此方法精确加载。
+    /// 修复：当调用方显式指定 PolicyBundleId 时，Engine 通过此方法精确加载。
     /// 找不到时返回 null 而非默认 bundle，避免静默回退掩盖配置错误。
     /// </remarks>
     Task<ContextPolicyBundle?> GetBundleAsync(
@@ -425,7 +425,7 @@ public interface IPolicyRegistry
     /// 注册新 bundle（不激活）。
     /// </summary>
     /// <remarks>
-    /// P0-4 修复：insert-if-absent 语义。相同 (BundleId, Version) 已存在时抛
+    /// 修复：insert-if-absent 语义。相同 (BundleId, Version) 已存在时抛
     /// <see cref="InvalidOperationException"/>，不再静默覆盖。
     /// bundle 全局不可变；supersede 通过新建 bundle 实现。
     /// </remarks>
@@ -447,7 +447,7 @@ public interface IPolicyRegistry
     /// false = CAS 失败（epoch 不匹配，已有更新版本激活）。
     /// </returns>
     /// <remarks>
-    /// P0-4 修复：解决"两个实例同时激活不同 bundle 到同一 workspace+collection"的竞态。
+    /// 修复：解决"两个实例同时激活不同 bundle 到同一 workspace+collection"的竞态。
     /// 数据库条件：UPDATE ... SET epoch = epoch + 1 WHERE epoch = @expected_epoch。
     /// </remarks>
     Task<bool> TryActivateAsync(
@@ -461,10 +461,10 @@ public interface IPolicyRegistry
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// P0-3：per-request 路由 override。仅允许调整 EnableModelScoring 开关。
+/// per-request 路由 override。仅允许调整 EnableModelScoring 开关。
 /// </summary>
 /// <remarks>
-/// P0-3 修复：原 ContextPolicyOverride.RoutingOverride 直接复用 RoutingProfile，
+/// 修复：原 ContextPolicyOverride.RoutingOverride 直接复用 RoutingProfile，
 /// 允许调用方修改 ModelArtifactId / DeterministicWeight / ModelWeight /
 /// ModelConfidenceThreshold / EnabledExperts，违反"不允许替换正式模型"的受限规则。
 /// 此 record 从类型系统上禁止 Request 修改这些字段。
@@ -476,10 +476,10 @@ public sealed record RequestRoutingOverride
 }
 
 /// <summary>
-/// P0-3：per-request 预算 override。仅允许调整 TokenBudget / TopK / SectionRatios。
+/// per-request 预算 override。仅允许调整 TokenBudget / TopK / SectionRatios。
 /// </summary>
 /// <remarks>
-/// P0-3 修复：原 ContextPolicyOverride.BudgetOverride 直接复用 BudgetProfile，
+/// 修复：原 ContextPolicyOverride.BudgetOverride 直接复用 BudgetProfile，
 /// 允许调用方修改 StrictBudgetEnforcement / ProfileId 等字段。
 /// 此 record 从类型系统上限制可调整字段。
 /// </remarks>
@@ -496,7 +496,7 @@ public sealed record RequestBudgetOverride
 }
 
 /// <summary>
-/// R19-1：per-request 策略 override。允许调用方在不替换 bundle 的前提下
+/// per-request 策略 override。允许调用方在不替换 bundle 的前提下
 /// 调整非安全相关参数。
 /// </summary>
 /// <remarks>
@@ -505,7 +505,7 @@ public sealed record RequestBudgetOverride
 ///   - 不允许替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
 ///   - 仅允许调整：TokenBudget / TopK / SectionRatios / EnableModelScoring。
 ///   - 字段全为可选：null = 使用 bundle 中的默认 profile。
-/// P0-3 修复：BudgetOverride / RoutingOverride 改用受限类型
+/// 修复：BudgetOverride / RoutingOverride 改用受限类型
 ///   (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
 ///   从类型系统上禁止 Request 修改 ModelArtifactId / 模型权重 / confidence threshold /
 ///   EnabledExperts / SafetyProfile。
@@ -527,7 +527,7 @@ public sealed record ContextPolicyOverride
     /// <summary>验证 override 是否符合受限规则（不替换安全边界 / 正式模型）。</summary>
     /// <returns>true = 合规；false = 违反受限规则。</returns>
     /// <remarks>
-    /// P0-3 修复后，受限规则由类型系统保证（RequestBudgetOverride / RequestRoutingOverride
+    /// 修复后，受限规则由类型系统保证（RequestBudgetOverride / RequestRoutingOverride
     /// 仅暴露安全字段），此方法始终返回 true（只要任一字段非空即表示有 override）。
     /// </remarks>
     public bool IsCompliant()

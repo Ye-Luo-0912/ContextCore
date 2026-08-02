@@ -64,7 +64,7 @@ public sealed class LlmContextCompressor : IContextCompressor
         var modelResponse = await _modelGateway.CompleteAsync(modelRequest, cancellationToken).ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
 
-        // §6.3 高风险任务禁止 fallback：审计级压缩任务使用了回退模型时直接失败
+        // 高风险任务禁止 fallback：审计级压缩任务使用了回退模型时直接失败
         var fallbackUsed = modelResponse.Metadata.TryGetValue("fallbackUsed", out var fbVal)
             && string.Equals(fbVal, "true", StringComparison.OrdinalIgnoreCase);
         if (fallbackUsed && request.Options.Depth == CompressionDepth.Audit)
@@ -148,7 +148,7 @@ public sealed class LlmContextCompressor : IContextCompressor
             finalStatus = CompressionStatus.PartiallySucceeded;
         }
 
-        // §6.3 fallback 输出默认进入 needs_review，并添加警告
+        // fallback 输出默认进入 needs_review，并添加警告
         if (fallbackUsed)
         {
             finalWarnings.Add(new ContextWarning
@@ -230,25 +230,25 @@ public sealed class LlmContextCompressor : IContextCompressor
         var fallbackUsed = meta.TryGetValue("fallbackUsed", out var fb)
             && string.Equals(fb, "true", StringComparison.OrdinalIgnoreCase);
 
-        // §6.1 从 gateway metadata 提取重试次数
+        // 从 gateway metadata 提取重试次数
         var retryCount = 0;
         if (meta.TryGetValue("attempt", out var attemptStr) && int.TryParse(attemptStr, out var attemptNum))
         {
             retryCount = Math.Max(0, attemptNum - 1);
         }
 
-        // §6.1 检测超时
+        // 检测超时
         var timedOut = meta.TryGetValue("failureReason", out var fr)
             && string.Equals(fr, "timeout", StringComparison.OrdinalIgnoreCase);
 
-        // §6.1 估算成本
+        // 估算成本
         var inputTokens = response.Usage?.InputTokens ?? 0;
         var outputTokens = response.Usage?.OutputTokens ?? 0;
         var inputPrice = meta.TryGetValue("inputPricePerMToken", out var ipStr) && double.TryParse(ipStr, out var ip) ? ip : DefaultInputPricePerMToken;
         var outputPrice = meta.TryGetValue("outputPricePerMToken", out var opStr) && double.TryParse(opStr, out var op) ? op : DefaultOutputPricePerMToken;
         var estimatedCost = (inputTokens * inputPrice + outputTokens * outputPrice) / 1_000_000.0;
 
-        // §6.2 来源证据绑定
+        // 来源证据绑定
         var sourceIds = request.Inputs
             .Where(i => !string.IsNullOrEmpty(i.Id))
             .Select(i => i.Id)

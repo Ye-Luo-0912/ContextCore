@@ -13,7 +13,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Service Composition E2E 验收测试
+// Service Composition E2E 验收测试
 //
 // 目标：验证 AddContextCoreRuntime 在三种 RuntimeProfile
 //   （Development / SingleNode / ProductionHA）下的服务注册组合正确性
@@ -273,7 +273,7 @@ public sealed class R29H_ServiceCompositionE2ETests
             "ProductionHA profile 应强制 LeaseEnabled=true（HA 多实例租约竞争）。");
 
         // 断言 3：CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
-        // P0-2：CanarySchedulerOptions 改用 AddOptions<>() 注册（Options Pipeline），
+        // CanarySchedulerOptions 改用 AddOptions<>() 注册（Options Pipeline），
         // 不再注册为 POCO singleton，需通过 IOptions<T> 解析。
         var canarySchedulerOptions = provider.GetService<IOptions<CanarySchedulerOptions>>()?.Value;
         Assert.IsNotNull(canarySchedulerOptions);

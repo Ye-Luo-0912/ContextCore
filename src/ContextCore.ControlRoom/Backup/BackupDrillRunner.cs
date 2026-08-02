@@ -5,7 +5,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.ControlRoom.Backup;
 
 /// <summary>
-/// P1-2-3：恢复演练器。将 ZIP 归档解压到隔离的 staging 目录，
+/// 恢复演练器。将 ZIP 归档解压到隔离的 staging 目录，
 /// 重新计算每个文件的 SHA-256 并与清单对比，输出 <see cref="BackupDrillResult"/>，
 /// 完成后自动清理 staging 目录。
 /// </summary>

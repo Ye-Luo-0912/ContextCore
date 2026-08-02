@@ -13,7 +13,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// WP-S6 Production Evidence：真进程 Kill + DB 网络分区集成测试
+// 真进程 Kill + DB 网络分区集成测试
 //
 // 目标：
 //   1. E2E_RealProcessKill_MidToolExecution_NoDuplicateSideEffect — 真实操作系统进程

@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-7：AgentRuntimeServiceCollectionExtensions DI 测试。
+/// AgentRuntimeServiceCollectionExtensions DI 测试。
 ///
 /// 覆盖：
 ///   1. AddAgentRuntimeRegistry 注册 IAgentRuntimeRegistry

@@ -65,7 +65,7 @@ public sealed class RelationTypeNormalizer
         return Clone(relation, normalizedType, relation.Confidence, relation.SourceRefs, metadata);
     }
 
-    // P3-04：CanBackfillDeterministicEvidence 和 NormalizeAndBackfillFixtureRelation 已移至
+    // CanBackfillDeterministicEvidence 和 NormalizeAndBackfillFixtureRelation 已移至
     // ControlRoom 的 RelationEvalBackfillPolicy，不再留在生产 Core。
 
     public static bool HasEvidence(ContextRelation relation)
@@ -103,7 +103,7 @@ public sealed class RelationTypeNormalizer
         return HasMetadataValue(relation.Metadata, "reviewStatus");
     }
 
-    // P3-04：CanBackfillDeterministicEvidence 已移至 ControlRoom 的 RelationEvalBackfillPolicy
+    // CanBackfillDeterministicEvidence 已移至 ControlRoom 的 RelationEvalBackfillPolicy
 
     private static ContextRelation Clone(
         ContextRelation relation,

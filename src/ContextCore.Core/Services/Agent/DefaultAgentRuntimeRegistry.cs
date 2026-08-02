@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-5：DefaultAgentRuntimeRegistry — Agent Runtime 注册表默认实现。
+// DefaultAgentRuntimeRegistry — Agent Runtime 注册表默认实现。
 //
 // 实现 IAgentRuntimeRegistry 契约：
 //   - ConcurrentDictionary<AgentRuntimeKind, IAgentRuntime> 后端存储
@@ -14,7 +14,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R23-5：<see cref="IAgentRuntimeRegistry"/> 的默认实现。
+/// <see cref="IAgentRuntimeRegistry"/> 的默认实现。
 /// </summary>
 /// <remarks>
 /// 使用 <see cref="ConcurrentDictionary{TKey, TValue}"/> 后端；线程安全。

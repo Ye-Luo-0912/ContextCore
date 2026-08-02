@@ -122,7 +122,7 @@ public sealed class DeterministicAgentModelTransport : IAgentModelTransport
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        // P0-1：确定性 fallback 不调用真实 LLM，忽略 Tools / ModelArtifactId / DeadlineAt，
+        // 确定性 fallback 不调用真实 LLM，忽略 Tools / ModelArtifactId / DeadlineAt，
         // 委托到 CallAsync(runId, messages) 旧路径（基于关键词匹配产出确定性响应）。
         return CallAsync(request.RunId, request.Messages, cancellationToken);
     }

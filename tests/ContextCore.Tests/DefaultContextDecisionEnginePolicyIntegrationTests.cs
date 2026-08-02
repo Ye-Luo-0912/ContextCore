@@ -6,7 +6,7 @@ using ContextCore.Core.Services.Policy;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R19-3：Pipeline 集成 — Engine.DecideAsync 读取 PolicyBundle 测试。
+/// Pipeline 集成 — Engine.DecideAsync 读取 PolicyBundle 测试。
 ///
 /// 验证目标：
 ///   1. 无 IPolicyRegistry 时向后兼容（hardcoded defaults，与 R18-2 行为一致）
@@ -461,7 +461,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             policyOverride: new ContextPolicyOverride
             {
                 BundleId = bundle.BundleId,
-                // P0-3 修复：使用 RequestBudgetOverride（仅允许 TokenBudget/TopK/SectionRatios）
+                // 修复：使用 RequestBudgetOverride（仅允许 TokenBudget/TopK/SectionRatios）
                 BudgetOverride = new RequestBudgetOverride
                 {
                     TokenBudget = 300,
@@ -512,7 +512,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             policyOverride: new ContextPolicyOverride
             {
                 BundleId = bundle.BundleId,
-                // P0-3 修复：使用 RequestRoutingOverride（仅允许 EnableModelScoring）
+                // 修复：使用 RequestRoutingOverride（仅允许 EnableModelScoring）
                 // bundle.Routing.ModelArtifactId 等字段不可被 Request 替换
                 RoutingOverride = new RequestRoutingOverride { EnableModelScoring = true }
             });
@@ -632,7 +632,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
     public async Task DecideAsync_WithRegistry_PolicyBundleIdProvided_SkipsRegistry()
     {
         // 自定义计数 registry：GetActiveBundleAsync 调用计数
-        // P0-2 修复：PolicyBundleId 显式提供时，Engine 通过 GetBundleAsync 精确加载
+        // 修复：PolicyBundleId 显式提供时，Engine 通过 GetBundleAsync 精确加载
         // （不再静默回退默认 Bundle）。
         var bundle = MakeBundle(bundleId: "bundle-explicit-id");
         var countingRegistry = new CountingPolicyRegistry(bundle);
@@ -659,14 +659,14 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
 
         Assert.AreEqual(0, countingRegistry.GetActiveBundleCallCount,
             "GetActiveBundleAsync 不应被调用");
-        // P0-2：显式 BundleId 解析成功 → 使用该 bundle（而非 hardcoded defaults）
+        // 显式 BundleId 解析成功 → 使用该 bundle（而非 hardcoded defaults）
         Assert.AreEqual(ContextDecisionPolicyVersions.DecisionSchemaV2_0, result.PolicyVersion);
     }
 
     [TestMethod]
     public async Task DecideAsync_WithRegistry_PolicyBundleIdProvided_ButNotFound_FailsClosed()
     {
-        // P0-2 fail-closed 契约：当 PolicyBundleId 显式提供但 GetBundleAsync 返回 null 时，
+        // fail-closed 契约：当 PolicyBundleId 显式提供但 GetBundleAsync 返回 null 时，
         // Engine 不允许静默回退默认 Bundle，必须抛 InvalidOperationException。
         var countingRegistry = new CountingPolicyRegistry(MakeBundle(bundleId: "bundle-real"));
         var engine = new DefaultContextDecisionEngine(countingRegistry);
@@ -874,13 +874,13 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             PolicyActivation activation, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        // P0-2：精确加载 bundle；此 stub 未追踪多版本 bundle，故仅在 BundleId 匹配时返回。
+        // 精确加载 bundle；此 stub 未追踪多版本 bundle，故仅在 BundleId 匹配时返回。
         public Task<ContextPolicyBundle?> GetBundleAsync(
             string bundleId, string? version, CancellationToken cancellationToken = default)
             => Task.FromResult<ContextPolicyBundle?>(
                 string.Equals(_bundle.BundleId, bundleId, StringComparison.Ordinal) ? _bundle : null);
 
-        // P0-4：CAS 激活；此 stub 不维护 epoch，无竞争场景下总是成功。
+        // CAS 激活；此 stub 不维护 epoch，无竞争场景下总是成功。
         public Task<bool> TryActivateAsync(
             PolicyActivation next, long expectedEpoch, CancellationToken cancellationToken = default)
             => Task.FromResult(true);

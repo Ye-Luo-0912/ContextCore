@@ -7,7 +7,7 @@ namespace ContextCore.Storage.FileSystem;
 /// 最终排序由调用方完成。
 /// </summary>
 /// <remarks>
-/// P0-9.1：旧实现调用 ReadAsync 全量反序列化每个分片文件，大历史文件开销随行数线性增长。
+/// 旧实现调用 ReadAsync 全量反序列化每个分片文件，大历史文件开销随行数线性增长。
 /// 新实现调用 ReadTailAsync，每个文件只反序列化尾部剩余预算行数的记录，收集够后立即停止。
 /// </remarks>
 internal static class TraceQueryHelper
@@ -38,7 +38,7 @@ internal static class TraceQueryHelper
                 break;
             }
 
-            // P0-9.1：只反序列化文件尾部剩余预算行数的记录，不再全量反序列化。
+            // 只反序列化文件尾部剩余预算行数的记录，不再全量反序列化。
             // append-only 下最新记录在文件末尾，从尾部读取可在收集够后早停。
             var remaining = budget - results.Count;
             var records = await jsonLines.ReadTailAsync<T>(path, remaining, cancellationToken)

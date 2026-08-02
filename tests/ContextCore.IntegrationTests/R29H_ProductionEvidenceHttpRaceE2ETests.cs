@@ -12,7 +12,7 @@ using Npgsql;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// WP-S6 Production Evidence：HTTP 竞态场景集成测试
+// HTTP 竞态场景集成测试
 //
 // 目标：
 //   1. E2E_Http_Sse_LastEventIdReplay_NoLostWakeup — SSE 在读取/订阅竞争窗口不丢最终事件：

@@ -79,7 +79,7 @@ public sealed class ContextCoreHybridRetrievalTests
         CollectionAssert.Contains(result.Candidates[0].MatchedAnchors.ToArray(), "中文输出");
     }
 
-    // R12.4A #1：Memory Recall 与 Keyword Recall 解耦。
+    // Memory Recall 与 Keyword Recall 解耦。
     // 记忆条目不含查询关键词时仍应被召回（基于 importance/confidence/lifecycle），不被 MatchesMemoryQuery 硬过滤丢弃。
     // 这与 Package Build 路径（WorkingMemoryRecaller）的 anchor-based 评分语义一致。
     [TestMethod]
@@ -120,7 +120,7 @@ public sealed class ContextCoreHybridRetrievalTests
             "查询文本未命中记忆内容，matchedTokens 应为空");
     }
 
-    // P0 4.1 矩阵测试：Memory Recall 必须独立于 Keyword Recall。
+    // 4.1 矩阵测试：Memory Recall 必须独立于 Keyword Recall。
     // 当 IncludeKeywordRecall=false 时，Memory Channel 仍应按 IncludeWorkingMemory/IncludeStableMemory 执行。
     [TestMethod]
     public async Task MemoryRecall_KeywordDisabled_WorkingOnly_RecallsWorkingLayer()
@@ -170,7 +170,7 @@ public sealed class ContextCoreHybridRetrievalTests
         CollectionAssert.DoesNotContain(ids, stableId);
     }
 
-    // P0-7.3 回归测试：per-layer quota 防止 Working Memory 饱和后压掉 Stable Memory。
+    // 回归测试：per-layer quota 防止 Working Memory 饱和后压掉 Stable Memory。
     // 旧实现按 Working → Stable → Distinct → Take(candidateTake) 顺序追加截取，
     // 当 Working 返回数 >= candidateTake 时 Stable 会被全部截掉。
     // 新实现使用 per-layer quota + rollover，确保两层共存。
@@ -1203,7 +1203,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// R12.4A #7: Retrieval deterministic CandidateId tie-break —
+    /// #7: Retrieval deterministic CandidateId tie-break —
     /// 同 Score + 同 EstimatedTokens 的候选按 CandidateId 升序稳定排序，
     /// 避免依赖输入枚举顺序导致跨 Provider/并发 Channel 结果不稳定。
     /// </summary>
@@ -1235,7 +1235,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// R12.4A #8: Relation quota 语义修正——Pack 阶段为 relation-only 候选预留 TopK 名额。
+    /// #8: Relation quota 语义修正——Pack 阶段为 relation-only 候选预留 TopK 名额。
     /// 当 main 候选分数高于 relation-only 候选时，仍应保留部分 TopK 槽位给 relation-only 候选，
     /// 而不是让高分 main 候选全部挤掉 relation-only 候选（之前的 cap-only 语义缺陷）。
     /// </summary>
@@ -1302,7 +1302,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// R12.4A #8: 当 relation-only 候选不足预留量时，未填满的槽位 rollover 给 main 候选。
+    /// #8: 当 relation-only 候选不足预留量时，未填满的槽位 rollover 给 main 候选。
     /// </summary>
     [TestMethod]
     public void Pack_RelationQuota_RollsOverUnusedSlotsToMain()
@@ -1367,7 +1367,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// R12.4A #8: 当 main 候选不足 mainSlots 时，未填满的槽位 rollover 给 relation-only 候选。
+    /// #8: 当 main 候选不足 mainSlots 时，未填满的槽位 rollover 给 relation-only 候选。
     /// </summary>
     [TestMethod]
     public void Pack_RelationQuota_RollsOverUnusedMainSlotsToRelationOnly()
@@ -1432,7 +1432,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// R12.4A #8: 无 relation-only 候选时，reservation 不生效，行为与之前一致。
+    /// #8: 无 relation-only 候选时，reservation 不生效，行为与之前一致。
     /// </summary>
     [TestMethod]
     public void Pack_RelationQuota_NoRelationOnly_BehavesUnchanged()

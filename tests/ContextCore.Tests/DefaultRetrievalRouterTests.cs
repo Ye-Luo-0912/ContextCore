@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R20-2：DefaultRetrievalRouter 测试。
+/// DefaultRetrievalRouter 测试。
 ///
 /// 验证目标：
 ///   1. 默认路由（mask=AllEnabled，无 bundle）→ 8 个 Expert 全部启用
@@ -337,7 +337,7 @@ public sealed class DefaultRetrievalRouterTests
     [TestMethod]
     public void Route_PolicyOverrideRoutingOverride_OnlyMergesEnableModelScoring()
     {
-        // P0-3 修复：RoutingOverride 不再完整替换 RoutingProfile。
+        // 修复：RoutingOverride 不再完整替换 RoutingProfile。
         // - RequestRoutingOverride 仅暴露 EnableModelScoring 字段；
         // - EnabledExperts / ModelArtifactId 等字段保留 bundle 默认。
         var router = new DefaultRetrievalRouter();
@@ -370,7 +370,7 @@ public sealed class DefaultRetrievalRouterTests
     [TestMethod]
     public void Route_PolicyOverrideBudgetOverride_MergesTokenBudgetAndTopK()
     {
-        // P0-3 修复：BudgetOverride 不再完整替换 BudgetProfile。
+        // 修复：BudgetOverride 不再完整替换 BudgetProfile。
         // - RequestBudgetOverride 仅暴露 TokenBudget / TopK / SectionRatios；
         // - ProfileId / StrictBudgetEnforcement 等字段保留 bundle 默认。
         var router = new DefaultRetrievalRouter();

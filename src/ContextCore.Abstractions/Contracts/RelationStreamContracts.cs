@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// P1-7：关系流式查询契约，避免一次性将整张关系图载入内存。
+/// 关系流式查询契约，避免一次性将整张关系图载入内存。
 /// <para>
 /// 与 <see cref="IRelationStore"/> 分离以保持 7 方法契约稳定。实现方在已有 store 上额外实现此接口；
 /// 调用方（如 RelationGraphValidationService.ValidateStreamAsync、流式诊断端点）通过
@@ -43,7 +43,7 @@ public interface IRelationStreamStore
 }
 
 /// <summary>
-/// P1-9：按关系 ID 批量 hydrate 完整 Relation Metadata（JSON）的契约。
+/// 按关系 ID 批量 hydrate 完整 Relation Metadata（JSON）的契约。
 /// <para>
 /// 与 <see cref="IRelationStore"/> 分离以保持 7 方法契约稳定（参照 <see cref="IRelationStreamStore"/> 的拆分模式）。
 /// 在线主链（<see cref="IRelationStore.QueryNeighborsBatchAsync"/>）只返回结构列，

@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions.Models;
 
 /// <summary>
-/// R13.2 #4：包构建读路径的查询计划，记录各 store 的实际调用次数与去重命中。
+/// #4：包构建读路径的查询计划，记录各 store 的实际调用次数与去重命中。
 /// 用于验证 R13.2 #1（merged constraint 去重）与 #3（current_task 并行）的效果，
 /// 并为后续 R13.3 Store Capability Model 与 R13-F Cache Canary Freeze 验收提供可观察指标。
 /// </summary>

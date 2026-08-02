@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R28-B：Unified Context Decision Runtime 契约
+// Unified Context Decision Runtime 契约
 //
 // 目标：
 //   把当前双重决策链收敛为唯一 Context Decision Runtime。
@@ -30,11 +30,11 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// §5.1 两层入口
+// 两层入口
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：统一 Context Decision Runtime — 唯一 I/O 编排入口。
+/// 统一 Context Decision Runtime — 唯一 I/O 编排入口。
 /// </summary>
 /// <remarks>
 /// 负责：Policy resolution → Router → CandidateProviders → Canonical Merge →
@@ -55,7 +55,7 @@ public interface IContextDecisionRuntime
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// R28-B.6 Blocker-1：执行完整决策编排，返回 ExecutionResult（含 WorkingSet）。
+    /// Blocker-1：执行完整决策编排，返回 ExecutionResult（含 WorkingSet）。
     /// </summary>
     /// <remarks>
     /// 与 <see cref="ExecuteAsync"/> 的差异：返回 <see cref="ContextDecisionExecutionResult"/>，
@@ -71,7 +71,7 @@ public interface IContextDecisionRuntime
 }
 
 /// <summary>
-/// R28-B.6 Blocker-1：Provider 执行报告。
+/// Blocker-1：Provider 执行报告。
 /// </summary>
 public sealed record ProviderExecutionReport
 {
@@ -98,7 +98,7 @@ public sealed record ProviderExecutionReport
 }
 
 /// <summary>
-/// P0-9：Learning Event 持久化状态。由 Runtime 在 TriggerUtilityLedgerMaterializationAsync 后填充，
+/// Learning Event 持久化状态。由 Runtime 在 TriggerUtilityLedgerMaterializationAsync 后填充，
 /// 让 Learning Durable Failure 不再被静默吞掉（caller 可观测 Persisted / Deferred / Failed）。
 /// </summary>
 public enum LearningPersistenceStatus : byte
@@ -114,7 +114,7 @@ public enum LearningPersistenceStatus : byte
 }
 
 /// <summary>
-/// R28-B.6 Blocker-1：完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。
+/// Blocker-1：完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。
 /// </summary>
 /// <remarks>
 /// Runtime 返回此类型，Projector 始终消费 Decision + WorkingSet + ProjectionContext，
@@ -165,7 +165,7 @@ public sealed record ContextDecisionExecutionResult
     public bool IsDegraded { get; init; }
 
     /// <summary>
-    /// P0-9：Learning Event 持久化状态。由 Runtime 在 TriggerUtilityLedgerMaterializationAsync 后填充。
+    /// Learning Event 持久化状态。由 Runtime 在 TriggerUtilityLedgerMaterializationAsync 后填充。
     /// null = 未触发物化路径（极旧 caller / 测试 stub）；非 null 时 caller 可观测 Persisted / Deferred / Failed。
     /// Failed 时主决策结果仍可用，但 Learning Event 入队失败需上层（observability / retry）处理。
     /// </summary>
@@ -173,7 +173,7 @@ public sealed record ContextDecisionExecutionResult
 }
 
 /// <summary>
-/// R28-B.7 P0-4：候选 token 成本（精确或估算）。
+/// 候选 token 成本（精确或估算）。
 /// </summary>
 /// <remarks>
 /// Provider 召回候选时计算 token 成本。若 IContextTokenizerResolver 可用则使用精确 tokenizer；
@@ -231,7 +231,7 @@ public sealed record FinalArtifactTokenCost
 }
 
 /// <summary>
-/// R28-B.7：Provider 输出快照（用于 replay 和审计）。
+/// Provider 输出快照（用于 replay 和审计）。
 /// </summary>
 /// <remarks>
 /// 捕获每个 Provider 执行后的 Envelopes + Materials + 成功状态 + 耗时，
@@ -347,7 +347,7 @@ public interface IExecutionArtifactFactory
 }
 
 /// <summary>
-/// R28-B：运行时请求。外部调用方通过此类型发起决策。
+/// 运行时请求。外部调用方通过此类型发起决策。
 /// </summary>
 /// <remarks>
 /// SeedCandidates 仅用于 Replay / 测试 / 调用方显式注入 / 已有候选复用。
@@ -380,7 +380,7 @@ public sealed record ContextDecisionRuntimeRequest
         = Array.Empty<ContextCandidateEnvelope>();
 
     /// <summary>
-    /// R28-B.6 P0-4：种子 WorkingSet（含 Envelopes + Materials）。
+    /// 种子 WorkingSet（含 Envelopes + Materials）。
     /// 正式路径接受完整 WorkingSet，而非只有 Envelope 的 SeedCandidates。
     /// Replay/Agent 显式注入时 Seed Material 不再丢失。
     /// null 时回退到 <see cref="SeedCandidates"/>（向后兼容）。
@@ -398,7 +398,7 @@ public sealed record ContextDecisionRuntimeRequest
 }
 
 /// <summary>
-/// R28-B.6 Blocker-4：Retrieval 专用输入。完整保留原 ContextRetrievalRequest 语义。
+/// Blocker-4：Retrieval 专用输入。完整保留原 ContextRetrievalRequest 语义。
 /// </summary>
 public sealed record RetrievalInput
 {
@@ -465,14 +465,14 @@ public sealed record RetrievalInput
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 
     /// <summary>
-    /// R28-B.6 P0-2：RetrievalPlan 序列化字符串（简化为 string，避免引入完整 RetrievalPlan 类型耦合）。
+    /// RetrievalPlan 序列化字符串（简化为 string，避免引入完整 RetrievalPlan 类型耦合）。
     /// 用于 Provider 在需要时读取 plan 中的细粒度配置。
     /// </summary>
     public string? Plan { get; init; }
 }
 
 /// <summary>
-/// R28-B.6 Blocker-4：Package 专用输入。
+/// Blocker-4：Package 专用输入。
 /// </summary>
 public sealed record PackageInput
 {
@@ -518,7 +518,7 @@ public sealed record PackageInput
     public bool IncludeRecent { get; init; } = true;
 
     /// <summary>
-    /// R28-B.7 P1-2：显式审计模式信号。任一为 true 即启用；任一为 false（且无 true）即关闭；均 null 时默认 false。
+    /// 显式审计模式信号。任一为 true 即启用；任一为 false（且无 true）即关闭；均 null 时默认 false。
     /// 审计模式启用后会召回废弃/被替代记忆并归入 historical_context section。
     /// </summary>
     public bool? IsAuditMode { get; init; }
@@ -528,7 +528,7 @@ public sealed record PackageInput
 }
 
 /// <summary>
-/// R28-B.6 Blocker-4：AgentContext 专用输入。
+/// Blocker-4：AgentContext 专用输入。
 /// </summary>
 public sealed record AgentInput
 {
@@ -543,16 +543,16 @@ public sealed record AgentInput
 }
 
 /// <summary>
-/// R28-B：统一作用域值对象。用于 Request.Scope 与 EffectivePolicySnapshot.ResolutionScope 校验。
+/// 统一作用域值对象。用于 Request.Scope 与 EffectivePolicySnapshot.ResolutionScope 校验。
 /// </summary>
 public readonly record struct ContextDecisionScope(string WorkspaceId, string CollectionId);
 
 // ---------------------------------------------------------------------------
-// §5.2 Policy 双类型
+// Policy 双类型
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：不可变策略引用。用于 Envelope provenance / Allocation / Evidence。
+/// 不可变策略引用。用于 Envelope provenance / Allocation / Evidence。
 /// </summary>
 /// <remarks>
 /// 与既有 <see cref="ResolvedPolicySnapshot"/>（BundleId + Version + ResolvedAt 轻量引用）
@@ -574,7 +574,7 @@ public sealed record ResolvedPolicyReference
 }
 
 /// <summary>
-/// R28-B：请求生命周期内的有效策略快照。
+/// 请求生命周期内的有效策略快照。
 /// </summary>
 /// <remarks>
 /// 由 IResolvedPolicyProvider 在请求入口产出，整个请求生命周期内不可变。
@@ -607,7 +607,7 @@ public sealed record EffectivePolicySnapshot
     public required ContextDecisionScope ResolutionScope { get; init; }
 
     /// <summary>
-    /// R28-D P0-1：是否允许 DeterministicReplay 引擎的分数参与 FinalScore 加权。
+    /// 是否允许 DeterministicReplay 引擎的分数参与 FinalScore 加权。
     /// 默认 false：即使 EnableModelScoring=true，DeterministicReplay 引擎也不改变 FinalScore，
     /// 避免把 feature hash 当成真实模型分数扰动排序。
     /// 仅在测试 / 预览场景显式开启 true。
@@ -615,7 +615,7 @@ public sealed record EffectivePolicySnapshot
     public bool AllowDeterministicReplayScoring { get; init; } = false;
 
     /// <summary>
-    /// R29 WP-D-1：Diversity 配置（V2.1 Allocator 路径专用）。
+    /// Diversity 配置（V2.1 Allocator 路径专用）。
     /// </summary>
     /// <remarks>
     /// 由 DefaultPolicyBundleFactory 在解析 bundle 时填充（默认 Lambda=0.5、SectionReserveRatio=0.1）。
@@ -629,7 +629,7 @@ public sealed record EffectivePolicySnapshot
 }
 
 /// <summary>
-/// R28-B：策略快照提供者。在请求入口产出 EffectivePolicySnapshot。
+/// 策略快照提供者。在请求入口产出 EffectivePolicySnapshot。
 /// </summary>
 public interface IResolvedPolicyProvider
 {
@@ -645,11 +645,11 @@ public interface IResolvedPolicyProvider
 }
 
 // ---------------------------------------------------------------------------
-// §5.3 双轴语义
+// 双轴语义
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：业务用途轴。表示决策的输出语义，不废弃。
+/// 业务用途轴。表示决策的输出语义，不废弃。
 /// </summary>
 public enum ContextDecisionPurpose : byte
 {
@@ -664,7 +664,7 @@ public enum ContextDecisionPurpose : byte
 }
 
 /// <summary>
-/// R28-B：运行实现轴。表示决策由哪条运行链执行。
+/// 运行实现轴。表示决策由哪条运行链执行。
 /// </summary>
 public enum ContextDecisionRuntimeKind : byte
 {
@@ -676,16 +676,16 @@ public enum ContextDecisionRuntimeKind : byte
 }
 
 // ---------------------------------------------------------------------------
-// §5.5 Canonical Identity + Material
+// Canonical Identity + Material
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：规范化候选标识。用于跨 Expert 去重合并。
+/// 规范化候选标识。用于跨 Expert 去重合并。
 /// </summary>
 /// <remarks>
 /// 同一实体不同版本（EntityVersion 不同）不直接合并；
 /// 相同 EntityId 不同 EntityKind 不得碰撞。
-/// P0-5：所有字段必须非空。EntityVersion 应为 stable content hash 或显式版本号。
+/// 所有字段必须非空。EntityVersion 应为 stable content hash 或显式版本号。
 /// 使用 <see cref="Create"/> 工厂方法进行验证；直接调用 primary constructor 不做校验
 /// （保留为 internal 供 record struct 序列化/反序列化使用）。
 /// </remarks>
@@ -697,7 +697,7 @@ public readonly record struct CanonicalCandidateKey(
     string EntityVersion)
 {
     /// <summary>
-    /// P0-5：创建并验证 CanonicalCandidateKey。所有字段必须非空。
+    /// 创建并验证 CanonicalCandidateKey。所有字段必须非空。
     /// EntityVersion 必须非空（显式版本号或 stable content hash）。
     /// </summary>
     public static CanonicalCandidateKey Create(
@@ -723,7 +723,7 @@ public readonly record struct CanonicalCandidateKey(
     }
 
     /// <summary>
-    /// P0-5：验证此 key 的所有字段是否非空。
+    /// 验证此 key 的所有字段是否非空。
     /// </summary>
     public bool IsValid =>
         !string.IsNullOrEmpty(WorkspaceId)
@@ -734,7 +734,7 @@ public readonly record struct CanonicalCandidateKey(
 }
 
 /// <summary>
-/// R28-B：Expert 来源记录。合并时 union 到 Envelope.Origins。
+/// Expert 来源记录。合并时 union 到 Envelope.Origins。
 /// </summary>
 public sealed record ExpertOrigin(
     ExpertKind Expert,
@@ -742,8 +742,8 @@ public sealed record ExpertOrigin(
     DateTimeOffset ObservedAt);
 
 /// <summary>
-/// R28-B / R28-G P1-1：候选正文 Material sidecar。正文与决策分离，Projector 不访问 Store。
-/// R28-G P1-1：新增 ContentHash / TokenCost 字段，避免 Merger 在冲突检测时重复计算 SHA256。
+/// / R28-G P1-1：候选正文 Material sidecar。正文与决策分离，Projector 不访问 Store。
+/// 新增 ContentHash / TokenCost 字段，避免 Merger 在冲突检测时重复计算 SHA256。
 /// </summary>
 public sealed record CandidateMaterial
 {
@@ -766,7 +766,7 @@ public sealed record CandidateMaterial
         init
         {
             _content = value ?? throw new ArgumentNullException(nameof(Content));
-            // R28-G P1-1：赋值时若未显式提供 ContentHash，则惰性计算并缓存。
+            // 赋值时若未显式提供 ContentHash，则惰性计算并缓存。
             // Merger 后续冲突检测可直接读取此字段，避免每次比对都重算 SHA256。
             if (string.IsNullOrEmpty(_contentHash))
             {
@@ -782,7 +782,7 @@ public sealed record CandidateMaterial
     public IReadOnlyList<string> SourceRefs { get; init; } = [];
 
     /// <summary>
-    /// R28-G P1-1：Content 的稳定哈希（"sha256:&lt;16hex&gt;"）。
+    /// Content 的稳定哈希（"sha256:&lt;16hex&gt;"）。
     /// 由 Content 的 init accessor 自动计算；调用方也可显式覆盖（如 Provider 已计算过）。
     /// Merger 用此字段做冲突检测，避免重复 SHA256.HashData。
     /// </summary>
@@ -794,7 +794,7 @@ public sealed record CandidateMaterial
     }
 
     /// <summary>
-    /// R28-G P1-1：可选的 token 成本（Provider 已精确计算时填充）。
+    /// 可选的 token 成本（Provider 已精确计算时填充）。
     /// Merger 不依赖此字段，但 Allocator 可直接读取避免重复 tokenizer 调用。
     /// null 时 Allocator 回退到 EstimatedTokens 或重新计算。
     /// </summary>
@@ -812,7 +812,7 @@ public sealed record CandidateMaterial
 }
 
 /// <summary>
-/// R28-B：候选工作集。Envelopes + Materials 的不可变快照。
+/// 候选工作集。Envelopes + Materials 的不可变快照。
 /// </summary>
 public sealed record CandidateWorkingSet
 {
@@ -825,18 +825,18 @@ public sealed record CandidateWorkingSet
 }
 
 /// <summary>
-/// R28-B：Expert 执行结果。每个 CandidateProvider 产出此二元组。
+/// Expert 执行结果。每个 CandidateProvider 产出此二元组。
 /// </summary>
 public sealed record ExpertExecutionResult(
     IReadOnlyList<ContextCandidateEnvelope> Envelopes,
     IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> Materials);
 
 // ---------------------------------------------------------------------------
-// §5.7 Router + Provider + Catalog
+// Router + Provider + Catalog
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：统一 Router 接口。替代 IRetrievalRouter，扩展到所有 Purpose。
+/// 统一 Router 接口。替代 IRetrievalRouter，扩展到所有 Purpose。
 /// </summary>
 public interface IRouter
 {
@@ -854,7 +854,7 @@ public interface IRouter
 }
 
 /// <summary>
-/// R28-B：Provider 能力目录。替代 no-op Expert 注册。
+/// Provider 能力目录。替代 no-op Expert 注册。
 /// </summary>
 /// <remarks>
 /// Router 基于 AvailableExperts 过滤；未注册的 Expert（如 Recency）被显式 disable，
@@ -867,7 +867,7 @@ public interface IExpertCatalog
 }
 
 /// <summary>
-/// R28-B：统一 Candidate Provider 接口。每个 Provider 对应一个 ExpertKind。
+/// 统一 Candidate Provider 接口。每个 Provider 对应一个 ExpertKind。
 /// </summary>
 public interface ICandidateProvider
 {
@@ -886,7 +886,7 @@ public interface ICandidateProvider
 }
 
 /// <summary>
-/// R28-B：Provider 执行上下文。
+/// Provider 执行上下文。
 /// </summary>
 public sealed record CandidateProviderContext(
     ContextDecisionRuntimeRequest Request,
@@ -895,7 +895,7 @@ public sealed record CandidateProviderContext(
     CandidateAdaptationContext AdaptationContext)
 {
     /// <summary>
-    /// R28-D P0-3：可选的 tokenizer 解析器。Provider 使用它精确计算 CandidateTokenCost，
+    /// 可选的 tokenizer 解析器。Provider 使用它精确计算 CandidateTokenCost，
     /// 让 Allocator 基于真实 token 数做预算控制（而非 length/4 粗估）。
     /// null 时 TokenCost 回退到 length/4 估算（IsEstimated=true）。
     /// </summary>
@@ -906,7 +906,7 @@ public sealed record CandidateProviderContext(
 }
 
 /// <summary>
-/// R28-B：统一 Expert 类型。与既有 RetrievalExpert 枚举值对齐。
+/// 统一 Expert 类型。与既有 RetrievalExpert 枚举值对齐。
 /// </summary>
 /// <remarks>
 /// Recency 枚举值保留，但默认不注册到 Catalog（Router disable + ReasonCode）。
@@ -940,11 +940,11 @@ public enum ExpertKind : byte
 }
 
 // ---------------------------------------------------------------------------
-// §5.8 Canonical Merger + Early/Decision Gate + Feature Pipeline
+// Canonical Merger + Early/Decision Gate + Feature Pipeline
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：规范化候选合并器。按 CanonicalCandidateKey 合并多 Expert 来源。
+/// 规范化候选合并器。按 CanonicalCandidateKey 合并多 Expert 来源。
 /// </summary>
 public interface ICanonicalCandidateMerger
 {
@@ -957,7 +957,7 @@ public interface ICanonicalCandidateMerger
 }
 
 /// <summary>
-/// R28-B：Early Admission Gate。在 Feature Pipeline 之前做早期剔除。
+/// Early Admission Gate。在 Feature Pipeline 之前做早期剔除。
 /// </summary>
 /// <remarks>
 /// 检查：scope mismatch / superseded / archived / rejected / forbidden tag /
@@ -971,7 +971,7 @@ public interface IEarlyAdmissionGate
     AdmissionResult Evaluate(ContextCandidateEnvelope envelope, EffectivePolicySnapshot snapshot);
 
     /// <summary>
-    /// R28-B.6 Blocker-6：评估候选集合的准入，返回分区结果（Admitted + Rejected）。
+    /// Blocker-6：评估候选集合的准入，返回分区结果（Admitted + Rejected）。
     /// </summary>
     /// <remarks>
     /// 与 <see cref="Evaluate"/> 的差异：批量评估并返回分区结果，
@@ -985,7 +985,7 @@ public interface IEarlyAdmissionGate
 }
 
 /// <summary>
-/// R28-B：准入结果。
+/// 准入结果。
 /// </summary>
 public sealed record AdmissionResult(
     bool Admitted,
@@ -993,7 +993,7 @@ public sealed record AdmissionResult(
     string Detail);
 
 /// <summary>
-/// R28-B.6 Blocker-6：准入分区结果。
+/// Blocker-6：准入分区结果。
 /// </summary>
 /// <param name="Admitted">通过 Early Admission Gate 的候选集合。</param>
 /// <param name="Rejected">被 Early Admission Gate 拒绝的候选集合（保留到 DroppedEnvelopes，不丢失）。</param>
@@ -1004,7 +1004,7 @@ public sealed record AdmissionPartition(
     IReadOnlyDictionary<CanonicalCandidateKey, string> RejectReasons);
 
 /// <summary>
-/// R28-B：Decision Safety Gate。在 Feature Pipeline 之后做完整安全检查。
+/// Decision Safety Gate。在 Feature Pipeline 之后做完整安全检查。
 /// </summary>
 /// <remarks>
 /// 检查：duplicate / required coverage / cross-candidate conflict / full evidence rules。
@@ -1019,7 +1019,7 @@ public interface ISafetyGate
 }
 
 /// <summary>
-/// R28-B：Safety Gate 结果。
+/// Safety Gate 结果。
 /// </summary>
 public sealed record SafetyGateResult(
     bool Passes,
@@ -1027,7 +1027,7 @@ public sealed record SafetyGateResult(
     string Detail);
 
 /// <summary>
-/// R28-B：Lifecycle Gate。检查候选生命周期状态。
+/// Lifecycle Gate。检查候选生命周期状态。
 /// </summary>
 public interface ILifecycleGate
 {
@@ -1038,7 +1038,7 @@ public interface ILifecycleGate
 }
 
 /// <summary>
-/// R28-B：Lifecycle Gate 结果。
+/// Lifecycle Gate 结果。
 /// </summary>
 public sealed record LifecycleGateResult(
     bool Passes,
@@ -1046,7 +1046,7 @@ public sealed record LifecycleGateResult(
     string Detail);
 
 /// <summary>
-/// R28-B：Feature Pipeline。纯转换，返回新 Envelope 列表（immutable record 友好）。
+/// Feature Pipeline。纯转换，返回新 Envelope 列表（immutable record 友好）。
 /// </summary>
 public interface IFeaturePipeline
 {
@@ -1064,22 +1064,22 @@ public interface IFeaturePipeline
 }
 
 /// <summary>
-/// R28-B：Feature Pipeline 上下文。
+/// Feature Pipeline 上下文。
 /// </summary>
 public sealed record FeaturePipelineContext(
     EffectivePolicySnapshot Policy,
     CandidateAdaptationContext AdaptationContext);
 
 // ---------------------------------------------------------------------------
-// §5.9 Utility Scorer + Allocator
+// Utility Scorer + Allocator
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：Utility Scorer。计算候选 FinalScore。
+/// Utility Scorer。计算候选 FinalScore。
 /// </summary>
 /// <remarks>
 /// rule-only 模式：w_d=1.0, w_m=0.0，FinalScore = DeterministicScore。
-/// R28-D：契约从 void Score 改为 ScoreAsync 返回新列表（immutable record 友好），
+/// 契约从 void Score 改为 ScoreAsync 返回新列表（immutable record 友好），
 /// 支持模型加权（FinalScore = w_d * Det + w_m * Model）。
 /// </remarks>
 public interface IUtilityScorer
@@ -1098,7 +1098,7 @@ public interface IUtilityScorer
 }
 
 /// <summary>
-/// R28-B.6 P0-5：分配上下文。携带 Purpose + Budget + MandatoryOverflowPolicy + TokenizerVersion。
+/// 分配上下文。携带 Purpose + Budget + MandatoryOverflowPolicy + TokenizerVersion。
 /// Allocator 不应在构造函数中固定 Purpose 相关策略（如 MandatoryOverflowPolicy），
 /// 应在每次 Allocate 时根据 context 选择策略。
 /// </summary>
@@ -1121,12 +1121,12 @@ public sealed record AllocationContext
 }
 
 /// <summary>
-/// R28-B：统一全局分配器。消费 SectionRatios + TopK + TokenBudget。
+/// 统一全局分配器。消费 SectionRatios + TopK + TokenBudget。
 /// </summary>
 /// <remarks>
 /// 产出 CandidateAllocationDecision，不污染 Envelope。
 /// diversity extension point 存在但 rule-only convergence 阶段禁用行为变更。
-/// R28-B.6 P0-5：新增接受 AllocationContext 的重载。Allocator 不应在构造函数中固定
+/// 新增接受 AllocationContext 的重载。Allocator 不应在构造函数中固定
 /// Purpose 相关策略，应在每次 Allocate 时根据 context 选择策略（如 AgentContext 默认 FailClosed）。
 /// 旧重载保留向后兼容（测试 / Legacy 路径使用）。
 /// </remarks>
@@ -1143,7 +1143,7 @@ public interface IGlobalAllocator
         EffectivePolicySnapshot snapshot);
 
     /// <summary>
-    /// R28-B.6 P0-5：执行全局预算分配，接受 AllocationContext（携带 Purpose + MandatoryOverflowPolicy）。
+    /// 执行全局预算分配，接受 AllocationContext（携带 Purpose + MandatoryOverflowPolicy）。
     /// Allocator 根据 context.Purpose 选择默认 MandatoryOverflowPolicy（如 AgentContext → FailClosed）；
     /// 若 context.MandatoryOverflowPolicy 显式指定，则覆盖 Purpose 默认策略。
     /// </summary>
@@ -1158,11 +1158,11 @@ public interface IGlobalAllocator
 }
 
 // ---------------------------------------------------------------------------
-// §5.9b Allocator V2.1（R28-B.8.1：section rollover + MMR diversity）
+// Allocator V2.1（R28-B.8.1：section rollover + MMR diversity）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.8.1：Allocator V2.1 扩展接口。支持 section rollover + MMR diversity。
+/// Allocator V2.1 扩展接口。支持 section rollover + MMR diversity。
 /// </summary>
 /// <remarks>
 /// 继承 <see cref="IGlobalAllocator"/>（V2.0 基础分配），新增
@@ -1186,7 +1186,7 @@ public interface IAllocatorV2_1 : IGlobalAllocator
 }
 
 /// <summary>
-/// R28-B.8.1：Diversity 配置。控制 MMR 重排序与 section rollover 行为。
+/// Diversity 配置。控制 MMR 重排序与 section rollover 行为。
 /// </summary>
 public sealed record DiversityOptions
 {
@@ -1207,7 +1207,7 @@ public sealed record DiversityOptions
     public double RolloverRatio { get; init; } = 1.0;
 
     /// <summary>
-    /// R28-G P1-4：每个 section 的 minimum reserve 占总预算的比例（0-1，默认 0.1）。
+    /// 每个 section 的 minimum reserve 占总预算的比例（0-1，默认 0.1）。
     /// 第一轮每个 section 至少获得 totalBudget × SectionReserveRatio ÷ sectionCount 的预算，
     /// 未用完的部分汇总到全局 pool 供第二轮 rollover 分配。
     /// 0 表示禁用 reserve（每个 section 第一轮获得等分预算）。
@@ -1220,7 +1220,7 @@ public sealed record DiversityOptions
 }
 
 /// <summary>
-/// R28-B.8.1：Section 分配结果（含 rollover 信息）。
+/// Section 分配结果（含 rollover 信息）。
 /// </summary>
 public sealed record SectionAllocationResult
 {
@@ -1244,7 +1244,7 @@ public sealed record SectionAllocationResult
 }
 
 /// <summary>
-/// R28-B：候选分配决策。与 Envelope 解耦，利于 Replay / counterfactual。
+/// 候选分配决策。与 Envelope 解耦，利于 Replay / counterfactual。
 /// </summary>
 public sealed record CandidateAllocationDecision
 {
@@ -1265,7 +1265,7 @@ public sealed record CandidateAllocationDecision
 }
 
 /// <summary>
-/// R28-B：分配结果。
+/// 分配结果。
 /// </summary>
 public sealed record AllocationResult(
     IReadOnlyList<ContextCandidateEnvelope> Selected,
@@ -1274,7 +1274,7 @@ public sealed record AllocationResult(
     ContextDecisionOutcomeSummary Outcome);
 
 /// <summary>
-/// R28-B：Mandatory 超预算策略。
+/// Mandatory 超预算策略。
 /// </summary>
 public enum MandatoryOverflowPolicy : byte
 {
@@ -1289,7 +1289,7 @@ public enum MandatoryOverflowPolicy : byte
 }
 
 /// <summary>
-/// R28-B.7 P0-5：mandatory 候选超出硬窗口时抛出。
+/// mandatory 候选超出硬窗口时抛出。
 /// </summary>
 /// <remarks>
 /// 当 MandatoryOverflowPolicy=FailClosed 且 mandatory 候选总 token 超出预算时，
@@ -1323,7 +1323,7 @@ public sealed class MandatoryContextWindowExceededException : InvalidOperationEx
 }
 
 /// <summary>
-/// P1-7锛歮andatory / hard constraint 鍊欓€夋鏂?hydrate 澶辫触鏃舵姏鍑恒€?/// </summary>
+/// 锛歮andatory / hard constraint 鍊欓€夋鏂?hydrate 澶辫触鏃舵姏鍑恒€?/// </summary>
 /// <remarks>
 /// 鏍规嵁 project_memory 绾︽潫锛欰gentContext hydration failures must fail closed for mandatory/hard
 /// constraints銆傚綋 <see cref="ISelectedCandidateHydrator"/> 杩斿洖鐨?<c>HydrationRepairDecision.HydrationFailures</c>
@@ -1355,7 +1355,7 @@ public sealed class MandatoryHydrationFailedException : InvalidOperationExceptio
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B：Agent Context Projector。从 DecisionResult + WorkingSet 投影为 AgentContextSnapshot。
+/// Agent Context Projector。从 DecisionResult + WorkingSet 投影为 AgentContextSnapshot。
 /// </summary>
 /// <remarks>
 /// 复用 R23 AgentContextSnapshot（不新增 AgentContextPackage）。
@@ -1373,7 +1373,7 @@ public interface IAgentContextProjector
     AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet);
 
     /// <summary>
-    /// P0-7：将决策结果 + 候选正文 + 投影上下文投影为 AgentContextSnapshot。
+    /// 将决策结果 + 候选正文 + 投影上下文投影为 AgentContextSnapshot。
     /// 使用 context.AgentSession 而非构造假 session ID。
     /// </summary>
     /// <param name="result">决策结果。</param>
@@ -1383,14 +1383,14 @@ public interface IAgentContextProjector
     AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet, ProjectionContext context);
 
     /// <summary>
-    /// R28-B.7 P0-6：从完整执行结果投影为 AgentContextSnapshot。
+    /// 从完整执行结果投影为 AgentContextSnapshot。
     /// </summary>
     /// <param name="execution">完整执行结果（含 Decision + WorkingSet）。</param>
     /// <returns>AgentContextSnapshot。</returns>
     AgentContextSnapshot Project(ContextDecisionExecutionResult execution);
 
     /// <summary>
-    /// R28-B.7 P0-6：从完整执行结果 + 投影上下文投影为 AgentContextSnapshot。
+    /// 从完整执行结果 + 投影上下文投影为 AgentContextSnapshot。
     /// </summary>
     /// <param name="execution">完整执行结果（含 Decision + WorkingSet）。</param>
     /// <param name="context">投影上下文（含真实 AgentSessionId）。</param>
@@ -1399,7 +1399,7 @@ public interface IAgentContextProjector
 }
 
 /// <summary>
-/// R28-B P0-7：投影上下文。携带调用方提供的 session 信息与作用域，
+/// 投影上下文。携带调用方提供的 session 信息与作用域，
 /// 供 Projector 构造真实 AgentSessionId 而非伪造的 session。
 /// </summary>
 public sealed record ProjectionContext
@@ -1415,11 +1415,11 @@ public sealed record ProjectionContext
 }
 
 // ---------------------------------------------------------------------------
-// R28-B.6 Impl-1：内容截断器
+// Impl-1：内容截断器
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6 Impl-1：内容截断器接口。按 token 数截断候选正文。
+/// Impl-1：内容截断器接口。按 token 数截断候选正文。
 /// </summary>
 /// <remarks>
 /// Allocator 在预算不足时仅做账面截断（IncludedTokens=remaining, IsTruncated=true），

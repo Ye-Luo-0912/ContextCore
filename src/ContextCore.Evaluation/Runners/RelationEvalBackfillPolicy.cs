@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Graph;
 namespace ContextCore.Evaluation.Runners;
 
 /// <summary>
-/// P3-04：eval/fixture/deterministic 感知的关系回填策略。
+/// eval/fixture/deterministic 感知的关系回填策略。
 /// 将 eval 特判从生产 Core 移到 Evaluation 工具层。
 /// 实现 <see cref="IRelationBackfillPolicy"/>，供 <see cref="RelationGraphValidationService"/> 和 eval runner 使用。
 /// </summary>

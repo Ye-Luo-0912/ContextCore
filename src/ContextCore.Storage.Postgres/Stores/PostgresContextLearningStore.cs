@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL 上下文学习记录与案例存储。
-/// R14-PG-4：替代 UnsupportedContextLearningStore，让 Postgres provider 在 HA 场景下能持久化晋升反馈、学习记录与学习案例。
+/// 替代 UnsupportedContextLearningStore，让 Postgres provider 在 HA 场景下能持久化晋升反馈、学习记录与学习案例。
 /// </summary>
 public sealed class PostgresContextLearningStore : PostgresStoreBase, IContextLearningStore
 {

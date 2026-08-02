@@ -22,7 +22,7 @@ public sealed class StorageOptions
 	public bool AllowExperimentalPostgres { get; set; }
 
 	/// <summary>
-	/// P0-6：服务启动时是否自动执行 PostgreSQL schema bootstrap migration。
+	/// 服务启动时是否自动执行 PostgreSQL schema bootstrap migration。
 	/// 默认 <c>true</c>——服务启动时若 schema 缺失，自动调用
 	/// <see cref="ContextCore.Storage.Postgres.Infrastructure.PostgresMigrationRunner.MigrateAsync"/>
 	/// 应用幂等 baseline（CREATE TABLE IF NOT EXISTS / ALTER TABLE ADD COLUMN IF NOT EXISTS），
@@ -91,7 +91,7 @@ public sealed class JobWorkerOptions
 	public int Concurrency { get; set; } = 1;
 
 	/// <summary>
-	/// P0-4：作业租约有效期。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
+	/// 作业租约有效期。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
 	/// worker 在处理过程中周期性调用 <c>RenewHeartbeatAsync</c> 续约；超过此时长未续约则租约过期，
 	/// 其他 worker 可通过 <c>AcquireLeaseAsync</c> 抢占（state=Running AND lease_expires_at &lt;= now）。
 	/// 默认 1 分钟——建议远大于 <see cref="HeartbeatInterval"/>（如 4 倍以上）以容忍单次续约失败。
@@ -99,7 +99,7 @@ public sealed class JobWorkerOptions
 	public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(1);
 
 	/// <summary>
-	/// P0-4：心跳续约间隔。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
+	/// 心跳续约间隔。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
 	/// worker 在作业处理过程中每隔此间隔调用 <c>RenewHeartbeatAsync</c>；续约失败（返回 false）则中止处理。
 	/// 默认 15 秒——必须显著小于 <see cref="LeaseDuration"/> 以保证租约不会因单次延迟而过期。
 	/// </summary>
@@ -117,7 +117,7 @@ public sealed class ShortTermMaintenanceOptions
 }
 
 /// <summary>
-/// P1-5：关系写入 outbox 调度与 reconciliation worker 的启停与周期配置。
+/// 关系写入 outbox 调度与 reconciliation worker 的启停与周期配置。
 /// 仅当 Postgres provider 注册了 <see cref="ContextCore.Abstractions.IRelationOutboxStore"/> 时生效；
 /// FileSystem / InMemory 不注册 outbox store，worker 启动后直接退出（no-op）。
 /// </summary>
@@ -164,7 +164,7 @@ public sealed class RelationReconciliationOptions
 }
 
 /// <summary>
-/// R13-F：Package Template Cache Canary 配置。控制是否启用 Package Template 缓存的 canary 试点。
+/// Package Template Cache Canary 配置。控制是否启用 Package Template 缓存的 canary 试点。
 /// 默认关闭（<see cref="Enabled"/>=false）；启用时仅缓存 <see cref="AllowedWorkspaces"/> 列出的工作空间。
 /// 启用前置条件：单实例（<see cref="RequireSingleInstance"/>）+ InMemory version store（生产已具备）。
 /// </summary>

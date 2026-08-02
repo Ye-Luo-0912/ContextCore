@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Retrieval;
 
 /// <summary>
-/// P0-7.2: Retrieval 通道读取 fanout 的并发上限配置。
+/// Retrieval 通道读取 fanout 的并发上限配置。
 /// 在 Batch API（IContextObjectBatchResolver）完成前，对当前 Task.WhenAll 路径施加 SemaphoreSlim 节流，
 /// 避免 VectorTopK=100 时 Postgres 连接池击穿或 FileSystem 锁竞争加剧。
 /// 默认按 store 类型自动解析；调用方可通过 HybridContextRetriever 构造函数显式覆盖。
@@ -22,7 +22,7 @@ public sealed class RetrievalFanoutOptions
     public static RetrievalFanoutOptions Default { get; } = new();
 
     /// <summary>
-    /// R13.3 #2：从 <see cref="StorageExecutionProfile"/> 派生 fanout 选项。
+    /// 从 <see cref="StorageExecutionProfile"/> 派生 fanout 选项。
     /// 当 <paramref name="profile"/> 不支持并发读时强制为 1（串行）；
     /// 否则使用 <see cref="StorageExecutionProfile.RecommendedReadFanout"/>。
     /// </summary>
@@ -37,7 +37,7 @@ public sealed class RetrievalFanoutOptions
 
     /// <summary>
     /// 根据 store 实际类型推断合适的 fanout 上限。
-    /// R13.3 #2：优先消费 <see cref="IStoreRuntimeCapabilities"/>，将字符串/namespace 推断降级为回退路径。
+    /// 优先消费 <see cref="IStoreRuntimeCapabilities"/>，将字符串/namespace 推断降级为回退路径。
     /// <list type="bullet">
     ///   <item>当 store 实现 IStoreRuntimeCapabilities 时：使用 Profile.RecommendedReadFanout；
     ///         若 SupportsParallelReads 为 false，强制为 1（串行）。</item>
@@ -67,7 +67,7 @@ public sealed class RetrievalFanoutOptions
             return int.MaxValue;
         }
 
-        // R13.3 #2：优先消费 IStoreRuntimeCapabilities（能力驱动，替代 namespace 字符串检测）
+        // 优先消费 IStoreRuntimeCapabilities（能力驱动，替代 namespace 字符串检测）
         if (store is IStoreRuntimeCapabilities capable)
         {
             var profile = capable.Profile;

@@ -5,7 +5,7 @@ using ContextCore.Core.Services.DecisionEngine;
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// R28-B.8：Canary Metrics 采集器（工作包 C）
+// Canary Metrics 采集器（工作包 C）
 //
 // 目标（对齐 R28-B.8 规格）：
 //   1. 从 shadow/parity 报告聚合 CanaryProgressionService.EvaluateAsync 消费的三个指标：
@@ -21,7 +21,7 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8：Canary 观察窗口的聚合指标。
+/// Canary 观察窗口的聚合指标。
 /// </summary>
 public sealed record CanaryObservationMetrics
 {
@@ -53,7 +53,7 @@ public sealed record CanaryObservationMetrics
     public required double LegacyP95LatencyMs { get; init; }
 
     /// <summary>
-    /// R29 WP-C-3：V2 路径产出质量分（0.0-1.0）。
+    /// V2 路径产出质量分（0.0-1.0）。
     /// <para>
     /// 综合 section 覆盖率（token 预算利用率）与候选相关性（SelectedEnvelopes.Utility.FinalScore 均值），
     /// 由 AuthoritativeRuntime 在 RecordObservation 调用点从 ContextDecisionExecutionResult 计算得到。
@@ -101,7 +101,7 @@ public sealed record CanaryObservationMetrics
     public double? InferenceCost { get; init; }
 
     /// <summary>
-    /// P10：V2 路径延迟 DDSketch 的二进制序列化字节。
+    /// V2 路径延迟 DDSketch 的二进制序列化字节。
     /// 由 GetAggregatedMetrics 从本地 DDSketch.Serialize() 产出；CanaryLeaderHostedService.ToSample
     /// 透传到 canary_metrics_samples.v2_latency_sketch bytea 列，供 Leader 聚合时 MergeFrom 合并。
     /// null/空数组 = 无 sketch 数据（回退到加权平均 P95）。
@@ -109,32 +109,32 @@ public sealed record CanaryObservationMetrics
     public byte[]? V2LatencySketch { get; init; }
 
     /// <summary>
-    /// P10：Legacy 路径延迟 DDSketch 的二进制序列化字节。语义同 <see cref="V2LatencySketch"/>。
+    /// Legacy 路径延迟 DDSketch 的二进制序列化字节。语义同 <see cref="V2LatencySketch"/>。
     /// </summary>
     public byte[]? LegacyLatencySketch { get; init; }
 
     /// <summary>
-    /// P11：任务成功率分子（sum of TaskSuccessRate over non-null samples）。
+    /// 任务成功率分子（sum of TaskSuccessRate over non-null samples）。
     /// 与 <see cref="TaskSuccessCount"/>（分母）配合，聚合时 SUM(分子) / SUM(分母) 替代 AVG(rate)。
     /// null = 未采集（TaskSuccessRate 也为 null）。
     /// </summary>
     public double? TaskSuccessSum { get; init; }
 
     /// <summary>
-    /// P11：任务成功率分母（count of non-null TaskSuccessRate samples）。
+    /// 任务成功率分母（count of non-null TaskSuccessRate samples）。
     /// null = 未采集。
     /// </summary>
     public long? TaskSuccessCount { get; init; }
 
     /// <summary>
-    /// P11：Tool 调用成功率分子（sum of ToolSuccessRate over non-null samples）。
+    /// Tool 调用成功率分子（sum of ToolSuccessRate over non-null samples）。
     /// 与 <see cref="ToolSuccessCount"/>（分母）配合，聚合时 SUM(分子) / SUM(分母) 替代 AVG(rate)。
     /// null = 未采集。
     /// </summary>
     public double? ToolSuccessSum { get; init; }
 
     /// <summary>
-    /// P11：Tool 调用成功率分母（count of non-null ToolSuccessRate samples）。
+    /// Tool 调用成功率分母（count of non-null ToolSuccessRate samples）。
     /// null = 未采集。
     /// </summary>
     public long? ToolSuccessCount { get; init; }
@@ -147,7 +147,7 @@ public sealed record CanaryObservationMetrics
 }
 
 /// <summary>
-/// R28-B.8：Canary Metrics 采集器接口。按 runId 聚合 shadow/parity 观察样本。
+/// Canary Metrics 采集器接口。按 runId 聚合 shadow/parity 观察样本。
 /// </summary>
 public interface ICanaryMetricsCollector
 {
@@ -158,12 +158,12 @@ public interface ICanaryMetricsCollector
     /// <param name="legacySucceeded">Legacy 路径是否成功（false 计入 LegacyErrorCount）。</param>
     /// <param name="v2Duration">V2 路径执行耗时（用于 V2 P95 计算）。</param>
     /// <param name="legacyDuration">
-    /// R28-D P0-6：Legacy 路径执行耗时（用于 Legacy P95 计算）。
+    /// Legacy 路径执行耗时（用于 Legacy P95 计算）。
     /// 缺省值 <c>null</c> 时回退到 <paramref name="v2Duration"/>（向后兼容旧调用点），
     /// 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
     /// </param>
     /// <param name="qualityScore">
-    /// R29 WP-C-3：V2 路径产出质量分（0.0-1.0）。
+    /// V2 路径产出质量分（0.0-1.0）。
     /// 由调用方从 <c>ContextDecisionExecutionResult</c> 计算（section 覆盖率 + 候选相关性加权）。
     /// 缺省值 <c>null</c> 时记为 0.0（无质量信号），不影响 latency/error/divergence 指标。
     /// V2 失败（<paramref name="v2Succeeded"/>=false）的样本应传 0.0 以反映失败质量。
@@ -217,11 +217,11 @@ public interface ICanaryMetricsCollector
 }
 
 /// <summary>
-/// R28-B.8 / R28-G P1-6：默认的 <see cref="ICanaryMetricsCollector"/> 实现。
+/// / R28-G P1-6：默认的 <see cref="ICanaryMetricsCollector"/> 实现。
 /// 使用 <see cref="ConcurrentDictionary{TKey, TValue}"/> 按 runId 聚合观察样本。
 /// </summary>
 /// <remarks>
-/// R28-G P1-6 优化：
+/// 优化：
 ///   - 固定容量 ring buffer 替代无界 List（默认 1000 样本/runId）。
 ///   - 滚动计数器（DivergentCount / V2ErrorCount / LegacyErrorCount）随 Add 更新，
 ///     GetAggregatedMetrics 无需 O(n) 扫描。
@@ -279,17 +279,17 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
 
         // Divergent = ParityLevel < Hard（含 Divergent 与 Diagnostic）
         var divergent = parityReport.ParityLevel < ParityLevel.Hard;
-        // R28-D P0-6：缺省 legacyDuration 时回退到 v2Duration（向后兼容旧调用点与测试），
+        // 缺省 legacyDuration 时回退到 v2Duration（向后兼容旧调用点与测试），
         // 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
         var legacyMs = (legacyDuration ?? v2Duration).TotalMilliseconds;
         var v2Ms = v2Duration.TotalMilliseconds;
-        // R29 WP-C-3：缺省 qualityScore 时记为 0.0（无质量信号；不参与 AverageQualityScore 的提升）
+        // 缺省 qualityScore 时记为 0.0（无质量信号；不参与 AverageQualityScore 的提升）
         var quality = qualityScore ?? 0.0;
 
         var bucket = _buckets.GetOrAdd(runId, _ => new ObservationBucket(_maxSamplesPerRun));
         lock (bucket)
         {
-            // R28-G P1-6：ring buffer 容量超限时淘汰最旧样本，并回滚其计数贡献
+            // ring buffer 容量超限时淘汰最旧样本，并回滚其计数贡献
             if (bucket.IsFull)
             {
                 bucket.EvictOldest();
@@ -301,7 +301,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             if (!v2Succeeded) bucket.V2ErrorCount++;
             if (!legacySucceeded) bucket.LegacyErrorCount++;
 
-            // R29 WP-C-3：质量分滚动求和（用于 AverageQualityScore 计算）
+            // 质量分滚动求和（用于 AverageQualityScore 计算）
             bucket.QualityScoreSum += quality;
 
             // DDSketch 累积：P95 查询走 sketch，无需全量排序
@@ -381,7 +381,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             };
         }
 
-        // R28-G P1-6：直接读取滚动计数器 + DDSketch 查询，无需复制/扫描/排序
+        // 直接读取滚动计数器 + DDSketch 查询，无需复制/扫描/排序
         long total, divergentCount, v2ErrorCount, legacyErrorCount;
         double v2P95, legacyP95, qualityScoreSum;
         DateTimeOffset windowStart, windowEnd;
@@ -401,7 +401,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             windowStart = bucket.WindowStart;
             windowEnd = bucket.WindowEnd;
             extSnapshot = bucket.ExternalMetrics.Clone();
-            // P10：序列化 DDSketch 字节，供 Leader 跨实例合并
+            // 序列化 DDSketch 字节，供 Leader 跨实例合并
             v2SketchBytes = bucket.V2LatencySketch.Serialize();
             legacySketchBytes = bucket.LegacyLatencySketch.Serialize();
         }
@@ -452,7 +452,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             LegacyErrorRate = (double)legacyErrorCount / total,
             V2P95LatencyMs = v2P95,
             LegacyP95LatencyMs = legacyP95,
-            // R29 WP-C-3：质量分均值 = sum / total（包含 V2 失败样本的 0.0 贡献）
+            // 质量分均值 = sum / total（包含 V2 失败样本的 0.0 贡献）
             AverageQualityScore = qualityScoreSum / total,
             // 任务 C：外部指标按字段独立均值（稀疏信号不计入未采集样本）
             TaskSuccessRate = extSnapshot.MeanOf(FieldTaskSuccessRate),
@@ -465,10 +465,10 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             AnswerQuality = extSnapshot.MeanOf(FieldAnswerQuality),
             TokenCost = extSnapshot.MeanOf(FieldTokenCost),
             InferenceCost = extSnapshot.MeanOf(FieldInferenceCost),
-            // P10：DDSketch 序列化字节（供 Leader 跨实例 MergeFrom 合并查询 P95）
+            // DDSketch 序列化字节（供 Leader 跨实例 MergeFrom 合并查询 P95）
             V2LatencySketch = v2SketchBytes,
             LegacyLatencySketch = legacySketchBytes,
-            // P11：成功率分子/分母（供 Leader 跨实例 SUM(分子)/SUM(分母) 聚合）
+            // 成功率分子/分母（供 Leader 跨实例 SUM(分子)/SUM(分母) 聚合）
             TaskSuccessSum = extSnapshot.SumOf(FieldTaskSuccessRate),
             TaskSuccessCount = extSnapshot.CountOf(FieldTaskSuccessRate),
             ToolSuccessSum = extSnapshot.SumOf(FieldToolSuccessRate),
@@ -583,7 +583,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
     }
 
     /// <summary>
-    /// R28-G P1-6：per-runId 的样本桶（含锁保护）。
+    /// per-runId 的样本桶（含锁保护）。
     /// 使用 ring buffer + 滚动计数器 + DDSketch，避免无界 List + 全量复制/排序。
     /// </summary>
     private sealed class ObservationBucket
@@ -606,7 +606,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         public long DivergentCount { get; set; }
         public long V2ErrorCount { get; set; }
         public long LegacyErrorCount { get; set; }
-        // R29 WP-C-3：质量分滚动求和（与 TotalObservations 配合计算均值）
+        // 质量分滚动求和（与 TotalObservations 配合计算均值）
         public double QualityScoreSum { get; set; }
         public DDSketch V2LatencySketch { get; }
         public DDSketch LegacyLatencySketch { get; }
@@ -651,7 +651,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             if (oldest.Divergent) DivergentCount--;
             if (!oldest.V2Succeeded) V2ErrorCount--;
             if (!oldest.LegacySucceeded) LegacyErrorCount--;
-            // R29 WP-C-3：回滚质量分贡献，保持 AverageQualityScore 一致性
+            // 回滚质量分贡献，保持 AverageQualityScore 一致性
             QualityScoreSum -= oldest.QualityScore;
 
             // 任务 C：回滚外部指标累加器（保持 per-field 均值一致性）
@@ -695,7 +695,7 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
 }
 
 /// <summary>
-/// R28-B.8：<see cref="CanaryObservationMetrics"/> 扩展方法，
+/// <see cref="CanaryObservationMetrics"/> 扩展方法，
 /// 转换为 <see cref="CanaryProgressionService"/> 可消费的 baseline/experiment 指标字典。
 /// </summary>
 public static class CanaryMetricsExtensions
@@ -710,7 +710,7 @@ public static class CanaryMetricsExtensions
 
     /// <summary>将 <see cref="CanaryObservationMetrics"/> 转换为实验路径（V2 路径）指标字典。</summary>
     /// <remarks>
-    /// R29 WP-C-3：新增 <c>quality_score</c> 字段，由 CanaryProgressionService.CheckRollbackThresholds
+    /// 新增 <c>quality_score</c> 字段，由 CanaryProgressionService.CheckRollbackThresholds
     /// 与 <see cref="CanaryGateOptions.MinQualityScore"/> 比较决定是否触发回滚。
     /// <para>
     /// 任务 C：新增外部指标键值对（task_success_rate / tool_success_rate / repair_rate /

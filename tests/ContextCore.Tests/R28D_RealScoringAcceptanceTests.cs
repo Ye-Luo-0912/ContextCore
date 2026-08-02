@@ -8,12 +8,12 @@ using ContextCore.Core.Services.Policy;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-D：真实评分能力验收测试
+// 真实评分能力验收测试
 //
 // 覆盖范围（DefaultFeaturePipeline + DefaultUtilityScorer 端到端）：
-//   §1 DefaultFeaturePipeline —— ScoreBreakdown 提升为强类型特征字段
-//   §2 DefaultUtilityScorer   —— rule-only / model-weighted / fallback 三模式
-//   §3 端到端集成              —— Enrich → Score 产出模型加权分数
+//   DefaultFeaturePipeline —— ScoreBreakdown 提升为强类型特征字段
+//   DefaultUtilityScorer   —— rule-only / model-weighted / fallback 三模式
+//   端到端集成              —— Enrich → Score 产出模型加权分数
 //
 // 验收点（对应 R28-D 任务描述）：
 //   1. DefaultFeaturePipeline 是真实特征提升（不再是 identity transform）
@@ -31,7 +31,7 @@ namespace ContextCore.Tests;
 // ===========================================================================
 
 // ===========================================================================
-// §1 DefaultFeaturePipeline 特征提升测试
+// DefaultFeaturePipeline 特征提升测试
 // ===========================================================================
 
 [TestClass]
@@ -171,7 +171,7 @@ public sealed class R28D_DefaultFeaturePipelineTests
 }
 
 // ===========================================================================
-// §2 DefaultUtilityScorer 评分模式测试
+// DefaultUtilityScorer 评分模式测试
 // ===========================================================================
 
 [TestClass]
@@ -335,7 +335,7 @@ public sealed class R28D_DefaultUtilityScorerTests
         // fail-open：异常被吞，返回原 envelope（ModelScore 保持 null）
         Assert.AreEqual(1, result.Count);
         Assert.IsNull(result[0].Utility.ModelScore);
-        // P0-1：模型已尝试但失败 → 标记 fallback-to-deterministic 并记录原因
+        // 模型已尝试但失败 → 标记 fallback-to-deterministic 并记录原因
         Assert.IsTrue(result[0].Utility.ModelAttempted, "ModelAttempted 应为 true（模型已尝试）");
         Assert.IsFalse(result[0].Utility.ModelApplied, "ModelApplied 应为 false（模型未实际应用）");
         Assert.AreEqual("inference-failed", result[0].Utility.ModelFallbackReason);
@@ -356,7 +356,7 @@ public sealed class R28D_DefaultUtilityScorerTests
 
         Assert.AreEqual(1, result.Count);
         Assert.IsNull(result[0].Utility.ModelScore);
-        // P0-1：模型已尝试但返回 Succeeded=false → 标记 fallback-to-deterministic 并记录原因
+        // 模型已尝试但返回 Succeeded=false → 标记 fallback-to-deterministic 并记录原因
         Assert.IsTrue(result[0].Utility.ModelAttempted, "ModelAttempted 应为 true（模型已尝试）");
         Assert.IsFalse(result[0].Utility.ModelApplied, "ModelApplied 应为 false（模型未实际应用）");
         Assert.AreEqual("inference-succeeded-false", result[0].Utility.ModelFallbackReason);
@@ -366,7 +366,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_MissingSchema_ReturnsEnvelopesUnchanged()
     {
-        // R28-F P3-1：Scorer 按 snapshot.FeatureSchemaVersion 解析 schema（不再用 engine.ModelVersion）。
+        // Scorer 按 snapshot.FeatureSchemaVersion 解析 schema（不再用 engine.ModelVersion）。
         // registry 中无 snapshot.FeatureSchemaVersion 对应的 schema → 标记降级。
         var engine = new StubBatchInferenceEngine("unknown-model-v1").WithOutput(0.8, 0.95);
         var registry = R28DTestHelpers.BuildRegistryWithSchema("different-model-v1");
@@ -406,7 +406,7 @@ public sealed class R28D_DefaultUtilityScorerTests
     [TestMethod]
     public async Task Score_CalibrationApplied_UsesCalibratedScore()
     {
-        // R28-F P3-3：默认 calibration 现在是 Identity（raw 原样返回）。
+        // 默认 calibration 现在是 Identity（raw 原样返回）。
         // 要复用旧 sigmoid 语义，需显式注册 Platt(A=1, B=0) 参数。
         // raw=0.8 → sigmoid(0.8) = 1/(1+e^-0.8) ≈ 0.689974
         var engine = new StubBatchInferenceEngine("test-model-v1")
@@ -465,7 +465,7 @@ public sealed class R28D_DefaultUtilityScorerTests
 }
 
 // ===========================================================================
-// §3 端到端集成：Enrich → Score
+// 端到端集成：Enrich → Score
 // ===========================================================================
 
 [TestClass]
@@ -634,7 +634,7 @@ internal static class R28DTestHelpers
             Safety = bundle.Safety,
             Budget = bundle.Budget,
             Routing = routing,
-            // R28-F P3-1：FeatureSchemaVersion 可显式传入（默认使用 bundle 的 DecisionSchemaVersion）。
+            // FeatureSchemaVersion 可显式传入（默认使用 bundle 的 DecisionSchemaVersion）。
             // 测试中应与 BuildRegistryWithSchema 的 schemaVersion 参数保持一致。
             FeatureSchemaVersion = featureSchemaVersion ?? bundle.Policies.DecisionSchemaVersion,
             ResolutionScope = new ContextDecisionScope("test-ws", "test-col"),
@@ -663,7 +663,7 @@ internal static class R28DTestHelpers
     }
 
     /// <summary>
-    /// R28-F P3-1：构造 registry + snapshot 配对（同 schemaVersion），保证两者对齐。
+    /// 构造 registry + snapshot 配对（同 schemaVersion），保证两者对齐。
     /// 旧测试调用 BuildRegistryWithSchema("test-model-v1") + BuildSnapshot() 会导致
     /// registry 的 schema 版本与 snapshot.FeatureSchemaVersion 不一致（前者 "test-model-v1"，
     /// 后者 bundle.Policies.DecisionSchemaVersion）。新测试应使用此方法避免不一致。
@@ -710,10 +710,10 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
 
     public string ModelVersion { get; }
 
-    // R28-D P0-1：Stub 默认为 RealModel，让测试可验证 model-weighted 路径
+    // Stub 默认为 RealModel，让测试可验证 model-weighted 路径
     public InferenceEngineKind Kind { get; set; } = InferenceEngineKind.RealModel;
 
-    // R28-F P3-1：Stub 默认 ContentHash/CalibrationVersion（测试可控）
+    // Stub 默认 ContentHash/CalibrationVersion（测试可控）
     public string ContentHash { get; set; } = "stub-content-hash";
     public string CalibrationVersion { get; set; } = "stub-calibration-v1";
 
@@ -775,7 +775,7 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
                 : new InferenceOutput { Score = 0.0, Confidence = 0.0 };
         }
 
-        // R28-F P3-2：返回真实执行时间（非零），避免推理验证器误判 timeout 未执行。
+        // 返回真实执行时间（非零），避免推理验证器误判 timeout 未执行。
         return new ValueTask<BatchInferenceResult>(new BatchInferenceResult
         {
             Outputs = outputs,
@@ -785,7 +785,7 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
         });
     }
 
-    // R28-F P4-1：Stub 的 FeatureBatch 路径直接复用 InferAsync 的输出策略
+    // Stub 的 FeatureBatch 路径直接复用 InferAsync 的输出策略
     public ValueTask<BatchInferenceResult> InferBatchAsync(FeatureBatch batch, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(batch);

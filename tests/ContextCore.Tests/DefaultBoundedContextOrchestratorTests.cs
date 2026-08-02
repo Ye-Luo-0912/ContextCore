@@ -5,7 +5,7 @@ using ContextCore.Core.Services.BoundedContext;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R22-3：DefaultBoundedContextOrchestrator 实现测试。
+/// DefaultBoundedContextOrchestrator 实现测试。
 ///
 /// 覆盖：
 ///   1. null 输入处理（decision/qualityReport/budget）

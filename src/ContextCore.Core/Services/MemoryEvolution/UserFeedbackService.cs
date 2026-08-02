@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R29 WP-E-5：用户反馈服务。
+/// 用户反馈服务。
 /// </summary>
 /// <remarks>
 /// 设计原则：

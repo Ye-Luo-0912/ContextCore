@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.Graph;
 
 /// <summary>
-/// P1-5：Outbox 装饰器，包装 <see cref="IRelationProjectionWriter"/> 与
+/// Outbox 装饰器，包装 <see cref="IRelationProjectionWriter"/> 与
 /// <see cref="ITransactionalRelationProjectionWriter"/>。
 /// </summary>
 /// <remarks>

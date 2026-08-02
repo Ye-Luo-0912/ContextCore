@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R27-2：Evolution Pipeline Run Store 契约
+// Evolution Pipeline Run Store 契约
 //
 // 目标（对齐 R27 规格）：
 //   1. 持久化 Guarded Optimization Pipeline 的运行状态（PipelineRunSnapshot）+ 3 类审计记录
@@ -25,11 +25,11 @@ namespace ContextCore.Abstractions;
 //   - 默认实现使用 ConcurrentDictionary（in-memory）；生产实现替换为 Postgres store。
 //   - 与 IAgentCheckpointStore 设计模式对齐（R26-2）。
 //   - P0-7：TryTransitionAsync 是唯一允许并发推进 run state 的入口；
-//     P2-1：TryCreateRunAsync 是唯一创建新 run 的入口（insert-if-absent 语义）。
+//     TryCreateRunAsync 是唯一创建新 run 的入口（insert-if-absent 语义）。
 // ===========================================================================
 
 /// <summary>
-/// R27-2：Pipeline 运行快照（不可变）。捕获一次 pipeline run 的完整可持久化状态。
+/// Pipeline 运行快照（不可变）。捕获一次 pipeline run 的完整可持久化状态。
 /// </summary>
 /// <remarks>
 /// 由 <see cref="IGuardedOptimizationPipeline"/> 实现在每次状态变更后生成新快照写入 store。
@@ -84,24 +84,24 @@ public sealed record PipelineRunSnapshot
     // ---------- P0-7：HA 字段 ----------
 
     /// <summary>
-    /// P0-7：单调递增版本号。StartAsync 初始为 1；每次 TryTransitionAsync 成功后 +1。
+    /// 单调递增版本号。StartAsync 初始为 1；每次 TryTransitionAsync 成功后 +1。
     /// CAS 推进的乐观锁基础：调用方传入 expectedRevision，store 在 WHERE 条件中校验。
     /// </summary>
     public required long Revision { get; init; }
 
     /// <summary>
-    /// P0-7：可选的租约所有者标识（实例 ID / 主机名 / 进程名）。
+    /// 可选的租约所有者标识（实例 ID / 主机名 / 进程名）。
     /// 由调用方管理语义；store 不主动获取或续约租约。
     /// </summary>
     public string? LeaseOwner { get; init; }
 
     /// <summary>
-    /// P0-7：可选的租约到期时间（UTC）。null 表示无租约或已过期。
+    /// 可选的租约到期时间（UTC）。null 表示无租约或已过期。
     /// </summary>
     public DateTimeOffset? LeaseExpiresAt { get; init; }
 
     /// <summary>
-    /// P0-7：上一次成功推进的逻辑 transition ID（由调用方生成，如 GUID）。
+    /// 上一次成功推进的逻辑 transition ID（由调用方生成，如 GUID）。
     /// 用于审计与重试去重：响应丢失时，调用方使用相同 transitionId 重试，
     /// store 可识别为已应用并返回当前快照（幂等）。
     /// </summary>
@@ -109,7 +109,7 @@ public sealed record PipelineRunSnapshot
 }
 
 /// <summary>
-/// P0-7：原子推进时附带的审计批量。所有非 null 项在同一事务内写入，
+/// 原子推进时附带的审计批量。所有非 null 项在同一事务内写入，
 /// 与 snapshot CAS 一起成功或一起失败（避免 audit 已写入但 snapshot 未更新）。
 /// </summary>
 public sealed record PipelineAuditBatch
@@ -128,7 +128,7 @@ public sealed record PipelineAuditBatch
 }
 
 /// <summary>
-/// P2-2：调用方提供的 transition 标识，用于端到端幂等。
+/// 调用方提供的 transition 标识，用于端到端幂等。
 /// </summary>
 /// <remarks>
 /// 当调用方在收到 <c>TryTransitionAsync</c> 响应前超时，重试时必须复用同一
@@ -159,7 +159,7 @@ public sealed record PipelineTransitionRequest
 }
 
 /// <summary>
-/// R27-2：Pipeline Run Store 接口。持久化 <see cref="PipelineRunSnapshot"/> 与 3 类审计记录。
+/// Pipeline Run Store 接口。持久化 <see cref="PipelineRunSnapshot"/> 与 3 类审计记录。
 /// </summary>
 /// <remarks>
 /// 适用于 HA 场景下 pipeline run state 跨进程恢复。
@@ -177,14 +177,14 @@ public interface IPipelineRunStore
     Task SaveRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P2-1：创建新 pipeline run（insert-if-absent 语义）。
+    /// 创建新 pipeline run（insert-if-absent 语义）。
     /// 同 RunId 已存在时返回 false（不覆盖）；不存在时插入并返回 true。
     /// </summary>
     /// <param name="snapshot">Run 快照（必填）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>true = 创建成功；false = RunId 已存在。</returns>
     /// <remarks>
-    /// P2-1 修复：替代 <see cref="SaveRunAsync"/> 用于 <c>StartAsync</c> 创建新 run。
+    /// 修复：替代 <see cref="SaveRunAsync"/> 用于 <c>StartAsync</c> 创建新 run。
     /// <see cref="SaveRunAsync"/> 使用 ON CONFLICT DO UPDATE 会覆盖同 RunId 的已有 run，
     /// 导致同秒启动两次（秒精度 RunId 碰撞）时第二次覆盖第一次。
     /// TryCreateRunAsync 使用 ON CONFLICT DO NOTHING，第二次启动返回 false，
@@ -218,7 +218,7 @@ public interface IPipelineRunStore
     Task<bool> DeleteRunAsync(string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// R28-B.8：按 <paramref name="stage"/> 列出所有处于该阶段的 pipeline run snapshot
+    /// 按 <paramref name="stage"/> 列出所有处于该阶段的 pipeline run snapshot
     /// （按 UpdatedAt 倒序）。供 CanaryProgressionHostedService 轮询 ScopedCanary 阶段的 run。
     /// </summary>
     /// <param name="stage">目标阶段。</param>
@@ -236,7 +236,7 @@ public interface IPipelineRunStore
         => Task.FromResult<IReadOnlyList<PipelineRunSnapshot>>(Array.Empty<PipelineRunSnapshot>());
 
     /// <summary>
-    /// P0-7：原子 CAS 推进 pipeline run snapshot。
+    /// 原子 CAS 推进 pipeline run snapshot。
     /// 仅当 store 内当前 <c>Revision == expectedRevision</c> 且 <c>CurrentStage == expectedStage</c> 时，
     /// 替换为 <paramref name="next"/> 并在同事务内写入 <paramref name="audit"/> 中的审计记录。
     /// </summary>
@@ -273,7 +273,7 @@ public interface IPipelineRunStore
     /// <param name="assignment">Canary assignment（必填）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
-    /// P2-3：推荐通过 <see cref="PipelineAuditBatch.CanaryAssignment"/> 在
+    /// 推荐通过 <see cref="PipelineAuditBatch.CanaryAssignment"/> 在
     /// <see cref="TryTransitionAsync"/> 的 transition audit 中原子提交 canary assignment，
     /// 而非通过此方法独立写入。独立写入可能导致状态已进入 ScopedCanary 但 assignment 未写入
     /// （或反之）的不一致。此方法保留用于管理员手动恢复 / 测试场景。
@@ -320,14 +320,14 @@ public interface IPipelineRunStore
     // ---------- Stage transitions (R28-B.8) ----------
 
     /// <summary>
-    /// R28-B.8：保存 canary 百分比推进审计记录（同 TransitionId 覆盖）。
+    /// 保存 canary 百分比推进审计记录（同 TransitionId 覆盖）。
     /// </summary>
     /// <param name="record">Stage transition 记录（必填）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     Task SaveStageTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// R28-B.8：按 RunId 列出所有 stage transition 审计记录（按 TransitionedAt 升序）。
+    /// 按 RunId 列出所有 stage transition 审计记录（按 TransitionedAt 升序）。
     /// </summary>
     /// <param name="runId">Run ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -338,7 +338,7 @@ public interface IPipelineRunStore
 }
 
 /// <summary>
-/// R28-B.8：Canary 百分比推进审计记录（对应 stage_transitions 持久化表）。
+/// Canary 百分比推进审计记录（对应 stage_transitions 持久化表）。
 /// </summary>
 /// <remarks>
 /// 每次 CanaryProgressionService 推进（Advance/Hold/Rollback/Promoted）生成一条记录。

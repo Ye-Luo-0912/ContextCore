@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R28-B.8：Per-Run CutoverController 隔离
+// Per-Run CutoverController 隔离
 //
 // 目标（对齐 R28-B.8 工作包 B 规格）：
 //   1. CutoverController 不再以 Singleton 形式被所有 canary run 共享，
@@ -23,7 +23,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8：Per-runId 的 <see cref="CutoverController"/> 注册表。
+/// Per-runId 的 <see cref="CutoverController"/> 注册表。
 /// </summary>
 /// <remarks>
 /// 管理 per-runId 的 <see cref="CutoverController"/> 实例，避免多个 canary run
@@ -100,7 +100,7 @@ public sealed class CutoverControllerRegistry
 }
 
 /// <summary>
-/// R28-B.8：CutoverController 解析器接口。按 runId 解析到对应的 <see cref="CutoverController"/>。
+/// CutoverController 解析器接口。按 runId 解析到对应的 <see cref="CutoverController"/>。
 /// </summary>
 /// <remarks>
 /// <see cref="Resolve"/> 在 runId 为 null/空时返回默认控制器（无活跃 canary run 路径）；
@@ -117,7 +117,7 @@ public interface ICutoverControllerResolver
 }
 
 /// <summary>
-/// R28-B.8：默认的 <see cref="ICutoverControllerResolver"/> 实现，包装 <see cref="CutoverControllerRegistry"/>。
+/// 默认的 <see cref="ICutoverControllerResolver"/> 实现，包装 <see cref="CutoverControllerRegistry"/>。
 /// </summary>
 public sealed class DefaultCutoverControllerResolver : ICutoverControllerResolver
 {

@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B 组件独立测试 — ShadowDecisionRuntime + ExperimentRecorder
+// 组件独立测试 — ShadowDecisionRuntime + ExperimentRecorder
 //
 // 覆盖范围（2 个测试类）：
 //   1. ShadowDecisionRuntimeComponentTests — Shadow 组件独立测试

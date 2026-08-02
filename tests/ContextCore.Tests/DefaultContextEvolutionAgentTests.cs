@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R16-2 DefaultContextEvolutionAgent 实现层测试。
+/// DefaultContextEvolutionAgent 实现层测试。
 /// 覆盖：DiagnoseAsync 生成 Validated proposal、RefineProposalAsync 推进/驳回、硬边界（Status 上限/管道状态拒绝）。
 /// </summary>
 [TestClass]

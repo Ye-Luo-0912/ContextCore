@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R16/R17 Evolution Contracts 验证测试。
+/// Evolution Contracts 验证测试。
 /// 确保所有公共契约类型可正确构造、字段验证生效、枚举值完整。
 /// </summary>
 /// <remarks>

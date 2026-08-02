@@ -118,7 +118,7 @@ public interface IContextJobQueue
 }
 
 /// <summary>
-/// P0-4：支持租约（lease）的作业队列扩展契约。
+/// 支持租约（lease）的作业队列扩展契约。
 /// 实现此接口的队列（如 Postgres）提供带租约的获取与心跳续约，
 /// 使 worker 进程崩溃后过期租约可被其他 worker 通过 <see cref="AcquireLeaseAsync"/> 抢占恢复。
 /// </summary>

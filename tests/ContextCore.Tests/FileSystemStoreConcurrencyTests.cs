@@ -6,7 +6,7 @@ using ContextCore.Storage.FileSystem.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P0-fix: FileSystem Store 并发正确性测试。
+/// -fix: FileSystem Store 并发正确性测试。
 /// 验证 Mutex 正确释放、双实例并发 upsert/delete 无丢失更新、取消和超时行为、无死锁。
 /// </summary>
 [TestClass]
@@ -38,7 +38,7 @@ public sealed class FileSystemStoreConcurrencyTests
         => new(new FileStorageOptions { RootPath = _rootPath! });
 
     /// <summary>
-    /// P0: 双实例并发 BatchUpsert 不丢失更新。
+    /// 双实例并发 BatchUpsert 不丢失更新。
     /// 两个 store 实例指向同一文件，各写入 50 条不重复关系，最终应有 100 条。
     /// </summary>
     [TestMethod]
@@ -88,7 +88,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: 双实例并发 BatchUpsert 同一 ID 不丢失更新（后写覆盖前写）。
+    /// 双实例并发 BatchUpsert 同一 ID 不丢失更新（后写覆盖前写）。
     /// </summary>
     [TestMethod]
     [Timeout(30_000)]
@@ -144,7 +144,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: BatchUpsert 与 DeleteAsync 并发不丢失更新。
+    /// BatchUpsert 与 DeleteAsync 并发不丢失更新。
     /// 一个实例删除关系，另一个实例同时 upsert 不同关系，最终状态应正确。
     /// </summary>
     [TestMethod]
@@ -214,7 +214,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: BatchUpsert 支持取消，取消后不阻塞其他操作。
+    /// BatchUpsert 支持取消，取消后不阻塞其他操作。
     /// </summary>
     [TestMethod]
     [Timeout(30_000)]
@@ -270,7 +270,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: DeleteAsync 支持取消，取消后不阻塞其他操作。
+    /// DeleteAsync 支持取消，取消后不阻塞其他操作。
     /// </summary>
     [TestMethod]
     [Timeout(30_000)]
@@ -316,7 +316,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: ContextStore 并发 Save + Get 不产生跨文件不一致。
+    /// ContextStore 并发 Save + Get 不产生跨文件不一致。
     /// 写入者更新同一 item 的 content 和 metadata，读取者应看到一致的快照。
     /// </summary>
     [TestMethod]
@@ -372,7 +372,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: ContextStore 并发 Save + Query 不产生异常或数据损坏。
+    /// ContextStore 并发 Save + Query 不产生异常或数据损坏。
     /// </summary>
     [TestMethod]
     [Timeout(30_000)]
@@ -453,7 +453,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: 连续多次 BatchUpsert + Delete 不死锁（验证 Mutex 正确释放）。
+    /// 连续多次 BatchUpsert + Delete 不死锁（验证 Mutex 正确释放）。
     /// 修复前 Mutex 只 Dispose 不 ReleaseMutex，第二次获取会超时/死锁。
     /// </summary>
     [TestMethod]
@@ -490,7 +490,7 @@ public sealed class FileSystemStoreConcurrencyTests
     }
 
     /// <summary>
-    /// P0: 双实例连续交替写入不死锁（验证跨实例 Mutex 释放）。
+    /// 双实例连续交替写入不死锁（验证跨实例 Mutex 释放）。
     /// </summary>
     [TestMethod]
     [Timeout(30_000)]

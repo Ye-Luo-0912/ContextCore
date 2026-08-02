@@ -4,7 +4,7 @@ using System.Text;
 namespace ContextCore.Storage.Shared;
 
 /// <summary>
-/// P1-2：跨层共享的 SHA-256 工具，供备份清单、artifact 校验等使用。
+/// 跨层共享的 SHA-256 工具，供备份清单、artifact 校验等使用。
 /// 统一 hex 编码（小写）与流式读取语义，避免每个调用点重复实现。
 /// </summary>
 /// <remarks>

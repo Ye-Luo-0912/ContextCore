@@ -6,17 +6,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// P0-7 / P0-8：ModelActivationManager 单元测试
+// ModelActivationManager 单元测试
 //
 // 覆盖范围：
-//   §1 代理行为：未激活时委托给 fallback，激活后委托给 OnnxInferenceEngine
-//   §2 激活成功路径：descriptor → 校准验证 → schema 验证 → session 创建 → 引擎切换
-//   §3 激活失败：descriptor 未找到
-//   §4 激活失败：校准验证不通过（P0-8）
-//   §5 激活失败：schema 未注册（P0-8）
-//   §6 激活失败：ONNX session 创建失败
-//   §7 ActivateLatestAsync：通过 GetLatestAsync 解析
-//   §8 DI 注册：AddModelActivationManager 正确注册所有接口
+//   代理行为：未激活时委托给 fallback，激活后委托给 OnnxInferenceEngine
+//   激活成功路径：descriptor → 校准验证 → schema 验证 → session 创建 → 引擎切换
+//   激活失败：descriptor 未找到
+//   激活失败：校准验证不通过（P0-8）
+//   激活失败：schema 未注册（P0-8）
+//   激活失败：ONNX session 创建失败
+//   ActivateLatestAsync：通过 GetLatestAsync 解析
+//   DI 注册：AddModelActivationManager 正确注册所有接口
 //
 // 设计：
 //   使用 InMemoryModelArtifactRegistry（测试辅助）+ MockOnnxInferenceSession 隔离真实 ONNX 加载。
@@ -34,7 +34,7 @@ public sealed class P0_7_ModelActivationManagerTests
     private const string CalibrationVersion = "p0-7-cal-v1";
 
     // ===========================================================================
-    // §1 代理行为
+    // 代理行为
     // ===========================================================================
 
     [TestMethod]
@@ -113,7 +113,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §2 激活成功路径
+    // 激活成功路径
     // ===========================================================================
 
     [TestMethod]
@@ -134,7 +134,7 @@ public sealed class P0_7_ModelActivationManagerTests
     [TestMethod]
     public async Task ActivateAsync_WithCalibrationService_ValidatesCalibration()
     {
-        // P0-8：校准服务注入后，激活时验证校准参数
+        // 校准服务注入后，激活时验证校准参数
         var calibration = new PlattCalibrationService();
         calibration.RegisterPlattParameters(a: 1.0, b: 0.0, modelName: ModelArtifactId, version: CalibrationVersion);
 
@@ -149,7 +149,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §3 激活失败：descriptor 未找到
+    // 激活失败：descriptor 未找到
     // ===========================================================================
 
     [TestMethod]
@@ -167,13 +167,13 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §4 激活失败：校准验证不通过（P0-8）
+    // 激活失败：校准验证不通过（P0-8）
     // ===========================================================================
 
     [TestMethod]
     public async Task ActivateAsync_InvalidCalibration_RejectsActivation()
     {
-        // P0-8：校准参数非法（Platt A=0）→ 激活被拒绝
+        // 校准参数非法（Platt A=0）→ 激活被拒绝
         var calibration = new PlattCalibrationService();
         calibration.RegisterPlattParameters(a: 0.0, b: 0.0, modelName: ModelArtifactId, version: CalibrationVersion); // A=0 → Error
 
@@ -194,13 +194,13 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §5 激活失败：schema 未注册（P0-8）
+    // 激活失败：schema 未注册（P0-8）
     // ===========================================================================
 
     [TestMethod]
     public async Task ActivateAsync_SchemaNotRegistered_RejectsActivation()
     {
-        // P0-8：descriptor 引用了未注册的 schema 版本 → 激活被拒绝
+        // descriptor 引用了未注册的 schema 版本 → 激活被拒绝
         var registry = new InMemoryModelArtifactRegistry();
         registry.RegisterAsync(new ModelArtifactDescriptor
         {
@@ -223,7 +223,7 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 schema 验证步骤
+        // fail-closed：提供有效校准参数以便流程越过校准检查到达 schema 验证步骤
         var manager = new ModelActivationManager(
             registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration(modelName: "bad-schema-model"));
 
@@ -240,7 +240,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §6 激活失败：ONNX session 创建失败
+    // 激活失败：ONNX session 创建失败
     // ===========================================================================
 
     [TestMethod]
@@ -258,7 +258,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §7 ActivateLatestAsync
+    // ActivateLatestAsync
     // ===========================================================================
 
     [TestMethod]
@@ -275,7 +275,7 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        // P0-8 fail-closed：注册与 ModelName 匹配的校准参数（descriptor 用 MakeDescriptor，
+        // fail-closed：注册与 ModelName 匹配的校准参数（descriptor 用 MakeDescriptor，
         // 其 ModelArtifactId 各不相同但 ModelName 统一为 p0-7-test-model）
         var manager = new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration(modelName: ModelName));
         var options = BuildOptions();
@@ -300,7 +300,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // §8 DI 注册
+    // DI 注册
     // ===========================================================================
 
     [TestMethod]
@@ -355,7 +355,7 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        // P0-8 fail-closed 要求 calibrationService 非空且版本精确匹配；
+        // fail-closed 要求 calibrationService 非空且版本精确匹配；
         // 未显式传入时使用与 descriptor.CalibrationVersion 一致的有效参数。
         var cal = calibrationService ?? BuildValidCalibration();
 
@@ -372,13 +372,13 @@ public sealed class P0_7_ModelActivationManagerTests
         var fallback = new DeterministicBatchInferenceEngine();
         var calValidator = new DefaultCalibrationValidator();
 
-        // P0-8 fail-closed：提供有效校准参数以便流程越过校准检查到达 session 创建步骤
+        // fail-closed：提供有效校准参数以便流程越过校准检查到达 session 创建步骤
         return new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration());
     }
 
     /// <summary>
     /// 构造与 descriptor.CalibrationVersion 精确匹配的有效 Platt 校准参数（A=1.0, B=0.0）。
-    /// P0-8 fail-closed 要求 ICalibrationService 非空且版本精确匹配才能通过校准验证。
+    /// fail-closed 要求 ICalibrationService 非空且版本精确匹配才能通过校准验证。
     /// </summary>
     /// <param name="modelName">注册校准参数的目标模型名（默认 <see cref="ModelArtifactId"/>）。</param>
     private static PlattCalibrationService BuildValidCalibration(string? modelName = null)

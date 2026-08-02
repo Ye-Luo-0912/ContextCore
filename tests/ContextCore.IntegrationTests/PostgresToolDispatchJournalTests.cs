@@ -8,7 +8,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// R29 WP-B-1：PostgresToolDispatchJournal 端到端集成测试（Testcontainers）。
+/// PostgresToolDispatchJournal 端到端集成测试（Testcontainers）。
 /// 验证持久化 Tool Dispatch Journal 的状态机推进、幂等、崩溃恢复与逆退保护。
 /// </summary>
 [TestClass]
@@ -25,7 +25,7 @@ public sealed class PostgresToolDispatchJournalTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // R14-PG 收口：直接尝试启动容器（与 PostgresWriteTransactionScopeTests 一致），
+        // 收口：直接尝试启动容器（与 PostgresWriteTransactionScopeTests 一致），
         // 避免 IsDockerAvailableAsync 在 Windows named-pipe Docker Desktop 上误判。
         try
         {
@@ -311,7 +311,7 @@ public sealed class PostgresToolDispatchJournalTests
             var journal = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
             var requestId = "req-missing-1";
 
-            // P0-3：未 Prepare 直接 MarkDispatched → 抛冲突异常（不再 auto-create stub）
+            // 未 Prepare 直接 MarkDispatched → 抛冲突异常（不再 auto-create stub）
             // 保证审计链完整：不存在 → Dispatched 这样的跳跃不再可能。
             var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(
                 async () => await journal.MarkDispatchedAsync(requestId, "ext-auto-1"));
@@ -339,7 +339,7 @@ public sealed class PostgresToolDispatchJournalTests
             var journal = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
             var requestId = "req-missing-committed-1";
 
-            // P0-3：未 Prepare/Dispatch 直接 MarkCommitted → 抛冲突异常
+            // 未 Prepare/Dispatch 直接 MarkCommitted → 抛冲突异常
             var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(
                 async () => await journal.MarkCommittedAsync(requestId));
             StringAssert.Contains(ex.Message, "缺失前驱记录");
@@ -365,7 +365,7 @@ public sealed class PostgresToolDispatchJournalTests
             var journal = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
             var requestId = "req-missing-delivered-1";
 
-            // P0-3：未 Prepare/Dispatch/Commit 直接 MarkResultDelivered → 抛冲突异常
+            // 未 Prepare/Dispatch/Commit 直接 MarkResultDelivered → 抛冲突异常
             var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(
                 async () => await journal.MarkResultDeliveredAsync(requestId));
             StringAssert.Contains(ex.Message, "缺失前驱记录");
@@ -401,7 +401,7 @@ public sealed class PostgresToolDispatchJournalTests
             });
 
             // 第二条 Prepare 使用不同 request_id 但相同幂等键 → 应被 UNIQUE 约束拒绝
-            // P0-3：防止不同 request_id 复用同一幂等键分别执行外部副作用。
+            // 防止不同 request_id 复用同一幂等键分别执行外部副作用。
             await Assert.ThrowsExceptionAsync<PostgresException>(
                 async () => await journal.PrepareAsync(new ToolDispatchJournalEntry
                 {
@@ -434,7 +434,7 @@ public sealed class PostgresToolDispatchJournalTests
         {
             var journal = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
 
-            // P0-3：NULL 幂等键不参与 UNIQUE 约束（partial index WHERE idempotency_key IS NOT NULL）
+            // NULL 幂等键不参与 UNIQUE 约束（partial index WHERE idempotency_key IS NOT NULL）
             // 多条 NULL 幂等键的 Prepare 应该都能成功（与"未声明幂等键"语义一致）。
             await journal.PrepareAsync(new ToolDispatchJournalEntry
             {

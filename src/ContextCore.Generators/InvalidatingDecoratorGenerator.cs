@@ -14,7 +14,7 @@ namespace ContextCore.Generators;
 /// 避免 Decorator 在 DI 解析后隐藏 inner store 实现的能力接口。
 /// </summary>
 /// <remarks>
-/// P0-8：读写分类改为基于 [StoreOperation] attribute，不再使用方法名前缀猜测。
+/// 读写分类改为基于 [StoreOperation] attribute，不再使用方法名前缀猜测。
 /// 未标注方法的接口会触发编译诊断 CCGEN001。
 /// </remarks>
 [Generator]
@@ -22,7 +22,7 @@ public sealed class InvalidatingDecoratorGenerator : IIncrementalGenerator
 {
     private const string AttributeFullyQualifiedName = "ContextCore.Core.GenerateInvalidatingDecoratorAttribute";
 
-    // P0-8：未标注 [StoreOperation] 的存储接口方法触发编译诊断。
+    // 未标注 [StoreOperation] 的存储接口方法触发编译诊断。
     private static readonly DiagnosticDescriptor UnannotatedStoreOperationDiagnostic = new(
         id: "CCGEN001",
         title: "Store operation method missing [StoreOperation] annotation",
@@ -61,7 +61,7 @@ public sealed class InvalidatingDecoratorGenerator : IIncrementalGenerator
                     }
                 }
 
-                // P0-8：收集未标注 [StoreOperation] 的方法，用于编译诊断。
+                // 收集未标注 [StoreOperation] 的方法，用于编译诊断。
                 var unannotated = new List<UnannotatedMethod>();
                 CollectUnannotatedMethods(interfaceType!, unannotated);
                 foreach (var cap in capabilities)
@@ -81,7 +81,7 @@ public sealed class InvalidatingDecoratorGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(provider, static (spc, spec) =>
         {
-            // P0-8：先报告未标注方法诊断，再生成源（若存在未标注方法，生成器只跳过它们，
+            // 先报告未标注方法诊断，再生成源（若存在未标注方法，生成器只跳过它们，
             // 装饰器类会因未实现接口方法而触发 CS0535，配合本诊断给出明确指引）。
             foreach (var m in spec.UnannotatedMethods)
             {

@@ -6,7 +6,7 @@ using ContextCore.Storage.FileSystem.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.2 #2：验证 FileConstraintStore 的 Provider 内按 Level/Layer 复用快照能力。
+/// 验证 FileConstraintStore 的 Provider 内按 Level/Layer 复用快照能力。
 /// 关键场景：单次 build 内 Hard/Soft/All 三次 Query 共享同一份 global + collection JSONL 反序列化结果，
 /// 通过 last-write-time 校验复用，避免 3 次重复文件 I/O。
 /// </summary>
@@ -37,7 +37,7 @@ public sealed class FileConstraintStoreSnapshotTests
     }
 
     /// <summary>
-    /// R13.2 #2 核心场景：Hard/Soft/All 三次 Query 同一 collection，
+    /// 核心场景：Hard/Soft/All 三次 Query 同一 collection，
     /// 第 1 次触发 global + collection 两次 miss，第 2/3 次完全命中快照。
     /// </summary>
     [TestMethod]

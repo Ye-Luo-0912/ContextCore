@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions.Models;
 
 /// <summary>
-/// R14-1：候选项决策原因码。替代 <see cref="ContextDecisionCandidate.Reason"/> 自由文本，
+/// 候选项决策原因码。替代 <see cref="ContextDecisionCandidate.Reason"/> 自由文本，
 /// 为决策证据提供机器可解析的枚举，使下游 Agent / Router / Reranker / 学习闭环可基于稳定分类聚合分析。
 /// </summary>
 /// <remarks>
@@ -68,7 +68,7 @@ public enum CandidateDecisionReasonCode
 }
 
 /// <summary>
-/// R14-1：候选项决策原因码集合。包含主原因与次要原因列表，
+/// 候选项决策原因码集合。包含主原因与次要原因列表，
 /// 替代 <see cref="ContextDecisionCandidate.Reason"/> 单字符串字段，提供结构化分类。
 /// </summary>
 public sealed class CandidateDecisionReason
@@ -94,7 +94,7 @@ public sealed class CandidateDecisionReason
 }
 
 /// <summary>
-/// R14-1：候选项决策证据 V2。替代 <see cref="DecisionEvidence"/> 的 PrimaryRationale/SecondaryRationales 字符串字段，
+/// 候选项决策证据 V2。替代 <see cref="DecisionEvidence"/> 的 PrimaryRationale/SecondaryRationales 字符串字段，
 /// 改为强类型枚举 + 结构化字段，为 Agent / Router / Reranker / 学习闭环提供可聚合的数据基础。
 /// </summary>
 /// <remarks>
@@ -176,7 +176,7 @@ public sealed class DecisionEvidenceV2
 }
 
 /// <summary>
-/// R14-1：决策证据 V2 解析结果。替代 <see cref="DecisionEvidenceResult"/>，
+/// 决策证据 V2 解析结果。替代 <see cref="DecisionEvidenceResult"/>，
 /// 携带 V2 结构化证据列表与完整性状态。
 /// </summary>
 public sealed class DecisionEvidenceV2Result

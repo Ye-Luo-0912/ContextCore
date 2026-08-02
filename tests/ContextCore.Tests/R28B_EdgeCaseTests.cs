@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B 边界条件测试 — TokenBudget=0 / 全部候选被 SafetyGate 拦截 / 取消令牌
+// 边界条件测试 — TokenBudget=0 / 全部候选被 SafetyGate 拦截 / 取消令牌
 //
 // 覆盖范围（3 个测试类）：
 //   1. TokenBudgetZeroEdgeCaseTests — TokenBudget=0 边界条件

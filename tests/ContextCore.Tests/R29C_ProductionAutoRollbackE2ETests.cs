@@ -8,7 +8,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-C-4：生产环境自动回滚验证（shadow 流量 + 真实 metrics）— 端到端验收测试
+// 生产环境自动回滚验证（shadow 流量 + 真实 metrics）— 端到端验收测试
 //
 // 目标：把 AuthoritativeRuntime（Retrieval + Package）的 shadow / Mixed / sampled shadow
 // 路径与 DefaultCanaryMetricsCollector + CanaryProgressionService 完整串联起来，

@@ -6,7 +6,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R18-4：Package 候选适配器（PackageTraceCandidate → ContextCandidateEnvelope）
+// Package 候选适配器（PackageTraceCandidate → ContextCandidateEnvelope）
 //
 // 目标：
 //   让现有 BasicContextPackageBuilder 路径产出的 PackageTraceCandidate 集合
@@ -39,7 +39,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R18-4：Package 候选适配器。将 <see cref="PackageTraceCandidate"/>
+/// Package 候选适配器。将 <see cref="PackageTraceCandidate"/>
 /// 集合转换为 <see cref="ContextCandidateEnvelope"/> 集合，作为现有 Package
 /// 路径与统一 Engine 之间的桥梁。
 /// </summary>
@@ -63,7 +63,7 @@ public static class PackageCandidateAdapter
         var constraintLevel = ResolveConstraintLevel(candidate.Kind);
         var lifecycleState = ResolveLifecycleState(candidate.Metadata);
 
-        // P0-5：填充 CanonicalKey / Origins / ExpertContributions / PolicyReference
+        // 填充 CanonicalKey / Origins / ExpertContributions / PolicyReference
         var expertKind = MapSourceToExpertKind(source);
         var canonicalKey = CanonicalCandidateKey.Create(
             workspaceId: context.WorkspaceId,
@@ -91,7 +91,7 @@ public static class PackageCandidateAdapter
             PolicyReference = context.PolicyReference,
             Safety = new CandidateSafetyState
             {
-                // P0-1：不再把 Constraint 来源一律视为 hard。
+                // 不再把 Constraint 来源一律视为 hard。
                 // IsMandatory 仅对 hard_constraint / constraints 为 true（Hard 级别）；
                 // soft_constraint（Soft）与 merged_constraint（Mixed）均不免预算。
                 // IsHardConstraint 仅当 ConstraintLevel == Hard 时为 true。
@@ -115,7 +115,7 @@ public static class PackageCandidateAdapter
                 ScoreBreakdown = ConvertScoreBreakdown(candidate.ScoreBreakdown),
                 ChannelSources = ResolveChannelSources(candidate.Kind)
             },
-            // P0-5：使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
+            // 使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
             ProvenanceRefs = candidate.SourceRefs
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => new EvidenceRef
@@ -174,7 +174,7 @@ public static class PackageCandidateAdapter
         allEnvelopes.AddRange(selectedEnvelopes);
         allEnvelopes.AddRange(droppedEnvelopes);
 
-        // P0-5：填充 WorkspaceId / CollectionId / QueryText / RequestId
+        // 填充 WorkspaceId / CollectionId / QueryText / RequestId
         return new ContextDecisionRequest
         {
             RequestId = string.IsNullOrEmpty(context.RequestId) ? result.BuildId : context.RequestId,
@@ -223,13 +223,13 @@ public static class PackageCandidateAdapter
     {
         if (string.IsNullOrEmpty(kind)) return false;
         var lower = kind.ToLowerInvariant();
-        // P0-1：仅 hard_constraint / constraints 视为 mandatory（Hard 级别）。
+        // 仅 hard_constraint / constraints 视为 mandatory（Hard 级别）。
         // merged_constraint（Mixed）与 soft_constraint（Soft）不再免预算。
         return lower == "hard_constraint" || lower == "constraints";
     }
 
     /// <summary>
-    /// P0-1：根据 kind 字符串解析约束强制级别。
+    /// 根据 kind 字符串解析约束强制级别。
     /// hard_constraint / constraints → Hard
     /// soft_constraint → Soft
     /// merged_constraint → Mixed（不可直接免预算）
@@ -309,7 +309,7 @@ public static class PackageCandidateAdapter
     }
 
     /// <summary>
-    /// P0-4：将 selected 的 <see cref="ContextPackageDecision"/> 转换为
+    /// 将 selected 的 <see cref="ContextPackageDecision"/> 转换为
     /// <see cref="ContextCandidateEnvelope"/>，用于 parity 对比中 Legacy selected 集合。
     /// </summary>
     public static ContextCandidateEnvelope ToEnvelopeFromDecision(
@@ -339,7 +339,7 @@ public static class PackageCandidateAdapter
             PolicyReference = context.PolicyReference,
             Safety = new CandidateSafetyState
             {
-                // P0-1：与 ToEnvelope 保持一致的 ConstraintLevel 推导
+                // 与 ToEnvelope 保持一致的 ConstraintLevel 推导
                 IsMandatory = IsMandatoryKind(decision.Kind),
                 ConstraintLevel = constraintLevel,
                 IsHardConstraint = constraintLevel == ConstraintLevel.Hard,
@@ -356,7 +356,7 @@ public static class PackageCandidateAdapter
             {
                 ChannelSources = ResolveChannelSources(decision.Kind)
             },
-            // P0-5：使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
+            // 使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
             ProvenanceRefs = decision.SourceRefs
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => new EvidenceRef
@@ -375,7 +375,7 @@ public static class PackageCandidateAdapter
     }
 
     /// <summary>
-    /// P0-4：将 dropped 的 <see cref="DroppedContextItem"/> 转换为
+    /// 将 dropped 的 <see cref="DroppedContextItem"/> 转换为
     /// <see cref="ContextCandidateEnvelope"/>，用于 parity 对比中 Legacy dropped 集合。
     /// </summary>
     public static ContextCandidateEnvelope ToEnvelopeFromDroppedItem(
@@ -421,7 +421,7 @@ public static class PackageCandidateAdapter
             {
                 ChannelSources = ResolveChannelSources(item.Kind)
             },
-            // P1-2：dropped envelope 填充 provenance（与 selected 路径一致）
+            // dropped envelope 填充 provenance（与 selected 路径一致）
             ProvenanceRefs = new List<EvidenceRef>
             {
                 new()
@@ -440,11 +440,11 @@ public static class PackageCandidateAdapter
     }
 
     // ----------------------------------------------------------------------
-    // P0-5：CanonicalKey / Expert 派生辅助方法
+    // CanonicalKey / Expert 派生辅助方法
     // ----------------------------------------------------------------------
 
     /// <summary>
-    /// P0-5：将 ContextCandidateSource 映射到 ExpertKind（用于 Origins/ExpertContributions）。
+    /// 将 ContextCandidateSource 映射到 ExpertKind（用于 Origins/ExpertContributions）。
     /// </summary>
     private static ExpertKind MapSourceToExpertKind(ContextCandidateSource source) => source switch
     {
@@ -462,7 +462,7 @@ public static class PackageCandidateAdapter
     };
 
     /// <summary>
-    /// P0-5：解析 EntityKind。优先使用 candidate.Type（业务类型），
+    /// 解析 EntityKind。优先使用 candidate.Type（业务类型），
     /// 退回 Kind 字符串，最后退回 Source 枚举名。
     /// </summary>
     private static string ResolveEntityKind(PackageTraceCandidate candidate, ContextCandidateSource source)
@@ -473,7 +473,7 @@ public static class PackageCandidateAdapter
     }
 
     /// <summary>
-    /// P0-5：解析 EntityKind（从 ContextPackageDecision）。
+    /// 解析 EntityKind（从 ContextPackageDecision）。
     /// </summary>
     private static string ResolveEntityKindFromDecision(ContextPackageDecision decision, ContextCandidateSource source)
     {
@@ -483,7 +483,7 @@ public static class PackageCandidateAdapter
     }
 
     /// <summary>
-    /// P0-5：解析 EntityVersion。优先使用 metadata["version"] / metadata["entityVersion"]，
+    /// 解析 EntityVersion。优先使用 metadata["version"] / metadata["entityVersion"]，
     /// 否则使用 candidate.Content 的 stable content hash。
     /// </summary>
     private static string ResolveEntityVersion(PackageTraceCandidate candidate)
@@ -498,7 +498,7 @@ public static class PackageCandidateAdapter
     }
 
     /// <summary>
-    /// P0-5：解析 EntityVersion（从 ContextPackageDecision）。
+    /// 解析 EntityVersion（从 ContextPackageDecision）。
     /// Decision 不含 Content，使用可识别字段计算 stable hash。
     /// </summary>
     private static string ResolveEntityVersionFromDecision(ContextPackageDecision decision)
@@ -509,7 +509,7 @@ public static class PackageCandidateAdapter
     }
 
     /// <summary>
-    /// P0-5：计算 stable content hash（SHA256，截取前 16 字符）。
+    /// 计算 stable content hash（SHA256，截取前 16 字符）。
     /// 复用 RetrievalCandidateAdapter 的实现以保持一致。
     /// </summary>
     internal static string ComputeStableContentHash(params object[] parts)

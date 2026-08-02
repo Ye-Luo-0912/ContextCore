@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-2：Agent Context 数据契约测试。
+/// Agent Context 数据契约测试。
 ///
 /// 验证目标：
 ///   1. AgentContextSnapshot record 必填字段 + 默认值 + with 表达式

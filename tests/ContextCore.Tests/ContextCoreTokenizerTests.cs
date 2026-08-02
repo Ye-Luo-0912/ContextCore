@@ -4,7 +4,7 @@ using ContextCore.Core;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P0 4.3 边界测试：验证 Legacy / Unicode tokenizer 的截断公式在预算边界处
+/// 4.3 边界测试：验证 Legacy / Unicode tokenizer 的截断公式在预算边界处
 /// 既不超预算也不系统性浪费 budget。
 /// 不变量：Estimate(TruncatedContent) <= budget，且保留字符数为满足该不等式的最大值。
 /// </summary>
@@ -198,7 +198,7 @@ public sealed class ContextCoreTokenizerTests
         }
     }
 
-    // R12.4A #3: Tokenizer 截断公式 — Latin run flush 后 safeLength 必须推进。
+    // #3: Tokenizer 截断公式 — Latin run flush 后 safeLength 必须推进。
     // 旧 bug：非 ASCII rune 前的 latin run 成功 flush 并计入 count 后，若该 rune 超预算 goto done，
     // safeLength 未更新导致 latin run 被系统性丢弃（返回空串而非已 flush 的 latin 文本）。
 

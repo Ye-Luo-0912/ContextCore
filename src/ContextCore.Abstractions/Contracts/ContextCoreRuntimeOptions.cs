@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// P0-1：统一运行配置入口契约
+// 统一运行配置入口契约
 //
 // 目标：
 //   把 ProductionHA Profile 与真实运行模式（Model / AgentModel / Tool）的分裂问题
@@ -32,7 +32,7 @@ namespace ContextCore.Abstractions;
 /// 运行时配置文件（profile）。决定生产服务注册组合。
 /// </summary>
 /// <remarks>
-/// P0-1：从 ContextCore.Service.Extensions 命名空间迁移到 Abstractions，
+/// 从 ContextCore.Service.Extensions 命名空间迁移到 Abstractions，
 /// 让 ContextCoreRuntimeOptions 能引用。原 ProductionRuntimeExtensions.cs
 /// 中的 RuntimeProfile 已删除，使用本类型。
 /// </remarks>
@@ -61,7 +61,7 @@ public enum RuntimeProfile
 }
 
 /// <summary>
-/// P0-1：Agent 模型调用模式。控制 IAgentModelTransport 的注册选择。
+/// Agent 模型调用模式。控制 IAgentModelTransport 的注册选择。
 /// </summary>
 /// <remarks>
 /// 与 <see cref="ModelExecutionMode"/> 区别：
@@ -87,7 +87,7 @@ public enum AgentModelMode : byte
 }
 
 /// <summary>
-/// P0-1：Tool 执行模式。控制 IToolDispatcher 的注册选择。
+/// Tool 执行模式。控制 IToolDispatcher 的注册选择。
 /// </summary>
 public enum ToolExecutionMode : byte
 {
@@ -106,7 +106,7 @@ public enum ToolExecutionMode : byte
 }
 
 /// <summary>
-/// P0-1：统一运行配置入口。对应 appsettings.json 中的 <c>ContextCoreRuntime</c> 节。
+/// 统一运行配置入口。对应 appsettings.json 中的 <c>ContextCoreRuntime</c> 节。
 /// </summary>
 /// <remarks>
 /// 替代旧的运行时选项与模型执行选项分裂配置。

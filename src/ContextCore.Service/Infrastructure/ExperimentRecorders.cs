@@ -11,7 +11,7 @@ using NpgsqlTypes;
 namespace ContextCore.Service.Infrastructure;
 
 // ===========================================================================
-// R28-B.6 阶段 E：IExperimentRecorder 持久化实现
+// 阶段 E：IExperimentRecorder 持久化实现
 //
 // 两个实现并存：
 //   1. FileSystemExperimentRecorder — JSON 文件存储（raw fixture）
@@ -35,7 +35,7 @@ namespace ContextCore.Service.Infrastructure;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6 阶段 E：FileSystem 持久化 ReplayFixture。
+/// 阶段 E：FileSystem 持久化 ReplayFixture。
 /// 每条 fixture 独立一个 JSON 文件，按月分片目录组织。
 /// </summary>
 /// <remarks>
@@ -171,7 +171,7 @@ public sealed class FileSystemExperimentRecorder : IExperimentRecorder
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6 阶段 E：PostgreSQL 持久化 ReplayFixture。
+/// 阶段 E：PostgreSQL 持久化 ReplayFixture。
 /// 索引列（标量字段）+ jsonb 列（完整 fixture，含 WorkingSet + V2Result）。
 /// </summary>
 /// <remarks>

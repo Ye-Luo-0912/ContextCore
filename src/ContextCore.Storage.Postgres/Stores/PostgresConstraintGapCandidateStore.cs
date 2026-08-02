@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL 约束语料缺口候选项存储。
-/// R14-PG-4：替代 UnsupportedConstraintGapCandidateStore，让 Postgres provider 在 HA 场景下能持久化缺口候选与审核记录。
+/// 替代 UnsupportedConstraintGapCandidateStore，让 Postgres provider 在 HA 场景下能持久化缺口候选与审核记录。
 /// </summary>
 public sealed class PostgresConstraintGapCandidateStore : PostgresStoreBase, IConstraintGapCandidateStore
 {

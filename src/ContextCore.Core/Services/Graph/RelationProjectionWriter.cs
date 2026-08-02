@@ -10,7 +10,7 @@ namespace ContextCore.Core.Services.Graph;
 /// 同时负责在 relation.Provenance 为空时填充调用方传入的 provenance。
 /// </summary>
 /// <remarks>
-/// P0-3：同时实现 <see cref="ITransactionalRelationProjectionWriter"/>——当注入的 <see cref="IRelationStore"/>
+/// 同时实现 <see cref="ITransactionalRelationProjectionWriter"/>——当注入的 <see cref="IRelationStore"/>
 /// 支持 <see cref="ITransactionalRelationStore"/> 时，事务路径走 BatchUpsertAsync(relations, scope, ct) 重载，
 /// 复用调用方提供的 <see cref="IWriteTransactionScope"/>。
 /// </remarks>
@@ -63,7 +63,7 @@ public sealed class RelationProjectionWriter : IRelationProjectionWriter, ITrans
     }
 
     /// <summary>
-    /// P0-3：在指定事务作用域内写入关系。仅当注入的 <see cref="IRelationStore"/> 实现
+    /// 在指定事务作用域内写入关系。仅当注入的 <see cref="IRelationStore"/> 实现
     /// <see cref="ITransactionalRelationStore"/> 时才走事务路径——否则抛出 <see cref="InvalidOperationException"/>。
     /// 提交由调用方通过 scope.CommitAsync 完成。
     /// </summary>

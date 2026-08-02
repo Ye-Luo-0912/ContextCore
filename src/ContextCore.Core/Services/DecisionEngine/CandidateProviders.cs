@@ -9,7 +9,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R28-B.6 Closure Gate §B：真实 ICandidateProvider 实现
+// Closure Gate §B：真实 ICandidateProvider 实现
 //
 // 目标：把 B-1 的空集合注册替换为真正从 Store 召回候选的 Provider 网络。
 // 每个 Provider 对应一个 ExpertKind，注入对应 Store，产出 Envelope + Material 二元组。
@@ -26,7 +26,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.6：Provider 共享 helper。封装 CanonicalKey 构建、content hash、token 估计等通用逻辑。
+/// Provider 共享 helper。封装 CanonicalKey 构建、content hash、token 估计等通用逻辑。
 /// </summary>
 internal static class CandidateProviderHelpers
 {
@@ -45,7 +45,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// P6：从 ContextItem.Metadata / Checksum 派生 stable content hash，避免在线重复 SHA-256 计算。
+    /// 从 ContextItem.Metadata / Checksum 派生 stable content hash，避免在线重复 SHA-256 计算。
     /// 摄取阶段已持久化 content_hash（Metadata["__content_hash"] 或 Checksum 字段），此处直接复用。
     /// 仅当未持久化时才回退到 <see cref="ComputeContentHash(string)"/> 在线计算。
     /// </summary>
@@ -70,7 +70,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// P6：从完整 SHA-256 hex（64 字符，小写）派生 "sha256:" + 前 16 字符形式的 content hash。
+    /// 从完整 SHA-256 hex（64 字符，小写）派生 "sha256:" + 前 16 字符形式的 content hash。
     /// 输入可能短于 16 字符（异常情况），此时取 min(16, len) 字符。
     /// </summary>
     private static string DeriveContentHashFromChecksum(string checksum)
@@ -81,7 +81,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// P5：从 ContextItem.Metadata 读取摄取阶段持久化的精确 token cost。
+    /// 从 ContextItem.Metadata 读取摄取阶段持久化的精确 token cost。
     /// 返回 null 表示未持久化（Provider 回退到 <see cref="EnrichTokenCost"/> fail-fast 路径）。
     /// </summary>
     internal static int? ReadPersistedTokenCost(ContextItem item)
@@ -93,7 +93,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// P0-10：从 ContextItem.Metadata 读取 PostgreSQL ts_rank_cd 派生的检索评分（× 100）。
+    /// 从 ContextItem.Metadata 读取 PostgreSQL ts_rank_cd 派生的检索评分（× 100）。
     /// 返回 null 表示未持久化（无 QueryText 路径 / 非 Postgres provider）——调用方回退到默认评分逻辑。
     /// </summary>
     /// <remarks>
@@ -184,14 +184,14 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// R28-D P0-3 / R29 WP-D-3：使用 tokenizer 精确计算候选正文 token 数，填充 envelope.TokenCost。
+    /// 使用 tokenizer 精确计算候选正文 token 数，填充 envelope.TokenCost。
     /// </summary>
     /// <param name="envelope">待填充的 envelope（TokenCost 字段会被设置）。</param>
     /// <param name="material">对应的 Material（提供正文）。</param>
     /// <param name="tokenizerResolver">tokenizer 解析器（必须非空；IncludeContent=false 时 material.Content 为空，仍可接受 null）。</param>
     /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
     /// <remarks>
-    /// R29 WP-D-3 fail-fast：当 <paramref name="material"/>.Content 非空且 <paramref name="tokenizerResolver"/> 为 null 时，
+    /// fail-fast：当 <paramref name="material"/>.Content 非空且 <paramref name="tokenizerResolver"/> 为 null 时，
     /// 抛 <see cref="InvalidOperationException"/>，不再静默回退到 length/4 粗估。
     /// 空内容（IncludeContent=false 路径）不需要 tokenize，仍填充 TokenCost(ContentTokens=0)，不抛异常。
     /// </remarks>
@@ -211,7 +211,7 @@ internal static class CandidateProviderHelpers
 
         var content = material?.Content;
 
-        // R29 WP-D-3：fail-fast — 内容非空但 tokenizer 不可用时抛异常，杜绝 length/4 静默回退
+        // fail-fast — 内容非空但 tokenizer 不可用时抛异常，杜绝 length/4 静默回退
         if (!string.IsNullOrEmpty(content) && tokenizerResolver is null)
         {
             throw new InvalidOperationException(
@@ -250,7 +250,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// R28-B.7-Final：从 RetrievalInput.Plan（序列化 JSON 字符串）解析排除状态列表。
+    /// 从 RetrievalInput.Plan（序列化 JSON 字符串）解析排除状态列表。
     /// </summary>
     /// <remarks>
     /// Plan 是 RetrievalPlan 的 JSON 序列化字符串，ExcludedStatuses 字段指定应从召回结果中
@@ -286,7 +286,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// R28-B.7-Final：应用 Plan 的 ExcludedStatuses 过滤到记忆条目列表。
+    /// 应用 Plan 的 ExcludedStatuses 过滤到记忆条目列表。
     /// </summary>
     /// <remarks>
     /// 从 Plan 解析排除状态列表，过滤掉 Status 匹配的记忆条目（如 "deprecated"、"rejected"）。
@@ -323,7 +323,7 @@ internal static class CandidateProviderHelpers
         IContextTokenizerResolver? tokenizerResolver = null,
         string? tokenizerModelName = null)
     {
-        // P6：优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
+        // 优先复用摄取阶段持久化的 content_hash，避免在线 SHA-256 重复计算。
         var contentHash = ResolveContentHash(item);
         var key = CanonicalCandidateKey.Create(
             workspaceId: item.WorkspaceId,
@@ -369,15 +369,15 @@ internal static class CandidateProviderHelpers
         var material = new CandidateMaterial
         {
             Key = key,
-            // R28-B.7 P1-1：IncludeContent=false 时不输出正文（尊重 RetrievalInput.IncludeContent）
+            // IncludeContent=false 时不输出正文（尊重 RetrievalInput.IncludeContent）
             Content = includeContent ? item.Content : string.Empty,
             NativeKind = string.IsNullOrEmpty(item.Type) ? "context" : item.Type,
             SourceRefs = item.SourceRefs.Concat(item.Refs).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
 
-        // P5：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
+        // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
-        // P3 Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
+        // Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
         // ContentTokens=0（tokenizes 空字符串）。此路径下用 item.Content（真实正文，store 未走
         // metadata-only 时仍存在）估算 token 数，确保 allocator 看到非零 token cost。
         var persistedTokenCost = ReadPersistedTokenCost(item);
@@ -395,7 +395,7 @@ internal static class CandidateProviderHelpers
         }
         else if (!includeContent)
         {
-            // P3 Fix-2：IncludeContent=false 且无持久化 token cost 时，用 item.Content 长度估算
+            // Fix-2：IncludeContent=false 且无持久化 token cost 时，用 item.Content 长度估算
             // （material.Content 已清空，但 item.Content 仍持有真实正文）。
             // Perf-2：metadata-only 路径下 item.Content 为空，回退到 metadata 持久化 content_length
             // （memory 摄取时写入；context 无该列时按 1 token 处理，与既有空字符串行为一致）。
@@ -411,7 +411,7 @@ internal static class CandidateProviderHelpers
         }
         else
         {
-            // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+            // 填充 CandidateTokenCost（使用 tokenizer 精确计算）
             envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
         }
 
@@ -475,7 +475,7 @@ internal static class CandidateProviderHelpers
         var material = new CandidateMaterial
         {
             Key = key,
-            // R28-B.7 P1-1：IncludeContent=false 时不输出正文（尊重 RetrievalInput.IncludeContent）
+            // IncludeContent=false 时不输出正文（尊重 RetrievalInput.IncludeContent）
             Content = includeContent ? memory.Content : string.Empty,
             NativeKind = string.IsNullOrEmpty(memory.Type) ? "memory" : memory.Type,
             SourceRefs = memory.SourceRefs
@@ -483,7 +483,7 @@ internal static class CandidateProviderHelpers
 
         // Perf-2：优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
         // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
-        // P3 Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
+        // Fix-2：IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
         // ContentTokens=0（tokenizes 空字符串）。此路径下用 memory.Content（真实正文）估算 token 数，
         // 确保 allocator 看到非零 token cost。
         var persistedTokenCost = ReadPersistedTokenCostFromMetadata(memory.Metadata);
@@ -501,7 +501,7 @@ internal static class CandidateProviderHelpers
         }
         else if (!includeContent)
         {
-            // P3 Fix-2：IncludeContent=false 且无持久化 token cost 时，用 memory.Content 长度估算
+            // Fix-2：IncludeContent=false 且无持久化 token cost 时，用 memory.Content 长度估算
             // （material.Content 已清空，但 memory.Content 仍持有真实正文）。
             // Perf-2：metadata-only 路径下 memory.Content 为空，回退到 metadata 持久化 content_length。
             envelope = envelope with
@@ -516,7 +516,7 @@ internal static class CandidateProviderHelpers
         }
         else
         {
-            // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+            // 填充 CandidateTokenCost（使用 tokenizer 精确计算）
             envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
         }
 
@@ -601,7 +601,7 @@ internal static class CandidateProviderHelpers
         }
         else
         {
-            // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+            // 填充 CandidateTokenCost（使用 tokenizer 精确计算）
             envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
         }
 
@@ -609,7 +609,7 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
-    /// R28-D P0-2：根据 source / score 构造权威原始特征向量。
+    /// 根据 source / score 构造权威原始特征向量。
     /// </summary>
     /// <remarks>
     /// 这些特征值基于现有 Provider 产出的 score 做合理映射（非真实 BM25/cosine 计算），
@@ -703,10 +703,10 @@ internal static class CandidateProviderHelpers
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：Mandatory 候选 Provider。从 IContextStore 召回标记为 mandatory 的条目。
+/// Mandatory 候选 Provider。从 IContextStore 召回标记为 mandatory 的条目。
 /// </summary>
 /// <remarks>
-/// R28-B.6 P0-1：合并两条召回路径：
+/// 合并两条召回路径：
 ///   1. Tags=["mandatory"] 查询标记为强制注入的条目（原有逻辑）。
 ///   2. RetrievalInput.RequiredIds（或 PackageInput.RequiredIds）强制 ID 召回 —
 ///      调用方显式要求强制召回的条目，按 ID 逐个 GetAsync 获取。
@@ -741,7 +741,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         var take = CandidateProviderHelpers.ResolveTake(context);
         var workspaceId = context.Request.Scope.WorkspaceId;
         var collectionId = context.Request.Scope.CollectionId;
-        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
 
         // 路径 1：Tags=["mandatory"] 召回
@@ -751,12 +751,12 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
             CollectionId = collectionId,
             Tags = new[] { "mandatory" },
             Take = take,
-            // R28-B.7 P1-1：将 IncludeContent 传递到 Store 查询
+            // 将 IncludeContent 传递到 Store 查询
             IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
 
-        // R28-B.6 P0-1：路径 2 — RequiredIds 强制召回（RetrievalInput / PackageInput）
-        // R28-B.7 P1-1：Refs 也作为额外 RequiredIds 强制召回
+        // 路径 2 — RequiredIds 强制召回（RetrievalInput / PackageInput）
+        // Refs 也作为额外 RequiredIds 强制召回
         var requiredIds = ResolveRequiredIds(context.Request);
         var seenIds = new HashSet<string>(items.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
         var mergedItems = items.ToList();
@@ -844,9 +844,9 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
     }
 
     /// <summary>
-    /// R28-B.6 P0-1：从 Request 解析 RequiredIds（RetrievalInput 优先，回退到 PackageInput）。
-    /// R28-B.7 P1-1：Refs 也合并为额外 RequiredIds（强制召回）。
-    /// R28-B.7-Final：AgentInput.RequiredIds 也作为回退源（AgentContext 路径 mandatory recall）。
+    /// 从 Request 解析 RequiredIds（RetrievalInput 优先，回退到 PackageInput）。
+    /// Refs 也合并为额外 RequiredIds（强制召回）。
+    /// AgentInput.RequiredIds 也作为回退源（AgentContext 路径 mandatory recall）。
     /// </summary>
     private static IReadOnlyList<string> ResolveRequiredIds(ContextDecisionRuntimeRequest request)
     {
@@ -855,7 +855,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         {
             ids.AddRange(retrievalIds);
         }
-        // R28-B.7 P1-1：Refs 作为额外 RequiredIds
+        // Refs 作为额外 RequiredIds
         if (request.RetrievalInput?.Refs is { Count: > 0 } refs)
         {
             ids.AddRange(refs);
@@ -866,7 +866,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         {
             return pkgIds;
         }
-        // R28-B.7-Final：AgentInput.RequiredIds 回退（AgentContext 路径）
+        // AgentInput.RequiredIds 回退（AgentContext 路径）
         if (request.AgentInput?.RequiredIds is { Count: > 0 } agentIds)
         {
             return agentIds;
@@ -880,7 +880,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：Constraint 候选 Provider。从 IConstraintStore 召回当前作用域的有效约束。
+/// Constraint 候选 Provider。从 IConstraintStore 召回当前作用域的有效约束。
 /// </summary>
 /// <remarks>
 /// 查询 workspace + collection 作用域内的所有约束（不按 Level/Status 过滤），
@@ -947,7 +947,7 @@ public sealed class ConstraintCandidateProvider : ICandidateProvider
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：Lexical 候选 Provider。从 IContextStore 按 QueryText 进行关键词召回。
+/// Lexical 候选 Provider。从 IContextStore 按 QueryText 进行关键词召回。
 /// </summary>
 /// <remarks>
 /// 使用 ContextQuery.QueryText 进行关键词/全文搜索。
@@ -978,13 +978,13 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // R28-B.7-Final：尊重 RetrievalInput.IncludeKeywordRecall（默认 true，false 时跳过关键词召回）
+        // 尊重 RetrievalInput.IncludeKeywordRecall（默认 true，false 时跳过关键词召回）
         if (context.Request.RetrievalInput?.IncludeKeywordRecall == false)
         {
             return CandidateProviderHelpers.Empty();
         }
 
-        // R28-B.7 P1-1：优先使用 RewrittenQueryText（query rewriting 后的结果），回退到 QueryText
+        // 优先使用 RewrittenQueryText（query rewriting 后的结果），回退到 QueryText
         var retrievalInput = context.Request.RetrievalInput;
         var effectiveQueryText = retrievalInput?.RewrittenQueryText ?? context.Request.QueryText;
 
@@ -995,7 +995,7 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             return CandidateProviderHelpers.Empty();
         }
 
-        // R28-B.6 P0-1：读取 RetrievalInput 的 RequiredTags / RequiredTypes
+        // 读取 RetrievalInput 的 RequiredTags / RequiredTypes
         // PackageInput 也提供相同字段（Package 路径下 Lexical 不一定启用，但保留兼容）
         var packageInput = context.Request.PackageInput;
         var requiredTags = retrievalInput?.RequiredTags;
@@ -1009,10 +1009,10 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             requiredTypes = packageInput?.RequiredTypes;
         }
 
-        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = retrievalInput?.IncludeContent ?? true;
 
-        // R28-B.7 P1-1：从 Metadata 解析排除类型/排除 ID（过滤用）
+        // 从 Metadata 解析排除类型/排除 ID（过滤用）
         var (excludedTypes, excludedIds) = ResolveExcludedFiltersFromMetadata(retrievalInput?.Metadata);
 
         var take = CandidateProviderHelpers.ResolveTake(context);
@@ -1021,17 +1021,17 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             WorkspaceId = context.Request.Scope.WorkspaceId,
             CollectionId = context.Request.Scope.CollectionId,
             QueryText = effectiveQueryText,
-            // R28-B.6 P0-1：应用 RequiredTags / RequiredTypes 作为过滤条件
+            // 应用 RequiredTags / RequiredTypes 作为过滤条件
             // （ContextQuery.Tags/Types 默认为空数组，等价于不应用过滤）
             Tags = requiredTags ?? Array.Empty<string>(),
             Types = requiredTypes ?? Array.Empty<string>(),
-            // R28-B.7 P1-1：应用 Refs（如果有 Refs，按 Refs 召回）
+            // 应用 Refs（如果有 Refs，按 Refs 召回）
             Refs = retrievalInput?.Refs ?? Array.Empty<string>(),
-            // R28-B.7 P1-1：应用 Metadata 解析的排除过滤
+            // 应用 Metadata 解析的排除过滤
             ExcludedTypes = excludedTypes,
             ExcludedIds = excludedIds,
             Take = take,
-            // R28-B.7 P1-1：将 IncludeContent 传递到 Store 查询
+            // 将 IncludeContent 传递到 Store 查询
             IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
 
@@ -1042,9 +1042,9 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
 
         foreach (var item in items)
         {
-            // P0-10：优先读取 PostgreSQL ts_rank_cd 派生的检索评分（写入 Metadata["__ts_rank"]）。
+            // 优先读取 PostgreSQL ts_rank_cd 派生的检索评分（写入 Metadata["__ts_rank"]）。
             // IncludeContent=false 路径下 PostgresContextStore 也会写入此键——确保 ts_rank 仍进入评分。
-            // P3 Fix-3：未持久化 ts_rank 时（非 Postgres provider / ID-match 无 QueryText 路径），
+            // Fix-3：未持久化 ts_rank 时（非 Postgres provider / ID-match 无 QueryText 路径），
             // 使用 50.0 作为 ID-match 基线分（精确 ID 查找是刻意召回，而非文本搜索），
             // 与 FTS ts_rank 评分尺度可比。title-contains 奖励 +50.0 仍叠加在此基线之上。
             var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 50.0;
@@ -1065,7 +1065,7 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
     }
 
     /// <summary>
-    /// R28-B.7 P1-1：从 RetrievalInput.Metadata 解析排除过滤条件。
+    /// 从 RetrievalInput.Metadata 解析排除过滤条件。
     /// 支持 "excludedTypes"（逗号分隔）和 "excludedIds"（逗号分隔）两个键。
     /// </summary>
     private static (IReadOnlyList<string> ExcludedTypes, IReadOnlyList<string> ExcludedIds) ResolveExcludedFiltersFromMetadata(
@@ -1097,7 +1097,7 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：Semantic 候选 Provider。通过 IVectorStore 进行向量召回。
+/// Semantic 候选 Provider。通过 IVectorStore 进行向量召回。
 /// </summary>
 /// <remarks>
 /// 流程：
@@ -1143,23 +1143,23 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 
         if (_vectorStore is null) return CandidateProviderHelpers.Empty();
 
-        // R28-B.7-Final：尊重 RetrievalInput.IncludeVectorRecall（默认 true，false 时跳过向量召回）
+        // 尊重 RetrievalInput.IncludeVectorRecall（默认 true，false 时跳过向量召回）
         if (context.Request.RetrievalInput?.IncludeVectorRecall == false)
         {
             return CandidateProviderHelpers.Empty();
         }
 
-        // R28-B.6 P0-1：读取 RetrievalInput 中的语义召回参数
+        // 读取 RetrievalInput 中的语义召回参数
         var retrievalInput = context.Request.RetrievalInput;
         var externalQueryVector = retrievalInput?.QueryVector;
         var modelName = retrievalInput?.ModelName;
         var queryInstruction = retrievalInput?.QueryInstruction;
         var vectorTopKFromInput = retrievalInput?.VectorTopK ?? 0;
         var minVectorScore = retrievalInput?.MinVectorScore;
-        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = retrievalInput?.IncludeContent ?? true;
 
-        // R28-B.6 P0-1：如果 QueryVector 非空，直接使用（不调用 EmbeddingProvider）
+        // 如果 QueryVector 非空，直接使用（不调用 EmbeddingProvider）
         IReadOnlyList<float> queryVector;
         if (externalQueryVector is { Count: > 0 } v)
         {
@@ -1169,7 +1169,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         {
             if (string.IsNullOrWhiteSpace(context.Request.QueryText)) return CandidateProviderHelpers.Empty();
 
-            // R28-B.6 P0-1：未提供 QueryVector 时使用 QueryText + QueryInstruction 调用 EmbeddingProvider
+            // 未提供 QueryVector 时使用 QueryText + QueryInstruction 调用 EmbeddingProvider
             if (_embeddingProvider is null) return CandidateProviderHelpers.Empty();
 
             // QueryInstruction 作为 BGE 前缀拼接到 QueryText
@@ -1182,7 +1182,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
                 OperationId = context.Request.RequestId,
                 WorkspaceId = context.Request.Scope.WorkspaceId,
                 CollectionId = context.Request.Scope.CollectionId,
-                // R28-B.6 P0-1：传 ModelName 给 EmbeddingProvider
+                // 传 ModelName 给 EmbeddingProvider
                 ModelName = modelName,
                 InputKind = EmbeddingInputKind.Query,
                 Inputs =
@@ -1204,7 +1204,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         if (queryVector.Count == 0) return CandidateProviderHelpers.Empty();
 
         // 2. 向量搜索
-        // R28-B.6 P0-1：VectorTopK 优先于 ResolveTake
+        // VectorTopK 优先于 ResolveTake
         var topK = vectorTopKFromInput > 0
             ? vectorTopKFromInput
             : CandidateProviderHelpers.ResolveTake(context);
@@ -1219,7 +1219,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 
         if (hits.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // R28-B.6 P0-1：MinVectorScore 过滤（hit.Score < MinVectorScore 的结果剔除）
+        // MinVectorScore 过滤（hit.Score < MinVectorScore 的结果剔除）
         if (minVectorScore.HasValue)
         {
             var threshold = minVectorScore.Value;
@@ -1350,7 +1350,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             {
                 if (!contextItemDict.TryGetValue(hit.Record.SourceId, out var item)) continue;
 
-                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
+                // 传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                     item, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent,
                     _tokenizerResolver, _tokenizerModelName);
@@ -1365,7 +1365,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             {
                 if (!memoryItemDict.TryGetValue(hit.Record.SourceId, out var memory)) continue;
 
-                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
+                // 传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                     memory, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent,
                     _tokenizerResolver, _tokenizerModelName);
@@ -1399,7 +1399,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：WorkingMemory 候选 Provider。从 IMemoryStore 召回 Layer=Working 的记忆条目。
+/// WorkingMemory 候选 Provider。从 IMemoryStore 召回 Layer=Working 的记忆条目。
 /// </summary>
 public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 {
@@ -1428,13 +1428,13 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 
         if (_memoryStore is null) return CandidateProviderHelpers.Empty();
 
-        // R28-B.7-Final：尊重 RetrievalInput.IncludeWorkingMemory（默认 true，false 时跳过工作记忆召回）
+        // 尊重 RetrievalInput.IncludeWorkingMemory（默认 true，false 时跳过工作记忆召回）
         if (context.Request.RetrievalInput?.IncludeWorkingMemory == false)
         {
             return CandidateProviderHelpers.Empty();
         }
 
-        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
 
         var take = CandidateProviderHelpers.ResolveTake(context);
@@ -1451,7 +1451,7 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // R28-B.7-Final：应用 Plan 的 ExcludedStatuses 过滤（排除废弃/拒绝等状态的记忆）
+        // 应用 Plan 的 ExcludedStatuses 过滤（排除废弃/拒绝等状态的记忆）
         memories = CandidateProviderHelpers.ApplyExcludedStatusesFilter(memories, context.Request.RetrievalInput?.Plan);
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
 
@@ -1460,7 +1460,7 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 
         foreach (var memory in memories)
         {
-            // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
+            // 传递 includeContent 控制候选正文输出
             var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                 memory, ContextCandidateSource.WorkingMemory, ExpertKind.WorkingMemory,
                 50.0, context.AdaptationContext, includeContent,
@@ -1478,7 +1478,7 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：StableMemory 候选 Provider。从 IMemoryStore 召回 Layer=Stable + Status=Stable 的记忆条目。
+/// StableMemory 候选 Provider。从 IMemoryStore 召回 Layer=Stable + Status=Stable 的记忆条目。
 /// </summary>
 public sealed class StableMemoryCandidateProvider : ICandidateProvider
 {
@@ -1507,13 +1507,13 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 
         if (_memoryStore is null) return CandidateProviderHelpers.Empty();
 
-        // R28-B.7-Final：尊重 RetrievalInput.IncludeStableMemory（默认 true，false 时跳过稳定记忆召回）
+        // 尊重 RetrievalInput.IncludeStableMemory（默认 true，false 时跳过稳定记忆召回）
         if (context.Request.RetrievalInput?.IncludeStableMemory == false)
         {
             return CandidateProviderHelpers.Empty();
         }
 
-        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
 
         var take = CandidateProviderHelpers.ResolveTake(context);
@@ -1531,7 +1531,7 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // R28-B.7-Final：应用 Plan 的 ExcludedStatuses 过滤（排除废弃/拒绝等状态的记忆）
+        // 应用 Plan 的 ExcludedStatuses 过滤（排除废弃/拒绝等状态的记忆）
         memories = CandidateProviderHelpers.ApplyExcludedStatusesFilter(memories, context.Request.RetrievalInput?.Plan);
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
 
@@ -1540,7 +1540,7 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 
         foreach (var memory in memories)
         {
-            // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
+            // 传递 includeContent 控制候选正文输出
             var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                 memory, ContextCandidateSource.StableMemory, ExpertKind.StableMemory,
                 80.0, context.AdaptationContext, includeContent,
@@ -1558,7 +1558,7 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B.6：Graph 候选 Provider。通过 IRelationStore 进行关系图扩展。
+/// Graph 候选 Provider。通过 IRelationStore 进行关系图扩展。
 /// </summary>
 /// <remarks>
 /// V2 模型中 Provider 独立并行执行，无法访问其他 Provider 的输出。
@@ -1602,7 +1602,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         if (_relationStore is null) return CandidateProviderHelpers.Empty();
         if (context.Request.SeedCandidates.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // R28-B.7-Final：尊重 RetrievalInput.IncludeRelationExpansion（默认 true，false 时跳过关系图扩展）
+        // 尊重 RetrievalInput.IncludeRelationExpansion（默认 true，false 时跳过关系图扩展）
         if (context.Request.RetrievalInput?.IncludeRelationExpansion == false)
         {
             return CandidateProviderHelpers.Empty();
@@ -1612,7 +1612,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         var workspaceId = context.Request.Scope.WorkspaceId;
         var collectionId = context.Request.Scope.CollectionId;
 
-        // R28-B.7 P1-1：从 RetrievalInput 读取图扩展参数
+        // 从 RetrievalInput 读取图扩展参数
         var retrievalInput = context.Request.RetrievalInput;
         // AllowedRelationTypes：为空表示不限制；非空时仅召回这些关系类型
         var allowedRelationTypes = retrievalInput?.AllowedRelationTypes ?? Array.Empty<string>();
@@ -1636,7 +1636,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         if (seedItemIds.Count == 0) return CandidateProviderHelpers.Empty();
 
         // 2. BFS 多跳扩展：按 maxDepth 迭代，每跳批量查询 frontier 的邻居
-        // R28-B.7 P1-1：应用 AllowedRelationTypes 过滤（非空时仅召回允许的关系类型）
+        // 应用 AllowedRelationTypes 过滤（非空时仅召回允许的关系类型）
         var neighborItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rs = _relationStore;
         var visitedItemIds = new HashSet<string>(seedItemIds, StringComparer.OrdinalIgnoreCase);
@@ -1797,7 +1797,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
             if (contextItemDict.TryGetValue(itemId, out var item))
             {
-                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
+                // 传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                     item, ContextCandidateSource.Graph, ExpertKind.Graph,
                     30.0, context.AdaptationContext, includeContent,
@@ -1813,7 +1813,7 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
             if (memoryItemDict.TryGetValue(itemId, out var memory))
             {
-                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
+                // 传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                     memory, ContextCandidateSource.Graph, ExpertKind.Graph,
                     30.0, context.AdaptationContext, includeContent,

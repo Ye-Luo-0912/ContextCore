@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Runtime;
 
 /// <summary>
-/// R13.3 #1/#2：IStoreRuntimeCapabilities 默认实现——按 StorageProviderKind 返回对应的 StorageExecutionProfile。
+/// IStoreRuntimeCapabilities 默认实现——按 StorageProviderKind 返回对应的 StorageExecutionProfile。
 /// 由各宿主（Service DI / ControlRoom 直构 / Eval）注入到 RuntimeBuildOptions，
 /// 替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断。
 /// </summary>

@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Evolution;
 
 /// <summary>
-/// R17-2 默认 <see cref="IPromotionJudge"/> 实现：基于规则引擎的端到端学习闭环裁决器。
+/// 默认 <see cref="IPromotionJudge"/> 实现：基于规则引擎的端到端学习闭环裁决器。
 /// </summary>
 /// <remarks>
 /// <b>设计原则</b>（与 project memory 硬边界一致）：

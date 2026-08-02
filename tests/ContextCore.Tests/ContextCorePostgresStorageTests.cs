@@ -126,7 +126,7 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IRetrievalTraceStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresDecisionTraceStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IDecisionTraceStore)));
-        // R14-PG-3：4 个新 Postgres store 与对应接口注册
+        // 4 个新 Postgres store 与对应接口注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresShortTermMemoryStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IShortTermMemoryStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresShortTermPromotionCandidateStore)));
@@ -139,7 +139,7 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ILearningFeedbackStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackReviewStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ILearningFeedbackReviewStore)));
-        // R14-PG-4：context learning / governance review stores 注册
+        // context learning / governance review stores 注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresContextLearningStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IContextLearningStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresStableLifecycleReviewStore)));
@@ -148,7 +148,7 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ICandidateConstraintReviewStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresConstraintGapCandidateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IConstraintGapCandidateStore)));
-        // R14-PG-5：vector lifecycle + artifact stores 注册
+        // vector lifecycle + artifact stores 注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorReindexReportStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorReindexReportStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorLifecycleMetadataReviewCandidateStore)));
@@ -159,21 +159,21 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorLifecycleSidecarMetadataStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresArtifactStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IArtifactStore)));
-        // R14-PG-6：分布式 context state 版本存储注册
+        // 分布式 context state 版本存储注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresContextStateVersionStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IContextStateVersionStore)));
-        // R26-2：Agent Runtime 持久化（checkpoint + task state）注册
+        // Agent Runtime 持久化（checkpoint + task state）注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentCheckpointStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentCheckpointStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentTaskStateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentTaskStateStore)));
-        // R29 WP-B-1/WP-B-3：IPersistent* 标记接口注册（WP-B-2 旧平面 KernelResultOutbox 已随双执行平面收敛删除）
+        // IPersistent* 标记接口注册（WP-B-2 旧平面 KernelResultOutbox 已随双执行平面收敛删除）
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentToolDispatchJournal)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentAgentCheckpointStore)));
-        // R27-3：Evolution Pipeline 持久化注册
+        // Evolution Pipeline 持久化注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresPipelineRunStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPipelineRunStore)));
-        // R29 WP-E-5：User Feedback Ledger 注册（Postgres 实现做 EXISTS 关联校验）
+        // User Feedback Ledger 注册（Postgres 实现做 EXISTS 关联校验）
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresUserFeedbackLedgerStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IUserFeedbackLedger)));
     }
@@ -565,13 +565,13 @@ public sealed class ContextCorePostgresStorageTests
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_vector_index_entries_scope");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_vector_index_entries_provider_model_dimension");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_vector_index_entries_source");
-        // R14-PG-2：decision_traces 表与索引
+        // decision_traces 表与索引
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_decision_traces");
         StringAssert.Contains(sql, "decision_id text NOT NULL");
         StringAssert.Contains(sql, "source text NOT NULL DEFAULT ''");
         StringAssert.Contains(sql, "ix_cc_decision_traces_created");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_decision_traces_created");
-        // R14-PG-3：short-term memory / promotion / candidate review 表
+        // short-term memory / promotion / candidate review 表
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_raw_events");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_working_items");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_archived_raw_events");
@@ -582,7 +582,7 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_candidate_memory_reviews");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_review_candidates");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_review_records");
-        // R14-PG-4：context learning / governance review 表
+        // context learning / governance review 表
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_learning_feedback");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_learning_records");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_learning_cases");
@@ -590,7 +590,7 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_candidate_constraint_reviews");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_constraint_gap_candidates");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_constraint_gap_reviews");
-        // R14-PG-5：vector lifecycle + artifact 表与索引
+        // vector lifecycle + artifact 表与索引
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_reindex_reports");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_lifecycle_metadata_review_candidates");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_lifecycle_metadata_reviews");
@@ -601,11 +601,11 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "ix_cc_vector_lifecycle_metadata_reviews_candidate");
         StringAssert.Contains(sql, "ix_cc_vector_lifecycle_sidecar_metadata_created");
         StringAssert.Contains(sql, "ix_cc_artifacts_kind");
-        // R14-PG-6：分布式 context state 版本号表
+        // 分布式 context state 版本号表
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_state_versions");
         StringAssert.Contains(sql, "store_kind text NOT NULL");
         StringAssert.Contains(sql, "version bigint NOT NULL DEFAULT 0");
-        // R26-1：agent_checkpoints + agent_task_states 表与索引
+        // agent_checkpoints + agent_task_states 表与索引
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_checkpoints");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_task_states");
         StringAssert.Contains(sql, "session_value text NOT NULL");
@@ -615,7 +615,7 @@ public sealed class ContextCorePostgresStorageTests
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_checkpoints_created");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_task_states_session");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_task_states_updated");
-        // R27-1：pipeline_runs + 3 audit tables 表与索引
+        // pipeline_runs + 3 audit tables 表与索引
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_runs");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_canary_assignments");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_rollback_records");
@@ -746,11 +746,11 @@ public sealed class ContextCorePostgresStorageTests
 
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
 
-        // R14-PG-6：context_state_versions 表必须支持原子自增，校验 SQL 包含 ON CONFLICT 模式（运行时 BumpVersionAsync 用此模式）。
+        // context_state_versions 表必须支持原子自增，校验 SQL 包含 ON CONFLICT 模式（运行时 BumpVersionAsync 用此模式）。
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_state_versions");
         StringAssert.Contains(sql, "store_kind text NOT NULL");
         StringAssert.Contains(sql, "version bigint NOT NULL DEFAULT 0");
-        // R26-1：agent_checkpoints + agent_task_states 表 DDL（索引断言在 PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 中）
+        // agent_checkpoints + agent_task_states 表 DDL（索引断言在 PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 中）
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_checkpoints");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_task_states");
         StringAssert.Contains(sql, "session_value text NOT NULL");
@@ -760,13 +760,13 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "ix_cc_agent_checkpoints_created");
         StringAssert.Contains(sql, "ix_cc_agent_task_states_session");
         StringAssert.Contains(sql, "ix_cc_agent_task_states_updated");
-        // R29 WP-B-1：tool_dispatch_journal_entries 表 DDL（持久化 Tool Dispatch Journal）
+        // tool_dispatch_journal_entries 表 DDL（持久化 Tool Dispatch Journal）
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_tool_dispatch_journal_entries");
         StringAssert.Contains(sql, "request_id text NOT NULL");
         StringAssert.Contains(sql, "state smallint NOT NULL DEFAULT 0");
         StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_state");
         StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_idempotency");
-        // WP-S2：执行平面已收敛为 AgentRun Command Ingress，禁止遗留 Kernel 独立传输平面。
+        // 执行平面已收敛为 AgentRun Command Ingress，禁止遗留 Kernel 独立传输平面。
         // 旧 Durable Transport（kernel_transport_inbox/outbox/dead_letter + kernel_result_outbox）
         // 的 DDL 不得再出现于迁移 SQL，防止新建库重新引入孤儿表。
         Assert.IsFalse(sql.Contains("cc_kernel_result_outbox", StringComparison.Ordinal),
@@ -782,7 +782,7 @@ public sealed class ContextCorePostgresStorageTests
     [TestMethod]
     public async Task AddContextStorage_Postgres_OverridesInMemoryVersionStoreRegistration()
     {
-        // R14-PG-6：验证 Postgres provider 启用时，PostgresContextStateVersionStore 覆盖 InMemoryContextStateVersionStore。
+        // 验证 Postgres provider 启用时，PostgresContextStateVersionStore 覆盖 InMemoryContextStateVersionStore。
         // .NET DI 后注册者胜出；AddContextStorage 内部调用 AddContextCorePostgresStorage，注册发生在 AddContextCore 之后。
         var services = new ServiceCollection();
         services.AddLogging();
@@ -809,7 +809,7 @@ public sealed class ContextCorePostgresStorageTests
     [TestMethod]
     public void PostgresMigrationRegistry_ContainsBaselineMigration()
     {
-        // R14-PG-8：注册表应包含基线 migration，且其 SupportsRollback=false。
+        // 注册表应包含基线 migration，且其 SupportsRollback=false。
         var migrations = PostgresMigrationRegistry.Migrations;
         Assert.AreEqual(1, migrations.Count, "当前应仅有基线 migration");
         var baseline = migrations[0];
@@ -857,7 +857,7 @@ public sealed class ContextCorePostgresStorageTests
     [TestMethod]
     public async Task RollbackAsync_ConfirmFalse_ReturnsConfirmRequired()
     {
-        // R14-PG-8：confirm=false 时不访问 DB，直接返回 ConfirmRequired=true。
+        // confirm=false 时不访问 DB，直接返回 ConfirmRequired=true。
         // 采用与 PostgresMigrationApply_ShouldRejectWithoutConfirm 一致的构造方式（不连真实 DB）。
         var runner = new PostgresMigrationRunner(new PostgresConnectionFactory(new PostgresOptions
         {
@@ -887,7 +887,7 @@ public sealed class ContextCorePostgresStorageTests
     [TestMethod]
     public void PostgresMigrationRunner_ListMigrations_ReflectsRegistry()
     {
-        // R14-PG-8：ListMigrations 应从 PostgresMigrationRegistry 读取，保持一致。
+        // ListMigrations 应从 PostgresMigrationRegistry 读取，保持一致。
         var runner = new PostgresMigrationRunner(new PostgresConnectionFactory(new PostgresOptions
         {
             ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",

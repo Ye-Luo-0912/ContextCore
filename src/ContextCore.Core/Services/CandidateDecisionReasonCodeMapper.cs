@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services;
 
 /// <summary>
-/// R14-1：决策原因码映射器。把 V17.0 自由文本 <see cref="ContextDecisionCandidate.Reason"/> 映射到
+/// 决策原因码映射器。把 V17.0 自由文本 <see cref="ContextDecisionCandidate.Reason"/> 映射到
 /// <see cref="CandidateDecisionReasonCode"/> 枚举，使历史 trace 可被 V2 工具链消费。
 /// </summary>
 /// <remarks>

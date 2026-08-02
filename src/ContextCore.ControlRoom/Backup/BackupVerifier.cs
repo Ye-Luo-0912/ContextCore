@@ -5,7 +5,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.ControlRoom.Backup;
 
 /// <summary>
-/// P1-2-3：备份校验器。加载清单后重新解压/读取归档并对比每条目 SHA-256，
+/// 备份校验器。加载清单后重新解压/读取归档并对比每条目 SHA-256，
 /// 输出 <see cref="BackupVerifyResult"/>，包括哈希不匹配、孤儿与缺失条目。
 /// </summary>
 /// <remarks>

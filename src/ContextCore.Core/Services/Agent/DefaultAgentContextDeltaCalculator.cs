@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-6：DefaultAgentContextDeltaCalculator — 默认 delta 计算器实现。
+// DefaultAgentContextDeltaCalculator — 默认 delta 计算器实现。
 //
 // 实现 IAgentContextDeltaCalculator：
 //   - Section 比较：基于 SectionName（key）；Content 字符串不同 = Modified；
@@ -15,7 +15,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R23-6：<see cref="IAgentContextDeltaCalculator"/> 的默认实现。
+/// <see cref="IAgentContextDeltaCalculator"/> 的默认实现。
 /// </summary>
 /// <remarks>
 /// 纯函数；线程安全；无状态。

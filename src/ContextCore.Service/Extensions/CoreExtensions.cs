@@ -36,7 +36,7 @@ internal static class CoreExtensions
 	/// <summary>注册 Core 业务服务（摄取、打包、校验、晋升、工作记忆）。</summary>
 	/// <remarks>
 	/// 子问题5：使用默认 ModelExecutionOptions（Deterministic 模式），向后兼容。
-	/// P0-1：[Obsolete] 此重载强制选择 Deterministic 模式，与 ProductionHA Profile 真实运行模式分裂。
+	/// [Obsolete] 此重载强制选择 Deterministic 模式，与 ProductionHA Profile 真实运行模式分裂。
 	/// 新代码应使用 <see cref="ProductionRuntimeExtensions.AddContextCoreRuntime"/> 单一入口，
 	/// 由该方法按 ContextCoreRuntime:ModelMode 配置选择正确的 ModelExecutionOptions。
 	/// 旧调用方（测试 / 已弃用路径）继续工作，但生产 Program.cs 已切换到新入口。
@@ -56,11 +56,11 @@ internal static class CoreExtensions
 		// 子问题5：注册 ModelExecutionOptions 单例（供 HostedService / 运行时查询当前模式）。
 		services.AddSingleton(modelExecutionOptions ?? ModelExecutionOptions.Default);
 
-		// R11-P6：ContextStateCache 基础设施。InMemoryContextStateCache 同时实现
+		// ContextStateCache 基础设施。InMemoryContextStateCache 同时实现
 		// IContextStateCache（读路径可选缓存）和 IStateCacheInvalidator（写入边界失效信号接收）。
 		// Store Decorator 在写入成功后调用 InvalidateAsync，移除受影响的缓存项。
 		// 读路径不自动使用缓存——仅在调用方显式注入 ContextStateCacheAccessor 时生效。
-		// R13-F：Cache 容量与 TTL 由 PackageTemplateCacheOptions 配置（默认值与 R11-P6 一致）。
+		// Cache 容量与 TTL 由 PackageTemplateCacheOptions 配置（默认值与 R11-P6 一致）。
 		// canary 关闭时仍注册此 singleton——store decorators 需要 IStateCacheInvalidator 实例（即使为空操作）。
 		services.AddSingleton(sp =>
 		{
@@ -73,7 +73,7 @@ internal static class CoreExtensions
 		});
 		services.AddSingleton<IContextStateCache>(sp => sp.GetRequiredService<InMemoryContextStateCache>());
 		services.AddSingleton<IStateCacheInvalidator>(sp => sp.GetRequiredService<InMemoryContextStateCache>());
-		// R13-F：ContextStateCacheAccessor 注册为 canary-aware。
+		// ContextStateCacheAccessor 注册为 canary-aware。
 		// canary 关闭（Enabled=false）或 AllowedWorkspaces 为空时 gate 返回 false——所有请求绕过缓存。
 		// canary 启用时 gate 仅对 AllowedWorkspaces 列出的工作空间返回 true——其余工作空间仍走全量流水线。
 		// 此 singleton 仅由 RuntimeBuildOptions.CacheAccessor 路径使用；测试代码直接 new ContextStateCacheAccessor。
@@ -90,7 +90,7 @@ internal static class CoreExtensions
 				: scopes => CacheCanaryGateWorkspaceAllowed(scopes, allowed);
 			return new ContextStateCacheAccessor(cache, versionStore, opts.FactoryTimeout, canaryGate);
 		});
-		// R10-2 P3：状态版本存储（进程内单调递增）。Decorator 在写入成功后 bump 版本，
+		// 状态版本存储（进程内单调递增）。Decorator 在写入成功后 bump 版本，
 		// ContextStateCache 据版本号判断是否命中。多实例场景需替换为持久化实现。
 		services.AddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>();
 		services.AddSingleton<BasicContextIngestionService>();
@@ -98,7 +98,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextInputValidator>();
 		services.AddSingleton<ContextInputHasher>();
 		services.AddSingleton<ContextInputSequencer>();
-		// P1-3：使用工厂委托让 DI 解析 IWriteTransactionScopeFactory（Postgres provider 注册时非空，
+		// 使用工厂委托让 DI 解析 IWriteTransactionScopeFactory（Postgres provider 注册时非空，
 		// InMemory/FileSystem 不注册时为 null）。null 时 BasicContextIngestionService 自动回退到非事务路径。
 		services.AddSingleton<ContextInputIngestionService>(sp => new ContextInputIngestionService(
 			sp.GetRequiredService<IContextStore>(),
@@ -183,7 +183,7 @@ internal static class CoreExtensions
 		services.AddSingleton<LearningFeedbackService>();
 		services.AddSingleton<LearningFeedbackReviewService>();
 		services.AddSingleton<LearningFeedbackFeatureCandidateBuilder>();
-		// R29 WP-E-5：用户反馈服务（thumbs up/down + 评分修正 + 文本反馈 → IUserFeedbackLedger）。
+		// 用户反馈服务（thumbs up/down + 评分修正 + 文本反馈 → IUserFeedbackLedger）。
 		// 生产路径 IUserFeedbackLedger 由 PostgresServiceCollectionExtensions 注册；
 		// Service 端 StorageExtensions 在 FileSystem / InMemory 模式下注册 InMemoryUserFeedbackLedgerStore。
 		services.AddSingleton<UserFeedbackService>();
@@ -233,7 +233,7 @@ internal static class CoreExtensions
 		// 使用 Scoped 会产生 captive dependency。
 		services.AddSingleton<RelationTypeNormalizer>();
 		services.AddSingleton<RelationProjectorOutputValidator>();
-		// P1-5：注册 RelationProjectionWriter 具体类型作为 inner writer。
+		// 注册 RelationProjectionWriter 具体类型作为 inner writer。
 		// IRelationProjectionWriter 通过工厂委托返回：当 IRelationOutboxStore 可用（Postgres provider）时
 		// 包装为 OutboxAwareRelationProjectionWriter；否则返回裸 RelationProjectionWriter。
 		// 两者均同时实现 IRelationProjectionWriter + ITransactionalRelationProjectionWriter，
@@ -247,7 +247,7 @@ internal static class CoreExtensions
 				? inner
 				: new OutboxAwareRelationProjectionWriter(inner, outboxStore);
 		});
-		// P3-04：生产 Service 不注入 IRelationBackfillPolicy（eval 特判只在 ControlRoom 使用）。
+		// 生产 Service 不注入 IRelationBackfillPolicy（eval 特判只在 ControlRoom 使用）。
 		// RelationGraphValidationService 接受 null，CanBackfillDeterministicEvidence 返回 false。
 		services.AddSingleton(sp => new RelationGraphValidationService(
 			sp.GetService<IRelationStore>(),
@@ -295,7 +295,7 @@ internal static class CoreExtensions
 				sinks.Add(postgresSink);
 			}
 
-			// P0-8 + R13.4 #1：CompositeContextEventSink.Kind 取最严格值——
+			// + R13.4 #1：CompositeContextEventSink.Kind 取最严格值——
 			// 当 FileContextEventSink / PostgresContextEventSink（审计 sink，Kind=Required）存在时，
 			// Composite.Kind = Required，外层 BoundedChannelContextEventSink 绕过通道、直接同步调用，
 			// 审计事件不被通道满丢弃。
@@ -308,7 +308,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextRuntimeService>();
 		services.AddSingleton<IContextRuntimeService>(sp =>
 			sp.GetRequiredService<ContextRuntimeService>());
-		// P0-7：注册 TraceBackedDecisionEvidenceProvider 作为生产 IDecisionEvidenceProvider 实现。
+		// 注册 TraceBackedDecisionEvidenceProvider 作为生产 IDecisionEvidenceProvider 实现。
 		// 仅当 trace store 实际可用时才会完成证据解析（IsComplete=true），否则返回 Incomplete。
 		// 未注册 IDecisionEvidenceProvider 时审计报告标记 NotConfigured（保留 null-safe 语义）。
 		services.AddSingleton<IDecisionEvidenceProvider>(sp => new TraceBackedDecisionEvidenceProvider(
@@ -346,20 +346,20 @@ internal static class CoreExtensions
 			TokenizerResolver = sp.GetRequiredService<IContextTokenizerResolver>(),
 			PromotionRecordStore = sp.GetRequiredService<IPromotionRecordStore>(),
 			WorkingMemoryService = sp.GetRequiredService<IWorkingMemoryService>(),
-			// P0-10.4: 注入 DI singleton RelationTypeRegistry，保证 Runtime 主链与
+			// 注入 DI singleton RelationTypeRegistry，保证 Runtime 主链与
 			// RelationReviewService / RelationGraphValidationService 共用同一份 taxonomy。
 			RelationTypeRegistry = sp.GetRequiredService<RelationTypeRegistry>(),
 			PackageBuildTraceStore = sp.GetService<IContextPackageBuildTraceStore>(),
 			DecisionTraceStore = sp.GetService<IDecisionTraceStore>(),
 			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),
-			// R13-F：Cache Canary Freeze。生产默认关闭（PackageTemplateCacheOptions.Enabled=false → null）。
+			// Cache Canary Freeze。生产默认关闭（PackageTemplateCacheOptions.Enabled=false → null）。
 			// 启用前置条件：Enabled=true + AllowedWorkspaces 非空 + 单实例（FileSystem provider 时检测
 			// FileSystemInstanceGuard.IsMultiProcessDetected；RequireSingleInstance=false 可绕过）。
 			// 启用后 ContextStateCacheAccessor.canaryGate 仅对 AllowedWorkspaces 列出的工作空间走缓存路径，
 			// 其余工作空间仍走全量流水线。R13.0 正确性测试（ContextStateCacheTests）覆盖 Cold 与 Hit 等价性、
 			// 版本失效、对象隔离、poisoned key、shutdown 行为——canary 启用时不需重新验证。
 			CacheAccessor = BuildPackageTemplateCacheAccessorOrNull(sp),
-			// R13.3 #2：注入 IStoreRuntimeCapabilities 以驱动 Retrieval fanout（替代 namespace 字符串推断）
+			// 注入 IStoreRuntimeCapabilities 以驱动 Retrieval fanout（替代 namespace 字符串推断）
 			Capabilities = sp.GetService<IStoreRuntimeCapabilities>()
 		}));
 
@@ -370,28 +370,28 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPreviewService);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton<IMemoryPromotionService>(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
-		// P0-1：Legacy 具体类型仍注册为 concrete type（供 Authoritative Runtime 注入）
+		// Legacy 具体类型仍注册为 concrete type（供 Authoritative Runtime 注入）
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 
-		// R28-B B-2：Unified Decision Runtime — pure Runtime + Shadow tee 注册。
-		// P0-1：主链（IContextRetriever / IContextPackageBuilder）已切换为 Authoritative Runtime（装饰器模式）。
+		// B-2：Unified Decision Runtime — pure Runtime + Shadow tee 注册。
+		// 主链（IContextRetriever / IContextPackageBuilder）已切换为 Authoritative Runtime（装饰器模式）。
 		// IContextDecisionRuntime 已升级为真实编排（EarlyGate → Feature → Safety → Score → Engine → Allocator）。
 		// ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，产出 Diagnostic parity 报告（B-3 升级为 Hard）。
-		// P0-3：注册 IPolicyRegistry 默认实现（in-memory DefaultPolicyRegistry）。
+		// 注册 IPolicyRegistry 默认实现（in-memory DefaultPolicyRegistry）。
 		// 使用 TryAdd 避免 Postgres provider 扩展已注册 PostgresPolicyRegistry 时产生重复注册。
 		// 调用顺序：AddContextStorage(Postgres) 先注册 → AddContextCore 的 TryAdd 跳过。
 		// 未配置 Postgres 时 TryAdd 生效，确保 PostgresResolvedPolicyProvider 可解析策略。
 		services.TryAddSingleton<DefaultPolicyRegistry>();
 		services.TryAddSingleton<IPolicyRegistry>(sp => sp.GetRequiredService<DefaultPolicyRegistry>());
-		// R28-B.6：Engine 注入全部 V2 决策抽象（SafetyGate/LifecycleGate/UtilityScorer/GlobalAllocator）。
+		// Engine 注入全部 V2 决策抽象（SafetyGate/LifecycleGate/UtilityScorer/GlobalAllocator）。
 		// Engine 是唯一决策点：Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score。
-		// R29 WP-D-1：注入 IAllocatorV2_1，使 Engine 在 DiversityOptions 非空时走 V2.1 AllocateWithDiversity。
-		// R29 WP-F-3：注入 IPerformanceMonitor，使 Engine 在 V2 路径执行超过阈值时自动回退到 V2.0 Allocator。
-		// P5：注入 IComponentHealthRegistry，使 Engine/Runtime 按组件归因耗时并支持组件级回退。
+		// 注入 IAllocatorV2_1，使 Engine 在 DiversityOptions 非空时走 V2.1 AllocateWithDiversity。
+		// 注入 IPerformanceMonitor，使 Engine 在 V2 路径执行超过阈值时自动回退到 V2.0 Allocator。
+		// 注入 IComponentHealthRegistry，使 Engine/Runtime 按组件归因耗时并支持组件级回退。
 		services.TryAddSingleton<DefaultPerformanceMonitor>();
 		services.TryAddSingleton<IPerformanceMonitor>(sp => sp.GetRequiredService<DefaultPerformanceMonitor>());
-		// P5：组件健康注册表（Singleton，与 DefaultPerformanceMonitor 同生命周期）。
+		// 组件健康注册表（Singleton，与 DefaultPerformanceMonitor 同生命周期）。
 		// 参考 DefaultPerformanceMonitor 注册模式：TryAddSingleton 避免重复注册；默认使用 ComponentFallbackOptions.Default。
 		services.TryAddSingleton<DefaultComponentHealthRegistry>();
 		services.TryAddSingleton<IComponentHealthRegistry>(sp => sp.GetRequiredService<DefaultComponentHealthRegistry>());
@@ -405,7 +405,7 @@ internal static class CoreExtensions
 			performanceMonitor: sp.GetService<IPerformanceMonitor>(),
 			componentHealthRegistry: sp.GetService<IComponentHealthRegistry>()));
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
-		// P0-3：将 IResolvedPolicyProvider 从 B-1 骨架 DefaultResolvedPolicyProvider 替换为
+		// 将 IResolvedPolicyProvider 从 B-1 骨架 DefaultResolvedPolicyProvider 替换为
 		// PostgresResolvedPolicyProvider，接入 IPolicyRegistry（CAS epoch + content hash +
 		// activation override + request override）。IPolicyRegistry 由 DefaultPolicyRegistry
 		// （in-memory）或 PostgresPolicyRegistry（生产）提供。
@@ -414,9 +414,9 @@ internal static class CoreExtensions
 		services.AddSingleton<IExpertCatalog, DefaultExpertCatalog>();
 		services.AddSingleton<ContextCore.Abstractions.IRouter, DefaultRouter>();
 		services.AddSingleton<ICanonicalCandidateMerger, DefaultCanonicalCandidateMerger>();
-		// R28-B.6：真实 ICandidateProvider 注册。每个 Provider 对应一个 ExpertKind，
+		// 真实 ICandidateProvider 注册。每个 Provider 对应一个 ExpertKind，
 		// 注入对应 Store（可选 Store 为 null 时 Provider 返回空结果，不抛异常）。
-		// R29 WP-D-3：所有 Provider 注入 IContextTokenizerResolver（fail-fast：内容非空但 tokenizer 不可用时抛异常）。
+		// 所有 Provider 注入 IContextTokenizerResolver（fail-fast：内容非空但 tokenizer 不可用时抛异常）。
 		services.AddSingleton<ICandidateProvider>(sp => new MandatoryCandidateProvider(
 			sp.GetRequiredService<IContextStore>(),
 			sp.GetService<IContextTokenizerResolver>()));
@@ -450,7 +450,7 @@ internal static class CoreExtensions
 		services.AddSingleton<IFeaturePipeline, DefaultFeaturePipeline>();
 		services.AddSingleton<ISafetyGate, DefaultSafetyGate>();
 		services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
-		// R28-D：DefaultUtilityScorer 注入模型推理 + 校准 + 特征 schema（可选）。
+		// DefaultUtilityScorer 注入模型推理 + 校准 + 特征 schema（可选）。
 		// null 时强制 rule-only（EnableModelScoring=true 也不触发模型路径）。
 		// 子问题6：IFeatureSchemaValidator 为必须依赖（非 null），推理前强制校验输入特征与 schema 一致性；
 		// IInferenceResultValidator 可选（未注册时 Scorer 内部回退 DefaultInferenceResultValidator）。
@@ -461,7 +461,7 @@ internal static class CoreExtensions
 			sp.GetService<IFeatureRegistry>(),
 			sp.GetService<IInferenceResultValidator>()));
 		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
-		// R28-B.8.1：Allocator V2.1（section rollover + MMR diversity）。
+		// Allocator V2.1（section rollover + MMR diversity）。
 		// 默认不替换 IGlobalAllocator（仍为 V2.0 DefaultGlobalAllocator）；
 		// 需 diversity 的调用方可显式注入 IAllocatorV2_1 / DefaultAllocatorV2_1。
 		// 委托给已注册的 IGlobalAllocator 作为 base allocator；IContentTruncator 可选注入。
@@ -470,22 +470,22 @@ internal static class CoreExtensions
 			sp.GetService<IContentTruncator>()));
 		services.TryAddSingleton<IAllocatorV2_1>(sp => sp.GetRequiredService<DefaultAllocatorV2_1>());
 		services.AddSingleton<IAgentContextProjector, AgentContextProjector>();
-		// R28-B.7-Final：Artifact 真实化服务注册（可被测试/生产覆盖；默认使用无状态单例实现）
+		// Artifact 真实化服务注册（可被测试/生产覆盖；默认使用无状态单例实现）
 		services.TryAddSingleton<IRuntimeRequestNormalizer>(DefaultRuntimeRequestNormalizer.Instance);
 		services.TryAddSingleton<IRequestSemanticHasher>(DefaultRequestSemanticHasher.Instance);
 		services.TryAddSingleton<IExecutionArtifactFactory>(DefaultExecutionArtifactFactory.Instance);
-		// R29 WP-E-2：Utility Ledger Materializer（依赖 IUtilityLedger + IConflictSetLedger）。
+		// Utility Ledger Materializer（依赖 IUtilityLedger + IConflictSetLedger）。
 		// TryAddSingleton：若测试路径注入 mock materializer 则跳过；生产路径 Postgres / 开发路径 InMemory
 		// 均已注册 IUtilityLedger / IConflictSetLedger（PostgresServiceCollectionExtensions / RegisterInMemory）。
 		// DefaultContextDecisionRuntime 通过 nullable 参数注入；未注册时跳过物化（保持向后兼容）。
 		services.TryAddSingleton<UtilityLedgerMaterializer>(sp => new UtilityLedgerMaterializer(
 			sp.GetRequiredService<IUtilityLedger>(),
 			sp.GetRequiredService<IConflictSetLedger>()));
-		// R29 WP-E-3：训练数据导出器（依赖 IUtilityLedgerStore；Postgres / InMemory 均已注册）。
+		// 训练数据导出器（依赖 IUtilityLedgerStore；Postgres / InMemory 均已注册）。
 		// TryAddSingleton：若测试路径注入 mock exporter 则跳过；生产路径通过 IUtilityLedgerStore 抽象读取 ledger。
 		services.TryAddSingleton<ITrainingDataExporter>(sp => new TrainingDataExporter(
 			sp.GetRequiredService<IUtilityLedgerStore>()));
-		// R29 WP-E-4：校准数据导出器（依赖 IUtilityLedgerStore；同 TrainingDataExporter）。
+		// 校准数据导出器（依赖 IUtilityLedgerStore；同 TrainingDataExporter）。
 		// 输出 predicted / observed / weight 三段式 JSONL，供 Platt / Temperature / Isotonic 校准拟合消费。
 		services.TryAddSingleton<ICalibrationDataExporter>(sp => new CalibrationDataExporter(
 			sp.GetRequiredService<IUtilityLedgerStore>()));
@@ -541,7 +541,7 @@ internal static class CoreExtensions
 		services.AddSingleton<DefaultSelectedCandidateHydrator>(sp => new DefaultSelectedCandidateHydrator(
 			sp.GetService<IContextStoreBatchLookup>(),
 			sp.GetService<IMemoryStoreBatchLookup>(),
-			// P3 Fix-5：注入 tokenizer 让 hydrate 后 TokenCost 精确重算（null 时回退 length/4 估算）
+			// Fix-5：注入 tokenizer 让 hydrate 后 TokenCost 精确重算（null 时回退 length/4 估算）
 			sp.GetService<IContextTokenizerResolver>()));
 		services.AddSingleton<ISelectedCandidateHydrator>(sp => sp.GetRequiredService<DefaultSelectedCandidateHydrator>());
 		services.AddSingleton<IContextDecisionRuntime>(sp =>
@@ -588,7 +588,7 @@ internal static class CoreExtensions
 			var controller = new CutoverController(config.CutoverPercentage);
 			return controller;
 		});
-		// R28-B.8 工作包 B：Per-run CutoverController 隔离。
+		// 工作包 B：Per-run CutoverController 隔离。
 		// CutoverControllerRegistry 包装默认控制器（CutoverPercentage 从环境变量读取），
 		// 并为每个 canary run 维护独立的 CutoverController 实例，避免多 run 百分比互相覆盖。
 		// ICutoverControllerResolver 供 AuthoritativeRuntime 按请求 metadata 中的 canaryRunId 路由。
@@ -603,7 +603,7 @@ internal static class CoreExtensions
 		services.AddSingleton<AuthoritativeRetrievalRuntime>();
 		services.AddSingleton<AuthoritativePackageRuntime>();
 		services.AddSingleton<AuthoritativeAgentContextRuntime>();
-		// P0-1：主链接口注册为 Authoritative Runtime（装饰器模式）。
+		// 主链接口注册为 Authoritative Runtime（装饰器模式）。
 		// IContextRetriever → AuthoritativeRetrievalRuntime（注入 HybridContextRetriever 具体类型，无 DI 循环）。
 		// IContextPackageBuilder → AuthoritativePackageRuntime（注入 BasicContextPackageBuilder 具体类型，无 DI 循环）。
 		// Legacy 具体类型仍注册为 concrete type（上方 RuntimeServices.PackageBuilder / .Retriever），
@@ -611,16 +611,16 @@ internal static class CoreExtensions
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<AuthoritativeRetrievalRuntime>());
 		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<AuthoritativePackageRuntime>());
 		// B-5：DecisionExperimentPlane 长期保留（sampled shadow + replay fixtures）
-		// P0-9：注册 IExperimentRecorder（默认 in-memory；可替换为持久化实现）
+		// 注册 IExperimentRecorder（默认 in-memory；可替换为持久化实现）
 		services.TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder>();
 		services.AddSingleton<DecisionExperimentPlaneIntegration>();
 
-		// R28-B.8 工作包 C：Canary Metrics 采集器。从 shadow/parity 报告聚合 divergence_rate /
+		// 工作包 C：Canary Metrics 采集器。从 shadow/parity 报告聚合 divergence_rate /
 		// error_rate / p95_latency_ms，供 CanaryProgressionService.EvaluateAsync 消费。
 		services.AddSingleton<ICanaryMetricsCollector, DefaultCanaryMetricsCollector>();
 
-		// R28-B.8 工作包 D：Canary Progression HostedService。
-		// P0-2：CanarySchedulerOptions 改用 Configure<T>() 注册（Options Pipeline），
+		// 工作包 D：Canary Progression HostedService。
+		// CanarySchedulerOptions 改用 Configure<T>() 注册（Options Pipeline），
 		// 让 IOptionsMonitor<CanarySchedulerOptions> 消费者能感知后续 PostConfigure 覆盖
 		// （如 ProductionHA 强制 Enabled=false）。原 AddSingleton POCO 模式不读取
 		// Options Pipeline，导致 HA 模式下 Progression 仍 Enabled。
@@ -633,7 +633,7 @@ internal static class CoreExtensions
 		});
 		// CanaryProgressionService 注册为 Singleton（依赖均为 Singleton）。
 		// 注入 CutoverControllerRegistry 实现 per-run 控制器隔离；注入 CutoverConfiguration 读取默认百分比。
-		// P0-7：注入 ICanaryDecisionApplier（可选，仅 Postgres storage 注册时存在），
+		// 注入 ICanaryDecisionApplier（可选，仅 Postgres storage 注册时存在），
 		// 供 RecoverFromStoreAsync 在启动时从 canary_pipelines 表恢复 in-memory 百分比。
 		services.AddSingleton<CanaryProgressionService>(sp =>
 		{
@@ -649,7 +649,7 @@ internal static class CoreExtensions
 				registry: registry,
 				decisionApplier: decisionApplier);
 		});
-		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
+		// HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
 		// 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
 		// services.AddHostedService<CanaryProgressionHostedService>(); // 已迁移到 Runtime 入口
 
@@ -662,7 +662,7 @@ internal static class CoreExtensions
 			new DefaultCanaryExternalMetricsSource(sp.GetService<IToolDispatchJournal>()));
 
 		// 任务 D：Canary HA Leader HostedService（多实例部署模式）。
-		// P0-2：CanaryLeaderOptions 改用 Configure<T>() 注册（Options Pipeline），
+		// CanaryLeaderOptions 改用 Configure<T>() 注册（Options Pipeline），
 		// 让 IOptionsMonitor<CanaryLeaderOptions> 消费者能感知后续 PostConfigure 覆盖
 		// （如 ProductionHA 强制 Enabled=true）。原 AddSingleton<IOptions<T>> 手工注册
 		// 会被 AddContextCoreRuntime 的 RemoveService 移除后重新注册，
@@ -674,16 +674,16 @@ internal static class CoreExtensions
 		{
 			sp.GetService<IConfiguration>()?.GetSection("CanaryLeader").Bind(opts);
 		});
-		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
+		// HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
 		// 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
 		// services.AddHostedService<CanaryLeaderHostedService>(); // 已迁移到 Runtime 入口
 
-		// R28-D：Model Execution Runtime 默认实现。
+		// Model Execution Runtime 默认实现。
 		// - IFeatureRegistry：in-memory 特征 schema 注册表（生产可替换为持久化实现）
 		// - IBatchInferenceEngine：按 ModelExecutionMode 选择注册方式（子问题5）
 		// - ICalibrationService：Platt scaling 默认 A=1 B=0（identity 的 sigmoid 形式）
 		// 三者均为 Singleton 生命周期：无状态/线程安全，可被多个请求共享。
-		// R28-D WP-D：IFeatureRegistry 预注册 default schema 匹配 DeterministicBatchInferenceEngine.ModelVersion，
+		// IFeatureRegistry 预注册 default schema 匹配 DeterministicBatchInferenceEngine.ModelVersion，
 		// 使 EnableModelScoring=true 时模型路径可实际执行（否则 Get(modelVersion) 返回 null 导致回退 rule-only）。
 		services.TryAddSingleton<IFeatureRegistry>(sp =>
 		{
@@ -732,7 +732,7 @@ internal static class CoreExtensions
 		services.AddSingleton<IModelActivationManager>(sp => sp.GetRequiredService<ModelActivationManager>());
 		services.AddSingleton<IBatchInferenceEngine>(sp => sp.GetRequiredService<ModelActivationManager>());
 
-		// P0-6：ShadowModelManager — Champion/Challenger 影子模式支持。
+		// ShadowModelManager — Champion/Challenger 影子模式支持。
 		// 维护独立于 ActiveEngine 的 Challenger 引擎，让控制平面能在不替换 active 模型的前提下
 		// 加载并验证候选模型（Challenger 推理结果不返回给用户，仅用于对比）。
 		// 仅 RealModel 模式注册（依赖 IOnnxInferenceSessionFactory）。
@@ -749,18 +749,18 @@ internal static class CoreExtensions
 		}
 		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
 
-		// P0-9：IClusterModelSlotStore 默认实现（InMemory）—— 单一 Champion 真相源。
+		// IClusterModelSlotStore 默认实现（InMemory）—— 单一 Champion 真相源。
 		// TryAddSingleton：不覆盖 Postgres / FileSystem / InMemory provider 已注册的持久化实现。
 		// 供 ModelStateReconcilerWorker 构造注入，以及控制面端点 CAS 更新使用。
 		services.TryAddSingleton<IClusterModelSlotStore, InMemoryClusterModelSlotStore>();
 
-		// R29 WP-A-3：ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
+		// ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
 		// 不抛异常：返回结构化 CalibrationValidationResult（Error / Warning / Info），
 		// 让 ModelArtifactRegistry 加载 descriptor 后能拒绝在统计上不合理的校准配置，
 		// 或退化为 Identity。与 ICalibrationService 互补：前者验证参数本身，后者应用参数。
 		services.TryAddSingleton<ICalibrationValidator, DefaultCalibrationValidator>();
 
-		// R29 WP-A-4：IFeatureSchemaValidator — 推理前输入特征与 FeatureSchema 的严格匹配验证。
+		// IFeatureSchemaValidator — 推理前输入特征与 FeatureSchema 的严格匹配验证。
 		// 检查 SchemaVersion / 必填 / 未知特征 / 类型可转换性 / 默认值回退。
 		// 不抛异常：返回结构化 FeatureSchemaValidationResult，让 Scorer 在推理前 fail-fast。
 		// 与 IInferenceResultValidator 互补：前者关心输入 vs schema，后者关心输出 vs 输入约束。
@@ -771,7 +771,7 @@ internal static class CoreExtensions
 		// TryAddSingleton 避免覆盖调用方注册的自定义验证器。
 		services.TryAddSingleton<IInferenceResultValidator, DefaultInferenceResultValidator>();
 
-		// R28-C：Agent Tool 执行基础（ToolDispatcher + CheckpointStore）。
+		// Agent Tool 执行基础（ToolDispatcher + CheckpointStore）。
 		// 默认实现：EchoToolDispatcher（测试用 echo）+ InMemoryAgentCheckpointStore。
 		// 生产部署可替换为自定义 IToolDispatcher（如 MCP tool bridge / RealToolDispatcher）。
 		// IAgentCheckpointStore 默认注册 InMemoryAgentCheckpointStore（TryAdd 不覆盖 Postgres 已注册的持久化实现；
@@ -797,7 +797,7 @@ internal static class CoreExtensions
 		// 子问题 8：循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
 		services.TryAddSingleton<IAgentLoopPolicy, DefaultAgentLoopPolicy>();
 		services.TryAddSingleton<IAgentToolCallValidator, DefaultAgentToolCallValidator>();
-		// P0-3：审批门绑定 SecurityOptions.ApprovalPolicy 配置。
+		// 审批门绑定 SecurityOptions.ApprovalPolicy 配置。
 		// 旧版参数less 注册使用 autoApproveAll=true 默认值，无视 ApprovalPolicy 配置——
 		// 生产环境即便显式 Enabled=true 也被忽略，所有 Tool 静默自动放行。
 		// 现按配置构造：Enabled=true 时 autoApproveAll=false，ApprovalRequiredTools 列表中的 Tool 需人工审批；
@@ -811,7 +811,7 @@ internal static class CoreExtensions
 			var approvalPolicy = securityOptions?.ApprovalPolicy;
 			var approvalStore = sp.GetService<IAgentApprovalStore>();
 
-			// P0-3: 生产环境默认不自动放行；只有显式配置 Enabled=false 才关闭审批
+			// 生产环境默认不自动放行；只有显式配置 Enabled=false 才关闭审批
 			var autoApproveAll = approvalPolicy is null || approvalPolicy.Enabled == false;
 			var approvalRequiredTools = approvalPolicy?.ApprovalRequiredTools is not null
 				? new HashSet<string>(approvalPolicy.ApprovalRequiredTools, StringComparer.OrdinalIgnoreCase)
@@ -835,7 +835,7 @@ internal static class CoreExtensions
 		// 生产部署应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
 		services.TryAddSingleton<IAgentModelTransport, DeterministicAgentModelTransport>();
 
-		// P0-3：IAgentModelContextProjector（从 WorkingSet.Materials 取正文 + Token 预算控制）。
+		// IAgentModelContextProjector（从 WorkingSet.Materials 取正文 + Token 预算控制）。
 		services.TryAddSingleton<IAgentModelContextProjector, DefaultAgentModelContextProjector>();
 
 		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
@@ -846,7 +846,7 @@ internal static class CoreExtensions
 		// 注册为 singleton 让 DefaultDurableToolExecutor 与各 Run 共享同一 journal 实例。
 		services.TryAddSingleton<IToolDispatchJournal, InMemoryToolDispatchJournal>();
 
-		// P0-3：IDurableToolResultStore（进程内默认实现；Postgres provider 可覆盖）。
+		// IDurableToolResultStore（进程内默认实现；Postgres provider 可覆盖）。
 		// 让 DefaultDurableToolExecutor 在 Committed 时缓存结果，供后续 PrepareAsync 查询。
 		services.TryAddSingleton<IDurableToolResultStore, InMemoryDurableToolResultStore>();
 
@@ -906,7 +906,7 @@ internal static class CoreExtensions
 	}
 
 	/// <summary>
-	/// R13-F：根据 PackageTemplateCacheOptions 构建可空的生产 Package Template 缓存访问器。
+	/// 根据 PackageTemplateCacheOptions 构建可空的生产 Package Template 缓存访问器。
 	/// 返回 null 表示生产缓存关闭——BasicContextPackageBuilder 走全量流水线（无缓存命中）。
 	/// 返回非 null 表示 canary 启用——ContextStateCacheAccessor.canaryGate 控制按工作空间粒度缓存。
 	/// 启用前置条件全部满足时才返回非 null：
@@ -945,7 +945,7 @@ internal static class CoreExtensions
 	}
 
 	/// <summary>
-	/// R13-F：canary gate 谓词——检查请求的依赖 scope 集合对应的工作空间是否在 allowlist 中。
+	/// canary gate 谓词——检查请求的依赖 scope 集合对应的工作空间是否在 allowlist 中。
 	/// 所有 scope 共享同一 WorkspaceId（由 PackageRequestFingerprintBuilder.BuildDependencyScopes 保证）。
 	/// 取首个 scope 的 WorkspaceId 进行判断；空 scope 集合（不应发生）保守返回 false。
 	/// </summary>

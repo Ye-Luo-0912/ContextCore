@@ -4,7 +4,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// R29 WP-A-1：PostgreSQL 持久化 Model Artifact Registry。
+/// PostgreSQL 持久化 Model Artifact Registry。
 /// 替代 InMemory 默认实现，让 HA 场景下模型工件描述符可跨进程持久化与查询，
 /// 让生产环境能从 PostgreSQL 加载权威模型描述符，而非依赖代码硬编码。
 /// </summary>

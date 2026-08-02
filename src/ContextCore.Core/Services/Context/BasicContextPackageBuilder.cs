@@ -123,7 +123,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
     }
 
     /// <summary>
-    /// R15 增量上下文包：执行全量构建并捕获状态快照。
+    /// 增量上下文包：执行全量构建并捕获状态快照。
     /// 调用方将返回的 <see cref="PackageStateSnapshot"/> 传给
     /// <see cref="IPackageIncrementalBuilder.IncrementalBuildAsync"/> 执行下次增量构建。
     /// </summary>
@@ -155,7 +155,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
     }
 
     /// <summary>
-    /// R15 V2：从既有快照复用 PackageTemplate，重新投影为新的 ContextPackageBuildResult。
+    /// V2：从既有快照复用 PackageTemplate，重新投影为新的 ContextPackageBuildResult。
     /// 仅用于 NoChange delta 路径：请求指纹 + store 版本均未变化，
     /// 因此快照中的 PackageTemplate 仍有效，可跳过 build pipeline。
     /// </summary>
@@ -227,7 +227,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
         // trace 写入仅在缓存 miss 时触发（factory 内部），缓存命中无需重复记录。
         if (_cacheAccessor is not null)
         {
-            // P0-5.6: 使用 SHA-256 哈希指纹作为缓存 key（固定 64 字符），避免明文查询/metadata 驻留与超长 key。
+            // 使用 SHA-256 哈希指纹作为缓存 key（固定 64 字符），避免明文查询/metadata 驻留与超长 key。
             var cacheKey = StateCacheKey.From($"pkg:{options.WorkspaceId}:{options.CollectionId}:{PackageRequestFingerprintBuilder.BuildHashed(request, policy)}");
             var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes(options.WorkspaceId, options.CollectionId ?? string.Empty);
             var template = await _cacheAccessor.GetOrAddAsync<PackageTemplate>(
@@ -275,7 +275,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
             }
             catch (Exception)
             {
-                // P5-0.4: package trace 写入失败不得影响正式 package 构建，但需记录降级指标。
+                // package trace 写入失败不得影响正式 package 构建，但需记录降级指标。
                 Interlocked.Increment(ref _packageTraceWriteFailures);
             }
         }

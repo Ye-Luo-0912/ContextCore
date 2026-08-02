@@ -38,9 +38,9 @@ public sealed class RelationTraversalEngine
         var profile = request.Profile;
         var maxDepth = Math.Max(1, profile.MaxDepth);
         var maxFanout = Math.Max(1, profile.MaxFanout);
-        // P1-3：maxNodes 受全局硬上限 MaxExpandedNodes 约束。
+        // maxNodes 受全局硬上限 MaxExpandedNodes 约束。
         var maxNodes = Math.Min(request.MaxNodesOverride ?? 100, GraphQueryLimits.MaxExpandedNodes);
-        // P1-3：maxRelations 不得超过全局硬上限 MaxTotalEdges。
+        // maxRelations 不得超过全局硬上限 MaxTotalEdges。
         var maxRelations = Math.Min(request.MaxRelationsOverride ?? 300, GraphQueryLimits.MaxTotalEdges);
         var minConfidence = profile.MinConfidence;
 
@@ -65,7 +65,7 @@ public sealed class RelationTraversalEngine
 
         var seeds = request.Seeds
             .Where(s => !string.IsNullOrWhiteSpace(s.ItemId))
-            // P1-3：全局硬上限 — 种子数超出 MaxSeeds 直接截断（保留原序）。
+            // 全局硬上限 — 种子数超出 MaxSeeds 直接截断（保留原序）。
             .Take(GraphQueryLimits.MaxSeeds)
             .ToArray();
         if (seeds.Length == 0)
@@ -119,7 +119,7 @@ public sealed class RelationTraversalEngine
             // 按 ItemId 索引结果（缺失视为空邻居）
             var bySeed = new Dictionary<string, IReadOnlyList<ContextRelation>>(
                 batchResults.Count, StringComparer.OrdinalIgnoreCase);
-            // P1-4：收集触发存储层截断的种子，向遍历结果传播 Truncated 信号 + 告警
+            // 收集触发存储层截断的种子，向遍历结果传播 Truncated 信号 + 告警
             var storageTruncatedSeeds = new List<string>();
             foreach (var result in batchResults)
             {
@@ -162,7 +162,7 @@ public sealed class RelationTraversalEngine
                     .OrderByDescending(r => ResolveWeight(r, profile))
                     .ThenByDescending(r => r.Confidence)
                     .ThenByDescending(r => r.CreatedAt)
-                    // R12.4A #7: 确定性 tie-break — 同 Weight/Confidence/CreatedAt 的 relation 按 Id 升序，
+                    // #7: 确定性 tie-break — 同 Weight/Confidence/CreatedAt 的 relation 按 Id 升序，
                     // 避免 maxFanout 截断时依赖 store 返回顺序导致遍历 frontier 不稳定。
                     .ThenBy(r => r.Id, StringComparer.OrdinalIgnoreCase)
                     .Take(maxFanout)
@@ -190,7 +190,7 @@ public sealed class RelationTraversalEngine
                         : $"{node.Path} <-[{relation.RelationType}]- {neighborId}";
                     maxDepthReached = Math.Max(maxDepthReached, depth);
 
-                    // P1-8：传播 relation weight/confidence/路径衰减到 child score。
+                    // 传播 relation weight/confidence/路径衰减到 child score。
                     // childScore = parentScore * DecayFactor * weightFactor * confidenceFactor
                     // 其中 weightFactor = min(effectiveWeight, 1.0) 防止分数无界增长，
                     // confidenceFactor = clamp(confidence, 0, 1)。
@@ -210,7 +210,7 @@ public sealed class RelationTraversalEngine
 
             currentFrontier = nextFrontier
                 .OrderByDescending(n => n.Score)
-                // R12.4A #7: 确定性 tie-break — 同 Score 的 traversal node 按 ItemId 升序，
+                // #7: 确定性 tie-break — 同 Score 的 traversal node 按 ItemId 升序，
                 // 避免 maxFanout 截断时依赖 nextFrontier 追加顺序导致 BFS frontier 不稳定。
                 .ThenBy(n => n.ItemId, StringComparer.OrdinalIgnoreCase)
                 .Take(maxFanout)
@@ -239,7 +239,7 @@ public sealed class RelationTraversalEngine
         int maxFanout,
         TraversalNode[] frontier)
     {
-        // P3-02：多类型下推到存储层，避免高权重非允许边在 Take 窗口外丢失合法边
+        // 多类型下推到存储层，避免高权重非允许边在 Take 窗口外丢失合法边
         string? relationType = null;
         IReadOnlyList<string> allowedTypes = Array.Empty<string>();
         if (profile.AllowedRelationTypes.Count == 1)
@@ -342,7 +342,7 @@ public sealed class RelationTraversalEngine
     }
 
     /// <summary>
-    /// P1-8：将 relation weight、confidence、路径衰减因子传播到 child score。
+    /// 将 relation weight、confidence、路径衰减因子传播到 child score。
     /// 公式：childScore = parentScore * DecayFactor * weightFactor * confidenceFactor
     ///   - DecayFactor：每跳衰减，默认 1.0（不衰减）
     ///   - weightFactor = min(ResolveWeight(relation), 1.0)：cap 在 1.0 防止分数无界增长

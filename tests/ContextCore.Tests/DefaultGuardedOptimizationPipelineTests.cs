@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R17-2 DefaultGuardedOptimizationPipeline 实现层测试。
+/// DefaultGuardedOptimizationPipeline 实现层测试。
 /// 覆盖：StartAsync + AdvanceAsync + GetStatusAsync、5 阶段顺序推进、自动回滚、终态、硬边界。
 /// </summary>
 [TestClass]

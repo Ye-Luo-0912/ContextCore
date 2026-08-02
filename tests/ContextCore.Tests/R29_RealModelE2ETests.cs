@@ -7,18 +7,18 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-A-5：真实模型端到端测试（feature → inference → calibration → score）
+// 真实模型端到端测试（feature → inference → calibration → score）
 //
 // 覆盖范围：
-//   §1 端到端流水线：FeatureSchemaValidator → StubBatchInferenceEngine
+//   端到端流水线：FeatureSchemaValidator → StubBatchInferenceEngine
 //        → DefaultInferenceResultValidator → PlattCalibrationService → DefaultUtilityScorer
-//   §2 模型工件加载路径：ModelArtifactDescriptor + ICalibrationValidator
+//   模型工件加载路径：ModelArtifactDescriptor + ICalibrationValidator
 //        在加载时验证校准参数（拒绝统计非法参数）
-//   §3 Schema drift 防护：FeatureSchemaValidator 在推理前 fail-fast
+//   Schema drift 防护：FeatureSchemaValidator 在推理前 fail-fast
 //        （SchemaVersion 不匹配 / 必填缺失 / 类型不兼容）
-//   §4 推理输出验证：DefaultInferenceResultValidator 防止 NaN/Infinity 污染排序
-//   §5 完整 DI 装配：ServiceCollection 注册所有组件，端到端解析并执行
-//   §6 真实 ONNX 引擎路径：Mock session 验证 OnnxInferenceEngine + Validator + Scorer 串联
+//   推理输出验证：DefaultInferenceResultValidator 防止 NaN/Infinity 污染排序
+//   完整 DI 装配：ServiceCollection 注册所有组件，端到端解析并执行
+//   真实 ONNX 引擎路径：Mock session 验证 OnnxInferenceEngine + Validator + Scorer 串联
 //
 // 设计原则：
 //   - 不依赖真实 ONNX 模型文件（使用 Stub / Mock 隔离），
@@ -37,7 +37,7 @@ public sealed class R29_RealModelE2ETests
     private const string CalibrationVersion = "test-calibration-v1";
 
     // ===========================================================================
-    // §1 端到端流水线：feature → inference → calibration → score
+    // 端到端流水线：feature → inference → calibration → score
     // ===========================================================================
 
     [TestMethod]
@@ -147,7 +147,7 @@ public sealed class R29_RealModelE2ETests
     }
 
     // ===========================================================================
-    // §2 模型工件加载：ICalibrationValidator 在加载时验证校准参数
+    // 模型工件加载：ICalibrationValidator 在加载时验证校准参数
     // ===========================================================================
 
     [TestMethod]
@@ -193,7 +193,7 @@ public sealed class R29_RealModelE2ETests
     }
 
     // ===========================================================================
-    // §3 Schema drift 防护：FeatureSchemaValidator 在推理前 fail-fast
+    // Schema drift 防护：FeatureSchemaValidator 在推理前 fail-fast
     // ===========================================================================
 
     [TestMethod]
@@ -292,7 +292,7 @@ public sealed class R29_RealModelE2ETests
     }
 
     // ===========================================================================
-    // §4 推理输出验证：DefaultInferenceResultValidator 防止脏数据
+    // 推理输出验证：DefaultInferenceResultValidator 防止脏数据
     // ===========================================================================
 
     [TestMethod]
@@ -409,7 +409,7 @@ public sealed class R29_RealModelE2ETests
     }
 
     // ===========================================================================
-    // §5 完整 DI 装配
+    // 完整 DI 装配
     // ===========================================================================
 
     [TestMethod]
@@ -476,7 +476,7 @@ public sealed class R29_RealModelE2ETests
     }
 
     // ===========================================================================
-    // §6 真实 ONNX 引擎路径（Mock session）
+    // 真实 ONNX 引擎路径（Mock session）
     // ===========================================================================
 
     [TestMethod]
@@ -558,7 +558,7 @@ public sealed class R29_RealModelE2ETests
     }
 
     // ===========================================================================
-    // §7 多候选批量推理端到端
+    // 多候选批量推理端到端
     // ===========================================================================
 
     [TestMethod]

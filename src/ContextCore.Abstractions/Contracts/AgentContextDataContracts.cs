@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R23-2：Agent Runtime 数据契约
+// Agent Runtime 数据契约
 //
 // 目标（对齐用户规格第六节）：
 //   定义 R23-1 中 AgentContextSnapshotRef.ContentJson 的实际结构，
@@ -22,7 +22,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R23-2：Agent Context Snapshot 数据。
+/// Agent Context Snapshot 数据。
 /// 完整上下文快照，由 <see cref="IAgentWorkspaceContextProvider.GetContextSnapshotAsync"/> 产生。
 /// </summary>
 /// <remarks>
@@ -75,7 +75,7 @@ public sealed record AgentContextSnapshot
 }
 
 /// <summary>
-/// R23-2：Agent Context Section。Snapshot 内的单个分区。
+/// Agent Context Section。Snapshot 内的单个分区。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -111,7 +111,7 @@ public sealed record AgentContextSection
 }
 
 /// <summary>
-/// R23-2：Agent Task State。Agent 当前任务状态。
+/// Agent Task State。Agent 当前任务状态。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -164,7 +164,7 @@ public sealed record AgentTaskState
 }
 
 /// <summary>
-/// R23-2：Agent Context Delta。两次 snapshot 之间的增量变更。
+/// Agent Context Delta。两次 snapshot 之间的增量变更。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -237,7 +237,7 @@ public sealed record AgentContextDelta
 }
 
 /// <summary>
-/// R23-2：Agent Context Schema 版本。集中管理所有数据契约的 schema 版本。
+/// Agent Context Schema 版本。集中管理所有数据契约的 schema 版本。
 /// </summary>
 public static class AgentContextSchemaVersions
 {

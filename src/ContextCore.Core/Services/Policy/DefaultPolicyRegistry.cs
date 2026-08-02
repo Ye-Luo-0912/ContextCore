@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Policy;
 
 // ===========================================================================
-// R19-2：策略包注册表默认实现 + 默认 bundle 工厂。
+// 策略包注册表默认实现 + 默认 bundle 工厂。
 //
 // 目标：
 //   把 R19-1 契约（ContextPolicyBundle / IPolicyRegistry）落到 Core 层，
@@ -29,7 +29,7 @@ namespace ContextCore.Core.Services.Policy;
 // ===========================================================================
 
 /// <summary>
-/// R19-2：默认策略包注册表（in-memory）。
+/// 默认策略包注册表（in-memory）。
 /// </summary>
 /// <remarks>
 /// 线程安全：所有读写操作通过 ConcurrentDictionary 保护。
@@ -37,7 +37,7 @@ namespace ContextCore.Core.Services.Policy;
 /// </remarks>
 public sealed class DefaultPolicyRegistry : IPolicyRegistry
 {
-    // P0-4：bundle 主键改为 (BundleId, Version) 复合键，保证不可变语义。
+    // bundle 主键改为 (BundleId, Version) 复合键，保证不可变语义。
     private readonly ConcurrentDictionary<string, ContextPolicyBundle> _bundles = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, PolicyActivation> _activations = new(StringComparer.Ordinal);
 
@@ -53,7 +53,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         var key = BuildActivationKey(workspaceId, collectionId);
         if (_activations.TryGetValue(key, out var activation))
         {
-            // P1-3：精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
+            // 精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
             // activation 记录了激活时的 BundleVersion，必须精确匹配。
             var bundle = await GetBundleAsync(activation.BundleId, activation.BundleVersion, cancellationToken)
                 .ConfigureAwait(false);
@@ -72,7 +72,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         string? version,
         CancellationToken cancellationToken = default)
     {
-        // P0-2 + P0-4：精确加载。
+        // + P0-4：精确加载。
         // - version 非空：按 (BundleId, Version) 复合主键精确查找。
         // - version 为空：返回该 BundleId 下最新非 superseded 版本。
         if (version is not null)
@@ -145,7 +145,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(bundle);
-        // P0-4：insert-if-absent。(BundleId, Version) 为复合主键：
+        // insert-if-absent。(BundleId, Version) 为复合主键：
         //   - 相同 (BundleId, Version) 已存在 → 抛 InvalidOperationException（不可变）
         //   - 同 BundleId 不同 Version → 视为不同 bundle（支持 supersede 链）
         //   - 同 BundleId 同 Version → 不允许（bundle 全局不可变）
@@ -168,7 +168,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         ArgumentNullException.ThrowIfNull(next);
         var key = BuildActivationKey(next.WorkspaceId, next.CollectionId);
 
-        // P0-4：CAS 语义
+        // CAS 语义
         // expectedEpoch == 0：首次激活（当前无 activation 记录）
         // expectedEpoch > 0：仅当当前 activation.Epoch == expectedEpoch 时才激活
         if (expectedEpoch == 0)
@@ -179,7 +179,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
                 WorkspaceId = next.WorkspaceId,
                 CollectionId = next.CollectionId,
                 BundleId = next.BundleId,
-                // P1-3：传播版本固定字段，确保 activation 精确指向激活时的 bundle 版本。
+                // 传播版本固定字段，确保 activation 精确指向激活时的 bundle 版本。
                 BundleVersion = next.BundleVersion,
                 BundleContentHash = next.BundleContentHash,
                 ActivatedAt = next.ActivatedAt,
@@ -204,7 +204,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
                 WorkspaceId = next.WorkspaceId,
                 CollectionId = next.CollectionId,
                 BundleId = next.BundleId,
-                // P1-3：传播版本固定字段，确保 activation 精确指向激活时的 bundle 版本。
+                // 传播版本固定字段，确保 activation 精确指向激活时的 bundle 版本。
                 BundleVersion = next.BundleVersion,
                 BundleContentHash = next.BundleContentHash,
                 ActivatedAt = next.ActivatedAt,
@@ -236,7 +236,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
 // ===========================================================================
 
 /// <summary>
-/// R19-2：默认策略包工厂。从 ContextDecisionPolicyVersions 静态常量
+/// 默认策略包工厂。从 ContextDecisionPolicyVersions 静态常量
 /// + 现有 hardcoded profile 默认值组装全局默认 bundle。
 /// </summary>
 /// <remarks>

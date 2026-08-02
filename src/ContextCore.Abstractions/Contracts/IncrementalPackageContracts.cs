@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// R15 增量上下文包：将多个 <see cref="VersionScope"/> 的版本号作为整体向量引用，
+/// 增量上下文包：将多个 <see cref="VersionScope"/> 的版本号作为整体向量引用，
 /// 用于检测自上次构建以来 store 数据是否变化。
 /// </summary>
 /// <remarks>
@@ -74,7 +74,7 @@ public sealed class StoreVersionVector
 }
 
 /// <summary>
-/// R15 增量上下文包：请求语义指纹，包含哈希值与影响构建输出的语义组件分解。
+/// 增量上下文包：请求语义指纹，包含哈希值与影响构建输出的语义组件分解。
 /// </summary>
 /// <remarks>
 /// 指纹仅包含影响构建输出的字段，排除 OperationId/RequestId 等 per-call 标识。
@@ -119,7 +119,7 @@ public sealed class RequestSemanticFingerprint
 }
 
 /// <summary>
-/// R15 增量上下文包：单个 section 的依赖集合，记录影响该 section 内容的所有 scope。
+/// 增量上下文包：单个 section 的依赖集合，记录影响该 section 内容的所有 scope。
 /// </summary>
 /// <remarks>
 /// 用于 DeltaPlanner 判断哪些 section 需要重载：当 section 的某个依赖 scope 版本变化时，
@@ -152,7 +152,7 @@ public sealed class SectionDependencySet
 }
 
 /// <summary>
-/// R15 增量上下文包：构建完成后的不可变状态快照，作为下次增量构建的基线。
+/// 增量上下文包：构建完成后的不可变状态快照，作为下次增量构建的基线。
 /// </summary>
 /// <remarks>
 /// 包含 PackageTemplate（不可变）+ 请求指纹 + store 版本向量 + section 依赖映射，
@@ -236,7 +236,7 @@ public sealed record PackageDeltaPlan(
 }
 
 /// <summary>
-/// R15 增量上下文包：delta 规划器，比较前一个快照与当前请求/版本，输出 delta 计划。
+/// 增量上下文包：delta 规划器，比较前一个快照与当前请求/版本，输出 delta 计划。
 /// </summary>
 /// <remarks>
 /// 实现必须为纯函数：相同输入产生相同输出，不依赖外部状态。
@@ -256,7 +256,7 @@ public interface IPackageDeltaPlanner
 }
 
 /// <summary>
-/// R15 增量上下文包：增量构建器，基于前一个快照与当前请求执行增量构建。
+/// 增量上下文包：增量构建器，基于前一个快照与当前请求执行增量构建。
 /// </summary>
 /// <remarks>
 /// 核心验收契约：<see cref="IncrementalBuildAsync"/> 的输出必须与
@@ -278,14 +278,14 @@ public interface IPackageIncrementalBuilder
 }
 
 /// <summary>
-/// R15 增量上下文包：支持快照捕获的包构建器。
+/// 增量上下文包：支持快照捕获的包构建器。
 /// 在全量构建完成后返回构建结果与状态快照，调用方将快照传给
 /// <see cref="IPackageIncrementalBuilder.IncrementalBuildAsync"/> 执行下次增量构建。
 /// </summary>
 /// <remarks>
 /// 此接口的存在使快照捕获成为 build pipeline 的一部分，
 /// 避免调用方需要重新执行 build 流水线来获取 internal PackageTemplate。
-/// R15 V2 新增 <see cref="RebuildFromSnapshotAsync"/>：在 NoChange delta 路径上
+/// V2 新增 <see cref="RebuildFromSnapshotAsync"/>：在 NoChange delta 路径上
 /// 直接复用快照中的 PackageTemplate，跳过 build pipeline，仅重新投影为
 /// 新的 <see cref="ContextPackageBuildResult"/>（重新生成 PackageId/BuildId/CreatedAt/metadata）。
 /// </remarks>
@@ -300,7 +300,7 @@ public interface ISnapshotCapablePackageBuilder : IContextPackageBuilder
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// R15 V2：从既有快照复用 PackageTemplate，重新投影为新的 <see cref="ContextPackageBuildResult"/>。
+    /// V2：从既有快照复用 PackageTemplate，重新投影为新的 <see cref="ContextPackageBuildResult"/>。
     /// 仅用于 <see cref="PackageDeltaKind.NoChange"/> 路径：请求指纹 + store 版本均未变化，
     /// 因此快照中的 PackageTemplate 仍有效，可跳过 build pipeline。
     /// </summary>

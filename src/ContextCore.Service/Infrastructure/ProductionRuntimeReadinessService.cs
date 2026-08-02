@@ -165,7 +165,7 @@ public sealed class ProductionRuntimeReadinessService
             }
         }
 
-        // P1-6：Capability probes — 验证生产可用性（不仅是注册状态）
+        // Capability probes — 验证生产可用性（不仅是注册状态）
         AddCapabilityProbes(checks);
 
         // 整体就绪判定：所有检查项均为 ready 或 warning 时视为就绪（warning 不阻断流量）
@@ -228,7 +228,7 @@ public sealed class ProductionRuntimeReadinessService
     }
 
     /// <summary>
-    /// P0-3：获取 Agent Model Transport 状态（Deterministic vs Real）。
+    /// 获取 Agent Model Transport 状态（Deterministic vs Real）。
     /// 用于 readiness 端点输出能力矩阵，标识当前 IAgentModelTransport 实现类型。
     /// </summary>
     /// <returns>Transport 状态信息（null = 未注册）。</returns>
@@ -252,7 +252,7 @@ public sealed class ProductionRuntimeReadinessService
     }
 
     /// <summary>
-    /// P0-3：获取 Tool Dispatcher 状态（Echo vs Real）。
+    /// 获取 Tool Dispatcher 状态（Echo vs Real）。
     /// 用于 readiness 端点输出能力矩阵，标识当前 IToolDispatcher 实现类型。
     /// </summary>
     /// <returns>Dispatcher 状态信息（null = 未注册）。</returns>
@@ -282,7 +282,7 @@ public sealed class ProductionRuntimeReadinessService
     /// <returns>Canary 状态信息。</returns>
     public CanaryStatus GetCanaryStatus()
     {
-        // P0-2：通过 IOptionsMonitor<T> 读取 Canary 配置，感知 PostConfigure 覆盖
+        // 通过 IOptionsMonitor<T> 读取 Canary 配置，感知 PostConfigure 覆盖
         // （如 ProductionHA 强制 CanarySchedulerOptions.Enabled=false / CanaryLeaderOptions.Enabled=true）。
         var schedulerOptions = _services.GetService<IOptionsMonitor<CanarySchedulerOptions>>()?.CurrentValue;
         var canaryLeaderOptions = _services.GetService<IOptionsMonitor<CanaryLeaderOptions>>()?.CurrentValue;
@@ -310,7 +310,7 @@ public sealed class ProductionRuntimeReadinessService
     }
 
     /// <summary>
-    /// P1-6：Capability probes — 验证生产可用性（不仅是注册状态）。
+    /// Capability probes — 验证生产可用性（不仅是注册状态）。
     /// 各 probe 失败时添加 error/warning 检查项，影响整体就绪判定。
     /// </summary>
     private void AddCapabilityProbes(List<ReadinessCheckItem> checks)
@@ -475,7 +475,7 @@ public sealed record ModelActivationStatus(
 public sealed record CanaryStatus(bool ProgressionEnabled, bool LeaderEnabled, string Mode);
 
 /// <summary>
-/// P0-3：Agent Model Transport 状态信息（能力矩阵组件）。
+/// Agent Model Transport 状态信息（能力矩阵组件）。
 /// 标识当前 IAgentModelTransport 实现类型（Deterministic vs Real）。
 /// </summary>
 /// <param name="IsRegistered">是否已注册。</param>
@@ -489,7 +489,7 @@ public sealed record AgentModelTransportStatus(
     string Mode);
 
 /// <summary>
-/// P0-3：Tool Dispatcher 状态信息（能力矩阵组件）。
+/// Tool Dispatcher 状态信息（能力矩阵组件）。
 /// 标识当前 IToolDispatcher 实现类型（Echo vs Real）。
 /// </summary>
 /// <param name="IsRegistered">是否已注册。</param>

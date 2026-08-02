@@ -1,7 +1,7 @@
 namespace ContextCore.Core.Services.Retrieval;
 
 /// <summary>
-/// P0-7.2: 对 Task.WhenAll 施加 SemaphoreSlim 节流的辅助方法。
+/// 对 Task.WhenAll 施加 SemaphoreSlim 节流的辅助方法。
 /// 在 Batch API（IContextObjectBatchResolver）落地前，对当前并行 N+1 路径施加并发上限，
 /// 防止 VectorTopK=100 时 Postgres 连接池击穿或 FileSystem 锁竞争加剧。
 /// 每次 WhenAllAsync 调用创建独立的 SemaphoreSlim，避免跨请求互相阻塞。

@@ -5,26 +5,26 @@ using ContextCore.Core.Services.ModelExecution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-F：模型执行链增强验收测试
+// 模型执行链增强验收测试
 //
 // 覆盖范围：
-//   §1 FeatureBatch              —— 连续 float 内存批量推理契约
-//   §2 DeterministicBatchInferenceEngine.InferBatchAsync —— 优化 hash 路径
-//   §3 CalibrationStrategies      —— Identity / Platt / Temperature / Isotonic
-//   §4 PlattCalibrationService    —— 扩展注册方法（Temperature / Isotonic / Identity）
-//   §5 ModelExecutionSnapshot     —— 精确模型执行快照
-//   §6 DefaultInferenceResultValidator —— 推理输出严格验证
+//   FeatureBatch              —— 连续 float 内存批量推理契约
+//   DeterministicBatchInferenceEngine.InferBatchAsync —— 优化 hash 路径
+//   CalibrationStrategies      —— Identity / Platt / Temperature / Isotonic
+//   PlattCalibrationService    —— 扩展注册方法（Temperature / Isotonic / Identity）
+//   ModelExecutionSnapshot     —— 精确模型执行快照
+//   DefaultInferenceResultValidator —— 推理输出严格验证
 //
 // 验收点（对应 R28-F 任务描述）：
-//   P3-1：FeatureSchemaVersion 与 ModelVersion 解耦 → ModelExecutionSnapshot
-//   P3-2：推理输出严格验证（NaN / Infinity / Confidence 范围 / Count / timeout）
-//   P3-3：Calibration 默认 Identity，显式 Platt / Temperature / Isotonic 策略
-//   P4-1：FeatureBatch 连续内存推理
-//   P4-2：Deterministic Hash 消除 StringBuilder / string[] / 排序分配
+//   FeatureSchemaVersion 与 ModelVersion 解耦 → ModelExecutionSnapshot
+//   推理输出严格验证（NaN / Infinity / Confidence 范围 / Count / timeout）
+//   Calibration 默认 Identity，显式 Platt / Temperature / Isotonic 策略
+//   FeatureBatch 连续内存推理
+//   Deterministic Hash 消除 StringBuilder / string[] / 排序分配
 // ===========================================================================
 
 // ===========================================================================
-// §1 FeatureBatch 连续内存契约
+// FeatureBatch 连续内存契约
 // ===========================================================================
 
 [TestClass]
@@ -84,7 +84,7 @@ public sealed class R28F_FeatureBatchTests
 }
 
 // ===========================================================================
-// §2 DeterministicBatchInferenceEngine.InferBatchAsync（优化 hash 路径）
+// DeterministicBatchInferenceEngine.InferBatchAsync（优化 hash 路径）
 // ===========================================================================
 
 [TestClass]
@@ -253,7 +253,7 @@ public sealed class R28F_DeterministicBatchInferenceEngineTests
     [TestMethod]
     public async Task InferBatchAsync_DurationIsPositive()
     {
-        // R28-F P3-2：推理验证要求 Duration > 0（当 TimeoutMs > 0）。
+        // 推理验证要求 Duration > 0（当 TimeoutMs > 0）。
         // DeterministicBatchInferenceEngine 使用 Stopwatch，Duration 应 > 0。
         var engine = new DeterministicBatchInferenceEngine();
         var batch = new FeatureBatch
@@ -280,7 +280,7 @@ public sealed class R28F_DeterministicBatchInferenceEngineTests
 }
 
 // ===========================================================================
-// §3 CalibrationStrategies 策略族
+// CalibrationStrategies 策略族
 // ===========================================================================
 
 [TestClass]
@@ -632,7 +632,7 @@ public sealed class R28F_CalibrationStrategiesTests
 }
 
 // ===========================================================================
-// §4 PlattCalibrationService 扩展注册方法
+// PlattCalibrationService 扩展注册方法
 // ===========================================================================
 
 [TestClass]
@@ -732,7 +732,7 @@ public sealed class R28F_PlattCalibrationServiceExtendedTests
 }
 
 // ===========================================================================
-// §5 ModelExecutionSnapshot
+// ModelExecutionSnapshot
 // ===========================================================================
 
 [TestClass]
@@ -787,7 +787,7 @@ public sealed class R28F_ModelExecutionSnapshotTests
 }
 
 // ===========================================================================
-// §6 DefaultInferenceResultValidator
+// DefaultInferenceResultValidator
 // ===========================================================================
 
 [TestClass]

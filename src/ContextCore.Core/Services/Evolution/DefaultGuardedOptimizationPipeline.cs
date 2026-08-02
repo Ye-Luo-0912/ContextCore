@@ -4,7 +4,7 @@ using ContextCore.Core.Services.DecisionEngine;
 namespace ContextCore.Core.Services.Evolution;
 
 /// <summary>
-/// R17-2 默认 <see cref="IGuardedOptimizationPipeline"/> 实现：5 阶段严格顺序推进 + 自动回滚 + 持久化 run state。
+/// 默认 <see cref="IGuardedOptimizationPipeline"/> 实现：5 阶段严格顺序推进 + 自动回滚 + 持久化 run state。
 /// </summary>
 /// <remarks>
 /// <b>硬边界</b>（与 project memory 一致）：
@@ -26,7 +26,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     private readonly IPromotionJudge _judge;
     private readonly IPipelineRunStore _store;
     private readonly TimeProvider _timeProvider;
-    // R28-B.8：可选的 Canary Gate 渐进推进服务。未注入时（默认）ScopedCanary 阶段沿用原 Promote 决策；
+    // 可选的 Canary Gate 渐进推进服务。未注入时（默认）ScopedCanary 阶段沿用原 Promote 决策；
     // 注入后，进入 ScopedCanary 时初始化百分比阶梯，每次 AdvanceWithMetricsAsync 评估 metrics 决定推进/回滚。
     private readonly CanaryProgressionService? _canaryProgression;
 
@@ -86,14 +86,14 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             CompletedAt = null,
             RollbackReason = null,
             StageMetrics = Array.Empty<BaselineComparison>(),
-            // P0-7：初始 revision = 1
-            // P2-1：StartAsync 使用 TryCreateRunAsync（insert-if-absent）替代 SaveRunAsync（覆盖）
+            // 初始 revision = 1
+            // StartAsync 使用 TryCreateRunAsync（insert-if-absent）替代 SaveRunAsync（覆盖）
             Revision = 1,
             LeaseOwner = null,
             LeaseExpiresAt = null,
             LastTransitionId = null
         };
-        // P2-1：TryCreateRunAsync 保证 RunId 碰撞时返回 false 而非覆盖。
+        // TryCreateRunAsync 保证 RunId 碰撞时返回 false 而非覆盖。
         // GUID RunId 碰撞概率极低；若发生，抛异常通知调用方。
         var created = await _store.TryCreateRunAsync(snapshot, cancellationToken).ConfigureAwait(false);
         if (!created)
@@ -139,7 +139,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     /// <param name="experimentMetrics">实验指标。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
-    /// P2-2：需要端到端幂等的调用方应使用接受 <see cref="PipelineTransitionRequest"/> 的重载，
+    /// 需要端到端幂等的调用方应使用接受 <see cref="PipelineTransitionRequest"/> 的重载，
     /// 在重试时复用同一 TransitionId，让 store 的幂等检查识别重放。
     /// </remarks>
     public Task<PipelineRunResult> AdvanceWithMetricsAsync(
@@ -148,7 +148,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         IReadOnlyDictionary<string, double> experimentMetrics,
         CancellationToken cancellationToken = default)
     {
-        // P2-2：自动生成 transitionId（非幂等场景；向后兼容）
+        // 自动生成 transitionId（非幂等场景；向后兼容）
         var transitionId = $"t-{runId}-{Guid.NewGuid():N}";
         return AdvanceWithMetricsAsync(
             runId, baselineMetrics, experimentMetrics,
@@ -165,15 +165,15 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     /// <param name="transition">P2-2：调用方提供的 transition 标识（含 TransitionId / ObservationBatchId / IdempotencyKey）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
-    /// P0-7：使用 <see cref="IPipelineRunStore.TryTransitionAsync"/> 原子 CAS 推进。
+    /// 使用 <see cref="IPipelineRunStore.TryTransitionAsync"/> 原子 CAS 推进。
     /// snapshot 更新 + audit 批量（BaselineComparison / CanaryAssignment / RollbackRecord）在同一事务内提交。
     /// 若 CAS 失败（并发推进冲突），抛 <see cref="InvalidOperationException"/> 通知调用方。
     /// <para>
-    /// P2-2：调用方提供 <paramref name="transition"/>.TransitionId 实现端到端幂等。
+    /// 调用方提供 <paramref name="transition"/>.TransitionId 实现端到端幂等。
     /// 若响应丢失后重试，使用相同 TransitionId，store 通过 LastTransitionId 幂等检查返回当前快照。
     /// </para>
     /// <para>
-    /// P2-3：当 judge 决定推进到 <see cref="OptimizationStage.ScopedCanary"/> 时，
+    /// 当 judge 决定推进到 <see cref="OptimizationStage.ScopedCanary"/> 时，
     /// 自动生成 <see cref="CanaryAssignment"/> 并作为 transition audit 一部分原子提交，
     /// 不再需要调用方通过 <see cref="RecordCanaryAssignmentAsync"/> 独立写入。
     /// </para>
@@ -203,7 +203,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             return BuildResult(snapshot);
         }
 
-        // R28-B.8：Canary Gate 渐进推进集成
+        // Canary Gate 渐进推进集成
         // 当 run 处于 ScopedCanary 阶段且注入了 CanaryProgressionService 时：
         //   1. 委托 CanaryProgressionService 评估 metrics（parity/error/latency 三类阈值）。
         //   2. 根据评估结果决定推进百分比档 / 回滚 / 保持 / 已晋升。
@@ -327,7 +327,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         var judgeResult = await _judge.JudgeAsync(request, cancellationToken).ConfigureAwait(false);
 
         // 应用 judge decision → 生成 next snapshot（P0-7：Revision +1 + LastTransitionId）
-        // P2-2：使用调用方提供的 transitionId
+        // 使用调用方提供的 transitionId
         var now = _timeProvider.GetUtcNow();
         var transitionId = transition.TransitionId;
         PipelineRunSnapshot nextSnapshot;
@@ -343,7 +343,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                 }
                 // 硬边界：严格顺序推进 — 验证下一阶段是当前阶段的合法后继
                 VerifyStageProgression(snapshot.CurrentStage, judgeResult.NextStage.Value);
-                // P2-3：进入 ScopedCanary 时自动生成 CanaryAssignment 作为 transition audit 一部分原子提交。
+                // 进入 ScopedCanary 时自动生成 CanaryAssignment 作为 transition audit 一部分原子提交。
                 if (judgeResult.NextStage == OptimizationStage.ScopedCanary)
                 {
                     canaryAssignment = new CanaryAssignment(
@@ -352,7 +352,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                         runId: runId,
                         strategy: CanaryAssignmentStrategy.HashBased,
                         assignedAt: now);
-                    // R28-B.8：进入 ScopedCanary 时初始化 Canary 渐进推进状态
+                    // 进入 ScopedCanary 时初始化 Canary 渐进推进状态
                     // （设置 CutoverController 为 PercentageLadder[0]）。
                     // 未初始化时 CanaryProgressionService.EvaluateAsync 永远返回 Hold。
                     _canaryProgression?.InitializeCanary(runId);
@@ -439,8 +439,8 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     $"Judge 返回未知的 PromotionDecision: {judgeResult.Decision}");
         }
 
-        // P0-7：原子 CAS 推进 — snapshot + audit 批量在同一事务内写入
-        // P2-3：CanaryAssignment 作为 transition audit 一部分原子提交（不再独立写入）
+        // 原子 CAS 推进 — snapshot + audit 批量在同一事务内写入
+        // CanaryAssignment 作为 transition audit 一部分原子提交（不再独立写入）
         var auditBatch = new PipelineAuditBatch
         {
             BaselineComparison = comparison,
@@ -488,7 +488,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
 
     /// <summary>记录 canary assignment（供 ScopedCanary 阶段审计）。</summary>
     /// <remarks>
-    /// P2-3：已过时。CanaryAssignment 现在通过 <see cref="AdvanceWithMetricsAsync"/> 的
+    /// 已过时。CanaryAssignment 现在通过 <see cref="AdvanceWithMetricsAsync"/> 的
     /// transition audit（<see cref="PipelineAuditBatch.CanaryAssignment"/>）原子提交，
     /// 不再需要独立写入。此方法保留用于管理员手动恢复 / 测试场景。
     /// </remarks>
@@ -560,7 +560,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     private static string BuildRunId(OptimizationProposal proposal)
     {
         var componentTag = proposal.TargetComponent.ToString().ToLowerInvariant();
-        // P2-1：使用 GUID 保证 RunId 唯一性，不依赖秒精度时间戳（避免同秒碰撞导致覆盖）。
+        // 使用 GUID 保证 RunId 唯一性，不依赖秒精度时间戳（避免同秒碰撞导致覆盖）。
         var uniqueId = Guid.NewGuid().ToString("N");
         return $"run-{componentTag}-{proposal.ProposalId}-{uniqueId}";
     }

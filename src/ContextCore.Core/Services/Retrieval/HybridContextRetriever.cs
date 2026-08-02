@@ -30,7 +30,7 @@ public sealed class HybridContextRetriever : IContextRetriever
         IVectorStore? vectorStore = null,
         IRetrievalTraceStore? traceStore = null,
         IDecisionTraceStore? decisionTraceStore = null,
-        // P0-7.2: 显式覆盖 fanout 上限；为 null 时按 store 类型自动解析
+        // 显式覆盖 fanout 上限；为 null 时按 store 类型自动解析
         RetrievalFanoutOptions? fanoutOptions = null)
     {
         _traceStore = traceStore;
@@ -40,7 +40,7 @@ public sealed class HybridContextRetriever : IContextRetriever
         var relationExpansionService = relationStore is null
             ? null
             : new RelationExpansionService(new RelationTraversalEngine(relationStore), contextObjectResolver);
-        // P0-7.2: 未显式传入时按 store namespace 自动推断（FileSystem=2 / InMemory=16 / Postgres=8 / 其他=4）
+        // 未显式传入时按 store namespace 自动推断（FileSystem=2 / InMemory=16 / Postgres=8 / 其他=4）
         var fanout = fanoutOptions ?? RetrievalFanoutOptions.Resolve(contextStore, memoryStore);
         _mandatoryRecallChannelExecutor = new MandatoryRecallChannelExecutor(contextStore, memoryStore, fanout);
         _contextRecallChannelExecutor = new ContextRecallChannelExecutor(contextStore);
@@ -173,7 +173,7 @@ public sealed class HybridContextRetriever : IContextRetriever
             stages.Add(CreateStageTrace(relationResult));
         }
 
-        // R12.4A #8: 合并主通道与关系扩展通道——BuildRankedCandidates 做去重 + cap 噪声过滤，
+        // #8: 合并主通道与关系扩展通道——BuildRankedCandidates 做去重 + cap 噪声过滤，
         // Pack 阶段为 relation-only 候选显式预留 TopK 名额（传入选中的 relation-only ID 集合）。
         var relationOnlyCandidatesView = relOnlyCandidates.ToCandidates(request.IncludeContent);
         var relationOnlyIds = relationOnlyCandidatesView
@@ -212,7 +212,7 @@ public sealed class HybridContextRetriever : IContextRetriever
             }
             catch (Exception)
             {
-                // P5-0.4: retrieval trace 写入失败不得影响正式检索输出，但需记录降级指标。
+                // retrieval trace 写入失败不得影响正式检索输出，但需记录降级指标。
                 Interlocked.Increment(ref _retrievalTraceWriteFailures);
             }
         }

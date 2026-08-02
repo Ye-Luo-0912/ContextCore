@@ -31,7 +31,7 @@ public sealed class ContextDecisionRecord
     public ContextDecisionRisk Risk { get; init; } = new();
 
     /// <summary>
-    /// R14-2：Package Quality 指标集合。仅 Source=Package 时填充；Source=Retrieval 时为 null。
+    /// Package Quality 指标集合。仅 Source=Package 时填充；Source=Retrieval 时为 null。
     /// 第一版保持确定性，由 Projector 在投影过程中基于已有数据一次性计算，不触发任何运行时变更。
     /// </summary>
     public PackageQualityReport? Quality { get; init; }
@@ -73,39 +73,39 @@ public sealed record ContextDecisionCandidate
     public string Reason { get; init; } = string.Empty;
 
     /// <summary>
-    /// R14-1：主决策原因码。替代 <see cref="Reason"/> 自由文本的机器可解析版本。
+    /// 主决策原因码。替代 <see cref="Reason"/> 自由文本的机器可解析版本。
     /// V17.0 历史 trace 升级路径设为 <see cref="CandidateDecisionReasonCode.Unknown"/>。
     /// </summary>
     public CandidateDecisionReasonCode ReasonCode { get; init; } = CandidateDecisionReasonCode.Unknown;
 
     /// <summary>
-    /// R14-1：次要决策原因码列表。同一候选可能命中多个原因。
+    /// 次要决策原因码列表。同一候选可能命中多个原因。
     /// </summary>
     public IReadOnlyList<CandidateDecisionReasonCode> SecondaryReasonCodes { get; init; } = Array.Empty<CandidateDecisionReasonCode>();
 
     /// <summary>
-    /// R14-1：候选来源 channel 列表（如 "recent_context"、"working_memory"）。
+    /// 候选来源 channel 列表（如 "recent_context"、"working_memory"）。
     /// 默认为空列表；由 V2 证据提供者填充。
     /// </summary>
     public IReadOnlyList<string> ChannelSources { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// R14-1：候选评分细分（key = 评分维度名）。默认为空字典。
+    /// 候选评分细分（key = 评分维度名）。默认为空字典。
     /// </summary>
     public IReadOnlyDictionary<string, double> ScoreBreakdown { get; init; } = new Dictionary<string, double>(StringComparer.Ordinal);
 
     /// <summary>
-    /// R14-1：候选命中的 anchor 列表。默认为空列表。
+    /// 候选命中的 anchor 列表。默认为空列表。
     /// </summary>
     public IReadOnlyList<string> MatchedAnchors { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// R14-1：候选参与的关系路径列表。默认为空列表。
+    /// 候选参与的关系路径列表。默认为空列表。
     /// </summary>
     public IReadOnlyList<string> RelationPaths { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// R14-1：候选 lifecycle 状态（如 "active" / "deprecated" / "superseded"）。默认 "active"。
+    /// 候选 lifecycle 状态（如 "active" / "deprecated" / "superseded"）。默认 "active"。
     /// </summary>
     public string LifecycleState { get; init; } = "active";
 

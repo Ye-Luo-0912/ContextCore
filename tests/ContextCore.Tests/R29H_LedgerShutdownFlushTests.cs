@@ -11,7 +11,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Ledger（AgentRunEventStore）关机刷盘验收测试
+// Ledger（AgentRunEventStore）关机刷盘验收测试
 //
 // 目标：验证 AgentRunActor 在以下"关机"场景下，缓冲事件被正确刷盘到
 // IAgentRunEventStore（Ledger）且哈希链完整无断裂：

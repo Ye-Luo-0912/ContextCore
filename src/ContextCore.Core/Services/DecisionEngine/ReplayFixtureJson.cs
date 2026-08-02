@@ -5,7 +5,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R28-B.6 阶段 E：Replay fixture JSON 序列化辅助
+// 阶段 E：Replay fixture JSON 序列化辅助
 //
 // 目标：
 //   1. 让 ReplayFixture（含 WorkingSet + V2Result）可往返 JSON 序列化。
@@ -25,7 +25,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.6：CanonicalCandidateKey 的 JSON 转换器。
+/// CanonicalCandidateKey 的 JSON 转换器。
 /// 序列化为字符串形式 `{WorkspaceId}\x1F{CollectionId}\x1F{EntityKind}\x1F{EntityId}\x1F{EntityVersion}`。
 /// 支持作为属性值与 Dictionary 键两种使用方式。
 /// </summary>
@@ -112,7 +112,7 @@ public sealed class CanonicalCandidateKeyJsonConverter : JsonConverter<Canonical
 }
 
 /// <summary>
-/// R28-B.6：ReplayFixture 专用 JSON 序列化器。
+/// ReplayFixture 专用 JSON 序列化器。
 /// 同时被 FileSystemExperimentRecorder 与 PostgresExperimentRecorder 使用，
 /// 保证两端落盘数据格式一致，可互读。
 /// </summary>

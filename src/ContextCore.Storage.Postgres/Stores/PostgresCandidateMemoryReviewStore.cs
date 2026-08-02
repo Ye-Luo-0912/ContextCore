@@ -7,7 +7,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL CandidateMemory 人工 review / cleanup 审核历史存储。
-/// R14-PG-3：替代 UnsupportedCandidateMemoryReviewStore，让 Postgres provider 在 HA 场景下能持久化候选审核历史。
+/// 替代 UnsupportedCandidateMemoryReviewStore，让 Postgres provider 在 HA 场景下能持久化候选审核历史。
 /// </summary>
 public sealed class PostgresCandidateMemoryReviewStore : PostgresStoreBase, ICandidateMemoryReviewStore
 {

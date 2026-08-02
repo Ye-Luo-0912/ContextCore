@@ -6,7 +6,7 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// P5：DefaultComponentHealthRegistry — 默认组件健康注册表实现
+// DefaultComponentHealthRegistry — 默认组件健康注册表实现
 //
 // 性能优化（对齐 DDSketch 基准：10000 样本约 147μs）：
 //   1. DDSketch 替换 double[] ring buffer + Array.Sort + P95：
@@ -98,7 +98,7 @@ public enum InferencePhaseKind : byte
 }
 
 /// <summary>
-/// P5：默认 IComponentHealthRegistry 实现。
+/// 默认 IComponentHealthRegistry 实现。
 /// per-scope per-component DDSketch + 惰性 P95 估算 + Circuit Breaker 状态机 + 自愈 + scope TTL。
 /// </summary>
 public sealed class DefaultComponentHealthRegistry : IComponentHealthRegistry, IDisposable
@@ -835,7 +835,7 @@ public sealed class DefaultComponentHealthRegistry : IComponentHealthRegistry, I
         if (state.TotalSampleCount < policy.MinSamplesBeforeFallback)
             return;
 
-        // P95 查询（O(b log b)，b 通常 < 100）
+        // 查询（O(b log b)，b 通常 < 100）
         var currentP95 = state.LatencySketch.GetQuantile(0.95);
         if (currentP95 > policy.MaxP95Ms)
         {

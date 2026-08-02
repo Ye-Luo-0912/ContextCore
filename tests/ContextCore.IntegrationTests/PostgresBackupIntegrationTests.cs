@@ -10,7 +10,7 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.IntegrationTests;
 
 /// <summary>
-/// R14-PG-10：PostgreSQL 备份/恢复端到端集成测试。
+/// PostgreSQL 备份/恢复端到端集成测试。
 /// <para>
 /// 覆盖 PostgresBackupRunner.DumpAsync → BackupManifestGenerator.ForPostgresDumpAsync →
 /// pg_restore → staging 数据库校验的完整 roundtrip。

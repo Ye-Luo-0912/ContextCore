@@ -43,7 +43,7 @@ public sealed class FileSystemReader
     }
 
     /// <summary>
-    /// P1-7：流式逐行读取 JSONL 文件，避免一次性将所有行载入 List。
+    /// 流式逐行读取 JSONL 文件，避免一次性将所有行载入 List。
     /// 文件不存在时返回空枚举（不抛异常）。空白行在产出前跳过。
     /// </summary>
     public async IAsyncEnumerable<string> ReadLinesStreamAsync(
@@ -91,7 +91,7 @@ public sealed class FileSystemReader
     }
 
     /// <summary>
-    /// R13.1 #2：从文件尾部向前反向读取行，按 newest-first 顺序返回最多 <paramref name="maxCount"/> 条非空白行。
+    /// 从文件尾部向前反向读取行，按 newest-first 顺序返回最多 <paramref name="maxCount"/> 条非空白行。
     /// 仅读取产出 <paramref name="maxCount"/> 行所需的尾部字节，避免对大历史 append-only 文件全量 I/O。
     /// </summary>
     /// <remarks>
@@ -257,7 +257,7 @@ public sealed class FileSystemReader
     }
 
     /// <summary>
-    /// R13.1 #2：反向读取使用的随机访问流。FileOptions.RandomAccess 提示 OS 缓存管理器
+    /// 反向读取使用的随机访问流。FileOptions.RandomAccess 提示 OS 缓存管理器
     /// 按 Seek 位置访问而非顺序预读，适合从文件尾部向前分块读取。
     /// </summary>
     private static FileStream OpenRandomReadStream(string path)

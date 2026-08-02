@@ -6,7 +6,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R29 WP-E-4：校准数据导出器默认实现。
+/// 校准数据导出器默认实现。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐 R29 §9.1 校准数据导出目标 + 澄清 #4）：

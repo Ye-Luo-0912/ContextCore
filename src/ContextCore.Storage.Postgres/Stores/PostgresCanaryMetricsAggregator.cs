@@ -68,34 +68,34 @@ public sealed record CanaryMetricsSample
     public double? InferenceCost { get; init; }
 
     /// <summary>
-    /// P10：V2 路径延迟 DDSketch 的二进制序列化字节。null/空 = 无 sketch 数据。
+    /// V2 路径延迟 DDSketch 的二进制序列化字节。null/空 = 无 sketch 数据。
     /// 由 CanaryLeaderHostedService.ToSample 从 CanaryObservationMetrics.V2LatencySketch 透传。
     /// </summary>
     public byte[]? V2LatencySketch { get; init; }
 
     /// <summary>
-    /// P10：Legacy 路径延迟 DDSketch 的二进制序列化字节。语义同 <see cref="V2LatencySketch"/>。
+    /// Legacy 路径延迟 DDSketch 的二进制序列化字节。语义同 <see cref="V2LatencySketch"/>。
     /// </summary>
     public byte[]? LegacyLatencySketch { get; init; }
 
     /// <summary>
-    /// P11：任务成功率分子（sum of TaskSuccessRate over non-null samples）。
+    /// 任务成功率分子（sum of TaskSuccessRate over non-null samples）。
     /// null = 未采集。与 <see cref="TaskSuccessCount"/>（分母）配合，聚合时 SUM(分子) / SUM(分母)。
     /// </summary>
     public double? TaskSuccessSum { get; init; }
 
     /// <summary>
-    /// P11：任务成功率分母（count of non-null TaskSuccessRate samples）。null = 未采集。
+    /// 任务成功率分母（count of non-null TaskSuccessRate samples）。null = 未采集。
     /// </summary>
     public long? TaskSuccessCount { get; init; }
 
     /// <summary>
-    /// P11：Tool 调用成功率分子。null = 未采集。与 <see cref="ToolSuccessCount"/>（分母）配合。
+    /// Tool 调用成功率分子。null = 未采集。与 <see cref="ToolSuccessCount"/>（分母）配合。
     /// </summary>
     public double? ToolSuccessSum { get; init; }
 
     /// <summary>
-    /// P11：Tool 调用成功率分母。null = 未采集。
+    /// Tool 调用成功率分母。null = 未采集。
     /// </summary>
     public long? ToolSuccessCount { get; init; }
 
@@ -263,10 +263,10 @@ ON CONFLICT (run_id, stage_epoch, instance_id) DO UPDATE SET
             hasExternal ? sample.WindowStart : null);
         AddNullableDateTimeOffset(command, "external_window_end",
             hasExternal ? sample.WindowEnd : null);
-        // P10：DDSketch 字节持久化到 bytea 列（null/空数组写 NULL）
+        // DDSketch 字节持久化到 bytea 列（null/空数组写 NULL）
         AddNullableBytes(command, "v2_latency_sketch", sample.V2LatencySketch);
         AddNullableBytes(command, "legacy_latency_sketch", sample.LegacyLatencySketch);
-        // P11：成功率分子/分母持久化
+        // 成功率分子/分母持久化
         AddNullableDouble(command, "task_success_sum", sample.TaskSuccessSum);
         AddNullableLong(command, "task_success_count", sample.TaskSuccessCount);
         AddNullableDouble(command, "tool_success_sum", sample.ToolSuccessSum);
@@ -279,7 +279,7 @@ ON CONFLICT (run_id, stage_epoch, instance_id) DO UPDATE SET
     /// <remarks>
     /// 通过 SQL <c>SUM/AVG</c> 聚合 <c>canary_metrics_samples</c> 表中指定 run 在当前 stage epoch 的所有实例最新快照。
     /// v36 修复：使用 <c>COUNT(DISTINCT instance_id)</c> 计算实例数；<c>WHERE stage_epoch = current_epoch</c> 过滤旧阶段数据；
-    /// P95 延迟改为加权平均（按 TotalObservations 加权）替代 MAX。
+    /// 延迟改为加权平均（按 TotalObservations 加权）替代 MAX。
     /// 若 <paramref name="externalMetricsSource"/> 非 null，优先使用其新鲜采集结果作为 ExternalMetrics；
     /// 否则从 samples 表聚合外部指标列（AVG 跳过 NULL）。
     /// 无样本时返回 InstanceCount=0 的空聚合（调用方应优雅降级）。
@@ -430,7 +430,7 @@ WHERE run_id = @run_id AND stage_epoch = @stage_epoch;
             };
         }
 
-        // P10：读取各实例的 DDSketch 字节，供 Leader 反序列化后 MergeFrom 合并查询总体 P95。
+        // 读取各实例的 DDSketch 字节，供 Leader 反序列化后 MergeFrom 合并查询总体 P95。
         // sketch 字节无法用 SQL 聚合（需应用层合并），故单独查询所有实例的 bytea 列。
         List<byte[]>? v2InstanceSketches = null;
         List<byte[]>? legacyInstanceSketches = null;
@@ -478,7 +478,7 @@ WHERE run_id = @run_id AND stage_epoch = @stage_epoch
             CurrentStageEpoch = currentEpoch,
             WindowStart = windowStart,
             WindowEnd = windowEnd,
-            // P10：sketch 字节列表（null/空 = 无 sketch 数据，Leader 保持加权平均 fallback）
+            // sketch 字节列表（null/空 = 无 sketch 数据，Leader 保持加权平均 fallback）
             V2InstanceSketches = v2InstanceSketches,
             LegacyInstanceSketches = legacyInstanceSketches
         };
@@ -488,7 +488,7 @@ WHERE run_id = @run_id AND stage_epoch = @stage_epoch
     /// <remarks>
     /// 递增 <c>canary_run_epochs</c> 表中指定 run 的 current_epoch（UPSERT + 原子递增）。
     /// Leader 推进百分比档后调用此方法；所有实例在下一次轮询时检测到 epoch 变化并 Reset 本地 Collector。
-    /// P12：fencingToken 非 0 时，UPDATE 追加 EXISTS 子查询校验 <c>canary_leader_leases</c> 中
+    /// fencingToken 非 0 时，UPDATE 追加 EXISTS 子查询校验 <c>canary_leader_leases</c> 中
     /// 仍存在 fencing_token = @fencing_token 的租约。旧 Leader（lease 被抢占后 fencing_token 较小）
     /// 的 UPDATE 影响 0 行，返回 0 表示推进失败。fencingToken = 0（默认）时不做校验（向后兼容）。
     /// </remarks>
@@ -500,7 +500,7 @@ WHERE run_id = @run_id AND stage_epoch = @stage_epoch
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
 
-        // P12：fencingToken > 0 时追加 EXISTS 校验到 INSERT 和 ON CONFLICT DO UPDATE 路径。
+        // fencingToken > 0 时追加 EXISTS 校验到 INSERT 和 ON CONFLICT DO UPDATE 路径。
         // INSERT ... SELECT WHERE EXISTS 保证首行插入也校验 lease；
         // ON CONFLICT DO UPDATE ... WHERE EXISTS 保证后续递增校验 lease。
         var fenceClause = fencingToken > 0
@@ -600,7 +600,7 @@ WHERE run_id = @run_id AND stage_epoch < @cutoff_epoch;
         return parameter;
     }
 
-    // P11：可空 long 参数（success count 分母）
+    // 可空 long 参数（success count 分母）
     private static NpgsqlParameter AddNullableLong(NpgsqlCommand command, string name, long? value)
     {
         var parameter = command.Parameters.Add(name, NpgsqlTypes.NpgsqlDbType.Bigint);
@@ -608,7 +608,7 @@ WHERE run_id = @run_id AND stage_epoch < @cutoff_epoch;
         return parameter;
     }
 
-    // P10：可空 byte[] 参数（DDSketch 序列化字节；null/空数组写 NULL）
+    // 可空 byte[] 参数（DDSketch 序列化字节；null/空数组写 NULL）
     private static NpgsqlParameter AddNullableBytes(NpgsqlCommand command, string name, byte[]? value)
     {
         var parameter = command.Parameters.Add(name, NpgsqlTypes.NpgsqlDbType.Bytea);

@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R24-3：R24 DI 扩展方法测试。
+/// DI 扩展方法测试。
 ///
 /// 覆盖：
 ///   1. AddAgentContextBridge 注册 IAgentContextBridge

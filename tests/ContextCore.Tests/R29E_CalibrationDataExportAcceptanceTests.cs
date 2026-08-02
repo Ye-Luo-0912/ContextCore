@@ -9,7 +9,7 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-E-4：校准数据导出器验收测试
+// 校准数据导出器验收测试
 //
 // 目标：
 //   验证 CalibrationDataExporter 从 IUtilityLedgerStore 查询 ledger 条目，

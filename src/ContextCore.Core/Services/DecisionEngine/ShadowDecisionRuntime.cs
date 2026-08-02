@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Learning.V14_0;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R28-B B-2：Candidate Capture + Pure Runtime + Tee Shadow 执行
+// B-2：Candidate Capture + Pure Runtime + Tee Shadow 执行
 //
 // 目标（B-2 阶段：Shadow tee，单次候选捕获）：
 //   1. Tee 机制：在 Legacy 主链产出后，零侵入地捕获原始候选快照，
@@ -29,11 +29,11 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// §7.1 WorkingSetTee — 候选捕获与 V2 转换
+// WorkingSetTee — 候选捕获与 V2 转换
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-2：候选捕获 tee。从 Legacy 主链产出构建 V2 CandidateWorkingSet。
+/// B-2：候选捕获 tee。从 Legacy 主链产出构建 V2 CandidateWorkingSet。
 /// </summary>
 /// <remarks>
 /// 零侵入设计：不修改 HybridContextRetriever / BasicContextPackageBuilder。
@@ -141,11 +141,11 @@ public static class WorkingSetTee
 }
 
 // ---------------------------------------------------------------------------
-// §7.2 DecisionExperimentPlane — Parity 对比器
+// DecisionExperimentPlane — Parity 对比器
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-2：决策实验平面。对比 Legacy 与 V2 决策结果，产出 parity 报告。
+/// B-2：决策实验平面。对比 Legacy 与 V2 决策结果，产出 parity 报告。
 /// </summary>
 /// <remarks>
 /// B-2 阶段：Diagnostic parity（仅告警，不阻断切换）。
@@ -170,13 +170,13 @@ public sealed class DecisionExperimentPlane
             v2Result.SelectedEnvelopes.Select(e => e.CandidateId),
             StringComparer.Ordinal);
 
-        // P0-4 修复：交集计算不应对空集特殊处理。空集与任何集合的交集恒为 0。
+        // 修复：交集计算不应对空集特殊处理。空集与任何集合的交集恒为 0。
         // 旧代码在 legacy 为空时把 commonSelected 设为 v2 数量，导致空 vs 非空错误得到 Jaccard=1.0。
         var commonSelected = legacySelectedIds.Intersect(v2SelectedIds).Count();
         var onlyInLegacy = legacySelectedIds.Except(v2SelectedIds).Count();
         var onlyInV2 = v2SelectedIds.Except(legacySelectedIds).Count();
 
-        // P0-4 修复：Jaccard 正确分母是 |A ∪ B| = |A| + |B| - |A ∩ B|，不是 |A| + |B|。
+        // 修复：Jaccard 正确分母是 |A ∪ B| = |A| + |B| - |A ∩ B|，不是 |A| + |B|。
         // 旧代码用 common / (legacyCount + v2Count)，导致两个完全相同的非空集合
         // （如各 10 个候选，common=10）得到 Jaccard=0.5 而非 1.0，被误判为 Divergent。
         var unionCount = legacySelectedIds.Count + v2SelectedIds.Count - commonSelected;
@@ -184,7 +184,7 @@ public sealed class DecisionExperimentPlane
             ? 1.0
             : (double)commonSelected / unionCount;
 
-        // P0-4 修复：Hard parity 应要求语义字段完全一致，不应仅依赖 Jaccard ≥ 0.99。
+        // 修复：Hard parity 应要求语义字段完全一致，不应仅依赖 Jaccard ≥ 0.99。
         // 当 Jaccard=1.0（集合完全相同）时，进一步检查 token 偏差；
         // Jaccard<1.0 时不可能为 Hard parity。
         var parityLevel = jaccardIndex switch
@@ -233,11 +233,11 @@ public sealed record ParityReport(
     int WorkingSetCandidateCount);
 
 // ---------------------------------------------------------------------------
-// §7.3 ShadowDecisionRuntime — Shadow 执行编排器
+// ShadowDecisionRuntime — Shadow 执行编排器
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-2：Shadow 执行编排器。
+/// B-2：Shadow 执行编排器。
 /// 编排 Legacy 主链 → Tee 捕获 → V2 pure Runtime → Parity 对比。
 /// </summary>
 /// <remarks>
@@ -266,7 +266,7 @@ public sealed class ShadowDecisionRuntime
     /// </summary>
     /// <returns>Shadow 执行报告（含 Legacy/V2 双结果 + parity 对比）。</returns>
     /// <remarks>
-    /// R28-B.6 Blocker-1：使用 <see cref="IContextDecisionRuntime.ExecuteWithWorkingSetAsync"/>
+    /// Blocker-1：使用 <see cref="IContextDecisionRuntime.ExecuteWithWorkingSetAsync"/>
     /// 获取完整 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
     /// 让 shadow 报告携带 V2 Runtime 真实使用的 WorkingSet（而非仅 Legacy tee 快照）。
     /// </remarks>
@@ -305,11 +305,11 @@ public sealed class ShadowDecisionRuntime
     }
 
     /// <summary>
-    /// R28-B.6：使用预计算的 V2 执行结果构建 Retrieval shadow 报告，不再次调用 V2 Runtime。
+    /// 使用预计算的 V2 执行结果构建 Retrieval shadow 报告，不再次调用 V2 Runtime。
     /// 用于 sampled shadow 路径（权威 V2 结果已就绪，仅需 Legacy 对照 + parity 计算）。
     /// </summary>
     /// <remarks>
-    /// R28-B.6 Blocker-1：接受 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
+    /// Blocker-1：接受 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
     /// shadow 报告直接复用 V2 Runtime 真实使用的 WorkingSet，避免丢失 Material。
     /// </remarks>
     /// <param name="legacyRequest">原始 Retrieval 请求。</param>
@@ -331,11 +331,11 @@ public sealed class ShadowDecisionRuntime
         ArgumentNullException.ThrowIfNull(context);
 
         var v2Result = v2Execution.Decision;
-        // R28-B.6：直接复用 V2 Runtime 真实使用的 WorkingSet（含 Material sidecar）
+        // 直接复用 V2 Runtime 真实使用的 WorkingSet（含 Material sidecar）
         var workingSet = v2Execution.WorkingSet;
 
         // Legacy 结果 → Envelope（用于 parity 对比）
-        // P0-4 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
+        // 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
         var legacySelectedEnvelopes = RetrievalCandidateAdapter.ToEnvelopes(
             legacyResult.SelectedItems, context);
         var legacyDroppedEnvelopes = legacyResult.DroppedItems
@@ -373,7 +373,7 @@ public sealed class ShadowDecisionRuntime
             WorkingSet: workingSet,
             Parity: parityReport)
         {
-            // R28-B.7 P0-3：携带完整 V2 执行结果，用于 ReplayFixture 纯决策重放
+            // 携带完整 V2 执行结果，用于 ReplayFixture 纯决策重放
             Execution = v2Execution
         };
     }
@@ -382,7 +382,7 @@ public sealed class ShadowDecisionRuntime
     /// 对 Package 路径执行 Shadow tee：Legacy 结果 → WorkingSet → V2 决策 → Parity。
     /// </summary>
     /// <remarks>
-    /// R28-B.6 Blocker-1：使用 <see cref="IContextDecisionRuntime.ExecuteWithWorkingSetAsync"/>
+    /// Blocker-1：使用 <see cref="IContextDecisionRuntime.ExecuteWithWorkingSetAsync"/>
     /// 获取完整 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
     /// 让 shadow 报告携带 V2 Runtime 真实使用的 WorkingSet（而非仅 Legacy tee 快照）。
     /// </remarks>
@@ -409,7 +409,7 @@ public sealed class ShadowDecisionRuntime
             SeedCandidates = teeWorkingSet.Envelopes
         };
 
-        // R28-B.6：使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
+        // 使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
         var v2Execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
 
         // 构建 parity 报告（不再次调用 V2）
@@ -417,11 +417,11 @@ public sealed class ShadowDecisionRuntime
     }
 
     /// <summary>
-    /// R28-B.6：使用预计算的 V2 执行结果构建 Package shadow 报告，不再次调用 V2 Runtime。
+    /// 使用预计算的 V2 执行结果构建 Package shadow 报告，不再次调用 V2 Runtime。
     /// 用于 sampled shadow 路径（权威 V2 结果已就绪，仅需 Legacy 对照 + parity 计算）。
     /// </summary>
     /// <remarks>
-    /// R28-B.6 Blocker-1：接受 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
+    /// Blocker-1：接受 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
     /// shadow 报告直接复用 V2 Runtime 真实使用的 WorkingSet，避免丢失 Material。
     /// </remarks>
     public PackageShadowReport BuildPackageShadowReport(
@@ -436,11 +436,11 @@ public sealed class ShadowDecisionRuntime
         ArgumentNullException.ThrowIfNull(context);
 
         var v2Result = v2Execution.Decision;
-        // R28-B.6：直接复用 V2 Runtime 真实使用的 WorkingSet（含 Material sidecar）
+        // 直接复用 V2 Runtime 真实使用的 WorkingSet（含 Material sidecar）
         var workingSet = v2Execution.WorkingSet;
 
         // Legacy 结果 → Envelope
-        // P0-4 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
+        // 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
         var legacySelectedEnvelopes = legacyResult.SelectedItems
             .Select(d => PackageCandidateAdapter.ToEnvelopeFromDecision(d, context))
             .ToList();
@@ -478,7 +478,7 @@ public sealed class ShadowDecisionRuntime
             WorkingSet: workingSet,
             Parity: parityReport)
         {
-            // R28-B.7 P0-3：携带完整 V2 执行结果，用于 ReplayFixture 纯决策重放
+            // 携带完整 V2 执行结果，用于 ReplayFixture 纯决策重放
             Execution = v2Execution
         };
     }

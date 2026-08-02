@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R26-2：PostgresAgentTaskStateStore 单元测试。
+/// PostgresAgentTaskStateStore 单元测试。
 ///
 /// 不连接真实 PostgreSQL 数据库；仅验证：
 ///   1. 构造函数与服务注册
@@ -65,7 +65,7 @@ public sealed class PostgresAgentTaskStateStoreTests
     [TestMethod]
     public async Task GetAsync_NullWorkspaceId_ThrowsArgumentNullException()
     {
-        // P0-6：ThrowIfNullOrWhiteSpace 在 null 时抛 ArgumentNullException
+        // ThrowIfNullOrWhiteSpace 在 null 时抛 ArgumentNullException
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentNullException>(
             () => store.GetAsync(null!, "task-1"));
@@ -201,7 +201,7 @@ public sealed class PostgresAgentTaskStateStoreTests
     [TestMethod]
     public async Task AddContextCorePostgresStorage_PostgresImplOverridesInMemory()
     {
-        // R26-2：模拟完整启动顺序 — 先注册 InMemory（AddContextCore 默认路径），
+        // 模拟完整启动顺序 — 先注册 InMemory（AddContextCore 默认路径），
         // 再 AddContextCorePostgresStorage（postgres provider），后注册者胜出。
         var services = new ServiceCollection();
         services.AddSingleton<IAgentTaskStateStore, ContextCore.Core.Services.Agent.InMemoryAgentTaskStateStore>();

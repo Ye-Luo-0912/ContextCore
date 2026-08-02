@@ -41,7 +41,7 @@ public sealed class PostgresAgentRunLease : PostgresStoreBase, IAgentRunLease
     /// <remarks>
     /// 原子 CAS 获取租约：使用 <c>INSERT ... ON CONFLICT DO UPDATE WHERE lease_expires_at &lt; now</c>。
     /// 无现有行或现有行过期时获取成功；现有行未过期时返回 null（已被其他实例持有）。
-    /// P0-4：成功获取时 <c>fencing_token = 旧值 + 1</c>（新插入为 1），RETURNING 返回新的 fencing_token，
+    /// 成功获取时 <c>fencing_token = 旧值 + 1</c>（新插入为 1），RETURNING 返回新的 fencing_token，
     /// 供调用方在副作用 UPDATE 的 WHERE 子句中校验。续约（RenewAsync）不递增 fencing_token。
     /// </remarks>
     public async ValueTask<LeasedAgentRun?> TryAcquireAsync(
@@ -66,7 +66,7 @@ public sealed class PostgresAgentRunLease : PostgresStoreBase, IAgentRunLease
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // P0-4：fencing_token 在 ON CONFLICT DO UPDATE 时 = agent_run_leases.fencing_token + 1（抢占过期），
+        // fencing_token 在 ON CONFLICT DO UPDATE 时 = agent_run_leases.fencing_token + 1（抢占过期），
         // 新插入时 = 1（VALUES 中指定）。RETURNING 同时返回 lease_token 与 fencing_token 以便调用方使用。
         command.CommandText = $"""
 INSERT INTO {Table("agent_run_leases")} (run_id, owner, lease_token, fencing_token, acquired_at, lease_expires_at)
@@ -86,7 +86,7 @@ RETURNING lease_token, fencing_token;
         command.Parameters.AddWithValue("now", now);
         command.Parameters.AddWithValue("expires_at", expiresAt);
 
-        // P0-4：RETURNING 返回两列（lease_token, fencing_token）；0 行返回 = 已被其他实例持有。
+        // RETURNING 返回两列（lease_token, fencing_token）；0 行返回 = 已被其他实例持有。
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -274,7 +274,7 @@ WHERE lease_expires_at < @now;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-6：查询是否存在未过期租约：SELECT 1 WHERE lease_expires_at &gt;= now LIMIT 1。
+    /// 查询是否存在未过期租约：SELECT 1 WHERE lease_expires_at &gt;= now LIMIT 1。
     /// 用于 Recovery Worker 在标记 Run 为 Failed 前校验是否有活跃 Owner。
     /// </remarks>
     public async ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
@@ -300,7 +300,7 @@ LIMIT 1;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：单 SQL 原子操作 — 只有无活跃租约 AND 状态匹配时才更新为 LeaseLost。
+    /// 单 SQL 原子操作 — 只有无活跃租约 AND 状态匹配时才更新为 LeaseLost。
     /// 消除 Recovery Worker 中 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
     /// NOT EXISTS 子查询检查活跃租约（lease_expires_at >= clock_timestamp()）。
     /// 同步更新 data JSON 中的 State / UpdatedAt / FinishedAt（与 TransitionStateAsync 一致）。

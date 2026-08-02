@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R21-5a：Memory Utility Stats 聚合契约
+// Memory Utility Stats 聚合契约
 //
 // 对齐用户规格中的 Memory Utility Ledger：
 //   - Recall count：被检索命中次数
@@ -26,7 +26,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R21-5a：单个 item 的 utility 聚合统计。
+/// 单个 item 的 utility 聚合统计。
 /// </summary>
 /// <remarks>
 /// 字段对齐用户规格：
@@ -103,7 +103,7 @@ public sealed record MemoryUtilityStats
 }
 
 /// <summary>
-/// R21-5a：MemoryUtilityStats 查询条件。
+/// MemoryUtilityStats 查询条件。
 /// </summary>
 public sealed record MemoryUtilityStatsQuery
 {
@@ -136,7 +136,7 @@ public sealed record MemoryUtilityStatsQuery
 }
 
 /// <summary>
-/// R21-5a：MemoryUtilityStats 存储（read-only 公共 API）。
+/// MemoryUtilityStats 存储（read-only 公共 API）。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐澄清 #4）：

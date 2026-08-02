@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B.8 Production Canary Plane — 生产验收测试（12 项）
+// Production Canary Plane — 生产验收测试（12 项）
 //
 // 覆盖范围（4 个测试类）：
 //   1. StageTransitionPersistenceAcceptanceTests（3 项）— Stage Transition 持久化
@@ -50,9 +50,9 @@ internal static class CanaryAcceptanceHelpers
 
     /// <summary>默认 Canary Gate 配置：1→5→10→25→50→100，最小观察 1 秒。</summary>
     /// <remarks>
-    /// R29 WP-C-3：显式设置 <see cref="CanaryGateOptions.MinQualityScore"/>=0.0 禁用质量分回滚阈值，
+    /// 显式设置 <see cref="CanaryGateOptions.MinQualityScore"/>=0.0 禁用质量分回滚阈值，
     /// 因 R28B 验收测试不通过 RecordObservation 上报 quality_score（旧测试在 R29 WP-C-3 之前编写）。
-    /// R29C_QualityScoreTests 单独覆盖 quality_score 回滚行为。
+    /// C_QualityScoreTests 单独覆盖 quality_score 回滚行为。
     /// </remarks>
     public static CanaryGateOptions DefaultOptions => new()
     {
@@ -497,8 +497,8 @@ public sealed class CanaryMetricsCollectorAcceptanceTests
 
         var metrics = collector.GetAggregatedMetrics(runId);
         Assert.AreEqual(20, metrics.TotalObservations, "总观察次数应为 20");
-        // P95 索引 = (int)(20 * 0.95) = 19，排序后 durations[19] = 200ms
-        // R28-G P1-6：DDSketch 相对误差 ≤ 1%，200ms 估计值在 [198, 202] 区间，放宽到 180-205
+        // 索引 = (int)(20 * 0.95) = 19，排序后 durations[19] = 200ms
+        // DDSketch 相对误差 ≤ 1%，200ms 估计值在 [198, 202] 区间，放宽到 180-205
         Assert.IsTrue(
             metrics.V2P95LatencyMs >= 180.0 && metrics.V2P95LatencyMs <= 205.0,
             $"V2P95LatencyMs 应在 180-205ms 范围内（DDSketch 相对误差 ≤ 1%），实际={metrics.V2P95LatencyMs}ms");
@@ -824,7 +824,7 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
         var metrics = collector.GetAggregatedMetrics(runId);
         Assert.AreEqual(10, metrics.TotalObservations, "总观察次数应为 10");
-        // R28-G P1-6：DDSketch 返回相对误差 1% 内的估计值（200ms ± 2ms），使用 delta 3.0 容忍
+        // DDSketch 返回相对误差 1% 内的估计值（200ms ± 2ms），使用 delta 3.0 容忍
         Assert.AreEqual(200.0, metrics.V2P95LatencyMs, 3.0,
             "V2 P95 应接近 200ms（真实 V2 耗时，DDSketch 相对误差 ≤ 1%）");
         Assert.AreEqual(50.0, metrics.LegacyP95LatencyMs, 1.0,
@@ -849,7 +849,7 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
             v2Duration: TimeSpan.FromMilliseconds(80));
 
         var metrics = collector.GetAggregatedMetrics(runId);
-        // R28-G P1-6：DDSketch 返回相对误差 1% 内的估计值（80ms ± 0.8ms），使用 delta 1.5 容忍
+        // DDSketch 返回相对误差 1% 内的估计值（80ms ± 0.8ms），使用 delta 1.5 容忍
         Assert.AreEqual(80.0, metrics.V2P95LatencyMs, 1.5, "V2 P95 应接近 80ms（DDSketch 相对误差 ≤ 1%）");
         Assert.AreEqual(80.0, metrics.LegacyP95LatencyMs, 1.5,
             "legacyDuration=null 时 Legacy P95 应回退到 V2 P95（向后兼容）");

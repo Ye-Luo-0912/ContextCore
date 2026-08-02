@@ -226,7 +226,7 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        // R12.4A #10: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
+        // 0: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
         var service = new BasicContextIngestionService(contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
 
         // 第一次 ingest：refs = [B, C]
@@ -254,7 +254,7 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        // R12.4A #10: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
+        // 0: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
         var service = new BasicContextIngestionService(contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
 
         await service.IngestAsync(CreateContextItem("item-x", refs: ["item-y", "item-z"]));
@@ -274,7 +274,7 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        // R12.4A #10: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
+        // 0: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
         var service = new BasicContextIngestionService(contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
 
         // 先 ingest 建立 related_to 边
@@ -325,7 +325,7 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         Assert.AreEqual(1, derivedFrom.Count, "derived_from edge should not be affected by ingest reconcile");
     }
 
-    // R12.4A #10: 验证 ingest 路径通过 IRelationProjectionWriter 写入 relation（验证被应用）。
+    // 0: 验证 ingest 路径通过 IRelationProjectionWriter 写入 relation（验证被应用）。
     /// <summary>
     /// 注入 writer 后，ingest 写入的 related_to 边应携带 Provenance="ingest"，
     /// 证明 relation 走的是 writer 边界（writer 负责填充 Provenance 并应用 validator）。
@@ -361,7 +361,7 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
     }
 
     /// <summary>
-    /// P1-3：未注入 writer 时，ingest reconcile 不应删除现有 ingest-provenance 边。
+    /// 未注入 writer 时，ingest reconcile 不应删除现有 ingest-provenance 边。
     /// 旧实现仅在写入条件里跳过写入，但后续删除循环仍按未写入的 newRelations 计算删除目标，
     /// 会把现有 ingest-provenance 边误删——造成"item 已保存但图被破坏"的静默数据损坏。
     /// </summary>

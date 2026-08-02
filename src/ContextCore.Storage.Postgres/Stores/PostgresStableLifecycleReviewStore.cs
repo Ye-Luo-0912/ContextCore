@@ -7,7 +7,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL Stable memory 生命周期人工 review 审核历史存储。
-/// R14-PG-4：替代 UnsupportedStableLifecycleReviewStore，让 Postgres provider 在 HA 场景下能持久化生命周期审核记录。
+/// 替代 UnsupportedStableLifecycleReviewStore，让 Postgres provider 在 HA 场景下能持久化生命周期审核记录。
 /// </summary>
 public sealed class PostgresStableLifecycleReviewStore : PostgresStoreBase, IStableLifecycleReviewStore
 {

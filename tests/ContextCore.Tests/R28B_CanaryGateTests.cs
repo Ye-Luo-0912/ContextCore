@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B.8 Production Canary Gate — 验收测试（8 项）
+// Production Canary Gate — 验收测试（8 项）
 //
 // 覆盖范围：
 //   1. CanaryGate_AdvancesThroughPercentageLadder — 百分比阶梯渐进推进

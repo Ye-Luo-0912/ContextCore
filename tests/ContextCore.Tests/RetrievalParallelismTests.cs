@@ -6,7 +6,7 @@ using ContextCore.Core.Services.Retrieval;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R12-4: 验证 retrieval 通道的 provider capability 控制并行度。
+/// 验证 retrieval 通道的 provider capability 控制并行度。
 /// 当 store 实现 IContextStoreBatchLookup 时，Mandatory executor 应使用 BatchGetAsync 而非 N 次单条 GetAsync。
 /// </summary>
 [TestClass]

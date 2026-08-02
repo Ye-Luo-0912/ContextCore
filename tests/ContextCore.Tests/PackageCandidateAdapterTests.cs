@@ -6,7 +6,7 @@ using ContextCore.Core.Services.DecisionEngine;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R18-4：Package 候选适配器验证。
+/// Package 候选适配器验证。
 ///
 /// 验证目标：
 ///   1. PackageTraceCandidate → ContextCandidateEnvelope 字段映射正确
@@ -175,7 +175,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_SoftConstraintKind_MapsToConstraintSourceButNotHard()
     {
-        // P0-1：soft_constraint 不再被错误提升为 hard
+        // soft_constraint 不再被错误提升为 hard
         var candidate = MakeCandidate("sc-1", "soft_constraint");
 
         var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
@@ -189,7 +189,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_MergedConstraintKind_MapsToMixedNotMandatory()
     {
-        // P0-1：merged_constraint 不再被整体视为 hard / mandatory
+        // merged_constraint 不再被整体视为 hard / mandatory
         var candidate = MakeCandidate("mc-1", "merged_constraint");
 
         var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
@@ -512,7 +512,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_WithContext_FillsWorkspaceAndCollectionAndObservedAt()
     {
-        // P0-5：context 提供 WorkspaceId/CollectionId/ObservedAt，适配器不应读系统时间
+        // context 提供 WorkspaceId/CollectionId/ObservedAt，适配器不应读系统时间
         var candidate = MakeCandidate("ctx-1", "working_memory");
         var observedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
         var context = new CandidateAdaptationContext
@@ -537,7 +537,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_WithContext_IsDeterministic_SameInputProducesSameOutput()
     {
-        // P0-5：相同候选 + 相同 context 应产生完全相同的 envelope（幂等性）
+        // 相同候选 + 相同 context 应产生完全相同的 envelope（幂等性）
         var candidate = MakeCandidate("det-1", "working_memory", score: 0.5,
             metadata: new Dictionary<string, string> { ["lifecycleStatus"] = "active" });
         var observedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
@@ -583,7 +583,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToDecisionRequest_WithContext_FillsWorkspaceCollectionQueryText()
     {
-        // P0-5：ToDecisionRequest 必须填充 WorkspaceId/CollectionId/QueryText，
+        // ToDecisionRequest 必须填充 WorkspaceId/CollectionId/QueryText，
         // 避免 PolicyRegistry 按空 workspace 解析默认 Bundle
         var result = new ContextPackageBuildResult
         {
@@ -623,7 +623,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToEnvelope_WithContext_UsesContextObservedAt()
     {
-        // P1-2：context-aware 重载使用 context.ObservedAt（确定性）
+        // context-aware 重载使用 context.ObservedAt（确定性）
         var candidate = MakeCandidate("legacy-1", "working_memory");
         var observedAt = new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero);
         var context = new CandidateAdaptationContext

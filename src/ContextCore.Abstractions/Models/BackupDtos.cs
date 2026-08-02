@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions.Models;
 
 /// <summary>
-/// P1-2：备份存储类型。当前仅 FileSystem + Postgres 两种；扩展时新增枚举值。
+/// 备份存储类型。当前仅 FileSystem + Postgres 两种；扩展时新增枚举值。
 /// </summary>
 public enum BackupStorageKind
 {
@@ -10,7 +10,7 @@ public enum BackupStorageKind
 }
 
 /// <summary>
-/// P1-2：备份清单中的一个条目。每个条目对应备份归档内的一个文件或数据库转储段。
+/// 备份清单中的一个条目。每个条目对应备份归档内的一个文件或数据库转储段。
 /// </summary>
 public sealed record BackupManifestEntry
 {
@@ -34,7 +34,7 @@ public sealed record BackupManifestEntry
 }
 
 /// <summary>
-/// P1-2：备份归档清单。归档（ZIP / pg_dump）旁以 JSON 形式保存，
+/// 备份归档清单。归档（ZIP / pg_dump）旁以 JSON 形式保存，
 /// 记录每个条目的 SHA-256 与元数据，供 <c>backup verify</c> / <c>backup drill</c> 校验完整性。
 /// </summary>
 public sealed record BackupManifest
@@ -71,7 +71,7 @@ public sealed record BackupManifest
 }
 
 /// <summary>
-/// P1-2：备份验证结果。供 <c>backup verify</c> 子命令返回，便于程序化消费。
+/// 备份验证结果。供 <c>backup verify</c> 子命令返回，便于程序化消费。
 /// </summary>
 public sealed record BackupVerifyResult
 {
@@ -110,7 +110,7 @@ public sealed record BackupVerifyResult
 }
 
 /// <summary>
-/// P1-2：恢复演练结果。drill 不实际覆盖现有数据，仅验证备份可解压/可恢复到隔离位置。
+/// 恢复演练结果。drill 不实际覆盖现有数据，仅验证备份可解压/可恢复到隔离位置。
 /// </summary>
 public sealed record BackupDrillResult
 {

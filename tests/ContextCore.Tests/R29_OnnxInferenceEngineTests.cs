@@ -6,16 +6,16 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-A-2：OnnxInferenceEngine 单元测试
+// OnnxInferenceEngine 单元测试
 //
 // 覆盖范围：
-//   §1 OnnxInferenceEngineOptions 默认值与 fallback 字段
-//   §2 OnnxInferenceEngine 元数据暴露（ModelVersion / Kind / ContentHash / CalibrationVersion）
-//   §3 OnnxInferenceEngine.InferBatchAsync 委托到 IOnnxInferenceSession
-//   §4 OnnxInferenceEngine.InferAsync 字典路径 → FeatureBatch 转换
-//   §5 空批次与取消处理
-//   §6 超时控制（CreateLinkedCancellationTokenSource）
-//   §7 DI 注册扩展（直接注册与工厂延迟加载）
+//   OnnxInferenceEngineOptions 默认值与 fallback 字段
+//   OnnxInferenceEngine 元数据暴露（ModelVersion / Kind / ContentHash / CalibrationVersion）
+//   OnnxInferenceEngine.InferBatchAsync 委托到 IOnnxInferenceSession
+//   OnnxInferenceEngine.InferAsync 字典路径 → FeatureBatch 转换
+//   空批次与取消处理
+//   超时控制（CreateLinkedCancellationTokenSource）
+//   DI 注册扩展（直接注册与工厂延迟加载）
 //
 // 设计：
 //   使用 MockOnnxInferenceSession 隔离真实 ONNX 模型加载，
@@ -29,7 +29,7 @@ namespace ContextCore.Tests;
 public sealed class R29_OnnxInferenceEngineTests
 {
     // ===========================================================================
-    // §1 OnnxInferenceEngineOptions 默认值与 fallback 字段
+    // OnnxInferenceEngineOptions 默认值与 fallback 字段
     // ===========================================================================
 
     [TestMethod]
@@ -76,7 +76,7 @@ public sealed class R29_OnnxInferenceEngineTests
     }
 
     // ===========================================================================
-    // §2 OnnxInferenceEngine 元数据暴露
+    // OnnxInferenceEngine 元数据暴露
     // ===========================================================================
 
     [TestMethod]
@@ -115,7 +115,7 @@ public sealed class R29_OnnxInferenceEngineTests
     }
 
     // ===========================================================================
-    // §3 OnnxInferenceEngine.InferBatchAsync 委托到 session
+    // OnnxInferenceEngine.InferBatchAsync 委托到 session
     // ===========================================================================
 
     [TestMethod]
@@ -184,7 +184,7 @@ public sealed class R29_OnnxInferenceEngineTests
     }
 
     // ===========================================================================
-    // §4 OnnxInferenceEngine.InferAsync 字典路径 → FeatureBatch 转换
+    // OnnxInferenceEngine.InferAsync 字典路径 → FeatureBatch 转换
     // ===========================================================================
 
     [TestMethod]
@@ -297,7 +297,7 @@ public sealed class R29_OnnxInferenceEngineTests
     }
 
     // ===========================================================================
-    // §5 空批次与取消处理
+    // 空批次与取消处理
     // ===========================================================================
 
     [TestMethod]
@@ -354,7 +354,7 @@ public sealed class R29_OnnxInferenceEngineTests
     }
 
     // ===========================================================================
-    // §6 超时控制
+    // 超时控制
     // ===========================================================================
 
     [TestMethod]
@@ -440,7 +440,7 @@ public sealed class R29_OnnxInferenceEngineTests
     }
 
     // ===========================================================================
-    // §7 DI 注册扩展
+    // DI 注册扩展
     // ===========================================================================
 
     [TestMethod]

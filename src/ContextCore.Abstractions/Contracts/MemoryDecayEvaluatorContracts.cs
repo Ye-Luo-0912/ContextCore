@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R21-4c：Memory Decay Evaluator 契约
+// Memory Decay Evaluator 契约
 //
 // 对齐用户规格中的 6 种降权因素：
 //   1. 长期未命中 → Active → Cooling → Dormant → Archived
@@ -21,7 +21,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R21-4c：memory 降权因素枚举（对齐用户规格的 6 种因素）。
+/// memory 降权因素枚举（对齐用户规格的 6 种因素）。
 /// </summary>
 public enum MemoryDecayFactor : byte
 {
@@ -48,7 +48,7 @@ public enum MemoryDecayFactor : byte
 }
 
 /// <summary>
-/// R21-4c：memory 衰减评估结果。包含目标状态 + 触发的降权因素 + 理由详情。
+/// memory 衰减评估结果。包含目标状态 + 触发的降权因素 + 理由详情。
 /// </summary>
 public sealed record MemoryDecayAssessment
 {
@@ -91,7 +91,7 @@ public sealed record MemoryDecayAssessment
 }
 
 /// <summary>
-/// R21-4c：memory 衰减评估器接口。根据 MemoryUtilityStats 等指标评估 item 是否需要降权。
+/// memory 衰减评估器接口。根据 MemoryUtilityStats 等指标评估 item 是否需要降权。
 /// </summary>
 /// <remarks>
 /// 设计原则：

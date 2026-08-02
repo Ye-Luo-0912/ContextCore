@@ -6,7 +6,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P0-7：验证生产 <see cref="TraceBackedDecisionEvidenceProvider"/> 行为契约。
+/// 验证生产 <see cref="TraceBackedDecisionEvidenceProvider"/> 行为契约。
 /// 覆盖：trace 命中→Complete；trace 缺失→Incomplete；store 未注册→Incomplete；
 /// retrieval/package 两条 source 路径分别独立分派；候选 ItemId 缺失→Incomplete。
 /// </summary>

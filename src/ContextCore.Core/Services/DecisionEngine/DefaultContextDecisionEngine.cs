@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R18-2 / R19-3：统一决策引擎默认实现（DefaultContextDecisionEngine）
+// / R19-3：统一决策引擎默认实现（DefaultContextDecisionEngine）
 //
 // 目标：
 //   实现 IContextDecisionEngine 接口，编排 envelope 集合的
@@ -49,11 +49,11 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R18-2 / R19-3 / R28-B.6：默认决策引擎实现。编排 envelope 集合的
+/// / R19-3 / R28-B.6：默认决策引擎实现。编排 envelope 集合的
 /// safety gate → lifecycle gate → utility scoring → budget allocation 四个阶段。
 /// </summary>
 /// <remarks>
-/// R28-B.6 Closure Gate：
+/// Closure Gate：
 ///   - 当注入 ISafetyGate/ILifecycleGate/IUtilityScorer/IGlobalAllocator 且 request.PolicySnapshot 非空时，
 ///     走 V2 路径（委托注入的抽象执行全部四阶段）。
 ///   - 当任一抽象为 null 或 PolicySnapshot 为空时，走 Legacy 静态路径（向后兼容 R18-2 测试）。
@@ -83,7 +83,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// R28-B.6：构造 Engine 并注入全部 V2 决策抽象。
+    /// 构造 Engine 并注入全部 V2 决策抽象。
     /// </summary>
     /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
     /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
@@ -101,7 +101,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// R29 WP-D-1：构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator。
+    /// 构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator。
     /// </summary>
     /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
     /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
@@ -121,7 +121,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// R29 WP-F-3：构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator + 性能监控。
+    /// 构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator + 性能监控。
     /// </summary>
     /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
     /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
@@ -144,7 +144,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// P5：构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator + 性能监控 + 组件健康注册表。
+    /// 构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator + 性能监控 + 组件健康注册表。
     /// </summary>
     /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
     /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
@@ -184,7 +184,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // R28-B.6：V2 路径 — 当注入全部决策抽象且 PolicySnapshot 非空时，委托注入的抽象执行。
+        // V2 路径 — 当注入全部决策抽象且 PolicySnapshot 非空时，委托注入的抽象执行。
         // Engine 是唯一决策点：Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score。
         if (_safetyGate is not null && _utilityScorer is not null && _globalAllocator is not null
             && request.PolicySnapshot is not null)
@@ -194,7 +194,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
 
         // ---- Legacy 静态路径（向后兼容 R18-2 测试） ----
 
-        // P0-2：解析 PolicyBundle
+        // 解析 PolicyBundle
         // PolicyBundleId 非空 → 精确加载（fail-closed：找不到则抛异常，不静默回退默认 bundle）
         // PolicyBundleId 为空 → 解析 workspace/collection 激活的 bundle
         ContextPolicyBundle? bundle = null;
@@ -218,7 +218,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
         }
 
-        // P0-3：应用受限 override（合并到 bundle profile，不替换整个 profile）
+        // 应用受限 override（合并到 bundle profile，不替换整个 profile）
         // 不允许替换 SafetyProfile；BudgetOverride 仅调整 TokenBudget/TopK/SectionRatios；
         // RoutingOverride 仅调整 EnableModelScoring。
         var safety = bundle?.Safety;
@@ -257,7 +257,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         // 排序键：IsMandatory 降序 → FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
         // 注意：IsMandatory 不影响 safety gate 准入（已在 SafetyState 注释中说明），
         //       但在排序中强制 mandatory 候选优先于非 mandatory。
-        // R29 WP-D-3：使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
+        // 使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
         var ordered = scored
             .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
             .ThenByDescending(e => e.Utility.FinalScore)
@@ -297,7 +297,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
 
             // Token budget 检查（Retrieval 全局硬上限语义）
-            // R29 WP-D-3：使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
+            // 使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
             var effectiveTokens = GetEffectiveTokens(envelope);
             if (!isMandatory && usedTokens + effectiveTokens > tokenBudget)
             {
@@ -361,13 +361,13 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     // -----------------------------------------------------------------------
-    // R28-B.6：V2 路径 — Engine 为唯一决策点，委托注入的抽象执行全部四阶段
+    // V2 路径 — Engine 为唯一决策点，委托注入的抽象执行全部四阶段
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// R28-B.6：V2 决策路径。委托 ISafetyGate → ILifecycleGate → IUtilityScorer → IGlobalAllocator。
+    /// V2 决策路径。委托 ISafetyGate → ILifecycleGate → IUtilityScorer → IGlobalAllocator。
     /// Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
-    /// R29 WP-F-3：注入 IPerformanceMonitor 时，V2 路径执行前后埋点；超过阈值时下次请求自动回退到 V2.0 Allocator。
+    /// 注入 IPerformanceMonitor 时，V2 路径执行前后埋点；超过阈值时下次请求自动回退到 V2.0 Allocator。
     /// </summary>
     private async Task<ContextDecisionResult> ExecuteV2PathAsync(
         ContextDecisionRequest request,
@@ -375,16 +375,16 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     {
         var snapshot = request.PolicySnapshot!;
 
-        // R29 WP-F-3：性能埋点 — 启动计时器，构造 scopeKey。
+        // 性能埋点 — 启动计时器，构造 scopeKey。
         var scopeKey = $"{request.WorkspaceId}/{request.CollectionId}";
         var monitor = _performanceMonitor;
         var perfEnabled = monitor is not null;
         var sw = perfEnabled ? Stopwatch.StartNew() : null;
 
-        // P5：组件健康注册表（可选注入；null 时跳过组件级归因与回退）
+        // 组件健康注册表（可选注入；null 时跳过组件级归因与回退）
         var componentRegistry = _componentHealthRegistry;
 
-        // R29 WP-F-3：查询是否应回退到 V2.0 Allocator（避免 V2.1 性能回退拖累主链）。
+        // 查询是否应回退到 V2.0 Allocator（避免 V2.1 性能回退拖累主链）。
         // 回退条件：monitor.ShouldFallbackToV20(scopeKey) 返回 true（基于最近样本 P95 + 阈值）。
         // 触发回退时：跳过 V2.1 AllocateWithDiversity，直接走 V2.0 Allocate。
         var forceV20Fallback = perfEnabled && monitor!.ShouldFallbackToV20(scopeKey);
@@ -393,7 +393,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             monitor!.RecordFallback(scopeKey, "v21_p95_exceeded_threshold", lastDurationMs: 0);
         }
 
-        // P5：组件级回退查询 — Allocation 组件回退（与 IPerformanceMonitor.ShouldFallbackToV20 互补）。
+        // 组件级回退查询 — Allocation 组件回退（与 IPerformanceMonitor.ShouldFallbackToV20 互补）。
         // 当 IComponentHealthRegistry 注入且 Allocation 组件 P95 超阈值时，也强制跳过 V2.1 路径。
         // 保留 IPerformanceMonitor.ShouldFallbackToV20 作为兜底入口（向后兼容）。
         var allocationFallbackActive = componentRegistry is not null
@@ -405,7 +405,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
                 ComponentKind.Allocation, scopeKey, "p95_exceeded_threshold", cancellationToken);
         }
 
-        // P5：Inference 组件回退 — 当 Inference 组件 P95 超阈值时，禁用模型评分路径
+        // Inference 组件回退 — 当 Inference 组件 P95 超阈值时，禁用模型评分路径
         //（等效切换到 DeterministicBatchInferenceEngine：ModelActivationManager 已实现 fallback）。
         // 实现方式：将 snapshot.Routing.EnableModelScoring 置为 false，让 DefaultUtilityScorer 走 rule-only 路径。
         var inferenceFallbackActive = componentRegistry is not null
@@ -473,7 +473,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         }
 
         // 阶段 3：UtilityScorer — R28-D：ScoreAsync 返回新列表（immutable record 友好）
-        // P5：用 Stopwatch 拆分 scoring_ms，记录到 IComponentHealthRegistry。
+        // 用 Stopwatch 拆分 scoring_ms，记录到 IComponentHealthRegistry。
         // 注：inference_ms 不再使用 scoring_ms 作为代理值——Inference 各阶段耗时由
         // OnnxInferenceEngine 通过 RecordInferencePhaseTime 直接上报（queue/copy/run/parse），
         // 避免用整体 Scoring 耗时代替 Inference 耗时导致归因失真。
@@ -504,7 +504,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         }
 
         // 阶段 4：GlobalAllocator — 委托 IGlobalAllocator（唯一分配点）
-        // R28-B.6：合并 request 级 budget override 到 snapshot（request budget 只解析一次）。
+        // 合并 request 级 budget override 到 snapshot（request budget 只解析一次）。
         // request.TokenBudget > 0 时覆盖 snapshot.Budget.DefaultTokenBudget；
         // request.TopK > 0 且非 int.MaxValue 时覆盖 snapshot.Budget.DefaultTopK。
         var effectiveTokenBudget = request.TokenBudget > 0
@@ -517,12 +517,12 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             || effectiveTopK != snapshot.Budget.DefaultTopK)
             ? snapshot with { Budget = snapshot.Budget with { DefaultTokenBudget = effectiveTokenBudget, DefaultTopK = effectiveTopK } }
             : snapshot;
-        // R29 WP-D-1：V2.1 路径选择 — 当 request.DiversityOptions 非空 + IAllocatorV2_1 注入 +
+        // V2.1 路径选择 — 当 request.DiversityOptions 非空 + IAllocatorV2_1 注入 +
         // AllocationContext 非空时，走 AllocateWithDiversity（section rollover + MMR）；
         // 否则回退 V2.0 Allocate（向后兼容 R28-G 之前的行为）。
         // V2.1 需要 AllocationContext 携带 Purpose + MandatoryOverflowPolicy，保证安全边界不被绕过。
-        // R29 WP-F-3：forceV20Fallback=true 时强制跳过 V2.1 路径，避免性能回退拖累主链。
-        // P5：forceV20Fallback 也由 Allocation 组件回退触发（见上方 allocationFallbackActive）。
+        // forceV20Fallback=true 时强制跳过 V2.1 路径，避免性能回退拖累主链。
+        // forceV20Fallback 也由 Allocation 组件回退触发（见上方 allocationFallbackActive）。
         AllocationResult allocation;
         var usedV21Path = false;
         var allocationSw = componentRegistry is not null ? Stopwatch.StartNew() : null;
@@ -553,7 +553,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
             else if (request.AllocationContext is not null)
             {
-                // R28-B.6 P0-5：携带 Purpose + MandatoryOverflowPolicy 的 V2.0 重载
+                // 携带 Purpose + MandatoryOverflowPolicy 的 V2.0 重载
                 allocation = _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot, request.AllocationContext);
             }
             else
@@ -574,7 +574,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
         }
 
-        // R29 WP-F-3：记录本次 V2 路径执行耗时（仅在 monitor 注入时）。
+        // 记录本次 V2 路径执行耗时（仅在 monitor 注入时）。
         if (perfEnabled)
         {
             sw!.Stop();
@@ -596,7 +596,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
                ?? allocation.Selected.FirstOrDefault(e => e.Utility.ModelArtifactRef != null)?.Utility.ModelArtifactRef)
             : null;
 
-        // R29 WP-F-3：合并性能诊断到 Outcome.Diagnostics（保留 Allocator 原有诊断）。
+        // 合并性能诊断到 Outcome.Diagnostics（保留 Allocator 原有诊断）。
         var outcome = perfEnabled
             ? MergePerformanceDiagnostics(allocation.Outcome, monitor!.GetDiagnostics(scopeKey), forceV20Fallback, usedV21Path)
             : allocation.Outcome;
@@ -617,7 +617,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// R29 WP-F-3：将性能诊断合并到 Outcome.Diagnostics（保留 Allocator 原有诊断 + 追加 perf.* 字段）。
+    /// 将性能诊断合并到 Outcome.Diagnostics（保留 Allocator 原有诊断 + 追加 perf.* 字段）。
     /// ContextDecisionOutcomeSummary 是 init-only class，构造新实例复制原字段并替换 Diagnostics。
     /// </summary>
     private static ContextDecisionOutcomeSummary MergePerformanceDiagnostics(
@@ -755,11 +755,11 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     // -----------------------------------------------------------------------
-    // P0-3：受限 override 合并辅助方法
+    // 受限 override 合并辅助方法
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// P0-3：将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
+    /// 将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
     /// 仅覆盖非空字段，不替换整个 profile。
     /// </summary>
     private static BudgetProfile? ApplyBudgetOverride(
@@ -777,7 +777,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// P0-3：将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
+    /// 将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
     /// 仅覆盖 EnableModelScoring（非空时），不替换整个 profile。
     /// </summary>
     private static RoutingProfile? ApplyRoutingOverride(
@@ -793,7 +793,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     /// <summary>
-    /// R29 WP-D-3：获取候选的有效 token 数（与 DefaultGlobalAllocator / DefaultAllocatorV2_1 语义一致）。
+    /// 获取候选的有效 token 数（与 DefaultGlobalAllocator / DefaultAllocatorV2_1 语义一致）。
     /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
     /// 回退到 EstimatedTokens（length/4 粗估，仅用于兼容 Legacy 候选）。
     /// </summary>

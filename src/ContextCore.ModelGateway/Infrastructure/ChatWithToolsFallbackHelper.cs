@@ -6,7 +6,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.ModelGateway.Infrastructure;
 
 /// <summary>
-/// P0-1：ChatWithToolsAsync 的降级实现辅助器。
+/// ChatWithToolsAsync 的降级实现辅助器。
 /// </summary>
 /// <remarks>
 /// 当底层 <see cref="IModelAdapter"/> 仅接受 <see cref="ModelRequest"/>（拼接 prompt 字符串）

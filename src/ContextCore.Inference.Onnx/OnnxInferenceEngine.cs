@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// R29 WP-A-2：OnnxInferenceEngine — IBatchInferenceEngine 的 ONNX 实现
+// OnnxInferenceEngine — IBatchInferenceEngine 的 ONNX 实现
 //
 // 目标：
 //   1. 把 IOnnxInferenceSession 适配为 IBatchInferenceEngine，让 ContextCore
@@ -27,7 +27,7 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-2：基于 ONNX Runtime 的 IBatchInferenceEngine 实现。
+/// 基于 ONNX Runtime 的 IBatchInferenceEngine 实现。
 /// </summary>
 /// <remarks>
 /// <b>构造</b>：
@@ -48,7 +48,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     private readonly string _calibrationVersion;
     private int _disposed;
 
-    // P3 步骤4：warmup 状态标志。
+    // warmup 状态标志。
     // 0 = 未 warmup；1 = 已 warmup。
     // 子问题2修复：warmup 失败时重置为 0，允许后续重试（不再永久标记为已 warmup）。
     // 使用 Interlocked 实现无锁 idempotent warmup，避免首次推理时的并发重复 warmup。
@@ -86,7 +86,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     /// <param name="options">运行时配置（用于超时与 FeatureVector → FeatureBatch 转换）。</param>
     /// <param name="calibrationVersion">校准版本号（默认 "default-v1"）。</param>
     /// <remarks>
-    /// P3 步骤4：构造函数不自动执行 warmup（避免 sync-over-async）。
+    /// 构造函数不自动执行 warmup（避免 sync-over-async）。
     /// 调用方应在构造后显式调用 <see cref="WarmupAsync(CancellationToken)"/>，
     /// 或依赖 <see cref="InferBatchAsync"/> 首次调用时的 lazy warmup（受 <see cref="OnnxInferenceEngineOptions.EnableWarmup"/> 控制）。
     /// </remarks>
@@ -212,7 +212,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             };
         }
 
-        // P3 步骤4：lazy warmup（若 EnableWarmup=true 且尚未 warmup）。
+        // lazy warmup（若 EnableWarmup=true 且尚未 warmup）。
         // 子问题2修复：warmup 失败时 EnsureWarmedUpAsync 内部已重置 _warmedUp=0，允许后续重试。
         if (_options.EnableWarmup)
         {
@@ -231,7 +231,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             };
         }
 
-        // P3 步骤3：Large batch splitting — 当 RowCount 超过 MaxBatchSize 时分片执行。
+        // Large batch splitting — 当 RowCount 超过 MaxBatchSize 时分片执行。
         // 这避免 large batch 一次性加载到 GPU 显存导致 OOM。
         // MaxBatchSize=0 表示不限制（默认）。
         if (_options.MaxBatchSize > 0 && batch.RowCount > _options.MaxBatchSize)
@@ -278,7 +278,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
         FeatureBatch batch,
         CancellationToken ct)
     {
-        // P5：阶段计时 — 方法入口时间戳（Queue 阶段起点）
+        // 阶段计时 — 方法入口时间戳（Queue 阶段起点）
         var methodEntryAt = Stopwatch.GetTimestamp();
 
         // 子问题7：back-pressure — 当孤儿任务（已超时但 native session.Run 仍在后台运行）
@@ -337,12 +337,12 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
         var startedAt = Stopwatch.GetTimestamp();
         var timeoutMs = _options.InferenceTimeoutMs;
 
-        // P5：阶段计时 — Queue 阶段完成（从方法入口到获取槽位）
+        // 阶段计时 — Queue 阶段完成（从方法入口到获取槽位）
         ReportPhaseTiming(InferencePhase.Queue, methodEntryAt, startedAt);
 
         try
         {
-            // P5：阶段计时 — Copy 阶段（槽位获取到 Task.Run 前；FeatureBatch 已是连续内存，通常极短）
+            // 阶段计时 — Copy 阶段（槽位获取到 Task.Run 前；FeatureBatch 已是连续内存，通常极短）
             var runStartedAt = Stopwatch.GetTimestamp();
             ReportPhaseTiming(InferencePhase.Copy, startedAt, runStartedAt);
 
@@ -361,7 +361,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             }
             catch (TimeoutException)
             {
-                // P5：阶段计时 — Run 阶段（超时路径：run 持续到超时）
+                // 阶段计时 — Run 阶段（超时路径：run 持续到超时）
                 var timeoutRunCompletedAt = Stopwatch.GetTimestamp();
                 ReportPhaseTiming(InferencePhase.Run, runStartedAt, timeoutRunCompletedAt);
                 // 子问题4：超时后释放槽位，让其他请求继续；native 调用仍在后台运行（无法中断）。
@@ -411,7 +411,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
                 };
             }
 
-            // P5：阶段计时 — Run 阶段完成（成功路径：await 返回）
+            // 阶段计时 — Run 阶段完成（成功路径：await 返回）
             var runCompletedAt = Stopwatch.GetTimestamp();
             ReportPhaseTiming(InferencePhase.Run, runStartedAt, runCompletedAt);
 
@@ -423,7 +423,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
                 Interlocked.Exchange(ref _consecutiveFailures, 0);
             }
 
-            // P5：阶段计时 — Parse 阶段（结果处理；通常极短）
+            // 阶段计时 — Parse 阶段（结果处理；通常极短）
             var parseCompletedAt = Stopwatch.GetTimestamp();
             ReportPhaseTiming(InferencePhase.Parse, runCompletedAt, parseCompletedAt);
             return result;
@@ -438,7 +438,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     }
 
     /// <summary>
-    /// P5：阶段耗时回调（仅在 InferencePhaseTimingCallback 非空时调用）。
+    /// 阶段耗时回调（仅在 InferencePhaseTimingCallback 非空时调用）。
     /// 在推理热路径上同步执行，回调实现应避免锁竞争与 IO（建议 DDSketch.Add 或 channel 写入）。
     /// </summary>
     /// <param name="phase">推理阶段。</param>
@@ -495,7 +495,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     }
 
     /// <summary>
-    /// P3 步骤4：执行 warmup（idempotent，可安全多次调用）。
+    /// 执行 warmup（idempotent，可安全多次调用）。
     /// 用一个 1 行全 0 的 dummy FeatureBatch 调用一次 session.InferBatchAsync，
     /// 让 ORT 完成 graph optimization 与内存分配，避免首次真实推理的冷启动延迟。
     /// </summary>
@@ -577,7 +577,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     }
 
     /// <summary>
-    /// P3 步骤4：lazy warmup 内部实现。仅在首次调用时执行 warmup，后续调用直接返回。
+    /// lazy warmup 内部实现。仅在首次调用时执行 warmup，后续调用直接返回。
     /// </summary>
     private async ValueTask EnsureWarmedUpAsync(CancellationToken ct)
     {
@@ -589,7 +589,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     }
 
     /// <summary>
-    /// P3 步骤3：按 MaxBatchSize 分片执行推理，合并各片输出。
+    /// 按 MaxBatchSize 分片执行推理，合并各片输出。
     /// 子问题4：每片通过 ExecuteWithSlotAndTimeoutAsync 执行，复用并发槽位与超时 watchdog。
     /// </summary>
     /// <param name="batch">原始大批量特征数据。</param>

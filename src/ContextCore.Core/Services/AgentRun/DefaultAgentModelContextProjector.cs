@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
-// P0-3 / Perf-4：DefaultAgentModelContextProjector — Agent 模型上下文默认投影器
+// / Perf-4：DefaultAgentModelContextProjector — Agent 模型上下文默认投影器
 //
 // 修复问题：
 //   旧路径中 Actor 调用 IContextDecisionRuntime 后仅将 CandidateId/Type/FinalScore
@@ -14,14 +14,14 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 本投影器在投影阶段从 ContextDecisionExecutionResult.WorkingSet.Materials 取出候选
 // 正文内容，并按 Run.ModelContextTokenBudget 截断。
 //
-// P0-1 修复后的投影顺序（高优先级在前）：
+// 修复后的投影顺序（高优先级在前）：
 //   1. System Prompt（可信系统指令，System 角色）
 //   2. Hard Constraints（硬约束，System 角色）
 //   3. Current Task（当前任务，User 角色）
 //   4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记；best-fit 策略）
 //   5. Conversation（对话历史，按原子协议单元保序裁剪）
 //
-// P0-1 修复要点：
+// 修复要点：
 //   a. 引入 AgentContextState.Conversation 统一对话流，按时间顺序存储 Assistant + Tool 消息。
 //   b. AssistantToolCallTurn（含 ToolCalls）与对应 ToolResultTurn 作为不可拆分协议单元：
 //      预算不足时整体截断，不拆分 Assistant 与 Tool 消息——保持 "assistant tool_calls → tool result"
@@ -36,7 +36,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 
 /// <summary>
-/// P0-3 / Perf-4：Agent 模型上下文默认投影器。
+/// / Perf-4：Agent 模型上下文默认投影器。
 /// 从 ContextDecisionExecutionResult.WorkingSet.Materials 取出候选正文内容，
 /// 按 Run.ModelContextTokenBudget 截断投影为最终发送给模型的消息列表。
 /// </summary>
@@ -89,7 +89,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         }
 
         // 4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记）
-        // P0-1：Retrieved Materials 移到 Conversation 之前——作为检索上下文注入，
+        // Retrieved Materials 移到 Conversation 之前——作为检索上下文注入，
         // 不破坏对话历史中 "assistant tool_calls → tool result" 的因果顺序。
         // Perf-4 修复 a：不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
         // Perf-4 修复 c：best-fit 策略——按 FinalScore 排序后逐个尝试纳入，
@@ -151,7 +151,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         }
 
         // 5. Conversation（对话历史，按原子协议单元保序裁剪）
-        // P0-1：从 context.Conversation 按时间顺序投影，保持 "assistant tool_calls → tool result" 因果顺序。
+        // 从 context.Conversation 按时间顺序投影，保持 "assistant tool_calls → tool result" 因果顺序。
         // AssistantToolCallTurn（含 ToolCalls）与对应的 ToolResultTurn 作为不可拆分协议单元：
         // 预算不足时整体截断，不拆分 Assistant 与 Tool 消息。
         // Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容旧路径）。
@@ -179,7 +179,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
     // ── P0-1：Conversation 原子协议单元投影 ──────────────────────────────
 
     /// <summary>
-    /// P0-1：从 Conversation 按原子协议单元保序裁剪。
+    /// 从 Conversation 按原子协议单元保序裁剪。
     /// AssistantToolCallTurn（含 ToolCalls）与紧随其后的 ToolResultTurn 作为一个不可拆分单元：
     /// 预算不足时整体截断，不拆分 Assistant 与 Tool 消息。
     /// </summary>
@@ -268,7 +268,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
     }
 
     /// <summary>
-    /// P0-1：回退路径——Conversation 为空时从 Messages + ToolObservations 分离投影（向后兼容）。
+    /// 回退路径——Conversation 为空时从 Messages + ToolObservations 分离投影（向后兼容）。
     /// 注意：此路径不保证 "assistant tool_calls → tool result" 因果顺序，
     /// 仅用于未填充 Conversation 的旧路径或恢复路径。
     /// </summary>
@@ -395,7 +395,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
     }
 
     /// <summary>
-    /// P0-1：估算单条消息的 token 数，包含 Content + ToolCalls（Id/Name/Arguments）+ ToolName/ToolCallId 开销。
+    /// 估算单条消息的 token 数，包含 Content + ToolCalls（Id/Name/Arguments）+ ToolName/ToolCallId 开销。
     /// 旧路径仅算 Content.Length，导致 Content 为空但 ToolCalls 非空的 Assistant 消息算作 0 token。
     /// </summary>
     private static int EstimateMessageTokens(AgentMessage msg)

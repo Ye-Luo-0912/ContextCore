@@ -5,7 +5,7 @@ using ContextCore.Core.Services.DecisionEngine;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R28-B P0-10：行为测试 — DecisionEngine 基础设施
+// 行为测试 — DecisionEngine 基础设施
 //
 // 覆盖范围（10 个测试类）：
 //   1. RetrievalResultProjectorTests — Projector 投影 + Material sidecar 恢复 + AllocationDecisions 消费
@@ -98,7 +98,7 @@ internal static class R28BTestHelpers
     }
 
     /// <summary>
-    /// R28-B.6 Blocker-1：从 ContextDecisionResult 构建 ContextDecisionExecutionResult（含 WorkingSet）。
+    /// Blocker-1：从 ContextDecisionResult 构建 ContextDecisionExecutionResult（含 WorkingSet）。
     /// 供测试桩（StubDecisionRuntime / RecordingDecisionRuntime）使用，
     /// 让 ExecuteWithWorkingSetAsync 返回完整 ExecutionResult。
     /// WorkingSet 从 result 的 SelectedEnvelopes + DroppedEnvelopes 构建（Materials 留空）。
@@ -216,7 +216,7 @@ public sealed class RetrievalResultProjectorTests
     [TestMethod]
     public void Project_WithWorkingSet_RestoresContentFromMaterialSidecar()
     {
-        // P0-7 回归：Projector 从 workingSet.Materials 恢复候选正文
+        // 回归：Projector 从 workingSet.Materials 恢复候选正文
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Semantic, score: 0.8, tokens: 100);
         var result = R28BTestHelpers.MakeResult(
             requestId: "op-2",
@@ -236,14 +236,14 @@ public sealed class RetrievalResultProjectorTests
         var dto = projector.Project(result, workingSet);
 
         Assert.AreEqual(1, dto.SelectedItems.Count);
-        // P0-7：Content 从 sidecar 恢复
+        // Content 从 sidecar 恢复
         Assert.AreEqual("hello world content", dto.SelectedItems[0].Content);
     }
 
     [TestMethod]
     public void Project_WithWorkingSet_ConsumesAllocationIncludedTokensAndIsTruncated()
     {
-        // P0-7 回归：Projector 从 AllocationDecisions 消费 IncludedTokens + IsTruncated
+        // 回归：Projector 从 AllocationDecisions 消费 IncludedTokens + IsTruncated
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Lexical, score: 0.7, tokens: 200);
         var allocation = R28BTestHelpers.MakeAllocation(
             envelope.CanonicalKey,
@@ -271,10 +271,10 @@ public sealed class RetrievalResultProjectorTests
         var dto = projector.Project(result, workingSet);
 
         Assert.AreEqual(1, dto.SelectedItems.Count);
-        // R28-B.6 Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
+        // Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
         // content="content"（7 chars）估算 7/4=1 token，1 <= maxTokens(150) 故不截断，ActualTokens=1。
         Assert.AreEqual(1, dto.SelectedItems[0].EstimatedTokens);
-        // P0-7：IsTruncated=true 添加 "truncated" reason
+        // IsTruncated=true 添加 "truncated" reason
         CollectionAssert.Contains(dto.SelectedItems[0].Reasons.ToList(), "truncated");
     }
 
@@ -345,7 +345,7 @@ public sealed class PackageResultProjectorTests
     [TestMethod]
     public void Project_WithWorkingSet_RestoresContentAndMarksTruncated()
     {
-        // P0-7 回归：Package Projector 从 sidecar 恢复 Content + IsTruncated 写入 metadata
+        // 回归：Package Projector 从 sidecar 恢复 Content + IsTruncated 写入 metadata
         var envelope = R28BTestHelpers.MakeEnvelope("item-1", ContextCandidateSource.Lexical, score: 0.6, tokens: 200);
         var allocation = R28BTestHelpers.MakeAllocation(
             envelope.CanonicalKey,
@@ -374,12 +374,12 @@ public sealed class PackageResultProjectorTests
 
         Assert.AreEqual(1, dto.SelectedItems.Count);
         var decision = dto.SelectedItems[0];
-        // P0-7：Section 从 AllocationDecision 恢复
+        // Section 从 AllocationDecision 恢复
         Assert.AreEqual("custom-section", decision.SectionName);
-        // R28-B.6 Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
+        // Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
         // content="package content body"（20 chars）估算 20/4=5 token，5 <= maxTokens(120) 故不截断，ActualTokens=5。
         Assert.AreEqual(5, decision.EstimatedTokens);
-        // P0-7：IsTruncated=true 写入 metadata["truncated"]="true"
+        // IsTruncated=true 写入 metadata["truncated"]="true"
         Assert.IsNotNull(decision.Metadata);
         Assert.IsTrue(decision.Metadata.TryGetValue("truncated", out var truncatedVal));
         Assert.AreEqual("true", truncatedVal);
@@ -388,7 +388,7 @@ public sealed class PackageResultProjectorTests
     [TestMethod]
     public void Project_WithWorkingSet_BuildsSectionBudgetsFromAllocationDecisions()
     {
-        // P0-7 回归：从 AllocationDecisions 按 Section 聚合构建 section budgets
+        // 回归：从 AllocationDecisions 按 Section 聚合构建 section budgets
         var env1 = R28BTestHelpers.MakeEnvelope("i1", ContextCandidateSource.Lexical, score: 0.5, tokens: 100);
         var env2 = R28BTestHelpers.MakeEnvelope("i2", ContextCandidateSource.Semantic, score: 0.6, tokens: 100);
         var env3 = R28BTestHelpers.MakeEnvelope("i3", ContextCandidateSource.WorkingMemory, score: 0.7, tokens: 100);
@@ -423,7 +423,7 @@ public sealed class PackageResultProjectorTests
 
         Assert.IsNotNull(dto.Budget);
         Assert.AreEqual(1000, dto.Budget.TokenBudget);
-        // R28-B.7：Budget.UsedTokens 使用 Projector 截断后的真实 token 数（含 section 内分隔符），
+        // Budget.UsedTokens 使用 Projector 截断后的真实 token 数（含 section 内分隔符），
         // 不再等于 result.Outcome.EstimatedTokens（240）。
         // recent_context：80+60=140 + 2（env1/env2 间 "\n\n" 分隔符）= 142；working_memory：100；合计 242。
         Assert.AreEqual(242, dto.Budget.UsedTokens);
@@ -599,7 +599,7 @@ public sealed class DecisionExperimentPlaneTests
     [TestMethod]
     public void Compare_PartialOverlap_ComputesJaccardUsingUnionDenominator()
     {
-        // P0-4 回归：Jaccard 分母必须是 |A ∪ B| = |A| + |B| - |A ∩ B|，不是 |A| + |B|。
+        // 回归：Jaccard 分母必须是 |A ∪ B| = |A| + |B| - |A ∩ B|，不是 |A| + |B|。
         // 旧实现把分母算成 |A| + |B| = 6，导致 Jaccard=2/6=0.33（被误判为 Divergent）。
         // 正确分母是 |A ∪ B| = 4，Jaccard=2/4=0.5（Diagnostic）。
         var legacySelected = new[]
@@ -634,7 +634,7 @@ public sealed class DecisionExperimentPlaneTests
     [TestMethod]
     public void Compare_EmptyLegacyVsNonEmptyV2_ReturnsDivergentNotHard()
     {
-        // P0-4 回归：空集与任何集合的交集恒为 0；Jaccard=0/|V2|=0 → Divergent。
+        // 回归：空集与任何集合的交集恒为 0；Jaccard=0/|V2|=0 → Divergent。
         // 旧实现错误地令 commonSelected=v2Selected.Count，导致空 vs 非空被误判为 Hard。
         var legacy = R28BTestHelpers.MakeResult("op-3", selected: Array.Empty<ContextCandidateEnvelope>());
         var v2 = R28BTestHelpers.MakeResult(
@@ -1032,7 +1032,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
     [TestMethod]
     public async Task RecordShadowReport_Retrieval_PersistsFixtureWithWorkingSetAndV2Result()
     {
-        // P0-9 回归：RecordShadowReport 携带完整 WorkingSet + V2Result
+        // 回归：RecordShadowReport 携带完整 WorkingSet + V2Result
         var customRecorder = new InMemoryExperimentRecorder();
         var integration = MakeIntegration(recorder: customRecorder);
 
@@ -1059,17 +1059,17 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 
         integration.RecordShadowReport(shadowReport, "fx-1", "retrieval-mixed");
 
-        // R28-B.6 Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
+        // Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
         await integration.FlushAsync();
         var history = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, history.Count);
         var fixture = history[0];
         Assert.AreEqual("fx-1", fixture.FixtureId);
         Assert.AreEqual("retrieval-mixed", fixture.Purpose);
-        // P0-9：fixture 携带 WorkingSet
+        // fixture 携带 WorkingSet
         Assert.IsNotNull(fixture.WorkingSet);
         Assert.AreEqual(1, fixture.WorkingSet!.Envelopes.Count);
-        // P0-9：fixture 携带 V2Result
+        // fixture 携带 V2Result
         Assert.IsNotNull(fixture.V2Result);
         Assert.AreEqual("op-1", fixture.V2Result!.RequestId);
     }
@@ -1107,7 +1107,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 
         integration.RecordShadowReport(shadowReport, "fx-pkg-1", "package-mixed");
 
-        // R28-B.6 Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
+        // Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
         await integration.FlushAsync();
         var history = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, history.Count);
@@ -1182,7 +1182,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
     [TestMethod]
     public async Task CustomRecorder_IsUsedInsteadOfDefault()
     {
-        // P0-9 回归：integration 必须把 fixture 写入注入的 recorder，而非内部 List
+        // 回归：integration 必须把 fixture 写入注入的 recorder，而非内部 List
         var customRecorder = new InMemoryExperimentRecorder();
         var integration = MakeIntegration(recorder: customRecorder);
 
@@ -1250,7 +1250,7 @@ public sealed class ReplayFixtureTests
         Assert.AreEqual(3, fixture.LegacySelectedCount);
         Assert.AreEqual(1.0, fixture.JaccardIndex);
         Assert.AreEqual(ParityLevel.Hard, fixture.ParityLevel);
-        // P0-9：旧入口 FromReport 不携带完整重放数据
+        // 旧入口 FromReport 不携带完整重放数据
         Assert.IsNull(fixture.WorkingSet);
         Assert.IsNull(fixture.V2Result);
     }
@@ -1258,7 +1258,7 @@ public sealed class ReplayFixtureTests
     [TestMethod]
     public void FromShadowReport_PropagatesWorkingSetAndV2Result()
     {
-        // P0-9 回归：FromShadowReport 应将 WorkingSet + V2Result 写入 fixture
+        // 回归：FromShadowReport 应将 WorkingSet + V2Result 写入 fixture
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Semantic, 0.8, 100);
         var v2Result = R28BTestHelpers.MakeResult("op-1", selected: new[] { envelope }, estimatedTokens: 100);
         var workingSet = new CandidateWorkingSet
@@ -1394,7 +1394,7 @@ public sealed class ShadowDecisionRuntimeTests
     [TestMethod]
     public async Task ExecuteRetrievalShadowAsync_LegacySelectedExcludesDropped()
     {
-        // P0-4 回归：Shadow 报告的 Legacy SelectedEnvelopes 不应包含 dropped 候选
+        // 回归：Shadow 报告的 Legacy SelectedEnvelopes 不应包含 dropped 候选
         var envelope = R28BTestHelpers.MakeEnvelope("selected-1", ContextCandidateSource.Semantic, 0.8, 100);
         var v2Result = R28BTestHelpers.MakeResult(
             requestId: "op-2",
@@ -1508,7 +1508,7 @@ public sealed class ShadowDecisionRuntimeTests
             return new ValueTask<ContextDecisionResult>(_result);
         }
 
-        // R28-B.6 Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
+        // Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
         public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
             ContextDecisionRuntimeRequest request,
             CancellationToken cancellationToken = default)

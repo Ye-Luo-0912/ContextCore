@@ -9,7 +9,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 作业队列，同时实现 <see cref="IContextJobQueue"/>、<see cref="IContextJobQueryStore"/>
 /// 和 <see cref="ILeasedJobQueue"/>。
 /// 使用 SELECT FOR UPDATE SKIP LOCKED 实现并发安全的出队与租约获取。
-/// P0-4：worker 通过 <see cref="ILeasedJobQueue.AcquireLeaseAsync"/> 获取带租约的作业，
+/// worker 通过 <see cref="ILeasedJobQueue.AcquireLeaseAsync"/> 获取带租约的作业，
 /// 处理过程中周期性调用 <see cref="ILeasedJobQueue.RenewHeartbeatAsync"/> 续约；
 /// 进程崩溃后过期租约被其他 worker 抢占恢复，避免 Running 任务永久滞留。
 /// </summary>
@@ -389,7 +389,7 @@ WHERE job_id = @job_id;
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var tbl1 = Table("context_jobs");
-        // R12.4A #6: CAS — 仅当 state = 'Running' 时才转换为 Succeeded。
+        // #6: CAS — 仅当 state = 'Running' 时才转换为 Succeeded。
         // 过期的 Ack（job 已被 Nack 为 WaitingRetry/Failed，或已被 Ack 为 Succeeded）匹配 0 行，为 no-op。
         command.CommandText = $@"UPDATE {tbl1}
 SET state = 'Succeeded',
@@ -415,7 +415,7 @@ WHERE job_id = @job_id
 
         // 读当前 retry_count，超过 max_retry_count 则 Failed，否则 WaitingRetry
         var tbl2 = Table("context_jobs");
-        // R12.4A #6: CAS — 仅当 state = 'Running' 时才转换为 WaitingRetry/Failed。
+        // #6: CAS — 仅当 state = 'Running' 时才转换为 WaitingRetry/Failed。
         // 过期的 Nack（job 已被 Ack 为 Succeeded，或已被 Nack 为 WaitingRetry/Failed）匹配 0 行，为 no-op。
         command.CommandText = $@"UPDATE {tbl2}
 SET retry_count = retry_count + 1,

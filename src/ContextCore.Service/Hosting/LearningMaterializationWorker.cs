@@ -45,7 +45,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
     private readonly LearningMaterializationMetrics _metrics;
     private readonly ILogger<LearningMaterializationWorker> _logger;
 
-    // P0-9：批量 heartbeat 协调器——单个后台任务为所有活跃 lease 续约，替代每 record 一个 heartbeat 任务。
+    // 批量 heartbeat 协调器——单个后台任务为所有活跃 lease 续约，替代每 record 一个 heartbeat 任务。
     // eventId → (leaseToken, per-record CTS for signaling lease loss to the owning worker)
     private readonly ConcurrentDictionary<string, (string LeaseToken, CancellationTokenSource Cts, DateTimeOffset ConfirmedExpiresAt)> _activeLeases = new();
     private Task? _heartbeatCoordinatorTask;
@@ -94,7 +94,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
         // bounded Channel：poller → workers 之间的背压控制。
         var channelCapacity = Math.Max(workerCount * 2, batchSize);
-        // P0-9：Channel 携带 (record, leaseCts) 对——Acquire 后立即在 _activeLeases 注册，
+        // Channel 携带 (record, leaseCts) 对——Acquire 后立即在 _activeLeases 注册，
         // 批量 heartbeat 协调器周期性续约，排队期间 lease 也会被续约，
         // 避免 record 在 Channel 中停留超过 leaseDuration 被抢占。
         var channel = Channel.CreateBounded<LearningMaterializationQueueItem>(
@@ -119,7 +119,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
             workers[i] = RunMaterializationWorkerAsync(channel.Reader, probeOutbox, owner, leaseDuration, heartbeatInterval, workerId, workerCts.Token);
         }
 
-        // P0-9：启动批量 heartbeat 协调器——单个后台任务为所有活跃 lease 续约。
+        // 启动批量 heartbeat 协调器——单个后台任务为所有活跃 lease 续约。
         _heartbeatCoordinatorTask = RunHeartbeatCoordinatorAsync(probeOutbox, leaseDuration, heartbeatInterval, stoppingToken);
 
         // 周期性更新指标（outbox state counts + last_success_at）。
@@ -192,7 +192,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
     /// <summary>
     /// 从 outbox 拉取一批 pending 记录并写入 bounded Channel。
-    /// P0-9：每个 record 入 Channel 前在 _activeLeases 注册——批量 heartbeat 协调器周期性续约，
+    /// 每个 record 入 Channel 前在 _activeLeases 注册——批量 heartbeat 协调器周期性续约，
     /// 排队期间 lease 也会被续约，避免被其他 worker 抢占。
     /// </summary>
     private async Task PollAndDispatchAsync(
@@ -228,11 +228,11 @@ public sealed class LearningMaterializationWorker : BackgroundService
         {
             if (cancellationToken.IsCancellationRequested) break;
 
-            // P0-9：Acquire 后立即在 _activeLeases 注册——批量 heartbeat 协调器会周期性续约。
+            // Acquire 后立即在 _activeLeases 注册——批量 heartbeat 协调器会周期性续约。
             // leaseCts 由协调器在检测到租约丢失时 cancel，信号 worker 中止该 record 处理。
             // 如果 record 未被消费（Channel 关闭/异常），下面的 try-catch 会调用 RemoveLease 清理。
             var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            // P1-5：本地记录 DB 确认的 ExpiresAt——续约异常时不更新，
+            // 本地记录 DB 确认的 ExpiresAt——续约异常时不更新，
             // DB 不可达超过 LeaseDuration 后过期 → watchdog cancel leaseCts → linked CTS 取消 MaterializeAsync。
             var confirmedExpiresAt = DateTimeOffset.UtcNow.Add(leaseDuration);
             _activeLeases[record.EventId] = (record.LeaseToken, leaseCts, confirmedExpiresAt);
@@ -253,7 +253,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
     /// <summary>
     /// 固定 worker：从 Channel 读取 outbox 记录，反序列化 payload，调用 MaterializeAsync，Ack/DeadLetter。
-    /// P0-9：leaseCts 已在 <see cref="PollAndDispatchAsync"/> 中创建并注册到 _activeLeases——
+    /// leaseCts 已在 <see cref="PollAndDispatchAsync"/> 中创建并注册到 _activeLeases——
     /// worker 复用 queueItem 中的 leaseCts，处理完成或异常时通过 RemoveLease 清理。
     /// 协调器检测到租约丢失时 cancel leaseCts，worker 捕获 OCE 中止处理。
     /// </summary>
@@ -287,10 +287,10 @@ public sealed class LearningMaterializationWorker : BackgroundService
                 }
 
                 var record = queueItem.Record;
-                // P0-9：复用 PollAndDispatchAsync 已创建并注册的 leaseCts——
+                // 复用 PollAndDispatchAsync 已创建并注册的 leaseCts——
                 // 协调器检测到租约丢失时 cancel leaseCts 信号 worker 中止。
                 var leaseCts = queueItem.LeaseCts;
-                // P0-10：创建组合 linked token —— lease 丢失时取消 MaterializeAsync，避免物化继续执行。
+                // 创建组合 linked token —— lease 丢失时取消 MaterializeAsync，避免物化继续执行。
                 // leaseCts 已链接 cancellationToken（workerCts.Token → stoppingToken），
                 // 组合后：stoppingToken / workerCts / leaseCts 任一取消 → linkedCts 取消。
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, leaseCts.Token);
@@ -361,7 +361,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                             .ConfigureAwait(false);
                         // store 根据 retry_count 决定回退 Pending 或转 DeadLettered。
                         // 如果转为 DeadLettered，递增死信计数（通过 metrics updater 周期同步）。
-                        // P0-8：若 lease 已被抢占（marked=false），跳过 MarkFailed——新 worker 会重新处理。
+                        // 若 lease 已被抢占（marked=false），跳过 MarkFailed——新 worker 会重新处理。
                         if (!marked)
                         {
                             _logger.LogWarning(
@@ -421,7 +421,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
 
             var now = DateTimeOffset.UtcNow;
 
-            // P1-5 本地 watchdog：内存比较，无 DB 开销。
+            // 本地 watchdog：内存比较，无 DB 开销。
             // 续约异常时不更新 ConfirmedExpiresAt；DB 不可达超过 LeaseDuration 后 ConfirmedExpiresAt 过期，
             // 立即 cancel leaseCts → worker 的 linked CTS 取消 MaterializeAsync，避免旧 Worker 越权继续物化。
             // 此检查先于 RenewLeaseBatchAsync——即使续约调用阻塞，已过期的 lease 也能被及时取消。
@@ -551,7 +551,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
     }
 
     /// <summary>
-    /// P0-9：Channel 传递的队列项——携带 record 与已在 Acquire 后创建的 leaseCts。
+    /// Channel 传递的队列项——携带 record 与已在 Acquire 后创建的 leaseCts。
     /// </summary>
     /// <remarks>
     /// 设计动机：原实现中 worker 从 Channel 取出 record 后才启动 heartbeat，导致排队期间的 record

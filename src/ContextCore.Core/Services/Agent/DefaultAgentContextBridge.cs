@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R24-1：DefaultAgentContextBridge — 默认 Agent Context 桥接器实现。
+// DefaultAgentContextBridge — 默认 Agent Context 桥接器实现。
 //
 // 实现 IAgentContextBridge 契约：
 //   1. 将 AgentContextBridgeRequest 转换为 ContextPackageRequest；
@@ -28,7 +28,7 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 
 /// <summary>
-/// R24-1：<see cref="IAgentContextBridge"/> 的默认实现。
+/// <see cref="IAgentContextBridge"/> 的默认实现。
 /// </summary>
 /// <remarks>
 /// 桥接 Agent Runtime 与 ContextCore 上下文构建管线。

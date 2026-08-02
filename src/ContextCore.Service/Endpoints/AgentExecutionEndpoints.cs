@@ -35,7 +35,7 @@ internal static class AgentExecutionEndpoints
     private const string Tag = "AgentExecution";
 
     /// <summary>
-    /// P0-10：watchdog 补偿间隔。SSE 等待 notifier 推送时，每 30s 强制做一次 DB 补读，
+    /// watchdog 补偿间隔。SSE 等待 notifier 推送时，每 30s 强制做一次 DB 补读，
     /// 防止 notifier 遗漏通知（如 channel 满时 TryWrite 丢弃）导致永久挂起。
     /// 间隔远大于正常通知间隔，避免频繁 DB 查询。
     /// </summary>
@@ -71,7 +71,7 @@ internal static class AgentExecutionEndpoints
             // 解析 workspaceId：优先认证上下文，回退请求体，再回退默认值
             var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, request.WorkspaceId);
 
-            // P1-5: Atomic idempotent creation - eliminates TOCTOU race between check and create
+            // Atomic idempotent creation - eliminates TOCTOU race between check and create
             var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey;
 
             var runId = Guid.NewGuid().ToString("N");
@@ -300,7 +300,7 @@ internal static class AgentExecutionEndpoints
             await writer.WriteLineAsync("retry: 1000").ConfigureAwait(false);
             await writer.FlushAsync(streamCt).ConfigureAwait(false);
 
-            // P0-10：SSE 轮询循环（修复永久丢唤醒窗口）：
+            // SSE 轮询循环（修复永久丢唤醒窗口）：
             //   a. 先注册 subscription（消除"DB 读取与订阅注册之间事件丢失"竞态）
             //   b. DB 补读 watermark 之后的事件（catch-up）
             //   c. 发送补读事件到 SSE 流
@@ -332,7 +332,7 @@ internal static class AgentExecutionEndpoints
                     break;
                 }
 
-                // P0-6：cursor 推进到本轮实际发送的最后一条 Sequence
+                // cursor 推进到本轮实际发送的最后一条 Sequence
                 // （不是 DB 最新 sequence，否则会跳过未发送的事件导致永久丢失）
                 if (lastSentSequence >= 0)
                 {
@@ -395,7 +395,7 @@ internal static class AgentExecutionEndpoints
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         // ── 管理员审计：读取原始事件流 ───────────────────────────────
-        // P1-10：SSE 公开端点隐藏敏感信息（Tool 参数、原始模型输出、异常堆栈），
+        // SSE 公开端点隐藏敏感信息（Tool 参数、原始模型输出、异常堆栈），
         // 管理员需要完整 Payload 进行审计/调试时通过此端点获取原始 AgentRunEvent。
         // 需要 WorkspaceRole.Admin 角色（RBAC 强制校验未启用时自动放行，仅记录审计日志）。
         group.MapGet("/{id}/events/raw", async Task<IResult> (
@@ -467,7 +467,7 @@ internal static class AgentExecutionEndpoints
                 ? AgentApprovalStatus.Rejected
                 : AgentApprovalStatus.Approved;
 
-            // P0-4c：先构建审批事件（哈希链计算），供原子方法或回退路径使用。
+            // c：先构建审批事件（哈希链计算），供原子方法或回退路径使用。
             var lastSequence = await eventStore.GetLastSequenceAsync(workspaceId, id, ct)
                 .ConfigureAwait(false);
             var lastEvent = lastSequence >= 0
@@ -489,7 +489,7 @@ internal static class AgentExecutionEndpoints
                 AgentRunEventType.ApprovalResolved, run.State,
                 payload, prevChainHash);
 
-            // P0-4c：优先使用 IPersistentAgentApprovalStore 的原子方法（单事务：裁决审批 + 追加事件 + CAS 推进 Run 状态）。
+            // c：优先使用 IPersistentAgentApprovalStore 的原子方法（单事务：裁决审批 + 追加事件 + CAS 推进 Run 状态）。
             // 旧路径 ResolveAsync → AppendAsync → TransitionStateAsync 三步非原子，任一步失败留下不一致状态。
             if (persistentApprovalStore is not null)
             {
@@ -509,7 +509,7 @@ internal static class AgentExecutionEndpoints
                             statusCode: StatusCodes.Status409Conflict);
                     }
 
-                    // P0-4c：批准且 Run 已推进到 PendingToolExecution 时，立即入队 AgentKernelHost
+                    // c：批准且 Run 已推进到 PendingToolExecution 时，立即入队 AgentKernelHost
                     //（不等 RecoveryWorker 轮询，缩短审批通过到 Tool 执行的延迟）。
                     if (result.RunStateChanged
                         && result.NewRunState == AgentRunState.PendingToolExecution
@@ -539,7 +539,7 @@ internal static class AgentExecutionEndpoints
                 }
             }
 
-            // P0-4c：回退路径——Store 不支持原子方法时，走旧的三步非原子流程。
+            // c：回退路径——Store 不支持原子方法时，走旧的三步非原子流程。
             // ALWAYS validate approval.RunId == route runId：原子方法在 SQL 内校验（WHERE run_id=@run_id），
             // 回退路径显式获取审批记录并校验 RunId 匹配，防跨 Run 误裁决。
             if (approvalStore is not null)
@@ -597,7 +597,7 @@ internal static class AgentExecutionEndpoints
                     $"记录 approval 事件失败：{ex.Message}");
             }
 
-            // P0-2：若 Run 处于 AwaitingApproval：
+            // 若 Run 处于 AwaitingApproval：
             //   决策为拒绝 → 推进到 Failed（无法继续）
             //   决策为批准 → 推进到 PendingToolExecution（Actor 恢复时直接执行原 Tool，不重新调用模型）
             // 旧路径批准后推进到 ToolDispatching，导致 Actor 重新调用模型、被批准的原 Tool 不会直接执行。
@@ -681,11 +681,11 @@ internal static class AgentExecutionEndpoints
         var events = await eventStore.ReadAsync(workspaceId, runId, fromSequence, 100, ct)
             .ConfigureAwait(false);
 
-        // P0-6：本轮最后一条事件 Sequence（用于推进 cursor，而非 DB 最新 sequence）
+        // 本轮最后一条事件 Sequence（用于推进 cursor，而非 DB 最新 sequence）
         var lastSentSequence = -1;
         foreach (var evt in events)
         {
-            // P1-10：SSE 序列化公开 DTO（隐藏 Tool 参数/结果、原始模型输出、异常堆栈等敏感信息）。
+            // SSE 序列化公开 DTO（隐藏 Tool 参数/结果、原始模型输出、异常堆栈等敏感信息）。
             //   id: {sequence}
             //   event: {eventType}
             //   data: {json}
@@ -697,7 +697,7 @@ internal static class AgentExecutionEndpoints
             lastSentSequence = evt.Sequence;
         }
 
-        // P0-6：每批次 Flush 一次（而非每条事件 Flush），减少系统调用开销
+        // 每批次 Flush 一次（而非每条事件 Flush），减少系统调用开销
         if (events.Count > 0)
         {
             await writer.FlushAsync(ct).ConfigureAwait(false);
@@ -735,7 +735,7 @@ internal static class AgentExecutionEndpoints
     }
 
     /// <summary>
-    /// P1-10：将 <see cref="AgentRunEvent"/> 映射为公开 DTO（隐藏敏感信息）。
+    /// 将 <see cref="AgentRunEvent"/> 映射为公开 DTO（隐藏敏感信息）。
     /// 仅保留 UI 显示进度/用量/状态所需的最小字段集：
     /// <list type="bullet">
     ///   <item>Tool 名称（用于进度显示），但隐藏 Tool 参数与结果。</item>
@@ -916,7 +916,7 @@ public sealed class CancelRunRequest
 }
 
 /// <summary>
-/// P1-10：SSE 公开事件 DTO。隐藏敏感数据（Tool 参数、原始模型输出、异常堆栈）。
+/// SSE 公开事件 DTO。隐藏敏感数据（Tool 参数、原始模型输出、异常堆栈）。
 /// </summary>
 /// <remarks>
 /// 仅暴露 UI 显示进度 / 用量 / 状态所需的最小字段集：

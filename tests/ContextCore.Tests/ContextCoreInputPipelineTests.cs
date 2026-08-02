@@ -768,7 +768,7 @@ public sealed class ContextCoreInputPipelineTests
     }
 
     /// <summary>
-    /// P0-1：ContextInputIngestionService 注入 RelationProjector/Writer 后，
+    /// ContextInputIngestionService 注入 RelationProjector/Writer 后，
     /// 摄取带 refs 的 ContextItem 应同步生成 related_to 边。
     /// 此前 line 169 直接 new BasicContextIngestionService(contextStore)，
     /// 导致生产 HTTP 摄取路径静默跳过关系投影。
@@ -838,7 +838,7 @@ public sealed class ContextCoreInputPipelineTests
     }
 
     /// <summary>
-    /// P0-1 反向用例：未注入 relation deps 时（旧默认行为），摄取不生成 related_to 边。
+    /// 反向用例：未注入 relation deps 时（旧默认行为），摄取不生成 related_to 边。
     /// 验证向后兼容——测试场景仍可省略 relation 依赖。
     /// </summary>
     [TestMethod]

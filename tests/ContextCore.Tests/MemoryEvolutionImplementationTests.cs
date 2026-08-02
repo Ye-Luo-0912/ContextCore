@@ -5,7 +5,7 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R21-4/R21-5：Memory Evolution 实现测试。
+/// /R21-5：Memory Evolution 实现测试。
 ///
 /// 覆盖：
 ///   1. InMemoryMemoryStateStore：append-only / 查询 / 最新状态 / 最近事件 / EventId 唯一性 / NewState != Fresh
@@ -578,7 +578,7 @@ public sealed class MemoryEvolutionImplementationTests
     }
 
     // ===========================================================================
-    // R29 WP-E-1：Materializer 依赖抽象（IUtilityLedger / IConflictSetLedger）验证
+    // Materializer 依赖抽象（IUtilityLedger / IConflictSetLedger）验证
     //
     // 目的：证明 UtilityLedgerMaterializer 不再硬绑定 InMemoryUtilityLedgerStore /
     //   InMemoryConflictSetStore，而是通过 IUtilityLedger / IConflictSetLedger 抽象写入。
@@ -612,7 +612,7 @@ public sealed class MemoryEvolutionImplementationTests
 
         var materialized = await materializer.MaterializeAsync(result, "ws-e1", "col-e1");
 
-        // P8 硬边界：selected + dropped 全部写入 ledger（3 条 entry）。
+        // 硬边界：selected + dropped 全部写入 ledger（3 条 entry）。
         Assert.AreEqual(3, materialized.LedgerEntryCount);
         var entries = await ledgerStore.QueryAsync(new UtilityLedgerQuery
         {

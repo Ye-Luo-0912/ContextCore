@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// P1-6：Canary 紧急回滚本地状态建模
+// Canary 紧急回滚本地状态建模
 //
 // 背景：
 //   RollbackAsync 在 DB CAS 失败时仍无条件将本地流量切到 0%（安全优先），
@@ -21,7 +21,7 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// P1-6：Canary 本地状态（相对 DB 真相源的一致性标记）。
+/// Canary 本地状态（相对 DB 真相源的一致性标记）。
 /// </summary>
 /// <remarks>
 /// <para>
@@ -54,7 +54,7 @@ public enum CanaryLocalState : byte
 }
 
 // ===========================================================================
-// R28-B.8：Production Canary Gate — 渐进推进服务
+// Production Canary Gate — 渐进推进服务
 //
 // 目标（对齐 R28-B.8 规格）：
 //   1. 在 ScopedCanary 阶段内部按 CanaryGateOptions.PercentageLadder 渐进推进 CutoverController。
@@ -73,7 +73,7 @@ public enum CanaryLocalState : byte
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8：Canary 渐进推进评估结果。
+/// Canary 渐进推进评估结果。
 /// </summary>
 public sealed record CanaryProgressionEvaluation
 {
@@ -100,7 +100,7 @@ public sealed record CanaryProgressionEvaluation
 }
 
 /// <summary>
-/// R28-B.8：Canary 渐进推进执行结果。
+/// Canary 渐进推进执行结果。
 /// </summary>
 public sealed record CanaryProgressionResult
 {
@@ -127,7 +127,7 @@ public sealed record CanaryProgressionResult
 }
 
 /// <summary>
-/// R28-B.8：Canary 渐进推进服务。基于 metrics 自动推进或回滚。
+/// Canary 渐进推进服务。基于 metrics 自动推进或回滚。
 /// </summary>
 /// <remarks>
 /// <b>使用模式</b>：
@@ -153,18 +153,18 @@ public sealed class CanaryProgressionService
     private readonly CutoverController _cutoverController;
     private readonly CanaryGateOptions _options;
     private readonly TimeProvider _timeProvider;
-    // R28-B.8 工作包 B：可选的 per-run CutoverController 注册表。
+    // 工作包 B：可选的 per-run CutoverController 注册表。
     // 非空时 InitializeCanary/AdvanceAsync/RollbackAsync 操作 registry.GetOrCreate(runId) 专用控制器；
     // 为 null 时回退到直接注入的 _cutoverController（B-8 之前行为，保持向后兼容）。
     private readonly CutoverControllerRegistry? _registry;
-    // P0-7：可选的 DB 决策应用器，用于启动时从 canary_pipelines 表恢复 in-memory 状态。
+    // 可选的 DB 决策应用器，用于启动时从 canary_pipelines 表恢复 in-memory 状态。
     // 为 null 时（如单元测试使用 InMemoryPipelineRunStore）RecoverFromStoreAsync 为 no-op。
     private readonly ICanaryDecisionApplier? _decisionApplier;
-    // P1-6：per-run 本地状态标记（DB 一致性），用于在 DB CAS 失败时拒绝后续推进。
+    // per-run 本地状态标记（DB 一致性），用于在 DB CAS 失败时拒绝后续推进。
     // Consistent = 与 DB 一致；非 Consistent = 本地有未持久化变更，AdvanceAsync 应拒绝推进。
     private readonly ConcurrentDictionary<string, CanaryLocalState> _localStates
         = new(StringComparer.Ordinal);
-    // P1-6：可选的日志器，用于在紧急回滚（DB CAS 失败）时记录告警。
+    // 可选的日志器，用于在紧急回滚（DB CAS 失败）时记录告警。
     private readonly ILogger<CanaryProgressionService> _logger;
 
     // 按 runId 维度记录当前百分比档 + 进入当前档的时间戳
@@ -181,16 +181,16 @@ public sealed class CanaryProgressionService
     /// <param name="options">Canary Gate 配置（可选，默认 <see cref="CanaryGateOptions"/>）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
     /// <param name="registry">
-    /// R28-B.8 工作包 B：可选的 per-run CutoverController 注册表。非空时按 runId 隔离控制器，
+    /// 工作包 B：可选的 per-run CutoverController 注册表。非空时按 runId 隔离控制器，
     /// 避免多 run 共享 Singleton 导致百分比互相覆盖；为 null 时回退到 <paramref name="cutoverController"/>。
     /// </param>
     /// <param name="decisionApplier">
-    /// P0-7：可选的 DB 决策应用器。非空时 <see cref="RecoverFromStoreAsync"/> 从
+    /// 可选的 DB 决策应用器。非空时 <see cref="RecoverFromStoreAsync"/> 从
     /// <c>canary_pipelines</c> 表读取活跃 pipeline 状态并恢复 in-memory 百分比
     /// （CutoverController + <c>_runStates</c>）。为 null 时恢复为 no-op（单节点/测试场景）。
     /// </param>
     /// <param name="logger">
-    /// P1-6：可选的日志器。非空时在紧急回滚（DB CAS 失败）记录告警；为 null 时使用 NullLogger。
+    /// 可选的日志器。非空时在紧急回滚（DB CAS 失败）记录告警；为 null 时使用 NullLogger。
     /// </param>
     public CanaryProgressionService(
         IPipelineRunStore pipelineRunStore,
@@ -213,7 +213,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// R28-B.8 工作包 B：解析指定 run 应操作的 CutoverController。
+    /// 工作包 B：解析指定 run 应操作的 CutoverController。
     /// registry 非空时返回该 run 的专用控制器（按需创建）；否则回退到共享的 <see cref="_cutoverController"/>。
     /// </summary>
     private CutoverController GetController(string runId)
@@ -245,7 +245,7 @@ public sealed class CanaryProgressionService
         if (_runStates.TryAdd(runId, state))
         {
             // 仅在首次初始化时调整 CutoverController
-            // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+            // 工作包 B：registry 非空时操作 per-run 专用控制器
             GetController(runId).SetCutoverPercentage(initialPercentage);
         }
         // 已存在 → no-op（幂等）
@@ -423,7 +423,7 @@ public sealed class CanaryProgressionService
             };
         }
 
-        // P1-6：本地状态一致性检查。如果本地存在未持久化变更（如紧急回滚后 DB CAS 失败），
+        // 本地状态一致性检查。如果本地存在未持久化变更（如紧急回滚后 DB CAS 失败），
         // 拒绝推进并返回错误。调用方需先解决 PersistPending 状态（重试 RollbackAsync 持久化
         // 或 Operator 介入修复 DB 状态），让 _localStates[runId] 回到 Consistent 后才能推进。
         var localState = GetLocalState(runId);
@@ -449,7 +449,7 @@ public sealed class CanaryProgressionService
                 {
                     var nextPercentage = evaluation.NextPercentage!.Value;
 
-                    // WP-2：当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
+                    // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
                     // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
                     if (_decisionApplier is not null)
                     {
@@ -460,7 +460,7 @@ public sealed class CanaryProgressionService
                         if (dbResult.Applied)
                         {
                             UpdateInMemoryPercentage(runId, nextPercentage);
-                            // P1-6：DB CAS 成功 → 本地与 DB 一致，清除任何遗留的本地状态标记。
+                            // DB CAS 成功 → 本地与 DB 一致，清除任何遗留的本地状态标记。
                             _localStates[runId] = CanaryLocalState.Consistent;
                         }
 
@@ -599,11 +599,11 @@ public sealed class CanaryProgressionService
         var previousPercentage = GetCurrentPercentage(runId);
         var now = _timeProvider.GetUtcNow();
 
-        // WP-2：当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
+        // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
         // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
         if (_decisionApplier is not null)
         {
-            // P1-6：捕获 DB CAS 结果，用于决定本地状态标记。
+            // 捕获 DB CAS 结果，用于决定本地状态标记。
             // 项目 memory 约束：RollbackAsync 必须无条件立即更新 in-memory 百分比为 0%，
             // 无论 DB CAS 是否成功（安全优先 — 本地先回滚可以成立）。
             // 但 DB CAS 失败时，本地与 DB 状态不再一致，必须建模为 LocalEmergencyRollback。
@@ -621,7 +621,7 @@ public sealed class CanaryProgressionService
             }
             else
             {
-                // P1-6：DB CAS 失败 → 本地已紧急回滚到 0%，但 DB 仍记录旧百分比。
+                // DB CAS 失败 → 本地已紧急回滚到 0%，但 DB 仍记录旧百分比。
                 // 建模为 LocalEmergencyRollback + PersistPending + OperatorAlertRequired。
                 // 后续 AdvanceAsync 将拒绝推进，直到通过重试 RollbackAsync 持久化成功
                 // 或 Operator 介入修复 DB 状态。
@@ -638,7 +638,7 @@ public sealed class CanaryProgressionService
         else
         {
             // 回退路径（_decisionApplier=null，测试场景）：仅写进程内状态
-            // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+            // 工作包 B：registry 非空时操作 per-run 专用控制器
             GetController(runId).SetCutoverPercentage(0);
             _runStates[runId] = new CanaryRunState(0, now);
 
@@ -682,7 +682,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// P1-6：获取指定 run 的本地状态（相对 DB 真相源的一致性标记）。
+    /// 获取指定 run 的本地状态（相对 DB 真相源的一致性标记）。
     /// </summary>
     /// <param name="runId">Run ID。</param>
     /// <returns>本地状态枚举（未初始化的 runId 返回 <see cref="CanaryLocalState.Consistent"/>）。</returns>
@@ -715,13 +715,13 @@ public sealed class CanaryProgressionService
         if (newPercentage < 0) newPercentage = 0;
         if (newPercentage > 100) newPercentage = 100;
 
-        // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+        // 工作包 B：registry 非空时操作 per-run 专用控制器
         GetController(runId).SetCutoverPercentage(newPercentage);
         _runStates[runId] = new CanaryRunState(newPercentage, _timeProvider.GetUtcNow());
     }
 
     /// <summary>
-    /// P0-7：从 DB（<c>canary_pipelines</c> 表）恢复 in-memory 状态。
+    /// 从 DB（<c>canary_pipelines</c> 表）恢复 in-memory 状态。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>恢复的活跃 pipeline 数量（0 = 无活跃 pipeline 或 decisionApplier 未注入）。</returns>
@@ -757,7 +757,7 @@ public sealed class CanaryProgressionService
             return 0;
         }
 
-        // TODO(P1-6 长期目标)：合并 canary_pipelines 表与 IPipelineRunStore 为单一 Pipeline Run 状态源。
+        // 合并 canary_pipelines 表与 IPipelineRunStore 为单一 Pipeline Run 状态源。
         // 当前存在两个持久化聚合：
         //   1. canary_pipelines 表（由 ICanaryDecisionApplier 维护，存储 canary 百分比 + revision + epoch）
         //   2. IPipelineRunStore（存储 PipelineRunSnapshot + 审计记录，由 DefaultGuardedOptimizationPipeline 维护）
@@ -779,7 +779,7 @@ public sealed class CanaryProgressionService
             }
             // UpdateInMemoryPercentage 同时恢复 CutoverController 百分比与 _runStates[runId]。
             UpdateInMemoryPercentage(state.RunId, state.Percentage);
-            // P1-6：DB 是权威真相源，恢复后本地与 DB 一致，清除任何紧急回滚标记。
+            // DB 是权威真相源，恢复后本地与 DB 一致，清除任何紧急回滚标记。
             _localStates[state.RunId] = CanaryLocalState.Consistent;
         }
 
@@ -910,7 +910,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// WP-2：通过 <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionLocalAsync"/> 单事务写入 DB
+    /// 通过 <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionLocalAsync"/> 单事务写入 DB
     /// （canary_pipelines revision CAS + transition audit + epoch 递增），统一 DB 真相源。
     /// </summary>
     /// <param name="runId">Canary run ID。</param>

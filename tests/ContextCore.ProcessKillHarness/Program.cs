@@ -8,7 +8,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
 // ===========================================================================
-// WP-S6 Production Evidence：真进程 Kill 测试专用 Harness
+// 真进程 Kill 测试专用 Harness
 //
 // 目的：作为独立操作系统进程运行（由集成测试 Process.Start 启动），
 // 模拟"生产节点 A"正在执行一个 Run：

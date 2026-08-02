@@ -29,7 +29,7 @@ public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, ICo
     }
 
     /// <summary>
-    /// P0-3：在指定事务作用域内保存条目。复用 scope 持有的连接与事务，不开启新连接。
+    /// 在指定事务作用域内保存条目。复用 scope 持有的连接与事务，不开启新连接。
     /// scope 必须是 <see cref="PostgresWriteTransactionScope"/>。
     /// </summary>
     public async Task SaveAsync(ContextItem item, IWriteTransactionScope scope, CancellationToken cancellationToken = default)
@@ -61,7 +61,7 @@ public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, ICo
     /// <summary>共享的 INSERT/ON CONFLICT 逻辑，由无事务与事务重载复用。</summary>
     private async Task ExecuteSaveAsync(NpgsqlCommand command, ContextItem normalized, CancellationToken cancellationToken)
     {
-        // P6：从 Metadata 读取摄取阶段已持久化的 content_hash / content_token_cost。
+        // 从 Metadata 读取摄取阶段已持久化的 content_hash / content_token_cost。
         // BasicContextIngestionService 在摄取时把这两个值写入 Metadata 字典（键见 ContentMetadataKeys），
         // Store 在写入时提取到专用列，Provider 读取时直接命中列而无需在线重算或解析 jsonb。
         var (contentHash, contentTokenCost) = ReadPersistedContentMetrics(normalized);
@@ -122,7 +122,7 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     }
 
     /// <summary>
-    /// P0-7.1: 批量查询上下文条目。使用 WHERE id = ANY(@ids) 单次 SQL 替代 N 次 GetAsync 并行，
+    /// 批量查询上下文条目。使用 WHERE id = ANY(@ids) 单次 SQL 替代 N 次 GetAsync 并行，
     /// 命中主键 B-tree 索引 (workspace_id, collection_id, id)。
     /// 返回列表只包含命中的条目，顺序不保证；未命中条目静默丢弃。
     /// 语义与 FileContextStore.BatchGetAsync / InMemoryContextStore.BatchGetAsync 保持一致。
@@ -287,16 +287,16 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         var innerLimitSql = hasCursor ? "LIMIT @take" : "LIMIT @skip + @take";
         var finalLimitSql = hasCursor ? "LIMIT @take" : "OFFSET @skip LIMIT @take";
 
-        // P4：IncludeContent=false 时只投影 metadata 列，避免读取/反序列化完整 jsonb 正文。
+        // IncludeContent=false 时只投影 metadata 列，避免读取/反序列化完整 jsonb 正文。
         // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方走 BatchGetAsync 二次读取。
-        // P0-10：必须返回 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
+        // 必须返回 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
         // 否则 ReadMetadataRow 构造的 ContextItem 作用域为空，Provider 用空作用域构造 CanonicalKey
         // 会导致 Lexical/Semantic 无法 Canonical Merge（且 CanonicalCandidateKey.Create 会抛 ArgumentException）。
         var results = new List<ContextItem>();
 
         if (!query.IncludeContent)
         {
-            // P0-10：ts_rank 列仅在 hasQueryText 时追加（与排序条件一致）。
+            // ts_rank 列仅在 hasQueryText 时追加（与排序条件一致）。
             // 列顺序固定为：workspace_id(0), collection_id(1), id(2), type(3), title(4),
             //   importance(5), version(6), updated_at(7), created_at(8), content_hash(9),
             //   content_token_cost(10), tags(11), refs(12), source_refs(13), ts_rank?(14)
@@ -414,7 +414,7 @@ ORDER BY importance DESC, updated_at DESC, id DESC
             while (await fullReader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 var item = Serializer.Deserialize<ContextItem>(fullReader.GetString(0));
-                // P3：把真实 TS rank 注入 Metadata，Provider 读取后替代固定 10/60 分。
+                // 把真实 TS rank 注入 Metadata，Provider 读取后替代固定 10/60 分。
                 if (hasRankColumn && !fullReader.IsDBNull(1))
                 {
                     var rank = fullReader.GetDouble(1);
@@ -498,8 +498,8 @@ ORDER BY importance DESC, updated_at DESC, id DESC
     }
 
     /// <summary>
-    /// P4：从 metadata-only 行构造 <see cref="ContextItem"/>（Content 为空，不触发 jsonb 反序列化）。
-    /// P0-10：解析 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
+    /// 从 metadata-only 行构造 <see cref="ContextItem"/>（Content 为空，不触发 jsonb 反序列化）。
+    /// 解析 workspace_id/collection_id/tags/refs/source_refs/created_at/ts_rank——
     /// 确保构造的 ContextItem 携带完整作用域与检索评分，Provider 可正确构造 CanonicalKey 与 score。
     /// </summary>
     /// <param name="reader">数据读取器（已定位到当前行）。</param>
@@ -527,7 +527,7 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         var refs = reader.IsDBNull(12) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(12);
         var sourceRefs = reader.IsDBNull(13) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(13);
 
-        // P6：把持久化的 content_hash / content_token_cost 写入 Metadata，
+        // 把持久化的 content_hash / content_token_cost 写入 Metadata，
         // Provider 在 BuildFromContextItem 中读取后跳过在线 SHA-256 + tokenizer 调用。
         var metadata = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(contentHash))
@@ -538,7 +538,7 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         {
             metadata[ContentMetadataKeys.ContentTokenCost] = contentTokenCost.Value.ToString(CultureInfo.InvariantCulture);
         }
-        // P0-10：IncludeContent=false 路径下，ts_rank 仍需写入 Metadata——
+        // IncludeContent=false 路径下，ts_rank 仍需写入 Metadata——
         // LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
         if (tsRankColumnIndex >= 0 && !reader.IsDBNull(tsRankColumnIndex))
         {
@@ -549,22 +549,22 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         return new ContextItem
         {
             Id = id,
-            // P0-10：填充作用域——BuildFromContextItem 用这两个字段构造 CanonicalKey，
+            // 填充作用域——BuildFromContextItem 用这两个字段构造 CanonicalKey，
             // 空值会导致 CanonicalCandidateKey.Create 抛 ArgumentException，破坏 Canonical Merge。
             WorkspaceId = workspaceId,
             CollectionId = collectionId,
             Type = type,
             Title = title,
-            // P4：IncludeContent=false → Content 必须为空字符串（与既有 WithoutContent 契约一致）
+            // IncludeContent=false → Content 必须为空字符串（与既有 WithoutContent 契约一致）
             Content = string.Empty,
-            // P0-10：填充 tags/refs/source_refs——BuildFromContextItem 用 SourceRefs+Refs 构造 Material.SourceRefs。
+            // 填充 tags/refs/source_refs——BuildFromContextItem 用 SourceRefs+Refs 构造 Material.SourceRefs。
             Tags = tags,
             Refs = refs,
             SourceRefs = sourceRefs,
             Importance = importance,
             Version = version,
             Checksum = contentHash,
-            // P0-10：填充 created_at——Provider 派生 EntityVersion 时可能用到。
+            // 填充 created_at——Provider 派生 EntityVersion 时可能用到。
             CreatedAt = createdAt,
             UpdatedAt = updatedAt,
             Metadata = metadata
@@ -600,7 +600,7 @@ ORDER BY importance DESC, updated_at DESC, id DESC
     }
 
     /// <summary>
-    /// P6：从 ContextItem.Metadata 读取摄取阶段持久化的 content_hash / content_token_cost。
+    /// 从 ContextItem.Metadata 读取摄取阶段持久化的 content_hash / content_token_cost。
     /// BasicContextIngestionService 在摄取时写入这两个键；未持久化时返回 (null, null)。
     /// </summary>
     private static (string? ContentHash, int? ContentTokenCost) ReadPersistedContentMetrics(ContextItem item)
@@ -738,7 +738,7 @@ ON CONFLICT (workspace_id, id) DO UPDATE SET
 }
 
 /// <summary>
-/// P0-10：metadata-only 查询路径的候选投影 DTO。
+/// metadata-only 查询路径的候选投影 DTO。
 /// </summary>
 /// <remarks>
 /// <para>

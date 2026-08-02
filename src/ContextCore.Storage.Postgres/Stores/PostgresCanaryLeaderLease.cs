@@ -52,7 +52,7 @@ public sealed class PostgresCanaryLeaderLease : PostgresStoreBase, ICanaryLeader
     /// <remarks>
     /// 原子 CAS 获取租约：使用 <c>INSERT ... ON CONFLICT DO UPDATE WHERE lease_expires_at &lt; now</c>。
     /// 无现有行或现有行过期时获取成功；现有行未过期时返回 null（已被其他实例持有）。
-    /// P12：成功获取时 <c>fencing_token = 旧值 + 1</c>（新插入为 1），RETURNING 返回新的 fencing_token，
+    /// 成功获取时 <c>fencing_token = 旧值 + 1</c>（新插入为 1），RETURNING 返回新的 fencing_token，
     /// 供调用方在副作用 UPDATE（如 AdvanceEpochAsync）的 WHERE 子句中校验。续约（RenewAsync）不递增 fencing_token。
     /// </remarks>
     public async ValueTask<LeasedLeadership?> TryAcquireAsync(
@@ -77,7 +77,7 @@ public sealed class PostgresCanaryLeaderLease : PostgresStoreBase, ICanaryLeader
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // P12：fencing_token 在 ON CONFLICT DO UPDATE 时 = canary_leader_leases.fencing_token + 1（抢占过期），
+        // fencing_token 在 ON CONFLICT DO UPDATE 时 = canary_leader_leases.fencing_token + 1（抢占过期），
         // 新插入时 = 1（VALUES 中指定）。RETURNING 同时返回 lease_token 与 fencing_token 以便调用方使用。
         command.CommandText = $"""
 INSERT INTO {Table("canary_leader_leases")} (run_id, owner, lease_token, fencing_token, acquired_at, lease_expires_at)
@@ -516,7 +516,7 @@ ON CONFLICT (run_id) DO UPDATE SET
 
     /// <inheritdoc />
     /// <remarks>
-    /// WP-2：单节点/本地模式——跳过 lease/fencing 校验（步骤 1），仅执行步骤 2-5
+    /// 单节点/本地模式——跳过 lease/fencing 校验（步骤 1），仅执行步骤 2-5
     /// （revision CAS + transition audit + epoch update），确保单节点模式也写 DB 真相源。
     /// </remarks>
     public async ValueTask<CanaryDecisionResult> ApplyCanaryDecisionLocalAsync(
@@ -537,7 +537,7 @@ ON CONFLICT (run_id) DO UPDATE SET
 
         try
         {
-            // WP-2：跳过步骤 1（lease/fencing 校验）——单节点模式无 Leader lease。
+            // 跳过步骤 1（lease/fencing 校验）——单节点模式无 Leader lease。
 
             // 步骤 2：读取当前 pipeline 状态
             await using (var stateCommand = connection.CreateCommand())
@@ -768,7 +768,7 @@ WHERE run_id = @run_id;
 
     /// <inheritdoc />
     /// <remarks>
-    /// WP-2：从 <c>canary_run_epochs</c> 表读取当前 stage epoch。行不存在时返回 0。
+    /// 从 <c>canary_run_epochs</c> 表读取当前 stage epoch。行不存在时返回 0。
     /// 供单节点模式下 <c>CanaryProgressionService.ApplyDecisionToStoreAsync</c> 计算
     /// <c>newEpoch = currentEpoch + 1</c>，确保重启后 epoch 不回退。
     /// </remarks>
@@ -794,7 +794,7 @@ WHERE run_id = @run_id;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：批量读取所有活跃 pipeline 状态。过滤终态（Promoted/RolledBack），
+    /// 批量读取所有活跃 pipeline 状态。过滤终态（Promoted/RolledBack），
     /// 仅返回 status='Active'（或其它非终态）的行，供服务启动时恢复 in-memory 路由状态。
     /// </remarks>
     public async ValueTask<IReadOnlyList<CanaryPipelineState>> GetAllActivePipelineStatesAsync(

@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R20-1：Multi-Expert Retrieval Routing 契约
+// Multi-Expert Retrieval Routing 契约
 //
 // 目标：
 //   为 HybridContextRetriever 的 5 channel（Mandatory / Keyword / Vector /
@@ -39,12 +39,12 @@ namespace ContextCore.Abstractions;
 //       ConstraintStore 查询提供）
 //
 // 子阶段进度：
-//   R20-1（当前）：契约定义 + 单元测试验证可实施性。不触碰 HybridContextRetriever。
-//   R20-2：DefaultRetrievalRouter 实现 + Budget-Aware TopK 模拟。
+//   （当前）：契约定义 + 单元测试验证可实施性。不触碰 HybridContextRetriever。
+//   DefaultRetrievalRouter 实现 + Budget-Aware TopK 模拟。
 // ===========================================================================
 
 /// <summary>
-/// R20-1：检索专家（Retrieval Expert）枚举。
+/// 检索专家（Retrieval Expert）枚举。
 /// 8 个 Expert 对齐 R18-1 <see cref="ContextCandidateSource"/> 枚举，
 /// 为 Router 提供 per-Expert 操作粒度。
 /// </summary>
@@ -95,7 +95,7 @@ public enum RetrievalExpert : byte
 }
 
 /// <summary>
-/// R20-1：Expert 路由决策。Router 为每个 Expert 计算的运行时决策。
+/// Expert 路由决策。Router 为每个 Expert 计算的运行时决策。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -151,7 +151,7 @@ public sealed record ExpertRoutingDecision
 }
 
 /// <summary>
-/// R20-1：Expert 路由决策集合。承载 Router 对所有 8 个 Expert 的决策结果。
+/// Expert 路由决策集合。承载 Router 对所有 8 个 Expert 的决策结果。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -200,7 +200,7 @@ public sealed record ExpertRoutingDecisionSet
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R20-1：Expert 位掩码。用于 O(1) 判断 Expert 是否启用。
+/// Expert 位掩码。用于 O(1) 判断 Expert 是否启用。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -299,7 +299,7 @@ public readonly record struct RetrievalExpertMask
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R20-1：HybridContextRetriever 5 channel 与 Expert 的映射关系。
+/// HybridContextRetriever 5 channel 与 Expert 的映射关系。
 /// </summary>
 /// <remarks>
 /// 当前 HybridContextRetriever 有 5 个 channel executor：

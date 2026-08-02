@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// P0-6：Model Activation Audit 契约
+// Model Activation Audit 契约
 //
 // 目标（对齐 P0-6 Model Control Plane API §3 Activation Audit）：
 //   把 ModelActivationManager.ActivateAsync / Rollback / Retire 等模型生命周期事件
@@ -20,7 +20,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// P0-6：模型激活审计存储 — 管理模型生命周期事件的审计记录。
+/// 模型激活审计存储 — 管理模型生命周期事件的审计记录。
 /// </summary>
 /// <remarks>
 /// 实现层可在 DI 中注册为持久化（Postgres）或 in-memory（默认）。
@@ -57,7 +57,7 @@ public interface IModelActivationAuditStore
 }
 
 /// <summary>
-/// P0-6：模型生命周期审计操作种类。
+/// 模型生命周期审计操作种类。
 /// </summary>
 public enum ModelActivationOperation : byte
 {
@@ -84,7 +84,7 @@ public enum ModelActivationOperation : byte
 }
 
 /// <summary>
-/// P0-6：单条模型激活审计记录。
+/// 单条模型激活审计记录。
 /// </summary>
 public sealed record ModelActivationAuditEntry
 {

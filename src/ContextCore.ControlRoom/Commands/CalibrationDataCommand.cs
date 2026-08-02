@@ -5,7 +5,7 @@ using ContextCore.ControlRoom.Services;
 namespace ContextCore.ControlRoom.Commands;
 
 /// <summary>
-/// R29 WP-E-4：校准数据导出命令。
+/// 校准数据导出命令。
 /// </summary>
 /// <remarks>
 /// 用法：

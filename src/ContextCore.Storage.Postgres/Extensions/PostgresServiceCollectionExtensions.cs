@@ -27,7 +27,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresMigrationRunner>();
         services.AddSingleton<IStoreMigrationRunner>(sp => sp.GetRequiredService<PostgresMigrationRunner>());
 
-        // P0-3：注册 PostgreSQL 跨 store 写入事务作用域工厂。
+        // 注册 PostgreSQL 跨 store 写入事务作用域工厂。
         // BasicContextIngestionService 通过 IWriteTransactionScopeFactory? 注入检测是否启用事务路径。
         // 仅 Postgres provider 注册——File/InMemory 不注册，CanUseTransactionPath 返回 false 走原有无事务路径。
         services.AddSingleton<PostgresWriteTransactionScopeFactory>();
@@ -64,13 +64,13 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresRelationReviewStore>();
         services.AddSingleton<IRelationReviewStore>(sp => sp.GetRequiredService<PostgresRelationReviewStore>());
         services.AddSingleton<PostgresRelationDiagnosticsStore>();
-        // P1-5：关系写入 outbox 存储。仅 Postgres provider 注册——
+        // 关系写入 outbox 存储。仅 Postgres provider 注册——
         // FileSystem/InMemory 不注册，OutboxAwareRelationProjectionWriter 与 RelationReconciliationWorker
         // 检测到 null 时回退到无 outbox 路径（仅走 stale-edge 周期扫描）。
         services.AddSingleton<PostgresRelationOutboxStore>();
         services.AddSingleton<IRelationOutboxStore>(sp => sp.GetRequiredService<PostgresRelationOutboxStore>());
 
-        // R14-PG-1：Learning feedback / review 接口正式绑定 Postgres 实现。
+        // Learning feedback / review 接口正式绑定 Postgres 实现。
         // 此前 Service 层在 RegisterPostgres 中用 Unsupported*Store 覆盖了接口绑定，
         // 导致运行时即便 Postgres provider 已就绪也走 Unsupported 路径。现在移除覆盖，
         // 让 PostgresLearningFeedbackStore / PostgresLearningFeedbackReviewStore 成为 source of truth。
@@ -103,11 +103,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresRetrievalTraceStore>();
         services.AddSingleton<IRetrievalTraceStore>(sp => sp.GetRequiredService<PostgresRetrievalTraceStore>());
 
-        // R14-PG-2：DecisionTraceStore。替代 Unsupported 占位，让 HA 场景下决策审计可持久化。
+        // DecisionTraceStore。替代 Unsupported 占位，让 HA 场景下决策审计可持久化。
         services.AddSingleton<PostgresDecisionTraceStore>();
         services.AddSingleton<IDecisionTraceStore>(sp => sp.GetRequiredService<PostgresDecisionTraceStore>());
 
-        // R14-PG-3：Short-term memory / promotion / candidate review stores。
+        // Short-term memory / promotion / candidate review stores。
         // 替代 Unsupported 占位，让 HA 场景下短期记忆与晋升审核可持久化。
         services.AddSingleton<PostgresShortTermMemoryStore>();
         services.AddSingleton<IShortTermMemoryStore>(sp => sp.GetRequiredService<PostgresShortTermMemoryStore>());
@@ -118,7 +118,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresStableReviewCandidateStore>();
         services.AddSingleton<IStableReviewCandidateStore>(sp => sp.GetRequiredService<PostgresStableReviewCandidateStore>());
 
-        // R14-PG-4：Context learning / governance review stores。
+        // Context learning / governance review stores。
         // 替代 Unsupported 占位，让 HA 场景下学习记录与生命周期审核可持久化。
         services.AddSingleton<PostgresContextLearningStore>();
         services.AddSingleton<IContextLearningStore>(sp => sp.GetRequiredService<PostgresContextLearningStore>());
@@ -129,7 +129,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresConstraintGapCandidateStore>();
         services.AddSingleton<IConstraintGapCandidateStore>(sp => sp.GetRequiredService<PostgresConstraintGapCandidateStore>());
 
-        // R14-PG-5：vector lifecycle + artifact stores。
+        // vector lifecycle + artifact stores。
         // 替代 Unsupported 占位，完成 R14-PG 阶段一垂直闭环，Postgres 无 Unsupported store。
         services.AddSingleton<PostgresVectorReindexReportStore>();
         services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<PostgresVectorReindexReportStore>());
@@ -142,23 +142,23 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresArtifactStore>();
         services.AddSingleton<IArtifactStore>(sp => sp.GetRequiredService<PostgresArtifactStore>());
 
-        // R14-PG-6：分布式 context state 版本存储。覆盖 CoreExtensions 的 InMemory 默认注册。
+        // 分布式 context state 版本存储。覆盖 CoreExtensions 的 InMemory 默认注册。
         // 多实例 Worker 通过 Postgres 行级锁共享单调递增的版本号，支持跨实例 cache invalidation。
         services.AddSingleton<PostgresContextStateVersionStore>();
         services.AddSingleton<IContextStateVersionStore>(sp => sp.GetRequiredService<PostgresContextStateVersionStore>());
 
-        // R26-2：Agent Runtime 持久化（checkpoint + task state）。
+        // Agent Runtime 持久化（checkpoint + task state）。
         // 替代 InMemory 默认注册，让 HA 场景下 agent session/task 状态可跨进程持久化与恢复。
         services.AddSingleton<PostgresAgentCheckpointStore>();
         services.AddSingleton<IAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
-        // R29 WP-B-3：显式注册 IPersistentAgentCheckpointStore 标记接口以区分持久化能力。
+        // 显式注册 IPersistentAgentCheckpointStore 标记接口以区分持久化能力。
         // delta 链路（R28-G P1-5）完全由恢复路径（事件流 + checkpoint 链）通过标准 GetAsync 走链，
         // Store 不需感知 delta 语义 — 只持久化完整 AgentCheckpoint blob。
         services.AddSingleton<IPersistentAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
         services.AddSingleton<PostgresAgentTaskStateStore>();
         services.AddSingleton<IAgentTaskStateStore>(sp => sp.GetRequiredService<PostgresAgentTaskStateStore>());
 
-        // R29 WP-B-1：Tool Dispatch Journal 持久化（PostgreSQL）。
+        // Tool Dispatch Journal 持久化（PostgreSQL）。
         // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下 tool 调用状态机可跨进程持久化与崩溃恢复。
         // 注册为 IToolDispatchJournal 让 DefaultDurableToolExecutor 自动注入；
         // 同时注册为 IPersistentToolDispatchJournal 以便显式区分持久化能力。
@@ -166,13 +166,13 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
         services.AddSingleton<IPersistentToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
 
-        // P0-3：Durable Tool Result 缓存持久化（PostgreSQL）。
+        // Durable Tool Result 缓存持久化（PostgreSQL）。
         // 让 DefaultDurableToolExecutor 在 Journal 已 Committed/ResultDelivered 时从持久化缓存返回结果，
         // 防止 HA 崩溃恢复时已执行的外部副作用结果丢失（被迫重新 Dispatch）。
         services.AddSingleton<PostgresDurableToolResultStore>();
         services.AddSingleton<IDurableToolResultStore>(sp => sp.GetRequiredService<PostgresDurableToolResultStore>());
 
-        // R29 WP-A-1：Model Artifact Registry 持久化（PostgreSQL）。
+        // Model Artifact Registry 持久化（PostgreSQL）。
         // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下模型工件描述符可跨进程持久化与查询。
         // 注册为 IModelArtifactRegistry 让消费方（如 OnnxInferenceEngine 启动加载器）自动注入；
         // 同时注册为 IPersistentModelArtifactRegistry 以便显式区分持久化能力。
@@ -180,25 +180,25 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
         services.AddSingleton<IPersistentModelArtifactRegistry>(sp => sp.GetRequiredService<PostgresModelArtifactRegistry>());
 
-        // R29 WP-A-2：Desired Model State Store 持久化（PostgreSQL）。
+        // Desired Model State Store 持久化（PostgreSQL）。
         // 存储 HA 集群中各模型的期望状态（Active/Inactive），由各节点的 ReconcilerWorker 定期拉取并应用。
         services.AddSingleton<PostgresDesiredModelStateStore>();
         services.AddSingleton<IDesiredModelStateStore>(sp => sp.GetRequiredService<PostgresDesiredModelStateStore>());
 
-        // P0-9：Cluster Model Slot Store 持久化（PostgreSQL）—— 单一 Champion 真相源。
+        // Cluster Model Slot Store 持久化（PostgreSQL）—— 单一 Champion 真相源。
         // 单行表 cluster_model_slots 通过 CAS（Revision）保证原子模型切换，替代 per-model DesiredModelState。
         // 控制面端点（activate/rollback/retire）通过 CAS 更新此 slot，Reconciler 从此 slot 同步期望状态。
         services.AddSingleton<PostgresClusterModelSlotStore>();
         services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<PostgresClusterModelSlotStore>());
 
-        // P0-6：Model Activation Audit 持久化（PostgreSQL）。
+        // Model Activation Audit 持久化（PostgreSQL）。
         // 替代 FileSystem / InMemory provider 下的 InMemory 默认实现，让 HA 场景下
         // 模型生命周期审计记录（Activate / Rollback / Retire / Shadow 等）可跨进程持久化与查询。
         // Service API 端点 /api/models/{id}/audit 通过 IModelActivationAuditStore.ListByModelAsync 查询历史。
         services.AddSingleton<PostgresModelActivationAuditStore>();
         services.AddSingleton<IModelActivationAuditStore>(sp => sp.GetRequiredService<PostgresModelActivationAuditStore>());
 
-        // R27-3：Evolution Pipeline 持久化（run state + 3 audit tables）。
+        // Evolution Pipeline 持久化（run state + 3 audit tables）。
         // 替代 InMemory 默认注册，让 HA 场景下 pipeline run state / canary / rollback / baseline 审计记录可跨进程持久化。
         services.AddSingleton<PostgresPipelineRunStore>();
         services.AddSingleton<IPipelineRunStore>(sp => sp.GetRequiredService<PostgresPipelineRunStore>());
@@ -222,7 +222,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresContextJobQueue>();
         services.AddSingleton<IContextJobQueue>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
         services.AddSingleton<IContextJobQueryStore>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
-        // P0-4：注册 ILeasedJobQueue 让 worker 检测到此队列支持租约语义。
+        // 注册 ILeasedJobQueue 让 worker 检测到此队列支持租约语义。
         // worker 通过 `queue is ILeasedJobQueue` 判断；InMemory/File 队列不实现此接口故走 Dequeue 路径。
         services.AddSingleton<ILeasedJobQueue>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
 
@@ -230,7 +230,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresContextEventSink>();
         services.AddSingleton<IContextEventSink>(sp => sp.GetRequiredService<PostgresContextEventSink>());
 
-        // R28-E / R29 WP-E-1：Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
+        // / R29 WP-E-1：Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
         // 读 API（IUtilityLedgerStore / IConflictSetStore）+ 写 API（IUtilityLedger / IConflictSetLedger）
         // 均绑定到同一 singleton；UtilityLedgerMaterializer 通过 IUtilityLedger / IConflictSetLedger
         // 异步批量写入，无需感知存储后端。无需失效 Decorator（读路径未接入缓存）。
@@ -241,7 +241,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<PostgresConflictSetStore>());
         services.AddSingleton<IConflictSetLedger>(sp => sp.GetRequiredService<PostgresConflictSetStore>());
 
-        // R29 WP-E-5：User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）。
+        // User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）。
         // Postgres 实现做关联校验（EXISTS 子查询验证 (decision_id, candidate_item_id) 在 utility_ledger_entries 中存在）。
         // Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 写入。
         services.AddSingleton<PostgresUserFeedbackLedgerStore>();
@@ -282,7 +282,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunLease>();
         services.AddSingleton<IAgentRunLease>(sp => sp.GetRequiredService<PostgresAgentRunLease>());
 
-        // P1-9：注册 ILeasedWorkStore 用于 Agent Run 租约（统一租约基础设施 — dual-registration）。
+        // 注册 ILeasedWorkStore 用于 Agent Run 租约（统一租约基础设施 — dual-registration）。
         // 与 IAgentRunLease 共享同一底层表（agent_run_leases），使用统一的 ILeasedWorkStore 接口。
         // 消费方（AgentKernelHost）暂不改用 ILeasedWorkStore，先通过 dual-registration 证明语义覆盖。
         services.AddLeasedWorkStore<string>(new LeasedWorkStoreConfiguration<string>
@@ -316,7 +316,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<ICanaryLeaderLease>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
         services.AddSingleton<ICanaryDecisionApplier>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
 
-        // P1-9：注册 ILeasedWorkStore 用于 Canary Leader 租约（统一租约基础设施）。
+        // 注册 ILeasedWorkStore 用于 Canary Leader 租约（统一租约基础设施）。
         // 与 ICanaryLeaderLease 共享同一底层表（canary_leader_leases），但使用统一的 ILeasedWorkStore 接口。
         services.AddLeasedWorkStore<string>(new LeasedWorkStoreConfiguration<string>
         {
@@ -334,7 +334,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresCanaryMetricsAggregator>();
         services.AddSingleton<ICanaryMetricsAggregator>(sp => sp.GetRequiredService<PostgresCanaryMetricsAggregator>());
 
-        // R14-PG-10：Postgres 备份/恢复 + PITR 执行器。
+        // Postgres 备份/恢复 + PITR 执行器。
         // 注册为 Transient 因为它们持有 PostgresConnectionFactory（内含 NpgsqlDataSource），
         // 需要随调用方释放；CLI 与 AdminEndpoints 通过 IAsyncDisposable 模式使用。
         services.AddTransient<PostgresBackupRunner>();
@@ -344,7 +344,7 @@ public static class PostgresServiceCollectionExtensions
     }
 
     /// <summary>
-    /// P2：注册一个通用 PostgreSQL 租约工作存储（<see cref="PostgresLeasedWorkStore{TWork}"/>）。
+    /// 注册一个通用 PostgreSQL 租约工作存储（<see cref="PostgresLeasedWorkStore{TWork}"/>）。
     /// </summary>
     /// <typeparam name="TWork">工作项类型。</typeparam>
     /// <param name="services">服务容器。</param>

@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ========================================================================================
-// R16 — Context Evolution Agent V1（离线控制面契约）
+// — Context Evolution Agent V1（离线控制面契约）
 //
 // 硬边界（来自 project memory）：
 // - Agent 只负责离线控制面：Observe / Cluster failures / Diagnose / Form hypothesis /
@@ -16,7 +16,7 @@ namespace ContextCore.Abstractions;
 // ========================================================================================
 
 /// <summary>
-/// R16 OptimizationProposal 的状态生命周期。
+/// OptimizationProposal 的状态生命周期。
 /// Agent 只能将状态推进到 <see cref="Validated"/>/<see cref="ExperimentReady"/>，
 /// 后续状态（Shadow/Canary/Promoted/RolledBack）由 R17 Guarded Optimization Pipeline 决定。
 /// </summary>
@@ -48,7 +48,7 @@ public enum OptimizationProposalStatus
 }
 
 /// <summary>
-/// R16 OptimizationProposal 版本号：用于追踪 proposal 的迭代演进。
+/// OptimizationProposal 版本号：用于追踪 proposal 的迭代演进。
 /// 同一 proposalId 的版本号单调递增，每次 Agent 修订（补充证据、修正假设）都递增。
 /// </summary>
 public sealed record OptimizationProposalVersion(int Major, int Minor)
@@ -67,7 +67,7 @@ public sealed record OptimizationProposalVersion(int Major, int Minor)
 }
 
 /// <summary>
-/// R16 实验证据：记录 Agent 在离线实验中采集的证据片段。
+/// 实验证据：记录 Agent 在离线实验中采集的证据片段。
 /// 证据必须可追溯（含源指标、采集时间、样本数），不允许无来源的断言。
 /// </summary>
 public sealed class ExperimentEvidence
@@ -130,7 +130,7 @@ public sealed class ExperimentEvidence
 }
 
 /// <summary>
-/// R16 预期收益：Agent 对 proposal 生效后预期产生的量化收益。
+/// 预期收益：Agent 对 proposal 生效后预期产生的量化收益。
 /// 必须含置信度（0~1）与生效前提条件；不得给出无条件的"必然收益"断言。
 /// </summary>
 public sealed class ExpectedGain
@@ -168,7 +168,7 @@ public sealed class ExpectedGain
 }
 
 /// <summary>
-/// R16 风险评估：Agent 对 proposal 可能引入的风险进行结构化记录。
+/// 风险评估：Agent 对 proposal 可能引入的风险进行结构化记录。
 /// 风险等级 + 触发条件 + 缓解措施必须齐全，缺一项视为草稿不可晋升 Validated。
 /// </summary>
 public sealed class RiskAssessment
@@ -225,8 +225,8 @@ public enum RiskSeverity
 }
 
 /// <summary>
-/// R16 回滚条件：当实验路径在 shadow/canary 阶段命中以下任一条件时，
-/// R17 pipeline 自动回滚到基线路径。条件必须可被运行时观察器检测。
+/// 回滚条件：当实验路径在 shadow/canary 阶段命中以下任一条件时，
+/// pipeline 自动回滚到基线路径。条件必须可被运行时观察器检测。
 /// </summary>
 public sealed class RollbackCondition
 {
@@ -289,7 +289,7 @@ public enum ComparisonOperator
 }
 
 /// <summary>
-/// R16 优化目标组件：标识 proposal 作用于哪个核心运行时组件。
+/// 优化目标组件：标识 proposal 作用于哪个核心运行时组件。
 /// 用于约束 Agent 的作用范围，避免越权修改非授权组件。
 /// </summary>
 public enum OptimizationTargetComponent
@@ -314,7 +314,7 @@ public enum OptimizationTargetComponent
 }
 
 /// <summary>
-/// R16 版本化 OptimizationProposal：Context Evolution Agent 的输出契约。
+/// 版本化 OptimizationProposal：Context Evolution Agent 的输出契约。
 /// </summary>
 /// <remarks>
 /// 不可变 record；每次 Agent 修订生成新版本号。
@@ -366,7 +366,7 @@ public sealed record OptimizationProposal
 }
 
 /// <summary>
-/// R16 Agent 观察源：提供运行时指标采集能力，供 Agent 读取。
+/// Agent 观察源：提供运行时指标采集能力，供 Agent 读取。
 /// 实现可以是 telemetry sink、benchmark runner、eval host 等。
 /// </summary>
 public interface IAgentObservationSource
@@ -382,7 +382,7 @@ public interface IAgentObservationSource
 }
 
 /// <summary>
-/// R16 Agent 诊断请求：触发 Agent 执行离线诊断流程。
+/// Agent 诊断请求：触发 Agent 执行离线诊断流程。
 /// Agent 内部按 Observe → Cluster failures → Diagnose → Form hypothesis →
 /// Generate experiment → Run benchmark/eval → Compare baseline → Generate proposal 顺序执行。
 /// </summary>
@@ -416,7 +416,7 @@ public sealed class AgentDiagnosticRequest
 }
 
 /// <summary>
-/// R16 Agent 诊断结果：含 Agent 生成的 proposal 与诊断摘要。
+/// Agent 诊断结果：含 Agent 生成的 proposal 与诊断摘要。
 /// </summary>
 public sealed class AgentDiagnosticResult
 {
@@ -447,7 +447,7 @@ public sealed class AgentDiagnosticResult
 }
 
 /// <summary>
-/// R16 Context Evolution Agent 主接口。
+/// Context Evolution Agent 主接口。
 /// </summary>
 /// <remarks>
 /// <b>硬边界</b>：
@@ -484,7 +484,7 @@ public interface IContextEvolutionAgent
 }
 
 // ========================================================================================
-// R17 — Guarded Optimization Pipeline 契约
+// — Guarded Optimization Pipeline 契约
 //
 // 硬边界（来自 project memory）：
 // - Pipeline 阶段严格按 Offline Experiment → Shadow → Scoped Canary →
@@ -498,7 +498,7 @@ public interface IContextEvolutionAgent
 // ========================================================================================
 
 /// <summary>
-/// R17 Guarded Optimization Pipeline 阶段。
+/// Guarded Optimization Pipeline 阶段。
 /// 阶段严格顺序推进，不允许跳跃（例如不能从 Shadow 直接跳到 Promotion）。
 /// </summary>
 public enum OptimizationStage
@@ -520,7 +520,7 @@ public enum OptimizationStage
 }
 
 /// <summary>
-/// R28-B.8：Canary 渐进推进决策类型。
+/// Canary 渐进推进决策类型。
 /// </summary>
 public enum CanaryProgressionDecision
 {
@@ -538,7 +538,7 @@ public enum CanaryProgressionDecision
 }
 
 /// <summary>
-/// R17 Pipeline 运行状态。
+/// Pipeline 运行状态。
 /// </summary>
 public enum PipelineRunStatus
 {
@@ -565,7 +565,7 @@ public enum PipelineRunStatus
 }
 
 /// <summary>
-/// R17 Pipeline 运行结果：单次推进阶段的执行结果。
+/// Pipeline 运行结果：单次推进阶段的执行结果。
 /// </summary>
 public sealed class PipelineRunResult
 {
@@ -618,7 +618,7 @@ public sealed class PipelineRunResult
 }
 
 /// <summary>
-/// R17 晋升裁决请求：包含 proposal、阶段指标、基线指标，由 <see cref="IPromotionJudge"/> 裁决是否晋升。
+/// 晋升裁决请求：包含 proposal、阶段指标、基线指标，由 <see cref="IPromotionJudge"/> 裁决是否晋升。
 /// </summary>
 public sealed class PromotionJudgeRequest
 {
@@ -657,7 +657,7 @@ public sealed class PromotionJudgeRequest
 }
 
 /// <summary>
-/// R17 晋升裁决结果：由 <see cref="IPromotionJudge"/> 输出。
+/// 晋升裁决结果：由 <see cref="IPromotionJudge"/> 输出。
 /// </summary>
 public sealed class PromotionJudgeResult
 {
@@ -707,7 +707,7 @@ public enum PromotionDecision
 }
 
 /// <summary>
-/// R17 PromotionJudge 接口：最小的端到端学习闭环裁决器。
+/// PromotionJudge 接口：最小的端到端学习闭环裁决器。
 /// </summary>
 /// <remarks>
 /// 建议作为第一项端到端学习闭环的实现目标，因为：
@@ -730,7 +730,7 @@ public interface IPromotionJudge
 }
 
 /// <summary>
-/// R17 Guarded Optimization Pipeline 主接口。
+/// Guarded Optimization Pipeline 主接口。
 /// </summary>
 /// <remarks>
 /// Pipeline 严格按 OfflineExperiment → Shadow → ScopedCanary → Promotion 顺序推进，

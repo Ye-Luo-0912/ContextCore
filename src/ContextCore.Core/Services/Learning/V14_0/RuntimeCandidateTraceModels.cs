@@ -71,7 +71,7 @@ public enum CandidateStrategyType : byte
 }
 
 /// <summary>
-/// P0-6.3: 单个候选在 section 装配后的精确归属结果。
+/// 单个候选在 section 装配后的精确归属结果。
 /// 替代 bool IncludedInPackage，使下游诊断能区分"完整保留/部分截断/未保留/未参与评分"四种状态。
 /// </summary>
 public enum RuntimeCandidateOutcome : byte

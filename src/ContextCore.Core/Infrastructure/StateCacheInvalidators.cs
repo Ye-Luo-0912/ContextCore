@@ -4,8 +4,8 @@ namespace ContextCore.Core;
 
 /// <summary>
 /// 默认空实现，不执行任何失效操作。
-/// R11-P6 前：<c>AddContextCore</c> 注册此实现作为 <see cref="IStateCacheInvalidator"/>。
-/// R11-P6 后：生产路径由 <see cref="InMemoryContextStateCache"/> 同时实现 <see cref="IContextStateCache"/> 和
+/// 前：<c>AddContextCore</c> 注册此实现作为 <see cref="IStateCacheInvalidator"/>。
+/// 后：生产路径由 <see cref="InMemoryContextStateCache"/> 同时实现 <see cref="IContextStateCache"/> 和
 /// <see cref="IStateCacheInvalidator"/>，本类保留作为不依赖 DI 的隔离场景回退（如 StorageExtensions）。
 /// </summary>
 public sealed class NullStateCacheInvalidator : IStateCacheInvalidator

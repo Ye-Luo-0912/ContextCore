@@ -6,7 +6,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R23-3：GenericToolAgentAdapter + GenericToolAgentSession + IAgentEventStream 实现测试。
+/// GenericToolAgentAdapter + GenericToolAgentSession + IAgentEventStream 实现测试。
 ///
 /// 覆盖：
 ///   1. Adapter 基本属性 / CreateSessionAsync / CloseSessionAsync / IsSessionActiveAsync

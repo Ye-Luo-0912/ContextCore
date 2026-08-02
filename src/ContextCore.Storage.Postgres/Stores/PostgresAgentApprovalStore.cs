@@ -184,12 +184,12 @@ LIMIT 1;
     }
 
     /// <summary>
-    /// P0-4：原子裁决审批 + 追加审批事件 + CAS 推进 Run 状态（单 PostgreSQL 事务）。
+    /// 原子裁决审批 + 追加审批事件 + CAS 推进 Run 状态（单 PostgreSQL 事务）。
     /// </summary>
     /// <remarks>
     /// 旧路径 ResolveAsync → AppendAsync → TransitionStateAsync 三步非原子，任一步失败留下不一致状态。
     /// 本方法在单事务内完成：校验 approval.RunId → CAS 裁决审批 → INSERT 事件（哈希链续接）→ CAS 推进 Run 状态。
-    /// P0-5：Run 状态 CAS 改为严格规则——0 行时查询当前状态：已处于目标状态则幂等提交，其他状态或不存在则整事务回滚
+    /// Run 状态 CAS 改为严格规则——0 行时查询当前状态：已处于目标状态则幂等提交，其他状态或不存在则整事务回滚
     /// （旧版本 best-effort：0 行时仍 COMMIT，审批已裁决但 Run 仍处 AwaitingApproval，外部无法再次 Resolve，Run 永久卡死）。
     /// </remarks>
     public async ValueTask<ApprovalResolveResult> ResolveApprovalAndAdvanceRunAsync(
@@ -417,7 +417,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             runAffected = await runUpdateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        // P0-5：严格规则 — Run CAS 0 行时查询当前状态，区分幂等成功与冲突失败。
+        // 严格规则 — Run CAS 0 行时查询当前状态，区分幂等成功与冲突失败。
         // 旧版本（best-effort）：0 行时仍 COMMIT（RunStateChanged=false），审批已裁决但 Run 状态未推进，
         // 留下半事务状态（Run 仍处 AwaitingApproval，但审批已 Resolved，外部无法再次 Resolve）。
         if (runAffected == 0)

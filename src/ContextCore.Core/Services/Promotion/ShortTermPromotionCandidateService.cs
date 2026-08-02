@@ -709,7 +709,7 @@ public sealed class ShortTermPromotionCandidateService
         var relations = _relationProjector.ProjectForPromotion(candidate, targetItemId, targetKind, now);
         if (relations.Count > 0 && _projectionWriter is not null)
         {
-            // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
+            // 0: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
             var writeResult = await _projectionWriter
                 .WriteAsync(relations, "promotion", cancellationToken)
                 .ConfigureAwait(false);

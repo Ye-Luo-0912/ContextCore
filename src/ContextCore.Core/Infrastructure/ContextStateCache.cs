@@ -6,7 +6,7 @@ namespace ContextCore.Core;
 
 /// <summary>
 /// 基于内存的 <see cref="IContextStateCache"/> 实现，同时实现 <see cref="IStateCacheInvalidator"/>。
-/// P0 返工：scope 索引实现 O(M) 失效（M 为该 scope 下的条目数，非全量 N）；
+/// 返工：scope 索引实现 O(M) 失效（M 为该 scope 下的条目数，非全量 N）；
 /// 每个条目绑定 <see cref="DependencyScopeSet"/>，支持跨 Store 组合依赖；
 /// 版本感知：写入时记录所有 scope 版本快照，读取时通过批量接口一次性校验。
 /// 进程内有效，重启丢失；多实例场景需替换为分布式实现。
@@ -18,7 +18,7 @@ namespace ContextCore.Core;
 /// 淘汰第一个 accessed=false 的条目，扫描过的条目清除 accessed bit（给予第二次机会）。
 /// 全部采样 accessed=true 时强制淘汰首个采样，保证每次调用至少淘汰一个。O(1) 采样，非 O(N) 全量复制。
 /// 版本失配删除使用条件删除（RemoveConditionalAsync），避免删除并发写入的新条目。
-/// R13.0 #6: 可选 TTL——条目写入后超过 TTL 即视为过期，读取时 lazy 淘汰并返回 null。
+/// #6: 可选 TTL——条目写入后超过 TTL 即视为过期，读取时 lazy 淘汰并返回 null。
 /// TTL 检查先于版本检查（TTL 是硬过期，版本是数据一致性校验；TTL 过期无需版本 RPC）。
 /// </remarks>
 public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheInvalidator
@@ -102,7 +102,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
             return null;
         }
 
-        // R13.0 #6: TTL 过期检查——先于版本检查（TTL 是硬过期，无需版本 RPC）。
+        // #6: TTL 过期检查——先于版本检查（TTL 是硬过期，无需版本 RPC）。
         // 过期则条件删除并返回 miss，避免后续命中读到超期数据。
         if (_ttl is { } ttl && entry.CreatedAt + ttl < DateTimeOffset.UtcNow)
         {
@@ -279,7 +279,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     /// CLOCK 淘汰一轮：通过 enumerator 采样 <see cref="EvictionSampleSize"/> 个候选，
     /// 淘汰第一个 accessed=0 的条目；扫描过的 accessed=1 条目清除 bit（给予第二次机会）。
     /// 若全部采样 accessed=1（已清除 bit），强制淘汰首个采样条目，保证每次调用至少淘汰一个。
-    /// P0-5.3: 不再 _entries.Keys.ToArray() 全量复制（O(N) 分配），改用 enumerator 采样固定数量。
+    /// 不再 _entries.Keys.ToArray() 全量复制（O(N) 分配），改用 enumerator 采样固定数量。
     /// </summary>
     private bool TryEvictOne()
     {
@@ -289,7 +289,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
             return false;
         }
 
-        // P0-5.3: 通过 enumerator 采样 EvictionSampleSize 个候选，避免 O(N) Keys.ToArray() 分配
+        // 通过 enumerator 采样 EvictionSampleSize 个候选，避免 O(N) Keys.ToArray() 分配
         var sampleCount = Math.Min(EvictionSampleSize, _entries.Count);
         if (sampleCount == 0)
         {
@@ -449,7 +449,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
         public required Type ValueType { get; init; }
         public DependencyScopeSet? Scopes { get; init; }
         public IReadOnlyDictionary<VersionScope, long>? VersionSnapshots { get; init; }
-        // R13.0 #6: 条目写入时间，用于 TTL 过期检查（lazy 淘汰）。
+        // #6: 条目写入时间，用于 TTL 过期检查（lazy 淘汰）。
         public DateTimeOffset CreatedAt { get; init; }
         // CLOCK：accessed bit，命中时设为 1，淘汰扫描时清除（给予第二次机会）。
         public int Accessed;

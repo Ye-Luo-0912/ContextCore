@@ -4,7 +4,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
-/// P0-3：PostgreSQL 跨 store 写入事务作用域。
+/// PostgreSQL 跨 store 写入事务作用域。
 /// 持有一个 <see cref="NpgsqlConnection"/> + <see cref="NpgsqlTransaction"/>，
 /// 让多个 Postgres store（PostgresContextStore / PostgresRelationStore 等）共享同一连接与事务。
 /// CommitAsync 一次性提交事务；RollbackAsync/DisposeAsync 回滚。
@@ -117,7 +117,7 @@ public sealed class PostgresWriteTransactionScope : IWriteTransactionScope
 }
 
 /// <summary>
-/// P0-3：PostgreSQL 事务作用域工厂。打开新连接并开始事务，返回 <see cref="PostgresWriteTransactionScope"/>。
+/// PostgreSQL 事务作用域工厂。打开新连接并开始事务，返回 <see cref="PostgresWriteTransactionScope"/>。
 /// 在 <see cref="PostgresServiceCollectionExtensions"/> 中注册为 <see cref="IWriteTransactionScopeFactory"/>。
 /// </summary>
 public sealed class PostgresWriteTransactionScopeFactory : IWriteTransactionScopeFactory

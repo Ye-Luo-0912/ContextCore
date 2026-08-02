@@ -6,7 +6,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R29 WP-E-3：训练数据导出器默认实现。
+/// 训练数据导出器默认实现。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐澄清 #4 + R29 学习闭环）：

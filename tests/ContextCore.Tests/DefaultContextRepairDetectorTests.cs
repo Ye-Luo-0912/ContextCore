@@ -5,7 +5,7 @@ using ContextCore.Core.Services.BoundedContext;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R22-2：DefaultContextRepairDetector 实现测试。
+/// DefaultContextRepairDetector 实现测试。
 ///
 /// 覆盖：
 ///   1. null 输入处理（decision null 抛异常 / qualityReport null 返回空列表）

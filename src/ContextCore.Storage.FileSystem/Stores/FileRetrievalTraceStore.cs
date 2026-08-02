@@ -13,7 +13,7 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
     private readonly FileTraceJanitor _janitor;
-    // R13.1 #4：retention 现为 fire-and-forget，保留最近一次清理 Task 供测试观察完成。
+    // #4：retention 现为 fire-and-forget，保留最近一次清理 Task 供测试观察完成。
     private Task? _pendingPurge;
 
     /// <summary>最近一次 MaybePurge 派发的清理 Task（已禁用/未到期时为 CompletedTask）。供测试等待清理完成。</summary>
@@ -45,7 +45,7 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
 
         await _jsonLines.AppendAsync(path, trace, cancellationToken).ConfigureAwait(false);
 
-        // R13.1 #4：retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
+        // #4：retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
         _pendingPurge = _janitor.MaybePurge(_paths.GetRetrievalTraceDirectory(trace.WorkspaceId, trace.CollectionId));
     }
 

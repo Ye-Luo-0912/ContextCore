@@ -4,7 +4,7 @@ namespace ContextCore.Abstractions;
 /// 标注存储契约方法的读写语义，供源生成器精确分类。
 /// </summary>
 /// <remarks>
-/// P0-8：取代基于方法名前缀（Get/Query/List/Search/BatchGet）的脆弱推断。
+/// 取代基于方法名前缀（Get/Query/List/Search/BatchGet）的脆弱推断。
 /// 源生成器（<c>InvalidatingDecoratorGenerator</c>）读取此 attribute 决定：
 /// <list type="bullet">
 ///   <item><see cref="Read"/> → 生成透传实现，直接调用 <c>_inner</c>。</item>

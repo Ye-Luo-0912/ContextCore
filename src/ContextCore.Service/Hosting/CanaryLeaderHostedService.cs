@@ -93,7 +93,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         _logger = logger;
         _timeProvider = TimeProvider.System;
 
-        // P0-2：通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖。
+        // 通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖。
         var owner = options.CurrentValue.Owner;
         _instanceId = string.IsNullOrWhiteSpace(owner)
             ? $"host-{Environment.MachineName}-{Guid.NewGuid():N}".Substring(0, 48)
@@ -103,7 +103,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // P0-2：通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖
+        // 通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖
         // （如 ProductionHA 强制 Enabled=true）。
         var options = _options.CurrentValue;
         if (!options.Enabled)
@@ -116,7 +116,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             "CanaryLeaderHostedService 启动：InstanceId={InstanceId}, RenewInterval={Renew}, LeaseDuration={Lease}, ReapInterval={Reap}.",
             _instanceId, options.RenewInterval, options.LeaseDuration, options.ReapInterval);
 
-        // P0-7：启动时从 DB（canary_pipelines 表）恢复 in-memory 路由状态。
+        // 启动时从 DB（canary_pipelines 表）恢复 in-memory 路由状态。
         // 进程重启后 CutoverController._cutoverPercentage 与 CanaryProgressionService._runStates
         // 均丢失，而 DB 仍持有权威百分比。此处调用 RecoverFromStoreAsync 重建两者，
         // 避免重启后回到 0% 导致流量瞬间全走 Legacy 路径。恢复失败不阻断启动（后续轮询仍可工作）。
@@ -231,7 +231,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         PostgresCanaryMetricsAggregator? postgresAggregator,
         CancellationToken cancellationToken)
     {
-        // P0-2：每次轮询读取 CurrentValue，感知运行时配置变更。
+        // 每次轮询读取 CurrentValue，感知运行时配置变更。
         var options = _options.CurrentValue;
 
         // 0. 检测 stage epoch 变化：若 DB 中的 current_epoch 已推进（Leader 推进了百分比档），
@@ -283,7 +283,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                 return;
             }
 
-            // P10：若各实例上报了 DDSketch 字节，反序列化后 MergeFrom 合并，从合并后的 sketch 查询总体 P95，
+            // 若各实例上报了 DDSketch 字节，反序列化后 MergeFrom 合并，从合并后的 sketch 查询总体 P95，
             // 覆盖加权平均近似值（加权平均会低估尾延迟）。无 sketch 数据时保持加权平均 fallback。
             aggregated = MergeSketchLatencies(aggregated);
 
@@ -442,7 +442,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             return false; // 已被其他实例持有
         }
 
-        // P12：存储 fencing token，用于 AdvanceEpochAsync 等 Progression 更新的 lease 校验
+        // 存储 fencing token，用于 AdvanceEpochAsync 等 Progression 更新的 lease 校验
         _heldLeases[runId] = (leased.LeaseToken, leased.FencingToken);
         _logger.LogInformation(
             "Canary run {RunId} 获取 leader 租约（owner={Owner}, expiresAt={ExpiresAt}, fencingToken={FencingToken}）。",
@@ -518,10 +518,10 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         AnswerQuality = m.AnswerQuality,
         TokenCost = m.TokenCost,
         InferenceCost = m.InferenceCost,
-        // P10：透传 DDSketch 字节，供 Leader 聚合时 MergeFrom 合并
+        // 透传 DDSketch 字节，供 Leader 聚合时 MergeFrom 合并
         V2LatencySketch = m.V2LatencySketch,
         LegacyLatencySketch = m.LegacyLatencySketch,
-        // P11：透传成功率分子/分母，供 Leader 聚合时 SUM(分子)/SUM(分母)
+        // 透传成功率分子/分母，供 Leader 聚合时 SUM(分子)/SUM(分母)
         TaskSuccessSum = m.TaskSuccessSum,
         TaskSuccessCount = m.TaskSuccessCount,
         ToolSuccessSum = m.ToolSuccessSum,
@@ -531,7 +531,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     };
 
     /// <summary>
-    /// P10：从各实例的 DDSketch 字节合并查询总体 P95，覆盖加权平均近似值。
+    /// 从各实例的 DDSketch 字节合并查询总体 P95，覆盖加权平均近似值。
     /// 无 sketch 数据时（V2InstanceSketches/LegacyInstanceSketches 为 null/空）返回原值不变。
     /// </summary>
     /// <remarks>
@@ -557,7 +557,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     }
 
     /// <summary>
-    /// P10：反序列化 sketch 字节列表，MergeFrom 合并后查询指定分位数。
+    /// 反序列化 sketch 字节列表，MergeFrom 合并后查询指定分位数。
     /// </summary>
     /// <returns>合并后的分位数值；无有效 sketch 时返回 null。</returns>
     private static double? TryMergeSketchP95(IReadOnlyList<byte[]>? sketches, double quantile)

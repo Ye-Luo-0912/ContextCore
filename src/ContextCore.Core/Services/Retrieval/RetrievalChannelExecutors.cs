@@ -18,7 +18,7 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
 {
     private readonly IContextStore _contextStore;
     private readonly IMemoryStore? _memoryStore;
-    // P0-7.2: 回退路径（非 batch store）的并发上限
+    // 回退路径（非 batch store）的并发上限
     private readonly int _maxReadFanout;
 
     public MandatoryRecallChannelExecutor(
@@ -54,7 +54,7 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
         }
 
         // 回退路径：并行单条查询（R17-C 消除 N+1 串行 await 的成果）。
-        // P0-7.2: 在 Batch API 落地前，用 BoundedFanout 施加 SemaphoreSlim 上限，
+        // 在 Batch API 落地前，用 BoundedFanout 施加 SemaphoreSlim 上限，
         // 避免 VectorTopK=100 / RequiredIds 很多时 Postgres 连接池击穿或 FileSystem 锁竞争加剧。
         var resolved = await BoundedFanout.WhenAllAsync(
             requiredIds,
@@ -167,7 +167,7 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
             }
             else
             {
-                // P0-7.2: MemoryStore 不支持批量，回退到带节流的并行单条查询
+                // MemoryStore 不支持批量，回退到带节流的并行单条查询
                 var memories = await BoundedFanout.WhenAllAsync(
                     missedIds,
                     (id, ct) => _memoryStore.GetAsync(
@@ -277,7 +277,7 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
         if (_memoryStore is not null && (context.Request.IncludeWorkingMemory || context.Request.IncludeStableMemory))
         {
             var memoryItems = await QueryMemoryCandidatesAsync(context, cancellationToken).ConfigureAwait(false);
-            // R12.4A #1：Memory Recall 与 Keyword Recall 解耦。
+            // Memory Recall 与 Keyword Recall 解耦。
             // 不再用 MatchesMemoryQuery 作为硬过滤——记忆条目只要通过 lifecycle 过滤（CanUseMemoryItem）
             // 即可参与评分。查询文本命中只作为加分项（ScoreMemoryCandidate 内部 CalculateTextScore），
             // 不命中时仍保留 base + importance + confidence + anchor bonus。
@@ -360,7 +360,7 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
             .Where(item => RetrievalCandidatePolicy.CanUseMemoryItem(item, allowDeprecated))
             .ToArray();
 
-        // P0-7.3: per-layer quota prevents Working Memory from saturating the candidate budget.
+        // per-layer quota prevents Working Memory from saturating the candidate budget.
         // 旧实现按 Working → Stable → Distinct → Take(candidateTake) 顺序追加并截取，
         // 当 Working 返回数 >= candidateTake 时 Stable 会被全部截掉，违反两层共存的语义。
         // 新策略：Working 与 Stable 各保留至少一半配额，未填满层的剩余配额滚动给另一层，
@@ -397,7 +397,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
     private readonly IEmbeddingProvider? _embeddingProvider;
     private readonly IMemoryStore? _memoryStore;
     private readonly IVectorStore? _vectorStore;
-    // P0-7.2: hydration 回退路径的并发上限
+    // hydration 回退路径的并发上限
     private readonly int _maxReadFanout;
 
     public VectorRecallChannelExecutor(
@@ -490,7 +490,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             return Array.Empty<float>();
         }
 
-        // P0-7.6: 不再在此处拼接 QueryInstruction，改为通过 EmbeddingInput.Instruction 传递给 Provider，
+        // 不再在此处拼接 QueryInstruction，改为通过 EmbeddingInput.Instruction 传递给 Provider，
         // 由 EmbeddingTextComposer 统一负责拼接格式，避免双重 instruction 风险。
         var embedding = await _embeddingProvider.EmbedAsync(new EmbeddingRequest
         {
@@ -537,7 +537,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
         // 若两个 store 都不支持批量，回退到并行单条查询
         if (batchContextStore is null && batchMemoryStore is null)
         {
-            // P0-7.2: 对回退路径施加 SemaphoreSlim 上限
+            // 对回退路径施加 SemaphoreSlim 上限
             var parallelCandidates = await BoundedFanout.WhenAllAsync(
                 hits,
                 (hit, ct) => CreateVectorHitCandidateAsync(context, hit, ct),
@@ -578,7 +578,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             }
             else
             {
-                // P0-7.2: batchContextStore is null — 带节流的并行回退
+                // batchContextStore is null — 带节流的并行回退
                 var cs = await BoundedFanout.WhenAllAsync(
                     contextHits,
                     (h, ct) => CreateVectorHitCandidateAsync(context, h, ct),
@@ -601,7 +601,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             }
             else
             {
-                // P0-7.2: batchMemoryStore is null — 带节流的并行回退
+                // batchMemoryStore is null — 带节流的并行回退
                 var ms = await BoundedFanout.WhenAllAsync(
                     memoryHits,
                     (h, ct) => CreateVectorHitCandidateAsync(context, h, ct),

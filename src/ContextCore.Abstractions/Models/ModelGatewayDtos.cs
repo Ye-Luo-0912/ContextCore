@@ -52,13 +52,13 @@ public sealed class ModelEndpointOptions
     public bool Enabled { get; init; } = true;
 
     /// <summary>
-    /// WP-0需求7：每百万输入 token 的费用（美元）。默认 0 = 不计费。
+    /// 需求7：每百万输入 token 的费用（美元）。默认 0 = 不计费。
     /// 配置后 HttpChatCompletionAdapter 按实际 token 用量计算 EstimatedCost/BilledCost。
     /// </summary>
     public double InputTokenPricePerMillionUsd { get; init; }
 
     /// <summary>
-    /// WP-0需求7：每百万输出 token 的费用（美元）。默认 0 = 不计费。
+    /// 需求7：每百万输出 token 的费用（美元）。默认 0 = 不计费。
     /// </summary>
     public double OutputTokenPricePerMillionUsd { get; init; }
 
@@ -225,7 +225,7 @@ public sealed class ModelRequest
     public string OperationId { get; init; } = string.Empty;
 
     /// <summary>
-    /// WP-0需求6：模型工件 ID（指定具体模型；null = 由网关按 Role 路由）。
+    /// 需求6：模型工件 ID（指定具体模型；null = 由网关按 Role 路由）。
     /// 非空时路由器优先精确匹配 Metadata["modelArtifactId"] 的模型端点。
     /// </summary>
     public string? ModelArtifactId { get; init; }
@@ -366,7 +366,7 @@ public interface IModelGateway
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-1：带 Tool 定义的结构化对话调用（function calling）。
+    /// 带 Tool 定义的结构化对话调用（function calling）。
     /// </summary>
     /// <param name="request">结构化对话请求（原生 messages + tool 定义 + 模型工件）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -418,7 +418,7 @@ public sealed record ModelChatMessage
     public string? ToolCallId { get; init; }
 
     /// <summary>
-    /// P0-2：Tool 调用列表（仅 Role=Assistant 时填充；模型请求的 Tool 调用）。
+    /// Tool 调用列表（仅 Role=Assistant 时填充；模型请求的 Tool 调用）。
     /// 原生 function calling 响应可能 Content 为空但 ToolCalls 非空。
     /// null = 非 Assistant 消息或无 Tool 调用。
     /// </summary>

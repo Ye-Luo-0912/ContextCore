@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.IntegrationTests;
 
 // ===========================================================================
-// WP-S6 Production Evidence：双 Host HA 集成测试
+// 双 Host HA 集成测试
 //
 // 目标：证明 ProductionHA 部署下"同一时刻仅一个 Agent 执行平面"：
 //   1. E2E_TwoHosts_SameRun_ExactlyOneExecutionPlane — 两个 AgentKernelHost 实例

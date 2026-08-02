@@ -9,7 +9,7 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-E-3：训练数据导出器验收测试
+// 训练数据导出器验收测试
 //
 // 目标：
 //   验证 TrainingDataExporter 从 IUtilityLedgerStore 查询 ledger 条目，

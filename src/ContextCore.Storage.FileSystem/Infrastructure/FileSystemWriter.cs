@@ -105,7 +105,7 @@ public sealed class FileSystemWriter
     }
 
     /// <summary>
-    /// P1-1：在跨进程写锁内执行读-改-写事务，并允许在锁内执行副作用（如写入相邻的 raw content 文件）。
+    /// 在跨进程写锁内执行读-改-写事务，并允许在锁内执行副作用（如写入相邻的 raw content 文件）。
     /// 锁定对象是 <paramref name="lockPath"/> 对应的 .lock 哨兵文件——同路径的 RMW 会序列化，
     /// 消除"读后写前另一进程覆盖"的 lost update。
     /// </summary>
@@ -134,7 +134,7 @@ public sealed class FileSystemWriter
     }
 
     /// <summary>
-    /// P1-1：在跨进程写锁内执行读-改-写事务，使用同步修改函数（无额外副作用文件）。
+    /// 在跨进程写锁内执行读-改-写事务，使用同步修改函数（无额外副作用文件）。
     /// 与 <see cref="UpdateLinesAsync(string, Func{IReadOnlyList{string}, IReadOnlyList{string}}, CancellationToken)"/>
     /// 的区别：本方法暴露读阶段的 CancellationToken，便于读阶段也响应取消。
     /// </summary>
@@ -152,7 +152,7 @@ public sealed class FileSystemWriter
     }
 
     /// <summary>
-    /// P1-1：在跨进程写锁内执行读-改-写事务；回调返回 null 时跳过写入，避免在文件不存在或
+    /// 在跨进程写锁内执行读-改-写事务；回调返回 null 时跳过写入，避免在文件不存在或
     /// "未找到目标" 场景下创建空文件。用于 delete-by-id 等"无修改即不写"语义的 RMW。
     /// </summary>
     /// <returns>true 表示已写入；false 表示回调跳过（未发生磁盘写入）。</returns>
@@ -225,7 +225,7 @@ public sealed class FileSystemWriter
         IReadOnlyList<string> lines,
         CancellationToken cancellationToken)
     {
-        // P0-9.2: 流式逐行写入临时文件，避免 string.Join 产生的大字符串分配。
+        // 流式逐行写入临时文件，避免 string.Join 产生的大字符串分配。
         // 旧实现使用 string.Join(Environment.NewLine, lines) 拼接全量文本后再 WriteAllTextAsync，
         // 大文件写入时同时持有行数组、拼接后的完整字符串和 UTF-8 编码缓冲。
         // 新实现直接打开临时文件逐行写入，然后 atomic replace。

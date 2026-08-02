@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 namespace ContextCore.Service.Hosting;
 
 /// <summary>
-/// P1-5：关系写入 outbox 调度与 reconciliation 后台服务。
+/// 关系写入 outbox 调度与 reconciliation 后台服务。
 /// 周期性从 <see cref="IRelationOutboxStore"/> 取出 pending 记录，
 /// 验证对应 relation 是否已落库；缺失则回放写入，已存在则标记 Applied。
 /// </summary>

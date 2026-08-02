@@ -106,7 +106,7 @@ public interface ISelectedCandidateHydrator
     /// <param name="selectedEnvelopes">Engine 选中的候选 envelope 集合（仅对这些候选 hydrate 正文）。</param>
     /// <param name="workingSet">当前候选工作集（含 Provider 产出的 Materials，可能 Content 为空）。</param>
     /// <param name="tokenBudget">
-    /// P1-1：最终 token 预算（用于 hydrate 后的二次预算修复）。&lt;= 0 表示无预算约束，跳过修复。
+    /// 最终 token 预算（用于 hydrate 后的二次预算修复）。&lt;= 0 表示无预算约束，跳过修复。
     /// hydrate 后正文的真实 TokenCost 可能超出 Engine 基于召回估算值做出的预算分配，
     /// 实现须在返回前按 FinalScore 升序裁减低分 Material（mandatory / hard constraint 不裁剪），
     /// 直到 Selected 候选的 TokenCost 总和回到预算内。
@@ -124,12 +124,12 @@ public interface ISelectedCandidateHydrator
 }
 
 /// <summary>
-/// P1-1：Late Hydration 执行结果。携带修复后的 WorkingSet、hydrate 计数与预算修复诊断。
+/// Late Hydration 执行结果。携带修复后的 WorkingSet、hydrate 计数与预算修复诊断。
 /// </summary>
 /// <remarks>
 /// Caller（DefaultContextDecisionRuntime）将 <see cref="FailedCount"/> / <see cref="BudgetExceeded"/>
 /// 合并进 Outcome.Diagnostics；AgentContext 路径对 hard constraint hydrate 失败 fail-closed。
-/// P1-7：<see cref="Repair"/> 携带正式修复决策，Caller 据此重建 ContextDecisionResult
+/// <see cref="Repair"/> 携带正式修复决策，Caller 据此重建 ContextDecisionResult
 /// （移除 dropped、更新 AllocationDecisions / SelectedCount / EstimatedTokens），不能只修改 WorkingSet。
 /// </remarks>
 public sealed record HydrationResult
@@ -150,7 +150,7 @@ public sealed record HydrationResult
     public IReadOnlyList<string>? BudgetRepairDiagnostics { get; init; }
 
     /// <summary>
-    /// P1-7：正式 hydration 修复决策。非空时 Caller 必须基于此重建 ContextDecisionResult，
+    /// 正式 hydration 修复决策。非空时 Caller 必须基于此重建 ContextDecisionResult，
     /// 不能只替换 WorkingSet（否则 SelectedEnvelopes / AllocationDecisions / Outcome.SelectedCount /
     /// EstimatedTokens 与实际输入不一致）。无 hydrate 发生时（NoHydration 路径）为 null。
     /// </summary>
@@ -158,7 +158,7 @@ public sealed record HydrationResult
 }
 
 /// <summary>
-/// P1-7: Formal hydration repair decision. Returned by hydrator when budget repair is needed.
+/// Formal hydration repair decision. Returned by hydrator when budget repair is needed.
 /// 携带 hydrate 后真实的 selected / dropped 候选 ID、更新的 AllocationDecisions、精确 token 总数与失败明细，
 /// 让 Caller（DefaultContextDecisionRuntime）能重建整个 ContextDecisionResult 而非仅替换 WorkingSet。
 /// </summary>

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace ContextCore.Service.Hosting;
 
 /// <summary>
-/// R29 WP-A-2 / P0-9：Model State Reconciler Worker（HA 模式）。
+/// Model State Reconciler Worker（HA 模式）。
 /// </summary>
 /// <remarks>
 /// 周期性从 <see cref="IClusterModelSlotStore"/> 拉取单一 Champion 槽位（"primary"）期望状态，
@@ -82,7 +82,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 
     private async Task ReconcileAsync(CancellationToken ct)
     {
-        // P0-9：从单一 Champion 槽位（"primary"）读取期望状态。
+        // 从单一 Champion 槽位（"primary"）读取期望状态。
         var slot = await _clusterSlotStore.GetAsync("primary", ct).ConfigureAwait(false);
 
         // slot 为 null 表示槽位尚未初始化（无任何 activate/retire 操作），无需同步。
@@ -112,7 +112,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         // 乐观并发控制：仅当远端 Revision > 本地 Revision 时才应用变更
         if (slot.Revision <= _lastKnownRevision)
         {
-            // P0-9：Revision 相同但 ContentHash 不匹配 → 记录漂移告警
+            // Revision 相同但 ContentHash 不匹配 → 记录漂移告警
             if (slot.Revision == _lastKnownRevision
                 && string.Equals(slot.DesiredStatus, "Active", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrEmpty(slot.ContentHash)
@@ -134,7 +134,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             {
                 var modelId = slot.ActiveModelArtifactId!;
 
-                // P0-9：ContentHash 匹配检查 —— 若本地已激活同 ContentHash 的模型则跳过重复激活。
+                // ContentHash 匹配检查 —— 若本地已激活同 ContentHash 的模型则跳过重复激活。
                 if (string.Equals(_activationManager.ActiveDescriptor?.ModelArtifactId, modelId, StringComparison.Ordinal)
                     && string.Equals(_activationManager.ContentHash, slot.ContentHash, StringComparison.Ordinal))
                 {
@@ -161,7 +161,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             }
             else if (string.Equals(slot.DesiredStatus, "Inactive", StringComparison.OrdinalIgnoreCase))
             {
-                // P0-9：调用 DeactivateAsync 停用模型，回退到 fallback。
+                // 调用 DeactivateAsync 停用模型，回退到 fallback。
                 _logger.LogInformation(
                     "应用期望状态：停用模型（Revision {Revision}）",
                     slot.Revision);
@@ -212,7 +212,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 }
 
 /// <summary>
-/// R29 WP-A-2：Model State Reconciler 配置选项。
+/// Model State Reconciler 配置选项。
 /// </summary>
 public sealed class ModelStateReconcilerOptions
 {

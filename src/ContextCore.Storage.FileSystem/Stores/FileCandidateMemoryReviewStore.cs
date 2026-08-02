@@ -35,11 +35,11 @@ public sealed class FileCandidateMemoryReviewStore : ICandidateMemoryReviewStore
         {
             var path = _paths.GetCandidateMemoryReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
             var legacyPath = _paths.GetLegacyCandidateMemoryReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            // P1-1: legacy 是只读迁移源，锁外预读即可。
+            // legacy 是只读迁移源，锁外预读即可。
             var legacy = await _jsonLines.ReadAsync<CandidateMemoryReviewRecord>(legacyPath, cancellationToken)
                 .ConfigureAwait(false);
 
-            // P1-1: 跨进程锁内 RMW primary 路径——读 primary + 合并 legacy + 过滤+追加+排序 + 原子写回。
+            // 跨进程锁内 RMW primary 路径——读 primary + 合并 legacy + 过滤+追加+排序 + 原子写回。
             await _jsonLines.UpdateAsync<CandidateMemoryReviewRecord>(
                 path,
                 primaryExisting =>
@@ -60,7 +60,7 @@ public sealed class FileCandidateMemoryReviewStore : ICandidateMemoryReviewStore
     }
 
     /// <summary>
-    /// P1-1: 将 legacy review 合并到 primary 集合，按 ReviewId 去重——primary 优先。
+    /// 将 legacy review 合并到 primary 集合，按 ReviewId 去重——primary 优先。
     /// </summary>
     private static IReadOnlyList<CandidateMemoryReviewRecord> MergeLegacyReviews(
         IReadOnlyList<CandidateMemoryReviewRecord> primary,

@@ -9,7 +9,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// R29 WP-A-2：OnnxRuntime Inference Session Factory + Session 实现
+// OnnxRuntime Inference Session Factory + Session 实现
 //
 // 目标：
 //   1. OnnxRuntimeInferenceSessionFactory：使用 Microsoft.ML.OnnxRuntime.InferenceSession
@@ -32,7 +32,7 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-2：基于 Microsoft.ML.OnnxRuntime 创建本地推理会话的工厂。
+/// 基于 Microsoft.ML.OnnxRuntime 创建本地推理会话的工厂。
 /// </summary>
 /// <remarks>
 /// 与 <c>OnnxRuntimeEmbeddingSessionFactory</c> 模式对齐：
@@ -250,7 +250,7 @@ public sealed class OnnxRuntimeInferenceSessionFactory : IOnnxInferenceSessionFa
 }
 
 /// <summary>
-/// R29 WP-A-2：封装 ONNX Runtime 推理调用的会话实现。
+/// 封装 ONNX Runtime 推理调用的会话实现。
 /// </summary>
 /// <remarks>
 /// 不可变：构造后 <see cref="Options"/> 与底层 <see cref="InferenceSession"/> 不再变更。
@@ -357,7 +357,7 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
             }
             finally
             {
-                // P3 步骤5：ArrayPool buffer 在 session.Run 完成后归还。
+                // ArrayPool buffer 在 session.Run 完成后归还。
                 // ORT session.Run 同步执行，返回时输入张量数据已被复制到 ORT 内部内存，
                 // 此后 DenseTensor 的 backing buffer 不再被引用，可安全归还。
                 // 零拷贝路径 rentedBuffer=null，跳过归还。
@@ -387,9 +387,9 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
 
     /// <summary>
     /// 构造 ONNX 输入张量。
-    /// P3 步骤2：零拷贝路径 — 当 batch.Values 由完整 float[] 支撑时（生产 Scorer 的 TryBuildFeatureBatch 路径），
+    /// 零拷贝路径 — 当 batch.Values 由完整 float[] 支撑时（生产 Scorer 的 TryBuildFeatureBatch 路径），
     /// 通过 MemoryMarshal.TryGetArray 直接复用底层数组，避免 ToArray 拷贝。
-    /// P3 步骤5：ArrayPool 回退路径 — 当零拷贝不可行时（如 batch.Values 是切片或非数组 backing），
+    /// ArrayPool 回退路径 — 当零拷贝不可行时（如 batch.Values 是切片或非数组 backing），
     /// 从 ArrayPool.Rent 租借缓冲区并拷贝，session.Run 完成后由调用方归还。
     /// </summary>
     /// <param name="batch">批量特征数据。</param>
@@ -401,7 +401,7 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
         var dimensions = new[] { batch.RowCount, batch.FeatureCount };
         var requiredLength = batch.RowCount * batch.FeatureCount;
 
-        // P3 步骤2：零拷贝路径 — 尝试获取 batch.Values 的底层 array。
+        // 零拷贝路径 — 尝试获取 batch.Values 的底层 array。
         // 当 batch.Values 由完整 float[] 直接构造（offset=0 + count=full）时，
         // 直接复用底层数组，避免 ToArray 拷贝。这是生产 Scorer → ONNX 推理的 hot path。
         if (MemoryMarshal.TryGetArray(batch.Values, out var arraySegment)
@@ -420,7 +420,7 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
             };
         }
 
-        // P3 步骤5：ArrayPool 回退路径 — 租借缓冲区 + 拷贝，避免每次 ToArray 造成的 GC 压力。
+        // ArrayPool 回退路径 — 租借缓冲区 + 拷贝，避免每次 ToArray 造成的 GC 压力。
         // 注意：Rent 返回的 buffer.Length >= requiredLength，可能更大；
         // 通过 AsMemory(0, requiredLength) 切片传给 DenseTensor，仅暴露所需范围。
         var buffer = ArrayPool<float>.Shared.Rent(requiredLength);

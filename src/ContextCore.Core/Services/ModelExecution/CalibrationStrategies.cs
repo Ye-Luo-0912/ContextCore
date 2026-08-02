@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R28-F P3-3：Calibration 策略族
+// Calibration 策略族
 //
 // 目标：把校准从单一 PlattCalibrationService（默认 A=1 B=0 但实际执行 sigmoid，
 // 导致 raw=0 → 0.5 而非 0）重构为显式的多策略：
@@ -20,7 +20,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R28-F P3-3：校准策略抽象。每种校准方法对应一个实现。
+/// 校准策略抽象。每种校准方法对应一个实现。
 /// </summary>
 public interface ICalibrationStrategy
 {
@@ -35,7 +35,7 @@ public interface ICalibrationStrategy
 }
 
 /// <summary>
-/// R28-F P3-3：恒等校准。
+/// 恒等校准。
 /// calibrated = rawScore；不改变输入。
 /// 替代旧版 PlattCalibrationService 默认参数（A=1, B=0）会执行 sigmoid 导致 raw=0 → 0.5 的问题。
 /// </summary>
@@ -50,7 +50,7 @@ public sealed class IdentityCalibration : ICalibrationStrategy
 }
 
 /// <summary>
-/// R28-F P3-3：Platt scaling。
+/// Platt scaling。
 /// calibrated = sigmoid(A * raw + B)；A 通常为正斜率，B 为偏置。
 /// 与原 PlattCalibrationService 公式一致；区别在于 B 现在显式暴露在 CalibrationParameters 中。
 /// </summary>
@@ -81,7 +81,7 @@ public sealed class PlattCalibration : ICalibrationStrategy
 }
 
 /// <summary>
-/// R28-F P3-3：Temperature scaling。
+/// Temperature scaling。
 /// calibrated = sigmoid(raw / T)；T > 0。
 /// 常用于多分类 logits 软化；T=1 等价 sigmoid(raw)。
 /// </summary>
@@ -109,7 +109,7 @@ public sealed class TemperatureCalibration : ICalibrationStrategy
 }
 
 /// <summary>
-/// R28-F P3-3：Isotonic regression（分段线性插值）。
+/// Isotonic regression（分段线性插值）。
 /// points 必须按 Input 升序；超出范围的输入 clamp 到边界输出。
 /// 点数 < 2 时退化为 identity（无法插值）。
 /// </summary>

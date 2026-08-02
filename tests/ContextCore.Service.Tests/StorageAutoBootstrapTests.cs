@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Service.Tests;
 
 /// <summary>
-/// P0-6：验证 StorageOptions.AutoBootstrap 配置默认值、绑定行为与 schema-version endpoint 暴露。
+/// 验证 StorageOptions.AutoBootstrap 配置默认值、绑定行为与 schema-version endpoint 暴露。
 /// 该选项控制服务启动时是否自动应用 PostgreSQL baseline migration，打破
 /// “缺 schema → 服务退出 → 无法访问迁移 HTTP 接口”自锁。
 /// </summary>

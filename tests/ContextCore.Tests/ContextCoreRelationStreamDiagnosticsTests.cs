@@ -11,7 +11,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P1-7：流式图诊断（IRelationStreamStore + ValidateStreamAsync）单元测试。
+/// 流式图诊断（IRelationStreamStore + ValidateStreamAsync）单元测试。
 /// 验证流式路径产出与非流式 ValidateAsync 的语义对齐，覆盖 fallback 路径与各阶段诊断。
 /// </summary>
 [TestClass]

@@ -37,7 +37,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// </code>
 /// 任意状态可跳转到 Failed（异常）或 Cancelled（用户取消）。
 /// Checkpointing 后回到 ContextBuilding 开启下一轮循环。
-/// P0-6：ToolDispatching → AwaitingApproval 允许 Tool 分派中需审批时挂起，
+/// ToolDispatching → AwaitingApproval 允许 Tool 分派中需审批时挂起，
 /// 等待外部 POST /approvals/{approvalId} 决策后回到 ToolDispatching 继续。
 /// </remarks>
 public static class AgentRunStateMachine
@@ -57,7 +57,7 @@ public static class AgentRunStateMachine
         }
 
         // 任意状态可跳转到 Failed / Cancelled（终态短路，幂等收尾）
-        // P0-5：LeaseLost 表示丢租（区别于用户主动 Cancelled），但 Completed/Cancelled
+        // LeaseLost 表示丢租（区别于用户主动 Cancelled），但 Completed/Cancelled
         //       已是确定终态，不可被旧 owner 的丢租写入覆盖（旧 owner 无 fencing token）。
         if (to == AgentRunState.Failed || to == AgentRunState.Cancelled)
         {
@@ -67,7 +67,7 @@ public static class AgentRunStateMachine
 
         if (to == AgentRunState.LeaseLost)
         {
-            // P0-5：LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled。
+            // LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled。
             // Completed/Cancelled 是确定终态，不应被丢租覆盖。
             if (from == AgentRunState.Completed || from == AgentRunState.Cancelled)
             {

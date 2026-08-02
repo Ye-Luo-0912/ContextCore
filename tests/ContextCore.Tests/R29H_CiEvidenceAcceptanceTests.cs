@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-S6：CI 生产证据固化验收测试
+// CI 生产证据固化验收测试
 //
 // 验证 CI 证据设施的硬门控（纯文件结构验证，不实际运行 CI）：
 //   1. ci.yml 包含 evidence job：聚合各测试 job 的 TRX，

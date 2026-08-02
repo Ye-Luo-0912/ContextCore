@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R23-6：Agent Context Delta Calculator 契约
+// Agent Context Delta Calculator 契约
 //
 // 目标（对齐 R23 规格）：
 //   1. 计算两次 AgentContextSnapshot 之间的 AgentContextDelta（增量变更）。
@@ -19,7 +19,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R23-6：Agent Context 增量计算器。计算两次 <see cref="AgentContextSnapshot"/> 之间的 <see cref="AgentContextDelta"/>。
+/// Agent Context 增量计算器。计算两次 <see cref="AgentContextSnapshot"/> 之间的 <see cref="AgentContextDelta"/>。
 /// </summary>
 /// <remarks>
 /// 纯函数；不修改输入；输出 deterministic。

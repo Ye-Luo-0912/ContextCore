@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R28-D / R28-F：Model Execution Runtime 契约
+// / R28-F：Model Execution Runtime 契约
 //
 // 目标：
 //   把分散在 ModelGateway 基础设施之上的特征管理、批量推理、模型校准能力
@@ -19,7 +19,7 @@ namespace ContextCore.Abstractions;
 //      保证主链始终能产出非空结果（fail-safe 而非 fail-fast）。
 //   4. Calibration 默认 identity：未配置参数时校准等价于恒等变换（返回原始 raw score）。
 //
-// R28-F（本迭代新增）：
+// （本迭代新增）：
 //   - ModelExecutionSnapshot：把 ModelArtifactId/ModelVersion/FeatureSchemaVersion/
 //     CalibrationVersion/InferenceEngineKind/ContentHash 组成精确模型执行快照，
 //     替代之前用 engine.ModelVersion 直接解析 FeatureSchema 的耦合。
@@ -92,7 +92,7 @@ public enum FeatureType : byte
 }
 
 /// <summary>
-/// R28-D P0-1：推理引擎类型。让消费方区分真实模型 vs 确定性 fallback，
+/// 推理引擎类型。让消费方区分真实模型 vs 确定性 fallback，
 /// 避免把 DeterministicBatchInferenceEngine 的 feature hash 当成真实模型分数参与排序。
 /// </summary>
 public enum InferenceEngineKind : byte
@@ -125,26 +125,26 @@ public interface IBatchInferenceEngine
     string ModelVersion { get; }
 
     /// <summary>
-    /// R28-D P0-1：引擎类型。消费方据此判断是否信任分数参与排序。
+    /// 引擎类型。消费方据此判断是否信任分数参与排序。
     /// DeterministicReplay 类型不得在默认配置下改变 FinalScore。
     /// </summary>
     InferenceEngineKind Kind { get; }
 
     /// <summary>
-    /// R28-F P3-1：模型工件内容哈希（用于精确 Model Execution Snapshot）。
+    /// 模型工件内容哈希（用于精确 Model Execution Snapshot）。
     /// 真实模型应返回 ONNX/序列化模型的 SHA-256；
     /// Deterministic 引擎返回自身实现的哈希（用于版本一致性检查）。
     /// </summary>
     string ContentHash { get; }
 
     /// <summary>
-    /// R28-F P3-1：绑定的校准版本号（与 CalibrationParameters 的拟合版本对齐）。
+    /// 绑定的校准版本号（与 CalibrationParameters 的拟合版本对齐）。
     /// 默认 "default-v1"。
     /// </summary>
     string CalibrationVersion { get; }
 
     /// <summary>
-    /// R28-F P4-1：基于连续数值内存（FeatureBatch）的批量推理。
+    /// 基于连续数值内存（FeatureBatch）的批量推理。
     /// 比 InferAsync(BatchInferenceRequest) 减少装箱与字典查找开销，适合高频推理。
     /// 默认实现回退到字典路径（向后兼容）。
     /// </summary>
@@ -231,7 +231,7 @@ public interface ICalibrationService
     CalibrationParameters? GetParameters(string? modelName = null);
 
     /// <summary>
-    /// WP-5：按 modelName + version 精确查找校准参数。
+    /// 按 modelName + version 精确查找校准参数。
     /// 用于 ModelActivationManager 激活时按 descriptor.CalibrationVersion 精确绑定校准参数。
     /// </summary>
     /// <param name="modelName">模型名（或 ModelArtifactId）；null 表示全局默认。</param>
@@ -245,7 +245,7 @@ public interface ICalibrationService
 }
 
 /// <summary>
-/// R28-D / R28-F P3-3：校准方法种类。用于精确路由 calibration 策略。
+/// / R28-F P3-3：校准方法种类。用于精确路由 calibration 策略。
 /// </summary>
 public enum CalibrationMethodKind : byte
 {
@@ -263,8 +263,8 @@ public enum CalibrationMethodKind : byte
 }
 
 /// <summary>
-/// R28-D / R28-F P3-3：校准参数。
-/// R28-D 原始契约仅暴露单个 Parameter（= Platt A）；R28-F 扩展为完整支持
+/// / R28-F P3-3：校准参数。
+/// 原始契约仅暴露单个 Parameter（= Platt A）；R28-F 扩展为完整支持
 /// Platt(A,B) / Temperature(T) / Isotonic(points) / Identity。
 /// 旧字段 Parameter 保留为 Platt A 的兼容别名（值同步 ParameterA）。
 /// </summary>
@@ -280,7 +280,7 @@ public sealed record CalibrationParameters
     public CalibrationMethodKind Kind { get; init; } = CalibrationMethodKind.Platt;
 
     /// <summary>
-    /// R28-D：校准参数（Platt: A；Temperature: T；Isotonic: 忽略）。
+    /// 校准参数（Platt: A；Temperature: T；Isotonic: 忽略）。
     /// <b>保留为向后兼容别名</b>，值与 <see cref="ParameterA"/> 同步。
     /// 新代码应使用 <see cref="ParameterA"/> / <see cref="ParameterB"/> / <see cref="Temperature"/>。
     /// </summary>
@@ -302,7 +302,7 @@ public sealed record CalibrationParameters
     public required DateTimeOffset FittedAt { get; init; }
 
     /// <summary>
-    /// WP-5：校准参数版本号。用于 ModelActivationManager 激活时与
+    /// 校准参数版本号。用于 ModelActivationManager 激活时与
     /// <see cref="ModelArtifactDescriptor.CalibrationVersion"/> 精确匹配。
     /// 默认 "default-v1"（与 OnnxInferenceEngine 默认值对齐）。
     /// </summary>
@@ -314,7 +314,7 @@ public sealed record CalibrationParameters
 }
 
 /// <summary>
-/// R28-F P3-3：Isotonic 回归的单个映射点。
+/// Isotonic 回归的单个映射点。
 /// </summary>
 public sealed record IsotonicPoint
 {
@@ -326,7 +326,7 @@ public sealed record IsotonicPoint
 }
 
 /// <summary>
-/// R28-F P3-1：Model Execution Snapshot。
+/// Model Execution Snapshot。
 /// 把 ModelArtifactId / ModelVersion / FeatureSchemaVersion / CalibrationVersion /
 /// InferenceEngineKind / ContentHash 组成精确的模型执行快照，
 /// 用于：(1) Scorer 解耦 schema 解析与模型版本；
@@ -358,7 +358,7 @@ public sealed record ModelExecutionSnapshot
 }
 
 /// <summary>
-/// R28-F P4-1：连续数值内存的批量特征数据。
+/// 连续数值内存的批量特征数据。
 /// 替代 <see cref="FeatureVector"/>（IReadOnlyDictionary&lt;string,object&gt; 装箱）的高性能等价物。
 /// 内存布局：row-major，RowCount × FeatureCount 连续 float。
 /// </summary>
@@ -393,7 +393,7 @@ public sealed record FeatureBatch
 }
 
 /// <summary>
-/// R28-F P3-2：推理输出验证结果。
+/// 推理输出验证结果。
 /// </summary>
 public sealed record InferenceValidationResult
 {
@@ -408,7 +408,7 @@ public sealed record InferenceValidationResult
 }
 
 /// <summary>
-/// R28-F P3-2：推理输出验证器。
+/// 推理输出验证器。
 /// 在 Scorer 应用模型分数到 Allocator 排序前，对 BatchInferenceResult 执行严格验证：
 ///   - Outputs.Count == Inputs.Count
 ///   - Score/Confidence 不是 NaN/Infinity

@@ -8,7 +8,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Model Activation 生产级可靠性验收测试
+// Model Activation 生产级可靠性验收测试
 //
 // 验证 ModelActivationManager 在生产场景下的端到端可靠性，覆盖：
 //   1. Production_RealOnnxFile_ActivatesWithValidHash — 真实 ONNX 文件激活并校验 SHA-256
@@ -557,7 +557,7 @@ public sealed class R29H_ModelActivationProductionTests
 
     /// <summary>
     /// 构建测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
-    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
     /// 本 helper 让校准验证通过，使测试聚焦于 schema/session/并发等被测逻辑。
     /// </summary>
     private static ICalibrationService BuildCalibrationService() => new TestCalibrationService();
@@ -643,7 +643,7 @@ public sealed class R29H_ModelActivationProductionTests
 
     /// <summary>
     /// 测试用 ICalibrationService：对任意 modelName + version 返回有效的 Identity 校准参数。
-    /// WP-5 fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
+    /// fail-closed 要求非 default-v1 的 CalibrationVersion 必须命中已注册参数，
     /// 此实现让校准验证始终通过，使测试聚焦于 schema/session/并发等被测逻辑。
     /// </summary>
     private sealed class TestCalibrationService : ICalibrationService

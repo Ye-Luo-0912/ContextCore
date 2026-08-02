@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R21-2：Utility Ledger + ConflictSet 契约测试。
+/// Utility Ledger + ConflictSet 契约测试。
 ///
 /// 验证目标：
 ///   1. UtilityLedgerEntry 必填字段 + 默认值

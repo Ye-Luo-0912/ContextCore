@@ -6,21 +6,21 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-A-3：DefaultCalibrationValidator 单元测试
+// DefaultCalibrationValidator 单元测试
 //
 // 覆盖范围：
-//   §1 Identity 恒通过（Info 级违规）
-//   §2 Platt(A, B) 参数验证
+//   Identity 恒通过（Info 级违规）
+//   Platt(A, B) 参数验证
 //        - A/B 有限
 //        - A != 0
 //        - |A| 过大 → Warning
 //        - |B| 过大 → Warning
-//   §3 Temperature(T) 参数验证
+//   Temperature(T) 参数验证
 //        - T 有限
 //        - T > 0
 //        - T 极小 → Warning（饱和）
 //        - T 极大 → Warning（近似 identity）
-//   §4 Isotonic(points) 参数验证
+//   Isotonic(points) 参数验证
 //        - points != null
 //        - Count >= 2
 //        - Input / Output 有限
@@ -29,10 +29,10 @@ namespace ContextCore.Tests;
 //        - Output 在 [0, 1] 范围
 //        - 覆盖率不足 → Warning
 //        - 重复 Input → Warning
-//   §5 一致性校验（Method 与 Kind 对齐；Parameter 与 ParameterA 同步）
-//   §6 null parameters / 未知 Kind
-//   §7 ValidateBatch 聚合
-//   §8 DI 注册扩展
+//   一致性校验（Method 与 Kind 对齐；Parameter 与 ParameterA 同步）
+//   null parameters / 未知 Kind
+//   ValidateBatch 聚合
+//   DI 注册扩展
 // ===========================================================================
 
 [TestClass]
@@ -43,7 +43,7 @@ public sealed class R29_CalibrationValidatorTests
     private readonly DefaultCalibrationValidator _validator = new();
 
     // ===========================================================================
-    // §1 Identity
+    // Identity
     // ===========================================================================
 
     [TestMethod]
@@ -69,7 +69,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §2 Platt(A, B)
+    // Platt(A, B)
     // ===========================================================================
 
     [TestMethod]
@@ -216,7 +216,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §3 Temperature(T)
+    // Temperature(T)
     // ===========================================================================
 
     [TestMethod]
@@ -325,7 +325,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §4 Isotonic(points)
+    // Isotonic(points)
     // ===========================================================================
 
     [TestMethod]
@@ -551,7 +551,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §5 一致性校验
+    // 一致性校验
     // ===========================================================================
 
     [TestMethod]
@@ -593,7 +593,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §6 null parameters / 未知 Kind
+    // null parameters / 未知 Kind
     // ===========================================================================
 
     [TestMethod]
@@ -624,7 +624,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §7 ValidateBatch 聚合
+    // ValidateBatch 聚合
     // ===========================================================================
 
     [TestMethod]
@@ -714,7 +714,7 @@ public sealed class R29_CalibrationValidatorTests
     }
 
     // ===========================================================================
-    // §8 DI 注册扩展
+    // DI 注册扩展
     // ===========================================================================
 
     [TestMethod]

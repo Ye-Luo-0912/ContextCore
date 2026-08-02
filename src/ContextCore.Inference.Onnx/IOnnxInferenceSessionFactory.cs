@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Inference.Onnx;
 
 // ===========================================================================
-// R29 WP-A-2：ONNX Inference Session 契约
+// ONNX Inference Session 契约
 //
 // 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
 //   1. 把 ONNX Runtime 的会话生命周期与推理调用从 IBatchInferenceEngine 实现中
@@ -25,7 +25,7 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-2：ONNX 推理会话抽象，隔离具体推理库。
+/// ONNX 推理会话抽象，隔离具体推理库。
 /// </summary>
 /// <remarks>
 /// 与 <c>IOnnxEmbeddingSession</c> 模式对齐：单一会话封装模型加载与批量推理，
@@ -70,7 +70,7 @@ public interface IOnnxInferenceSession : IAsyncDisposable
 }
 
 /// <summary>
-/// R29 WP-A-2：创建 ONNX 推理会话的工厂。
+/// 创建 ONNX 推理会话的工厂。
 /// </summary>
 /// <remarks>
 /// 默认实现 <see cref="OnnxRuntimeInferenceSessionFactory"/> 使用

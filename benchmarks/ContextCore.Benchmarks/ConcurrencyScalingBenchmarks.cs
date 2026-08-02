@@ -93,7 +93,7 @@ public class ConcurrencyScalingBenchmarks
         }
         else
         {
-            // P0-11：直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
+            // 直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
             // 避免 Task.Run 将 ThreadPool 调度成本混入业务测量。
             await Task.WhenAll(Enumerable.Range(0, ConcurrencyLevel).Select(async _ =>
             {

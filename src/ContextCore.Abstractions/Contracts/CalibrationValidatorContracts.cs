@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R29 WP-A-3：Calibration Validator 契约
+// Calibration Validator 契约
 //
 // 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
 //   在模型加载时验证校准参数（Platt / Temperature / Isotonic / Identity）的
@@ -25,7 +25,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-3：校准参数验证器。
+/// 校准参数验证器。
 /// 在模型加载时对 <see cref="CalibrationParameters"/> 执行统计有效性验证。
 /// </summary>
 /// <remarks>
@@ -77,7 +77,7 @@ public interface ICalibrationValidator
 }
 
 /// <summary>
-/// R29 WP-A-3：校准验证结果。
+/// 校准验证结果。
 /// </summary>
 public sealed record CalibrationValidationResult
 {
@@ -98,7 +98,7 @@ public sealed record CalibrationValidationResult
 }
 
 /// <summary>
-/// R29 WP-A-3：单条校准违规。
+/// 单条校准违规。
 /// </summary>
 public sealed record CalibrationViolation
 {
@@ -119,7 +119,7 @@ public sealed record CalibrationViolation
 }
 
 /// <summary>
-/// R29 WP-A-3：校准违规严重程度。
+/// 校准违规严重程度。
 /// </summary>
 public enum CalibrationViolationSeverity : byte
 {

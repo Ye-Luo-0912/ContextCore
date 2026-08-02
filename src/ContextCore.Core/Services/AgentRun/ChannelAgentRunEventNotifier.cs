@@ -76,7 +76,7 @@ public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
         long fromSequence,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        // P0-10：委托到 RegisterSubscription，复用分离后的注册逻辑。
+        // 委托到 RegisterSubscription，复用分离后的注册逻辑。
         var subscription = RegisterSubscription(workspaceId, runId, fromSequence);
         try
         {
@@ -95,7 +95,7 @@ public sealed class ChannelAgentRunEventNotifier : IAgentRunEventNotifier
         => $"{workspaceId}:{runId}";
 
     /// <summary>
-    /// P0-10：Channel-based 订阅句柄。注册时创建，Dispose 时注销。
+    /// Channel-based 订阅句柄。注册时创建，Dispose 时注销。
     /// 枚举 IAsyncEnumerable 等待 notifier 推送的 sequence。
     /// </summary>
     private sealed class ChannelSubscription : IAgentRunEventSubscription

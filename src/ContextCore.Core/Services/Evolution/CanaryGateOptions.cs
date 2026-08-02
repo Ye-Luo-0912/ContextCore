@@ -1,7 +1,7 @@
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// R28-B.8：Production Canary Gate — 渐进推进配置
+// Production Canary Gate — 渐进推进配置
 //
 // 目标（对齐 R28-B.8 规格）：
 //   1. 替代单一 ScopedCanary 阶段为渐进百分比阶梯（1→5→10→25→50→100）。
@@ -17,7 +17,7 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8：Canary Gate 渐进推进配置。
+/// Canary Gate 渐进推进配置。
 /// </summary>
 /// <remarks>
 /// 默认值符合 R28-B.8 规格：
@@ -67,7 +67,7 @@ public sealed class CanaryGateOptions
     public double MaxLatencyMultiplier { get; init; } = 2.0;
 
     /// <summary>
-    /// R29 WP-C-3：质量分下限阈值（V2 路径 quality_score &lt; 此值则自动回滚）。
+    /// 质量分下限阈值（V2 路径 quality_score &lt; 此值则自动回滚）。
     /// </summary>
     /// <remarks>
     /// 语义：experimentMetrics["quality_score"]（0.0-1.0）&lt; MinQualityScore 时触发回滚。

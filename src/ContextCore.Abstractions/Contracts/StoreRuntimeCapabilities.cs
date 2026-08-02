@@ -1,7 +1,7 @@
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// R13.3 #1：存储 Provider 类型枚举——替代字符串 "filesystem"/"postgres"/"memory" 判断的单一事实源。
+/// 存储 Provider 类型枚举——替代字符串 "filesystem"/"postgres"/"memory" 判断的单一事实源。
 /// </summary>
 public enum StorageProviderKind
 {
@@ -19,7 +19,7 @@ public enum StorageProviderKind
 }
 
 /// <summary>
-/// R13.3 #1：存储 Provider 运行时能力契约——替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断。
+/// 存储 Provider 运行时能力契约——替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断。
 ///
 /// 设计原则：
 /// - Provider 自己声明能力，避免调用方按字符串或 namespace 推断（脆弱、易遗漏）。
@@ -34,7 +34,7 @@ public interface IStoreRuntimeCapabilities
 }
 
 /// <summary>
-/// R13.3 #1：存储 Provider 执行能力描述——对 IStoreRuntimeCapabilities.Profile 的强类型表达。
+/// 存储 Provider 执行能力描述——对 IStoreRuntimeCapabilities.Profile 的强类型表达。
 /// 替代字符串 "filesystem"/"postgres"/"memory" 判断的单一事实源。
 /// </summary>
 public sealed class StorageExecutionProfile

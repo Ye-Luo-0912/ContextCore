@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL 短期记忆晋升候选项存储。
-/// R14-PG-3：替代 UnsupportedShortTermPromotionCandidateStore，让 Postgres provider 在 HA 场景下能持久化晋升候选与审核记录。
+/// 替代 UnsupportedShortTermPromotionCandidateStore，让 Postgres provider 在 HA 场景下能持久化晋升候选与审核记录。
 /// </summary>
 public sealed class PostgresShortTermPromotionCandidateStore : PostgresStoreBase, IShortTermPromotionCandidateStore
 {

@@ -4,7 +4,7 @@ using ContextCore.Storage.FileSystem;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R13.1 #2: FileSystemReader.ReadLinesReverseAsync 正确性测试。
+/// FileSystemReader.ReadLinesReverseAsync 正确性测试。
 /// 验证从文件尾部反向 I/O 读取行：newest-first 顺序、空白行跳过、
 /// \r\n 与 \n 混合行结束符、跨块边界拼接、UTF-8 多字节字符安全、maxCount 早停。
 /// </summary>

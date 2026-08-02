@@ -222,7 +222,7 @@ public class ContextCoreGraphTraversalSafetyTests
             $"Traversal of 100k edges took {stopwatch.Elapsed.TotalSeconds:F2}s, expected < 5s");
         Assert.AreEqual(50, result.Edges.Count,
             $"Fanout=50 should return exactly 50 edges, got {result.Edges.Count}");
-        // P1-4: 100K 边远超 MaxScan=500（maxFanout=50 × 10），存储层会截断并传播 Truncated=true。
+        // 100K 边远超 MaxScan=500（maxFanout=50 × 10），存储层会截断并传播 Truncated=true。
         Assert.IsTrue(result.Truncated,
             "100K edges with MaxScan=500 should propagate storage-side truncation");
         Assert.IsTrue(result.Warnings.Count > 0,
@@ -283,7 +283,7 @@ public class ContextCoreGraphTraversalSafetyTests
     // ── P1-8：relation weight/confidence/路径衰减传播到多跳评分 ─────────────
 
     /// <summary>
-    /// P1-8：默认参数（DecayFactor=1.0, weight=1.0, confidence=1.0）下，
+    /// 默认参数（DecayFactor=1.0, weight=1.0, confidence=1.0）下，
     /// childScore 应等于 parentScore，保持向后兼容。
     /// </summary>
     [TestMethod]
@@ -318,7 +318,7 @@ public class ContextCoreGraphTraversalSafetyTests
     }
 
     /// <summary>
-    /// P1-8：DecayFactor=0.5 时，每跳 childScore 衰减为 parentScore * 0.5。
+    /// DecayFactor=0.5 时，每跳 childScore 衰减为 parentScore * 0.5。
     /// </summary>
     [TestMethod]
     public async Task P1_8_DecayFactor_PropagatesExponentiallyAcrossHops()
@@ -355,7 +355,7 @@ public class ContextCoreGraphTraversalSafetyTests
     }
 
     /// <summary>
-    /// P1-8：低 weight 边应降低 childScore（weight=0.5 → childScore 减半）。
+    /// 低 weight 边应降低 childScore（weight=0.5 → childScore 减半）。
     /// </summary>
     [TestMethod]
     public async Task P1_8_LowWeight_ReducesChildScore()
@@ -387,7 +387,7 @@ public class ContextCoreGraphTraversalSafetyTests
     }
 
     /// <summary>
-    /// P1-8：低 confidence 边应降低 childScore（confidence=0.4 → childScore = parentScore * 0.4）。
+    /// 低 confidence 边应降低 childScore（confidence=0.4 → childScore = parentScore * 0.4）。
     /// </summary>
     [TestMethod]
     public async Task P1_8_LowConfidence_ReducesChildScore()
@@ -418,7 +418,7 @@ public class ContextCoreGraphTraversalSafetyTests
     }
 
     /// <summary>
-    /// P1-8：weight > 1.0 被 cap 到 1.0，防止分数无界增长。
+    /// weight > 1.0 被 cap 到 1.0，防止分数无界增长。
     /// </summary>
     [TestMethod]
     public async Task P1_8_HighWeight_CappedToOneToPreventScoreGrowth()
@@ -447,7 +447,7 @@ public class ContextCoreGraphTraversalSafetyTests
     }
 
     /// <summary>
-    /// P1-8：高 score 路径应在 frontier 排序中优先于低 score 路径，
+    /// 高 score 路径应在 frontier 排序中优先于低 score 路径，
     /// 即 BFS 会优先扩展通过高质量边到达的节点。
     /// </summary>
     [TestMethod]
@@ -491,7 +491,7 @@ public class ContextCoreGraphTraversalSafetyTests
     }
 
     /// <summary>
-    /// P1-8：EnableScorePropagation=false 时仅应用 DecayFactor，不传播 weight/confidence。
+    /// EnableScorePropagation=false 时仅应用 DecayFactor，不传播 weight/confidence。
     /// 保持与旧版（pre-P1-8）完全等价的语义。
     /// </summary>
     [TestMethod]

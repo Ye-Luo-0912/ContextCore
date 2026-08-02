@@ -67,7 +67,7 @@ internal static class EvalStateFactory
             TokenizerResolver = tokenizerResolver,
             PromotionRecordStore = memoryStore,
             WorkingMemoryService = memoryStore,
-            // R13.3 #2：注入 InMemory 能力契约，驱动 Retrieval fanout
+            // 注入 InMemory 能力契约，驱动 Retrieval fanout
             Capabilities = new StoreRuntimeCapabilities(StorageProviderKind.InMemory),
         });
 

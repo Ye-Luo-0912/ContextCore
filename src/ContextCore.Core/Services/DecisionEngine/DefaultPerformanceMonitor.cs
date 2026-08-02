@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R29 WP-F-3：DefaultPerformanceMonitor — 默认性能监控实现
+// DefaultPerformanceMonitor — 默认性能监控实现
 //
 // 目标（对齐 Workstream F 规格）：
 //   1. 实现 IPerformanceMonitor 接口，提供 per-scope ring buffer 样本存储。
@@ -22,7 +22,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-F-3：默认 IPerformanceMonitor 实现。
+/// 默认 IPerformanceMonitor 实现。
 /// per-scope ring buffer + P95 估算 + 自愈（连续低于阈值样本解除回退）。
 /// </summary>
 public sealed class DefaultPerformanceMonitor : IPerformanceMonitor
@@ -190,7 +190,7 @@ public sealed class DefaultPerformanceMonitor : IPerformanceMonitor
             var snapshot = new double[_count];
             for (int i = 0; i < _count; i++) snapshot[i] = _buffer[i];
             Array.Sort(snapshot);
-            // P95 索引：使用 nearest-rank 方法
+            // 索引：使用 nearest-rank 方法
             var idx = (int)Math.Ceiling(0.95 * _count) - 1;
             if (idx < 0) idx = 0;
             if (idx >= _count) idx = _count - 1;

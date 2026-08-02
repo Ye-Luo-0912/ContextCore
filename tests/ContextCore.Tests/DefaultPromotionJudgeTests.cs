@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Evolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R17-2 DefaultPromotionJudge 实现层测试。
+/// DefaultPromotionJudge 实现层测试。
 /// 覆盖：5 种 PromotionDecision（Advance/Hold/Rollback/Promote/Reject）、终态阶段、RollbackCondition 触发、ExpectedGain 方向对比、置信度阈值、硬边界。
 /// </summary>
 [TestClass]

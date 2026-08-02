@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R21-4：Memory Evolution Engine 统一契约（替换 R21-1 的 SupersededItemState）
+// Memory Evolution Engine 统一契约（替换 R21-1 的 SupersededItemState）
 //
 // 设计变更（用户选择"合并为统一 MemoryState 枚举"）：
 //   - 原 SupersededItemState（5 值：Unknown/Active/Superseded/Replaced/Archived）
@@ -49,7 +49,7 @@ namespace ContextCore.Abstractions;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-4：item 在 Memory Evolution 生命周期中的统一状态。
+/// item 在 Memory Evolution 生命周期中的统一状态。
 /// 合并了 supersede 事件流（Superseded/Replaced/Archived）与衰减生命周期（Fresh/Cooling/Dormant/Rejected）。
 /// </summary>
 /// <remarks>
@@ -92,7 +92,7 @@ public enum MemoryState : byte
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-4：memory state 转换事件记录。捕获"何时 / 何因 / 由谁触发状态转换"事件流。
+/// memory state 转换事件记录。捕获"何时 / 何因 / 由谁触发状态转换"事件流。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -151,7 +151,7 @@ public sealed record MemoryStateEventRecord
 }
 
 /// <summary>
-/// R21-4：memory state 事件查询条件。
+/// memory state 事件查询条件。
 /// </summary>
 public sealed record MemoryStateEventQuery
 {
@@ -188,7 +188,7 @@ public sealed record MemoryStateEventQuery
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-4：memory state 事件流存储接口。append-only 语义，记录 item 状态转换事件。
+/// memory state 事件流存储接口。append-only 语义，记录 item 状态转换事件。
 /// </summary>
 /// <remarks>
 /// 实现层可注入 Postgres / InMemory / FileSystem store。
@@ -235,7 +235,7 @@ public interface IMemoryStateStore
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-4：Consolidation ETL 请求。把 superseded/replaced items 从 active store 迁移到归档 store。
+/// Consolidation ETL 请求。把 superseded/replaced items 从 active store 迁移到归档 store。
 /// </summary>
 /// <remarks>
 /// ETL 流程：
@@ -271,7 +271,7 @@ public sealed record ConsolidationRequest
 }
 
 /// <summary>
-/// R21-4：Consolidation ETL 执行结果。
+/// Consolidation ETL 执行结果。
 /// </summary>
 public sealed record ConsolidationRunResult
 {
@@ -322,7 +322,7 @@ public sealed record ConsolidationRunResult
 }
 
 /// <summary>
-/// R21-4：Consolidation ETL 接口。把 superseded/replaced items 从 active store 迁移到归档 store。
+/// Consolidation ETL 接口。把 superseded/replaced items 从 active store 迁移到归档 store。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -347,7 +347,7 @@ public interface IConsolidationETL
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-4：MemoryState 扩展方法。提供状态机判断逻辑。
+/// MemoryState 扩展方法。提供状态机判断逻辑。
 /// </summary>
 public static class MemoryStateExtensions
 {

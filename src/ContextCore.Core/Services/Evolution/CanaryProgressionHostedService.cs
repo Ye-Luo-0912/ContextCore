@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// R28-B.8：Canary Progression HostedService（工作包 D）
+// Canary Progression HostedService（工作包 D）
 //
 // 目标（对齐 R28-B.8 规格）：
 //   1. 后台定时（按 CanarySchedulerOptions.PollingInterval）轮询所有处于 ScopedCanary
@@ -28,7 +28,7 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8：Canary 调度器配置。
+/// Canary 调度器配置。
 /// </summary>
 public sealed class CanarySchedulerOptions
 {
@@ -40,7 +40,7 @@ public sealed class CanarySchedulerOptions
 }
 
 /// <summary>
-/// R28-B.8：Canary 渐进推进后台服务。定时轮询 ScopedCanary 阶段的 pipeline runs，
+/// Canary 渐进推进后台服务。定时轮询 ScopedCanary 阶段的 pipeline runs，
 /// 基于 ICanaryMetricsCollector 聚合的指标自动推进或回滚 canary 百分比。
 /// </summary>
 public sealed class CanaryProgressionHostedService : BackgroundService
@@ -60,7 +60,7 @@ public sealed class CanaryProgressionHostedService : BackgroundService
     /// <param name="timeProvider">时间提供者（可选，默认 System）。</param>
     /// <param name="logger">日志器。</param>
     /// <remarks>
-    /// P0-2：构造函数改用 <see cref="IOptionsMonitor{T}"/> 注入 <see cref="CanarySchedulerOptions"/>，
+    /// 构造函数改用 <see cref="IOptionsMonitor{T}"/> 注入 <see cref="CanarySchedulerOptions"/>，
     /// 让 ProductionHA profile 的 <c>PostConfigure&lt;CanarySchedulerOptions&gt;(o => o.Enabled = false)</c>
     /// 能被本服务感知。原直接 POCO 注入读取的是 Options Pipeline 之外的快照，导致
     /// HA 模式下 Progression 仍 Enabled，与 Leader 推进器同时运行。
@@ -84,7 +84,7 @@ public sealed class CanaryProgressionHostedService : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // P0-2：每次循环读取 IOptionsMonitor.CurrentValue 而非构造时快照，
+        // 每次循环读取 IOptionsMonitor.CurrentValue 而非构造时快照，
         // 让 PostConfigure 覆盖（如 ProductionHA 强制 Enabled=false）能即时生效。
         var options = _optionsMonitor.CurrentValue;
         if (!options.Enabled)
@@ -113,7 +113,7 @@ public sealed class CanaryProgressionHostedService : BackgroundService
 
             try
             {
-                // P0-2：每次延迟前重新读取 CurrentValue，让运行时配置变更（如 PostConfigure）生效。
+                // 每次延迟前重新读取 CurrentValue，让运行时配置变更（如 PostConfigure）生效。
                 await Task.Delay(_optionsMonitor.CurrentValue.PollingInterval, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

@@ -19,21 +19,21 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Benchmarks;
 
 // ===========================================================================
-// R28-B.6 Closure Gate 性能基准
+// Closure Gate 性能基准
 //
 // 测量目标（对应任务 §1~§5）：
-//   §1 Provider/Store-call 计数：通过计数包装 store/router/provider，在每次 op
+//   Provider/Store-call 计数：通过计数包装 store/router/provider，在每次 op
 //      结束时拍快照写入静态字典，再由自定义 IColumn 展示到 summary。
-//   §2 p50/p95 latency：BenchmarkDotNet 默认统计已提供 Percentile 列，无需额外配置。
-//   §3 allocated bytes/op + Gen0/Gen1 GC：[MemoryDiagnoser] 自动收集。
-//   §4 100% V2 vs Legacy 差分：LegacyRetrieval / LegacyPackageBuild（基线）
+//   p50/p95 latency：BenchmarkDotNet 默认统计已提供 Percentile 列，无需额外配置。
+//   allocated bytes/op + Gen0/Gen1 GC：[MemoryDiagnoser] 自动收集。
+//   100% V2 vs Legacy 差分：LegacyRetrieval / LegacyPackageBuild（基线）
 //      对比 V2Retrieval_100Percent / V2PackageBuild_100Percent。
-//   §5 sampled shadow 额外开销门：V2Retrieval_100Percent（无 shadow）
+//   sampled shadow 额外开销门：V2Retrieval_100Percent（无 shadow）
 //      对比 SampledShadowRetrieval_Rate0 / SampledShadowRetrieval_Rate100。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// §0 文件计数快照存储 — 跨进程传递计数（BenchmarkDotNet 在子进程中运行 benchmark，
+// 文件计数快照存储 — 跨进程传递计数（BenchmarkDotNet 在子进程中运行 benchmark，
 //    静态字典不回传宿主进程，故用文件中转）
 // ---------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ internal static class ClosureGateCounters
 }
 
 // ---------------------------------------------------------------------------
-// §1 计数包装 Store — 记录 QueryAsync / GetAsync 调用次数
+// 计数包装 Store — 记录 QueryAsync / GetAsync 调用次数
 // ---------------------------------------------------------------------------
 
 internal sealed class CountingContextStore : IContextStore
@@ -155,7 +155,7 @@ internal sealed class CountingContextStore : IContextStore
 }
 
 // ---------------------------------------------------------------------------
-// §2 计数包装 Router — 记录 RouteAsync 调用次数
+// 计数包装 Router — 记录 RouteAsync 调用次数
 // ---------------------------------------------------------------------------
 
 internal sealed class CountingRouter : IRouter
@@ -178,7 +178,7 @@ internal sealed class CountingRouter : IRouter
 }
 
 // ---------------------------------------------------------------------------
-// §3 计数包装 CandidateProvider — 记录 ExecuteAsync 调用次数
+// 计数包装 CandidateProvider — 记录 ExecuteAsync 调用次数
 // ---------------------------------------------------------------------------
 
 internal sealed class CountingCandidateProvider : ICandidateProvider
@@ -202,7 +202,7 @@ internal sealed class CountingCandidateProvider : ICandidateProvider
 }
 
 // ---------------------------------------------------------------------------
-// §4 自定义 IColumn — 从计数文件读取快照展示到 summary
+// 自定义 IColumn — 从计数文件读取快照展示到 summary
 //    BenchmarkDotNet 在子进程中执行 benchmark 方法，IColumn 在宿主进程中渲染 summary，
 //    故通过文件中转计数（见 ClosureGateCounters）。
 // ---------------------------------------------------------------------------
@@ -259,7 +259,7 @@ internal sealed class CounterColumn : IColumn
 }
 
 // ---------------------------------------------------------------------------
-// §5 Benchmark 配置 — 继承 BenchmarkOutputConfig（含 Job[MinIterationCount=15]
+// Benchmark 配置 — 继承 BenchmarkOutputConfig（含 Job[MinIterationCount=15]
 //    + JSON/Markdown/CSV 导出器 + ConsoleLogger + DefaultColumnProviders），
 //    仅追加自定义计数列。确保配置链路：
 //    Program.Main → BenchmarkSwitcher → BenchmarkOutputConfig → MinIterationCount=15
@@ -286,7 +286,7 @@ public sealed class ClosureGateBenchmarksConfig : BenchmarkOutputConfig
 }
 
 // ---------------------------------------------------------------------------
-// §6 ClosureGateBenchmarks — 主基准类
+// ClosureGateBenchmarks — 主基准类
 // ---------------------------------------------------------------------------
 
 [MemoryDiagnoser]
@@ -733,7 +733,7 @@ public class ClosureGateBenchmarks
     }
 
     // ===================================================================
-    // §4 Legacy 基线
+    // Legacy 基线
     // ===================================================================
 
     // Legacy 检索路径（HybridContextRetriever.RetrieveAsync）
@@ -755,7 +755,7 @@ public class ClosureGateBenchmarks
     }
 
     // ===================================================================
-    // §4 100% V2-only 路径（cutover=100, 无 shadow）
+    // 100% V2-only 路径（cutover=100, 无 shadow）
     // ===================================================================
 
     // V2 检索路径（AuthoritativeRetrievalRuntime, cutover=100）
@@ -781,7 +781,7 @@ public class ClosureGateBenchmarks
     }
 
     // ===================================================================
-    // §5 sampled shadow 额外开销门
+    // sampled shadow 额外开销门
     // ===================================================================
 
     // shadow rate=0：experimentPlane 已注入但采样率为 0，不执行 Legacy 对照。

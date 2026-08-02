@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core;
 
 /// <summary>
-/// R15 增量上下文包：默认增量构建器实现。
+/// 增量上下文包：默认增量构建器实现。
 /// 基于前一个快照与当前请求执行增量构建，保证与全量构建完全等价。
 /// </summary>
 /// <remarks>
@@ -71,14 +71,14 @@ public sealed class PackageIncrementalBuilder : IPackageIncrementalBuilder
         _onDeltaPlanned?.Invoke(deltaPlan);
 
         // 3. 根据 delta kind 选择路径
-        // R15 V2: NoChange 路径直接复用快照中的 PackageTemplate，跳过 build pipeline
+        // V2: NoChange 路径直接复用快照中的 PackageTemplate，跳过 build pipeline
         if (deltaPlan.Kind == PackageDeltaKind.NoChange)
         {
             return await _innerBuilder.RebuildFromSnapshotAsync(
                 previousSnapshot, currentRequest, cancellationToken).ConfigureAwait(false);
         }
 
-        // R15 V2: 其他 delta kind 委托到全量构建（PartialSectionChange 选择性重载留待 V3）
+        // V2: 其他 delta kind 委托到全量构建（PartialSectionChange 选择性重载留待 V3）
         return await _innerBuilder.BuildDetailedAsync(currentRequest, cancellationToken).ConfigureAwait(false);
     }
 

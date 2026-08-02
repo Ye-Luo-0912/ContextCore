@@ -5,7 +5,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R24-1：DefaultAgentContextBridge 实现测试。
+/// DefaultAgentContextBridge 实现测试。
 ///
 /// 覆盖：
 ///   1. 构造函数 null packageBuilder 抛异常

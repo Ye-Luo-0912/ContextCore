@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：ContextCandidateSource → RetrievalExpert 映射。
+/// ContextCandidateSource → RetrievalExpert 映射。
 /// GlobalContext / RelatedContext / Unknown 映射到 RetrievalExpert.Unknown
 /// （这两个 source 不是 R20 Expert，而是 R18-1 的特殊候选类别）。
 /// </summary>

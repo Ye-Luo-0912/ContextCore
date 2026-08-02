@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Service.Extensions;
 
 // ===========================================================================
-// R23-7：Agent Runtime DI 扩展方法。
+// Agent Runtime DI 扩展方法。
 //
 // 提供 AddAgentRuntime / AddGenericToolAgentRuntime / AddCodexAgentRuntime /
 // AddClaudeAgentRuntime / AddAgentContextDeltaCalculator / AddAgentCheckpointStore
@@ -20,7 +20,7 @@ namespace ContextCore.Service.Extensions;
 // ===========================================================================
 
 /// <summary>
-/// R23-7：Agent Runtime DI 扩展方法。
+/// Agent Runtime DI 扩展方法。
 /// </summary>
 public static class AgentRuntimeServiceCollectionExtensions
 {

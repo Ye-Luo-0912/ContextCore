@@ -83,7 +83,7 @@ public sealed class FileVectorStore : IVectorStore
             .Where(item => query.MinScore is null || item.Score >= query.MinScore.Value)
             .OrderByDescending(item => item.Score)
             .ThenByDescending(item => item.Record.UpdatedAt)
-            // R12.4A #7: 确定性 tie-break — 同 Score/UpdatedAt 的命中按 SourceId 升序，
+            // #7: 确定性 tie-break — 同 Score/UpdatedAt 的命中按 SourceId 升序，
             // 避免 topK 截断时依赖文件行顺序导致向量检索结果不稳定。
             .ThenBy(item => item.Record.SourceId, StringComparer.OrdinalIgnoreCase)
             .Take(topK)
@@ -105,7 +105,7 @@ public sealed class FileVectorStore : IVectorStore
         {
             foreach (var path in ResolveVectorPaths(workspaceId, null))
             {
-                // P1-1: TryUpdateAsync 在跨进程锁内读改写；未匹配到目标时返回 null 跳过写入，
+                // TryUpdateAsync 在跨进程锁内读改写；未匹配到目标时返回 null 跳过写入，
                 // 避免对未创建/未变更的 vectors.jsonl 创建空文件。
                 await _jsonLines.TryUpdateAsync<VectorRecord>(
                     path,

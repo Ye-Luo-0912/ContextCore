@@ -5,7 +5,7 @@ namespace ContextCore.Service.Hosting;
 
 /// <summary>托管后台服务，持续轮询 ContextCore 作业队列并分发给对应处理器。</summary>
 /// <remarks>
-/// P0-4：当队列实现 <see cref="ILeasedJobQueue"/> 时（如 Postgres），worker 切换到租约路径：
+/// 当队列实现 <see cref="ILeasedJobQueue"/> 时（如 Postgres），worker 切换到租约路径：
 /// 使用 <see cref="ILeasedJobQueue.AcquireLeaseAsync"/> 获取带租约的作业，
 /// 处理过程中周期性调用 <see cref="ILeasedJobQueue.RenewHeartbeatAsync"/> 续约；
 /// 进程崩溃后过期租约被其他 worker 抢占恢复，避免 Running 任务永久滞留。
@@ -39,7 +39,7 @@ public sealed class ContextJobWorker : BackgroundService
 
 		var delay = TimeSpan.FromMilliseconds(Math.Max(100, _options.Value.PollIntervalMilliseconds));
 		var concurrency = Math.Max(1, _options.Value.Concurrency);
-		// P0-4：租约配置。仅当队列实现 ILeasedJobQueue 时生效；否则走 Dequeue 路径。
+		// 租约配置。仅当队列实现 ILeasedJobQueue 时生效；否则走 Dequeue 路径。
 		var leaseDuration = _options.Value.LeaseDuration;
 		var heartbeatInterval = _options.Value.HeartbeatInterval;
 		var owner = GenerateOwnerId();
@@ -61,7 +61,7 @@ public sealed class ContextJobWorker : BackgroundService
 			// 每轮创建 scope，确保 scoped 存储或处理器生命周期正确。
 			var scope = _services.CreateScope();
 			var queue = scope.ServiceProvider.GetRequiredService<IContextJobQueue>();
-			// P0-4：检测队列是否支持租约语义。Postgres 实现 ILeasedJobQueue；InMemory/File 不实现。
+			// 检测队列是否支持租约语义。Postgres 实现 ILeasedJobQueue；InMemory/File 不实现。
 			var leasedQueue = queue as ILeasedJobQueue;
 
 			ContextJob? job;
@@ -87,7 +87,7 @@ public sealed class ContextJobWorker : BackgroundService
 			// 异步执行作业，不阻塞轮询循环，允许同时处理多个作业。
 			_ = Task.Run(async () =>
 			{
-				// P0-4：租约路径下启动 heartbeat 任务，周期性续约。
+				// 租约路径下启动 heartbeat 任务，周期性续约。
 				// leaseCts 链接到 stoppingToken——host 关闭时也会取消租约。
 				// heartbeat 续约失败时取消 leaseCts，让 DispatchAsync 抛出 OperationCanceledException，
 				// 主任务据此识别租约丢失并跳过 Ack/Nack。
@@ -109,7 +109,7 @@ public sealed class ContextJobWorker : BackgroundService
 					var eventSink = scope.ServiceProvider.GetRequiredService<IContextEventSink>();
 					await dispatcher.DispatchAsync(job, effectiveToken).ConfigureAwait(false);
 					await queue.AckAsync(job.JobId, stoppingToken).ConfigureAwait(false);
-					// R12.4A #9: Event Sink fail-open——作业已成功并 Ack，sink 发射失败不得触发 Nack/error 路径。
+					// #9: Event Sink fail-open——作业已成功并 Ack，sink 发射失败不得触发 Nack/error 路径。
 					// 之前 EmitAsync 抛出会落入外层 catch，导致对已 Ack 的作业执行 NackAsync（CAS 下为 no-op）
 					// 并发射误导性的 Error 事件。现在单独捕获并降级为 Warning 日志。
 					try
@@ -123,7 +123,7 @@ public sealed class ContextJobWorker : BackgroundService
 				}
 				catch (OperationCanceledException) when (leaseCts is not null && leaseCts.IsCancellationRequested && !stoppingToken.IsCancellationRequested)
 				{
-					// P0-4：租约丢失——RenewHeartbeatAsync 返回 false，heartbeat 任务已取消 leaseCts。
+					// 租约丢失——RenewHeartbeatAsync 返回 false，heartbeat 任务已取消 leaseCts。
 					// 不 Ack/Nack：保留 state='Running'，lease_expires_at 已过期，
 					// 其他 worker 的 AcquireLeaseAsync 会通过 (state='Running' AND lease_expires_at <= now) 抢占恢复。
 					// 注意：仅在 stoppingToken 未取消时判定为租约丢失——host 关闭导致的取消不算租约丢失。
@@ -148,7 +148,7 @@ public sealed class ContextJobWorker : BackgroundService
 				}
 				finally
 				{
-					// P0-4：停止 heartbeat 任务并释放 leaseCts。
+					// 停止 heartbeat 任务并释放 leaseCts。
 					// leaseCts.Cancel() 让 heartbeat 的 Task.Delay 抛出 OperationCanceledException 而退出。
 					if (leaseCts is not null)
 					{
@@ -168,7 +168,7 @@ public sealed class ContextJobWorker : BackgroundService
 	}
 
 	/// <summary>
-	/// P0-4：周期性续约租约。续约失败（返回 false）时取消 leaseCts，让 DispatchAsync 抛出 OperationCanceledException。
+	/// 周期性续约租约。续约失败（返回 false）时取消 leaseCts，让 DispatchAsync 抛出 OperationCanceledException。
 	/// 续约异常视为瞬时错误，等待下一次续约——若 lease 真的过期，下一次 RenewHeartbeatAsync 仍会返回 false。
 	/// </summary>
 	private async Task RunHeartbeatAsync(

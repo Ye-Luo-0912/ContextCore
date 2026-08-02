@@ -44,7 +44,7 @@ public sealed class FileJsonLineStore
     }
 
     /// <summary>
-    /// P1-7：流式逐行读取并反序列化 JSONL 文件，避免一次性将所有记录载入 List。
+    /// 流式逐行读取并反序列化 JSONL 文件，避免一次性将所有记录载入 List。
     /// 文件不存在时返回空枚举；损坏行（反序列化失败）跳过且不产出。
     /// </summary>
     public async IAsyncEnumerable<T> StreamAsync<T>(
@@ -70,7 +70,7 @@ public sealed class FileJsonLineStore
     }
 
     /// <summary>
-    /// R13.1 #2：从 JSONL 文件尾部读取最近的 <paramref name="maxCount"/> 条记录。
+    /// 从 JSONL 文件尾部读取最近的 <paramref name="maxCount"/> 条记录。
     /// append-only 文件中最新记录在文件末尾，从尾部反序列化可在收集够后立即停止，
     /// 避免对大历史文件逐行反序列化。返回顺序为最新在前（文件末尾 → 文件头部）。
     /// </summary>
@@ -90,7 +90,7 @@ public sealed class FileJsonLineStore
             return Array.Empty<T>();
         }
 
-        // R13.1 #2：反向 I/O 读取——仅读取尾部所需字节，newest-first，空白行已跳过。
+        // 反向 I/O 读取——仅读取尾部所需字节，newest-first，空白行已跳过。
         var lines = await _reader.ReadLinesReverseAsync(path, maxCount, cancellationToken)
             .ConfigureAwait(false);
 
@@ -212,7 +212,7 @@ public sealed class FileJsonLineStore
     }
 
     /// <summary>
-    /// P1-1：在单个写锁内对 JSONL 文件执行读改写；回调返回 null 时跳过写入，
+    /// 在单个写锁内对 JSONL 文件执行读改写；回调返回 null 时跳过写入，
     /// 用于 delete-by-id 等"无修改即不写"语义——文件不存在或未匹配目标时不会创建空文件。
     /// </summary>
     /// <returns>true 表示已写入；false 表示回调跳过（未发生磁盘写入）。</returns>

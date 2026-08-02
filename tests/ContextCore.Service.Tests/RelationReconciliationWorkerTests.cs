@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Service.Tests;
 
 /// <summary>
-/// P1-5：RelationReconciliationWorker 单元测试。
+/// RelationReconciliationWorker 单元测试。
 /// 使用 fake IRelationOutboxStore / IRelationStore / IRelationProjectionWriter 验证：
 /// <list type="bullet">
 ///   <item>Enabled=false → worker 立即退出，不调用任何 store。</item>

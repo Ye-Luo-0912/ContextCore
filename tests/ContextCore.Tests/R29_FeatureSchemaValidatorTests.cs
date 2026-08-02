@@ -5,27 +5,27 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-A-4：DefaultFeatureSchemaValidator 单元测试
+// DefaultFeatureSchemaValidator 单元测试
 //
 // 覆盖范围：
-//   §1 SchemaVersion 校验
+//   SchemaVersion 校验
 //        - 匹配 / 不匹配 / 空
-//   §2 FeatureVector 必填特征
+//   FeatureVector 必填特征
 //        - 全部提供 / 缺失必填 / 缺失可选
-//   §3 未知特征检查（严格模式）
+//   未知特征检查（严格模式）
 //        - 开启：拒绝未知特征
 //        - 关闭：允许未知特征
-//   §4 类型可转换性
+//   类型可转换性
 //        - Numeric / Categorical / Boolean / Text
 //        - 类型不匹配
-//   §5 默认值回退
+//   默认值回退
 //        - 必填缺失 + 有默认值 → Warning
 //        - 必填缺失 + 无默认值 → Error
 //        - 默认值无法解析 → Error
-//   §6 FeatureBatch 校验
+//   FeatureBatch 校验
 //        - SchemaVersion / FeatureCount / FeatureNames 顺序 / Values 长度 / NaN 检测
-//   §7 ValidateBatch 聚合
-//   §8 DI 注册扩展
+//   ValidateBatch 聚合
+//   DI 注册扩展
 // ===========================================================================
 
 [TestClass]
@@ -68,7 +68,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §1 SchemaVersion 校验
+    // SchemaVersion 校验
     // ===========================================================================
 
     [TestMethod]
@@ -118,7 +118,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §2 FeatureVector 必填特征
+    // FeatureVector 必填特征
     // ===========================================================================
 
     [TestMethod]
@@ -215,7 +215,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §3 未知特征检查（严格模式）
+    // 未知特征检查（严格模式）
     // ===========================================================================
 
     [TestMethod]
@@ -252,7 +252,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §4 类型可转换性
+    // 类型可转换性
     // ===========================================================================
 
     [TestMethod]
@@ -348,7 +348,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §5 默认值回退
+    // 默认值回退
     // ===========================================================================
 
     [TestMethod]
@@ -397,7 +397,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §6 FeatureBatch 校验
+    // FeatureBatch 校验
     // ===========================================================================
 
     [TestMethod]
@@ -549,7 +549,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §7 ValidateBatch 聚合
+    // ValidateBatch 聚合
     // ===========================================================================
 
     [TestMethod]
@@ -643,7 +643,7 @@ public sealed class R29_FeatureSchemaValidatorTests
     }
 
     // ===========================================================================
-    // §8 DI 注册扩展
+    // DI 注册扩展
     // ===========================================================================
 
     [TestMethod]

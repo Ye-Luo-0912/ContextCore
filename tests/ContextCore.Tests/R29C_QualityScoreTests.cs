@@ -6,7 +6,7 @@ using ContextCore.Core.Services.Policy;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 WP-C-3：质量分指标 + Canary 回滚阈值接入验收测试
+// 质量分指标 + Canary 回滚阈值接入验收测试
 //
 // 覆盖范围（3 个测试类，共 22 项）：
 //   1. CanaryQualityScoreCalculatorTests（8 项）— 质量分计算器单元行为

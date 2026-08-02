@@ -58,7 +58,7 @@ public enum ConstraintLevel
     Soft,
     /// <summary>混合约束（merged section：Hard + Soft + 其他级别混合）。</summary>
     /// <remarks>
-    /// P0-1 修复：merged_constraint 不再被整体视为 hard。Mixed 不可直接免预算，
+    /// 修复：merged_constraint 不再被整体视为 hard。Mixed 不可直接免预算，
     /// 应由 section allocator 确保其中的 Hard segment 被保留。
     /// </remarks>
     Mixed,

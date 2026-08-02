@@ -160,7 +160,7 @@ internal sealed class PackageTraceRecorder
                         sectionName,
                         sectionResult.Reason,
                         candidate.EstimatedTokens);
-                    // P0-6.3: 精确区分 Accepted/PartiallyAccepted 并填充 IncludedTokens/OriginalTokens/TruncationRatio。
+                    // 精确区分 Accepted/PartiallyAccepted 并填充 IncludedTokens/OriginalTokens/TruncationRatio。
                     // - Accepted: IncludedTokens = OriginalTokens = candidate.EstimatedTokens（无截断，ratio=1.0）
                     // - PartiallyAccepted: IncludedTokens = sectionResult.PartiallyAcceptedIncludedTokens（截断后保留量）
                     if (isPartiallyAccepted)

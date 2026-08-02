@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-5a：IMemoryUtilityStatsStore 的 in-memory 实现（read-only 公共 API）。
+/// IMemoryUtilityStatsStore 的 in-memory 实现（read-only 公共 API）。
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐澄清 #4）：

@@ -87,7 +87,7 @@ public static class ModelRouteResolver
         ModelGatewayOptions options,
         ModelRequest request)
     {
-        // WP-0需求6：ModelArtifactId 精确匹配优先于 Role 路由。
+        // 需求6：ModelArtifactId 精确匹配优先于 Role 路由。
         // 调用方指定了具体工件 ID 时，直接在所有已启用模型中查找 Metadata["modelArtifactId"] 匹配的端点。
         if (!string.IsNullOrWhiteSpace(request.ModelArtifactId))
         {

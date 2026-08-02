@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.ModelExecution;
 
 // ===========================================================================
-// R29 WP-A-3：Default Calibration Validator
+// Default Calibration Validator
 //
 // 目标：
 //   在模型加载时对 CalibrationParameters 执行统计有效性验证，按 Kind 路由：
@@ -23,7 +23,7 @@ namespace ContextCore.Core.Services.ModelExecution;
 // ===========================================================================
 
 /// <summary>
-/// R29 WP-A-3：默认校准参数验证器。
+/// 默认校准参数验证器。
 /// </summary>
 public sealed class DefaultCalibrationValidator : ICalibrationValidator
 {
@@ -112,7 +112,7 @@ public sealed class DefaultCalibrationValidator : ICalibrationValidator
             });
         }
 
-        // R28-D 兼容别名：Parameter 应与 ParameterA 同步
+        // 兼容别名：Parameter 应与 ParameterA 同步
         if (parameters.Kind == CalibrationMethodKind.Platt
             && !Equals(parameters.Parameter, parameters.ParameterA))
         {

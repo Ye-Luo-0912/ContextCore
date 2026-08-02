@@ -4,19 +4,19 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Evolution;
 
 // ===========================================================================
-// R27-2：InMemoryPipelineRunStore — IPipelineRunStore 的 in-memory 实现。
+// InMemoryPipelineRunStore — IPipelineRunStore 的 in-memory 实现。
 //
 // 目标（对齐 R27 规格）：
 //   1. 实现 IPipelineRunStore 的 10 个方法（runs / canary / rollback / baseline + TryTransitionAsync）。
 //   2. 仅 in-memory；进程重启后丢失；生产实现应替换为 PostgresPipelineRunStore。
 //   3. 线程安全：ConcurrentDictionary + 按 proposal/run 维度分组查询；
-//      P0-7 TryTransitionAsync 使用 lock 保证 CAS 原子性（in-memory 场景无并发 CAS 真实意义，
+//      TryTransitionAsync 使用 lock 保证 CAS 原子性（in-memory 场景无并发 CAS 真实意义，
 //      但行为与 Postgres 实现对齐以便测试复用）。
 //   4. 与 InMemoryAgentCheckpointStore 设计模式对齐（R23-3）。
 // ===========================================================================
 
 /// <summary>
-/// R27-2：<see cref="IPipelineRunStore"/> 的 in-memory 实现。
+/// <see cref="IPipelineRunStore"/> 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 适用于测试 / 演示 / 单机开发场景。生产场景需替换为持久化实现。
@@ -34,7 +34,7 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
     private readonly ConcurrentDictionary<string, StageTransitionRecord> _stageTransitions
         = new(StringComparer.Ordinal);
 
-    // P0-7：保护 TryTransitionAsync 的 CAS 原子性
+    // 保护 TryTransitionAsync 的 CAS 原子性
     private readonly object _transitionLock = new();
 
     // ---------- Pipeline runs ----------
@@ -119,7 +119,7 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：使用 lock 保证 CAS 原子性（read current → check revision+stage → write snapshot + audit batch）。
+    /// 使用 lock 保证 CAS 原子性（read current → check revision+stage → write snapshot + audit batch）。
     /// 幂等语义：若 next.LastTransitionId 非 null 且等于 current.LastTransitionId，直接返回 current。
     /// </remarks>
     public Task<PipelineRunSnapshot?> TryTransitionAsync(

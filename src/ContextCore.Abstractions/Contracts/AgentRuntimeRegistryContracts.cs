@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R23-5：Agent Runtime Registry 契约
+// Agent Runtime Registry 契约
 //
 // 目标（对齐 R23 规格）：
 //   1. 支持同一 process 内注册多个 AgentRuntime（GenericTool / Codex / Claude），
@@ -18,7 +18,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R23-5：Agent Runtime 注册表。支持按 <see cref="AgentRuntimeKind"/> 解析对应 <see cref="IAgentRuntime"/>。
+/// Agent Runtime 注册表。支持按 <see cref="AgentRuntimeKind"/> 解析对应 <see cref="IAgentRuntime"/>。
 /// </summary>
 /// <remarks>
 /// 适用于同一 process 内同时使用多个 Agent Runtime（如 GenericTool 用于本地工具型 + Codex 用于生产）的场景。

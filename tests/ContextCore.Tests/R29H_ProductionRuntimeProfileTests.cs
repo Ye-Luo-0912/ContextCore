@@ -18,7 +18,7 @@ using Microsoft.Extensions.Options;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Production Runtime Profile 完整性测试
+// Production Runtime Profile 完整性测试
 //
 // 目标：验证 Production Runtime Profile 的完整功能：
 //   1. 统一 Worker 注册（ProductionRuntimeWorkerRegistry 在各 Profile 下正确捕获 Worker 类型名）
@@ -101,7 +101,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
     /// ProductionHA profile 下 WorkerRegistry 应包含 HA 平面 Worker：
     /// AgentRunRecoveryWorker / ModelStateReconcilerWorker / LearningMaterializationWorker /
     /// CanaryLeaderHostedService（以及 registry 统一记录的 CanaryProgressionHostedService）。
-    /// P0-6：旧平面 Durable Transport 专属 Worker 全部退役（执行平面收敛到 AgentKernelHost/AgentRunActor）。
+    /// 旧平面 Durable Transport 专属 Worker 全部退役（执行平面收敛到 AgentKernelHost/AgentRunActor）。
     /// </summary>
     [TestMethod]
     public void ProductionHA_Profile_WorkerRegistry_ContainsHAPlaneWorkers()

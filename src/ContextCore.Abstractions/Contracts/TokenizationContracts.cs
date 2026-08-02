@@ -74,7 +74,7 @@ public static class ContextTokenizationMetadataKeys
 }
 
 /// <summary>
-/// P5/P6：ContextItem.Metadata 中用于在 Store 与 Provider 之间传递持久化内容指标的键名。
+/// ContextItem.Metadata 中用于在 Store 与 Provider 之间传递持久化内容指标的键名。
 /// 摄取阶段（BasicContextIngestionService）计算 content_hash / content_token_cost 并写入 Metadata，
 /// Store 提取到专用列；Provider 读取后跳过在线 SHA-256 + tokenizer 调用。
 /// </summary>

@@ -6,7 +6,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// P1-5：PostgreSQL 关系写入 outbox 存储。实现 <see cref="IRelationOutboxStore"/>。
+/// PostgreSQL 关系写入 outbox 存储。实现 <see cref="IRelationOutboxStore"/>。
 /// </summary>
 /// <remarks>
 /// 原子性：当 <see cref="EnqueueAsync"/> / <see cref="EnqueueBatchAsync"/> 接受非空

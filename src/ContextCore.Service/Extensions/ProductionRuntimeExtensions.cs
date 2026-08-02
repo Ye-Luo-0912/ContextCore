@@ -29,7 +29,7 @@ namespace ContextCore.Service.Extensions;
 //   AddContextStorage → AddContextModelGateway → AddEmbeddingProviders
 //   → AddContextCoreRuntime（唯一入口，按 Profile + ModelMode 分发）
 //
-// P0-2 修复：
+// 修复：
 //   CanarySchedulerOptions / CanaryLeaderOptions 统一通过 IOptionsMonitor<T> 消费。
 //   ProductionHA 模式通过 PostConfigure 覆盖 Enabled 标志，而非 RemoveService + AddSingleton
 //   （后者不进入 Options Pipeline，IOptionsMonitor 读不到覆盖值）。
@@ -43,7 +43,7 @@ internal static class ProductionRuntimeExtensions
     // ── P0-1：统一入口 ──────────────────────────────────────────────────
 
     /// <summary>
-    /// P0-1：统一注册 Core 服务 + 生产 Runtime 服务，作为生产 Composition Root 的唯一入口。
+    /// 统一注册 Core 服务 + 生产 Runtime 服务，作为生产 Composition Root 的唯一入口。
     /// </summary>
     /// <param name="services">DI 容器。</param>
     /// <param name="configuration">应用配置（读取 <c>ContextCoreRuntime</c> 节）。</param>
@@ -74,7 +74,7 @@ internal static class ProductionRuntimeExtensions
         // 绑定 ContextCoreRuntimeOptions（唯一配置节，不再回退旧 ProductionRuntime 节）
         var runtimeOptions = BindContextCoreRuntimeOptions(configuration, sectionName);
 
-        // P0-3：ProductionHA 强制真实运行模式（AgentModelMode=RealModel, ToolMode=RealDispatch）。
+        // ProductionHA 强制真实运行模式（AgentModelMode=RealModel, ToolMode=RealDispatch）。
         // ProductionHA 不允许 DeterministicAgentModelTransport / EchoToolDispatcher 静默生效——
         // 这些是测试/开发用 fallback，生产 HA 必须使用真实 transport / dispatcher。
         if (runtimeOptions.Profile == RuntimeProfile.ProductionHA)
@@ -87,7 +87,7 @@ internal static class ProductionRuntimeExtensions
         }
 
         // 按ModelMode 选择 ModelExecutionOptions，调用 AddContextCore 注册 Core 服务。
-        // P0-1 核心修复：不再使用无参数 AddContextCore()（强制 Deterministic），
+        // 核心修复：不再使用无参数 AddContextCore()（强制 Deterministic），
         // 而是根据 ContextCoreRuntime:ModelMode 显式选择 RealModel / Deterministic。
         var modelExecutionOptions = BuildModelExecutionOptions(runtimeOptions);
         CoreExtensions.AddContextCore(services, modelExecutionOptions);
@@ -98,7 +98,7 @@ internal static class ProductionRuntimeExtensions
         // 执行共享的 Profile 注册逻辑
         AddProductionRuntimeProfileServices(services, runtimeOptions, configuration);
 
-        // P0-3：按 AgentModelMode / ToolMode 覆盖 AddContextCore 的默认注册。
+        // 按 AgentModelMode / ToolMode 覆盖 AddContextCore 的默认注册。
         // AddContextCore 使用 TryAddSingleton 注册 DeterministicAgentModelTransport / EchoToolDispatcher，
         // 此处按运行配置覆盖为真实实现（RealModel → ModelGatewayAgentModelTransport，
         // RealDispatch → RealToolDispatcher）。
@@ -179,7 +179,7 @@ internal static class ProductionRuntimeExtensions
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
-        // P0-2：单节点 Canary Progression HostedService 注册。
+        // 单节点 Canary Progression HostedService 注册。
         // CanaryProgressionHostedService 通过 IOptionsMonitor<CanarySchedulerOptions> 读取 Enabled 标志，
         // ProductionHA 模式的 PostConfigure(Enabled=false) 能被正确感知。
         services.AddHostedService<CanaryProgressionHostedService>();
@@ -207,7 +207,7 @@ internal static class ProductionRuntimeExtensions
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
-        // P0-2：单节点 Canary Progression HostedService 注册。
+        // 单节点 Canary Progression HostedService 注册。
         services.AddHostedService<CanaryProgressionHostedService>();
 
         // LearningMaterializationWorker：Postgres provider 时激活 durable outbox 物化。
@@ -227,7 +227,7 @@ internal static class ProductionRuntimeExtensions
         // AgentRunStore → AgentKernelHost → AgentRunActor，无独立 Durable Transport）。
         // 1. 启用 Run Recovery + Agent Run Lease（多实例竞争租约）。
         // 2. Canary 切换到 HA 模式：
-        //    P0-2：通过 PostConfigure 覆盖 Enabled 标志（进入 Options Pipeline），
+        //    通过 PostConfigure 覆盖 Enabled 标志（进入 Options Pipeline），
         //    让 IOptionsMonitor<CanarySchedulerOptions> / IOptionsMonitor<CanaryLeaderOptions>
         //    消费者能读到覆盖值。原 RemoveService + AddSingleton 不进入 Options Pipeline。
         // 3. 注册 CanaryLeaderHostedService（HA 模式），不注册 CanaryProgressionHostedService。
@@ -261,7 +261,7 @@ internal static class ProductionRuntimeExtensions
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。
         services.AddHostedService<CanaryLeaderHostedService>();
 
-        // R29 WP-A-2：HA 模式注册 ModelStateReconcilerWorker（同步期望模型状态）。
+        // HA 模式注册 ModelStateReconcilerWorker（同步期望模型状态）。
         // ModelStateReconcilerWorker 通过 IOptionsMonitor<ModelStateReconcilerOptions> 读取 Enabled=true。
         services.PostConfigure<ModelStateReconcilerOptions>(o => o.Enabled = true);
         services.AddHostedService<ModelStateReconcilerWorker>();
@@ -301,7 +301,7 @@ internal static class ProductionRuntimeExtensions
     }
 
     /// <summary>
-    /// P0-3：按 <see cref="AgentModelMode"/> 覆盖 IAgentModelTransport 注册。
+    /// 按 <see cref="AgentModelMode"/> 覆盖 IAgentModelTransport 注册。
     /// AddContextCore 默认注册 DeterministicAgentModelTransport（TryAddSingleton），
     /// RealModel 模式下移除默认注册并注册 ModelGatewayAgentModelTransport（真实 LLM transport）。
     /// </summary>
@@ -326,7 +326,7 @@ internal static class ProductionRuntimeExtensions
     }
 
     /// <summary>
-    /// P0-3：按 <see cref="ToolExecutionMode"/> 覆盖 IToolDispatcher 注册。
+    /// 按 <see cref="ToolExecutionMode"/> 覆盖 IToolDispatcher 注册。
     /// AddContextCore 默认注册 EchoToolDispatcher（TryAddSingleton），
     /// RealDispatch 模式下移除默认注册并注册 RealToolDispatcher（真实分派器）。
     /// </summary>
@@ -347,7 +347,7 @@ internal static class ProductionRuntimeExtensions
         {
             var handlers = sp.GetServices<IToolHandler>();
             var logger = sp.GetService<ILogger<RealToolDispatcher>>();
-            // P0-4：构造后立即冻结注册表，禁止运行时 AddHandler；
+            // 构造后立即冻结注册表，禁止运行时 AddHandler；
             // 同时物化 SupportedTools 缓存为不可变 FrozenSet。
             var dispatcher = new RealToolDispatcher(handlers, logger);
             dispatcher.Freeze();
@@ -394,7 +394,7 @@ internal static class ProductionRuntimeExtensions
                     "但当前为空。请配置连接字符串（支持 env:VAR_NAME 格式）。");
             }
 
-            // P0-7：旧平面已退役——EnableAgentKernelLoop 配置项已随双执行平面收敛删除，无需校验。
+            // 旧平面已退役——EnableAgentKernelLoop 配置项已随双执行平面收敛删除，无需校验。
         }
 
         // EnableModelActivation=true 时要求 IModelArtifactRegistry 已注册

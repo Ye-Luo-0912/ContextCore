@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R14-PG-7：Service 层根据 provider 选择 version store + 多实例 cache invalidation 验收。
+/// Service 层根据 provider 选择 version store + 多实例 cache invalidation 验收。
 /// - 验证 FileSystem/InMemory provider 仍用 InMemoryContextStateVersionStore（单机默认）
 /// - 验证 Postgres provider 用 PostgresContextStateVersionStore（覆盖默认，跨实例可见）
 /// - 模拟多实例：两个独立 cache 共享同一 versionStore（模拟 Postgres 跨实例共享），
@@ -22,7 +22,7 @@ namespace ContextCore.Tests;
 public sealed class MultiInstanceCacheInvalidationTests
 {
     /// <summary>
-    /// R14-PG-7：FileSystem provider 是 Local/Single-host runtime，storage-only 注册不应引入
+    /// FileSystem provider 是 Local/Single-host runtime，storage-only 注册不应引入
     /// IContextStateVersionStore。生产路径由 AddContextCore 注册 InMemoryContextStateVersionStore，
     /// 此处仅验证 storage-only 隔离场景：Decorator 应解析到 null 并跳过 bump。
     /// 与 R14-PG-6 的 AddContextStorage_Postgres_OverridesInMemoryVersionStoreRegistration 互补，
@@ -45,7 +45,7 @@ public sealed class MultiInstanceCacheInvalidationTests
     }
 
     /// <summary>
-    /// R14-PG-7：模拟多实例 cache invalidation。
+    /// 模拟多实例 cache invalidation。
     /// 两个独立 InMemoryContextStateCache 共享同一 IContextStateVersionStore，
     /// 模拟两个 Worker 实例共享同一 PostgresContextStateVersionStore 表。
     /// 当 Instance A 的 Decorator 触发 bump 后，Instance B 的 cache.GetAsync 应检测到版本失配。
@@ -81,7 +81,7 @@ public sealed class MultiInstanceCacheInvalidationTests
     }
 
     /// <summary>
-    /// R14-PG-7：端到端模拟 Decorator 触发的跨实例 bump。
+    /// 端到端模拟 Decorator 触发的跨实例 bump。
     /// Instance A 用真实 InvalidatingContextStoreDecorator 包装 IContextStore，
     /// 写入时 Decorator 调用共享 versionStore.BumpVersionAsync。
     /// Instance B 用同一个共享 versionStore 但独立的 cache，下次读取应失配。

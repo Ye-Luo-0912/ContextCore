@@ -8,7 +8,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 
 /// <summary>基于文件系统的 <see cref="IRelationStore"/> 实现，关系数据持久化为 JSONL 文件。</summary>
 /// <remarks>
-/// P1-1: RMW 完整流程在跨进程锁内执行——通过 <see cref="FileJsonLineStore.UpdateAsync{T}"/>
+/// RMW 完整流程在跨进程锁内执行——通过 <see cref="FileJsonLineStore.UpdateAsync{T}"/>
 /// / <see cref="FileSystemWriter.UpdateLinesAsync"/> 包装读+改+写，FileLockProvider 在路径上加
 /// 进程内 SemaphoreSlim + 跨进程 FileShare.None 哨兵文件，两进程不会各自读旧数据后互相覆盖。
 /// <see cref="SemaphoreSlim"/> _gate 仅用于进程内读路径与写路径的串行化（保证 cache 一致性），
@@ -25,7 +25,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
 
     // relation adjacency cache, keyed by relations.jsonl path.
     // Invalidation: file mtime mismatch → cache miss → re-read.
-    // P0-fix: mtime recheck after read prevents caching stale content.
+    // -fix: mtime recheck after read prevents caching stale content.
     private readonly ConcurrentDictionary<string, RelationCacheEntry> _relationCache = new(StringComparer.OrdinalIgnoreCase);
 
     private sealed record RelationCacheEntry(
@@ -75,7 +75,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
             var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
                 .ConfigureAwait(false);
 
-            // P0-fix: 读后复核 mtime；持有写锁期间不会有并发写，但仍防御性校验
+            // -fix: 读后复核 mtime；持有写锁期间不会有并发写，但仍防御性校验
             var mtimeAfter = TryGetLastWriteUtc(path);
             if (mtimeBefore is not null && mtimeAfter is not null && mtimeBefore == mtimeAfter)
             {
@@ -142,7 +142,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // P1-1: TryUpdateAsync 在 FileLockProvider 跨进程锁内完成读+改+写；
+            // TryUpdateAsync 在 FileLockProvider 跨进程锁内完成读+改+写；
             // 未匹配到 relationId 时返回 null 跳过写入，文件不存在或无变更时不创建空文件。
             var deleted = await _jsonLines.TryUpdateAsync<ContextRelation>(
                 path,
@@ -169,7 +169,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
 
     /// <summary>
     /// 批量 upsert：按 (workspaceId, collectionId) 分组，每组在跨进程锁内完成读改写并原子替换文件。
-    /// P1-1: 走 <see cref="FileJsonLineStore.UpdateAsync{T}"/>，FileLockProvider 保证跨进程 RMW 原子性。
+    /// 走 <see cref="FileJsonLineStore.UpdateAsync{T}"/>，FileLockProvider 保证跨进程 RMW 原子性。
     /// </summary>
     public async Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
@@ -228,12 +228,12 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
             ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
             : null;
-        // P3-02：多类型过滤优先于单类型
+        // 多类型过滤优先于单类型
         var allowedTypes = query.AllowedRelationTypes.Count > 0
             ? new HashSet<string>(query.AllowedRelationTypes, StringComparer.OrdinalIgnoreCase)
             : null;
 
-        // P0-fix: ReadRelationsCachedAsync 在慢路径加锁，快路径走缓存
+        // -fix: ReadRelationsCachedAsync 在慢路径加锁，快路径走缓存
         var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, query.CollectionId ?? string.Empty);
         var relations = await ReadRelationsCachedAsync(path, cancellationToken)
             .ConfigureAwait(false);
@@ -274,7 +274,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
             filtered = filtered.Where(relation => !excludedReviewStatuses.Contains(relation.ReviewStatus ?? string.Empty));
         }
 
-        // P5-0.3: 先排序再 Take(maxScan)，避免文件后部高权重关系永远进不了结果。
+        // 先排序再 Take(maxScan)，避免文件后部高权重关系永远进不了结果。
         // 文件已被完整读入内存，提前 Take 并不减少磁盘 I/O，反而丢失正确性。
         return [.. filtered
             .OrderByDescending(relation => relation.Weight)
@@ -286,7 +286,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
     }
 
     /// <summary>
-    /// P1-6：批量邻居查询。单次读文件 + 单次内存扫描，按种子 ID 分桶；
+    /// 批量邻居查询。单次读文件 + 单次内存扫描，按种子 ID 分桶；
     /// per-seed 排序 + MaxScan + Skip + Take。
     /// </summary>
     public async Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
@@ -451,7 +451,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        // P0-fix: ReadRelationsCachedAsync 在慢路径加锁，快路径走缓存
+        // -fix: ReadRelationsCachedAsync 在慢路径加锁，快路径走缓存
         var relations = new List<ContextRelation>();
         var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
 
@@ -525,10 +525,10 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
     }
 
     /// <summary>
-    /// P1-7 / P1-9：流式枚举关系，逐行读取 JSONL 而非全量载入 List。
+    /// 流式枚举关系，逐行读取 JSONL 而非全量载入 List。
     /// 跨集合枚举时不保持全局排序——每个集合内部按文件顺序产出。
     /// 调用方（如 ValidateStreamAsync）按需在消费端累积排序状态。
-    /// P1-9：禁止无界扫描——累计产出达到 <see cref="GraphQueryLimits.MaxTotalEdges"/> 即停止，
+    /// 禁止无界扫描——累计产出达到 <see cref="GraphQueryLimits.MaxTotalEdges"/> 即停止，
     /// 防止病态全表把整张图拉入内存。
     /// </summary>
     public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
@@ -540,7 +540,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // P1-9：全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限。
+        // 全局上限——未提供 LIMIT 时使用 GraphQueryLimits.MaxTotalEdges 默认上限。
         var yielded = 0;
         var collectionIds = ResolveCollectionIds(workspaceId, collectionId);
         foreach (var cid in collectionIds)
@@ -573,7 +573,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
     }
 
     /// <summary>
-    /// P1-9：按关系 ID 批量 hydrate 完整 Relation（含 Metadata/SourceRefs 等）。
+    /// 按关系 ID 批量 hydrate 完整 Relation（含 Metadata/SourceRefs 等）。
     /// FileSystem 实现逐集合读取 JSONL 并按 ID 集合过滤，命中即收集并克隆返回。
     /// </summary>
     public async Task<IReadOnlyList<ContextRelation>> HydrateRelationsAsync(

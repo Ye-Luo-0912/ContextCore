@@ -4,7 +4,7 @@ using ContextCore.Core.Services.Agent;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R24-2：InMemoryAgentTaskStateStore 实现测试。
+/// InMemoryAgentTaskStateStore 实现测试。
 ///
 /// 覆盖：
 ///   1. SaveAsync null 抛异常
@@ -50,7 +50,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     [TestMethod]
     public async Task SaveAsync_SameWorkspaceAndTaskId_Overwrites()
     {
-        // P0-6：主键 (workspace_id, task_id) — 同 workspace 同 task id 覆盖
+        // 主键 (workspace_id, task_id) — 同 workspace 同 task id 覆盖
         var store = new InMemoryAgentTaskStateStore();
         var task1 = MakeTask("task-1", status: "Running");
         var task2 = MakeTask("task-1", status: "Completed");
@@ -257,7 +257,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     [TestMethod]
     public async Task CrossWorkspace_SameTaskId_RemainsIsolated()
     {
-        // P0-6：两个 workspace 各自保存同 ID task，应互不可见
+        // 两个 workspace 各自保存同 ID task，应互不可见
         var store = new InMemoryAgentTaskStateStore();
         var ws1Task = MakeTask("task-shared", sessionValue: "session-ws1", status: "Running", workspaceId: "ws-1");
         var ws2Task = MakeTask("task-shared", sessionValue: "session-ws2", status: "Completed", workspaceId: "ws-2");
@@ -282,7 +282,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     [TestMethod]
     public async Task CrossWorkspace_GetAsync_UnknownWorkspace_ReturnsNull()
     {
-        // P0-6：ws-1 的 task，ws-2 看不到
+        // ws-1 的 task，ws-2 看不到
         var store = new InMemoryAgentTaskStateStore();
         await store.SaveAsync(MakeTask("task-1", workspaceId: "ws-1"));
 
@@ -293,7 +293,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     [TestMethod]
     public async Task CrossWorkspace_DeleteAsync_DoesNotAffectOtherWorkspace()
     {
-        // P0-6：删除 ws-1 的 task 不影响 ws-2 的同 ID task
+        // 删除 ws-1 的 task 不影响 ws-2 的同 ID task
         var store = new InMemoryAgentTaskStateStore();
         await store.SaveAsync(MakeTask("task-shared", sessionValue: "session-ws1", workspaceId: "ws-1"));
         await store.SaveAsync(MakeTask("task-shared", sessionValue: "session-ws2", workspaceId: "ws-2"));
@@ -310,7 +310,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     [TestMethod]
     public async Task CrossWorkspace_DeleteAsync_UnknownWorkspace_ReturnsFalse()
     {
-        // P0-6：尝试用 ws-2 删除 ws-1 的 task 应返回 false
+        // 尝试用 ws-2 删除 ws-1 的 task 应返回 false
         var store = new InMemoryAgentTaskStateStore();
         await store.SaveAsync(MakeTask("task-1", workspaceId: "ws-1"));
 
@@ -325,7 +325,7 @@ public sealed class InMemoryAgentTaskStateStoreTests
     [TestMethod]
     public async Task CrossWorkspace_DuplicateIdAcrossWorkspaces_RemainsIsolated()
     {
-        // P0-6：边界场景 — 两个 workspace 保存相同 ID，应共存而不互相覆盖
+        // 边界场景 — 两个 workspace 保存相同 ID，应共存而不互相覆盖
         var store = new InMemoryAgentTaskStateStore();
         var ws1Task = MakeTask("task-dup", sessionValue: "session-1", status: "ws1", workspaceId: "ws-1");
         var ws2Task = MakeTask("task-dup", sessionValue: "session-2", status: "ws2", workspaceId: "ws-2");

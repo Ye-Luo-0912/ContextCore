@@ -173,7 +173,7 @@ public sealed class ContextCorePolicyMigrationSnapshotTests
     [TestMethod]
     public async Task ChatModeKeywordBoostSnapshot_ShouldBoostStablePreferenceItem()
     {
-        // R10-1 改造：模式保留加分由领域词表改为显式信号权重（ModeReserveWeightProfile）。
+        // 改造：模式保留加分由领域词表改为显式信号权重（ModeReserveWeightProfile）。
         // stable:preference-snapshot 通过 Metadata["signal"]="preference" 获得显式 +900 稳定记忆保留分，
         // 不再依赖内容关键词匹配。长期记忆门禁改由 Layer==Stable 结构信号判定。
         var now = DateTimeOffset.UtcNow;

@@ -94,11 +94,11 @@ public sealed class StorageProviderBehaviorContractTests
     };
 
     // Postgres 原生注册的接口（R14-PG-5 完成后无 Unsupported 占位）
-    // R14-PG-1：新增 ILearningFeedbackStore / ILearningFeedbackReviewStore
-    // R14-PG-2：新增 IDecisionTraceStore
-    // R14-PG-3：新增 IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore
-    // R14-PG-4：新增 IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore
-    // R14-PG-5：新增 IVectorReindexReportStore / IVectorLifecycleMetadataReviewCandidateStore / IVectorLifecycleMetadataReviewStore / IVectorLifecycleSidecarMetadataStore / IArtifactStore
+    // 新增 ILearningFeedbackStore / ILearningFeedbackReviewStore
+    // 新增 IDecisionTraceStore
+    // 新增 IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore
+    // 新增 IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore
+    // 新增 IVectorReindexReportStore / IVectorLifecycleMetadataReviewCandidateStore / IVectorLifecycleMetadataReviewStore / IVectorLifecycleSidecarMetadataStore / IArtifactStore
     private static readonly Type[] PostgresNativeInterfaces = new[]
     {
         typeof(IContextStore),
@@ -230,14 +230,14 @@ public sealed class StorageProviderBehaviorContractTests
     }
 
     /// <summary>
-    /// R14-PG-5：垂直闭环完成 sanity check。
+    /// 垂直闭环完成 sanity check。
     /// 替代已删除的 Postgres_UnsupportedStore_ThrowsNotSupportedExceptionOnUse 与 Postgres_All5UnsupportedStores_ThrowNotSupportedException，
     /// 断言 R14-PG-5 新绑定的 5 个接口在 Postgres provider 下均为原生实现，不再是 Unsupported 占位。
     /// </summary>
     [TestMethod]
     public async Task Postgres_NoUnsupportedStoresRemain()
     {
-        // R14-PG-5：垂直闭环完成，Postgres 无 Unsupported 占位。
+        // 垂直闭环完成，Postgres 无 Unsupported 占位。
         var services = new ServiceCollection();
         services.AddLogging();
         var options = new StorageOptions
@@ -267,7 +267,7 @@ public sealed class StorageProviderBehaviorContractTests
     }
 
     /// <summary>
-    /// P0-7.1: 三套 provider 的 IContextStore 实例都应同时实现 IContextStoreBatchLookup，
+    /// 三套 provider 的 IContextStore 实例都应同时实现 IContextStoreBatchLookup，
     /// 让 Retrieval Mandatory 通道走单次 BatchGetAsync 而非 N 次并行 GetAsync。
     /// 通过 is 运算符验证 cast 路径与 RetrievalChannelExecutors 的运行时检测一致。
     /// </summary>
@@ -306,13 +306,13 @@ public sealed class StorageProviderBehaviorContractTests
         Assert.IsNotNull(contextStore);
         Assert.IsFalse(IsUnsupportedPlaceholder(contextStore), $"{provider} IContextStore 不应是 Unsupported 占位");
 
-        // P0-7.1: 关键断言 — IContextStore 实例必须同时实现 IContextStoreBatchLookup
+        // 关键断言 — IContextStore 实例必须同时实现 IContextStoreBatchLookup
         Assert.IsTrue(contextStore is IContextStoreBatchLookup,
             $"{provider} IContextStore 应实现 IContextStoreBatchLookup 以启用 Retrieval 批量查询路径");
     }
 
     /// <summary>
-    /// P0-7.1: 三套 provider 的 IMemoryStore 实例都应同时实现 IMemoryStoreBatchLookup。
+    /// 三套 provider 的 IMemoryStore 实例都应同时实现 IMemoryStoreBatchLookup。
     /// </summary>
     [DataTestMethod]
     [DataRow("filesystem", DisplayName = "FileSystem")]
@@ -349,7 +349,7 @@ public sealed class StorageProviderBehaviorContractTests
         Assert.IsNotNull(memoryStore);
         Assert.IsFalse(IsUnsupportedPlaceholder(memoryStore), $"{provider} IMemoryStore 不应是 Unsupported 占位");
 
-        // P0-7.1: 关键断言 — IMemoryStore 实例必须同时实现 IMemoryStoreBatchLookup
+        // 关键断言 — IMemoryStore 实例必须同时实现 IMemoryStoreBatchLookup
         Assert.IsTrue(memoryStore is IMemoryStoreBatchLookup,
             $"{provider} IMemoryStore 应实现 IMemoryStoreBatchLookup 以启用 Retrieval 批量查询路径");
     }

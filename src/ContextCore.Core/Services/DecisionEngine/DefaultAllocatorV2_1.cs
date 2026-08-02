@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
-// R28-B.8.1：Allocator V2.1 默认实现（section rollover + MMR diversity）
+// Allocator V2.1 默认实现（section rollover + MMR diversity）
 //
 // 设计原则：
 //   1. 继承 IGlobalAllocator（V2.0）：基接口 Allocate 委托给 _baseAllocator，保持向后兼容。
@@ -20,7 +20,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8.1：Allocator V2.1 默认实现。支持 section rollover + MMR diversity。
+/// Allocator V2.1 默认实现。支持 section rollover + MMR diversity。
 /// </summary>
 /// <remarks>
 /// 默认不替换 V2.0 <see cref="IGlobalAllocator"/>；需要 diversity 的调用方显式注入此实现。
@@ -114,7 +114,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         var selected = candidates.Where(c => selectedKeys.Contains(c.CanonicalKey)).ToList();
         var dropped = candidates.Where(c => !selectedKeys.Contains(c.CanonicalKey)).ToList();
 
-        // R29 WP-D-2：接入 MandatoryOverflowPolicy。
+        // 接入 MandatoryOverflowPolicy。
         // V2.1 section 分配阶段 mandatory 候选始终选入（AllowOverflowWithDiagnostic 语义），
         // 此处在 section 分配完成后统一检查总 mandatory token 是否超出总预算：
         //   - FailClosed：收集溢出 mandatory 候选 ID + 总 token 需求，抛 MandatoryContextWindowExceededException
@@ -204,7 +204,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             diagnostics[$"section.{sr.Section}.borrowed"] = sr.BorrowedTokens.ToString(CultureInfo.InvariantCulture);
         }
 
-        // R29 WP-D-2：记录 mandatory overflow 诊断（与 V2.0 DefaultGlobalAllocator 诊断字段对齐）
+        // 记录 mandatory overflow 诊断（与 V2.0 DefaultGlobalAllocator 诊断字段对齐）
         if (mandatoryOverflowTokens > 0 || hardWindowViolated)
         {
             diagnostics["MandatoryOverflowTokens"] = mandatoryOverflowTokens.ToString(CultureInfo.InvariantCulture);
@@ -230,7 +230,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
 
     /// <summary>
     /// 逐 section 分配，含 rollover 逻辑。
-    /// R28-G P1-4 修正：原实现"第一个 section 获得全部剩余预算 → 下一 section 只获得前一 section
+    /// 修正：原实现"第一个 section 获得全部剩余预算 → 下一 section 只获得前一 section
     /// 剩余量 × ratio"会让靠后的 section 饿死。改为两轮分配：
     ///   1. 第一轮：每个 section 获得 minimum reserve（totalBudget × SectionReserveRatio），
     ///      在 reserve 内做基础分配，收集未使用的预算（unused reserve）。
@@ -250,10 +250,10 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             return results;
         }
 
-        // R28-G P1-4：每个 section 的 minimum reserve = totalBudget × SectionReserveRatio。
+        // 每个 section 的 minimum reserve = totalBudget × SectionReserveRatio。
         // SectionReserveRatio 默认 0.1（每个 section 至少获得 10% 总预算）。
         // 各 section reserve 之和不超过 totalBudget；若超过则按比例缩放。
-        // R28-G P1-4 修正：禁用 rollover 时使用等分预算（totalBudget / sectionCount）以匹配
+        // 修正：禁用 rollover 时使用等分预算（totalBudget / sectionCount）以匹配
         // "每个 section 获得等分预算，不结转"语义；启用 rollover 时使用小 reserve + 全局 pool。
         var reserveRatio = Math.Clamp(options.SectionReserveRatio, 0.0, 1.0);
         int perSectionReserve;
@@ -305,7 +305,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             var ordered = mandatory.Concat(nonMandatory).ToList();
 
             // 第一轮：在 perSectionReserve 内分配
-            // R28-G P1-4 修正：rollover 启用时禁用 partial truncation，候选未完整匹配 reserve 时整候选
+            // 修正：rollover 启用时禁用 partial truncation，候选未完整匹配 reserve 时整候选
             // 进入 remaining 等待 round 2 全局 pool 分配（避免 reserve 过小导致候选被截断到 reserve 大小）。
             // rollover 禁用时启用 partial truncation，等分预算内允许截断（无 round 2 兜底）。
             var firstRoundAllowTruncation = !options.EnableSectionRollover;
@@ -327,7 +327,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
 
         // 第二轮：把全局剩余预算（totalBudget - totalUsed）按 RolloverRatio 缩放后，按 section 顺序
         // 重新分配给仍有候选被丢弃的 section。
-        // R28-G P1-4：原实现"下一 section 只获得前一 section 剩余量 × ratio"会让靠后 section 饿死；
+        // 原实现"下一 section 只获得前一 section 剩余量 × ratio"会让靠后 section 饿死；
         // 改为 round 1 各 section 仅消费自身 reserve，剩余全部预算汇总到全局 pool 供 round 2 分配。
         // 关键修正：
         //   - pool = (totalBudget - totalUsed) × RolloverRatio（含未消费的 reserve + 完全未分配的预算余额）
@@ -358,7 +358,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             }
         }
 
-        // R28-G P1-4：round 2 结束后仍有候选未选入 → 生成 TokenBudgetExceeded decision（IncludedTokens=0）
+        // round 2 结束后仍有候选未选入 → 生成 TokenBudgetExceeded decision（IncludedTokens=0）
         // 以便下游 trace / parity 检查能看到明确的"预算耗尽"记录。
         foreach (var state in sectionStates)
         {
@@ -396,11 +396,11 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
     }
 
     /// <summary>
-    /// R28-G P1-4：section 内分配，返回 decisions + used tokens + 仍可分配的候选（用于第二轮）。
+    /// section 内分配，返回 decisions + used tokens + 仍可分配的候选（用于第二轮）。
     /// 与原 AllocateWithinSection 不同：返回 remaining 候选列表，便于第二轮 rollover 复用。
     /// </summary>
     /// <param name="allowPartialTruncation">
-    /// R28-G P1-4 修正：round 1（rollover 启用）传 false——候选未完整匹配 reserve 时
+    /// 修正：round 1（rollover 启用）传 false——候选未完整匹配 reserve 时
     /// 不做截断，整候选送入 remaining 等待 round 2 全局 pool 分配；
     /// round 1（rollover 禁用）和 round 2 传 true——允许在剩余预算内做 partial truncation。
     /// </param>
@@ -419,7 +419,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         {
             var isMandatory = envelope.Safety.IsMandatory || envelope.Safety.IsHardConstraint;
 
-            // R28-G P1-4：使用 EffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
+            // 使用 EffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
             // 原实现用 EstimatedTokens 导致中文/JSON/代码场景严重低估 token 成本。
             var effectiveTokens = GetEffectiveTokens(envelope);
 
@@ -481,7 +481,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
     }
 
     /// <summary>
-    /// R28-G P1-4：获取候选的有效 token 数（与 DefaultGlobalAllocator.GetEffectiveTokens 语义一致）。
+    /// 获取候选的有效 token 数（与 DefaultGlobalAllocator.GetEffectiveTokens 语义一致）。
     /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
     /// 回退到 EstimatedTokens（length/4 粗估）。
     /// </summary>
