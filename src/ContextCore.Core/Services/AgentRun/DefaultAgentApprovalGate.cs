@@ -22,7 +22,9 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   - 默认行为是"全部自动批准"（兼容现有 Kernel 测试场景，不阻塞流程）；
 //   - 通过构造注入 approvalRequiredTools 可显式标记某些 Tool 需要人工审批；
 //   - 自动审批的 ApproverId 为 "auto-rule"，便于审计区分；
-//   - store=null 时不引入任何持久化状态，无副作用（向后兼容）。
+//   - store=null 且无需人工审批时保持原行为（无持久化，纯内存决策）；
+//   - store=null 且 Tool 需要人工审批时 fail-closed 抛异常——不允许出现
+//     "Run AwaitingApproval 但无 Approval Row" 的半状态。
 // ===========================================================================
 
 /// <summary>
@@ -97,6 +99,16 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
 
         if (requiresHuman)
         {
+            // 人工审批必须持久化 Pending 记录供外部系统裁决；无 store 时若仍返回
+            // PendingApproval=true，Run 会进入 AwaitingApproval 但数据库无对应审批行，
+            // 外部永远无法 Resolve，Run 永久卡死。fail-closed：直接拒绝。
+            if (_approvalStore is null)
+            {
+                throw new InvalidOperationException(
+                    $"Tool '{toolCall.ToolName}' 需要人工审批，但未注入 IAgentApprovalStore：" +
+                    "无法持久化 Pending 审批记录，拒绝进入 AwaitingApproval（fail-closed）。");
+            }
+
             // 持久化 Pending 记录，等待外部 ResolveAsync
             await TryPersistApprovalAsync(workspaceId, runId, toolCall, approvalId, AgentApprovalStatus.Pending,
                 approverId: null, rejectionReason: null, createdAt: now, cancellationToken).ConfigureAwait(false);

@@ -345,6 +345,119 @@ public sealed class R29H_ProductionEvidenceE2ETests
     }
 
     // =======================================================================
+    // 测试 5：并发审批裁决 CAS — 多调用方同时裁决同一审批，恰好一个成功
+    // =======================================================================
+
+    [TestMethod]
+    public async Task E2E_RealPostgres_ConcurrentApprovalResolve_CasAllowsExactlyOne()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明生产证据通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("e2e5_");
+        try
+        {
+            var runStore = new PostgresAgentRunStore(factory, serializer, migrationRunner);
+            var eventStore = new PostgresAgentRunEventStore(factory, serializer, migrationRunner);
+            var approvalStore = new PostgresAgentApprovalStore(factory, serializer, migrationRunner);
+
+            // ── 准备：Run 挂起在 AwaitingApproval + 一条 Pending 审批记录 ──
+            var run = BuildRun("并发审批 CAS 裁决", turnBudget: new AgentTurnBudget
+            {
+                MaxTurns = 10,
+                TurnsUsed = 0,
+                MaxModelCalls = 5
+            });
+            run = run with { State = AgentRunState.AwaitingApproval };
+            await runStore.CreateAsync(run);
+
+            var approvalId = "ap-" + Guid.NewGuid().ToString("N");
+            await approvalStore.CreateAsync(new AgentApproval
+            {
+                ApprovalId = approvalId,
+                RunId = run.RunId,
+                WorkspaceId = run.WorkspaceId,
+                ToolCallId = "model-tc-cas",
+                ToolName = "file_delete",
+                Status = AgentApprovalStatus.Pending,
+                Reason = "并发 CAS 裁决测试",
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            // ── 按端点模式构建审批事件（哈希链续接）──
+            var lastSequence = await eventStore.GetLastSequenceAsync(run.WorkspaceId, run.RunId);
+            var lastEvent = lastSequence >= 0
+                ? await eventStore.ReadAsync(run.WorkspaceId, run.RunId, lastSequence, 1)
+                : Array.Empty<AgentRunEvent>();
+            var prevChainHash = lastEvent.Count > 0 ? lastEvent[0].ContentHash : null;
+            var approvalEvent = AgentRunEventChain.BuildEvent(
+                run.RunId, run.WorkspaceId, lastSequence + 1,
+                AgentRunEventType.ApprovalResolved, run.State,
+                JsonSerializer.Serialize(new { approvalId, decision = "approve", runState = run.State.ToString() }),
+                prevChainHash);
+
+            // ── 并发裁决：4 个调用方同时提交 Approved ──
+            const int contenders = 4;
+            var successCount = 0;
+            var failures = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            var tasks = Enumerable.Range(0, contenders).Select(i => Task.Run(async () =>
+            {
+                try
+                {
+                    var result = await approvalStore.ResolveApprovalAndAdvanceRunAsync(
+                        run.WorkspaceId, run.RunId, approvalId,
+                        expectedRunState: AgentRunState.AwaitingApproval,
+                        AgentApprovalStatus.Approved,
+                        $"approver-{i}", rejectionReason: null,
+                        approvalEvent);
+                    if (result.Succeeded)
+                    {
+                        Interlocked.Increment(ref successCount);
+                    }
+                    else
+                    {
+                        failures.Enqueue(result.FailureReason ?? "unknown");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failures.Enqueue(ex.Message);
+                }
+            })).ToArray();
+
+            await Task.WhenAll(tasks);
+
+            // ── 断言 1：恰好一个成功，其余 CAS 失败 ──
+            Assert.AreEqual(1, successCount, $"并发 CAS 裁决必须恰好一个成功，实际 {successCount}。");
+            Assert.AreEqual(contenders - 1, failures.Count,
+                $"其余 {contenders - 1} 个并发裁决必须失败（审批不可重复裁决）。");
+
+            // ── 断言 2：审批记录终态 Approved，Run 恰好推进一次 ──
+            var resolved = await approvalStore.GetAsync(run.WorkspaceId, approvalId);
+            Assert.IsNotNull(resolved, "应能取回审批记录。");
+            Assert.AreEqual(AgentApprovalStatus.Approved, resolved!.Status,
+                "审批记录应裁决为 Approved。");
+            Assert.IsFalse(string.IsNullOrEmpty(resolved.ApproverId), "应记录获胜裁决者。");
+
+            var finalRun = await runStore.GetAsync(run.WorkspaceId, run.RunId);
+            Assert.IsNotNull(finalRun, "应能取回 Run。");
+            Assert.AreEqual(AgentRunState.PendingToolExecution, finalRun!.State,
+                $"批准后 Run 应推进到 PendingToolExecution，实际 {finalRun.State}。");
+
+            // ── 断言 3：事件流恰好一个 ApprovalResolved 事件 ──
+            var events = await eventStore.ReadAsync(run.WorkspaceId, run.RunId, take: 10000);
+            var approvalResolvedEvents = events
+                .Where(e => e.EventType == AgentRunEventType.ApprovalResolved)
+                .ToList();
+            Assert.AreEqual(1, approvalResolvedEvents.Count,
+                $"并发裁决后事件流应恰好 1 个 ApprovalResolved 事件，实际 {approvalResolvedEvents.Count}。");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    // =======================================================================
     // 测试 3：崩溃恢复 — Tool 执行后崩溃 → 恢复 → Journal 保证 exactly-once
     // =======================================================================
 

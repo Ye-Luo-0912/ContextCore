@@ -254,19 +254,28 @@ public sealed class AgentKernelHost : IAsyncDisposable
             }
 
             // 子问题 9：将租约登记到共享批量心跳（续约失败时取消 Actor 防止双执行）
-            // P0-4：传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
+            // 传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
+            Func<DateTimeOffset?>? leaseExpiryProvider = null;
             if (lease is not null && _runLease is not null)
             {
                 RegisterLease(lease, activeRun.Cts);
+                var leaseEntry = _leaseRegistry[lease.RunId];
+                // 读取共享心跳维护的最新确认租约过期时间，让 Tool 副作用 fence
+                // 与数据库 lease_expires_at 保持一致（每次续约后自动前移）。
+                leaseExpiryProvider = () =>
+                {
+                    var ticks = Interlocked.Read(ref leaseEntry.LastConfirmedExpiresTicks);
+                    return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+                };
             }
 
-            // P0-4：将 leaseToken + fencingToken 传给 Actor，Actor 在每次副作用操作（FlushPendingEventsAsync）
+            // 将 leaseToken + fencingToken 传给 Actor，Actor 在每次副作用操作（FlushPendingEventsAsync）
             // 时带上，Postgres 实现在 WHERE 子句中校验 lease 仍由当前实例持有。
             try
             {
                 await activeRun.Actor.ExecuteAsync(
                     run, activeRun.Cts.Token,
-                    lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
+                    lease?.LeaseToken, lease?.FencingToken, leaseExpiryProvider).ConfigureAwait(false);
             }
             catch
             {

@@ -94,12 +94,16 @@ public sealed class AgentRunActor
     // P1-4: 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
     private int _eventsSinceLastCheckpoint;
 
-    // P0-4：当前 Run 的 lease token 与 fencing token（由 AgentKernelHost 在 ExecuteAsync 时注入）。
+    // 当前 Run 的 lease token 与 fencing token（由 AgentKernelHost 在 ExecuteAsync 时注入）。
     // 非空时 FlushPendingEventsAsync 将它们写入 AgentRunStateUpdate，由 Postgres 实现在
     // 状态 CAS + 事件追加的 WHERE 子句中校验 lease 仍由当前实例持有。
     // null = 无 lease 路径（测试 / 外部取消 / 恢复 Worker 等不持有 lease 的调用方）。
     private string? _leaseToken;
     private long? _fencingToken;
+
+    // 实际租约过期时间提供器（由 AgentKernelHost 注入，读取共享心跳维护的 LastConfirmedExpiresTicks）。
+    // Tool 副作用 fence 使用它替代 Run.DeadlineAt 推导值，让 fence 边界与数据库 lease_expires_at 一致。
+    private Func<DateTimeOffset?>? _leaseExpiresAtProvider;
 
     /// <summary>
     /// P0-2 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
@@ -216,7 +220,11 @@ public sealed class AgentRunActor
     /// 所有副作用操作（状态 CAS / 事件追加）的 WHERE 子句将追加 lease_token + fencing_token 校验；
     /// lease 已被抢占时副作用失败，Actor 应中止。null = 无 lease 路径（测试 / 外部取消等）。
     /// </param>
-    /// <param name="fencingToken">P0-4：可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
+    /// <param name="fencingToken">可选 fencing token，与 <paramref name="leaseToken"/> 配合使用。</param>
+    /// <param name="leaseExpiresAtProvider">
+    /// 可选实际租约过期时间提供器：每次 Tool fence 构造时调用，返回数据库 lease_expires_at
+    /// （共享心跳续约后的最新确认值）。null = 无 lease 路径，fence 回退到 Run.DeadlineAt 推导。
+    /// </param>
     /// <remarks>
     /// 运行时能力补齐 — Resume from checkpoint：
     ///   当 <paramref name="run"/>.State != Created 时判定为崩溃恢复场景。
@@ -229,14 +237,16 @@ public sealed class AgentRunActor
         AgentRun run,
         CancellationToken cancellationToken = default,
         string? leaseToken = null,
-        long? fencingToken = null)
+        long? fencingToken = null,
+        Func<DateTimeOffset?>? leaseExpiresAtProvider = null)
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        // P0-4：保存 lease token 与 fencing token，供 FlushPendingEventsAsync 在批量提交时校验。
+        // 保存 lease token 与 fencing token，供 FlushPendingEventsAsync 在批量提交时校验。
         // 两者必须同时为 null 或同时非 null（接口契约由调用方 AgentKernelHost 保证）。
         _leaseToken = leaseToken;
         _fencingToken = fencingToken;
+        _leaseExpiresAtProvider = leaseExpiresAtProvider;
 
         // 运行时能力补齐：检测 resume 场景
         // run.State != Created 表示 Run 之前已开始执行（崩溃/重启后由 RecoveryWorker 重新入队）
@@ -1148,14 +1158,16 @@ public sealed class AgentRunActor
             ToolExecutionResult? toolResult = null;
             if (_durableToolExecutor is not null)
             {
-                // P0-4：构造 leaseFence 并传入，保护 Tool 副作用边界。
-                // ExpiresAt 用 Run.DeadlineAt 保守推导（lease 不会超过 Run 超时）。
+                // 构造 leaseFence 并传入，保护 Tool 副作用边界。
+                // ExpiresAt 使用实际租约过期时间（共享心跳续约后的最新确认值），
+                // 与数据库 lease_expires_at 一致；无 lease 时回退到 Run.DeadlineAt 保守推导。
                 var leaseFence1 = (_leaseToken is not null && _fencingToken is not null)
                     ? new AgentLeaseFence
                       {
                           LeaseToken = _leaseToken,
                           FencingToken = _fencingToken.Value,
-                          ExpiresAt = state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
+                          ExpiresAt = _leaseExpiresAtProvider?.Invoke()
+                              ?? state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
                       }
                     : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
@@ -1751,20 +1763,18 @@ public sealed class AgentRunActor
                         pendingToolCommands = pendingCommands
                     }));
 
-                    // P0-3：Gate 是审批记录的唯一创建者。Actor 不再直接写 IAgentApprovalStore——
-                    // 旧路径 Actor 与 Gate 各 CreateAsync 一次，产生重复 Pending 记录（同 toolCallId 二次插入被
-                    // ON CONFLICT DO NOTHING 吞掉，但 workspaceId 不一致时会出现两条记录）。
-                    // 现统一由 Gate 用正确 workspaceId 创建记录（见 DefaultAgentApprovalGate.TryPersistApprovalAsync）。
-                    // 使用 Actor 生成的 toolCallId 作为 ApprovalId，确保事件流与审批记录一致。
+                    // Gate 是审批记录的唯一创建者。Actor 不再直接写 IAgentApprovalStore——
+                    // 旧路径 Actor 与 Gate 各 CreateAsync 一次，产生重复 Pending 记录。
+                    // ApprovalId 由 Gate 独立生成（审批记录主键），与模型 ToolCallId 分离，
+                    // 事件流通过 approvalId 字段与审批记录关联。
                     var approval = await _approvalGate.RequestApprovalAsync(
                         state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
 
                     // P0-6：区分三种审批结果——PendingApproval（挂起等待人工）/ Approved（批准）/ Rejected（拒绝）
                     if (approval.PendingApproval)
                     {
-                        // P0-3：使用 Gate 返回的 ApprovalId 作为外部 POST 端点定位键。
-                        // Gate 是审批记录的唯一创建者，其内部 toolCallId 即为 store 中的 ApprovalId。
-                        // 未注入 store 时 Gate 返回的 ApprovalId 仍可用于事件流审计，回退到 Actor 的 toolCallId。
+                        // 使用 Gate 返回的 ApprovalId 作为外部 POST 端点定位键。
+                        // 未注入 store 时（测试模式）Gate 不生成持久化记录，回退到 Actor 的 toolCallId 仅用于事件流审计。
                         var effectiveApprovalId = approval.ApprovalId ?? toolCallId;
 
                         // P0-6：审批挂起 — 记录 ApprovalResolved(pending) 事件 + approvalId，
@@ -1832,13 +1842,14 @@ public sealed class AgentRunActor
             ToolExecutionResult? toolResult = null;
             if (_durableToolExecutor is not null)
             {
-                // P0-4：构造 leaseFence 并传入，保护 Tool 副作用边界。
+                // 构造 leaseFence 并传入，保护 Tool 副作用边界。
                 var leaseFence2 = (_leaseToken is not null && _fencingToken is not null)
                     ? new AgentLeaseFence
                       {
                           LeaseToken = _leaseToken,
                           FencingToken = _fencingToken.Value,
-                          ExpiresAt = state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
+                          ExpiresAt = _leaseExpiresAtProvider?.Invoke()
+                              ?? state.Run.DeadlineAt ?? DateTimeOffset.UtcNow.AddMinutes(5)
                       }
                     : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
