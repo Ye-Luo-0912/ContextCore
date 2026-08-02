@@ -12,15 +12,14 @@ namespace ContextCore.Benchmarks;
 // 覆盖：
 //   §1 InMemoryToolDispatchJournal 状态机（Prepared → Dispatched → Committed → ResultDelivered）
 //   §2 DefaultAgentCheckpointFactory.CreateCheckpointAsync（Full + Delta 模式）
-//   §3 DefaultAgentKernel 端到端（Submit Execute 指令 → Tool dispatch → Result outbox）
-//   §4 InMemoryAgentCheckpointStore SaveAsync / GetAsync 往返
+//   §3 InMemoryAgentCheckpointStore SaveAsync / GetAsync 往返
 //
 // 数据规模：[Params(1, 10, 100)] 覆盖单 turn / 小批次 / 大批次指令
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
 //
 // 依赖：
-//   - EchoToolDispatcher（echo tool，SideEffect.None）作为 IToolDispatcher 桩
-//   - InProcessTransport（Channel-based IAgentKernelTransport）
+//   - InMemoryToolDispatchJournal（Durable Tool Journal 进程内默认实现）
+//   - DefaultAgentCheckpointFactory + KernelStateAccessor（checkpoint 序列化工具）
 //   - InMemoryAgentCheckpointStore（生产 InMemory checkpoint store）
 // ===========================================================================
 
@@ -153,45 +152,26 @@ public class CheckpointFactoryBenchmarks
 }
 
 /// <summary>
-/// WP-F-1 §3+§4：Agent Kernel 端到端 + Checkpoint Store 往返。
+/// WP-F-1 §3：Checkpoint Store Save + Get 往返。
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
-public class AgentKernelEndToEndBenchmarks
+public class AgentCheckpointStoreBenchmarks
 {
     private const string WorkspaceId = "bench-ws";
 
     [Params(1, 10, 50)]
-    public int InstructionCount { get; set; }
+    public int CheckpointCount { get; set; }
 
-    private List<AgentKernelInstruction> _executeInstructions = null!;
     private List<AgentCheckpoint> _checkpoints = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        _executeInstructions = new List<AgentKernelInstruction>(InstructionCount);
-        for (int i = 0; i < InstructionCount; i++)
-        {
-            _executeInstructions.Add(new AgentKernelInstruction
-            {
-                InstructionId = $"instr-{i}",
-                Kind = AgentKernelInstructionKind.Execute,
-                Payload = $"echo payload #{i}",
-                Metadata = new Dictionary<string, string>
-                {
-                    ["tool"] = "echo",
-                    ["sessionId"] = "bench-session",
-                    ["workspaceId"] = WorkspaceId
-                }
-            });
-        }
-
-        // 预构造 checkpoints 用于 store 往返测试
-        _checkpoints = new List<AgentCheckpoint>(InstructionCount);
+        _checkpoints = new List<AgentCheckpoint>(CheckpointCount);
         var now = DateTimeOffset.UtcNow;
-        for (int i = 0; i < InstructionCount; i++)
+        for (int i = 0; i < CheckpointCount; i++)
         {
             _checkpoints.Add(new AgentCheckpoint
             {
@@ -208,43 +188,6 @@ public class AgentKernelEndToEndBenchmarks
         }
     }
 
-    // §3 Kernel 端到端：Submit Execute 指令 → Run → 等待结果
-    [Benchmark]
-    [BenchmarkCategory("Kernel")]
-    public async Task Kernel_SubmitAndRun()
-    {
-        var transport = new InProcessTransport(capacity: 256);
-        var kernel = new DefaultAgentKernel(
-            transport,
-            new EchoToolDispatcher(),
-            new InMemoryAgentCheckpointStore());
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var runTask = kernel.RunAsync(cts.Token).AsTask();
-
-        foreach (var instr in _executeInstructions)
-        {
-            await kernel.SubmitAsync(instr, cts.Token).ConfigureAwait(false);
-        }
-
-        // 读取所有结果
-        for (int i = 0; i < InstructionCount; i++)
-        {
-            _ = await transport.ReceiveResultAsync(cts.Token).ConfigureAwait(false);
-        }
-
-        // 提交 Shutdown 指令让 RunAsync 自然结束
-        await kernel.SubmitAsync(new AgentKernelInstruction
-        {
-            InstructionId = "shutdown",
-            Kind = AgentKernelInstructionKind.Shutdown,
-            Metadata = new Dictionary<string, string>()
-        }, cts.Token).ConfigureAwait(false);
-
-        await runTask.ConfigureAwait(false);
-    }
-
-    // §4 Checkpoint Store Save + Get 往返
     [Benchmark]
     [BenchmarkCategory("Store")]
     public async Task CheckpointStore_SaveAndGet()

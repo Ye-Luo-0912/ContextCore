@@ -7,8 +7,8 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 // 子问题 5：DefaultDurableToolExecutor — Durable Tool 执行器默认实现
 //
-// 封装 Tool 调用的完整 durable 流程，复用旧 Kernel（DefaultAgentKernel.ProcessExecuteAsync）
-// 的 Tool 处理逻辑，让 AgentRunActor 不再直接调用 IToolDispatcher。
+// 封装 Tool 调用的完整 durable 流程，
+// 让 AgentRunActor 不再直接调用 IToolDispatcher。
 //
 // 流程：
 //   1. 生成稳定 RequestId（基于 runId + toolCall 哈希，确保可重放时一致）
@@ -43,7 +43,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// 封装 Tool 调用的完整 durable 流程（journal + dispatch + commit）。
 /// </summary>
 /// <remarks>
-/// 复用旧 Kernel（<see cref="DefaultAgentKernel"/>）的 Tool 处理逻辑，
+/// 封装 Tool 调用的完整 durable 编排流程，
 /// 让 <see cref="AgentRunActor"/> 不再直接调用 <see cref="IToolDispatcher"/>。
 ///
 /// <b>P0-3</b>：根据 <see cref="IToolDispatchJournal.PrepareAsync"/> 返回的

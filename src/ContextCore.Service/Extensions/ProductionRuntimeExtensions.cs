@@ -54,13 +54,6 @@ public sealed class ProductionRuntimeOptions
     public RuntimeProfile Profile { get; set; } = RuntimeProfile.Development;
 
     /// <summary>
-    /// 是否启用 AgentKernel 主循环 HostedService（<see cref="AgentKernelLoopHostedService"/>）。
-    /// P0-7：默认 false。旧 AgentKernelLoop 平面已退役，AgentRun 统一由 AgentKernelHost 处理。
-    /// 设为 true 仅用于向后兼容验证（不推荐）。
-    /// </summary>
-    public bool EnableAgentKernelLoop { get; set; } = false;
-
-    /// <summary>
     /// 是否启用 AgentRun Recovery Worker（<see cref="AgentRunRecoveryWorker"/>）。
     /// 默认 true。Development profile 下 worker 检测到非持久化 store 时自动退出（no-op）。
     /// </summary>
@@ -261,15 +254,9 @@ internal static class ProductionRuntimeExtensions
         ProductionRuntimeOptions options,
         ProductionRuntimeWorkerRegistry workerRegistry)
     {
-        // Development：InMemory/FileSystem + InProcessTransport + Deterministic 推理。
+        // Development：InMemory/FileSystem + Deterministic 推理。
         // Canary 走单节点 CanaryProgressionHostedService（CanarySchedulerOptions.Enabled 默认 true）。
         // CanaryLeaderHostedService 不注册（依赖 Postgres-only 的 ICanaryLeaderLease / ICanaryMetricsAggregator）。
-
-        if (options.EnableAgentKernelLoop)
-        {
-            services.AddHostedService<AgentKernelLoopHostedService>();
-            workerRegistry.Add<AgentKernelLoopHostedService>();
-        }
 
         if (options.EnableRunRecovery)
         {
@@ -294,16 +281,10 @@ internal static class ProductionRuntimeExtensions
         ProductionRuntimeOptions options,
         ProductionRuntimeWorkerRegistry workerRegistry)
     {
-        // SingleNode：Postgres 存储 + InProcessTransport（非 durable）。
+        // SingleNode：Postgres 存储（非 durable transport）。
         // 启用 Run Recovery（Postgres IAgentRunStore 持久化）。
         // Canary 走单节点 CanaryProgressionHostedService。
         // AgentHostOptions.LeaseEnabled 保持默认 false（单实例无需租约竞争）。
-
-        if (options.EnableAgentKernelLoop)
-        {
-            services.AddHostedService<AgentKernelLoopHostedService>();
-            workerRegistry.Add<AgentKernelLoopHostedService>();
-        }
 
         if (options.EnableRunRecovery)
         {
@@ -327,32 +308,16 @@ internal static class ProductionRuntimeExtensions
         IConfiguration configuration,
         ProductionRuntimeWorkerRegistry workerRegistry)
     {
-        // ProductionHA：Postgres 存储 + Durable Transport + HA Leader 模式。
-        // 1. 启用 Durable Transport（替换 IAgentKernelTransport 绑定为 PostgresDurableTransport）。
-        // 2. 注册 Durable Transport hosted services（pump / replay / reaper / metrics）。
-        // 3. 启用 Run Recovery + Agent Run Lease（多实例竞争租约）。
-        // 4. Canary 切换到 HA 模式：
+        // ProductionHA：Postgres 存储 + HA Leader 模式（执行平面已收敛到
+        // AgentRunStore → AgentKernelHost → AgentRunActor，无独立 Durable Transport）。
+        // 1. 启用 Run Recovery + Agent Run Lease（多实例竞争租约）。
+        // 2. Canary 切换到 HA 模式：
         //    P0-2：通过 PostConfigure 覆盖 Enabled 标志（进入 Options Pipeline），
         //    让 IOptionsMonitor<CanarySchedulerOptions> / IOptionsMonitor<CanaryLeaderOptions>
         //    消费者能读到覆盖值。原 RemoveService + AddSingleton 不进入 Options Pipeline。
-        // 5. 注册 CanaryLeaderHostedService（HA 模式），不注册 CanaryProgressionHostedService。
+        // 3. 注册 CanaryLeaderHostedService（HA 模式），不注册 CanaryProgressionHostedService。
 
-        // 1. 启用 Durable Transport：替换 IAgentKernelTransport 绑定
-        services.UsePostgresDurableTransport();
-
-        // 2. 注册 Durable Transport hosted services
-        services.AddDurableTransportHostedServices(opts =>
-        {
-            configuration.GetSection("DurableTransport").Bind(opts);
-            opts.Enabled = true;
-        });
-        // P0-6：移除 DurableTransportInstructionPumpService 注册——指令不再通过 durable inbox → 旧 IAgentKernel
-        // inbox 路径，统一走 AgentRunStore → AgentKernelHost → AgentRunActor。Pump 仍保留代码以备兼容参考。
-        workerRegistry.Add<ResultOutboxReplayService>();
-        workerRegistry.Add<LeaseReaperService>();
-        workerRegistry.Add<PendingCountMetricsService>();
-
-        // 3. 覆盖 AgentHostOptions：启用 Run Lease
+        // 1. 覆盖 AgentHostOptions：启用 Run Lease
         // AgentHostOptions 通过 TryAddSingleton 注册为 POCO（非 Options Pipeline），
         // 故仍使用 RemoveService + AddSingleton 覆盖（仅 Canary options 改用 PostConfigure）。
         RemoveService(services, typeof(ContextCore.Abstractions.AgentHostOptions));
@@ -364,18 +329,12 @@ internal static class ProductionRuntimeExtensions
             return opts;
         });
 
-        // 4. P0-2：Canary 模式切换——通过 PostConfigure 覆盖 Enabled 标志。
+        // 2. P0-2：Canary 模式切换——通过 PostConfigure 覆盖 Enabled 标志。
         // PostConfigure 在 Configure 之后执行，IOptionsMonitor<T>.CurrentValue 会反映覆盖值。
         // CanarySchedulerOptions.Enabled = false（禁用单节点 CanaryProgressionHostedService）
         services.PostConfigure<CanarySchedulerOptions>(o => o.Enabled = false);
         // CanaryLeaderOptions.Enabled = true（启用 HA CanaryLeaderHostedService）
         services.PostConfigure<CanaryLeaderOptions>(o => o.Enabled = true);
-
-        if (options.EnableAgentKernelLoop)
-        {
-            services.AddHostedService<AgentKernelLoopHostedService>();
-            workerRegistry.Add<AgentKernelLoopHostedService>();
-        }
 
         if (options.EnableRunRecovery)
         {
@@ -383,7 +342,7 @@ internal static class ProductionRuntimeExtensions
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
-        // 5. P0-2：HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
+        // 3. P0-2：HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。
         services.AddHostedService<CanaryLeaderHostedService>();
 
@@ -498,7 +457,6 @@ internal static class ProductionRuntimeExtensions
         => new()
         {
             Profile = runtime.Profile,
-            EnableAgentKernelLoop = runtime.EnableAgentKernelLoop,
             EnableRunRecovery = runtime.EnableAgentRunRecovery,
             RunRecoveryInterval = runtime.RunRecoveryInterval,
             RunExecutionTimeout = runtime.RunExecutionTimeout,
@@ -513,7 +471,6 @@ internal static class ProductionRuntimeExtensions
         => new()
         {
             Profile = legacy.Profile,
-            EnableAgentKernelLoop = legacy.EnableAgentKernelLoop,
             EnableAgentRunRecovery = legacy.EnableRunRecovery,
             RunRecoveryInterval = legacy.RunRecoveryInterval,
             RunExecutionTimeout = legacy.RunExecutionTimeout,
@@ -544,7 +501,7 @@ internal static class ProductionRuntimeExtensions
                 $"但当前 Storage:Provider='{configuration["Storage:Provider"] ?? "filesystem"}'。" +
                 $"{profile} profile 依赖 Postgres 持久化存储" +
                 (profile == RuntimeProfile.ProductionHA
-                    ? "（Durable Transport、AgentRunStore、CanaryLeaderLease 等）。"
+                    ? "（AgentRunStore 事件溯源、Run Lease、CanaryLeaderLease 等）。"
                     : "（IAgentRunStore 持久化、Run Recovery）。") +
                 "请将 Storage:Provider 改为 postgres 并配置 PostgresConnectionString，或切换到 Development profile。");
         }
@@ -560,7 +517,7 @@ internal static class ProductionRuntimeExtensions
                     "但当前为空。请配置连接字符串（支持 env:VAR_NAME 格式）。");
             }
 
-            // P0-7：移除 ProductionHA 对 EnableAgentKernelLoop 的强制校验——旧平面已退役。
+            // P0-7：旧平面已退役——EnableAgentKernelLoop 配置项已随双执行平面收敛删除，无需校验。
         }
 
         // EnableModelActivation=true 时要求 IModelArtifactRegistry 已注册
@@ -610,7 +567,7 @@ internal sealed class ProductionRuntimeOptionsValidator : IValidateOptions<Produ
                 "支持的值：Development (0), SingleNode (1), ProductionHA (2)。");
         }
 
-        // P0-7：移除 ProductionHA 对 EnableAgentKernelLoop 的强制校验。
+        // P0-7：旧平面已退役——EnableAgentKernelLoop 配置项已随双执行平面收敛删除。
 
         return ValidateOptionsResult.Success;
     }

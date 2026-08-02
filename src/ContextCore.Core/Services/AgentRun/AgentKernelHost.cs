@@ -8,7 +8,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 // 任务 E7 + 子问题 9：AgentKernelHost — 多 Session 隔离的 Kernel Host（生产化）
 //
-// 替代 DefaultAgentKernel 的 Singleton 全局状态，实现真正的多 Session 隔离：
+// 替代旧单例 Kernel 平面的全局状态，实现真正的多 Session 隔离：
 //   1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
 //   2. 通过 IServiceProvider 解析 Actor 所需依赖（与 DI 容器集成）；
 //   3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceId:runId）；
@@ -33,7 +33,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 /// <summary>
 /// 任务 E7 + 子问题 9：多 Session 隔离的 Kernel Host（生产化）。
-/// 替代 <see cref="ContextCore.Core.Services.AgentKernel.DefaultAgentKernel"/> 的 Singleton 全局状态，
+/// 替代旧单例 Kernel 平面的全局状态，
 /// 为每个 Run 创建独立的 <see cref="AgentRunActor"/> 实例，实现真正的多 Session 隔离。
 /// </summary>
 /// <remarks>

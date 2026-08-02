@@ -1619,7 +1619,7 @@ public interface IAgentRunEventSubscription : IAsyncEnumerable<long>, IDisposabl
 /// <remarks>
 /// <b>引入背景</b>：AgentRunActor 直接调用 IToolDispatcher 会绕过 Durable Tool Journal，
 /// 导致崩溃恢复时无法判断 tool 是否真正执行、无法重放已 commit 的结果。
-/// 本接口封装旧 Kernel（DefaultAgentKernel.ProcessExecuteAsync）的 Tool 处理逻辑，
+/// 本接口封装 Tool 调用的完整 durable 编排流程，
 /// 让 Actor 复用同一套 durable 流程。
 ///
 /// 与 IToolDispatcher 的区别：

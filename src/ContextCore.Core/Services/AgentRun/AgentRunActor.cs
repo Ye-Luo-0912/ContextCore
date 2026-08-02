@@ -1783,8 +1783,8 @@ public sealed class AgentRunActor
 
     /// <summary>
     /// 子问题 6：构建 ToolCallCompleted 事件 payload（含完整 Tool 身份信息）。
-    /// payload 结构与 DefaultAgentKernel.ToolCallCompletedPayload 对齐（JSON 字段名兼容），
-    /// 让 ResumeFromCursorCheckpointAsync 可从 payload 反序列化真实 RequestId/SideEffect/IdempotencyKey。
+    /// payload 结构与事件流中的 ToolCallCompleted payload 对齐（JSON 字段名兼容），
+    /// 让恢复路径可从 payload 反序列化真实 RequestId/SideEffect/IdempotencyKey。
     /// </summary>
     private static object BuildCompletedPayload(
         string toolCallId,

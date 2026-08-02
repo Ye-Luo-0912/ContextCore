@@ -132,19 +132,7 @@ public sealed class ProductionRuntimeReadinessService
             }
         }
 
-        // 3. 检查 Durable Transport（ProductionHA）
-        if (_runtimeOptions.Profile == RuntimeProfile.ProductionHA)
-        {
-            var durableTransport = _services.GetService<IDurableTransport>();
-            checks.Add(new ReadinessCheckItem(
-                Name: "durable-transport",
-                Status: durableTransport is not null ? "ready" : "error",
-                Message: durableTransport is not null
-                    ? $"Durable Transport 已注册（{durableTransport.GetType().Name}）。"
-                    : "IDurableTransport 未注册——ProductionHA profile 要求 Durable Transport。"));
-        }
-
-        // 4. 检查 Model Activation（如果启用）
+        // 3. 检查 Model Activation（如果启用）
         if (_runtimeOptions.EnableModelActivation)
         {
             var registry = _services.GetService<IModelArtifactRegistry>();
@@ -215,24 +203,6 @@ public sealed class ProductionRuntimeReadinessService
         }
 
         return workers;
-    }
-
-    /// <summary>
-    /// 获取 Durable Transport 状态。
-    /// </summary>
-    /// <returns>Durable Transport 状态信息（null = 未注册）。</returns>
-    public DurableTransportStatus? GetDurableTransportStatus()
-    {
-        var transport = _services.GetService<IDurableTransport>();
-        if (transport is null)
-        {
-            return null;
-        }
-
-        return new DurableTransportStatus(
-            IsRegistered: true,
-            ImplementationType: transport.GetType().Name,
-            IsActive: _runtimeOptions.Profile == RuntimeProfile.ProductionHA);
     }
 
     /// <summary>
@@ -332,12 +302,7 @@ public sealed class ProductionRuntimeReadinessService
         var isHA = _runtimeOptions.Profile == RuntimeProfile.ProductionHA;
         return
         [
-            (nameof(Hosting.AgentKernelLoopHostedService), "AgentKernelLoop", _runtimeOptions.EnableAgentKernelLoop),
             (nameof(Hosting.AgentRunRecoveryWorker), "AgentRunRecovery", _runtimeOptions.EnableRunRecovery),
-            (nameof(Hosting.DurableTransportInstructionPumpService), "DurableTransportInstructionPump", isHA),
-            (nameof(Hosting.ResultOutboxReplayService), "ResultOutboxReplay", isHA),
-            (nameof(Hosting.LeaseReaperService), "LeaseReaper", isHA),
-            (nameof(Hosting.PendingCountMetricsService), "PendingCountMetrics", isHA),
             (nameof(Hosting.LearningMaterializationWorker), "LearningMaterialization", true),
             (nameof(CanaryProgressionHostedService), "CanaryProgression", !isHA),
             (nameof(Hosting.CanaryLeaderHostedService), "CanaryLeader", isHA),
@@ -489,12 +454,6 @@ public sealed record ReadinessCheckItem(string Name, string Status, string Messa
 /// <param name="Registered">是否已注册到 DI 容器。</param>
 /// <param name="Started">是否已启动（已注册且应用已启动）。</param>
 public sealed record WorkerStatus(string Name, string Type, bool Enabled, bool Registered, bool Started);
-
-/// <summary>Durable Transport 状态信息。</summary>
-/// <param name="IsRegistered">是否已注册。</param>
-/// <param name="ImplementationType">实现类型名称。</param>
-/// <param name="IsActive">是否在当前 Profile 下激活。</param>
-public sealed record DurableTransportStatus(bool IsRegistered, string ImplementationType, bool IsActive);
 
 /// <summary>Model Activation 状态信息。</summary>
 /// <param name="Enabled">是否启用。</param>

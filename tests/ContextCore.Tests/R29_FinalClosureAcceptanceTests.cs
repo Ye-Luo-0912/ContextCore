@@ -9,15 +9,17 @@ using ContextCore.Inference.Onnx;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29 Final Closure — 30 项硬验收测试
+// R29 Final Closure — 25 项硬验收测试
 //
-// 覆盖六条工作流（A-F）的核心契约：
-//   A. 持久化投递（Durable Delivery）：Outbox + Transport 的 FIFO / 计数 / 往返契约
+// 覆盖五条工作流（B-F）的核心契约：
 //   B. Tool 副作用安全（Tool Effect Safety）：Journal 状态机 + expected-state CAS
 //   C. Canary 真相（Canary Truth）：外部 ground-truth 指标采集器
 //   D. 模型激活（Model Activation）：ActivationManager 代理行为 + 失败路径
 //   E. Agent 智能（Agent Intelligence）：状态机 + 哈希链 + CAS Run Store
 //   F. 性能真相（Performance Truth）：组件健康注册表 + benchmark 脚本门控
+//
+// 注：旧平面 Workflow A（Durable Delivery — Outbox + Transport）随双执行平面
+// 收敛删除（R29-Perf-1），由 AgentRunStore 事件溯源路径取代。
 //
 // 设计原则：
 //   - 全部使用 InMemory 实现（无 Postgres / 真实 ONNX 依赖）
@@ -26,106 +28,6 @@ namespace ContextCore.Tests;
 //     MockOnnxInferenceSession / MockSessionFactory / FailingSessionFactory
 //   - 所有代码注释使用中文
 // ===========================================================================
-
-// ===========================================================================
-// 工作流 A：Durable Delivery — Outbox + Transport 投递契约（5 项）
-// ===========================================================================
-
-[TestClass]
-[TestCategory("R29-Closure")]
-[TestCategory("Workflow-A")]
-public sealed class WorkflowA_DurableDeliveryAcceptanceTests
-{
-    [TestMethod]
-    public async Task Outbox_EnqueueAndDequeue_PreservesResultBody()
-    {
-        // 验证：EnqueueAsync 写入的结果能通过 DequeueAsync FIFO 读出，字段保持一致
-        var outbox = new InMemoryKernelResultOutbox(capacity: 16);
-        var result = BuildResult("instr-A1", output: "output-A1");
-
-        await outbox.EnqueueAsync(result);
-        var dequeued = await outbox.DequeueAsync();
-
-        Assert.IsNotNull(dequeued, "Outbox 应能读出刚写入的结果。");
-        Assert.AreEqual(result.InstructionId, dequeued!.InstructionId);
-        Assert.AreEqual(result.Output, dequeued.Output);
-    }
-
-    [TestMethod]
-    public async Task Outbox_PendingCount_ReflectsEnqueueAndDequeue()
-    {
-        // 验证：PendingCount 同步反映 Enqueue/Dequeue 操作后的积压数量
-        var outbox = new InMemoryKernelResultOutbox(capacity: 16);
-
-        Assert.AreEqual(0, outbox.PendingCount, "初始 PendingCount 应为 0。");
-
-        await outbox.EnqueueAsync(BuildResult("instr-A2-1"));
-        await outbox.EnqueueAsync(BuildResult("instr-A2-2"));
-        Assert.AreEqual(2, outbox.PendingCount, "Enqueue 2 条后 PendingCount 应为 2。");
-
-        await outbox.DequeueAsync();
-        Assert.AreEqual(1, outbox.PendingCount, "Dequeue 1 条后 PendingCount 应为 1。");
-    }
-
-    [TestMethod]
-    public async Task Outbox_GetPendingCountAsync_MatchesSyncCounter()
-    {
-        // 验证：异步 GetPendingCountAsync 与同步 PendingCount 返回一致值（P2 异步化兼容）
-        var outbox = new InMemoryKernelResultOutbox(capacity: 16);
-        await outbox.EnqueueAsync(BuildResult("instr-A3-1"));
-        await outbox.EnqueueAsync(BuildResult("instr-A3-2"));
-        await outbox.EnqueueAsync(BuildResult("instr-A3-3"));
-
-        var syncCount = outbox.PendingCount;
-        var asyncCount = await outbox.GetPendingCountAsync();
-
-        Assert.AreEqual(syncCount, asyncCount, "同步与异步 PendingCount 必须一致。");
-        Assert.AreEqual(3, asyncCount, "3 条 Enqueue 后异步计数应为 3。");
-    }
-
-    [TestMethod]
-    public async Task Transport_SubmitAndReceive_PreservesInstruction()
-    {
-        // 验证：InProcessTransport.SubmitAsync 写入的指令能通过 ReceiveAsync 读出
-        var transport = new InProcessTransport(capacity: 16);
-        var instruction = new AgentKernelInstruction
-        {
-            InstructionId = "instr-A4",
-            Kind = AgentKernelInstructionKind.Execute,
-            Payload = "execute-payload-A4"
-        };
-
-        await transport.SubmitAsync(instruction);
-        var received = await transport.ReceiveAsync();
-
-        Assert.IsNotNull(received, "Transport 应能读出刚提交的指令。");
-        Assert.AreEqual(instruction.InstructionId, received!.InstructionId);
-        Assert.AreEqual(instruction.Kind, received.Kind);
-        Assert.AreEqual(instruction.Payload, received.Payload);
-    }
-
-    [TestMethod]
-    public async Task Transport_SendAndReceiveResult_PreservesResult()
-    {
-        // 验证：Transport.SendResultAsync 写入的结果能通过 ReceiveResultAsync 读出
-        var transport = new InProcessTransport(capacity: 16);
-        var result = BuildResult("instr-A5", output: "result-A5");
-
-        await transport.SendResultAsync(result);
-        var received = await transport.ReceiveResultAsync();
-
-        Assert.IsNotNull(received, "Transport outbox 应能读出刚发送的结果。");
-        Assert.AreEqual(result.InstructionId, received!.InstructionId);
-        Assert.AreEqual(result.Output, received.Output);
-    }
-
-    private static AgentKernelResult BuildResult(string instructionId, string? output = null) => new()
-    {
-        InstructionId = instructionId,
-        Succeeded = true,
-        Output = output ?? ("output-" + instructionId)
-    };
-}
 
 // ===========================================================================
 // 工作流 B：Tool Effect Safety — Journal 状态机 + expected-state CAS（5 项）

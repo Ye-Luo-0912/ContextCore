@@ -90,8 +90,8 @@ builder.Services
 	.AddContextStorage(storageOptions)
 	// P0-1：统一入口 AddContextCoreRuntime 替代旧 AddContextCore() + AddContextCoreProductionRuntime()。
 	// 该方法内部按 ContextCoreRuntime:ModelMode 选择 ModelExecutionOptions 调用 AddContextCore，
-	// 再按 ContextCoreRuntime:Profile 分发 HostedService / Transport / Canary 注册。
-	// 必须在 AddContextStorage 之后调用（依赖其注册的 IModelArtifactRegistry / PostgresDurableTransport 等）。
+	// 再按 ContextCoreRuntime:Profile 分发 HostedService / Run Lease / Canary 注册。
+	// 必须在 AddContextStorage 之后调用（依赖其注册的 IModelArtifactRegistry / IAgentRunStore 等）。
 	.AddContextCoreRuntime(builder.Configuration)
 	.AddContextModelGateway(builder.Configuration)
 	.AddEmbeddingProviders(embeddingProviderOptions)

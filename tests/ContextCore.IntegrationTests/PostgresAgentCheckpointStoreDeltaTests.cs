@@ -11,7 +11,7 @@ namespace ContextCore.IntegrationTests;
 /// 验证持久化 Agent Checkpoint Store 的 Full/Delta 链路持久化与崩溃恢复。
 /// </summary>
 /// <remarks>
-/// R28-G P1-5 delta 链路完全由 DefaultAgentKernel.ResumeAsync 通过标准 IAgentCheckpointStore.GetAsync 走链，
+/// R28-G P1-5 delta 链路由恢复路径（事件流 + checkpoint 链）通过标准 IAgentCheckpointStore.GetAsync 走链，
 /// Store 不需感知 delta 语义 — 只持久化完整 AgentCheckpoint blob。本测试验证 Store 正确持久化
 /// Full/Delta 两种 checkpoint，且通过 GetAsync 可恢复整条链。
 /// </remarks>
@@ -188,7 +188,7 @@ public sealed class PostgresAgentCheckpointStoreDeltaTests
             StringAssert.Contains(deltaFetched!.StateJson, "\"Mode\":1");
             StringAssert.Contains(deltaFetched.StateJson, "\"BaseCheckpointId\":\"ckpt-base\"");
 
-            // 模拟 DefaultAgentKernel.ResumeAsync 递归走链：通过 BaseCheckpointId 读取 Full checkpoint
+            // 模拟恢复路径递归走链：通过 BaseCheckpointId 读取 Full checkpoint
             var baseFetched = await store2.GetAsync(session.WorkspaceId, "ckpt-base");
             Assert.IsNotNull(baseFetched, "通过 BaseCheckpointId 应能读取 Full checkpoint。");
             StringAssert.Contains(baseFetched!.StateJson, "\"Mode\":0");

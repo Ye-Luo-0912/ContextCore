@@ -1,12 +1,10 @@
 using ContextCore.Abstractions;
-using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Service.Extensions;
 using ContextCore.Service.Hosting;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Extensions;
 using ContextCore.Storage.Postgres.Infrastructure;
-using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -18,13 +16,15 @@ namespace ContextCore.Tests;
 // R29-Hard-Gate：Service Composition E2E 验收测试
 //
 // 目标：验证 AddContextCoreProductionRuntime 在三种 RuntimeProfile
-//   （Development / SingleNode / ProductionHA）下的服务注册组合正确性：
-//   1. Development：InMemory/FileSystem + InProcessTransport；不启用 Durable Transport
-//      hosted services；不强制 Run Lease。
-//   2. SingleNode：要求 Postgres 存储；不启用 Durable Transport hosted services；
+//   （Development / SingleNode / ProductionHA）下的服务注册组合正确性
+//   （执行平面已收敛到 AgentRunStore → AgentKernelHost → AgentRunActor，
+//   无独立 Durable Transport hosted services）：
+//   1. Development：InMemory/FileSystem 存储；注册 Run Recovery + 单节点
+//      Canary Progression；不强制 Run Lease。
+//   2. SingleNode：要求 Postgres 存储；注册 Run Recovery + 单节点 Canary；
 //      Run Lease 默认 false。
-//   3. ProductionHA：要求 Postgres 存储；启用 Durable Transport hosted services
-//      （pump / replay / reaper / metrics）；强制 Run Lease；Canary 切换到 HA 模式。
+//   3. ProductionHA：要求 Postgres 存储；注册 Run Recovery + HA Canary Leader
+//      + ModelStateReconciler；强制 Run Lease；Canary 切换到 HA 模式。
 //
 // 设计原则：
 //   - 使用真实组件（非 mock）验证 DI 容器内容；Postgres 不可用时仅跳过
@@ -45,62 +45,64 @@ public sealed class R29H_ServiceCompositionE2ETests
 
     /// <summary>
     /// Development profile 在 filesystem 存储下应成功注册：
-    ///   - IAgentKernelTransport → InProcessTransport
-    ///   - 不注册 IDurableTransport（Postgres 未注册）
-    ///   - 注册 AgentKernelLoopHostedService + AgentRunRecoveryWorker
+    ///   - 注册 AgentRunRecoveryWorker + CanaryProgressionHostedService + LearningMaterializationWorker
+    ///   - 不注册 CanaryLeaderHostedService / ModelStateReconcilerWorker（Postgres-only / HA-only）
+    ///   - 不注册任何旧平面 Durable Transport hosted services（双执行平面已收敛）
     /// </summary>
     [TestMethod]
-    public void Development_Profile_RegistersInProcessTransportAndHostedServices()
+    public void Development_Profile_RegistersRunRecoveryAndCanaryHostedServices()
     {
         // 安排：filesystem 存储配置 + Development profile
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
             ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableAgentKernelLoop"] = "true",
             ["ProductionRuntime:EnableRunRecovery"] = "true"
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore(); // 注册基础服务（InProcessTransport 等）
+        services.AddContextCore();
         services.AddContextCoreProductionRuntime(config);
         var provider = services.BuildServiceProvider();
 
-        // 断言 1：IAgentKernelTransport 解析为 InProcessTransport（Development 默认）
-        var transport = provider.GetService<IAgentKernelTransport>();
-        Assert.IsNotNull(transport, "IAgentKernelTransport 应已注册。");
-        Assert.IsInstanceOfType(transport, typeof(InProcessTransport),
-            "Development profile 应使用 InProcessTransport。");
-
-        // 断言 2：IDurableTransport 未注册（Postgres 未注册）
-        var durableTransport = provider.GetService<IDurableTransport>();
-        Assert.IsNull(durableTransport,
-            "Development profile 不应注册 IDurableTransport（无 Postgres 后端）。");
-
-        // 断言 3：ProductionRuntimeOptions 已注册并绑定 Profile=Development
+        // 断言 1：ProductionRuntimeOptions 已注册并绑定 Profile=Development
         var runtimeOptions = provider.GetRequiredService<ProductionRuntimeOptions>();
         Assert.AreEqual(RuntimeProfile.Development, runtimeOptions.Profile,
             "ProductionRuntimeOptions.Profile 应为 Development。");
 
-        // 断言 4：HostedService 描述符包含 AgentKernelLoopHostedService + AgentRunRecoveryWorker
+        // 断言 2：HostedService 描述符包含 Run Recovery + 单节点 Canary + Learning
         var hostedServiceTypes = services
             .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
             .Select(d => d.ImplementationType)
             .Where(t => t is not null)
             .Select(t => t!.FullName)
             .ToList();
-        CollectionAssert.Contains(hostedServiceTypes, typeof(AgentKernelLoopHostedService).FullName,
-            "Development profile 应注册 AgentKernelLoopHostedService。");
         CollectionAssert.Contains(hostedServiceTypes, typeof(AgentRunRecoveryWorker).FullName,
             "Development profile 应注册 AgentRunRecoveryWorker。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(CanaryProgressionHostedService).FullName,
+            "Development profile 应注册 CanaryProgressionHostedService。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(LearningMaterializationWorker).FullName,
+            "Development profile 应注册 LearningMaterializationWorker。");
 
-        // 断言 5：Durable Transport 专属 hosted services 未注册
-        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(DurableTransportInstructionPumpService).FullName,
-            "Development profile 不应注册 DurableTransportInstructionPumpService。");
-        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(ResultOutboxReplayService).FullName,
-            "Development profile 不应注册 ResultOutboxReplayService。");
-        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(LeaseReaperService).FullName,
-            "Development profile 不应注册 LeaseReaperService。");
+        // 断言 3：HA-only / Postgres-only hosted services 未注册
+        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(CanaryLeaderHostedService).FullName,
+            "Development profile 不应注册 CanaryLeaderHostedService（依赖 Postgres-only lease）。");
+        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(ModelStateReconcilerWorker).FullName,
+            "Development profile 不应注册 ModelStateReconcilerWorker（ProductionHA 专属）。");
+
+        // 断言 4：旧平面 Durable Transport hosted services 全部退役（按名称守卫，防止回归）
+        foreach (var retiredWorker in new[]
+                 {
+                     "DurableTransportInstructionPumpService",
+                     "AgentKernelLoopHostedService",
+                     "ResultOutboxReplayService",
+                     "LeaseReaperService",
+                     "PendingCountMetricsService"
+                 })
+        {
+            CollectionAssert.DoesNotContain(hostedServiceTypes, retiredWorker,
+                $"Development profile 不应注册已退役的旧平面 worker：{retiredWorker}。");
+        }
     }
 
     /// <summary>
@@ -131,18 +133,17 @@ public sealed class R29H_ServiceCompositionE2ETests
 
     /// <summary>
     /// SingleNode profile 在 Postgres 存储下应成功注册：
-    ///   - IAgentKernelTransport → InProcessTransport（非 durable，单实例无需跨进程持久化）
-    ///   - IDurableTransport 已注册（由 AddContextCorePostgresStorage 注册）
-    ///   - 不调用 UsePostgresDurableTransport（IAgentKernelTransport 不替换为 PostgresDurableTransport）
-    ///   - AgentHostOptions.LeaseEnabled = false
-    ///   - 注册 AgentKernelLoopHostedService + AgentRunRecoveryWorker
+    ///   - IAgentRunStore 解析为持久化实现（Postgres）
+    ///   - AgentHostOptions.LeaseEnabled = false（单实例无需租约竞争）
+    ///   - 注册 AgentRunRecoveryWorker + CanaryProgressionHostedService + LearningMaterializationWorker
+    ///   - 不注册旧平面 Durable Transport hosted services
     /// </summary>
     /// <remarks>
     /// 本测试不连接真实 Postgres；仅验证 DI 容器中的服务描述符绑定。
     /// PostgresConnectionFactory 在被解析时才创建 NpgsqlDataSource，本测试不触发该路径。
     /// </remarks>
     [TestMethod]
-    public void SingleNode_Profile_RegistersPostgresStoresButKeepsInProcessTransport()
+    public void SingleNode_Profile_RegistersPostgresStoresAndRunRecovery()
     {
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -158,52 +159,55 @@ public sealed class R29H_ServiceCompositionE2ETests
         services.AddContextCoreProductionRuntime(config);
         var provider = services.BuildServiceProvider();
 
-        // 断言 1：IAgentKernelTransport 仍为 InProcessTransport（SingleNode 不启用 durable）
-        var transport = provider.GetService<IAgentKernelTransport>();
-        Assert.IsNotNull(transport, "IAgentKernelTransport 应已注册。");
-        Assert.IsInstanceOfType(transport, typeof(InProcessTransport),
-            "SingleNode profile 应使用 InProcessTransport（单实例无需 durable transport）。");
-
-        // 断言 2：IDurableTransport 已注册（Postgres 存储自带）
-        var durable = provider.GetService<IDurableTransport>();
-        Assert.IsNotNull(durable, "IDurableTransport 应由 AddContextCorePostgresStorage 注册。");
-        Assert.IsInstanceOfType(durable, typeof(PostgresDurableTransport),
-            "IDurableTransport 应解析为 PostgresDurableTransport。");
-
-        // 断言 3：IAgentRunStore 解析为持久化实现（IPersistentAgentRunStore）
+        // 断言 1：IAgentRunStore 解析为持久化实现（IPersistentAgentRunStore）
         var runStore = provider.GetService<IAgentRunStore>();
         Assert.IsNotNull(runStore, "IAgentRunStore 应已注册。");
         Assert.IsInstanceOfType(runStore, typeof(IPersistentAgentRunStore),
             "SingleNode profile 应使用持久化 IAgentRunStore（Postgres）。");
 
-        // 断言 4：AgentHostOptions.LeaseEnabled = false
+        // 断言 2：AgentHostOptions.LeaseEnabled = false
         var agentHostOptions = provider.GetService<AgentHostOptions>();
         Assert.IsNotNull(agentHostOptions);
         Assert.IsFalse(agentHostOptions!.LeaseEnabled,
             "SingleNode profile 应保持 LeaseEnabled=false。");
 
-        // 断言 5：Durable Transport hosted services 未注册
+        // 断言 3：Run Recovery + 单节点 Canary + Learning hosted services 注册
         var hostedServiceTypes = services
             .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
             .Select(d => d.ImplementationType)
             .Where(t => t is not null)
             .Select(t => t!.FullName)
             .ToList();
-        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(DurableTransportInstructionPumpService).FullName,
-            "SingleNode profile 不应注册 DurableTransportInstructionPumpService（不启用 durable transport）。");
-        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(LeaseReaperService).FullName,
-            "SingleNode profile 不应注册 LeaseReaperService。");
-        // Run Recovery 应注册
         CollectionAssert.Contains(hostedServiceTypes, typeof(AgentRunRecoveryWorker).FullName,
             "SingleNode profile 应注册 AgentRunRecoveryWorker。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(CanaryProgressionHostedService).FullName,
+            "SingleNode profile 应注册 CanaryProgressionHostedService。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(LearningMaterializationWorker).FullName,
+            "SingleNode profile 应注册 LearningMaterializationWorker。");
+
+        // 断言 4：HA-only / 旧平面 hosted services 未注册
+        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(CanaryLeaderHostedService).FullName,
+            "SingleNode profile 不应注册 CanaryLeaderHostedService（HA 专属）。");
+        foreach (var retiredWorker in new[]
+                 {
+                     "DurableTransportInstructionPumpService",
+                     "AgentKernelLoopHostedService",
+                     "ResultOutboxReplayService",
+                     "LeaseReaperService",
+                     "PendingCountMetricsService"
+                 })
+        {
+            CollectionAssert.DoesNotContain(hostedServiceTypes, retiredWorker,
+                $"SingleNode profile 不应注册已退役的旧平面 worker：{retiredWorker}。");
+        }
     }
 
     // ── ProductionHA Profile ─────────────────────────────────────────────
 
     /// <summary>
     /// ProductionHA profile 在 Postgres 存储下应成功注册：
-    ///   - IAgentKernelTransport → PostgresDurableTransport（durable，HA 跨进程持久化）
-    ///   - 注册 Durable Transport hosted services（pump / replay / reaper / metrics）
+    ///   - 注册 Run Recovery + HA Canary Leader + ModelStateReconciler + Learning 等 hosted services
+    ///   - 不注册任何旧平面 Durable Transport hosted services（双执行平面已收敛）
     ///   - AgentHostOptions.LeaseEnabled = true（强制启用 HA 租约竞争）
     ///   - CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
     ///   - IOptions&lt;CanaryLeaderOptions&gt;.Enabled = true（启用 HA Canary Leader）
@@ -212,14 +216,13 @@ public sealed class R29H_ServiceCompositionE2ETests
     /// 本测试不连接真实 Postgres；仅验证 DI 容器中的服务描述符绑定。
     /// </remarks>
     [TestMethod]
-    public void ProductionHA_Profile_RegistersDurableTransportAndHAHostedServices()
+    public void ProductionHA_Profile_RegistersRunLeaseAndHAHostedServices()
     {
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "postgres",
             ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
             ["ProductionRuntime:Profile"] = "ProductionHA",
-            ["ProductionRuntime:EnableAgentKernelLoop"] = "true",
             ["ProductionRuntime:EnableRunRecovery"] = "true"
         });
 
@@ -229,44 +232,47 @@ public sealed class R29H_ServiceCompositionE2ETests
         services.AddContextCoreProductionRuntime(config);
         var provider = services.BuildServiceProvider();
 
-        // 断言 1：IAgentKernelTransport 替换为 PostgresDurableTransport
-        var transport = provider.GetService<IAgentKernelTransport>();
-        Assert.IsNotNull(transport, "IAgentKernelTransport 应已注册。");
-        Assert.IsInstanceOfType(transport, typeof(PostgresDurableTransport),
-            "ProductionHA profile 应使用 PostgresDurableTransport（durable transport for HA）。");
-
-        // 断言 2：IDurableTransport 解析为 PostgresDurableTransport（与 IAgentKernelTransport 同一 singleton）
-        var durable = provider.GetService<IDurableTransport>();
-        Assert.IsNotNull(durable, "IDurableTransport 应已注册。");
-        Assert.IsInstanceOfType(durable, typeof(PostgresDurableTransport));
-        Assert.AreSame(transport, durable,
-            "IAgentKernelTransport 与 IDurableTransport 应解析为同一 PostgresDurableTransport singleton。");
-
-        // 断言 3：Durable Transport hosted services 注册（P0-6：Pump 已退役，不再注册）
+        // 断言 1：HA 平面 hosted services 注册（P0-6：旧平面 pump/replay/reaper/metrics 已退役）
         var hostedServiceTypes = services
             .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
             .Select(d => d.ImplementationType)
             .Where(t => t is not null)
             .Select(t => t!.FullName)
             .ToList();
-        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(DurableTransportInstructionPumpService).FullName,
-            "P0-6：ProductionHA profile 不应注册 DurableTransportInstructionPumpService（执行平面已收敛）。");
-        CollectionAssert.Contains(hostedServiceTypes, typeof(ResultOutboxReplayService).FullName,
-            "ProductionHA profile 应注册 ResultOutboxReplayService。");
-        CollectionAssert.Contains(hostedServiceTypes, typeof(LeaseReaperService).FullName,
-            "ProductionHA profile 应注册 LeaseReaperService。");
-        CollectionAssert.Contains(hostedServiceTypes, typeof(AgentKernelLoopHostedService).FullName,
-            "ProductionHA profile 应注册 AgentKernelLoopHostedService。");
         CollectionAssert.Contains(hostedServiceTypes, typeof(AgentRunRecoveryWorker).FullName,
             "ProductionHA profile 应注册 AgentRunRecoveryWorker。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(CanaryLeaderHostedService).FullName,
+            "ProductionHA profile 应注册 CanaryLeaderHostedService。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(ModelStateReconcilerWorker).FullName,
+            "ProductionHA profile 应注册 ModelStateReconcilerWorker。");
+        CollectionAssert.Contains(hostedServiceTypes, typeof(LearningMaterializationWorker).FullName,
+            "ProductionHA profile 应注册 LearningMaterializationWorker。");
 
-        // 断言 4：AgentHostOptions.LeaseEnabled 强制为 true（HA 多实例租约竞争）
+        // 单节点 Canary Progression 不应注册（HA 模式互斥）
+        CollectionAssert.DoesNotContain(hostedServiceTypes, typeof(CanaryProgressionHostedService).FullName,
+            "ProductionHA profile 不应注册 CanaryProgressionHostedService（HA 模式互斥）。");
+
+        // 旧平面 Durable Transport hosted services 全部退役（按名称守卫，防止回归）
+        foreach (var retiredWorker in new[]
+                 {
+                     "DurableTransportInstructionPumpService",
+                     "AgentKernelLoopHostedService",
+                     "ResultOutboxReplayService",
+                     "LeaseReaperService",
+                     "PendingCountMetricsService"
+                 })
+        {
+            CollectionAssert.DoesNotContain(hostedServiceTypes, retiredWorker,
+                $"ProductionHA profile 不应注册已退役的旧平面 worker：{retiredWorker}。");
+        }
+
+        // 断言 2：AgentHostOptions.LeaseEnabled 强制为 true（HA 多实例租约竞争）
         var agentHostOptions = provider.GetService<AgentHostOptions>();
         Assert.IsNotNull(agentHostOptions);
         Assert.IsTrue(agentHostOptions!.LeaseEnabled,
             "ProductionHA profile 应强制 LeaseEnabled=true（HA 多实例租约竞争）。");
 
-        // 断言 5：CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
+        // 断言 3：CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
         // P0-2：CanarySchedulerOptions 改用 AddOptions<>() 注册（Options Pipeline），
         // 不再注册为 POCO singleton，需通过 IOptions<T> 解析。
         var canarySchedulerOptions = provider.GetService<IOptions<CanarySchedulerOptions>>()?.Value;
@@ -274,7 +280,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         Assert.IsFalse(canarySchedulerOptions!.Enabled,
             "ProductionHA profile 应禁用单节点 CanaryProgressionHostedService。");
 
-        // 断言 6：IOptions<CanaryLeaderOptions>.Enabled = true（启用 HA Canary Leader）
+        // 断言 4：IOptions<CanaryLeaderOptions>.Enabled = true（启用 HA Canary Leader）
         var canaryLeaderOptions = provider.GetService<IOptions<CanaryLeaderOptions>>();
         Assert.IsNotNull(canaryLeaderOptions);
         Assert.IsTrue(canaryLeaderOptions!.Value.Enabled,
@@ -426,10 +432,6 @@ public sealed class R29H_ServiceCompositionE2ETests
             var provider = services.BuildServiceProvider();
 
             // 断言 1：所有关键 HA 服务可解析（不抛异常）
-            var transport = provider.GetRequiredService<IAgentKernelTransport>();
-            Assert.IsInstanceOfType(transport, typeof(PostgresDurableTransport),
-                "ProductionHA + 真实 Postgres 应解析 PostgresDurableTransport。");
-
             var runStore = provider.GetRequiredService<IAgentRunStore>();
             Assert.IsInstanceOfType(runStore, typeof(IPersistentAgentRunStore),
                 "ProductionHA + 真实 Postgres 应解析持久化 IAgentRunStore。");

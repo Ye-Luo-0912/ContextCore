@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using ContextCore.Abstractions;
-using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Service.Extensions;
 using ContextCore.Service.Hosting;
@@ -9,7 +8,6 @@ using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Extensions;
 using ContextCore.Storage.Postgres.Infrastructure;
-using ContextCore.Storage.Postgres.Stores;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -24,8 +22,8 @@ namespace ContextCore.Tests;
 //
 // 目标：验证 Production Runtime Profile 的完整功能：
 //   1. 统一 Worker 注册（ProductionRuntimeWorkerRegistry 在各 Profile 下正确捕获 Worker 类型名）
-//   2. Readiness Service 行为（CheckReadinessAsync / GetRegisteredWorkers / GetDurableTransportStatus /
-//      GetCanaryStatus / GetModelActivationStatus）
+//   2. Readiness Service 行为（CheckReadinessAsync / GetRegisteredWorkers / GetCanaryStatus /
+//      GetModelActivationStatus）
 //   3. Readiness Endpoint（/health/ready）— 通过 WebApplicationFactory<Program> 真实 HTTP 调用验证
 //   4. 当前激活组件报告 Endpoint（/api/runtime/status）— 同上
 //   5. 不合法组合 fail-fast 补充边界场景
@@ -50,9 +48,9 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
     /// <summary>
     /// Development profile 下 WorkerRegistry 应包含预期 Worker：
-    /// AgentKernelLoopHostedService / AgentRunRecoveryWorker / LearningMaterializationWorker /
-    /// CanaryProgressionHostedService / CanaryLeaderHostedService。
-    /// 不应包含 Durable Transport 专属 Worker（pump / replay / reaper / metrics）。
+    /// AgentRunRecoveryWorker / LearningMaterializationWorker / CanaryProgressionHostedService /
+    /// CanaryLeaderHostedService / ModelStateReconcilerWorker。
+    /// 不应包含任何旧平面 Durable Transport 专属 Worker（pump / loop / replay / reaper / metrics）。
     /// </summary>
     [TestMethod]
     public void Development_Profile_WorkerRegistry_ContainsExpectedWorkers()
@@ -61,7 +59,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
         {
             ["Storage:Provider"] = "filesystem",
             ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableAgentKernelLoop"] = "true",
             ["ProductionRuntime:EnableRunRecovery"] = "true"
         });
 
@@ -74,8 +71,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var workerNames = registry.WorkerTypeNames.ToList();
 
         // 断言：包含 Development profile 预期 Worker
-        CollectionAssert.Contains(workerNames, nameof(AgentKernelLoopHostedService),
-            "WorkerRegistry 应包含 AgentKernelLoopHostedService。");
         CollectionAssert.Contains(workerNames, nameof(AgentRunRecoveryWorker),
             "WorkerRegistry 应包含 AgentRunRecoveryWorker。");
         CollectionAssert.Contains(workerNames, nameof(LearningMaterializationWorker),
@@ -83,26 +78,33 @@ public sealed class R29H_ProductionRuntimeProfileTests
         CollectionAssert.Contains(workerNames, nameof(CanaryProgressionHostedService),
             "WorkerRegistry 应包含 CanaryProgressionHostedService。");
         CollectionAssert.Contains(workerNames, nameof(CanaryLeaderHostedService),
-            "WorkerRegistry 应包含 CanaryLeaderHostedService。");
+            "WorkerRegistry 应包含 CanaryLeaderHostedService（registry 统一记录，实际注册按 Profile 互斥）。");
+        CollectionAssert.Contains(workerNames, nameof(ModelStateReconcilerWorker),
+            "WorkerRegistry 应包含 ModelStateReconcilerWorker（registry 统一记录，实际注册仅 ProductionHA）。");
 
-        // 断言：不包含 Durable Transport 专属 Worker
-        CollectionAssert.DoesNotContain(workerNames, nameof(DurableTransportInstructionPumpService),
-            "Development profile 不应注册 DurableTransportInstructionPumpService。");
-        CollectionAssert.DoesNotContain(workerNames, nameof(ResultOutboxReplayService),
-            "Development profile 不应注册 ResultOutboxReplayService。");
-        CollectionAssert.DoesNotContain(workerNames, nameof(LeaseReaperService),
-            "Development profile 不应注册 LeaseReaperService。");
-        CollectionAssert.DoesNotContain(workerNames, nameof(PendingCountMetricsService),
-            "Development profile 不应注册 PendingCountMetricsService。");
+        // 断言：不包含旧平面 Durable Transport 专属 Worker（按名称守卫，防止回归）
+        foreach (var retiredWorker in new[]
+                 {
+                     "DurableTransportInstructionPumpService",
+                     "AgentKernelLoopHostedService",
+                     "ResultOutboxReplayService",
+                     "LeaseReaperService",
+                     "PendingCountMetricsService"
+                 })
+        {
+            CollectionAssert.DoesNotContain(workerNames, retiredWorker,
+                $"Development profile 不应注册已退役的旧平面 worker：{retiredWorker}。");
+        }
     }
 
     /// <summary>
-    /// ProductionHA profile 下 WorkerRegistry 应包含 Durable Transport 专属 Worker：
-    /// ResultOutboxReplayService / LeaseReaperService / PendingCountMetricsService。
-    /// P0-6：DurableTransportInstructionPumpService 已退役（执行平面收敛到 AgentKernelHost/AgentRunActor）。
+    /// ProductionHA profile 下 WorkerRegistry 应包含 HA 平面 Worker：
+    /// AgentRunRecoveryWorker / ModelStateReconcilerWorker / LearningMaterializationWorker /
+    /// CanaryLeaderHostedService（以及 registry 统一记录的 CanaryProgressionHostedService）。
+    /// P0-6：旧平面 Durable Transport 专属 Worker 全部退役（执行平面收敛到 AgentKernelHost/AgentRunActor）。
     /// </summary>
     [TestMethod]
-    public void ProductionHA_Profile_WorkerRegistry_ContainsDurableTransportWorkers()
+    public void ProductionHA_Profile_WorkerRegistry_ContainsHAPlaneWorkers()
     {
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -120,18 +122,23 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var registry = provider.GetRequiredService<ProductionRuntimeWorkerRegistry>();
         var workerNames = registry.WorkerTypeNames.ToList();
 
-        // 断言：包含 Durable Transport 专属 Worker（P0-6：Pump 已退役，不再注册）
-        CollectionAssert.DoesNotContain(workerNames, nameof(DurableTransportInstructionPumpService),
-            "P0-6：ProductionHA profile 不应注册 DurableTransportInstructionPumpService（执行平面已收敛）。");
-        CollectionAssert.Contains(workerNames, nameof(ResultOutboxReplayService),
-            "ProductionHA profile 应注册 ResultOutboxReplayService。");
-        CollectionAssert.Contains(workerNames, nameof(LeaseReaperService),
-            "ProductionHA profile 应注册 LeaseReaperService。");
-        CollectionAssert.Contains(workerNames, nameof(PendingCountMetricsService),
-            "ProductionHA profile 应注册 PendingCountMetricsService。");
+        // 断言：不包含旧平面 Durable Transport 专属 Worker
+        foreach (var retiredWorker in new[]
+                 {
+                     "DurableTransportInstructionPumpService",
+                     "AgentKernelLoopHostedService",
+                     "ResultOutboxReplayService",
+                     "LeaseReaperService",
+                     "PendingCountMetricsService"
+                 })
+        {
+            CollectionAssert.DoesNotContain(workerNames, retiredWorker,
+                $"ProductionHA profile 不应注册已退役的旧平面 worker：{retiredWorker}。");
+        }
 
-        // 断言：也包含通用 Worker
-        // P0-7：AgentKernelLoop 默认禁用；P0-9：ModelStateReconcilerWorker 为 HA 模式期望状态同步 Worker。
+        // 断言：包含 HA 平面通用 Worker
+        CollectionAssert.Contains(workerNames, nameof(AgentRunRecoveryWorker),
+            "ProductionHA profile 应注册 AgentRunRecoveryWorker。");
         CollectionAssert.Contains(workerNames, nameof(ModelStateReconcilerWorker),
             "ProductionHA profile 应注册 ModelStateReconcilerWorker。");
         CollectionAssert.Contains(workerNames, nameof(LearningMaterializationWorker),
@@ -143,16 +150,15 @@ public sealed class R29H_ProductionRuntimeProfileTests
     }
 
     /// <summary>
-    /// Development profile 下禁用 AgentKernelLoop 时，WorkerRegistry 不应包含 AgentKernelLoopHostedService。
+    /// Development profile 下禁用 Run Recovery 时，WorkerRegistry 不应包含 AgentRunRecoveryWorker。
     /// </summary>
     [TestMethod]
-    public void Development_Profile_DisableAgentKernelLoop_WorkerRegistry_ExcludesLoopWorker()
+    public void Development_Profile_DisableRunRecovery_WorkerRegistry_ExcludesRecoveryWorker()
     {
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
             ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableAgentKernelLoop"] = "false",
             ["ProductionRuntime:EnableRunRecovery"] = "false"
         });
 
@@ -165,16 +171,14 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var workerNames = registry.WorkerTypeNames.ToList();
 
         // 断言：不包含被禁用的 Worker
-        CollectionAssert.DoesNotContain(workerNames, nameof(AgentKernelLoopHostedService),
-            "EnableAgentKernelLoop=false 时不应注册 AgentKernelLoopHostedService。");
         CollectionAssert.DoesNotContain(workerNames, nameof(AgentRunRecoveryWorker),
             "EnableRunRecovery=false 时不应注册 AgentRunRecoveryWorker。");
 
-        // 断言：仍包含 Canary 和 LearningMaterialization（不受 Enable* 开关控制）
+        // 断言：仍包含 Canary 和 LearningMaterialization（不受 EnableRunRecovery 开关控制）
         CollectionAssert.Contains(workerNames, nameof(CanaryProgressionHostedService),
-            "CanaryProgressionHostedService 不受 EnableAgentKernelLoop 影响。");
+            "CanaryProgressionHostedService 不受 EnableRunRecovery 影响。");
         CollectionAssert.Contains(workerNames, nameof(CanaryLeaderHostedService),
-            "CanaryLeaderHostedService 不受 EnableAgentKernelLoop 影响。");
+            "CanaryLeaderHostedService 不受 EnableRunRecovery 影响。");
     }
 
     // ── 2. ReadinessService 行为测试 ─────────────────────────────────────
@@ -258,7 +262,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
         {
             ["Storage:Provider"] = "filesystem",
             ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableAgentKernelLoop"] = "true",
             ["ProductionRuntime:EnableRunRecovery"] = "true"
         });
 
@@ -274,63 +277,36 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
         var workers = readinessService.GetRegisteredWorkers();
 
-        // 断言：返回 9 个预期 Worker 定义
-        Assert.AreEqual(9, workers.Count,
-            "GetExpectedWorkerDefinitions 应返回 9 个 Worker。");
+        // 断言：返回 4 个预期 Worker 定义（旧平面 9 个 → 收敛后 4 个）
+        Assert.AreEqual(4, workers.Count,
+            "GetExpectedWorkerDefinitions 应返回 4 个 Worker。");
 
-        // 断言：AgentKernelLoop — Enabled=true, Registered=true
-        var loop = workers.FirstOrDefault(w => w.Name == "AgentKernelLoop");
-        Assert.IsNotNull(loop, "应包含 AgentKernelLoop Worker。");
-        Assert.IsTrue(loop!.Enabled, "Development profile 下 AgentKernelLoop 应 Enabled=true。");
-        Assert.IsTrue(loop.Registered, "AgentKernelLoop 应已注册。");
+        // 断言：AgentRunRecovery — Enabled=true, Registered=true
+        var recovery = workers.FirstOrDefault(w => w.Name == "AgentRunRecovery");
+        Assert.IsNotNull(recovery, "应包含 AgentRunRecovery Worker。");
+        Assert.IsTrue(recovery!.Enabled, "Development profile 下 AgentRunRecovery 应 Enabled=true。");
+        Assert.IsTrue(recovery.Registered, "AgentRunRecovery 应已注册。");
 
-        // 断言：DurableTransportInstructionPump — Enabled=false, Registered=false
-        var pump = workers.FirstOrDefault(w => w.Name == "DurableTransportInstructionPump");
-        Assert.IsNotNull(pump, "应包含 DurableTransportInstructionPump Worker（即使未注册）。");
-        Assert.IsFalse(pump!.Enabled, "Development profile 下 DurableTransportInstructionPump 应 Enabled=false。");
-        Assert.IsFalse(pump.Registered, "Development profile 不应注册 DurableTransportInstructionPump。");
+        // 断言：LearningMaterialization — Enabled=true, Registered=true
+        var learning = workers.FirstOrDefault(w => w.Name == "LearningMaterialization");
+        Assert.IsNotNull(learning, "应包含 LearningMaterialization Worker。");
+        Assert.IsTrue(learning!.Enabled, "LearningMaterialization 应 Enabled=true。");
+        Assert.IsTrue(learning.Registered, "LearningMaterialization 应已注册。");
 
         // 断言：CanaryProgression — Enabled=true, Registered=true
         var canaryProg = workers.FirstOrDefault(w => w.Name == "CanaryProgression");
         Assert.IsNotNull(canaryProg, "应包含 CanaryProgression Worker。");
         Assert.IsTrue(canaryProg!.Enabled, "Development profile 下 CanaryProgression 应 Enabled=true。");
-        Assert.IsTrue(canaryProg.Registered, "CanaryProgression 应已注册（AddContextCore 注册）。");
+        Assert.IsTrue(canaryProg.Registered, "CanaryProgression 应已注册。");
 
-        // 断言：CanaryLeader — Enabled=false, Registered=true（AddContextCore 注册但 Enabled=false）
+        // 断言：CanaryLeader — Enabled=false, Registered=true（registry 统一记录，Development 实际未注册为 HostedService）
         var canaryLeader = workers.FirstOrDefault(w => w.Name == "CanaryLeader");
         Assert.IsNotNull(canaryLeader, "应包含 CanaryLeader Worker。");
         Assert.IsFalse(canaryLeader!.Enabled, "Development profile 下 CanaryLeader 应 Enabled=false。");
-        Assert.IsTrue(canaryLeader.Registered, "CanaryLeader 应已注册（AddContextCore 注册）。");
+        Assert.IsTrue(canaryLeader.Registered, "CanaryLeader 应已注册（registry 统一记录）。");
 
         // 断言：Started=false（ApplicationStarted 未触发）
-        Assert.IsFalse(loop.Started, "ApplicationStarted 未触发时 Started 应为 false。");
-    }
-
-    /// <summary>
-    /// Development profile 下 GetDurableTransportStatus 应返回 null（未注册 IDurableTransport）。
-    /// </summary>
-    [TestMethod]
-    public void ReadinessService_Development_GetDurableTransportStatus_ReturnsNull()
-    {
-        var config = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development"
-        });
-
-        var services = new ServiceCollection();
-        services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
-
-        var lifetime = new TestHostApplicationLifetime();
-        services.AddSingleton<IHostApplicationLifetime>(lifetime);
-
-        var provider = services.BuildServiceProvider();
-        var readinessService = provider.GetRequiredService<ProductionRuntimeReadinessService>();
-
-        var status = readinessService.GetDurableTransportStatus();
-        Assert.IsNull(status,
-            "Development profile 不注册 IDurableTransport，应返回 null。");
+        Assert.IsFalse(recovery.Started, "ApplicationStarted 未触发时 Started 应为 false。");
     }
 
     /// <summary>
@@ -363,38 +339,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
             "Development profile 下 CanaryProgression 应启用（CanarySchedulerOptions.Enabled 默认 true）。");
         Assert.IsFalse(canary.LeaderEnabled,
             "Development profile 下 CanaryLeader 应禁用。");
-    }
-
-    /// <summary>
-    /// ProductionHA profile 下 GetDurableTransportStatus 应返回已注册状态。
-    /// </summary>
-    [TestMethod]
-    public void ReadinessService_ProductionHA_GetDurableTransportStatus_ReturnsRegistered()
-    {
-        var config = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Storage:Provider"] = "postgres",
-            ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "ProductionHA"
-        });
-
-        var services = new ServiceCollection();
-        services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_rts_ha_"));
-        services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
-
-        var lifetime = new TestHostApplicationLifetime();
-        services.AddSingleton<IHostApplicationLifetime>(lifetime);
-
-        var provider = services.BuildServiceProvider();
-        var readinessService = provider.GetRequiredService<ProductionRuntimeReadinessService>();
-
-        var status = readinessService.GetDurableTransportStatus();
-        Assert.IsNotNull(status, "ProductionHA profile 应注册 IDurableTransport。");
-        Assert.IsTrue(status!.IsRegistered, "DurableTransport 应已注册。");
-        Assert.AreEqual(nameof(PostgresDurableTransport), status.ImplementationType,
-            "DurableTransport 实现类型应为 PostgresDurableTransport。");
-        Assert.IsTrue(status.IsActive, "ProductionHA profile 下 DurableTransport 应为 active。");
     }
 
     /// <summary>
@@ -534,8 +478,8 @@ public sealed class R29H_ProductionRuntimeProfileTests
                 "响应应包含 workers 数组。");
             Assert.AreEqual(JsonValueKind.Array, workersProp.ValueKind,
                 "workers 应为数组。");
-            Assert.IsTrue(workersProp.GetArrayLength() >= 9,
-                "workers 数组应至少包含 9 个 Worker 定义。");
+            Assert.IsTrue(workersProp.GetArrayLength() >= 4,
+                "workers 数组应至少包含 4 个 Worker 定义（旧平面 9 个 → 收敛后 4 个）。");
 
             // 验证 canary 字段
             Assert.IsTrue(json.TryGetProperty("canary", out var canaryProp),
@@ -548,12 +492,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
             // 验证 checkedAt 字段
             Assert.IsTrue(json.TryGetProperty("checkedAt", out _),
                 "响应应包含 checkedAt 字段。");
-
-            // 验证 durableTransport 字段（Development 下为 null）
-            Assert.IsTrue(json.TryGetProperty("durableTransport", out var dtProp),
-                "响应应包含 durableTransport 字段。");
-            Assert.AreEqual(JsonValueKind.Null, dtProp.ValueKind,
-                "Development profile 下 durableTransport 应为 null。");
 
             // 验证 modelActivation 字段（EnableModelActivation=false 时为 null）
             Assert.IsTrue(json.TryGetProperty("modelActivation", out var maProp),
@@ -589,28 +527,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
         Assert.ThrowsException<InvalidOperationException>(() =>
             services.AddContextCoreProductionRuntime(config),
             "EnableModelActivation=true 但未注册 IModelArtifactRegistry 应 fail-fast。");
-    }
-
-    /// <summary>
-    /// P0-7：ProductionHA profile 配合 EnableAgentKernelLoop=false 不再 fail-fast。
-    /// 旧 AgentKernelLoop 已默认禁用，由 AgentRunActor 接管执行平面。
-    /// </summary>
-    [TestMethod]
-    public void ProductionHA_DisableAgentKernelLoop_DoesNotThrow()
-    {
-        var config = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Storage:Provider"] = "postgres",
-            ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "ProductionHA",
-            ["ProductionRuntime:EnableAgentKernelLoop"] = "false"
-        });
-
-        var services = new ServiceCollection();
-        services.AddContextCore();
-
-        // P0-7：验证不抛异常（validation 已移除）。
-        services.AddContextCoreProductionRuntime(config);
     }
 
     /// <summary>
@@ -721,7 +637,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
             builder.UseSetting("Compression:Provider", "mock");
             builder.UseSetting("JobWorker:Enabled", "false");
             builder.UseSetting("ProductionRuntime:Profile", "Development");
-            builder.UseSetting("ProductionRuntime:EnableAgentKernelLoop", "false");
             builder.UseSetting("ProductionRuntime:EnableRunRecovery", "false");
             // Development 环境默认 ValidateOnBuild=true，会验证所有服务描述符。
             // 但部分服务（ICanaryLeaderLease / ILearningEventOutboxStore）仅在 Postgres provider 下注册，
@@ -733,7 +648,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
             });
             // 移除所有 IHostedService 注册（E2E 测试只需 HTTP 端点响应，不需要后台 Worker）。
             // filesystem 模式下部分 HostedService 依赖 Postgres-only 服务（ICanaryLeaderLease /
-            // ILearningEventOutboxStore / KernelStateAccessor），无法激活。移除后 web 服务器仍正常启动。
+            // ILearningEventOutboxStore），无法激活。移除后 web 服务器仍正常启动。
             builder.ConfigureServices(services =>
             {
                 for (var i = services.Count - 1; i >= 0; i--)

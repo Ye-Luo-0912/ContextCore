@@ -181,7 +181,7 @@ WHERE run_id = @run_id
     /// <inheritdoc />
     /// <remarks>
     /// 回收过期租约（后台清理）：DELETE WHERE lease_expires_at &lt; now。
-    /// 应由定时任务（如 <c>LeaseReaperService</c>）周期性调用，
+    /// 应由定时任务周期性调用（AgentRunRecoveryWorker / 统一的 lease reaper 逻辑），
     /// 确保崩溃实例持有的过期租约最终被释放，让其他实例可以重新获取租约。
     /// </remarks>
     public async ValueTask<int> ReapExpiredAsync(CancellationToken cancellationToken = default)

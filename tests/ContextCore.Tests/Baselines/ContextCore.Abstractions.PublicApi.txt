@@ -32,17 +32,6 @@ F:ContextCore.Abstractions.AgentEventLevel.Error
 F:ContextCore.Abstractions.AgentEventLevel.Information
 F:ContextCore.Abstractions.AgentEventLevel.Trace
 F:ContextCore.Abstractions.AgentEventLevel.Warning
-F:ContextCore.Abstractions.AgentKernelInstructionKind.AcknowledgeToolResult
-F:ContextCore.Abstractions.AgentKernelInstructionKind.BuildContext
-F:ContextCore.Abstractions.AgentKernelInstructionKind.Checkpoint
-F:ContextCore.Abstractions.AgentKernelInstructionKind.Execute
-F:ContextCore.Abstractions.AgentKernelInstructionKind.QueryToolDispatchState
-F:ContextCore.Abstractions.AgentKernelInstructionKind.RejectToolResult
-F:ContextCore.Abstractions.AgentKernelInstructionKind.Shutdown
-F:ContextCore.Abstractions.AgentKernelState.Draining
-F:ContextCore.Abstractions.AgentKernelState.Idle
-F:ContextCore.Abstractions.AgentKernelState.Running
-F:ContextCore.Abstractions.AgentKernelState.Stopped
 F:ContextCore.Abstractions.AgentLoopDecision.CallModel
 F:ContextCore.Abstractions.AgentLoopDecision.Checkpoint
 F:ContextCore.Abstractions.AgentLoopDecision.Complete
@@ -204,16 +193,6 @@ F:ContextCore.Abstractions.DatasetSplitStrategy.GroupKeyed
 F:ContextCore.Abstractions.DatasetSplitStrategy.Random
 F:ContextCore.Abstractions.DatasetSplitStrategy.Stratified
 F:ContextCore.Abstractions.DatasetSplitStrategy.TimeSeries
-F:ContextCore.Abstractions.DurableDeliveryStatus.AckFailed
-F:ContextCore.Abstractions.DurableDeliveryStatus.Acked
-F:ContextCore.Abstractions.DurableDeliveryStatus.DuplicateRedelivery
-F:ContextCore.Abstractions.DurableDeliveryStatus.LeaseExpiredBeforeAck
-F:ContextCore.Abstractions.DurableDeliveryStatus.NotDurable
-F:ContextCore.Abstractions.DurableDeliveryStatus.PermanentFault
-F:ContextCore.Abstractions.DurableDeliveryStatusKeys.AckFailureDiagnostic
-F:ContextCore.Abstractions.DurableDeliveryStatusKeys.DurableDeliveryStatus
-F:ContextCore.Abstractions.DurableTransportMetadataKeys.LeaseOwner
-F:ContextCore.Abstractions.DurableTransportMetadataKeys.LeaseToken
 F:ContextCore.Abstractions.ExpertKind.Constraint
 F:ContextCore.Abstractions.ExpertKind.Graph
 F:ContextCore.Abstractions.ExpertKind.Lexical
@@ -232,14 +211,6 @@ F:ContextCore.Abstractions.FeatureType.Text
 F:ContextCore.Abstractions.InferenceEngineKind.DeterministicReplay
 F:ContextCore.Abstractions.InferenceEngineKind.Disabled
 F:ContextCore.Abstractions.InferenceEngineKind.RealModel
-F:ContextCore.Abstractions.InstructionProcessingOutcome.BusinessRejected
-F:ContextCore.Abstractions.InstructionProcessingOutcome.PermanentFault
-F:ContextCore.Abstractions.InstructionProcessingOutcome.Succeeded
-F:ContextCore.Abstractions.InstructionProcessingOutcome.TransientInfrastructure
-F:ContextCore.Abstractions.InstructionReconciliationAction.ManualIntervention
-F:ContextCore.Abstractions.InstructionReconciliationAction.None
-F:ContextCore.Abstractions.InstructionReconciliationAction.ResumeProcessing
-F:ContextCore.Abstractions.InstructionReconciliationAction.ReturnCachedResult
 F:ContextCore.Abstractions.LeakageKind.CrossSplitLeakage
 F:ContextCore.Abstractions.LeakageKind.DuplicateSample
 F:ContextCore.Abstractions.LeakageKind.FutureInformationLeakage
@@ -1013,9 +984,6 @@ F:ContextCore.Abstractions.ToolSideEffect.ReadOnly
 F:ContextCore.Abstractions.ToolSideEffect.RequiresReconciliation
 F:ContextCore.Abstractions.ToolSideEffect.Unknown
 F:ContextCore.Abstractions.ToolSideEffect.Write
-F:ContextCore.Abstractions.TransportFailurePolicy.FailFast
-F:ContextCore.Abstractions.TransportFailurePolicy.FallbackToDeterministic
-F:ContextCore.Abstractions.TransportFailurePolicy.Retry
 F:ContextCore.Abstractions.UserFeedbackKind.Report
 F:ContextCore.Abstractions.UserFeedbackKind.ScoreCorrection
 F:ContextCore.Abstractions.UserFeedbackKind.TextFeedback
@@ -1188,27 +1156,6 @@ M:ContextCore.Abstractions.AgentInput.Equals(System.Object)
 M:ContextCore.Abstractions.AgentInput.GetHashCode()
 M:ContextCore.Abstractions.AgentInput.GetType()
 M:ContextCore.Abstractions.AgentInput.ToString()
-M:ContextCore.Abstractions.AgentKernelInstruction.#ctor()
-M:ContextCore.Abstractions.AgentKernelInstruction.<Clone>$()
-M:ContextCore.Abstractions.AgentKernelInstruction.Equals(ContextCore.Abstractions.AgentKernelInstruction)
-M:ContextCore.Abstractions.AgentKernelInstruction.Equals(System.Object)
-M:ContextCore.Abstractions.AgentKernelInstruction.GetHashCode()
-M:ContextCore.Abstractions.AgentKernelInstruction.GetType()
-M:ContextCore.Abstractions.AgentKernelInstruction.ToString()
-M:ContextCore.Abstractions.AgentKernelResult.#ctor()
-M:ContextCore.Abstractions.AgentKernelResult.<Clone>$()
-M:ContextCore.Abstractions.AgentKernelResult.Equals(ContextCore.Abstractions.AgentKernelResult)
-M:ContextCore.Abstractions.AgentKernelResult.Equals(System.Object)
-M:ContextCore.Abstractions.AgentKernelResult.GetHashCode()
-M:ContextCore.Abstractions.AgentKernelResult.GetType()
-M:ContextCore.Abstractions.AgentKernelResult.ToString()
-M:ContextCore.Abstractions.AgentKernelStatus.#ctor()
-M:ContextCore.Abstractions.AgentKernelStatus.<Clone>$()
-M:ContextCore.Abstractions.AgentKernelStatus.Equals(ContextCore.Abstractions.AgentKernelStatus)
-M:ContextCore.Abstractions.AgentKernelStatus.Equals(System.Object)
-M:ContextCore.Abstractions.AgentKernelStatus.GetHashCode()
-M:ContextCore.Abstractions.AgentKernelStatus.GetType()
-M:ContextCore.Abstractions.AgentKernelStatus.ToString()
 M:ContextCore.Abstractions.AgentLeaseFence.#ctor()
 M:ContextCore.Abstractions.AgentLeaseFence.<Clone>$()
 M:ContextCore.Abstractions.AgentLeaseFence.Equals(ContextCore.Abstractions.AgentLeaseFence)
@@ -1853,10 +1800,6 @@ M:ContextCore.Abstractions.DiversityOptions.Equals(System.Object)
 M:ContextCore.Abstractions.DiversityOptions.GetHashCode()
 M:ContextCore.Abstractions.DiversityOptions.GetType()
 M:ContextCore.Abstractions.DiversityOptions.ToString()
-M:ContextCore.Abstractions.DurableDeliveryStatusKeys.Equals(System.Object)
-M:ContextCore.Abstractions.DurableDeliveryStatusKeys.GetHashCode()
-M:ContextCore.Abstractions.DurableDeliveryStatusKeys.GetType()
-M:ContextCore.Abstractions.DurableDeliveryStatusKeys.ToString()
 M:ContextCore.Abstractions.DurableToolResult.#ctor()
 M:ContextCore.Abstractions.DurableToolResult.<Clone>$()
 M:ContextCore.Abstractions.DurableToolResult.Equals(ContextCore.Abstractions.DurableToolResult)
@@ -1864,15 +1807,6 @@ M:ContextCore.Abstractions.DurableToolResult.Equals(System.Object)
 M:ContextCore.Abstractions.DurableToolResult.GetHashCode()
 M:ContextCore.Abstractions.DurableToolResult.GetType()
 M:ContextCore.Abstractions.DurableToolResult.ToString()
-M:ContextCore.Abstractions.DurableTransportHostingOptions.#ctor()
-M:ContextCore.Abstractions.DurableTransportHostingOptions.Equals(System.Object)
-M:ContextCore.Abstractions.DurableTransportHostingOptions.GetHashCode()
-M:ContextCore.Abstractions.DurableTransportHostingOptions.GetType()
-M:ContextCore.Abstractions.DurableTransportHostingOptions.ToString()
-M:ContextCore.Abstractions.DurableTransportMetadataKeys.Equals(System.Object)
-M:ContextCore.Abstractions.DurableTransportMetadataKeys.GetHashCode()
-M:ContextCore.Abstractions.DurableTransportMetadataKeys.GetType()
-M:ContextCore.Abstractions.DurableTransportMetadataKeys.ToString()
 M:ContextCore.Abstractions.EffectivePolicySnapshot.#ctor()
 M:ContextCore.Abstractions.EffectivePolicySnapshot.<Clone>$()
 M:ContextCore.Abstractions.EffectivePolicySnapshot.Equals(ContextCore.Abstractions.EffectivePolicySnapshot)
@@ -2033,15 +1967,8 @@ M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractio
 M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractions.ContextDecisionExecutionResult, ContextCore.Abstractions.ProjectionContext)
 M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.CandidateWorkingSet)
 M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.CandidateWorkingSet, ContextCore.Abstractions.ProjectionContext)
-M:ContextCore.Abstractions.IAgentContextSnapshotStore.GetAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentEventStream.QueryAsync(ContextCore.Abstractions.AgentEventQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentEventStream.SubscribeAsync(ContextCore.Abstractions.AgentSessionId, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IAgentKernel.GetStatus()
-M:ContextCore.Abstractions.IAgentKernel.ResumeAsync(ContextCore.Abstractions.AgentCheckpoint, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IAgentKernel.RunAsync(System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IAgentKernel.SubmitAsync(ContextCore.Abstractions.AgentKernelInstruction, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IAgentKernelTransport.ReceiveAsync(System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IAgentKernelTransport.SendResultAsync(ContextCore.Abstractions.AgentKernelResult, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentLoopPolicy.DecideAsync(ContextCore.Abstractions.AgentRun, ContextCore.Abstractions.AgentModelResponse, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentModelContextProjector.Project(ContextCore.Abstractions.AgentRun, ContextCore.Abstractions.ContextDecisionExecutionResult, ContextCore.Abstractions.AgentContextState, System.Int32)
 M:ContextCore.Abstractions.IAgentModelTransport.CallAsync(ContextCore.Abstractions.AgentModelRequest, System.Threading.CancellationToken)
@@ -2238,25 +2165,6 @@ M:ContextCore.Abstractions.IDurableToolResultStore.GetAsync(System.String, Syste
 M:ContextCore.Abstractions.IDurableToolResultStore.GetByRequestIdAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDurableToolResultStore.SaveAsync(System.String, ContextCore.Abstractions.DurableToolResult, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDurableToolResultStore.SaveByRequestIdAsync(ContextCore.Abstractions.DurableToolResult, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.AckAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.AckBatchAsync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>>, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.AckResultAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.AckResultBatchAsync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>>, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.GetPendingInstructionCountAsync(System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.GetPendingResultCountAsync(System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.LeaseAsync(System.TimeSpan, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.LeaseBatchAsync(System.Int32, System.TimeSpan, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.LeaseResultAsync(System.TimeSpan, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.LeaseResultBatchAsync(System.Int32, System.TimeSpan, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.NackAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.NackBatchAsync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>>, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.NackResultAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.NackResultBatchAsync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>>, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.RenewLeaseAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.RenewLeaseBatchAsync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>>, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.RenewResultLeaseAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.RenewResultLeaseBatchAsync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.String, System.String>>, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableTransport.RequeueExpiredAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IEarlyAdmissionGate.Evaluate(ContextCore.Abstractions.ContextCandidateEnvelope, ContextCore.Abstractions.EffectivePolicySnapshot)
 M:ContextCore.Abstractions.IEarlyAdmissionGate.EvaluateBatch(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, ContextCore.Abstractions.EffectivePolicySnapshot)
 M:ContextCore.Abstractions.IEmbeddingGenerator.GenerateAsync(ContextCore.Abstractions.Models.EmbeddingGeneratorRequest, System.Threading.CancellationToken)
@@ -2283,10 +2191,6 @@ M:ContextCore.Abstractions.IGuardedOptimizationPipeline.GetStatusAsync(System.St
 M:ContextCore.Abstractions.IGuardedOptimizationPipeline.StartAsync(ContextCore.Abstractions.OptimizationProposal, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IInferenceResultValidator.Validate(ContextCore.Abstractions.BatchInferenceRequest, ContextCore.Abstractions.BatchInferenceResult)
 M:ContextCore.Abstractions.IInferenceResultValidator.Validate(ContextCore.Abstractions.FeatureBatch, ContextCore.Abstractions.BatchInferenceResult)
-M:ContextCore.Abstractions.IInstructionReconciliation.ReconcileAsync(System.String, System.String, ContextCore.Abstractions.DurableDeliveryStatus, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IKernelResultOutbox.DequeueAsync(System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IKernelResultOutbox.EnqueueAsync(ContextCore.Abstractions.AgentKernelResult, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IKernelResultOutbox.GetPendingCountAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILabelQualityScorer.EvaluateAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeakageDetector.DetectAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILearningDatasetSplitter.SplitAsync(System.String, System.String, ContextCore.Abstractions.TrainingCalibrationSplitOptions, System.Threading.CancellationToken)
@@ -2352,11 +2256,6 @@ M:ContextCore.Abstractions.IPerformanceMonitor.RecordExecutionTime(System.String
 M:ContextCore.Abstractions.IPerformanceMonitor.RecordFallback(System.String, System.String, System.Double)
 M:ContextCore.Abstractions.IPerformanceMonitor.ShouldFallbackToV20(System.String)
 M:ContextCore.Abstractions.IPersistentAgentApprovalStore.ResolveApprovalAndAdvanceRunAsync(System.String, System.String, System.String, ContextCore.Abstractions.AgentRunState, ContextCore.Abstractions.AgentApprovalStatus, System.String, System.String, ContextCore.Abstractions.AgentRunEvent, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IPersistentKernelResultOutbox.AckAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IPersistentKernelResultOutbox.LeaseAsync(System.TimeSpan, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IPersistentKernelResultOutbox.NackAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IPersistentKernelResultOutbox.RenewLeaseAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IPersistentKernelResultOutbox.RequeueExpiredAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.DeleteRunAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.GetRollbackRecordByRunAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.GetRunAsync(System.String, System.Threading.CancellationToken)
@@ -2545,13 +2444,6 @@ M:ContextCore.Abstractions.IsotonicPoint.Equals(System.Object)
 M:ContextCore.Abstractions.IsotonicPoint.GetHashCode()
 M:ContextCore.Abstractions.IsotonicPoint.GetType()
 M:ContextCore.Abstractions.IsotonicPoint.ToString()
-M:ContextCore.Abstractions.KernelTransportOptions.#ctor()
-M:ContextCore.Abstractions.KernelTransportOptions.<Clone>$()
-M:ContextCore.Abstractions.KernelTransportOptions.Equals(ContextCore.Abstractions.KernelTransportOptions)
-M:ContextCore.Abstractions.KernelTransportOptions.Equals(System.Object)
-M:ContextCore.Abstractions.KernelTransportOptions.GetHashCode()
-M:ContextCore.Abstractions.KernelTransportOptions.GetType()
-M:ContextCore.Abstractions.KernelTransportOptions.ToString()
 M:ContextCore.Abstractions.LabelQualityReport.#ctor()
 M:ContextCore.Abstractions.LabelQualityReport.<Clone>$()
 M:ContextCore.Abstractions.LabelQualityReport.Equals(ContextCore.Abstractions.LabelQualityReport)
@@ -2608,13 +2500,6 @@ M:ContextCore.Abstractions.LeasedAgentRun.Equals(System.Object)
 M:ContextCore.Abstractions.LeasedAgentRun.GetHashCode()
 M:ContextCore.Abstractions.LeasedAgentRun.GetType()
 M:ContextCore.Abstractions.LeasedAgentRun.ToString()
-M:ContextCore.Abstractions.LeasedInstruction.#ctor()
-M:ContextCore.Abstractions.LeasedInstruction.<Clone>$()
-M:ContextCore.Abstractions.LeasedInstruction.Equals(ContextCore.Abstractions.LeasedInstruction)
-M:ContextCore.Abstractions.LeasedInstruction.Equals(System.Object)
-M:ContextCore.Abstractions.LeasedInstruction.GetHashCode()
-M:ContextCore.Abstractions.LeasedInstruction.GetType()
-M:ContextCore.Abstractions.LeasedInstruction.ToString()
 M:ContextCore.Abstractions.LeasedLeadership.#ctor()
 M:ContextCore.Abstractions.LeasedLeadership.<Clone>$()
 M:ContextCore.Abstractions.LeasedLeadership.Equals(ContextCore.Abstractions.LeasedLeadership)
@@ -2622,20 +2507,6 @@ M:ContextCore.Abstractions.LeasedLeadership.Equals(System.Object)
 M:ContextCore.Abstractions.LeasedLeadership.GetHashCode()
 M:ContextCore.Abstractions.LeasedLeadership.GetType()
 M:ContextCore.Abstractions.LeasedLeadership.ToString()
-M:ContextCore.Abstractions.LeasedOutboxResult.#ctor()
-M:ContextCore.Abstractions.LeasedOutboxResult.<Clone>$()
-M:ContextCore.Abstractions.LeasedOutboxResult.Equals(ContextCore.Abstractions.LeasedOutboxResult)
-M:ContextCore.Abstractions.LeasedOutboxResult.Equals(System.Object)
-M:ContextCore.Abstractions.LeasedOutboxResult.GetHashCode()
-M:ContextCore.Abstractions.LeasedOutboxResult.GetType()
-M:ContextCore.Abstractions.LeasedOutboxResult.ToString()
-M:ContextCore.Abstractions.LeasedResult.#ctor()
-M:ContextCore.Abstractions.LeasedResult.<Clone>$()
-M:ContextCore.Abstractions.LeasedResult.Equals(ContextCore.Abstractions.LeasedResult)
-M:ContextCore.Abstractions.LeasedResult.Equals(System.Object)
-M:ContextCore.Abstractions.LeasedResult.GetHashCode()
-M:ContextCore.Abstractions.LeasedResult.GetType()
-M:ContextCore.Abstractions.LeasedResult.ToString()
 M:ContextCore.Abstractions.LeasedWork<>.#ctor()
 M:ContextCore.Abstractions.LeasedWork<>.<Clone>$()
 M:ContextCore.Abstractions.LeasedWork<>.Equals(ContextCore.Abstractions.LeasedWork<>)
@@ -5556,23 +5427,6 @@ P:ContextCore.Abstractions.AgentHostOptions.WorkerCount (get|set)
 P:ContextCore.Abstractions.AgentInput.RequiredIds (get|init)
 P:ContextCore.Abstractions.AgentInput.RequiredTags (get|init)
 P:ContextCore.Abstractions.AgentInput.Session (get|init)
-P:ContextCore.Abstractions.AgentKernelInstruction.InstructionId (get|init)
-P:ContextCore.Abstractions.AgentKernelInstruction.Kind (get|init)
-P:ContextCore.Abstractions.AgentKernelInstruction.Metadata (get|init)
-P:ContextCore.Abstractions.AgentKernelInstruction.Payload (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.AffectedRequestId (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.DispatchState (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.Error (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.InstructionId (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.LastSnapshotId (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.Metadata (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.Output (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.Snapshot (get|init)
-P:ContextCore.Abstractions.AgentKernelResult.Succeeded (get|init)
-P:ContextCore.Abstractions.AgentKernelStatus.LastProcessedAt (get|init)
-P:ContextCore.Abstractions.AgentKernelStatus.PendingCount (get|init)
-P:ContextCore.Abstractions.AgentKernelStatus.ProcessedCount (get|init)
-P:ContextCore.Abstractions.AgentKernelStatus.State (get|init)
 P:ContextCore.Abstractions.AgentLeaseFence.ExpiresAt (get|init)
 P:ContextCore.Abstractions.AgentLeaseFence.FencingToken (get|init)
 P:ContextCore.Abstractions.AgentLeaseFence.LeaseToken (get|init)
@@ -6027,10 +5881,8 @@ P:ContextCore.Abstractions.ContextCandidateEnvelope.Type (get|init)
 P:ContextCore.Abstractions.ContextCandidateEnvelope.Utility (get|init)
 P:ContextCore.Abstractions.ContextCandidateEnvelope.WorkspaceId (get|init)
 P:ContextCore.Abstractions.ContextCoreRuntimeOptions.AgentModelMode (get|init)
-P:ContextCore.Abstractions.ContextCoreRuntimeOptions.EnableAgentKernelLoop (get|init)
 P:ContextCore.Abstractions.ContextCoreRuntimeOptions.EnableAgentRunRecovery (get|init)
 P:ContextCore.Abstractions.ContextCoreRuntimeOptions.EnableCanaryLeader (get|init)
-P:ContextCore.Abstractions.ContextCoreRuntimeOptions.EnableKernelWorker (get|init)
 P:ContextCore.Abstractions.ContextCoreRuntimeOptions.EnableModelActivation (get|init)
 P:ContextCore.Abstractions.ContextCoreRuntimeOptions.ModelMode (get|init)
 P:ContextCore.Abstractions.ContextCoreRuntimeOptions.PostgresConnectionString (get|init)
@@ -6278,20 +6130,6 @@ P:ContextCore.Abstractions.DurableToolResult.SideEffect (get|init)
 P:ContextCore.Abstractions.DurableToolResult.Succeeded (get|init)
 P:ContextCore.Abstractions.DurableToolResult.ToolCallId (get|init)
 P:ContextCore.Abstractions.DurableToolResult.WorkspaceId (get|init)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.BatchLeaseLimit (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.Enabled (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.InstructionLeaseDuration (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.LeaseRenewalInterval (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.MaxPollInterval (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.MaxProcessingTime (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.MetricsInterval (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.OutboxLeaseDuration (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.OutboxPollInterval (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.OutboxRetryBackoff (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.Owner (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.PollBackoffMultiplier (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.PollInterval (get|set)
-P:ContextCore.Abstractions.DurableTransportHostingOptions.ReaperInterval (get|set)
 P:ContextCore.Abstractions.EffectivePolicySnapshot.AllowDeterministicReplayScoring (get|init)
 P:ContextCore.Abstractions.EffectivePolicySnapshot.Budget (get|init)
 P:ContextCore.Abstractions.EffectivePolicySnapshot.DiversityOptions (get|init)
@@ -6419,7 +6257,6 @@ P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.Normalize (get)
 P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.PoolingStrategy (get)
 P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.ProviderType (get)
 P:ContextCore.Abstractions.IExpertCatalog.AvailableExperts (get)
-P:ContextCore.Abstractions.IKernelResultOutbox.PendingCount (get)
 P:ContextCore.Abstractions.IPerformanceMonitor.Options (get)
 P:ContextCore.Abstractions.IStoreRuntimeCapabilities.Profile (get)
 P:ContextCore.Abstractions.IToolDispatchJournal.PersistsResults (get)
@@ -6434,15 +6271,6 @@ P:ContextCore.Abstractions.InferenceValidationResult.IsValid (get|init)
 P:ContextCore.Abstractions.InferenceValidationResult.Violations (get|init)
 P:ContextCore.Abstractions.IsotonicPoint.Input (get|init)
 P:ContextCore.Abstractions.IsotonicPoint.Output (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.Default (get)
-P:ContextCore.Abstractions.KernelTransportOptions.DurableLeaseRenewalInterval (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.DurableMaxProcessingTime (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.EnableResultOutbox (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.FailurePolicy (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.MaxOutboxBacklog (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.MaxRetries (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.RetryDelay (get|init)
-P:ContextCore.Abstractions.KernelTransportOptions.UseDurableTransport (get|init)
 P:ContextCore.Abstractions.LabelQualityReport.AverageConfidence (get|init)
 P:ContextCore.Abstractions.LabelQualityReport.CollectionId (get|init)
 P:ContextCore.Abstractions.LabelQualityReport.ConsistencyScore (get|init)
@@ -6513,22 +6341,11 @@ P:ContextCore.Abstractions.LeasedAgentRun.FencingToken (get|init)
 P:ContextCore.Abstractions.LeasedAgentRun.LeaseToken (get|init)
 P:ContextCore.Abstractions.LeasedAgentRun.Owner (get|init)
 P:ContextCore.Abstractions.LeasedAgentRun.RunId (get|init)
-P:ContextCore.Abstractions.LeasedInstruction.Instruction (get|init)
-P:ContextCore.Abstractions.LeasedInstruction.LeaseExpiresAt (get|init)
-P:ContextCore.Abstractions.LeasedInstruction.LeaseToken (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.ExpiresAt (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.FencingToken (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.LeaseToken (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.Owner (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.RunId (get|init)
-P:ContextCore.Abstractions.LeasedOutboxResult.LeaseExpiresAt (get|init)
-P:ContextCore.Abstractions.LeasedOutboxResult.LeaseToken (get|init)
-P:ContextCore.Abstractions.LeasedOutboxResult.OutboxId (get|init)
-P:ContextCore.Abstractions.LeasedOutboxResult.Result (get|init)
-P:ContextCore.Abstractions.LeasedResult.LeaseExpiresAt (get|init)
-P:ContextCore.Abstractions.LeasedResult.LeaseToken (get|init)
-P:ContextCore.Abstractions.LeasedResult.Result (get|init)
-P:ContextCore.Abstractions.LeasedResult.ResultId (get|init)
 P:ContextCore.Abstractions.LeasedWork<>.AcquiredAt (get|init)
 P:ContextCore.Abstractions.LeasedWork<>.ExpiresAt (get|init)
 P:ContextCore.Abstractions.LeasedWork<>.FencingToken (get|init)
@@ -11019,11 +10836,6 @@ T:ContextCore.Abstractions.AgentEventLevel (Enum)
 T:ContextCore.Abstractions.AgentEventQuery
 T:ContextCore.Abstractions.AgentHostOptions
 T:ContextCore.Abstractions.AgentInput
-T:ContextCore.Abstractions.AgentKernelInstruction
-T:ContextCore.Abstractions.AgentKernelInstructionKind (Enum)
-T:ContextCore.Abstractions.AgentKernelResult
-T:ContextCore.Abstractions.AgentKernelState (Enum)
-T:ContextCore.Abstractions.AgentKernelStatus
 T:ContextCore.Abstractions.AgentLeaseFence
 T:ContextCore.Abstractions.AgentLoopDecision (Enum)
 T:ContextCore.Abstractions.AgentMessage
@@ -11148,11 +10960,7 @@ T:ContextCore.Abstractions.DelayedUserFeedbackResult
 T:ContextCore.Abstractions.DependencyScopeSet
 T:ContextCore.Abstractions.DesiredModelState
 T:ContextCore.Abstractions.DiversityOptions
-T:ContextCore.Abstractions.DurableDeliveryStatus (Enum)
-T:ContextCore.Abstractions.DurableDeliveryStatusKeys
 T:ContextCore.Abstractions.DurableToolResult
-T:ContextCore.Abstractions.DurableTransportHostingOptions
-T:ContextCore.Abstractions.DurableTransportMetadataKeys
 T:ContextCore.Abstractions.EffectivePolicySnapshot
 T:ContextCore.Abstractions.EvidenceRef
 T:ContextCore.Abstractions.ExpectedGain
@@ -11183,10 +10991,7 @@ T:ContextCore.Abstractions.IAgentCheckpointStore (Interface)
 T:ContextCore.Abstractions.IAgentContextBridge (Interface)
 T:ContextCore.Abstractions.IAgentContextDeltaCalculator (Interface)
 T:ContextCore.Abstractions.IAgentContextProjector (Interface)
-T:ContextCore.Abstractions.IAgentContextSnapshotStore (Interface)
 T:ContextCore.Abstractions.IAgentEventStream (Interface)
-T:ContextCore.Abstractions.IAgentKernel (Interface)
-T:ContextCore.Abstractions.IAgentKernelTransport (Interface)
 T:ContextCore.Abstractions.IAgentLoopPolicy (Interface)
 T:ContextCore.Abstractions.IAgentModelContextProjector (Interface)
 T:ContextCore.Abstractions.IAgentModelTransport (Interface)
@@ -11260,7 +11065,6 @@ T:ContextCore.Abstractions.IDecisionTraceStore (Interface)
 T:ContextCore.Abstractions.IDesiredModelStateStore (Interface)
 T:ContextCore.Abstractions.IDurableToolExecutor (Interface)
 T:ContextCore.Abstractions.IDurableToolResultStore (Interface)
-T:ContextCore.Abstractions.IDurableTransport (Interface)
 T:ContextCore.Abstractions.IEarlyAdmissionGate (Interface)
 T:ContextCore.Abstractions.IEmbeddingGenerator (Interface)
 T:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor (Interface)
@@ -11277,8 +11081,6 @@ T:ContextCore.Abstractions.IGlobalAllocator (Interface)
 T:ContextCore.Abstractions.IGlobalContextStore (Interface)
 T:ContextCore.Abstractions.IGuardedOptimizationPipeline (Interface)
 T:ContextCore.Abstractions.IInferenceResultValidator (Interface)
-T:ContextCore.Abstractions.IInstructionReconciliation (Interface)
-T:ContextCore.Abstractions.IKernelResultOutbox (Interface)
 T:ContextCore.Abstractions.ILabelQualityScorer (Interface)
 T:ContextCore.Abstractions.ILeakageDetector (Interface)
 T:ContextCore.Abstractions.ILearningDatasetSplitter (Interface)
@@ -11308,7 +11110,6 @@ T:ContextCore.Abstractions.IPersistentAgentApprovalStore (Interface)
 T:ContextCore.Abstractions.IPersistentAgentCheckpointStore (Interface)
 T:ContextCore.Abstractions.IPersistentAgentRunEventStore (Interface)
 T:ContextCore.Abstractions.IPersistentAgentRunStore (Interface)
-T:ContextCore.Abstractions.IPersistentKernelResultOutbox (Interface)
 T:ContextCore.Abstractions.IPersistentModelArtifactRegistry (Interface)
 T:ContextCore.Abstractions.IPersistentToolDispatchJournal (Interface)
 T:ContextCore.Abstractions.IPipelineRunStore (Interface)
@@ -11372,10 +11173,7 @@ T:ContextCore.Abstractions.IWriteTransactionScopeFactory (Interface)
 T:ContextCore.Abstractions.InferenceEngineKind (Enum)
 T:ContextCore.Abstractions.InferenceOutput
 T:ContextCore.Abstractions.InferenceValidationResult
-T:ContextCore.Abstractions.InstructionProcessingOutcome (Enum)
-T:ContextCore.Abstractions.InstructionReconciliationAction (Enum)
 T:ContextCore.Abstractions.IsotonicPoint
-T:ContextCore.Abstractions.KernelTransportOptions
 T:ContextCore.Abstractions.LabelQualityReport
 T:ContextCore.Abstractions.LeakageFinding
 T:ContextCore.Abstractions.LeakageKind (Enum)
@@ -11389,10 +11187,7 @@ T:ContextCore.Abstractions.LearningPipelineEvent
 T:ContextCore.Abstractions.LearningPipelineEventType (Enum)
 T:ContextCore.Abstractions.LeaseAcquireResult (Enum)
 T:ContextCore.Abstractions.LeasedAgentRun
-T:ContextCore.Abstractions.LeasedInstruction
 T:ContextCore.Abstractions.LeasedLeadership
-T:ContextCore.Abstractions.LeasedOutboxResult
-T:ContextCore.Abstractions.LeasedResult
 T:ContextCore.Abstractions.LeasedWork<>
 T:ContextCore.Abstractions.LifecycleGateResult
 T:ContextCore.Abstractions.MandatoryContextWindowExceededException
@@ -11964,7 +11759,6 @@ T:ContextCore.Abstractions.TrainingDataExportManifest
 T:ContextCore.Abstractions.TrainingDataExportRequest
 T:ContextCore.Abstractions.TrainingDataExportResult
 T:ContextCore.Abstractions.TrainingDataRecord
-T:ContextCore.Abstractions.TransportFailurePolicy (Enum)
 T:ContextCore.Abstractions.TruncationResult
 T:ContextCore.Abstractions.UserFeedbackEntry
 T:ContextCore.Abstractions.UserFeedbackKind (Enum)

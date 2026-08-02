@@ -7,7 +7,7 @@ namespace ContextCore.Service.Endpoints;
 /// <summary>
 /// Production Runtime Profile 端点：就绪检查与运行时状态报告。
 /// <list type="bullet">
-///   <item><c>/health/ready</c>：Production Runtime 就绪探针，检查 Worker 启动 / Postgres / Durable Transport / Model Activation。</item>
+///   <item><c>/health/ready</c>：Production Runtime 就绪探针，检查 Worker 启动 / Postgres / Model Activation。</item>
 ///   <item><c>/api/runtime/status</c>：当前激活组件报告（Profile / Worker 列表 / Model / Transport / Canary）。</item>
 /// </list>
 /// </summary>
@@ -17,7 +17,7 @@ internal static class ProductionRuntimeEndpoints
     public static IEndpointRouteBuilder MapProductionRuntimeEndpoints(this IEndpointRouteBuilder app)
     {
         // ── /health/ready：Production Runtime 就绪探针 ────────────────────
-        // 检查所有关键 Worker 是否已启动、Postgres 连接、Durable Transport、Model Activation。
+        // 检查所有关键 Worker 是否已启动、Postgres 连接、Model Activation。
         // 返回 200 OK（就绪）或 503 Service Unavailable（未就绪）。
         app.MapGet("/health/ready", async Task<IResult> (
             ProductionRuntimeReadinessService readinessService,
@@ -36,17 +36,16 @@ internal static class ProductionRuntimeEndpoints
         })
         .WithTags("Health")
         .WithName("ProductionRuntimeReady")
-        .WithSummary("Production Runtime 就绪探针（检查 Worker / Postgres / Durable Transport / Model Activation）")
+        .WithSummary("Production Runtime 就绪探针（检查 Worker / Postgres / Model Activation）")
         .Produces<ProductionRuntimeReadinessResult>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         // ── /api/runtime/status：当前激活组件报告 ────────────────────────
         // 返回当前 Profile、已注册的 Worker 列表及状态、Model Activation 信息、
-        // Durable Transport 状态、Agent Model Transport 状态、Tool Dispatcher 状态、Canary 状态。
+        // Agent Model Transport 状态、Tool Dispatcher 状态、Canary 状态。
         app.MapGet("/api/runtime/status", (ProductionRuntimeReadinessService readinessService) =>
         {
             var workers = readinessService.GetRegisteredWorkers();
-            var durableTransport = readinessService.GetDurableTransportStatus();
             var modelActivation = readinessService.GetModelActivationStatus();
             var agentModelTransport = readinessService.GetAgentModelTransportStatus();
             var toolDispatcher = readinessService.GetToolDispatcherStatus();
@@ -57,7 +56,6 @@ internal static class ProductionRuntimeEndpoints
                 Profile = readinessService.Profile.ToString(),
                 ApplicationStarted = readinessService.IsApplicationStarted,
                 Workers = workers,
-                DurableTransport = durableTransport,
                 ModelActivation = modelActivation,
                 AgentModelTransport = agentModelTransport,
                 ToolDispatcher = toolDispatcher,
@@ -88,9 +86,6 @@ internal sealed class ProductionRuntimeStatusResponse
 
     /// <summary>已注册的 Worker 列表及状态。</summary>
     public required IReadOnlyList<WorkerStatus> Workers { get; init; }
-
-    /// <summary>Durable Transport 状态（null = 未注册）。</summary>
-    public DurableTransportStatus? DurableTransport { get; init; }
 
     /// <summary>Model Activation 状态（null = 未启用）。</summary>
     public ModelActivationStatus? ModelActivation { get; init; }

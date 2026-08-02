@@ -72,7 +72,6 @@ public sealed class ProductionEvidenceWebFactory : WebApplicationFactory<Program
 
         // 关闭非必要的后台 Worker（测试聚焦 HTTP 端点链路，避免 HostedService 干扰）
         builder.UseSetting("JobWorker:Enabled", "false");
-        builder.UseSetting("ProductionRuntime:EnableAgentKernelLoop", "false");
         builder.UseSetting("ProductionRuntime:EnableRunRecovery", "false");
         builder.UseSetting("RelationReconciliation:Enabled", "false");
         builder.UseSetting("ShortTermMaintenance:Enabled", "false");

@@ -298,7 +298,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
 
     /// <summary>R28-E P1-1 / R28-G P1-5 / P4：Kernel 状态访问器（读取已提交结果 + snapshot 引用 + delta cursor + event cursor）。</summary>
     /// <remarks>
-    /// 通过委托避免直接暴露 Kernel 内部字段；工厂构造时由 Kernel 注入。
+    /// 通过委托避免直接暴露状态持有方内部字段；工厂构造时由状态持有方注入。
     /// 新增（P1-5）的访问器委托可为 null（兼容旧调用方）；null 时退回默认值（cursor=0 → Full 模式）。
     /// P4 新增委托：GetLastEventSequence / GetActiveSnapshotId / GetBudgetCounters。
     /// </remarks>
@@ -474,7 +474,7 @@ public sealed class DefaultAgentCheckpointFactory : IAgentCheckpointFactory
 
         /// <summary>
         /// P4：当前活跃的 AgentContextSnapshot ID（替代嵌入完整 snapshot）。
-        /// Cursor 模式下 ResumeAsync 通过 IAgentContextSnapshotStore.GetAsync 恢复 _lastSnapshot。
+        /// Cursor 模式下恢复路径通过此 ID 从快照存储恢复活跃快照。
         /// 非 Cursor 模式下为 null（使用 SnapshotId 字段，向后兼容）。
         /// </summary>
         public string? ActiveSnapshotId { get; init; }

@@ -5,7 +5,7 @@ namespace ContextCore.Abstractions;
 /// <summary>
 /// 统一租约工作项（被租约保护的工作单元）。
 /// 覆盖 Leader/Hold 租约（如 IAgentRunLease / ICanaryLeaderLease）与 Queue/Outbox 租约
-/// （如 IDurableTransport / ILearningEventOutboxStore / ILeasedJobQueue）两种模式。
+/// （如 ILearningEventOutboxStore / ILeasedJobQueue）两种模式。
 /// </summary>
 /// <typeparam name="TWork">工作项类型（Leader 模式下通常为 string 即 workId；Queue 模式下为工作负载类型）。</typeparam>
 public sealed record LeasedWork<TWork>

@@ -771,24 +771,18 @@ internal static class CoreExtensions
 		// TryAddSingleton 避免覆盖调用方注册的自定义验证器。
 		services.TryAddSingleton<IInferenceResultValidator, DefaultInferenceResultValidator>();
 
-		// R28-C：Agent Kernel — .NET 决策循环（Transport + ToolDispatcher + Kernel + V2 Runtime）。
-		// 默认实现：InProcessTransport（进程内 Channel）+ EchoToolDispatcher（测试用 echo）+
-		// DefaultAgentKernel（编排 Transport → ToolDispatcher → CheckpointStore → IContextDecisionRuntime）。
-		// R28-C WP-A：DefaultAgentKernel 额外注入 IContextDecisionRuntime + IAgentContextProjector
-		//（均已在前注册，DI 自动解析）；BuildContext 指令经 V2 路径产出 AgentContextSnapshot。
-		// 生产部署可替换为自定义 IAgentKernelTransport（如 gRPC / WebSocket）和
-		// 自定义 IToolDispatcher（如 MCP tool bridge）。
+		// R28-C：Agent Tool 执行基础（ToolDispatcher + CheckpointStore）。
+		// 默认实现：EchoToolDispatcher（测试用 echo）+ InMemoryAgentCheckpointStore。
+		// 生产部署可替换为自定义 IToolDispatcher（如 MCP tool bridge / RealToolDispatcher）。
 		// IAgentCheckpointStore 默认注册 InMemoryAgentCheckpointStore（TryAdd 不覆盖 Postgres 已注册的持久化实现；
 		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，PostgresAgentCheckpointStore 生效）。
 		services.TryAddSingleton<IAgentCheckpointStore, InMemoryAgentCheckpointStore>();
-		services.TryAddSingleton<IAgentKernelTransport, InProcessTransport>();
 		services.TryAddSingleton<IToolDispatcher, EchoToolDispatcher>();
-		services.TryAddSingleton<IAgentKernel, DefaultAgentKernel>();
 
 		// 子问题 8：Agent Run Actor 生产化注册（模型驱动的 Agent 执行循环）。
 		// 注册顺序：底层依赖（Store / Journal / Executor）→ 策略 / 校验 / 审批 → ModelTransport → Host。
-		// 所有注册使用 TryAdd 不覆盖调用方已注册的自定义实现；保留旧 IAgentKernel/DefaultAgentKernel
-		// 注册以向后兼容（旧路径仍可用，新路径通过 AgentKernelHost 启动）。
+		// 所有注册使用 TryAdd 不覆盖调用方已注册的自定义实现；执行平面已收敛到
+		// AgentRunStore → AgentKernelHost → AgentRunActor（无独立 IAgentKernel / Transport 平面）。
 
 		// 子问题 8：Agent Run 元数据 Store（进程内默认实现；Postgres provider 可覆盖）
 		services.TryAddSingleton<IAgentRunStore, InMemoryAgentRunStore>();
@@ -832,8 +826,10 @@ internal static class CoreExtensions
 				logger: logger);
 		});
 
-		// 子问题 8：IAgentCheckpointFactory（默认实现，依赖 IAgentRunEventStore / IAgentRunStore）
-		services.TryAddSingleton<IAgentCheckpointFactory, DefaultAgentCheckpointFactory>();
+		// 子问题 8：IAgentCheckpointFactory（默认实现）。
+		// 注：DefaultAgentCheckpointFactory 依赖 KernelStateAccessor（由状态持有方构造，无法由 DI 直接激活），
+		// 故此处不再注册。生产环境 AgentRunActor._checkpointFactory 为 null，checkpoint 走事件流游标路径
+		// （_pendingTurnCheckpoint + AppendBatchAsync 单事务持久化）；测试通过 StubCheckpointFactory 注入。
 
 		// 子问题 7：IAgentModelTransport fallback 实现（确定性响应，不调用真实 LLM）。
 		// 生产部署应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
@@ -847,7 +843,7 @@ internal static class CoreExtensions
 		services.TryAddSingleton<IDurableToolExecutor, DefaultDurableToolExecutor>();
 
 		// 子问题 8：IToolDispatchJournal（进程内默认实现；Postgres provider 可覆盖）。
-		// 注册为 singleton 让 DefaultDurableToolExecutor 与 DefaultAgentKernel 共享同一 journal 实例。
+		// 注册为 singleton 让 DefaultDurableToolExecutor 与各 Run 共享同一 journal 实例。
 		services.TryAddSingleton<IToolDispatchJournal, InMemoryToolDispatchJournal>();
 
 		// P0-3：IDurableToolResultStore（进程内默认实现；Postgres provider 可覆盖）。

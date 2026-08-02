@@ -152,7 +152,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentCheckpointStore>();
         services.AddSingleton<IAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
         // R29 WP-B-3：显式注册 IPersistentAgentCheckpointStore 标记接口以区分持久化能力。
-        // delta 链路（R28-G P1-5）完全由 DefaultAgentKernel.ResumeAsync 通过标准 GetAsync 走链，
+        // delta 链路（R28-G P1-5）完全由恢复路径（事件流 + checkpoint 链）通过标准 GetAsync 走链，
         // Store 不需感知 delta 语义 — 只持久化完整 AgentCheckpoint blob。
         services.AddSingleton<IPersistentAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
         services.AddSingleton<PostgresAgentTaskStateStore>();
@@ -160,7 +160,7 @@ public static class PostgresServiceCollectionExtensions
 
         // R29 WP-B-1：Tool Dispatch Journal 持久化（PostgreSQL）。
         // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下 tool 调用状态机可跨进程持久化与崩溃恢复。
-        // 注册为 IToolDispatchJournal 让 DefaultAgentKernel 的 nullable 参数自动注入；
+        // 注册为 IToolDispatchJournal 让 DefaultDurableToolExecutor 自动注入；
         // 同时注册为 IPersistentToolDispatchJournal 以便显式区分持久化能力。
         services.AddSingleton<PostgresToolDispatchJournal>();
         services.AddSingleton<IToolDispatchJournal>(sp => sp.GetRequiredService<PostgresToolDispatchJournal>());
@@ -171,21 +171,6 @@ public static class PostgresServiceCollectionExtensions
         // 防止 HA 崩溃恢复时已执行的外部副作用结果丢失（被迫重新 Dispatch）。
         services.AddSingleton<PostgresDurableToolResultStore>();
         services.AddSingleton<IDurableToolResultStore>(sp => sp.GetRequiredService<PostgresDurableToolResultStore>());
-
-        // R29 WP-B-2：Kernel Result Outbox 持久化（PostgreSQL）。
-        // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下未投递的 AgentKernelResult 可跨进程持久化与崩溃恢复重放。
-        // 注册为 IKernelResultOutbox 让 DefaultAgentKernel 的 nullable 参数自动注入；
-        // 同时注册为 IPersistentKernelResultOutbox 以便显式区分持久化能力。
-        services.AddSingleton<PostgresKernelResultOutbox>();
-        services.AddSingleton<IKernelResultOutbox>(sp => sp.GetRequiredService<PostgresKernelResultOutbox>());
-        services.AddSingleton<IPersistentKernelResultOutbox>(sp => sp.GetRequiredService<PostgresKernelResultOutbox>());
-
-        // R29 WP-B-4：Durable Transport 持久化（PostgreSQL-backed Channel）。
-        // 始终注册 PostgresDurableTransport 单例 + IDurableTransport 标记接口；
-        // IAgentKernelTransport 绑定默认不替换（保留 InProcessTransport），
-        // 由 UsePostgresDurableTransport() 扩展方法或 KernelTransportOptions.UseDurableTransport=true 显式启用。
-        services.AddSingleton<PostgresDurableTransport>();
-        services.AddSingleton<IDurableTransport>(sp => sp.GetRequiredService<PostgresDurableTransport>());
 
         // R29 WP-A-1：Model Artifact Registry 持久化（PostgreSQL）。
         // 替代（当前未注册的）InMemory 默认实现，让 HA 场景下模型工件描述符可跨进程持久化与查询。
@@ -355,67 +340,6 @@ public static class PostgresServiceCollectionExtensions
         services.AddTransient<PostgresBackupRunner>();
         services.AddTransient<PostgresPitrRunner>();
 
-        return services;
-    }
-
-    /// <summary>
-    /// 注册 PostgreSQL 存储实现 + 可选的 Durable Transport 配置开关。
-    /// 当 <paramref name="transportOptions"/>.<see cref="KernelTransportOptions.UseDurableTransport"/> = true 时，
-    /// 替换 <see cref="IAgentKernelTransport"/> 绑定为 <see cref="PostgresDurableTransport"/>；
-    /// 否则保留 <see cref="ContextCore.Core.Services.AgentKernel.InProcessTransport"/>（开发环境默认）。
-    /// </summary>
-    /// <param name="services">服务容器。</param>
-    /// <param name="options">PostgreSQL 配置。</param>
-    /// <param name="transportOptions">Kernel transport 配置；为 null 时等价于 <see cref="KernelTransportOptions.Default"/>（不启用 durable transport）。</param>
-    public static IServiceCollection AddContextCorePostgresStorage(
-        this IServiceCollection services,
-        PostgresOptions options,
-        KernelTransportOptions? transportOptions)
-    {
-        services.AddContextCorePostgresStorage(options);
-
-        if (transportOptions is { UseDurableTransport: true })
-        {
-            services.UsePostgresDurableTransport();
-        }
-
-        return services;
-    }
-
-    /// <summary>
-    /// 显式启用 PostgreSQL Durable Transport：替换 <see cref="IAgentKernelTransport"/> 绑定为
-    /// <see cref="PostgresDurableTransport"/>，让指令/结果跨进程持久化以支持 HA 崩溃恢复。
-    /// </summary>
-    /// <remarks>
-    /// 必须在 <see cref="AddContextCorePostgresStorage(PostgresOptions)"/> 之后调用，
-    /// 以确保 <see cref="PostgresDurableTransport"/> 单例已注册。
-    /// 此扩展会移除 CoreExtensions 注册的 InProcessTransport 默认绑定并替换为持久化实现。
-    /// 开发环境保留 InMemory（不调用本方法）以避免不必要的 DB 依赖。
-    ///
-    /// <b>P0-4：启用后台托管服务</b>。调用本方法后，还需在 Service 层调用
-    /// <c>AddDurableTransportHostedServices()</c>（<c>ContextCore.Service.Extensions.DurableTransportServiceCollectionExtensions</c>）
-    /// 注册 3 个后台服务：
-    ///   - <c>DurableTransportInstructionPumpService</c>：从 PG inbox 租约指令 → <see cref="IAgentKernel.SubmitAsync"/>
-    ///   - <c>ResultOutboxReplayService</c>：从 outbox 租约结果 → <see cref="IAgentKernelTransport.SendResultAsync"/> → Ack
-    ///   - <c>LeaseReaperService</c>：定时回滚过期 Leased 行
-    /// 分离注册的原因：<see cref="ContextCore.Storage.Postgres"/> 不引用 <c>ContextCore.Service</c>（依赖方向约束）。
-    /// </remarks>
-    public static IServiceCollection UsePostgresDurableTransport(this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        // 移除 CoreExtensions 注册的 IAgentKernelTransport → InProcessTransport 默认绑定
-        // （TryAddSingleton 模式下若已注册则不会被覆盖；本方法显式替换）。
-        for (var i = services.Count - 1; i >= 0; i--)
-        {
-            var descriptor = services[i];
-            if (descriptor.ServiceType == typeof(IAgentKernelTransport))
-            {
-                services.RemoveAt(i);
-            }
-        }
-
-        services.AddSingleton<IAgentKernelTransport>(sp => sp.GetRequiredService<PostgresDurableTransport>());
         return services;
     }
 

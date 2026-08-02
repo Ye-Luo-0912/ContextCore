@@ -19,8 +19,8 @@ namespace ContextCore.Abstractions;
 //   1. 契约层不引入存储 I/O：聚合与租约的实现层可注入 Postgres rollup /
 //      Prometheus 查询 / Redis stream 等。
 //   2. 外部指标为可选信号：未采集时为 null，聚合器应优雅降级到进程内指标。
-//   3. Leader 租约复用 IDurableTransport 的 LeaseAsync/AckAsync/RenewLeaseAsync/
-//      RequeueExpiredAsync 状态机语义（Pending → Leased → Acked）。
+//   3. Leader 租约复用 ILeasedWorkStore 的 TryAcquireAsync/RenewAsync/ReleaseAsync
+//      状态机语义（Pending → Leased → Acked）。
 // ===========================================================================
 
 /// <summary>

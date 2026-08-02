@@ -13,7 +13,7 @@ namespace ContextCore.Abstractions;
 //      新版本通过新 ModelArtifactId 注册实现（与 FeatureSchema 不可变语义一致）。
 //   4. IPersistentModelArtifactRegistry 标记接口（不添加成员），让消费方显式区分
 //      持久化能力与 in-memory 回退，与 IPersistentToolDispatchJournal /
-//      IPersistentKernelResultOutbox / IPersistentAgentCheckpointStore 模式对齐。
+//      IPersistentAgentCheckpointStore 模式对齐。
 //
 // 设计边界：
 //   - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
@@ -144,9 +144,9 @@ public sealed record ModelArtifactDescriptor
 /// 持久化 registry（PostgreSQL）与 in-memory 默认实现。
 /// </summary>
 /// <remarks>
-/// 与 <c>IPersistentToolDispatchJournal</c> / <c>IPersistentKernelResultOutbox</c> /
-/// <c>IPersistentAgentCheckpointStore</c> 模式对齐：marker interface 仅继承基础契约，
-/// DefaultAgentKernel 等消费方需感知持久化能力时按此 marker 解析。
+/// 与 <c>IPersistentToolDispatchJournal</c> / <c>IPersistentAgentCheckpointStore</c> 等
+/// marker-interface 模式对齐：marker interface 仅继承基础契约，
+/// 消费方需感知持久化能力时按此 marker 解析。
 /// </remarks>
 public interface IPersistentModelArtifactRegistry : IModelArtifactRegistry
 {

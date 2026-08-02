@@ -167,84 +167,15 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentCheckpointStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentTaskStateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentTaskStateStore)));
-        // R29 WP-B-1/WP-B-2/WP-B-3：IPersistent* 标记接口注册
+        // R29 WP-B-1/WP-B-3：IPersistent* 标记接口注册（WP-B-2 旧平面 KernelResultOutbox 已随双执行平面收敛删除）
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentToolDispatchJournal)));
-        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentKernelResultOutbox)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentAgentCheckpointStore)));
-        // R29 WP-B-4：PostgresDurableTransport 注册（IAgentKernelTransport 默认不替换，由 UsePostgresDurableTransport 显式启用）
-        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresDurableTransport)));
-        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IDurableTransport)));
-        Assert.IsFalse(services.Any(item => item.ServiceType == typeof(IAgentKernelTransport)),
-            "AddContextCorePostgresStorage 默认不注册 IAgentKernelTransport，保留 CoreExtensions 的 InProcessTransport 默认；" +
-            "调用 UsePostgresDurableTransport() 或传 KernelTransportOptions{UseDurableTransport=true} 才替换绑定。");
         // R27-3：Evolution Pipeline 持久化注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresPipelineRunStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPipelineRunStore)));
         // R29 WP-E-5：User Feedback Ledger 注册（Postgres 实现做 EXISTS 关联校验）
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresUserFeedbackLedgerStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IUserFeedbackLedger)));
-    }
-
-    [TestMethod]
-    public void UsePostgresDurableTransport_ReplacesIAgentKernelTransportBinding()
-    {
-        // R29 WP-B-4：验证 UsePostgresDurableTransport() 显式替换 IAgentKernelTransport 绑定为 PostgresDurableTransport
-        var services = new ServiceCollection();
-        // 模拟 CoreExtensions 注册的 InProcessTransport 默认绑定
-        services.AddSingleton<IAgentKernelTransport, ContextCore.Core.Services.AgentKernel.InProcessTransport>();
-        services.AddContextCorePostgresStorage(new PostgresOptions
-        {
-            ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
-            AutoMigrate = false
-        });
-        services.UsePostgresDurableTransport();
-
-        Assert.IsTrue(services.Count(item => item.ServiceType == typeof(IAgentKernelTransport)) == 1,
-            "UsePostgresDurableTransport 应移除原 InProcessTransport 绑定并注册 PostgresDurableTransport");
-        var provider = services.BuildServiceProvider();
-        var transport = provider.GetRequiredService<IAgentKernelTransport>();
-        Assert.IsInstanceOfType(transport, typeof(PostgresDurableTransport));
-    }
-
-    [TestMethod]
-    public void AddContextCorePostgresStorage_WithKernelTransportOptions_UseDurableTransportTrue_AppliesDurableBinding()
-    {
-        // R29 WP-B-4：验证 KernelTransportOptions.UseDurableTransport=true 触发 durable transport 绑定替换
-        var services = new ServiceCollection();
-        services.AddSingleton<IAgentKernelTransport, ContextCore.Core.Services.AgentKernel.InProcessTransport>();
-        services.AddContextCorePostgresStorage(
-            new PostgresOptions
-            {
-                ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
-                AutoMigrate = false
-            },
-            new KernelTransportOptions { UseDurableTransport = true });
-
-        Assert.IsTrue(services.Count(item => item.ServiceType == typeof(IAgentKernelTransport)) == 1);
-        var provider = services.BuildServiceProvider();
-        var transport = provider.GetRequiredService<IAgentKernelTransport>();
-        Assert.IsInstanceOfType(transport, typeof(PostgresDurableTransport));
-    }
-
-    [TestMethod]
-    public void AddContextCorePostgresStorage_WithKernelTransportOptions_UseDurableTransportFalse_KeepsInProcessDefault()
-    {
-        // R29 WP-B-4：验证 KernelTransportOptions.UseDurableTransport=false（默认）保留 InProcessTransport 默认
-        var services = new ServiceCollection();
-        services.AddSingleton<IAgentKernelTransport, ContextCore.Core.Services.AgentKernel.InProcessTransport>();
-        services.AddContextCorePostgresStorage(
-            new PostgresOptions
-            {
-                ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
-                AutoMigrate = false
-            },
-            KernelTransportOptions.Default);
-
-        // UseDurableTransport=false → 不替换；保留 InProcessTransport
-        Assert.IsTrue(services.Count(item => item.ServiceType == typeof(IAgentKernelTransport)) == 1);
-        var provider = services.BuildServiceProvider();
-        var transport = provider.GetRequiredService<IAgentKernelTransport>();
-        Assert.IsInstanceOfType(transport, typeof(ContextCore.Core.Services.AgentKernel.InProcessTransport));
     }
 
     [TestMethod]
