@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\src\ContextCore.Service\ContextCore.Service.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Storage.Postgres\ContextCore.Storage.Postgres.csproj" />
     <ProjectReference Include="..\ContextCore.Tests\ContextCore.Tests.csproj" />
+    <ProjectReference Include="..\ContextCore.ProcessKillHarness\ContextCore.ProcessKillHarness.csproj" />
   </ItemGroup>
 
 </Project>

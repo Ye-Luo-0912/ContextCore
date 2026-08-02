@@ -225,6 +225,22 @@ jobs:
           path: benchmarks/baseline
           key: benchmark-baseline-main-${{ github.sha }}
 
+      # WP-S6：基准结果与当前 HEAD 绑定（可追溯）。
+      # 将 commit sha + run 信息写入基准结果目录，随工件上传，证明该基准结果来自哪个提交。
+      - name: Record head commit for traceability
+        run: |
+          mkdir -p benchmarks/results/results
+          cat > benchmarks/results/results/head-commit.json <<EOF
+          {
+            "headSha": "${{ github.sha }}",
+            "runId": "${{ github.run_id }}",
+            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "benchmarkType": "main-baseline",
+            "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+        shell: bash
+
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         if: always()

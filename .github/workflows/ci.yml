@@ -292,3 +292,97 @@ jobs:
           name: openapi-snapshot-tests-${{ github.run_id }}
           path: '**/TestResults/*.trx'
           retention-days: 7
+
+  # WP-S6：生产证据固化 job —— 汇总各测试 job 的 TRX 结果：
+  #   1. no-Inconclusive 门禁：任何测试以 Inconclusive 跳过都导致 CI 失败，
+  #      不允许用 Inconclusive 掩盖缺失的证据（例如 Docker 未就绪导致的静默跳过）。
+  #   2. 记录当前 HEAD（commit sha + run id + 各 job 结果）为可追溯证据，
+  #      上传 evidence 工件（保留 90 天）。
+  evidence:
+    name: Evidence (no-Inconclusive gate + HEAD traceability)
+    needs: [build, unit, integration-postgres, architecture, public-api, openapi-snapshot]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download unit test results
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-tests-${{ github.run_id }}
+          path: evidence/trx/unit
+        continue-on-error: true
+
+      - name: Download integration test results
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-tests-${{ github.run_id }}
+          path: evidence/trx/integration
+        continue-on-error: true
+
+      - name: Download architecture test results
+        uses: actions/download-artifact@v4
+        with:
+          name: architecture-tests-${{ github.run_id }}
+          path: evidence/trx/architecture
+        continue-on-error: true
+
+      - name: Download public API test results
+        uses: actions/download-artifact@v4
+        with:
+          name: public-api-tests-${{ github.run_id }}
+          path: evidence/trx/public-api
+        continue-on-error: true
+
+      - name: Download OpenAPI snapshot test results
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-snapshot-tests-${{ github.run_id }}
+          path: evidence/trx/openapi-snapshot
+        continue-on-error: true
+
+      # WP-S6 门禁：拒绝 Inconclusive。TRX 缺失（目录为空）同样失败（证据不完整）。
+      - name: Gate — no Inconclusive test results
+        run: python3 scripts/gate-no-inconclusive.py evidence/trx
+
+      - name: Record HEAD evidence
+        run: |
+          mkdir -p evidence
+          cat > evidence/head-evidence.json <<EOF
+          {
+            "headSha": "${{ github.sha }}",
+            "headShortSha": "${{ github.sha }}",
+            "runId": "${{ github.run_id }}",
+            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "repository": "${{ github.repository }}",
+            "branch": "${{ github.ref_name }}",
+            "jobs": {
+              "build": "${{ needs.build.result }}",
+              "unit": "${{ needs.unit.result }}",
+              "integration-postgres": "${{ needs.integration-postgres.result }}",
+              "architecture": "${{ needs.architecture.result }}",
+              "public-api": "${{ needs.public-api.result }}",
+              "openapi-snapshot": "${{ needs.openapi-snapshot.result }}"
+            },
+            "gate": "no-inconclusive"
+          }
+          EOF
+          echo "## WP-S6 Evidence (HEAD=${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **runId**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **build**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **unit**: ${{ needs.unit.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **integration-postgres**: ${{ needs.integration-postgres.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **architecture**: ${{ needs.architecture.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **public-api**: ${{ needs.public-api.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **openapi-snapshot**: ${{ needs.openapi-snapshot.result }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload evidence artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-${{ github.run_id }}
+          path: evidence/
+          retention-days: 90
