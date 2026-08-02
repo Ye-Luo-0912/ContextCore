@@ -11,7 +11,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 第一版聚焦 <see cref="IMemoryStore"/>：保存、按层/状态/标签查询，以及更新记忆状态。
 /// Perf-2：SaveAsync 计算 SHA-256 + token 数并持久化到专用列，Provider 读取时直接复用、跳过在线重算。
 /// </summary>
-public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore, IMemoryStoreBatchLookup
+public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore, IMemoryStoreBatchLookup, IMemoryStoreMetadataLookup
 {
     public PostgresMemoryStore(
         PostgresConnectionFactory connectionFactory,
@@ -172,6 +172,55 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
         return results;
     }
 
+    /// <summary>
+    /// Perf-2：按 ID 批量获取记忆条目元数据（不读取/反序列化完整 jsonb 正文）。
+    /// SELECT 除 data 外的全列，读取走 <see cref="ReadMemoryItemMetadataRow"/>——Content 恒为空字符串，
+    /// Metadata 合并摄取阶段持久化的 content_hash / content_length / token_count 等专用列，
+    /// Layer/Status/Type/SourceRefs 等字段齐全（ApplyExcludedStatusesFilter 依赖 Status）。
+    /// 语义与 <see cref="BatchGetAsync"/> 一致：只返回命中的条目，顺序不保证，未命中静默丢弃。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextMemoryItem>> BatchGetMetadataAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (ids.Count == 0)
+        {
+            return Array.Empty<ContextMemoryItem>();
+        }
+
+        // 过滤空白 id；Postgres 对 ANY() 中的重复值会自然去重，无需在客户端去重
+        var normalizedIds = ids.Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+        if (normalizedIds.Length == 0)
+        {
+            return Array.Empty<ContextMemoryItem>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText =
+            "SELECT workspace_id, collection_id, id, layer, status, type, tags, source_refs, relation_refs, " +
+            "importance, confidence, version, created_at, updated_at, " +
+            "content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at " +
+            $"FROM {Table("memory_items")} " +
+            "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        AddTextArray(command, "ids", normalizedIds);
+
+        var results = new List<ContextMemoryItem>(normalizedIds.Length);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            results.Add(ReadMemoryItemMetadataRow(reader));
+        }
+        return results;
+    }
+
     public async Task<IReadOnlyList<ContextMemoryItem>> QueryAsync(ContextMemoryQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -220,6 +269,31 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
 
         command.Parameters.AddWithValue("skip", Math.Max(0, query.Skip));
         command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
+
+        // Perf-2：IncludeContent=false 时只投影元数据列，避免读取/反序列化完整 jsonb 正文。
+        // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方（ISelectedCandidateHydrator）二次读取。
+        if (!query.IncludeContent)
+        {
+            command.CommandText = $"""
+SELECT workspace_id, collection_id, id, layer, status, type, tags, source_refs, relation_refs,
+       importance, confidence, version, created_at, updated_at,
+       content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at
+FROM {Table("memory_items")}
+WHERE {string.Join(" AND ", filters)}
+ORDER BY importance DESC, updated_at DESC
+OFFSET @skip
+LIMIT @take;
+""";
+
+            var metadataResults = new List<ContextMemoryItem>();
+            await using var metadataReader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await metadataReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                metadataResults.Add(ReadMemoryItemMetadataRow(metadataReader));
+            }
+            return metadataResults;
+        }
+
         command.CommandText = $"""
 SELECT data, content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at
 FROM {Table("memory_items")}
@@ -320,4 +394,69 @@ LIMIT @take;
         command.Parameters.AddWithValue("token_count", metadata.TokenCount);
         command.Parameters.AddWithValue("counted_at", (object?)metadata.CountedAt ?? DBNull.Value);
     }
+
+    /// <summary>
+    /// Perf-2：从 reader 当前行读取 ContextMemoryItem 元数据（不反序列化 jsonb 正文）。
+    /// Content 恒为空字符串（Selected-only Hydration 契约），Layer/Status/Type/Tags/SourceRefs/
+    /// RelationRefs/Importance/Confidence/Version/CreatedAt/UpdatedAt 字段齐全，
+    /// 并把专用列的 tokenization metadata 合并到 Metadata 字典（Provider 读取后跳过在线重算）。
+    /// 列顺序与 BatchGetMetadataAsync / QueryAsync(IncludeContent=false) 的 SELECT 子句一一对应：
+    /// workspace_id(0), collection_id(1), id(2), layer(3), status(4), type(5), tags(6),
+    /// source_refs(7), relation_refs(8), importance(9), confidence(10), version(11),
+    /// created_at(12), updated_at(13), content_hash(14), content_length(15), tokenizer_id(16),
+    /// tokenizer_version(17), token_count(18), counted_at(19)。
+    /// </summary>
+    private ContextMemoryItem ReadMemoryItemMetadataRow(System.Data.Common.DbDataReader reader)
+    {
+        var workspaceId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+        var collectionId = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        var id = reader.GetString(2);
+        var layer = reader.IsDBNull(3) ? ContextMemoryLayer.Working : ParseEnum(reader.GetString(3), ContextMemoryLayer.Working);
+        var status = reader.IsDBNull(4) ? ContextMemoryStatus.Active : ParseEnum(reader.GetString(4), ContextMemoryStatus.Active);
+        var type = reader.IsDBNull(5) ? string.Empty : reader.GetString(5);
+        var tags = reader.IsDBNull(6) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(6);
+        var sourceRefs = reader.IsDBNull(7) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(7);
+        var relationRefs = reader.IsDBNull(8) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(8);
+        var importance = reader.IsDBNull(9) ? 0.0 : reader.GetDouble(9);
+        var confidence = reader.IsDBNull(10) ? 0.0 : reader.GetDouble(10);
+        var version = reader.IsDBNull(11) ? 0L : reader.GetInt64(11);
+        var createdAt = reader.IsDBNull(12) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(12);
+        var updatedAt = reader.IsDBNull(13) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(13);
+        var contentHash = reader.IsDBNull(14) ? null : reader.GetString(14);
+        var contentLength = reader.IsDBNull(15) ? (int?)null : reader.GetInt32(15);
+        var tokenizerId = reader.IsDBNull(16) ? null : reader.GetString(16);
+        var tokenizerVersion = reader.IsDBNull(17) ? null : reader.GetString(17);
+        var tokenCount = reader.IsDBNull(18) ? (int?)null : reader.GetInt32(18);
+        var countedAt = reader.IsDBNull(19) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(19);
+
+        var metadata = MergePersistedTokenizationColumns(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            contentHash, contentLength, tokenizerId, tokenizerVersion, tokenCount, countedAt);
+
+        return new ContextMemoryItem
+        {
+            Id = id,
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            Layer = layer,
+            Status = status,
+            Type = type,
+            // Perf-2：IncludeContent=false → Content 必须为空字符串（与 ContextItem metadata-only 契约一致）
+            Content = string.Empty,
+            Tags = tags,
+            SourceRefs = sourceRefs,
+            RelationRefs = relationRefs,
+            Importance = importance,
+            Confidence = confidence,
+            Version = version,
+            Metadata = metadata,
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        };
+    }
+
+    /// <summary>从数据库文本列解析枚举；无法解析时回退到默认值（兼容历史脏数据）。</summary>
+    private static TEnum ParseEnum<TEnum>(string value, TEnum fallback)
+        where TEnum : struct, Enum
+        => Enum.TryParse<TEnum>(value, ignoreCase: false, out var parsed) ? parsed : fallback;
 }

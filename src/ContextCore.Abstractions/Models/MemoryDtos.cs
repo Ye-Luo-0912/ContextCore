@@ -565,6 +565,13 @@ public sealed class ContextMemoryQuery
 
     /// <summary>最多返回的记录数，默认 50。</summary>
     public int Take { get; init; } = 50;
+
+    /// <summary>
+    /// Perf-2：是否在查询结果中包含正文 Content（默认 true）。
+    /// false 时 store 只投影元数据列（Content 为空，Metadata 携带 content_hash / content_length /
+    /// token_count 等摄取阶段持久化值），避免把未选中记忆正文读入内存；需要正文时由调用方二次读取。
+    /// </summary>
+    public bool IncludeContent { get; init; } = true;
 }
 
 /// <summary>全局上下文条目查询条件。</summary>

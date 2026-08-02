@@ -125,13 +125,20 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                 }
 
                 // Perf-4：User 角色 + [untrusted_data] section 标记（替代旧的 System 角色）
+                var prefix = $"{UntrustedDataSectionMarker}\n[RetrievedContext:{env.Type}]\n";
                 var msg = new AgentMessage
                 {
                     Role = AgentMessageRole.User,
-                    Content = $"{UntrustedDataSectionMarker}\n[RetrievedContext:{env.Type}]\n{content}"
+                    Content = prefix + content
                 };
 
-                var tokens = EstimateMessageTokens(msg);
+                // Perf-2（精确 tokenize → Model Projection）：hydrated material 的 TokenCost 已由
+                // ISelectedCandidateHydrator 用 tokenizer 精确重算（P3 Fix-5），正文 token 直接复用精确值，
+                // 仅对固定包装开销（[untrusted_data]/[RetrievedContext:type]）做长度估算；
+                // 无精确值（测试 stub / 降级路径 / 正文缺失）时回退到整体长度估算（与旧行为一致）。
+                var tokens = TryGetExactMaterialTokens(env, materials, out var exactContentTokens)
+                    ? exactContentTokens + EstimateTokens(prefix)
+                    : EstimateMessageTokens(msg);
                 if (budget > 0 && usedTokens + tokens > budget)
                 {
                     // Perf-4 修复 c：best-fit — 当前材料太大时跳过，继续尝试下一个更小的材料（不 break）
@@ -354,6 +361,27 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
             return material.Content;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Perf-2（精确 tokenize → Model Projection）：尝试读取 material 的精确 token 数。
+    /// 仅当正文非空且 TokenCost 存在（ISelectedCandidateHydrator hydrate 后用 tokenizer 精确重算，
+    /// 或摄取阶段持久化的精确 cost）时返回 true；测试 stub / 降级路径返回 false，调用方回退到长度估算。
+    /// </summary>
+    private static bool TryGetExactMaterialTokens(
+        ContextCandidateEnvelope envelope,
+        IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> materials,
+        out int exactTokens)
+    {
+        exactTokens = 0;
+        if (materials.TryGetValue(envelope.CanonicalKey, out var material)
+            && !string.IsNullOrEmpty(material.Content)
+            && material.TokenCost is { ContentTokens: >= 0 })
+        {
+            exactTokens = material.TokenCost.ContentTokens;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>字符估算 token 数（与 AgentContextState.EstimateTokens 对齐：Max(1, (length+1)/2)）。</summary>

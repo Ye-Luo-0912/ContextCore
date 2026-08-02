@@ -10,7 +10,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 上下文条目与集合元数据存储。
 /// 完整 DTO 保存在 jsonb 中，同时抽取常用筛选列以便查询和索引。
 /// </summary>
-public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, ITransactionalContextStore
+public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextStoreMetadataLookup, ITransactionalContextStore
 {
     public PostgresContextStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -158,6 +158,54 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         AddTextArray(command, "ids", normalizedIds);
 
         return await ExecuteReaderJsonAsync<ContextItem>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Perf-2：按 ID 批量获取上下文条目元数据（不读取/反序列化完整 jsonb 正文）。
+    /// 列集与 QueryAsync 的 IncludeContent=false 投影一致，复用 <see cref="ReadMetadataRow"/>；
+    /// Metadata 携带摄取阶段持久化的 content_hash / content_token_cost，Provider 据此跳过在线
+    /// SHA-256 + tokenizer 调用。Content 恒为空字符串（Selected-only Hydration 契约）。
+    /// 语义与 <see cref="BatchGetAsync"/> 一致：只返回命中的条目，顺序不保证，未命中静默丢弃。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextItem>> BatchGetMetadataAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (ids.Count == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
+        // 过滤空白 id；Postgres 对 ANY() 中的重复值会自然去重，无需在客户端去重
+        var normalizedIds = ids.Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+        if (normalizedIds.Length == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText =
+            "SELECT workspace_id, collection_id, id, type, title, importance, version, " +
+            "updated_at, created_at, content_hash, content_token_cost, tags, refs, source_refs " +
+            $"FROM {Table("context_items")} " +
+            "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        AddTextArray(command, "ids", normalizedIds);
+
+        var results = new List<ContextItem>(normalizedIds.Length);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            results.Add(ReadMetadataRow(reader));
+        }
+        return results;
     }
 
     public async Task<IReadOnlyList<ContextItem>> QueryAsync(ContextQuery query, CancellationToken cancellationToken = default)

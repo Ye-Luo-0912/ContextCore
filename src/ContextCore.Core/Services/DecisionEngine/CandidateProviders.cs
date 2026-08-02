@@ -147,6 +147,42 @@ internal static class CandidateProviderHelpers
         return Math.Max(1, (content?.Length ?? 0) / 4);
     }
 
+    /// <summary>粗略估算 token 数（~4 chars/token，最小 1；负值/未知长度按 0 处理）。</summary>
+    internal static int EstimateTokens(int contentLength)
+    {
+        return Math.Max(1, Math.Max(0, contentLength) / 4);
+    }
+
+    /// <summary>
+    /// Perf-2：解析 metadata 中摄取阶段持久化的 content_length（Memory/Constraint 摄取时写入
+    /// <see cref="ContentMetadataKeys.ContentLength"/>）。未持久化返回 -1。
+    /// </summary>
+    internal static int ResolveContentLength(IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is not null
+            && metadata.TryGetValue(ContentMetadataKeys.ContentLength, out var lenStr)
+            && int.TryParse(lenStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var len)
+            && len >= 0)
+        {
+            return len;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Perf-2：返回用于 token 估算的有效长度——优先真实正文长度；正文为空（metadata-only 路径）时
+    /// 回退到 metadata 持久化 content_length；两者皆无返回 -1（调用方按 1 token 处理，与既有
+    /// <see cref="EstimateTokens(string)"/> 对空字符串的行为一致）。
+    /// </summary>
+    internal static int ResolveEstimateLength(string? content, IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (!string.IsNullOrEmpty(content))
+        {
+            return content.Length;
+        }
+        return ResolveContentLength(metadata);
+    }
+
     /// <summary>
     /// R28-D P0-3 / R29 WP-D-3：使用 tokenizer 精确计算候选正文 token 数，填充 envelope.TokenCost。
     /// </summary>
@@ -296,12 +332,16 @@ internal static class CandidateProviderHelpers
             entityId: item.Id,
             entityVersion: item.Version > 0 ? item.Version.ToString() : contentHash);
 
+        // Perf-2：估算长度——正文非空时用真实长度；metadata-only 路径（Content 为空）回退到
+        // 持久化 content_length（memory 有该列；context 无该列时为 -1，按 1 token 处理）。
+        var estimateLength = ResolveEstimateLength(item.Content, item.Metadata);
+
         var envelope = new ContextCandidateEnvelope
         {
             CandidateId = $"{expertKind}:{item.Id}",
             Source = source,
             Type = item.Type,
-            EstimatedTokens = EstimateTokens(item.Content),
+            EstimatedTokens = EstimateTokens(estimateLength),
             WorkspaceId = item.WorkspaceId,
             CollectionId = item.CollectionId,
             CanonicalKey = key,
@@ -357,11 +397,13 @@ internal static class CandidateProviderHelpers
         {
             // P3 Fix-2：IncludeContent=false 且无持久化 token cost 时，用 item.Content 长度估算
             // （material.Content 已清空，但 item.Content 仍持有真实正文）。
+            // Perf-2：metadata-only 路径下 item.Content 为空，回退到 metadata 持久化 content_length
+            // （memory 摄取时写入；context 无该列时按 1 token 处理，与既有空字符串行为一致）。
             envelope = envelope with
             {
                 TokenCost = new CandidateTokenCost
                 {
-                    ContentTokens = EstimateTokens(item.Content),
+                    ContentTokens = EstimateTokens(estimateLength),
                     TokenizerId = "length-div-4",
                     IsEstimated = true
                 }
@@ -397,12 +439,16 @@ internal static class CandidateProviderHelpers
             entityId: memory.Id,
             entityVersion: contentHash);
 
+        // Perf-2：估算长度——正文非空时用真实长度；metadata-only 路径（Content 为空）回退到
+        // 持久化 content_length（memory 摄取时写入专用列并合并进 Metadata）。
+        var estimateLength = ResolveEstimateLength(memory.Content, memory.Metadata);
+
         var envelope = new ContextCandidateEnvelope
         {
             CandidateId = $"{expertKind}:{memory.Id}",
             Source = source,
             Type = memory.Type,
-            EstimatedTokens = EstimateTokens(memory.Content),
+            EstimatedTokens = EstimateTokens(estimateLength),
             WorkspaceId = memory.WorkspaceId,
             CollectionId = memory.CollectionId,
             CanonicalKey = key,
@@ -457,11 +503,12 @@ internal static class CandidateProviderHelpers
         {
             // P3 Fix-2：IncludeContent=false 且无持久化 token cost 时，用 memory.Content 长度估算
             // （material.Content 已清空，但 memory.Content 仍持有真实正文）。
+            // Perf-2：metadata-only 路径下 memory.Content 为空，回退到 metadata 持久化 content_length。
             envelope = envelope with
             {
                 TokenCost = new CandidateTokenCost
                 {
-                    ContentTokens = EstimateTokens(memory.Content),
+                    ContentTokens = EstimateTokens(estimateLength),
                     TokenizerId = "length-div-4",
                     IsEstimated = true
                 }
@@ -728,8 +775,22 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
             if (idsToFetch.Count > 0)
             {
                 // 批量或并行查询，消除 N+1
+                // Perf-2（Selected-only Hydration）：IncludeContent=false 时优先走元数据投影
+                // （不读取/反序列化 jsonb 正文，避免把未选中正文送入内存）；store 未实现
+                // IContextStoreMetadataLookup 时回退到全量批量（正确性不变）。
                 var fetchedDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
-                if (_contextStore is IContextStoreBatchLookup batchLookup && idsToFetch.Count > 1)
+                if (!includeContent
+                    && _contextStore is IContextStoreMetadataLookup metadataLookup
+                    && idsToFetch.Count > 1)
+                {
+                    var batchItems = await metadataLookup.BatchGetMetadataAsync(
+                        workspaceId, collectionId, idsToFetch, cancellationToken).ConfigureAwait(false);
+                    foreach (var item in batchItems)
+                    {
+                        if (item is not null) fetchedDict[item.Id] = item;
+                    }
+                }
+                else if (_contextStore is IContextStoreBatchLookup batchLookup && idsToFetch.Count > 1)
                 {
                     var batchItems = await batchLookup.BatchGetAsync(
                         workspaceId, collectionId, idsToFetch, cancellationToken).ConfigureAwait(false);
@@ -1173,6 +1234,10 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
 
         var batchContextStore = _contextStore as IContextStoreBatchLookup;
         var batchMemoryStore = _memoryStore as IMemoryStoreBatchLookup;
+        // Perf-2（Selected-only Hydration）：IncludeContent=false 时优先走元数据投影，
+        // 避免把未选中候选的完整正文 jsonb 读入内存；未实现时回退到全量批量（正确性不变）。
+        var metadataContextStore = !includeContent ? _contextStore as IContextStoreMetadataLookup : null;
+        var metadataMemoryStore = !includeContent ? _memoryStore as IMemoryStoreMetadataLookup : null;
         var workspaceId = context.Request.Scope.WorkspaceId;
         var defaultCollectionId = context.Request.Scope.CollectionId;
 
@@ -1201,7 +1266,16 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         foreach (var (collId, groupHits) in contextHitGroups)
         {
             var sourceIds = groupHits.Select(h => h.Record.SourceId).ToArray();
-            if (batchContextStore is not null)
+            if (metadataContextStore is not null)
+            {
+                var items = await metadataContextStore.BatchGetMetadataAsync(
+                    workspaceId, collId, sourceIds, cancellationToken).ConfigureAwait(false);
+                foreach (var item in items)
+                {
+                    if (item is not null) contextItemDict[item.Id] = item;
+                }
+            }
+            else if (batchContextStore is not null)
             {
                 var items = await batchContextStore.BatchGetAsync(
                     workspaceId, collId, sourceIds, cancellationToken).ConfigureAwait(false);
@@ -1233,7 +1307,16 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             foreach (var (collId, groupHits) in memoryHitGroups)
             {
                 var sourceIds = groupHits.Select(h => h.Record.SourceId).ToArray();
-                if (batchMemoryStore is not null)
+                if (metadataMemoryStore is not null)
+                {
+                    var memories = await metadataMemoryStore.BatchGetMetadataAsync(
+                        workspaceId, collId, sourceIds, cancellationToken).ConfigureAwait(false);
+                    foreach (var memory in memories)
+                    {
+                        if (memory is not null) memoryItemDict[memory.Id] = memory;
+                    }
+                }
+                else if (batchMemoryStore is not null)
                 {
                     var memories = await batchMemoryStore.BatchGetAsync(
                         workspaceId, collId, sourceIds, cancellationToken).ConfigureAwait(false);
@@ -1360,7 +1443,10 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
             WorkspaceId = context.Request.Scope.WorkspaceId,
             CollectionId = context.Request.Scope.CollectionId,
             Layer = ContextMemoryLayer.Working,
-            Take = take
+            Take = take,
+            // Perf-2（Selected-only Hydration）：IncludeContent=false 时 store 只投影元数据列，
+            // 避免把未选中记忆正文读入内存（需要正文时由 ISelectedCandidateHydrator 二次读取）。
+            IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
 
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
@@ -1437,7 +1523,10 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
             CollectionId = context.Request.Scope.CollectionId,
             Layer = ContextMemoryLayer.Stable,
             Status = ContextMemoryStatus.Stable,
-            Take = take
+            Take = take,
+            // Perf-2（Selected-only Hydration）：IncludeContent=false 时 store 只投影元数据列，
+            // 避免把未选中记忆正文读入内存（需要正文时由 ISelectedCandidateHydrator 二次读取）。
+            IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
 
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
@@ -1653,9 +1742,20 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         var neighborIdList = neighborItemIds.ToArray();
 
         // 批量查询 context store
+        // Perf-2（Selected-only Hydration）：IncludeContent=false 时优先走元数据投影，
+        // 避免把未选中关联条目的完整正文 jsonb 读入内存；未实现时回退到全量批量（正确性不变）。
         var contextItemDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
-        var batchContextStore = _contextStore as IContextStoreBatchLookup;
-        if (batchContextStore is not null && neighborIdList.Length > 1)
+        var metadataContextStore = !includeContent ? _contextStore as IContextStoreMetadataLookup : null;
+        if (metadataContextStore is not null && neighborIdList.Length > 1)
+        {
+            var items = await metadataContextStore.BatchGetMetadataAsync(
+                workspaceId, collectionId, neighborIdList, cancellationToken).ConfigureAwait(false);
+            foreach (var item in items)
+            {
+                if (item is not null) contextItemDict[item.Id] = item;
+            }
+        }
+        else if (_contextStore is IContextStoreBatchLookup batchContextStore && neighborIdList.Length > 1)
         {
             var items = await batchContextStore.BatchGetAsync(
                 workspaceId, collectionId, neighborIdList, cancellationToken).ConfigureAwait(false);
@@ -1684,8 +1784,17 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         if (missingIds.Length > 0 && _memoryStore is not null)
         {
             var ms = _memoryStore;
-            var batchMemoryStore = ms as IMemoryStoreBatchLookup;
-            if (batchMemoryStore is not null && missingIds.Length > 1)
+            var metadataMemoryStore = !includeContent ? ms as IMemoryStoreMetadataLookup : null;
+            if (metadataMemoryStore is not null && missingIds.Length > 1)
+            {
+                var memories = await metadataMemoryStore.BatchGetMetadataAsync(
+                    workspaceId, collectionId, missingIds, cancellationToken).ConfigureAwait(false);
+                foreach (var memory in memories)
+                {
+                    if (memory is not null) memoryItemDict[memory.Id] = memory;
+                }
+            }
+            else if (ms is IMemoryStoreBatchLookup batchMemoryStore && missingIds.Length > 1)
             {
                 var memories = await batchMemoryStore.BatchGetAsync(
                     workspaceId, collectionId, missingIds, cancellationToken).ConfigureAwait(false);

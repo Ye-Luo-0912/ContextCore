@@ -34,6 +34,44 @@ public interface IMemoryStoreBatchLookup
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// 可选能力接口：按 ID 批量获取上下文条目的元数据（不加载正文）。
+/// 实现此接口的 <see cref="IContextStore"/> 可在召回阶段只返回 Content 为空的
+/// <see cref="ContextItem"/>（Metadata 携带 content_hash / content_token_cost 等摄取阶段持久化值），
+/// 避免把未选中候选的完整正文 jsonb 读入内存；需要正文时由调用方走
+/// <see cref="IContextStoreBatchLookup.BatchGetAsync"/> 二次读取。
+/// </summary>
+/// <remarks>
+/// Perf-2（Selected-only Hydration）：Provider 在 IncludeContent=false 时优先使用本接口，
+/// 仅对 Engine 最终选中的候选由 ISelectedCandidateHydrator 批量 hydrate 正文。
+/// 未实现本接口的 store 回退到全量批量读取（正确性不变，仅失去元数据投影的传输/解析节省）。
+/// </remarks>
+public interface IContextStoreMetadataLookup
+{
+    /// <summary>按 ID 批量获取上下文条目元数据（Content 恒为空，Metadata/作用域字段齐全）。只返回找到的条目，顺序不保证。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<IReadOnlyList<ContextItem>> BatchGetMetadataAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 可选能力接口：按 ID 批量获取记忆条目的元数据（不加载正文）。
+/// 语义与 <see cref="IContextStoreMetadataLookup"/> 一致，面向 <see cref="IMemoryStore"/>。
+/// </summary>
+public interface IMemoryStoreMetadataLookup
+{
+    /// <summary>按 ID 批量获取记忆条目元数据（Content 恒为空，Layer/Status/Type/Metadata 等字段齐全）。只返回找到的条目，顺序不保证。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<IReadOnlyList<ContextMemoryItem>> BatchGetMetadataAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default);
+}
+
 // ===========================================================================
 // Perf-1：Late Hydration 契约
 //
