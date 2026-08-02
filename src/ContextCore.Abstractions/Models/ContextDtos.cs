@@ -108,9 +108,35 @@ public sealed class ContextQuery
 
     public int Take { get; init; } = 50;
 
+    /// <summary>Keyset 游标（上一页末条）。设置后存储层从游标之后续取下一页并忽略 Skip；未设置时维持 OFFSET 分页。</summary>
+    public ContextQueryCursor? After { get; init; }
+
     public bool IncludeContent { get; init; } = true;
 
     public bool IncludeDerived { get; init; } = true;
+}
+
+/// <summary>
+/// Keyset 游标：上一页最后一条记录的排序键，用于深度分页时替代 OFFSET。
+/// 由调用方从上一页末条的字段构造（ID/重要性/更新时间取自条目本身，
+/// 来源与相关度分仅在 QueryText 路径有意义）。
+/// </summary>
+public sealed class ContextQueryCursor
+{
+    /// <summary>上一页末条的来源：0 = FTS 命中，1 = ID 精确/前缀命中；仅 QueryText 路径有意义。</summary>
+    public int SourceOrder { get; init; }
+
+    /// <summary>上一页末条的检索相关度分（ts_rank_cd 原值）；仅 SourceOrder = 0 时参与比较。</summary>
+    public double TsRank { get; init; }
+
+    /// <summary>上一页末条的重要性分。</summary>
+    public double Importance { get; init; }
+
+    /// <summary>上一页末条的更新时间。</summary>
+    public DateTimeOffset UpdatedAt { get; init; }
+
+    /// <summary>上一页末条 ID，作为排序决胜键。</summary>
+    public string Id { get; init; } = string.Empty;
 }
 
 /// <summary>稳定查询响应 DTO，封装上下文条目列表。</summary>

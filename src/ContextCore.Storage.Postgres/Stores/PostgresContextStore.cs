@@ -234,6 +234,10 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
             ? "ts_rank_cd(search_vector, websearch_to_tsquery('simple', @query_text))"
             : null;
 
+        var take = TakeOrDefault(query.Take);
+        var after = query.After;
+        var hasCursor = after is not null;
+
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var filters = AppendBaseFilters(command, query);
@@ -246,8 +250,47 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
             command.Parameters.AddWithValue("query_prefix", query.QueryText! + "%");
         }
 
-        command.Parameters.AddWithValue("skip", Math.Max(0, query.Skip));
-        command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
+        command.Parameters.AddWithValue("take", take);
+        if (hasCursor)
+        {
+            // Keyset 模式：以游标续取替代 OFFSET，Skip 不再参与分页。
+            command.Parameters.AddWithValue("after_ts_rank", after!.TsRank);
+            command.Parameters.AddWithValue("after_importance", after!.Importance);
+            command.Parameters.AddWithValue("after_updated_at", after!.UpdatedAt);
+            command.Parameters.AddWithValue("after_id", after!.Id);
+        }
+        else
+        {
+            command.Parameters.AddWithValue("skip", Math.Max(0, query.Skip));
+        }
+
+        // Keyset 续取谓词按来源拆分（ts_rank 在 id_hits 中为 NULL，无法共用同一谓词）：
+        // - fts_hits：游标位于 FTS 命中（SourceOrder=0）时按 (ts_rank, importance, updated_at, id) 续取；
+        //   游标已越过全部 FTS 命中（SourceOrder=1）时不再产出任何行。
+        // - id_hits：游标位于 ID 命中（SourceOrder=1）时按 (importance, updated_at, id) 续取；
+        //   游标位于 FTS 命中（SourceOrder=0）时全部 ID 命中都排在其后，无需过滤。
+        // - 无 QueryText 路径：与 id_hits 相同的 (importance, updated_at, id) 续取。
+        var ftsAfterSql = string.Empty;
+        var idAfterSql = string.Empty;
+        var plainAfterSql = string.Empty;
+        if (hasCursor)
+        {
+            if (after!.SourceOrder == 0)
+            {
+                ftsAfterSql = "AND (" + BuildAfterPredicate(FtsAfterColumns) + ")";
+            }
+            else
+            {
+                ftsAfterSql = "AND false";
+                idAfterSql = "AND (" + BuildAfterPredicate(IdAfterColumns) + ")";
+            }
+            plainAfterSql = "AND (" + BuildAfterPredicate(IdAfterColumns) + ")";
+        }
+
+        // 内层 CTE 每源只需取 take 条候选：FTS 命中在去重中全部保留，外层 LIMIT 收敛到恰好 take 条；
+        // 无游标时维持 LIMIT @skip + @take 供外层 OFFSET 筛选，避免第二页漏结果。
+        var innerLimitSql = hasCursor ? "LIMIT @take" : "LIMIT @skip + @take";
+        var finalLimitSql = hasCursor ? "LIMIT @take" : "OFFSET @skip LIMIT @take";
 
         // P4：IncludeContent=false 时只投影 metadata 列，避免读取/反序列化完整 jsonb 正文。
         // 节省 PostgreSQL 网络传输 + JSON 解析 + 大字符串分配；需要正文时由调用方走 BatchGetAsync 二次读取。
@@ -272,9 +315,9 @@ WITH fts_hits AS (
            {rankExpression} AS ts_rank, 0 AS source_order
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
-    ORDER BY ts_rank DESC, importance DESC, updated_at DESC
-
-    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
+    {ftsAfterSql}
+    ORDER BY ts_rank DESC, importance DESC, updated_at DESC, id DESC
+    {innerLimitSql}
 ),
 id_hits AS (
     SELECT workspace_id, collection_id, id, type, title, importance, version,
@@ -283,8 +326,9 @@ id_hits AS (
            NULL::real AS ts_rank, 1 AS source_order
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
-    ORDER BY importance DESC, updated_at DESC
-    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
+    {idAfterSql}
+    ORDER BY importance DESC, updated_at DESC, id DESC
+    {innerLimitSql}
 ),
 combined AS (
     SELECT * FROM fts_hits
@@ -298,7 +342,8 @@ SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
        tags, refs, source_refs, ts_rank
 FROM deduped
-ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC OFFSET @skip LIMIT @take;
+ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
+{finalLimitSql};
 """;
             }
             else
@@ -308,10 +353,9 @@ SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
        tags, refs, source_refs
 FROM {Table("context_items")}
-WHERE {baseFilterSql}
-ORDER BY importance DESC, updated_at DESC
-OFFSET @skip
-LIMIT @take;
+WHERE {baseFilterSql} {plainAfterSql}
+ORDER BY importance DESC, updated_at DESC, id DESC
+{finalLimitSql};
 """;
             }
 
@@ -332,17 +376,18 @@ WITH fts_hits AS (
            {rankExpression} AS ts_rank, 0 AS source_order
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
-    ORDER BY ts_rank DESC, importance DESC, updated_at DESC
-
-    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
+    {ftsAfterSql}
+    ORDER BY ts_rank DESC, importance DESC, updated_at DESC, id DESC
+    {innerLimitSql}
 ),
 id_hits AS (
     SELECT data, workspace_id, collection_id, id, importance, updated_at,
            NULL::real AS ts_rank, 1 AS source_order
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
-    ORDER BY importance DESC, updated_at DESC
-    LIMIT @skip + @take  -- P1-8：提供 skip+take 候选供外层 OFFSET/LIMIT 筛选，避免第二页漏结果
+    {idAfterSql}
+    ORDER BY importance DESC, updated_at DESC, id DESC
+    {innerLimitSql}
 ),
 combined AS (
     SELECT * FROM fts_hits
@@ -354,7 +399,8 @@ deduped AS (
 )
 SELECT data, ts_rank
 FROM deduped
-ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC OFFSET @skip LIMIT @take;
+ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
+{finalLimitSql};
 """;
             }
             else
@@ -362,10 +408,9 @@ ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC
                 command.CommandText = $"""
 SELECT data
 FROM {Table("context_items")}
-WHERE {baseFilterSql}
-ORDER BY importance DESC, updated_at DESC
-OFFSET @skip
-LIMIT @take;
+WHERE {baseFilterSql} {plainAfterSql}
+ORDER BY importance DESC, updated_at DESC, id DESC
+{finalLimitSql};
 """;
             }
 
@@ -385,6 +430,28 @@ LIMIT @take;
         }
 
         return results;
+    }
+
+    /// <summary>FTS 命中源的 keyset 排序键（该源内 ts_rank 恒非空，无需 NULLS LAST 处理）。</summary>
+    private static readonly string[] FtsAfterColumns = ["ts_rank", "importance", "updated_at", "id"];
+
+    /// <summary>ID 命中源与无 QueryText 路径的 keyset 排序键。</summary>
+    private static readonly string[] IdAfterColumns = ["importance", "updated_at", "id"];
+
+    /// <summary>
+    /// 生成 DESC 排序下“严格位于游标之后”的 keyset 谓词：
+    /// (k1 &lt; c1) OR (k1 = c1 AND k2 &lt; c2) OR (k1 = c1 AND k2 = c2 AND k3 &lt; c3) ...
+    /// 参与比较的列约定 NOT NULL；参数名取 @after_&lt;列名&gt;，调用方负责绑定。
+    /// </summary>
+    internal static string BuildAfterPredicate(IReadOnlyList<string> columns)
+    {
+        var clauses = new string[columns.Count];
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var prefix = columns.Take(i).Select(c => $"{c} = @after_{c}");
+            clauses[i] = "(" + string.Join(" AND ", prefix.Append($"{columns[i]} < @after_{columns[i]}")) + ")";
+        }
+        return string.Join(" OR ", clauses);
     }
 
     /// <summary>

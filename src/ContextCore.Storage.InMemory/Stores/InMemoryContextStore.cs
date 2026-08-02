@@ -75,6 +75,7 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var skip = query.After is null ? Math.Max(0, query.Skip) : 0;
         var results = _items.Values
             .Where(item => string.Equals(item.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
             .Where(item => string.IsNullOrWhiteSpace(query.CollectionId)
@@ -85,12 +86,33 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
             .Where(item => MatchesRefs(item, query.Refs))
             .Where(item => MatchesQueryText(item, query.QueryText))
             .OrderByDescending(item => item.UpdatedAt)
-            .Skip(Math.Max(0, query.Skip))
+            .ThenByDescending(item => item.Id, StringComparer.Ordinal)
+            .Where(item => IsAfterCursor(item, query.After))
+            .Skip(skip)
             .Take(query.Take > 0 ? query.Take : 50)
             .Select(item => query.IncludeContent ? Clone(item) : Clone(item, content: string.Empty))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextItem>>(results);
+    }
+
+    /// <summary>
+    /// Keyset 续取过滤：仅保留排序上严格位于游标之后的条目。
+    /// 内存存储无 ts_rank/importance 排序，按 (updated_at, id) 近似续取（id 为决胜键）。
+    /// </summary>
+    private static bool IsAfterCursor(ContextItem item, ContextQueryCursor? after)
+    {
+        if (after is null)
+        {
+            return true;
+        }
+
+        var timeCmp = item.UpdatedAt.CompareTo(after.UpdatedAt);
+        if (timeCmp != 0)
+        {
+            return timeCmp < 0;
+        }
+        return string.CompareOrdinal(item.Id, after.Id) < 0;
     }
 
     private static bool IsExcluded(ContextItem item, ContextQuery query)

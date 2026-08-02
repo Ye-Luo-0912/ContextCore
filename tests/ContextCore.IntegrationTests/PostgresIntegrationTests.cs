@@ -192,6 +192,87 @@ public sealed class PostgresIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("Postgres")]
+    public async Task ContextStore_Query_KeysetPagination_ShouldContinueWithoutDuplicates()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("ctxk_");
+        try
+        {
+            var store = new PostgresContextStore(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            for (var i = 1; i <= 8; i++)
+            {
+                await store.SaveAsync(new ContextItem
+                {
+                    Id = $"kitem-{i}",
+                    WorkspaceId = "ws",
+                    CollectionId = "col",
+                    Type = "note",
+                    Title = $"title {i}",
+                    Content = $"shared retrieval content {i}",
+                    Importance = i,
+                    CreatedAt = now,
+                    UpdatedAt = now.AddMinutes(-i)
+                });
+            }
+
+            static ContextQueryCursor CursorFrom(ContextItem item)
+            {
+                // __ts_rank 存储的是 ts_rank * 100（字符串），还原为原值；无该键说明是 ID 命中源。
+                var hasRank = item.Metadata.TryGetValue("__ts_rank", out var rankText);
+                double rank = 0;
+                if (hasRank)
+                {
+                    hasRank = double.TryParse(rankText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out rank);
+                }
+                return new ContextQueryCursor
+                {
+                    SourceOrder = hasRank ? 0 : 1,
+                    TsRank = hasRank ? rank / 100.0 : 0,
+                    Importance = item.Importance,
+                    UpdatedAt = item.UpdatedAt,
+                    Id = item.Id
+                };
+            }
+
+            var page1 = await store.QueryAsync(new ContextQuery { WorkspaceId = "ws", CollectionId = "col", QueryText = "retrieval", Take = 3 });
+            Assert.AreEqual(3, page1.Count, "第一页应有 3 条");
+
+            var page2 = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "retrieval",
+                Take = 3,
+                After = CursorFrom(page1[^1])
+            });
+            Assert.AreEqual(3, page2.Count, "第二页应有 3 条");
+
+            var page3 = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "retrieval",
+                Take = 3,
+                After = CursorFrom(page2[^1])
+            });
+            Assert.AreEqual(2, page3.Count, "第三页应剩 2 条");
+
+            var allIds = page1.Concat(page2).Concat(page3).Select(i => i.Id).ToArray();
+            Assert.AreEqual(8, allIds.Distinct().Count(), "跨页不应出现重复条目");
+            Assert.AreEqual(8, allIds.Length);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
     public async Task MemoryStore_SaveAndPromotion_ShouldRoundtrip()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }

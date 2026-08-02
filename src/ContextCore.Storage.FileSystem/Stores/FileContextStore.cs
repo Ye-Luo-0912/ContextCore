@@ -252,7 +252,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
                 }
             }
 
-            var skip = Math.Max(0, query.Skip);
+            var skip = query.After is null ? Math.Max(0, query.Skip) : 0;
             var take = query.Take > 0 ? query.Take : 50;
 
             // Phase 2a: query text requires content — read all candidates, filter by text, then paginate
@@ -272,6 +272,8 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
 
                 return textFiltered
                     .OrderByDescending(item => item.UpdatedAt)
+                    .ThenByDescending(item => item.Id, StringComparer.Ordinal)
+                    .Where(item => IsAfterCursor(item, query.After))
                     .Skip(skip)
                     .Take(take)
                     .Select(item => query.IncludeContent ? item : WithoutContent(item))
@@ -281,6 +283,8 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
             // Phase 2b: no query text — paginate metadata first, read content only for the final page
             var page = candidates
                 .OrderByDescending(metadata => metadata.UpdatedAt)
+                .ThenByDescending(metadata => metadata.Id, StringComparer.Ordinal)
+                .Where(metadata => IsAfterCursor(metadata, query.After))
                 .Skip(skip)
                 .Take(take)
                 .ToArray();
@@ -576,6 +580,41 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
         return !query.IncludeDerived
             && metadata.Metadata.TryGetValue("isDerived", out var isDerived)
             && string.Equals(isDerived, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Keyset 续取过滤：仅保留排序上严格位于游标之后的条目（文本命中路径）。
+    /// 文件存储无 ts_rank/importance 排序，按 (updated_at, id) 近似续取（id 为决胜键）。
+    /// </summary>
+    private static bool IsAfterCursor(ContextItem item, ContextQueryCursor? after)
+    {
+        if (after is null)
+        {
+            return true;
+        }
+
+        var timeCmp = item.UpdatedAt.CompareTo(after.UpdatedAt);
+        if (timeCmp != 0)
+        {
+            return timeCmp < 0;
+        }
+        return string.CompareOrdinal(item.Id, after.Id) < 0;
+    }
+
+    /// <summary>Keyset 续取过滤的元数据版本（无 QueryText 路径）。</summary>
+    private static bool IsAfterCursor(ContextItemMetadata metadata, ContextQueryCursor? after)
+    {
+        if (after is null)
+        {
+            return true;
+        }
+
+        var timeCmp = metadata.UpdatedAt.CompareTo(after.UpdatedAt);
+        if (timeCmp != 0)
+        {
+            return timeCmp < 0;
+        }
+        return string.CompareOrdinal(metadata.Id, after.Id) < 0;
     }
 
     private static bool MatchesTags(IReadOnlyList<string> itemTags, IReadOnlyList<string> queryTags)

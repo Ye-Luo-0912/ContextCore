@@ -3285,6 +3285,11 @@ M:ContextCore.Abstractions.Models.ContextQuery.Equals(System.Object)
 M:ContextCore.Abstractions.Models.ContextQuery.GetHashCode()
 M:ContextCore.Abstractions.Models.ContextQuery.GetType()
 M:ContextCore.Abstractions.Models.ContextQuery.ToString()
+M:ContextCore.Abstractions.Models.ContextQueryCursor.#ctor()
+M:ContextCore.Abstractions.Models.ContextQueryCursor.Equals(System.Object)
+M:ContextCore.Abstractions.Models.ContextQueryCursor.GetHashCode()
+M:ContextCore.Abstractions.Models.ContextQueryCursor.GetType()
+M:ContextCore.Abstractions.Models.ContextQueryCursor.ToString()
 M:ContextCore.Abstractions.Models.ContextQueryResponse.#ctor()
 M:ContextCore.Abstractions.Models.ContextQueryResponse.Equals(System.Object)
 M:ContextCore.Abstractions.Models.ContextQueryResponse.GetHashCode()
@@ -7734,6 +7739,7 @@ P:ContextCore.Abstractions.Models.ContextProvenanceResponse.TargetConstraint (ge
 P:ContextCore.Abstractions.Models.ContextProvenanceResponse.TargetItemKind (get|init)
 P:ContextCore.Abstractions.Models.ContextProvenanceResponse.TargetMemoryItem (get|init)
 P:ContextCore.Abstractions.Models.ContextProvenanceResponse.Warnings (get|init)
+P:ContextCore.Abstractions.Models.ContextQuery.After (get|init)
 P:ContextCore.Abstractions.Models.ContextQuery.CollectionId (get|init)
 P:ContextCore.Abstractions.Models.ContextQuery.ExcludedIds (get|init)
 P:ContextCore.Abstractions.Models.ContextQuery.ExcludedTypes (get|init)
@@ -7746,6 +7752,11 @@ P:ContextCore.Abstractions.Models.ContextQuery.Tags (get|init)
 P:ContextCore.Abstractions.Models.ContextQuery.Take (get|init)
 P:ContextCore.Abstractions.Models.ContextQuery.Types (get|init)
 P:ContextCore.Abstractions.Models.ContextQuery.WorkspaceId (get|init)
+P:ContextCore.Abstractions.Models.ContextQueryCursor.Id (get|init)
+P:ContextCore.Abstractions.Models.ContextQueryCursor.Importance (get|init)
+P:ContextCore.Abstractions.Models.ContextQueryCursor.SourceOrder (get|init)
+P:ContextCore.Abstractions.Models.ContextQueryCursor.TsRank (get|init)
+P:ContextCore.Abstractions.Models.ContextQueryCursor.UpdatedAt (get|init)
 P:ContextCore.Abstractions.Models.ContextQueryResponse.Count (get|init)
 P:ContextCore.Abstractions.Models.ContextQueryResponse.Items (get|init)
 P:ContextCore.Abstractions.Models.ContextRelation.CollectionId (get|init)
@@ -11363,6 +11374,7 @@ T:ContextCore.Abstractions.Models.ContextPolicyFeatureExample
 T:ContextCore.Abstractions.Models.ContextPromotionRecord
 T:ContextCore.Abstractions.Models.ContextProvenanceResponse
 T:ContextCore.Abstractions.Models.ContextQuery
+T:ContextCore.Abstractions.Models.ContextQueryCursor
 T:ContextCore.Abstractions.Models.ContextQueryResponse
 T:ContextCore.Abstractions.Models.ContextRelation
 T:ContextCore.Abstractions.Models.ContextRelationQuery
