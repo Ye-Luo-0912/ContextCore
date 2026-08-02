@@ -37,7 +37,7 @@ namespace ContextCore.Service.Hosting;
 internal sealed class AgentRunRecoveryWorker : BackgroundService
 {
     private readonly IServiceProvider _services;
-    private readonly ProductionRuntimeOptions _options;
+    private readonly ContextCoreRuntimeOptions _options;
     private readonly ILogger<AgentRunRecoveryWorker> _logger;
 
     /// <summary>
@@ -62,7 +62,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
     public AgentRunRecoveryWorker(
         IServiceProvider services,
-        ProductionRuntimeOptions options,
+        ContextCoreRuntimeOptions options,
         ILogger<AgentRunRecoveryWorker> logger)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));

@@ -27,20 +27,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R28-B.8：v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
     /// R28-E：v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
     /// R29 WP-B-1：v20 → v21，新增 tool_dispatch_journal_entries 表与索引（持久化 Tool Dispatch Journal，支持 HA 崩溃恢复 exactly-once）。
-    /// R29 WP-B-2：v21 → v22，新增 kernel_result_outbox 表与索引（持久化 Kernel Result Outbox，支持崩溃恢复结果重放）。
-    /// R29 WP-B-4：v22 → v23，新增 kernel_transport_inbox + kernel_transport_outbox 表与索引（Durable Transport，PostgreSQL-backed Channel 支持 HA 跨进程指令/结果传输）。
     /// R29 WP-A-1：v23 → v24，新增 model_artifacts 表与索引（Model Artifact Registry 持久化，集中管理 ModelArtifactDescriptor 的注册与查询）。
     /// R29 WP-E-3：v24 → v25，新增 vw_utility_ledger_training_data 视图（训练数据导出 SQL 接口，供 ad-hoc 查询与 BI 工具直接消费）。
     /// R29 WP-E-4：v25 → v26，新增 vw_utility_ledger_calibration_data 视图（校准数据导出 SQL 接口，predicted / observed / weight 三段式）。
     /// R29 WP-E-5：v26 → v27，新增 user_feedback_entries 表与索引（用户显式反馈接入 ledger：thumbs up/down + 评分修正 + 文本反馈）。
     /// P0-3：v27 → v28，tool_dispatch_journal_entries.idempotency_key 索引由普通 index 升级为 UNIQUE partial index，
     ///       防止不同 request_id 使用相同幂等键分别执行（外部副作用 exactly-once 的数据库层兜底）。
-    /// P0-1：v28 → v29，kernel_transport_inbox / kernel_transport_outbox 追加 state / lease_owner / lease_expires_at 列
-    ///       与配套索引，将破坏性 DELETE 出队改为租约模型（Pending → Leased → Acked），
-    ///       支持崩溃恢复后由新实例重新租约或 RequeueExpired 回滚过期租约。
-    /// P0-2：v29 → v30，kernel_result_outbox 追加 lease_owner / lease_expires_at / lease_token 列与配套索引，
-    ///       将 DequeueAsync 的 Dispatched 终态改为租约模型（Pending → Leased → Acked），
-    ///       避免 consumer 崩溃后 Dispatched 行永久滞留；旧 DequeueAsync 内部改用 LeaseAsync（默认租约）。
     /// 任务 F：v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
     /// 任务 D：v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
     ///       （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
@@ -56,11 +48,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///       - 每次 UPSERT 覆盖该实例最新累计值（不再追加行），聚合时只汇总当前 epoch 的最新快照
     ///       - 修复 SUM(total_observations) 重复累计、InstanceCount=COUNT(*) 误算样本行数、
     ///         旧 Canary 阶段数据污染新阶段、表无限增长等问题。
-    /// Durable Delivery 剩余修复：v36 → v37，为 kernel_transport_inbox / kernel_transport_outbox /
-    ///   kernel_result_outbox 追加重试与死信列（attempt_count / max_attempts / next_attempt_at /
-    ///   last_error / dead_letter_reason），新增 kernel_transport_dead_letter 表，并为
-    ///   kernel_transport_outbox.instruction_id 添加 UNIQUE 约束（让 SendResultAsync 幂等，
-    ///   result_id 改为基于 instruction_id 的稳定值，避免 Replayer 重发产生重复投递）。
     /// P0-6：v37 → v38，新增 model_activation_audit 表与索引（Model Control Plane 激活审计持久化，
     ///   记录 Activate/Rollback/Retire/Shadow/Warmup 等模型生命周期事件，含 previous_model_id /
     ///   operator / reason / node_id 等业务字段，支持 HA 多节点对账与 Champion/Challenger 推进追溯）。
@@ -194,11 +181,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "tool_dispatch_journal_entries",
         // P0-3：Durable Tool Result 缓存持久化（已 Committed/ResultDelivered 的 tool 结果跨进程读取）
         "tool_dispatch_results",
-        // R29 WP-B-2：Kernel Result Outbox 持久化（崩溃恢复结果重放）
-        "kernel_result_outbox",
-        // R29 WP-B-4：Durable Transport 持久化（PostgreSQL-backed Channel，跨进程指令/结果传输）
-        "kernel_transport_inbox",
-        "kernel_transport_outbox",
         // R29 WP-A-1：Model Artifact Registry 持久化（集中管理 ModelArtifactDescriptor 注册与查询）
         "model_artifacts",
         // R29 WP-E-5：User Feedback Ledger 持久化（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）
@@ -215,8 +197,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "canary_transition_audit",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
         "learning_event_outbox",
-        // Durable Delivery v37：Durable Transport Dead Letter Queue（超过 max_attempts 的指令/结果）
-        "kernel_transport_dead_letter",
         // P0-6：Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
         "model_activation_audit",
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化
@@ -369,20 +349,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("tool_dispatch_results", "ws_run_invocation"),
         ("tool_dispatch_results", "tool_call_id"),
         ("tool_dispatch_results", "idempotency_key"),
-        // R29 WP-B-2 / P0-2：Kernel Result Outbox 索引（按 state + created_at 查 Pending + 按 instruction_id 查历史 + 租约模型 pending/expired）
-        ("kernel_result_outbox", "state"),
-        ("kernel_result_outbox", "instruction"),
-        ("kernel_result_outbox", "pending"),
-        ("kernel_result_outbox", "expired"),
-        // R29 WP-B-4：Durable Transport 索引（inbox/outbox 按 created_at FIFO 取最旧 + 按 instruction_id 查历史）
-        ("kernel_transport_inbox", "created"),
-        ("kernel_transport_inbox", "instruction"),
-        ("kernel_transport_inbox", "pending"),
-        ("kernel_transport_inbox", "expired"),
-        ("kernel_transport_outbox", "created"),
-        ("kernel_transport_outbox", "instruction"),
-        ("kernel_transport_outbox", "pending"),
-        ("kernel_transport_outbox", "expired"),
         // R29 WP-A-1：Model Artifact Registry 索引（按 model_name + registered_at 查最新版本 / 列举所有版本）
         ("model_artifacts", "model_name"),
         ("model_artifacts", "registered"),
@@ -411,14 +377,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("learning_event_outbox", "state"),
         ("learning_event_outbox", "lease"),
         ("learning_event_outbox", "workspace"),
-        // Durable Delivery v37：重试与死信索引
-        // inbox/outbox 按 next_attempt_at 取可重试的 Pending 行（LeaseAsync WHERE next_attempt_at <= now）
-        ("kernel_transport_inbox", "retry"),
-        ("kernel_transport_outbox", "retry"),
-        ("kernel_result_outbox", "retry"),
-        // DLQ 按 source + created_at 列举（GetDeadLetterEntriesAsync）
-        ("kernel_transport_dead_letter", "source"),
-        ("kernel_transport_dead_letter", "created"),
         // P0-6：model_activation_audit 索引（按 model_artifact_id 查历史 + 按 operation 过滤 + 按时间倒序列举）
         ("model_activation_audit", "model"),
         ("model_activation_audit", "operation"),
@@ -532,11 +490,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var toolDispatchResults = Infrastructure.PostgresNames.Table(options, "tool_dispatch_results");
         // P0-4：tool_dispatch_results 主键约束名（Postgres 默认 {table}_pkey），用于 DROP CONSTRAINT
         var toolDispatchResultsPkey = $"{options.TablePrefix}tool_dispatch_results_pkey";
-        // R29 WP-B-2：Kernel Result Outbox 持久化表
-        var kernelResultOutbox = Infrastructure.PostgresNames.Table(options, "kernel_result_outbox");
-        // R29 WP-B-4：Durable Transport 持久化表（inbox/outbox）
-        var kernelTransportInbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_inbox");
-        var kernelTransportOutbox = Infrastructure.PostgresNames.Table(options, "kernel_transport_outbox");
         // R29 WP-A-1：Model Artifact Registry 持久化表
         var modelArtifacts = Infrastructure.PostgresNames.Table(options, "model_artifacts");
         // R29 WP-E-5：User Feedback Ledger 持久化表
@@ -552,8 +505,6 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var canaryPipelines = Infrastructure.PostgresNames.Table(options, "canary_pipelines");
         var canaryTransitionAudit = Infrastructure.PostgresNames.Table(options, "canary_transition_audit");
         var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
-        // Durable Delivery v37：Durable Transport Dead Letter Queue 表
-        var kernelTransportDeadLetter = Infrastructure.PostgresNames.Table(options, "kernel_transport_dead_letter");
         // P0-6：Model Control Plane 激活审计持久化表
         var modelActivationAudit = Infrastructure.PostgresNames.Table(options, "model_activation_audit");
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化表
@@ -1843,151 +1794,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "tool_call_id")} ON {toolDispatchResults} (tool_call_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "idempotency_key")} ON {toolDispatchResults} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
--- R29 WP-B-2：Kernel Result Outbox 持久化表（崩溃恢复结果重放）
--- kernel_result_outbox: outbox_id 主键 — 每个未投递的 AgentKernelResult 一条行
--- P0-2：state 为 text（'Pending' / 'Leased' / 'Dispatched'）；instruction_id 反规范化以便查询
---   - 'Pending'：待租约（LeaseAsync 取最旧行）
---   - 'Leased'：已租约未确认（持有 lease_token）；过期由 RequeueExpiredAsync 回滚为 Pending
---   - 'Dispatched'：遗留终态（旧 DequeueAsync 直接标记）；P0-2 后 DequeueAsync 改用 LeaseAsync，不再产生新 Dispatched 行
--- 完整 AgentKernelResult 保存在 data jsonb；LeaseAsync 使用 FOR UPDATE SKIP LOCKED 支持 worker 并发
-CREATE TABLE IF NOT EXISTS {kernelResultOutbox} (
-    outbox_id text NOT NULL,
-    instruction_id text NOT NULL DEFAULT '',
-    state text NOT NULL DEFAULT 'Pending',
-    created_at timestamptz NOT NULL,
-    updated_at timestamptz NOT NULL,
-    data jsonb NOT NULL DEFAULT jsonb_build_object(),
-    PRIMARY KEY (outbox_id)
-);
-
--- P0-2：租约模型列追加（幂等）— 与 kernel_transport_inbox/outbox 对齐
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS lease_owner text;
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
-
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "state")} ON {kernelResultOutbox} (state, created_at ASC);
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "instruction")} ON {kernelResultOutbox} (instruction_id);
--- P0-2：按 created_at 查 Pending 行（LeaseAsync 取最旧 Pending，FOR UPDATE SKIP LOCKED）
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "pending")} ON {kernelResultOutbox} (created_at ASC) WHERE state = 'Pending';
--- P0-2：按 lease_expires_at 查过期 Leased 行（RequeueExpiredAsync 扫描）
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "expired")} ON {kernelResultOutbox} (lease_expires_at ASC) WHERE state = 'Leased';
-
--- R29 WP-B-4：Durable Transport 持久化表（PostgreSQL-backed Channel）
--- P0-1：租约模型 — 破坏性 DELETE 出队改为 Pending → Leased(owner,expires_at) → Acked(DELETE)。
---   state: 'Pending'（待租约）/ 'Leased'（已租约，未确认）/ 'Acked'（已确认，将被删除）
---   lease_owner: 租约持有者标识（如 worker ID）；lease_expires_at: 租约过期时间
---   崩溃恢复：过期 Leased 行由 RequeueExpiredAsync 回滚为 Pending；新实例可重新租约。
--- kernel_transport_inbox: instruction_id 主键 — 每条待处理指令一行
--- created_at 用于 FIFO 排序；LeaseAsync 使用 FOR UPDATE SKIP LOCKED 取最旧 Pending 行并标记 Leased
--- 完整 AgentKernelInstruction 保存在 data jsonb
-CREATE TABLE IF NOT EXISTS {kernelTransportInbox} (
-    instruction_id text NOT NULL,
-    created_at timestamptz NOT NULL,
-    data jsonb NOT NULL DEFAULT jsonb_build_object(),
-    PRIMARY KEY (instruction_id)
-);
-
--- P0-1：租约模型列追加（幂等）
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS state text NOT NULL DEFAULT 'Pending';
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS lease_owner text;
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS lease_token text;
-
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "created")} ON {kernelTransportInbox} (created_at ASC);
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "instruction")} ON {kernelTransportInbox} (instruction_id);
--- P0-1：按 state + created_at 查 Pending 行（LeaseAsync 取最旧 Pending）
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "pending")} ON {kernelTransportInbox} (created_at ASC) WHERE state = 'Pending';
--- P0-1：按 lease_expires_at 查过期 Leased 行（RequeueExpiredAsync 扫描）
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "expired")} ON {kernelTransportInbox} (lease_expires_at ASC) WHERE state = 'Leased';
-
--- kernel_transport_outbox: result_id 主键 — 每条待读取结果一行
--- created_at 用于 FIFO 排序；LeaseResultAsync 使用 FOR UPDATE SKIP LOCKED 取最旧 Pending 行并标记 Leased
--- 完整 AgentKernelResult 保存在 data jsonb；instruction_id 反规范化以便查询
-CREATE TABLE IF NOT EXISTS {kernelTransportOutbox} (
-    result_id text NOT NULL,
-    instruction_id text NOT NULL DEFAULT '',
-    created_at timestamptz NOT NULL,
-    data jsonb NOT NULL DEFAULT jsonb_build_object(),
-    PRIMARY KEY (result_id)
-);
-
--- P0-1：租约模型列追加（幂等）
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS state text NOT NULL DEFAULT 'Pending';
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS lease_owner text;
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
-
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "created")} ON {kernelTransportOutbox} (created_at ASC);
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "instruction")} ON {kernelTransportOutbox} (instruction_id);
--- P0-1：按 state + created_at 查 Pending 行
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "pending")} ON {kernelTransportOutbox} (created_at ASC) WHERE state = 'Pending';
--- P0-1：按 lease_expires_at 查过期 Leased 行
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "expired")} ON {kernelTransportOutbox} (lease_expires_at ASC) WHERE state = 'Leased';
-
--- Durable Delivery v37：重试与死信支持
--- 1) kernel_transport_inbox / kernel_transport_outbox / kernel_result_outbox 追加重试列（幂等）：
---    attempt_count：累计失败次数（Nack / lease 过期回滚 +1）；max_attempts：上限，超过移入 DLQ；
---    next_attempt_at：指数退避后的下次可重试时间（NULL 表示立即可重试）；
---    last_error：最近一次失败原因（截断到合理长度）；dead_letter_reason：进入 DLQ 时的归档原因。
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NULL;
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS last_error text NULL;
-ALTER TABLE {kernelTransportInbox} ADD COLUMN IF NOT EXISTS dead_letter_reason text NULL;
-
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NULL;
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS last_error text NULL;
-ALTER TABLE {kernelTransportOutbox} ADD COLUMN IF NOT EXISTS dead_letter_reason text NULL;
-
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NULL;
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS last_error text NULL;
-ALTER TABLE {kernelResultOutbox} ADD COLUMN IF NOT EXISTS dead_letter_reason text NULL;
-
--- 2) 按 next_attempt_at 取可重试的 Pending 行（LeaseAsync WHERE next_attempt_at IS NULL OR next_attempt_at <= now）
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_inbox", "retry")} ON {kernelTransportInbox} (next_attempt_at ASC) WHERE state = 'Pending';
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "retry")} ON {kernelTransportOutbox} (next_attempt_at ASC) WHERE state = 'Pending';
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_result_outbox", "retry")} ON {kernelResultOutbox} (next_attempt_at ASC) WHERE state = 'Pending';
-
--- 3) kernel_transport_outbox.instruction_id UNIQUE 约束：让 SendResultAsync 用
---    result_id = 'result-' || instruction_id + ON CONFLICT (instruction_id) DO NOTHING 实现幂等，
---    避免 Replayer 在 Ack 失败后重发产生重复投递（消费者侧也可基于 instruction_id 去重）。
---    预清理：删除同一 instruction_id 的重复旧行（保留最新一行），保证 UNIQUE 约束创建成功。
-DELETE FROM {kernelTransportOutbox} o
-WHERE result_id NOT IN (
-    SELECT result_id FROM (
-        SELECT result_id, instruction_id,
-               ROW_NUMBER() OVER (PARTITION BY instruction_id ORDER BY created_at DESC, result_id DESC) AS rn
-        FROM {kernelTransportOutbox}
-    ) ranked WHERE rn = 1
-) AND instruction_id <> '';
-CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_outbox", "instruction_unique")}
-    ON {kernelTransportOutbox} (instruction_id) WHERE instruction_id <> '';
-
--- 4) kernel_transport_dead_letter：Durable Transport Dead Letter Queue 表
---    超过 max_attempts 的指令/结果从原表归档到此表，保留原始 data 与失败诊断供人工介入/重投。
---    source：'inbox' / 'outbox' / 'result_outbox'，标识来源表；
---    original_id：原表主键（instruction_id / result_id / outbox_id）；
---    attempt_count：归档时的累计失败次数；last_error / dead_letter_reason：失败诊断；
---    original_data：原行完整 data jsonb，便于诊断或重投回原队列。
-CREATE TABLE IF NOT EXISTS {kernelTransportDeadLetter} (
-    dead_letter_id text NOT NULL,
-    source text NOT NULL,
-    original_id text NOT NULL,
-    attempt_count integer NOT NULL DEFAULT 0,
-    last_error text NULL,
-    dead_letter_reason text NULL,
-    original_data jsonb NOT NULL DEFAULT jsonb_build_object(),
-    created_at timestamptz NOT NULL,
-    PRIMARY KEY (dead_letter_id)
-);
-
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_dead_letter", "source")} ON {kernelTransportDeadLetter} (source, created_at ASC);
-CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "kernel_transport_dead_letter", "created")} ON {kernelTransportDeadLetter} (created_at ASC);
-
 -- R29 WP-A-1：Model Artifact Registry 持久化表
 -- model_artifacts: model_artifact_id 主键 — 每个已注册模型工件描述符一行
 -- 反规范化 model_name / model_version / feature_schema_version / calibration_version / engine_kind /
@@ -2382,7 +2188,7 @@ CREATE TABLE IF NOT EXISTS {learningEventOutbox} (
 
 -- P0-8：租约 token 列追加（幂等）— AcquirePendingAsync 生成唯一 token 写入 lease_token，
 -- MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 WHERE lease_token = @token CAS 校验
--- 仅持有者可 Ack/Nack/Renew。与 kernel_result_outbox / kernel_transport_* 对齐。
+-- 仅持有者可 Ack/Nack/Renew（与其他租约模型队列对齐）。
 ALTER TABLE {learningEventOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "state")} ON {learningEventOutbox} (state, created_at ASC);

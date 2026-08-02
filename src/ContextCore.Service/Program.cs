@@ -63,8 +63,8 @@ builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
 // P1-5：RelationReconciliation worker。默认 Enabled=false；启用时周期性调度 outbox pending 记录。
 // FileSystem/InMemory provider 时 worker 内部检测 IRelationOutboxStore=null 后立即退出（no-op）。
 builder.Services.AddHostedService<RelationReconciliationWorker>();
-// LearningMaterializationWorker 已迁移至 AddContextCoreProductionRuntime 统一注册（按 Profile 分发）。
-// 配置绑定 LearningMaterializationOptions 也由 AddContextCoreProductionRuntime 完成。
+// LearningMaterializationWorker 由 AddContextCoreRuntime 统一注册（按 Profile 分发）。
+// 配置绑定 LearningMaterializationOptions 也由 AddContextCoreRuntime 完成。
 builder.Services.AddSingleton<ContextCoreMetrics>();
 builder.Services.AddRequestTimeouts(options =>
 {
@@ -88,7 +88,7 @@ builder.Services
 		});
 	})
 	.AddContextStorage(storageOptions)
-	// P0-1：统一入口 AddContextCoreRuntime 替代旧 AddContextCore() + AddContextCoreProductionRuntime()。
+	// P0-1：统一入口 AddContextCoreRuntime（唯一运行时配置入口，替代旧双入口）。
 	// 该方法内部按 ContextCoreRuntime:ModelMode 选择 ModelExecutionOptions 调用 AddContextCore，
 	// 再按 ContextCoreRuntime:Profile 分发 HostedService / Run Lease / Canary 注册。
 	// 必须在 AddContextStorage 之后调用（依赖其注册的 IModelArtifactRegistry / IAgentRunStore 等）。

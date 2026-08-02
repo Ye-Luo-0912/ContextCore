@@ -58,13 +58,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableRunRecovery"] = "true"
+            ["ContextCoreRuntime:Profile"] = "Development",
+            ["ContextCoreRuntime:EnableAgentRunRecovery"] = "true"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         var registry = provider.GetRequiredService<ProductionRuntimeWorkerRegistry>();
@@ -110,13 +110,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
         {
             ["Storage:Provider"] = "postgres",
             ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "ProductionHA"
+            ["ContextCoreRuntime:Profile"] = "ProductionHA"
         });
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_wr_ha_"));
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         var registry = provider.GetRequiredService<ProductionRuntimeWorkerRegistry>();
@@ -158,13 +158,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableRunRecovery"] = "false"
+            ["ContextCoreRuntime:Profile"] = "Development",
+            ["ContextCoreRuntime:EnableAgentRunRecovery"] = "false"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         var registry = provider.GetRequiredService<ProductionRuntimeWorkerRegistry>();
@@ -172,13 +172,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
         // 断言：不包含被禁用的 Worker
         CollectionAssert.DoesNotContain(workerNames, nameof(AgentRunRecoveryWorker),
-            "EnableRunRecovery=false 时不应注册 AgentRunRecoveryWorker。");
+            "EnableAgentRunRecovery=false 时不应注册 AgentRunRecoveryWorker。");
 
-        // 断言：仍包含 Canary 和 LearningMaterialization（不受 EnableRunRecovery 开关控制）
+        // 断言：仍包含 Canary 和 LearningMaterialization（不受 EnableAgentRunRecovery 开关控制）
         CollectionAssert.Contains(workerNames, nameof(CanaryProgressionHostedService),
-            "CanaryProgressionHostedService 不受 EnableRunRecovery 影响。");
+            "CanaryProgressionHostedService 不受 EnableAgentRunRecovery 影响。");
         CollectionAssert.Contains(workerNames, nameof(CanaryLeaderHostedService),
-            "CanaryLeaderHostedService 不受 EnableRunRecovery 影响。");
+            "CanaryLeaderHostedService 不受 EnableAgentRunRecovery 影响。");
     }
 
     // ── 2. ReadinessService 行为测试 ─────────────────────────────────────
@@ -192,12 +192,12 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development"
+            ["ContextCoreRuntime:Profile"] = "Development"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
         lifetime.TriggerApplicationStarted();
@@ -231,12 +231,12 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development"
+            ["ContextCoreRuntime:Profile"] = "Development"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
 
         // 不触发 ApplicationStarted
         var lifetime = new TestHostApplicationLifetime();
@@ -261,13 +261,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableRunRecovery"] = "true"
+            ["ContextCoreRuntime:Profile"] = "Development",
+            ["ContextCoreRuntime:EnableAgentRunRecovery"] = "true"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
         services.AddSingleton<IHostApplicationLifetime>(lifetime);
@@ -318,12 +318,12 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development"
+            ["ContextCoreRuntime:Profile"] = "Development"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
         services.AddSingleton<IHostApplicationLifetime>(lifetime);
@@ -351,13 +351,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
         {
             ["Storage:Provider"] = "postgres",
             ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "ProductionHA"
+            ["ContextCoreRuntime:Profile"] = "ProductionHA"
         });
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_canary_ha_"));
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
         services.AddSingleton<IHostApplicationLifetime>(lifetime);
@@ -384,13 +384,13 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableModelActivation"] = "false"
+            ["ContextCoreRuntime:Profile"] = "Development",
+            ["ContextCoreRuntime:EnableModelActivation"] = "false"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
         services.AddSingleton<IHostApplicationLifetime>(lifetime);
@@ -517,15 +517,15 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableModelActivation"] = "true"
+            ["ContextCoreRuntime:Profile"] = "Development",
+            ["ContextCoreRuntime:EnableModelActivation"] = "true"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
 
         Assert.ThrowsException<InvalidOperationException>(() =>
-            services.AddContextCoreProductionRuntime(config),
+            services.AddContextCoreRuntime(config),
             "EnableModelActivation=true 但未注册 IModelArtifactRegistry 应 fail-fast。");
     }
 
@@ -538,14 +538,14 @@ public sealed class R29H_ProductionRuntimeProfileTests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "999"
+            ["ContextCoreRuntime:Profile"] = "999"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
 
         Assert.ThrowsException<InvalidOperationException>(() =>
-            services.AddContextCoreProductionRuntime(config),
+            services.AddContextCoreRuntime(config),
             "未知 Profile 值应 fail-fast。");
     }
 
@@ -636,8 +636,8 @@ public sealed class R29H_ProductionRuntimeProfileTests
             builder.UseSetting("Storage:RootPath", _rootPath);
             builder.UseSetting("Compression:Provider", "mock");
             builder.UseSetting("JobWorker:Enabled", "false");
-            builder.UseSetting("ProductionRuntime:Profile", "Development");
-            builder.UseSetting("ProductionRuntime:EnableRunRecovery", "false");
+            builder.UseSetting("ContextCoreRuntime:Profile", "Development");
+            builder.UseSetting("ContextCoreRuntime:EnableAgentRunRecovery", "false");
             // Development 环境默认 ValidateOnBuild=true，会验证所有服务描述符。
             // 但部分服务（ICanaryLeaderLease / ILearningEventOutboxStore）仅在 Postgres provider 下注册，
             // filesystem 下无法解析。本测试验证 HTTP 端点响应，非 DI 容器完整性，故关闭构建时验证。

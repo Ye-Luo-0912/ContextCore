@@ -766,27 +766,17 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "state smallint NOT NULL DEFAULT 0");
         StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_state");
         StringAssert.Contains(sql, "ix_cc_tool_dispatch_journal_entries_idempotency");
-        // R29 WP-B-2 / P0-2：kernel_result_outbox 表 DDL + 租约模型列（持久化 Kernel Result Outbox）
-        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_kernel_result_outbox");
-        StringAssert.Contains(sql, "outbox_id text NOT NULL");
-        StringAssert.Contains(sql, "state text NOT NULL DEFAULT 'Pending'");
-        StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_state");
-        StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_instruction");
-        // P0-2：租约模型列 + 索引（pending/expired partial index）
-        StringAssert.Contains(sql, "ALTER TABLE cc_kernel_result_outbox ADD COLUMN IF NOT EXISTS lease_owner text");
-        StringAssert.Contains(sql, "ALTER TABLE cc_kernel_result_outbox ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz");
-        StringAssert.Contains(sql, "ALTER TABLE cc_kernel_result_outbox ADD COLUMN IF NOT EXISTS lease_token text");
-        StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_pending");
-        StringAssert.Contains(sql, "ix_cc_kernel_result_outbox_expired");
-        // R29 WP-B-4：kernel_transport_inbox + kernel_transport_outbox 表 DDL（Durable Transport）
-        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_kernel_transport_inbox");
-        StringAssert.Contains(sql, "instruction_id text NOT NULL");
-        StringAssert.Contains(sql, "ix_cc_kernel_transport_inbox_created");
-        StringAssert.Contains(sql, "ix_cc_kernel_transport_inbox_instruction");
-        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_kernel_transport_outbox");
-        StringAssert.Contains(sql, "result_id text NOT NULL");
-        StringAssert.Contains(sql, "ix_cc_kernel_transport_outbox_created");
-        StringAssert.Contains(sql, "ix_cc_kernel_transport_outbox_instruction");
+        // WP-S2：执行平面已收敛为 AgentRun Command Ingress，禁止遗留 Kernel 独立传输平面。
+        // 旧 Durable Transport（kernel_transport_inbox/outbox/dead_letter + kernel_result_outbox）
+        // 的 DDL 不得再出现于迁移 SQL，防止新建库重新引入孤儿表。
+        Assert.IsFalse(sql.Contains("cc_kernel_result_outbox", StringComparison.Ordinal),
+            "遗留 Kernel Result Outbox 表 DDL 不应再生成。");
+        Assert.IsFalse(sql.Contains("cc_kernel_transport_inbox", StringComparison.Ordinal),
+            "遗留 Kernel Transport Inbox 表 DDL 不应再生成。");
+        Assert.IsFalse(sql.Contains("cc_kernel_transport_outbox", StringComparison.Ordinal),
+            "遗留 Kernel Transport Outbox 表 DDL 不应再生成。");
+        Assert.IsFalse(sql.Contains("cc_kernel_transport_dead_letter", StringComparison.Ordinal),
+            "遗留 Kernel Transport Dead Letter 表 DDL 不应再生成。");
     }
 
     [TestMethod]

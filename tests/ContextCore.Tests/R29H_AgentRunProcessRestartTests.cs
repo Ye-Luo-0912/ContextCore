@@ -377,9 +377,9 @@ public sealed class R29H_AgentRunProcessRestartTests
         var host = serviceProvider.GetRequiredService<AgentKernelHost>();
         await using (host)
         {
-            var options = new ProductionRuntimeOptions
+            var options = new ContextCoreRuntimeOptions
             {
-                EnableRunRecovery = true,
+                EnableAgentRunRecovery = true,
                 RunRecoveryInterval = TimeSpan.FromMilliseconds(100)
             };
 
@@ -448,9 +448,9 @@ public sealed class R29H_AgentRunProcessRestartTests
 
         await using (serviceProvider.GetRequiredService<AgentKernelHost>())
         {
-            var options = new ProductionRuntimeOptions
+            var options = new ContextCoreRuntimeOptions
             {
-                EnableRunRecovery = true,
+                EnableAgentRunRecovery = true,
                 RunRecoveryInterval = TimeSpan.FromMilliseconds(100),
                 RunExecutionTimeout = TimeSpan.FromHours(1)
             };

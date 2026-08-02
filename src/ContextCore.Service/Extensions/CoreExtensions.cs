@@ -649,8 +649,8 @@ internal static class CoreExtensions
 				registry: registry,
 				decisionApplier: decisionApplier);
 		});
-		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime /
-		// AddContextCoreProductionRuntime 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
+		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
+		// 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
 		// services.AddHostedService<CanaryProgressionHostedService>(); // 已迁移到 Runtime 入口
 
 		// 任务 C：默认外部指标采集源（ICanaryExternalMetricsSource 实现）。
@@ -665,7 +665,7 @@ internal static class CoreExtensions
 		// P0-2：CanaryLeaderOptions 改用 Configure<T>() 注册（Options Pipeline），
 		// 让 IOptionsMonitor<CanaryLeaderOptions> 消费者能感知后续 PostConfigure 覆盖
 		// （如 ProductionHA 强制 Enabled=true）。原 AddSingleton<IOptions<T>> 手工注册
-		// 会被 AddContextCoreProductionRuntime 的 RemoveService 移除后重新注册，
+		// 会被 AddContextCoreRuntime 的 RemoveService 移除后重新注册，
 		// 但 IOptionsMonitor 路径仍读旧值——导致 HA Leader 实际仍 Disabled。
 		// 配置从 "CanaryLeader" 节绑定（未配置时 Enabled=false，单节点模式）。
 		// 使用 Configure<IServiceProvider> + GetService<IConfiguration> 而非 Configure<IConfiguration>，
@@ -674,8 +674,8 @@ internal static class CoreExtensions
 		{
 			sp.GetService<IConfiguration>()?.GetSection("CanaryLeader").Bind(opts);
 		});
-		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime /
-		// AddContextCoreProductionRuntime 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
+		// P0-2：HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
+		// 按 Profile 选择性注册（避免单节点 + HA 双推进器）。
 		// services.AddHostedService<CanaryLeaderHostedService>(); // 已迁移到 Runtime 入口
 
 		// R28-D：Model Execution Runtime 默认实现。

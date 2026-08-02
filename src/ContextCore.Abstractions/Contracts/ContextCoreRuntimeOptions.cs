@@ -109,7 +109,7 @@ public enum ToolExecutionMode : byte
 /// P0-1：统一运行配置入口。对应 appsettings.json 中的 <c>ContextCoreRuntime</c> 节。
 /// </summary>
 /// <remarks>
-/// 替代旧的 <c>ProductionRuntimeOptions</c> + <c>ModelExecutionOptions</c> 分裂配置。
+/// 替代旧的运行时选项与模型执行选项分裂配置。
 /// 单一入口让 Profile / ModelMode / AgentModelMode / ToolMode 在同一处决定，
 /// 避免 AddContextCore() 无参数重载强制选择 Deterministic 导致的分裂。
 /// </remarks>

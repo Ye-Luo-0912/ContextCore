@@ -15,7 +15,7 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // R29-Hard-Gate：Service Composition E2E 验收测试
 //
-// 目标：验证 AddContextCoreProductionRuntime 在三种 RuntimeProfile
+// 目标：验证 AddContextCoreRuntime 在三种 RuntimeProfile
 //   （Development / SingleNode / ProductionHA）下的服务注册组合正确性
 //   （执行平面已收敛到 AgentRunStore → AgentKernelHost → AgentRunActor，
 //   无独立 Durable Transport hosted services）：
@@ -56,19 +56,19 @@ public sealed class R29H_ServiceCompositionE2ETests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development",
-            ["ProductionRuntime:EnableRunRecovery"] = "true"
+            ["ContextCoreRuntime:Profile"] = "Development",
+            ["ContextCoreRuntime:EnableAgentRunRecovery"] = "true"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
-        // 断言 1：ProductionRuntimeOptions 已注册并绑定 Profile=Development
-        var runtimeOptions = provider.GetRequiredService<ProductionRuntimeOptions>();
+        // 断言 1：ContextCoreRuntimeOptions 已注册并绑定 Profile=Development
+        var runtimeOptions = provider.GetRequiredService<ContextCoreRuntimeOptions>();
         Assert.AreEqual(RuntimeProfile.Development, runtimeOptions.Profile,
-            "ProductionRuntimeOptions.Profile 应为 Development。");
+            "ContextCoreRuntimeOptions.Profile 应为 Development。");
 
         // 断言 2：HostedService 描述符包含 Run Recovery + 单节点 Canary + Learning
         var hostedServiceTypes = services
@@ -114,12 +114,12 @@ public sealed class R29H_ServiceCompositionE2ETests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "Development"
+            ["ContextCoreRuntime:Profile"] = "Development"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         // 断言：AgentHostOptions.LeaseEnabled = false
@@ -149,14 +149,14 @@ public sealed class R29H_ServiceCompositionE2ETests
         {
             ["Storage:Provider"] = "postgres",
             ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "SingleNode"
+            ["ContextCoreRuntime:Profile"] = "SingleNode"
         });
 
         var services = new ServiceCollection();
         // 注册 Postgres 存储服务（仅描述符，不连接 DB）
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_sn_"));
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         // 断言 1：IAgentRunStore 解析为持久化实现（IPersistentAgentRunStore）
@@ -222,14 +222,14 @@ public sealed class R29H_ServiceCompositionE2ETests
         {
             ["Storage:Provider"] = "postgres",
             ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "ProductionHA",
-            ["ProductionRuntime:EnableRunRecovery"] = "true"
+            ["ContextCoreRuntime:Profile"] = "ProductionHA",
+            ["ContextCoreRuntime:EnableAgentRunRecovery"] = "true"
         });
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_ha_"));
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         // 断言 1：HA 平面 hosted services 注册（P0-6：旧平面 pump/replay/reaper/metrics 已退役）
@@ -298,13 +298,13 @@ public sealed class R29H_ServiceCompositionE2ETests
         {
             ["Storage:Provider"] = "postgres",
             ["Storage:PostgresConnectionString"] = "Host=localhost;Database=stub;Username=stub;Password=stub",
-            ["ProductionRuntime:Profile"] = "ProductionHA"
+            ["ContextCoreRuntime:Profile"] = "ProductionHA"
         });
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_hainfra_"));
         services.AddContextCore();
-        services.AddContextCoreProductionRuntime(config);
+        services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
         // 断言：HA 基础设施组件均注册
@@ -334,15 +334,15 @@ public sealed class R29H_ServiceCompositionE2ETests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "SingleNode"
+            ["ContextCoreRuntime:Profile"] = "SingleNode"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
 
-        // 断言：调用 AddContextCoreProductionRuntime 抛 InvalidOperationException
+        // 断言：调用 AddContextCoreRuntime 抛 InvalidOperationException
         Assert.ThrowsException<InvalidOperationException>(() =>
-            services.AddContextCoreProductionRuntime(config),
+            services.AddContextCoreRuntime(config),
             "SingleNode profile 配合 filesystem 存储应 fail-fast 抛 InvalidOperationException。");
     }
 
@@ -357,14 +357,14 @@ public sealed class R29H_ServiceCompositionE2ETests
         {
             ["Storage:Provider"] = "postgres",
             // 故意不设置 Storage:PostgresConnectionString
-            ["ProductionRuntime:Profile"] = "ProductionHA"
+            ["ContextCoreRuntime:Profile"] = "ProductionHA"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
 
         Assert.ThrowsException<InvalidOperationException>(() =>
-            services.AddContextCoreProductionRuntime(config),
+            services.AddContextCoreRuntime(config),
             "ProductionHA profile 缺少 PostgresConnectionString 应 fail-fast 抛 InvalidOperationException。");
     }
 
@@ -377,14 +377,14 @@ public sealed class R29H_ServiceCompositionE2ETests
         var config = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "filesystem",
-            ["ProductionRuntime:Profile"] = "ProductionHA"
+            ["ContextCoreRuntime:Profile"] = "ProductionHA"
         });
 
         var services = new ServiceCollection();
         services.AddContextCore();
 
         Assert.ThrowsException<InvalidOperationException>(() =>
-            services.AddContextCoreProductionRuntime(config),
+            services.AddContextCoreRuntime(config),
             "ProductionHA profile 配合 filesystem 存储应 fail-fast 抛 InvalidOperationException。");
     }
 
@@ -413,7 +413,7 @@ public sealed class R29H_ServiceCompositionE2ETests
             {
                 ["Storage:Provider"] = "postgres",
                 ["Storage:PostgresConnectionString"] = connectionString,
-                ["ProductionRuntime:Profile"] = "ProductionHA"
+                ["ContextCoreRuntime:Profile"] = "ProductionHA"
             });
 
             var services = new ServiceCollection();
@@ -427,7 +427,7 @@ public sealed class R29H_ServiceCompositionE2ETests
             };
             services.AddContextCorePostgresStorage(pgOptions);
             services.AddContextCore();
-            services.AddContextCoreProductionRuntime(config);
+            services.AddContextCoreRuntime(config);
 
             var provider = services.BuildServiceProvider();
 

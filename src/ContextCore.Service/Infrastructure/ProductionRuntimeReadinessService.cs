@@ -29,7 +29,7 @@ namespace ContextCore.Service.Infrastructure;
 
 /// <summary>
 /// 注册阶段捕获的 Worker 类型名列表。
-/// 在 AddContextCoreProductionRuntime 中由各 Add*Services 方法填充。
+/// 在 AddContextCoreRuntime 中由各 Add*Services 方法填充。
 /// 供 ProductionRuntimeReadinessService 在运行时查询已注册的 Worker。
 /// </summary>
 public sealed class ProductionRuntimeWorkerRegistry
@@ -52,18 +52,18 @@ public sealed class ProductionRuntimeReadinessService
 {
     private readonly IServiceProvider _services;
     private readonly IHostApplicationLifetime _lifetime;
-    private readonly ProductionRuntimeOptions _runtimeOptions;
+    private readonly ContextCoreRuntimeOptions _runtimeOptions;
     private readonly ProductionRuntimeWorkerRegistry _workerRegistry;
 
     /// <summary>构造函数。</summary>
     /// <param name="services">DI 根容器（用于运行时解析服务检查注册状态）。</param>
     /// <param name="lifetime">应用生命周期（判断 ApplicationStarted）。</param>
-    /// <param name="runtimeOptions">当前 ProductionRuntimeOptions（含 Profile 等）。</param>
+    /// <param name="runtimeOptions">当前 ContextCoreRuntimeOptions（含 Profile 等）。</param>
     /// <param name="workerRegistry">注册阶段捕获的 Worker 类型名列表。</param>
     public ProductionRuntimeReadinessService(
         IServiceProvider services,
         IHostApplicationLifetime lifetime,
-        ProductionRuntimeOptions runtimeOptions,
+        ContextCoreRuntimeOptions runtimeOptions,
         ProductionRuntimeWorkerRegistry workerRegistry)
     {
         _services = services;
@@ -302,7 +302,7 @@ public sealed class ProductionRuntimeReadinessService
         var isHA = _runtimeOptions.Profile == RuntimeProfile.ProductionHA;
         return
         [
-            (nameof(Hosting.AgentRunRecoveryWorker), "AgentRunRecovery", _runtimeOptions.EnableRunRecovery),
+            (nameof(Hosting.AgentRunRecoveryWorker), "AgentRunRecovery", _runtimeOptions.EnableAgentRunRecovery),
             (nameof(Hosting.LearningMaterializationWorker), "LearningMaterialization", true),
             (nameof(CanaryProgressionHostedService), "CanaryProgression", !isHA),
             (nameof(Hosting.CanaryLeaderHostedService), "CanaryLeader", isHA),
