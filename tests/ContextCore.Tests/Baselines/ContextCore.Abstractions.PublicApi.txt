@@ -969,6 +969,7 @@ F:ContextCore.Abstractions.ToolDispatchState.Committed
 F:ContextCore.Abstractions.ToolDispatchState.Dispatched
 F:ContextCore.Abstractions.ToolDispatchState.DispatchingIntent
 F:ContextCore.Abstractions.ToolDispatchState.Prepared
+F:ContextCore.Abstractions.ToolDispatchState.Reconciling
 F:ContextCore.Abstractions.ToolDispatchState.ResultDelivered
 F:ContextCore.Abstractions.ToolExecutionMode.Echo
 F:ContextCore.Abstractions.ToolExecutionMode.RealDispatch
@@ -2369,15 +2370,18 @@ M:ContextCore.Abstractions.IToolAuthorizer.AuthorizeAsync(ContextCore.Abstractio
 M:ContextCore.Abstractions.IToolAuthorizer.GetRequiredPermission(System.String)
 M:ContextCore.Abstractions.IToolAuthorizer.RegisterToolPermission(System.String, ContextCore.Abstractions.WorkspacePermission)
 M:ContextCore.Abstractions.IToolCatalog.GetToolDefinitions()
+M:ContextCore.Abstractions.IToolDispatchJournal.BeginReconciliationAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.GetEntryAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.MarkCommittedAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.MarkCommittedWithResultAsync(System.String, ContextCore.Abstractions.DurableToolResult, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.MarkDispatchedAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.MarkDispatchingIntentAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatchJournal.MarkReconciledWithResultAsync(System.String, ContextCore.Abstractions.DurableToolResult, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.MarkResultDeliveredAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.PrepareAsync(ContextCore.Abstractions.ToolDispatchJournalEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatchJournal.PrepareWithIntentAsync(ContextCore.Abstractions.ToolDispatchJournalEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.DispatchAsync(ContextCore.Abstractions.ToolDispatchRequest, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolDispatcher.GetDescriptor(System.String)
 M:ContextCore.Abstractions.ITrainingDataExporter.ExportAsync(ContextCore.Abstractions.TrainingDataExportRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalConflictSetLedger.AppendConflictSetsAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ConflictSet>, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalContextStore.SaveAsync(ContextCore.Abstractions.Models.ContextItem, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
@@ -10666,6 +10670,7 @@ P:ContextCore.Abstractions.ToolDispatchPrepareResult.ExternalOperationId (get|in
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.NeedsReconciliation (get|init)
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.ShouldDispatch (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.DeadlineAt (get|init)
+P:ContextCore.Abstractions.ToolDispatchRequest.ExternalOperationId (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.IdempotencyKey (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.LeaseFence (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.Payload (get|init)
@@ -10680,6 +10685,7 @@ P:ContextCore.Abstractions.ToolDispatchResult.Result (get|init)
 P:ContextCore.Abstractions.ToolDispatchResult.SideEffect (get|init)
 P:ContextCore.Abstractions.ToolDispatchResult.Succeeded (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.DeadlineAt (get|init)
+P:ContextCore.Abstractions.ToolExecutionContext.ExternalOperationId (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.IdempotencyKey (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.LeaseFence (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.Payload (get|init)

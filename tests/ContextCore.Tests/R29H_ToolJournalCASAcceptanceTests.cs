@@ -5,7 +5,7 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：Tool Journal CAS 严格状态机验收测试（3 项）
+// Tool Journal CAS 严格状态机验收测试（3 项）
 //
 // 验证任务B 修复后的 Tool Journal 严格 expected-state CAS 语义：
 //   1. 状态转换不能跳过 Dispatched 状态（Prepared → Committed 禁止）
@@ -41,7 +41,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             cts.Token);
 
         // 2. 尝试直接 MarkCommittedAsync（跳过 MarkDispatchedAsync）→ 应抛 InvalidOperationException（InvalidTransition）
-        //    P0-3 CAS-1：expected-state 精确匹配，禁止跨级跳跃
+        //    CAS-1：expected-state 精确匹配，禁止跨级跳跃
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
             () => journal.MarkCommittedAsync(requestId, cts.Token).AsTask(),
             "Prepared → Committed 跨级跳跃必须被拒绝（InvalidTransition）。");
@@ -76,7 +76,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareAsync(originalEntry, cts.Token);
 
         // 2. 第二次 PrepareAsync（相同 RequestId，但 PayloadDigest = digest-B，IdempotencyKey = idem-conflicting）
-        //    P0-3 CAS-2：语义等价校验失败 → 抛 InvalidOperationException（RequestIdReuseDetected）
+        //    CAS-2：语义等价校验失败 → 抛 InvalidOperationException（RequestIdReuseDetected）
         var conflictingEntry = BuildEntry(
             requestId,
             ToolDispatchState.Prepared,
@@ -165,7 +165,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
     }
 
     /// <summary>
-    /// 验证（Item 5）：PrepareWithIntentAsync 首次调用单次原子写即落库 DispatchingIntent，
+    /// 验证：PrepareWithIntentAsync 首次调用单次原子写即落库 DispatchingIntent，
     /// 返回 ShouldDispatch=true（外部调用尚未开始，可直接 Dispatch，无需再单独标记 Intent）。
     /// </summary>
     [TestMethod]
@@ -190,7 +190,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
     }
 
     /// <summary>
-    /// 验证（Item 5）：已处于 DispatchingIntent（上次崩溃残留/并发分派）时再次
+    /// 验证：已处于 DispatchingIntent（上次崩溃残留/并发分派）时再次
     /// PrepareWithIntentAsync → NeedsReconciliation=true（外部调用可能已开始，禁止重复 Dispatch）。
     /// </summary>
     [TestMethod]
@@ -213,7 +213,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
     }
 
     /// <summary>
-    /// 验证（Item 5）：既有 Prepared 前驱（旧两步流程崩溃残留）经 PrepareWithIntentAsync
+    /// 验证：既有 Prepared 前驱（旧两步流程崩溃残留）经 PrepareWithIntentAsync
     /// 原子推进到 DispatchingIntent，并返回 ShouldDispatch=true。
     /// </summary>
     [TestMethod]
@@ -240,7 +240,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
     }
 
     /// <summary>
-    /// 验证（Item 5）：journal 已 Committed 时 PrepareWithIntentAsync 返回缓存结果
+    /// 验证：journal 已 Committed 时 PrepareWithIntentAsync 返回缓存结果
     /// （InMemory 自带缓存），ShouldDispatch=false（禁止重新执行外部副作用）。
     /// </summary>
     [TestMethod]
@@ -277,7 +277,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
     }
 
     /// <summary>
-    /// 验证（Item 5）：PrepareWithIntentAsync 语义等价校验与 PrepareAsync 一致——
+    /// 验证：PrepareWithIntentAsync 语义等价校验与 PrepareAsync 一致——
     /// 相同 RequestId 但不同 PayloadDigest → RequestIdReuseDetected（fails closed）。
     /// </summary>
     [TestMethod]
@@ -296,18 +296,158 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             "相同 RequestId 但不同 PayloadDigest 必须被拒绝（RequestIdReuseDetected）。");
     }
 
+    /// <summary>
+    /// 验证：对账入口 BeginReconciliationAsync 将 Dispatched 模糊态原子推进到 Reconciling。
+    /// </summary>
+    [TestMethod]
+    public async Task Journal_BeginReconciliation_FromDispatched_AdvancesToReconciling()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-recon-1";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A", externalOperationId: "ext-op-1"),
+            cts.Token);
+        await journal.MarkDispatchedAsync(requestId, "ext-op-1", cts.Token);
+
+        await journal.BeginReconciliationAsync(requestId, cts.Token);
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Reconciling, entry!.State, "Dispatched 模糊态应原子推进到 Reconciling。");
+        Assert.AreEqual("ext-op-1", entry.ExternalOperationId, "ExternalOperationId 应在对账状态下保留。");
+    }
+
+    /// <summary>
+    /// 验证：Prepared 状态（外部调用从未开始）禁止进入对账——它应被重新 Dispatch 而非对账。
+    /// </summary>
+    [TestMethod]
+    public async Task Journal_BeginReconciliation_FromPrepared_ThrowsInvalidTransition()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-recon-2";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await journal.PrepareAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
+            cts.Token);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => journal.BeginReconciliationAsync(requestId, cts.Token).AsTask(),
+            "Prepared（外部调用从未开始）进入对账必须被拒绝（InvalidTransition）。");
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Prepared, entry!.State, "状态必须保持 Prepared。");
+    }
+
+    /// <summary>
+    /// 验证：已处于 Reconciling 时重复 BeginReconciliationAsync 幂等成功（不报错、不改变状态）。
+    /// </summary>
+    [TestMethod]
+    public async Task Journal_BeginReconciliation_AlreadyReconciling_Idempotent()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-recon-3";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
+            cts.Token);
+        await journal.BeginReconciliationAsync(requestId, cts.Token);
+        await journal.BeginReconciliationAsync(requestId, cts.Token); // 幂等重入
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Reconciling, entry!.State, "重复进入对账应幂等，状态保持 Reconciling。");
+    }
+
+    /// <summary>
+    /// 验证：对账完成 MarkReconciledWithResultAsync 将 Reconciling 原子推进到 Committed 并缓存对账结果。
+    /// </summary>
+    [TestMethod]
+    public async Task Journal_MarkReconciledWithResult_FromReconciling_CommitsWithResult()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-recon-4";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
+            cts.Token);
+        await journal.BeginReconciliationAsync(requestId, cts.Token);
+
+        var reconciledResult = new DurableToolResult
+        {
+            ToolCallId = "tool-call-4",
+            RequestId = requestId,
+            WorkspaceId = "ws-test-journal",
+            RunId = "run-test-journal",
+            InvocationId = requestId,
+            SideEffect = ToolSideEffect.Write,
+            ExternalOperationId = "ext-op-4",
+            Result = "reconciled-result",
+            Succeeded = true,
+            DurationMs = 1.0
+        };
+        await journal.MarkReconciledWithResultAsync(requestId, reconciledResult, cts.Token);
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "对账完成后应推进到 Committed。");
+
+        // 对账结果进入缓存：后续 Prepare 应返回 CachedResult（禁止重放）
+        var prepare = await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
+            cts.Token);
+        Assert.IsFalse(prepare.ShouldDispatch, "对账提交后禁止重新 Dispatch。");
+        Assert.IsNotNull(prepare.CachedResult, "对账提交的结果应可被缓存读取。");
+        Assert.AreEqual("reconciled-result", prepare.CachedResult!.Result);
+    }
+
+    /// <summary>
+    /// 验证：从 Dispatched（未进入对账）直接 MarkReconciledWithResultAsync 必须被拒绝（跨级跳跃）。
+    /// </summary>
+    [TestMethod]
+    public async Task Journal_MarkReconciledWithResult_FromDispatched_ThrowsInvalidTransition()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-recon-5";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
+            cts.Token);
+        await journal.MarkDispatchedAsync(requestId, "ext-op-5", cts.Token);
+
+        var result = new DurableToolResult
+        {
+            ToolCallId = "tool-call-5",
+            RequestId = requestId,
+            InvocationId = requestId,
+            SideEffect = ToolSideEffect.Write,
+            Succeeded = true,
+            DurationMs = 1.0
+        };
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => journal.MarkReconciledWithResultAsync(requestId, result, cts.Token).AsTask(),
+            "未进入 Reconciling 直接提交对账结果必须被拒绝（InvalidTransition）。");
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "状态必须保持 Dispatched。");
+    }
+
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
     private static ToolDispatchJournalEntry BuildEntry(
         string requestId,
         ToolDispatchState state,
         string? payloadDigest = null,
-        string? idempotencyKey = null) => new()
+        string? idempotencyKey = null,
+        string? externalOperationId = null) => new()
         {
             RequestId = requestId,
             ToolName = "echo",
             State = state,
             IdempotencyKey = idempotencyKey ?? ("idem-" + requestId),
+            ExternalOperationId = externalOperationId,
             PayloadDigest = payloadDigest ?? ToolDispatchJournalEntry.ComputePayloadDigest("default-payload"),
             WorkspaceId = "ws-test-journal",
             RunId = "run-test-journal",

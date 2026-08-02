@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R29-Hard-Gate：HA / Concurrency 硬验收门测试
+// HA / Concurrency 硬验收门测试
 //
 // 验证任务C 修复后的两个核心 HA/并发保证：
 //   1. OnlyOneInstance_OwnsAgentRunLease
@@ -278,6 +278,8 @@ public sealed class R29H_HAConcurrencyAcceptanceTests
         private static readonly IReadOnlySet<string> s_empty = new HashSet<string>(StringComparer.Ordinal);
 
         public IReadOnlySet<string> SupportedTools => s_empty;
+
+        public ToolDescriptor? GetDescriptor(string toolName) => null;
 
         public ValueTask<ToolDispatchResult> DispatchAsync(
             ToolDispatchRequest request,

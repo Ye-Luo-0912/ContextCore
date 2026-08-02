@@ -6,10 +6,10 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Tool Dispatch 与 Agent Checkpoint 契约
 //
-// 历史：本文件原为 R28-C Agent Kernel 契约（IAgentKernel / IAgentKernelTransport /
+// 历史：本文件原为旧 Agent Kernel 契约（IAgentKernel / IAgentKernelTransport /
 //   IDurableTransport / IKernelResultOutbox 等旧指令平面契约）。执行平面已收敛到
 //   AgentRunStore → AgentKernelHost → AgentRunActor 单一平面，旧平面契约已删除
-//   （性能优先级 #1：删除双执行平面）。
+//   （删除双执行平面）。
 //
 // 当前保留：
 //   1. Tool Dispatch 契约（IToolDispatcher / IToolCatalog / IToolDispatchJournal /
@@ -20,7 +20,7 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 
 /// <summary>
-/// R28-C：Tool Dispatcher 抽象。
+/// Tool Dispatcher 抽象。
 /// </summary>
 /// <remarks>
 /// 负责按名称分派 tool 调用并返回结果。Actor 不直接调用 tool；通过此抽象解耦。
@@ -31,6 +31,14 @@ public interface IToolDispatcher
     /// <summary>当前 Dispatcher 支持的 tool 名称集合。</summary>
     IReadOnlySet<string> SupportedTools { get; }
 
+    /// <summary>
+    /// 获取 tool 的静态描述符（前置副作用声明 / 审批 / 幂等 / fence / 恢复策略）。
+    /// 由 <see cref="ContextCore.Core.Services.AgentRunRuntime.DefaultDurableToolExecutor"/>
+    /// 在 Dispatch 前读取，用于 fail-closed 校验与恢复策略决策；
+    /// 未注册的 tool 返回 null（调用方按无声明处理）。
+    /// </summary>
+    ToolDescriptor? GetDescriptor(string toolName);
+
     /// <summary>分派 tool 调用。</summary>
     /// <param name="request">分派请求（tool 名称 + payload + requestId）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -39,7 +47,7 @@ public interface IToolDispatcher
 }
 
 /// <summary>
-/// P1-1: Tool catalog — provides tool definitions for model function calling.
+/// Tool catalog — provides tool definitions for model function calling.
 /// Decoupled from IToolDispatcher to allow decorators/wrappers/MCP adapters to expose definitions
 /// without requiring Actor to cast to a concrete RealToolDispatcher.
 /// </summary>
@@ -50,7 +58,7 @@ public interface IToolCatalog
 }
 
 /// <summary>
-/// R28-C：Tool 分派请求。
+/// Tool 分派请求。
 /// </summary>
 public sealed record ToolDispatchRequest
 {
@@ -64,33 +72,41 @@ public sealed record ToolDispatchRequest
     public required string RequestId { get; init; }
 
     /// <summary>
-    /// P0-3：调用方提供的幂等键（可选；用于外部系统去重）。
+    /// 调用方提供的幂等键（可选；用于外部系统去重）。
     /// 透传到 Tool provider 与 Journal，让外部系统侧也能基于此键去重，
     /// 配合 <see cref="IToolDispatchJournal"/> 的 UNIQUE 约束兜底实现外部副作用 exactly-once。
     /// </summary>
     public string? IdempotencyKey { get; init; }
 
     /// <summary>
-    /// P0-4：workspace 作用域标识（可选）。
+    /// workspace 作用域标识（可选）。
     /// 由调用方（<see cref="ContextCore.Core.Services.AgentRunRuntime.DefaultDurableToolExecutor"/>）填充，
     /// 透传到 <see cref="ToolExecutionContext.WorkspaceId"/> 供 Tool Handler 做作用域校验/审计。
     /// </summary>
     public string? WorkspaceId { get; init; }
 
     /// <summary>
-    /// P0-4：Agent Run 作用域标识（可选）。
+    /// Agent Run 作用域标识（可选）。
     /// 透传到 <see cref="ToolExecutionContext.RunId"/> 供 Tool Handler 关联 Run 上下文。
     /// </summary>
     public string? RunId { get; init; }
 
     /// <summary>
-    /// P0-4：本次 Tool 调用的截止时间（UTC，可选）。
+    /// 外部操作 ID（可选，框架生成，供 Tool provider 关联外部副作用）。
+    /// 由执行器在 Prepare 时生成并持久化到 journal（重放时从 journal 读回，保持稳定），
+    /// 在外部调用发起前下发给 Tool Handler，让外部系统侧可基于此 ID 去重/对账；
+    /// Handler 返回真实外部系统 ID 时可覆盖它。
+    /// </summary>
+    public string? ExternalOperationId { get; init; }
+
+    /// <summary>
+    /// 本次 Tool 调用的截止时间（UTC，可选）。
     /// 透传到 <see cref="ToolExecutionContext.DeadlineAt"/>；Tool Handler 应在此时间前完成调用。
     /// </summary>
     public DateTimeOffset? DeadlineAt { get; init; }
 
     /// <summary>
-    /// P0-4：租约围栏（可选）。
+    /// 租约围栏（可选）。
     /// 携带 lease token + fencing token，让副作用 Tool Handler 校验调用方仍持有有效租约。
     /// null = 无 lease 路径（测试 / 非 Actor 调用）。
     /// </summary>
@@ -98,7 +114,7 @@ public sealed record ToolDispatchRequest
 }
 
 /// <summary>
-/// P0-4：Tool 执行上下文。
+/// Tool 执行上下文。
 /// 由 <see cref="IToolDispatcher"/> 从 <see cref="ToolDispatchRequest"/> 构造并传递给
 /// <see cref="ContextCore.Core.Services.AgentKernel.IToolHandler.HandleAsync"/>，
 /// 让 Tool Handler 能访问 WorkspaceId/RunId/RequestId/IdempotencyKey/Payload/Deadline/LeaseFence，
@@ -124,6 +140,14 @@ public sealed record ToolExecutionContext
     /// <summary>调用方提供的幂等键（可选；用于外部系统去重）。</summary>
     public string? IdempotencyKey { get; init; }
 
+    /// <summary>
+    /// 外部操作 ID（可选，框架在 Prepare 时生成）。
+    /// 与 journal 条目 / <see cref="ToolDispatchResult.ExternalOperationId"/> 对应，
+    /// 供 Tool Handler 在发起外部调用前携带此 ID，让外部系统侧可据此关联与去重；
+    /// Handler 可在返回结果中覆盖它。
+    /// </summary>
+    public string? ExternalOperationId { get; init; }
+
     /// <summary>Tool 调用负载（自由文本；语义由 Tool 实现约定）。</summary>
     public required string Payload { get; init; }
 
@@ -138,7 +162,7 @@ public sealed record ToolExecutionContext
 }
 
 /// <summary>
-/// R28-C WP-C：Tool 副作用分类。决定恢复时是否自动重放。
+/// Tool 副作用分类。决定恢复时是否自动重放。
 /// </summary>
 public enum ToolSideEffect : byte
 {
@@ -157,31 +181,31 @@ public enum ToolSideEffect : byte
     Unknown = 3,
 
     /// <summary>
-    /// P0-4：幂等写（如带 IdempotencyKey 的 API 调用）。可安全重放，但需 lease fence 保护。
+    /// 幂等写（如带 IdempotencyKey 的 API 调用）。可安全重放，但需 lease fence 保护。
     /// 恢复时：若有缓存结果则使用，否则重放（依赖外部幂等性）。
     /// </summary>
     IdempotentWrite = 4,
 
     /// <summary>
-    /// P0-4：受 Fence 保护的写（如数据库事务 + fencing token 校验）。
+    /// 受 Fence 保护的写（如数据库事务 + fencing token 校验）。
     /// 恢复时：必须有有效 lease fence，否则 fail-closed。
     /// </summary>
     FencedWrite = 5,
 
     /// <summary>
-    /// P0-4：非幂等写（如发送邮件 / 扣款）。无外部幂等或 fencing 支持时必须 fail-closed。
+    /// 非幂等写（如发送邮件 / 扣款）。无外部幂等或 fencing 支持时必须 fail-closed。
     /// 恢复时：使用缓存结果，绝不重放；无缓存结果时需 RequiresReconciliation 对账。
     /// </summary>
     NonIdempotentWrite = 6,
 
     /// <summary>
-    /// P0-4：需对账（如外部系统状态不确定）。恢复时不自动重放，需人工或外部对账流程确认。
+    /// 需对账（如外部系统状态不确定）。恢复时不自动重放，需人工或外部对账流程确认。
     /// </summary>
     RequiresReconciliation = 7
 }
 
 /// <summary>
-/// P0-2: Tool recovery strategy. Determines how to handle Tool calls in Prepared/DispatchingIntent state during crash recovery.
+/// Tool recovery strategy. Determines how to handle Tool calls in Prepared/DispatchingIntent state during crash recovery.
 /// </summary>
 public enum ToolRecoveryStrategy : byte
 {
@@ -196,7 +220,7 @@ public enum ToolRecoveryStrategy : byte
 }
 
 /// <summary>
-/// P0-2: Tool static descriptor. Declares side-effect properties, approval requirements, recovery strategy, etc.
+/// Tool static descriptor. Declares side-effect properties, approval requirements, recovery strategy, etc.
 /// Executor reads this descriptor BEFORE dispatch to decide pre-execution policy;
 /// the SideEffect in execution result is only used to VERIFY actual behavior matches declaration.
 /// </summary>
@@ -221,7 +245,7 @@ public sealed record ToolDescriptor
 }
 
 /// <summary>
-/// R28-C：Tool 分派结果。
+/// Tool 分派结果。
 /// </summary>
 public sealed record ToolDispatchResult
 {
@@ -238,7 +262,7 @@ public sealed record ToolDispatchResult
     public required TimeSpan Duration { get; init; }
 
     /// <summary>
-    /// R28-C WP-C：Tool 副作用分类。默认 Unknown（保守策略：未声明的 tool 不自动重放）。
+    /// Tool 副作用分类。默认 Unknown（保守策略：未声明的 tool 不自动重放）。
     /// Tool 实现应显式声明副作用类型。EchoToolDispatcher 声明 None。
     /// </summary>
     public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.Unknown;
@@ -252,14 +276,14 @@ public sealed record ToolDispatchResult
 }
 
 /// <summary>
-/// R28-E P1-4：Tool 分派状态机。
+/// Tool 分派状态机。
 /// 实现恰好一次（exactly-once）tool 执行的核心状态。
 /// </summary>
 /// <remarks>
 /// 状态流转（不可逆，只能向前）：
 ///   <see cref="Prepared"/> → <see cref="DispatchingIntent"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
 ///
-/// <b>P0-1：DispatchingIntent 外部副作用边界</b>。
+/// DispatchingIntent 外部副作用边界</b>。
 /// <see cref="DispatchingIntent"/> 在外部 Tool 调用发起<b>前</b>持久化，创建一个 durable 边界：
 /// 若进程在此之后崩溃，恢复时知道外部调用可能已开始。
 ///
@@ -270,12 +294,17 @@ public sealed record ToolDispatchResult
 ///     需按 <see cref="ToolDescriptor.RecoveryStrategy"/> 决定（SafeReplay 重放 / UseCachedResult 查缓存 / 其他对账）。
 ///   - <see cref="Dispatched"/> 但未 <see cref="Committed"/> → <b>模糊状态</b>：tool 可能已成功执行外部副作用，
 ///     需调用方查询外部系统或人工裁决；不可盲目重新执行。
+///   - <see cref="Reconciling"/> → 对账进行中：外部副作用真相正在确认（以
+///     <see cref="ExternalOperationId"/> 查询外部系统 / 人工裁决），确认后经
+///     <see cref="IToolDispatchJournal.MarkReconciledWithResultAsync"/> 提交到
+///     <see cref="Committed"/>；对账未完成前绝不静默重放。
 ///   - <see cref="Committed"/> 但未 <see cref="ResultDelivered"/> → 结果已持久化，可安全重发。
 ///   - <see cref="ResultDelivered"/> → 完全完成，无需任何动作。
 ///
 /// <b>注意</b>：<see cref="DispatchingIntent"/> 使用数值 4（而非 1），
 /// 以避免破坏数据库中已有的 Dispatched=1 / Committed=2 / ResultDelivered=3 的 byte 映射。
-/// 状态机的"前向推进"判断基于逻辑顺序（Prepared→DispatchingIntent→Dispatched→Committed→ResultDelivered），
+/// 状态机的"前向推进"判断基于逻辑顺序
+/// （Prepared→DispatchingIntent→Dispatched→Reconciling→Committed→ResultDelivered），
 /// 而非数值大小。
 /// </remarks>
 public enum ToolDispatchState : byte
@@ -284,7 +313,7 @@ public enum ToolDispatchState : byte
     Prepared = 0,
 
     /// <summary>
-    /// P0-1：分派意图已持久化（外部调用即将开始但尚未返回）。
+    /// 分派意图已持久化（外部调用即将开始但尚未返回）。
     /// 在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前由
     /// <see cref="IToolDispatchJournal.MarkDispatchingIntentAsync"/> 写入，
     /// 创建外部副作用 exactly-once 的 durable 边界。
@@ -294,6 +323,16 @@ public enum ToolDispatchState : byte
     /// <summary>已分派（tool 已调用并返回，或外部调用已发起但结果未确认）。</summary>
     Dispatched = 1,
 
+    /// <summary>
+    /// 对账中：模糊状态（DispatchingIntent/Dispatched）经
+    /// <see cref="IToolDispatchJournal.BeginReconciliationAsync"/> 显式进入，
+    /// 表示外部副作用真相正在确认。确认后经
+    /// <see cref="IToolDispatchJournal.MarkReconciledWithResultAsync"/> 提交到
+    /// <see cref="Committed"/>（同事务写结果）；对账失败保持本状态等待重试或人工介入，
+    /// 绝不静默重放外部副作用。
+    /// </summary>
+    Reconciling = 5,
+
     /// <summary>已提交（结果已写入 durable result store）。</summary>
     Committed = 2,
 
@@ -302,7 +341,7 @@ public enum ToolDispatchState : byte
 }
 
 /// <summary>
-/// R28-E P1-4：Tool 分派 journal 条目。
+/// Tool 分派 journal 条目。
 /// 持久化记录每个 tool 调用的状态机进度，用于崩溃恢复时判断是否可安全重放。
 /// </summary>
 public sealed record ToolDispatchJournalEntry
@@ -319,7 +358,11 @@ public sealed record ToolDispatchJournalEntry
     /// <summary>调用方提供的幂等键（可选；用于外部系统去重）。</summary>
     public string? IdempotencyKey { get; init; }
 
-    /// <summary>外部操作 ID（tool 实际执行后返回的外部系统 ID，可用于查询/对账）。</summary>
+    /// <summary>
+    /// 外部操作 ID（框架在 Prepare 时生成，持久化后重放时读回保持稳定）。
+    /// 在外部调用发起前下发给 Tool Handler 供外部系统关联/去重；
+    /// Handler 返回真实外部系统 ID 时在 <see cref="ToolDispatchState.Dispatched"/> 转换时覆盖。
+    /// </summary>
     public string? ExternalOperationId { get; init; }
 
     /// <summary>journal 条目更新时间（UTC）。</summary>
@@ -329,7 +372,7 @@ public sealed record ToolDispatchJournalEntry
     public string? DiagnosticNote { get; init; }
 
     /// <summary>
-    /// P0-3 CAS-2：tool 调用 payload 的 SHA-256 摘要（小写 hex）。
+    /// tool 调用 payload 的 SHA-256 摘要（小写 hex）。
     /// 用于 <see cref="IToolDispatchJournal.PrepareAsync"/> 在同一 RequestId 已存在时验证语义等价，
     /// 防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
     /// 调用方应使用 <see cref="ComputePayloadDigest"/> 计算；未设置时为 null（参与比较时两侧须同为 null）。
@@ -337,13 +380,13 @@ public sealed record ToolDispatchJournalEntry
     public string? PayloadDigest { get; init; }
 
     /// <summary>
-    /// P0-3 CAS-2：workspace 作用域标识。
+    /// workspace 作用域标识。
     /// 用于 PrepareAsync 语义等价校验，确保同一 RequestId 不跨 workspace 复用。
     /// </summary>
     public string? WorkspaceId { get; init; }
 
     /// <summary>
-    /// P0-3 CAS-2：run 作用域标识。
+    /// run 作用域标识。
     /// 用于 PrepareAsync 语义等价校验，确保同一 RequestId 不跨 run 复用。
     /// </summary>
     public string? RunId { get; init; }
@@ -363,7 +406,7 @@ public sealed record ToolDispatchJournalEntry
 }
 
 /// <summary>
-/// P0-3：Durable Tool 执行结果缓存（与 Journal Committed 状态同一事务持久化）。
+/// Durable Tool 执行结果缓存（与 Journal Committed 状态同一事务持久化）。
 /// </summary>
 /// <remarks>
 /// 当 Journal 已处于 <see cref="ToolDispatchState.Committed"/> / <see cref="ToolDispatchState.ResultDelivered"/>
@@ -375,26 +418,26 @@ public sealed record DurableToolResult
 {
     /// <summary>
     /// Tool 调用 ID（与 ToolCallStarted/Completed 事件中的 toolCallId 一致）。
-    /// P0-4：不再作为主键（模型生成，不保证跨 Run/Provider 唯一）；改为 tool_dispatch_results 上的辅助索引列，
+    /// 不再作为主键（模型生成，不保证跨 Run/Provider 唯一）；改为 tool_dispatch_results 上的辅助索引列，
     /// 供旧 <see cref="IDurableToolResultStore.GetAsync"/> 查询路径使用。主键为 <see cref="RequestId"/>。
     /// </summary>
     public required string ToolCallId { get; init; }
 
-    /// <summary>本次调用的 RequestId（与 Journal request_id 一致；P0-4 起为 tool_dispatch_results 主键）。</summary>
+    /// <summary>本次调用的 RequestId（与 Journal request_id 一致；为 tool_dispatch_results 主键）。</summary>
     public required string RequestId { get; init; }
 
     /// <summary>
-    /// P0-4：workspace 作用域标识（可选）。
+    /// workspace 作用域标识（可选）。
     /// 与 <see cref="RunId"/> / <see cref="InvocationId"/> 共同构成 tool_dispatch_results 的
     /// UNIQUE(workspace_id, run_id, invocation_id) 约束，作为 Workspace 隔离键，防止另一 Run 覆盖已有 Tool Result。
     /// </summary>
     public string? WorkspaceId { get; init; }
 
-    /// <summary>P0-4：Agent Run 作用域标识（可选；配合 <see cref="WorkspaceId"/> / <see cref="InvocationId"/> 构成隔离键）。</summary>
+    /// <summary>Agent Run 作用域标识（可选；配合 <see cref="WorkspaceId"/> / <see cref="InvocationId"/> 构成隔离键）。</summary>
     public string? RunId { get; init; }
 
     /// <summary>
-    /// P0-4：本次调用的 Invocation ID（可选；代码层等同于 <see cref="RequestId"/>，作为稳定调用身份）。
+    /// 本次调用的 Invocation ID（可选；代码层等同于 <see cref="RequestId"/>，作为稳定调用身份）。
     /// 非 null 且非空时参与 UNIQUE(workspace_id, run_id, invocation_id) 约束；为空时该行不参与约束（兼容旧数据）。
     /// </summary>
     public string? InvocationId { get; init; }
@@ -422,7 +465,7 @@ public sealed record DurableToolResult
 }
 
 /// <summary>
-/// P0-3：Durable Tool 结果缓存存储抽象。
+/// Durable Tool 结果缓存存储抽象。
 /// </summary>
 /// <remarks>
 /// <b>引入背景</b>：<see cref="DefaultDurableToolExecutor"/> 在 Journal 已 Committed/ResultDelivered 时
@@ -435,12 +478,12 @@ public sealed record DurableToolResult
 /// </remarks>
 public interface IDurableToolResultStore
 {
-    // P0-4：旧方法（按 tool_call_id）保留兼容但已过时——tool_call_id 不保证跨 Run/Provider 唯一，
+    // 旧方法（按 tool_call_id）保留兼容但已过时——tool_call_id 不保证跨 Run/Provider 唯一，
     //       不能作为主键。新代码应使用 GetByRequestIdAsync / SaveByRequestIdAsync（按稳定 request_id）。
 
     /// <summary>
     /// 按 toolCallId 获取缓存结果（旧路径，已过时）。
-    /// P0-4：tool_call_id 不再是主键，仅为辅助索引；新代码应使用 <see cref="GetByRequestIdAsync"/>。
+    /// tool_call_id 不再是主键，仅为辅助索引；新代码应使用 <see cref="GetByRequestIdAsync"/>。
     /// </summary>
     /// <param name="toolCallId">Tool 调用 ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -449,7 +492,7 @@ public interface IDurableToolResultStore
 
     /// <summary>
     /// 保存缓存结果（旧路径，已过时；按 toolCallId 幂等覆盖）。
-    /// P0-4：底层按 <see cref="DurableToolResult.RequestId"/> upsert（tool_call_id 不再唯一）。
+    /// 底层按 <see cref="DurableToolResult.RequestId"/> upsert（tool_call_id 不再唯一）。
     /// 新代码应使用 <see cref="SaveByRequestIdAsync"/>。
     /// </summary>
     /// <param name="toolCallId">Tool 调用 ID。</param>
@@ -457,10 +500,10 @@ public interface IDurableToolResultStore
     /// <param name="cancellationToken">取消令牌。</param>
     Task SaveAsync(string toolCallId, DurableToolResult result, CancellationToken ct);
 
-    // P0-4：新方法（按 request_id，稳定调用身份哈希，跨 Run/Provider 唯一）
+    // 新方法（按 request_id，稳定调用身份哈希，跨 Run/Provider 唯一）
 
     /// <summary>
-    /// P0-4：按 RequestId 获取缓存结果（推荐路径）。
+    /// 按 RequestId 获取缓存结果（推荐路径）。
     /// request_id 为 tool_dispatch_results 主键，保证跨 Run/Provider 不覆盖。
     /// </summary>
     /// <param name="requestId">Tool 调用 RequestId（与 Journal request_id 一致）。</param>
@@ -469,8 +512,8 @@ public interface IDurableToolResultStore
     Task<DurableToolResult?> GetByRequestIdAsync(string requestId, CancellationToken ct);
 
     /// <summary>
-    /// P0-4：保存缓存结果（推荐路径；按 RequestId 幂等覆盖）。
-    /// 写入 workspace_id / run_id / invocation_id 等 P0-4 新字段，供 UNIQUE 隔离约束与对账查询使用。
+    /// 保存缓存结果（推荐路径；按 RequestId 幂等覆盖）。
+    /// 写入 workspace_id / run_id / invocation_id 等隔离键字段，供 UNIQUE 隔离约束与对账查询使用。
     /// </summary>
     /// <param name="result">待缓存的结果（RequestId 作为主键）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -478,7 +521,7 @@ public interface IDurableToolResultStore
 }
 
 /// <summary>
-/// P0-3：<see cref="IToolDispatchJournal.PrepareAsync"/> 返回值。
+/// <see cref="IToolDispatchJournal.PrepareAsync"/> 返回值。
 /// 描述 Prepare 后 Journal 的当前状态，供 <see cref="IDurableToolExecutor"/> 决策是否 Dispatch。
 /// </summary>
 /// <remarks>
@@ -511,7 +554,7 @@ public sealed record ToolDispatchPrepareResult
 }
 
 /// <summary>
-/// R28-E P1-4：Tool 分派 journal 抽象。
+/// Tool 分派 journal 抽象。
 /// 持久化 <see cref="ToolDispatchJournalEntry"/> 以支持 exactly-once tool 执行。
 /// </summary>
 /// <remarks>
@@ -519,14 +562,14 @@ public sealed record ToolDispatchPrepareResult
 /// 不保证崩溃恢复的 exactly-once。生产部署应注入持久化实现（如基于 DB/WAL 的 journal）。
 ///
 /// Journal 写入顺序（与 <see cref="ContextCore.Core.Services.AgentRunRuntime.DefaultDurableToolExecutor"/> 调用点对应）：
-///   1. <see cref="PrepareWithIntentAsync"/>（Item 5：Prepare + 前置 Intent 单次原子写）：
+///   1. <see cref="PrepareWithIntentAsync"/>（Prepare + 前置 Intent 单次原子写）：
 ///      在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。也可用
 ///      <see cref="PrepareAsync"/> + <see cref="MarkDispatchingIntentAsync"/> 两步完成等价流程。
 ///   2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
 ///   3. <see cref="MarkCommittedAsync"/>：结果写入 durable result store 后。
 ///   4. <see cref="MarkResultDeliveredAsync"/>：结果成功送达后。
 ///
-/// <b>P0-3 CAS-1：expected-state 精确匹配（state = @expected）</b>。
+/// <b>CAS-1：expected-state 精确匹配（state = @expected）</b>。
 /// Mark* 方法使用精确前驱状态 CAS 推进状态机（而非旧版 <c>state &lt; @target</c> 宽松匹配），
 /// <b>不自动创建 stub 条目</b>，且<b>禁止跨级跳跃</b>（如 Prepared → Committed）：
 /// <list type="bullet">
@@ -538,7 +581,7 @@ public sealed record ToolDispatchPrepareResult
 ///     而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
 /// </list>
 ///
-/// <b>P0-3 CAS-2：PrepareAsync 语义等价校验</b>。
+/// <b>CAS-2：PrepareAsync 语义等价校验</b>。
 /// <see cref="PrepareAsync"/> 对同一 request_id 重复写入时不再静默沿用旧记录：
 /// 既有行必须与新条目在 <see cref="ToolDispatchJournalEntry.ToolName"/> /
 /// <see cref="ToolDispatchJournalEntry.IdempotencyKey"/> /
@@ -547,7 +590,7 @@ public sealed record ToolDispatchPrepareResult
 /// <see cref="ToolDispatchJournalEntry.RunId"/> 上语义等价；
 /// 否则抛 <see cref="InvalidOperationException"/>（RequestIdReuseDetected）。
 ///
-/// <b>外部副作用 exactly-once 边界（P0-3）</b>。
+/// <b>外部副作用 exactly-once 边界</b>。
 /// Journal 仅保证 ContextCore 内部的"恰好一次编排记录"——同一 request_id 的状态机只向前推进一次。
 /// 完整的外部副作用 exactly-once 还需要：
 /// <list type="bullet">
@@ -560,7 +603,7 @@ public sealed record ToolDispatchPrepareResult
 public interface IToolDispatchJournal
 {
     /// <summary>
-    /// P0-6：指示 <see cref="MarkCommittedWithResultAsync"/> 是否在同事务内持久化 Tool 结果缓存。
+    /// 指示 <see cref="MarkCommittedWithResultAsync"/> 是否在同事务内持久化 Tool 结果缓存。
     /// </summary>
     /// <remarks>
     /// <b>true</b>（如 <c>PostgresToolDispatchJournal</c>）：MarkCommittedWithResultAsync 在同一 DB 事务内
@@ -578,7 +621,7 @@ public interface IToolDispatchJournal
     /// 幂等：重复 Prepare 同一 request_id 不覆盖已推进的状态（ON CONFLICT DO NOTHING / TryAdd 语义）。
     /// 持久化实现要求 <see cref="ToolDispatchJournalEntry.IdempotencyKey"/> 全局唯一（UNIQUE partial index）。
     ///
-    /// <b>P0-3：返回值决策矩阵</b>：
+    /// 返回值决策矩阵</b>：
     /// <list type="bullet">
     ///   <item>Journal 不存在（新插入）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
     ///   <item>Journal = Prepared（重复 Prepare）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
@@ -591,7 +634,7 @@ public interface IToolDispatchJournal
     ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Item 5（性能优先级）：Prepare + 前置 Intent 合并为单次原子写。
+    /// Prepare + 前置 Intent 合并为单次原子写。
     /// 在外部 Tool 调用发起前一次性写入条目并推进到 <see cref="ToolDispatchState.DispatchingIntent"/>，
     /// 替代"<see cref="PrepareAsync"/> + <see cref="MarkDispatchingIntentAsync"/> 两次往返"，
     /// 每 Tool 分派减少一次持久化写入，且 durable 边界与条目创建原子化（无 Prepared 空窗）。
@@ -604,12 +647,12 @@ public interface IToolDispatchJournal
     /// 外部调用尚未开始，可安全执行 <see cref="IToolDispatcher.DispatchAsync"/>，无需再单独标记 Intent。
     /// 既有 DispatchingIntent/Dispatched（上次崩溃残留或并发分派）→ NeedsReconciliation；
     /// 既有 Committed/ResultDelivered → CachedResult（InMemory 自带缓存）或 ShouldDispatch=false（Postgres 由调用方查结果缓存）。
-    /// 语义等价校验与 <see cref="PrepareAsync"/> 一致（P0-3 CAS-2：RequestId 复用检测）。
+    /// 语义等价校验与 <see cref="PrepareAsync"/> 一致（RequestId 复用检测）。
     /// </remarks>
     ValueTask<ToolDispatchPrepareResult> PrepareWithIntentAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-1: Mark that the external Tool call is about to start. Must be persisted BEFORE the actual external call.
+    /// Mark that the external Tool call is about to start. Must be persisted BEFORE the actual external call.
     /// This creates a durable boundary: if a crash occurs after this point, recovery knows the external call may have started.
     /// Transitions state from Prepared to DispatchingIntent (CAS). Throws InvalidOperationException if state has already
     /// advanced past DispatchingIntent (e.g., Dispatched), indicating a concurrent dispatch may have occurred.
@@ -633,7 +676,7 @@ public interface IToolDispatchJournal
     ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-3：将指定 RequestId 的状态推进到 Committed，并在<b>同一事务</b>内持久化 Tool 结果缓存。
+    /// 将指定 RequestId 的状态推进到 Committed，并在<b>同一事务</b>内持久化 Tool 结果缓存。
     /// </summary>
     /// <param name="requestId">Tool RequestId（必须已存在 Dispatched 条目）。</param>
     /// <param name="result">待缓存的结果（含 ToolCallId 作为主键；与 Committed 状态原子写入）。</param>
@@ -653,6 +696,36 @@ public interface IToolDispatchJournal
     /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Committed 前驱）或当前 state ≥ ResultDelivered（逆退）。</exception>
     ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 将对账目标条目（DispatchingIntent/Dispatched 模糊态）显式推进到
+    /// <see cref="ToolDispatchState.Reconciling"/>。
+    /// </summary>
+    /// <param name="requestId">Tool RequestId（必须已存在 DispatchingIntent 或 Dispatched 条目）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 进入 Reconciling 表示外部副作用真相正在确认（以 <see cref="ToolDispatchJournalEntry.ExternalOperationId"/>
+    /// 查询外部系统 / 人工裁决）。已处于 Reconciling 或已超过（Committed/ResultDelivered）时幂等成功；
+    /// 处于 Prepared（外部调用从未开始）或条目缺失时抛 <see cref="InvalidOperationException"/>
+    /// （Prepared 无需对账——它应被重新 Dispatch 而非对账）。
+    /// 对账确认后经 <see cref="MarkReconciledWithResultAsync"/> 提交；失败保持 Reconciling 等待重试或人工介入，
+    /// 绝不静默重放外部副作用。
+    /// </remarks>
+    ValueTask BeginReconciliationAsync(string requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 对账完成——将 <see cref="ToolDispatchState.Reconciling"/> 条目推进到
+    /// <see cref="ToolDispatchState.Committed"/> 并在同一事务内写入对账得到的结果。
+    /// </summary>
+    /// <param name="requestId">Tool RequestId（必须已存在 Reconciling 条目）。</param>
+    /// <param name="result">对账确认后的外部副作用结果（Succeeded=true 表示确认副作用已发生并取得结果）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 对账语义：外部副作用确实发生了（以 ExternalOperationId 在外部的实际执行情况为准），
+    /// 将对账结果提交为最终真相，后续调用返回缓存结果、禁止重放。
+    /// 持久化实现应保证状态推进与结果写入同事务（与 <see cref="MarkCommittedWithResultAsync"/> 一致）。
+    /// </remarks>
+    ValueTask MarkReconciledWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default);
+
     /// <summary>查询指定 RequestId 的当前 journal 状态（用于恢复时判断）。</summary>
     /// <param name="requestId">Tool RequestId。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -661,7 +734,7 @@ public interface IToolDispatchJournal
 }
 
 /// <summary>
-/// R29 WP-B-1：持久化 Tool Dispatch Journal 抽象。
+/// 持久化 Tool Dispatch Journal 抽象。
 /// 继承 <see cref="IToolDispatchJournal"/> 并标记为持久化实现，用于崩溃恢复的 exactly-once 语义。
 /// </summary>
 /// <remarks>
@@ -675,7 +748,7 @@ public interface IPersistentToolDispatchJournal : IToolDispatchJournal
 }
 
 /// <summary>
-/// R29 WP-B-3：持久化 Agent Checkpoint Store 抽象。
+/// 持久化 Agent Checkpoint Store 抽象。
 /// 继承 <see cref="IAgentCheckpointStore"/> 并标记为持久化实现，用于崩溃恢复的 checkpoint 链。
 /// </summary>
 /// <remarks>
@@ -689,7 +762,7 @@ public interface IPersistentAgentCheckpointStore : IAgentCheckpointStore
 }
 
 /// <summary>
-/// R28-E P1-1：Agent Checkpoint 工厂抽象。
+/// Agent Checkpoint 工厂抽象。
 /// 统一各 checkpoint 入口的状态格式，确保序列化完整的执行状态（已提交 tool 结果 + snapshot 引用）。
 /// </summary>
 /// <remarks>

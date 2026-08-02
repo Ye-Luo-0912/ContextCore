@@ -24,7 +24,7 @@ namespace ContextCore.Core.Services.AgentKernel;
 //      生产部署应通过 DI 工厂注册所需 Handler（如 search / read_file / calculator）。
 //   4. 线程安全：ConcurrentDictionary + 不可变 ToolHandler 注册后不替换。
 //
-// P0-4 修复：
+// 修复要点：
 //   - IToolHandler.HandleAsync 改为接收 ToolExecutionContext（携带 WorkspaceId/RunId/
 //     RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence），而非仅裸 JSON Payload。
 //   - 注册表冻结：Freeze() 后禁止 AddHandler；DI 工厂在注册完所有 Handler 后调用 Freeze()。
@@ -61,7 +61,7 @@ public interface IToolHandler
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>Tool 调用结果（成功/失败 + 输出/错误）。</returns>
     /// <summary>
-    /// P0-2: Tool static descriptor. Declares side-effect, approval, recovery policy, etc.
+    /// Tool 静态描述符：声明副作用 / 审批 / 恢复策略等。
     /// Executor reads this BEFORE dispatch to decide pre-execution policy.
     /// </summary>
     ToolDescriptor Descriptor { get; }
@@ -87,7 +87,7 @@ public sealed record ToolHandlerResult
     public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.None;
 
     /// <summary>
-    /// P0-3: External operation ID (e.g. external system transaction/job ID).
+    /// 外部操作 ID（如外部系统 transaction/job ID）。
     /// Used for reconciliation when dispatch result is ambiguous (timeout/exception).
     /// </summary>
     public string? ExternalOperationId { get; init; }
@@ -107,9 +107,9 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
         new(StringComparer.Ordinal);
     private readonly ILogger<RealToolDispatcher>? _logger;
     private readonly object _freezeGate = new();
-    // P0-4：冻结标志。Freeze() 后 AddHandler 抛 InvalidOperationException，防止运行时变更注册表。
+    // 冻结标志。Freeze() 后 AddHandler 抛 InvalidOperationException，防止运行时变更注册表。
     private bool _isFrozen;
-    // P0-4：SupportedTools 缓存。首次读取后冻结为不可变集合，避免每次读取创建新 HashSet。
+    // SupportedTools 缓存。首次读取后冻结为不可变集合，避免每次读取创建新 HashSet。
     private IReadOnlySet<string>? _supportedToolsCache;
 
     /// <summary>
@@ -118,7 +118,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     /// <param name="handlers">初始 Tool 处理器集合（可选）。</param>
     /// <param name="logger">日志记录器（可选）。</param>
     /// <exception cref="InvalidOperationException">
-    /// P0-4：handlers 中存在重复 ToolName（fail-fast，不再静默覆盖）。
+    /// handlers 中存在重复 ToolName（fail-fast，不再静默覆盖）。
     /// </exception>
     public RealToolDispatcher(
         IEnumerable<IToolHandler>? handlers = null,
@@ -145,7 +145,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     /// </summary>
     /// <param name="handler">Tool 处理器。</param>
     /// <exception cref="InvalidOperationException">
-    /// P0-4：ToolName 已存在（fail-fast 重复注册）或注册表已冻结（<see cref="Freeze"/>）。
+    /// ToolName 已存在（fail-fast 重复注册）或注册表已冻结（<see cref="Freeze"/>）。
     /// </exception>
     public void AddHandler(IToolHandler handler)
     {
@@ -170,7 +170,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     }
 
     /// <summary>
-    /// P0-4：冻结注册表。调用后 <see cref="AddHandler"/> 抛异常，<see cref="SupportedTools"/> 缓存为不可变集合。
+    /// 冻结注册表。调用后 <see cref="AddHandler"/> 抛异常，<see cref="SupportedTools"/> 缓存为不可变集合。
     /// DI 工厂应在注册完所有 Handler 后调用此方法，防止运行时变更注册表。
     /// </summary>
     public void Freeze()
@@ -188,7 +188,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     {
         get
         {
-            // P0-4：缓存 SupportedTools，避免每次读取创建新 HashSet。
+            // 缓存 SupportedTools，避免每次读取创建新 HashSet。
             // 未冻结时延迟物化并缓存；冻结后缓存永不变更。
             if (_supportedToolsCache is { } cached)
             {
@@ -206,6 +206,14 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
         }
     }
 
+    /// <inheritdoc />
+    /// <summary>返回已注册 Tool Handler 的前置声明描述符；未注册时返回 null（调用方按无声明处理）。</summary>
+    public ToolDescriptor? GetDescriptor(string toolName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+        return _handlers.TryGetValue(toolName, out var handler) ? handler.Descriptor : null;
+    }
+
     /// <summary>构建当前注册表快照为不可变集合。</summary>
     private IReadOnlySet<string> BuildSupportedTools()
     {
@@ -218,7 +226,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     }
 
     /// <summary>
-    /// P0-1：从已注册的 IToolHandler 集合构建 AgentToolDefinition 列表，
+    /// 从已注册的 IToolHandler 集合构建 AgentToolDefinition 列表，
     /// 用于向模型声明可调用的 Tool 及其参数 schema（原生 function calling）。
     /// </summary>
     /// <returns>不可变的 AgentToolDefinition 列表（按注册表当前快照构建）。</returns>
@@ -253,19 +261,20 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
                 Succeeded = false,
                 Result = $"[Error] Tool '{request.ToolName}' 未注册。已注册: {string.Join(", ", _handlers.Keys)}",
                 Duration = TimeSpan.Zero,
-                // P0-3: Unregistered tool is an error - default to RequiresReconciliation.
+                // 未注册 tool 是错误——默认按 RequiresReconciliation 处理。
                 SideEffect = ToolSideEffect.RequiresReconciliation
             };
         }
 
-        // P0-4：从 ToolDispatchRequest 构造 ToolExecutionContext，让 Handler 能访问
-        // WorkspaceId/RunId/RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence。
+        // 从 ToolDispatchRequest 构造 ToolExecutionContext，让 Handler 能访问
+        // WorkspaceId/RunId/RequestId/IdempotencyKey/ExternalOperationId/Payload/DeadlineAt/LeaseFence。
         var context = new ToolExecutionContext
         {
             WorkspaceId = request.WorkspaceId ?? string.Empty,
             RunId = request.RunId ?? string.Empty,
             RequestId = request.RequestId,
             IdempotencyKey = request.IdempotencyKey,
+            ExternalOperationId = request.ExternalOperationId,
             Payload = request.Payload,
             DeadlineAt = request.DeadlineAt,
             LeaseFence = request.LeaseFence
@@ -303,7 +312,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
                 Succeeded = false,
                 Result = $"[Exception] Tool '{request.ToolName}' 处理异常：{ex.Message}",
                 Duration = sw.Elapsed,
-                // P0-3: Exception means external side-effect state is unknown - default to RequiresReconciliation.
+                // 异常意味着外部副作用状态未知——默认按 RequiresReconciliation 处理。
                 SideEffect = ToolSideEffect.RequiresReconciliation
             };
         }
