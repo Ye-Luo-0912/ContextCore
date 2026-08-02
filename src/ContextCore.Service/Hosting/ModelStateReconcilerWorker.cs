@@ -19,8 +19,9 @@ namespace ContextCore.Service.Hosting;
 /// <item>Revision 相同但 ContentHash 不匹配：记录漂移告警（检测跨节点内容不一致）。</item>
 /// </list>
 ///
-/// <b>启动恢复</b>：首次执行全量同步，从 slot 重建本地 _lastKnownRevision，
-/// 避免进程重启后重复应用已生效的期望状态。
+/// <b>启动恢复</b>：首次执行全量同步时立即应用期望状态（激活/停用），
+/// 而非仅记录 Revision 等待后续变更——全新节点启动后马上加载集群 Champion 模型。
+/// 本地已激活同一 ContentHash 的模型（同进程内重复同步）由匹配检查跳过。
 ///
 /// <b>并发控制</b>：Revision 字段用于乐观并发控制（CAS），仅当远端 Revision > 本地 Revision 时才应用。
 /// HA 场景下由 <see cref="IClusterModelSlotStore.TryUpdateAsync"/> 的 CAS 保证单写者不回滚。
@@ -90,14 +91,13 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             return;
         }
 
-        // P0-9：首次同步时从 slot 重建 _lastKnownRevision，避免重启后重复应用。
-        // 后续轮询仅处理 Revision 更高的变更。
+        // 首次启动立即应用期望状态：不在此提前 return，而是继续走下方 apply 逻辑。
+        // 全新节点（无本地激活）会立即激活 slot 中的 Champion 模型；
+        // 同进程内已激活同一模型（ContentHash 匹配）由下方检查跳过，不会重复激活。
         if (Interlocked.Exchange(ref _initialSyncDone, 1) == 0)
         {
-            _lastKnownRevision = slot.Revision;
-
-            // 用本地 ActiveGeneration 初始化已知 Revision，
-            // 避免重启后对同一模型重复 Activate（Revision 相同 → 跳过）。
+            // 用本地 ActiveGeneration 初始化已知 Revision 的下界，
+            // 同进程内相同 Revision 不重复应用（乐观并发控制下界）。
             if (_activationManager.ActiveDescriptor is not null
                 && _activationManager.ActiveGeneration is { } localGen)
             {
@@ -105,9 +105,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             }
 
             _logger.LogInformation(
-                "ModelStateReconcilerWorker 初始同步完成，当前 slot Revision={Revision}，DesiredStatus={DesiredStatus}。",
+                "ModelStateReconcilerWorker 初始同步，当前 slot Revision={Revision}，DesiredStatus={DesiredStatus}，立即应用。",
                 slot.Revision, slot.DesiredStatus);
-            return;
         }
 
         // 乐观并发控制：仅当远端 Revision > 本地 Revision 时才应用变更

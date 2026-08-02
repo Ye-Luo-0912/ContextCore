@@ -41,11 +41,12 @@ namespace ContextCore.Inference.Onnx;
 /// 与 ICalibrationService 中已注册的参数版本号一致的字符串。
 /// </para>
 /// </remarks>
-public sealed class OnnxInferenceEngine : IBatchInferenceEngine
+public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposable
 {
     private readonly IOnnxInferenceSession _session;
     private readonly OnnxInferenceEngineOptions _options;
     private readonly string _calibrationVersion;
+    private int _disposed;
 
     // P3 步骤4：warmup 状态标志。
     // 0 = 未 warmup；1 = 已 warmup。
@@ -720,5 +721,29 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromMilliseconds(effectiveTimeoutMs));
         return cts;
+    }
+
+    /// <summary>
+    /// 释放底层 ONNX 推理会话与并发槽位。
+    /// 引擎被激活管理器退役（Retired handle 引用归零）后调用；幂等，多次调用安全。
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        // 会话持有 native ONNX Runtime 资源（模型权重 / arena），必须显式释放。
+        // 此前引擎未实现 IAsyncDisposable，SafeDisposeEngineAsync 无法回收会话，导致
+        // 模型切换（Activate/Retire）时 native 会话泄漏。
+        try
+        {
+            await _session.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _inferenceSlots.Dispose();
+        }
     }
 }

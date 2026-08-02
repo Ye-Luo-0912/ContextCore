@@ -464,12 +464,12 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
         using var document = JsonDocument.Parse(responseText);
         var root = document.RootElement;
 
-        // P1-3：空 choices 不当作成功 Stop，返回结构化失败
+        // 空 choices 不当作成功 Stop，返回结构化失败（EmptyChoices：非瞬态，需人工复核）
         if (!root.TryGetProperty("choices", out var choices)
             || choices.ValueKind != JsonValueKind.Array
             || choices.GetArrayLength() == 0)
         {
-            return ChatFailure(operationId, "响应中缺少 choices 或 choices 为空。", "empty_response");
+            return ChatFailure(operationId, "响应中缺少 choices 或 choices 为空。", "empty_choices");
         }
 
         var firstChoice = choices[0];

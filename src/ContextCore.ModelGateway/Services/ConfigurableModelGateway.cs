@@ -946,8 +946,8 @@ public sealed class ConfigurableModelGateway : IModelGateway
     private sealed record ModelValidationResult(bool Succeeded, ModelFailureReason FailureReason, string? ErrorMessage);
 }
 
-/// <summary>网关内部使用的失败分类，用于决定是否重试或触发回退模型。</summary>
-internal enum ModelFailureReason
+/// <summary>模型失败分类，用于决定是否重试、是否触发回退模型，以及外部系统的结构化消费。</summary>
+public enum ModelFailureReason
 {
     None,
     Unavailable,
@@ -955,11 +955,20 @@ internal enum ModelFailureReason
     RateLimit,
     ServerError,
     InvalidJson,
-    EmptyResponse
+    EmptyResponse,
+
+    /// <summary>输出因长度上限被截断（finish_reason=length）。非瞬态：重试不会改善，需人工复核或调整参数。</summary>
+    LengthTruncated,
+
+    /// <summary>输出被内容过滤拦截（finish_reason=content_filter）。非瞬态：需人工复核或调整提示。</summary>
+    ContentFilter,
+
+    /// <summary>响应缺少 choices 或 choices 为空。非瞬态：需人工复核或重发请求。</summary>
+    EmptyChoices
 }
 
 /// <summary>模型失败分类与日志元数据字符串之间的转换工具。</summary>
-internal static class ModelFailureReasonExtensions
+public static class ModelFailureReasonExtensions
 {
     public static string ToMetadataValue(this ModelFailureReason reason)
     {
@@ -972,6 +981,9 @@ internal static class ModelFailureReasonExtensions
             ModelFailureReason.ServerError => "server_error",
             ModelFailureReason.InvalidJson => "invalid_json",
             ModelFailureReason.EmptyResponse => "empty_response",
+            ModelFailureReason.LengthTruncated => "length_truncated",
+            ModelFailureReason.ContentFilter => "content_filter",
+            ModelFailureReason.EmptyChoices => "empty_choices",
             _ => "unavailable"
         };
     }
@@ -987,6 +999,9 @@ internal static class ModelFailureReasonExtensions
             "server_error" => ModelFailureReason.ServerError,
             "invalid_json" => ModelFailureReason.InvalidJson,
             "empty_response" => ModelFailureReason.EmptyResponse,
+            "length_truncated" => ModelFailureReason.LengthTruncated,
+            "content_filter" => ModelFailureReason.ContentFilter,
+            "empty_choices" => ModelFailureReason.EmptyChoices,
             _ => ModelFailureReason.Unavailable
         };
     }

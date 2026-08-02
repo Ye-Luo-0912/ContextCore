@@ -523,6 +523,9 @@ internal sealed class MockOnnxInferenceSession : IOnnxInferenceSession
 
     public FeatureBatch? LastReceivedBatch { get; private set; }
 
+    /// <summary>DisposeAsync 被调用的次数（验证引擎释放路径）。</summary>
+    public int DisposeCallCount { get; private set; }
+
     public ValueTask<BatchInferenceResult> InferBatchAsync(
         FeatureBatch batch,
         CancellationToken cancellationToken = default)
@@ -560,7 +563,11 @@ internal sealed class MockOnnxInferenceSession : IOnnxInferenceSession
         });
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        DisposeCallCount++;
+        return ValueTask.CompletedTask;
+    }
 }
 
 internal sealed class SlowOnnxInferenceSession : IOnnxInferenceSession
