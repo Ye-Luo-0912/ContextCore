@@ -917,6 +917,8 @@ public sealed class RelationNeighborQuery
 ///   - <see cref="MaxSeeds"/>：单次图查询的最大种子数，超出部分直接截断（保留原序）。
 ///   - <see cref="MaxEdgesPerSeed"/>：单种子返回的最大边数（per-seed Take 硬上限）。
 ///   - <see cref="MaxTotalEdges"/>：单次图查询全局读取/返回的最大边数，超出即截断并标记 Truncated。
+/// 存储层通过查询参数（<see cref="RelationNeighborBatchQuery.GlobalEdgeLimit"/>、MaxScan、Take）强制这些上限，
+/// 本类常量作为默认值与天花板（存储层对 GlobalEdgeLimit clamp 到 [1, MaxTotalEdges]）。
 /// </remarks>
 public static class GraphQueryLimits
 {
@@ -940,9 +942,10 @@ public static class GraphQueryLimits
 }
 
 /// <summary>
-/// P1-6：批量邻居查询 DTO。一次查询多个种子节点的邻居，消除 BFS 逐节点往返。
+/// 批量邻居查询 DTO：一次查询多个种子节点的邻居，消除 BFS 逐节点往返。
 /// 字段语义与 <see cref="RelationNeighborQuery"/> 一致，区别仅在于 <see cref="ItemIds"/>（多个种子）。
-/// Take/Skip/MaxScan 仍为 per-seed 语义：每个种子独立排序、独立扫描上限、独立分页。
+/// Take/Skip/MaxScan 仍为 per-seed 语义：每个种子独立排序、独立扫描上限、独立分页；
+/// <see cref="GlobalEdgeLimit"/> 为所有种子合计的全局上限：存储层在 SQL/遍历中强制，命中即截断并标记 Truncated。
 /// </summary>
 public sealed class RelationNeighborBatchQuery
 {
@@ -982,6 +985,13 @@ public sealed class RelationNeighborBatchQuery
 
     /// <summary>per-seed 扫描上限：从数据源读取的最大行数。默认 1000。</summary>
     public int MaxScan { get; init; } = 1000;
+
+    /// <summary>
+    /// 单次查询所有种子合计的全局返回边数上限（硬上限，默认 <see cref="GraphQueryLimits.MaxTotalEdges"/>）。
+    /// 存储层在 SQL/遍历中强制：累计返回边数达到上限即停止读取并截断，命中种子标记
+    /// <see cref="RelationNeighborBatchResult.Truncated"/>。调用方（BFS 引擎 / Provider）可传入自身剩余预算。
+    /// </summary>
+    public int GlobalEdgeLimit { get; init; } = GraphQueryLimits.MaxTotalEdges;
 }
 
 /// <summary>

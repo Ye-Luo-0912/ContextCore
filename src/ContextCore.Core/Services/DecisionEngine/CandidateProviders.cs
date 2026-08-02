@@ -1563,7 +1563,8 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 /// <remarks>
 /// V2 模型中 Provider 独立并行执行，无法访问其他 Provider 的输出。
 /// 因此 Graph Provider 使用 Request.SeedCandidates 作为种子（而非其他 Provider 的输出），
-/// 对每个种子的 ItemId 调用 QueryNeighborsAsync，然后 hydration 关联条目。
+/// 对 frontier 批量调用 QueryNeighborsBatchAsync（全局边数预算下推存储层 SQL/LATERAL），
+/// 然后 hydration 关联条目。
 ///
 /// 如果 SeedCandidates 为空，返回空结果（无种子无法做图扩展）。
 /// </remarks>
@@ -1644,79 +1645,43 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         for (var depth = 0; depth < maxDepth && currentFrontier.Count > 0; depth++)
         {
             var nextFrontier = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            // P1-3：限制扩展节点总数，防止 BFS 爆炸
+            // 限制扩展节点总数，防止 BFS 爆炸。
+            // 该预算是跨跳累积的新节点数，不是单跳边数，无法表达为单跳邻居 SQL 的 LIMIT，故保持在 C# 侧。
             if (visitedItemIds.Count - seedItemIds.Count >= GraphQueryLimits.MaxExpandedNodes)
             {
                 break;
             }
 
 
-            if (currentFrontier.Count > 1)
+            // 整个 frontier 一次性批量查询（frontier 为单种子时同样走批量，
+            // 确保全局 LIMIT 下推在存储层生效，而不是回退到无全局上限的单条查询路径）。
+            // 应用 AllowedRelationTypes；Take 为 per-seed 返回上限；
+            // GlobalEdgeLimit 默认 GraphQueryLimits.MaxTotalEdges，由存储层在 SQL/遍历中强制。
+            var batchResults = await rs.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
             {
-                // 批量查询 frontier 的邻居
-                var batchResults = await rs.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
-                {
-                    WorkspaceId = workspaceId,
-                    CollectionId = collectionId,
-                    ItemIds = currentFrontier.ToArray(),
-                    Direction = RelationDirection.Both,
-                    // R28-B.7 P1-1：应用 AllowedRelationTypes
-                    AllowedRelationTypes = allowedRelationTypes,
-                    Take = take
-                }, cancellationToken).ConfigureAwait(false);
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                ItemIds = currentFrontier.ToArray(),
+                Direction = RelationDirection.Both,
+                // 应用 AllowedRelationTypes
+                AllowedRelationTypes = allowedRelationTypes,
+                Take = take
+            }, cancellationToken).ConfigureAwait(false);
 
-                foreach (var result in batchResults)
-                {
-                    var seedItemId = result.ItemId;
-                    foreach (var relation in result.Relations)
-                    {
-                        // 提取"另一端"的 ItemId
-                        var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
-                            ? relation.TargetId
-                            : relation.SourceId;
-
-                        if (!string.IsNullOrEmpty(otherId) && visitedItemIds.Add(otherId))
-                        {
-                            neighborItemIds.Add(otherId);
-                            nextFrontier.Add(otherId);
-                        }
-                    }
-                }
-            }
-            else
+            foreach (var result in batchResults)
             {
-                // 回退到带节流的并行单条查询
-                var seedArray = currentFrontier.ToArray();
-                var relationsPerSeed = await BoundedFanout.WhenAllAsync(
-                    seedArray,
-                    (seedItemId, ct) => rs.QueryNeighborsAsync(new RelationNeighborQuery
-                    {
-                        WorkspaceId = workspaceId,
-                        CollectionId = collectionId,
-                        ItemId = seedItemId,
-                        Direction = RelationDirection.Both,
-                        // R28-B.7 P1-1：应用 AllowedRelationTypes
-                        AllowedRelationTypes = allowedRelationTypes,
-                        Take = take
-                    }, ct),
-                    CandidateProviderHelpers.DefaultReadFanout,
-                    cancellationToken).ConfigureAwait(false);
-
-                for (var i = 0; i < relationsPerSeed.Length; i++)
+                var seedItemId = result.ItemId;
+                foreach (var relation in result.Relations)
                 {
-                    var seedItemId = seedArray[i];
-                    foreach (var relation in relationsPerSeed[i])
-                    {
-                        // 提取"另一端"的 ItemId
-                        var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
-                            ? relation.TargetId
-                            : relation.SourceId;
+                    // 提取"另一端"的 ItemId
+                    var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
+                        ? relation.TargetId
+                        : relation.SourceId;
 
-                        if (!string.IsNullOrEmpty(otherId) && visitedItemIds.Add(otherId))
-                        {
-                            neighborItemIds.Add(otherId);
-                            nextFrontier.Add(otherId);
-                        }
+                    if (!string.IsNullOrEmpty(otherId) && visitedItemIds.Add(otherId))
+                    {
+                        neighborItemIds.Add(otherId);
+                        nextFrontier.Add(otherId);
                     }
                 }
             }
@@ -1726,7 +1691,8 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
         if (neighborItemIds.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // P1-3：全局硬上限 — 限制 hydration 条目数，防止对过多邻居进行正文批量获取。
+        // 限制 hydration 条目数，防止对过多邻居进行正文批量获取。
+        // 该预算作用于图遍历后的物化阶段，不属于邻居边 SQL 的读取预算，故保持在 C# 侧。
         if (neighborItemIds.Count > GraphQueryLimits.MaxHydrationItems)
         {
             neighborItemIds = new HashSet<string>(
@@ -1819,7 +1785,8 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         }
 
         // 按原始顺序构造 envelope（context 优先，memory 回退）
-        // P1-3：MaxGraphTokens — 累计 token 超限后停止添加新候选
+        // 累计 token 超限后停止添加新候选（MaxGraphTokens）。
+        // 该预算基于 hydrate 后的正文内容计算，无法下推到只返回结构列的邻居 SQL，故保持在 C# 侧。
         var graphTokenSum = 0;
         foreach (var itemId in neighborIdList)
         {

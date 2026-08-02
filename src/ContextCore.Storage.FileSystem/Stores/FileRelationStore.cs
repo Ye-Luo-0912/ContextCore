@@ -310,9 +310,24 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
             return Array.Empty<RelationNeighborBatchResult>();
         }
 
+        // 全局硬上限：种子数超出 GraphQueryLimits.MaxSeeds 直接截断（保留原序），与 Postgres 语义一致。
+        // 被截断的种子同时从 seedSet 移除：其关系不再进入任何桶（对齐 Postgres 只处理前 MaxSeeds 个种子）。
+        if (seeds.Count > GraphQueryLimits.MaxSeeds)
+        {
+            for (var i = GraphQueryLimits.MaxSeeds; i < seeds.Count; i++)
+            {
+                seedSet.Remove(seeds[i]);
+            }
+            seeds.RemoveRange(GraphQueryLimits.MaxSeeds, seeds.Count - GraphQueryLimits.MaxSeeds);
+        }
+
         var effectiveTake = query.Take > 0 ? query.Take : 100;
         var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
         var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        // 全局边数上限 = 查询声明的 GlobalEdgeLimit（clamp 到 [1, MaxTotalEdges]），与 Postgres 语义一致。
+        var globalEdgeLimit = query.GlobalEdgeLimit > 0
+            ? Math.Min(query.GlobalEdgeLimit, GraphQueryLimits.MaxTotalEdges)
+            : GraphQueryLimits.MaxTotalEdges;
         var excludedLifecycles = query.ExcludedLifecycles.Count > 0
             ? new HashSet<string>(query.ExcludedLifecycles, StringComparer.OrdinalIgnoreCase)
             : null;
@@ -379,26 +394,49 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         }
 
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
+        var totalRead = 0;
         foreach (var seed in seeds)
         {
-            // P1-4：先排序并物化，便于检测 MaxScan 截断。
+            // 先排序并物化，便于检测 MaxScan 截断。
             var sorted = buckets[seed]
                 .OrderByDescending(r => r.Weight)
                 .ThenByDescending(r => r.Confidence)
                 .ThenByDescending(r => r.CreatedAt)
                 .ToArray();
             var truncated = sorted.Length > maxScan;
-            var seedRelations = sorted
-                .Take(maxScan)
+            if (totalRead >= globalEdgeLimit)
+            {
+                // 全局预算已耗尽，后续种子不再返回结果（对齐 Postgres 外层 LIMIT @global_limit 语义）。
+                break;
+            }
+
+            // per-seed 扫描窗口（对齐 Postgres LATERAL 顺序：先 per-seed 扫描上限 → 全局上限 → Skip/Take 分页）。
+            var scanWindow = sorted.Length > maxScan ? sorted.Take(maxScan).ToArray() : sorted;
+            var remaining = globalEdgeLimit - totalRead;
+            ContextRelation[] window;
+            if (scanWindow.Length >= remaining)
+            {
+                // 预算在该种子窗口内耗尽（含恰好用尽）：只发剩余行数，并保守标记 Truncated
+                // （Postgres 无法区分"桶恰好读完"与"还有更多"，此处复刻同一保守语义保证跨存储一致）。
+                window = scanWindow.Take(remaining).ToArray();
+                truncated = true;
+            }
+            else
+            {
+                window = scanWindow;
+            }
+            totalRead += window.Length;
+
+            var paged = window
                 .Skip(effectiveSkip)
                 .Take(effectiveTake)
                 .ToArray();
-            if (seedRelations.Length > 0)
+            if (paged.Length > 0)
             {
                 results.Add(new RelationNeighborBatchResult
                 {
                     ItemId = seed,
-                    Relations = seedRelations,
+                    Relations = paged,
                     Truncated = truncated
                 });
             }

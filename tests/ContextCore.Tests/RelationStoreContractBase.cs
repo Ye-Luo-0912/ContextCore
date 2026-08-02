@@ -907,4 +907,165 @@ public abstract class RelationStoreContractBase
             await DisposeStoreAsync(store, CancellationToken.None);
         }
     }
+
+    // ── 全局边数预算（GlobalEdgeLimit）下推语义 ──────────────────────────
+
+    /// <summary>
+    /// GlobalEdgeLimit 跨种子累计截断：3 个种子各 4 条出边（weight 1-4，降序），
+    /// 全局上限 5 → 种子 A 全量 4 条，种子 B 只返回 1 条（weight 4）并标记 Truncated，种子 C 无结果。
+    /// 三个 store 必须一致（Postgres 外层 LIMIT / InMemory·FileSystem 遍历累计）。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_GlobalEdgeLimit_TruncatesAcrossSeeds()
+    {
+        var relations = new List<ContextRelation>();
+        foreach (var seed in new[] { "seedA", "seedB", "seedC" })
+        {
+            for (var i = 1; i <= 4; i++)
+            {
+                relations.Add(MakeRelation($"r-{seed}-{i}", seed, $"n-{seed}-{i}", "related_to", weight: (double)i));
+            }
+        }
+        var store = await PrepareAsync(relations.ToArray());
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB", "seedC"],
+                Direction = RelationDirection.Outgoing,
+                Take = 100,
+                GlobalEdgeLimit = 5
+            }, CancellationToken.None);
+
+            var bySeed = batch.ToDictionary(b => b.ItemId, b => b, StringComparer.OrdinalIgnoreCase);
+            Assert.AreEqual(2, batch.Count, "全局预算耗尽后 seedC 不应有结果");
+            Assert.AreEqual(4, bySeed["seedA"].Relations.Count, "seedA 应全量返回 4 条");
+            Assert.IsFalse(bySeed["seedA"].Truncated, "seedA 未触及全局上限，不应截断");
+            Assert.AreEqual(1, bySeed["seedB"].Relations.Count, "seedB 应只剩 1 条预算");
+            Assert.AreEqual(4.0, bySeed["seedB"].Relations[0].Weight, "seedB 只返回 weight 最高的 1 条");
+            Assert.IsTrue(bySeed["seedB"].Truncated, "预算在 seedB 窗口内耗尽，应标记 Truncated");
+            Assert.AreEqual(5, batch.Sum(b => b.Relations.Count), "全局返回边数不得超过 GlobalEdgeLimit");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// GlobalEdgeLimit 与 per-seed MaxScan 叠加：每种子 4 条候选、扫描窗口 2（weight 4、3），
+    /// 全局上限 4 → 种子 A 返回窗口 2 条（per-seed 截断，Truncated=true）；种子 B 恰好用尽剩余 2 条
+    /// （保守标记 Truncated=true）；种子 C 无结果。总返回 4 条。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_GlobalEdgeLimit_CombinesWithMaxScan()
+    {
+        var relations = new List<ContextRelation>();
+        foreach (var seed in new[] { "seedA", "seedB", "seedC" })
+        {
+            for (var i = 1; i <= 4; i++)
+            {
+                relations.Add(MakeRelation($"r-{seed}-{i}", seed, $"n-{seed}-{i}", "related_to", weight: (double)i));
+            }
+        }
+        var store = await PrepareAsync(relations.ToArray());
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB", "seedC"],
+                Direction = RelationDirection.Outgoing,
+                Take = 100,
+                MaxScan = 2,
+                GlobalEdgeLimit = 4
+            }, CancellationToken.None);
+
+            var bySeed = batch.ToDictionary(b => b.ItemId, b => b, StringComparer.OrdinalIgnoreCase);
+            Assert.AreEqual(2, batch.Count, "全局预算耗尽后 seedC 不应有结果");
+            Assert.AreEqual(2, bySeed["seedA"].Relations.Count, "seedA 应返回扫描窗口内的 2 条");
+            Assert.IsTrue(bySeed["seedA"].Truncated, "seedA 候选数(4) > MaxScan(2)，per-seed 截断应标记 Truncated");
+            Assert.AreEqual(2, bySeed["seedB"].Relations.Count, "seedB 应恰好用尽剩余 2 条");
+            Assert.IsTrue(bySeed["seedB"].Truncated, "seedB 恰好消费到全局上限，应保守标记 Truncated");
+            Assert.AreEqual(4, batch.Sum(b => b.Relations.Count), "全局返回边数不得超过 GlobalEdgeLimit");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// GlobalEdgeLimit 大于实际数据量时，不得误标 Truncated（防过度标记回归）。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_GlobalEdgeLimit_ExceedsData_NoTruncation()
+    {
+        var store = await PrepareAsync(
+            MakeRelation("r-a1", "seedA", "n-a1", "related_to", weight: 2.0),
+            MakeRelation("r-a2", "seedA", "n-a2", "related_to", weight: 1.0),
+            MakeRelation("r-b1", "seedB", "n-b1", "related_to", weight: 2.0),
+            MakeRelation("r-b2", "seedB", "n-b2", "related_to", weight: 1.0),
+            MakeRelation("r-c1", "seedC", "n-c1", "related_to", weight: 2.0),
+            MakeRelation("r-c2", "seedC", "n-c2", "related_to", weight: 1.0));
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB", "seedC"],
+                Direction = RelationDirection.Outgoing,
+                Take = 100,
+                GlobalEdgeLimit = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(3, batch.Count, "3 个种子都应有结果");
+            Assert.AreEqual(6, batch.Sum(b => b.Relations.Count), "数据量 < 全局上限，应全量返回");
+            Assert.IsTrue(batch.All(b => !b.Truncated), "未触及任何上限，不应标记 Truncated");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// 种子数超过 GraphQueryLimits.MaxSeeds（50）时，超出部分直接截断（保留原序）。
+    /// 51 个种子各 1 条出边 → 恰返回前 50 个种子的结果，无 Truncated。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_SeedsBeyondMaxSeeds_Truncated()
+    {
+        var relations = Enumerable.Range(0, GraphQueryLimits.MaxSeeds + 1)
+            .Select(i => MakeRelation($"r-s{i}", $"seed-{i:D2}", $"n-{i:D2}", "related_to"))
+            .ToArray();
+        var itemIds = Enumerable.Range(0, GraphQueryLimits.MaxSeeds + 1)
+            .Select(i => $"seed-{i:D2}")
+            .ToArray();
+        var store = await PrepareAsync(relations);
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = itemIds,
+                Direction = RelationDirection.Outgoing,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(GraphQueryLimits.MaxSeeds, batch.Count, "种子数应截断到 MaxSeeds=50");
+            Assert.IsTrue(batch.All(b => !b.Truncated), "单种子单边未触及任何上限，不应标记 Truncated");
+            Assert.AreEqual("seed-00", batch[0].ItemId, "截断应保留原序");
+            Assert.AreEqual($"seed-{GraphQueryLimits.MaxSeeds - 1:D2}", batch[^1].ItemId, "最后一个保留种子应是第 50 个");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
 }

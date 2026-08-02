@@ -490,6 +490,12 @@ LIMIT @take OFFSET @skip;
         var effectiveTake = Math.Min(query.Take > 0 ? query.Take : 100, GraphQueryLimits.MaxEdgesPerSeed);
         var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
 
+        // 全局边数上限 = 查询声明的 GlobalEdgeLimit（clamp 到 [1, MaxTotalEdges]）。
+        // 默认即 MaxTotalEdges；调用方（BFS 引擎 / Provider）可传入自身剩余预算，把上限精确下推到 SQL。
+        var globalEdgeLimit = query.GlobalEdgeLimit > 0
+            ? Math.Min(query.GlobalEdgeLimit, GraphQueryLimits.MaxTotalEdges)
+            : GraphQueryLimits.MaxTotalEdges;
+
         // P7：读取 (seed_id, 结构列) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
         var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var seed in seeds)
@@ -503,14 +509,14 @@ LIMIT @take OFFSET @skip;
         string? lastReadSeedId = null;
 
         // P1-9：Seed 分批执行，避免单次 LATERAL unnest(@item_ids) 过大。
-        // 全局 LIMIT @global_limit 下推到 SQL：每批 = MaxTotalEdges - totalRead 的剩余预算，
+        // 全局 LIMIT @global_limit 下推到 SQL：每批 = 全局上限（GlobalEdgeLimit）- totalRead 的剩余预算，
         // 数据库只需为每批排序/生成 ≤ remainingBudget 行结构列。
         const int SeedBatchSize = 10;
-        for (var batchStart = 0; batchStart < seeds.Count && totalRead < GraphQueryLimits.MaxTotalEdges; batchStart += SeedBatchSize)
+        for (var batchStart = 0; batchStart < seeds.Count && totalRead < globalEdgeLimit; batchStart += SeedBatchSize)
         {
             var batchSize = Math.Min(SeedBatchSize, seeds.Count - batchStart);
             var batchSeeds = seeds.Skip(batchStart).Take(batchSize).ToArray();
-            var remainingBudget = GraphQueryLimits.MaxTotalEdges - totalRead;
+            var remainingBudget = globalEdgeLimit - totalRead;
 
             await using var command = connection.CreateCommand();
             command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -624,7 +630,7 @@ LIMIT @global_limit;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (totalRead >= GraphQueryLimits.MaxTotalEdges)
+                if (totalRead >= globalEdgeLimit)
                 {
                     globalCapHit = true;
                     break;
@@ -642,7 +648,7 @@ LIMIT @global_limit;
                 }
             }
 
-            if (totalRead >= GraphQueryLimits.MaxTotalEdges)
+            if (totalRead >= globalEdgeLimit)
             {
                 globalCapHit = true;
                 break;

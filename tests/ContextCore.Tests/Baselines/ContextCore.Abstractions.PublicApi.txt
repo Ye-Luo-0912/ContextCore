@@ -8930,6 +8930,7 @@ P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.CollectionId (get|i
 P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.Direction (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ExcludedLifecycles (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ExcludedReviewStatuses (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.GlobalEdgeLimit (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ItemIds (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.MaxScan (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.MinConfidence (get|init)

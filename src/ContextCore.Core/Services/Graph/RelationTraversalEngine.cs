@@ -103,7 +103,7 @@ public sealed class RelationTraversalEngine
                 break;
             }
 
-            // P1-6: 整个 frontier 一次性批量查询，消除逐节点往返。
+            // 整个 frontier 一次性批量查询，消除逐节点往返。
             var batchQuery = BuildBatchQuery(
                 request,
                 profile,
@@ -227,7 +227,7 @@ public sealed class RelationTraversalEngine
     }
 
     /// <summary>
-    /// P1-6：为整个 frontier 构建 RelationNeighborBatchQuery。
+    /// 为整个 frontier 构建 RelationNeighborBatchQuery。
     /// 字段语义与原 per-node RelationNeighborQuery 一致，区别仅在 ItemIds（多个种子）。
     /// </summary>
     private static RelationNeighborBatchQuery BuildBatchQuery(

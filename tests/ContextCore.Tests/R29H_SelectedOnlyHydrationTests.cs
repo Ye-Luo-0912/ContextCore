@@ -310,6 +310,36 @@ public sealed class R29H_SelectedOnlyHydrationTests
         }
     }
 
+    [TestMethod]
+    public async Task GraphProvider_SingleSeed_UsesBatchPath()
+    {
+        // frontier 为单种子时也必须走 QueryNeighborsBatchAsync（保证全局 LIMIT 下推在存储层生效），
+        // 不得回退到无全局上限的 QueryNeighborsAsync 单条路径。
+        var contextStore = new RecordingContextStore(
+            metadataItems: new[] { MakeMetadataOnlyItem("n-1", 80), MakeMetadataOnlyItem("n-2", 80) });
+        var relationStore = new FakeRelationStore(
+            new[]
+            {
+                MakeRelation("r-1", "seed-1", "n-1"),
+                MakeRelation("r-2", "seed-1", "n-2")
+            });
+        var seed = new ContextCandidateEnvelope
+        {
+            CandidateId = "seed-1",
+            Source = ContextCandidateSource.Mandatory,
+            CanonicalKey = CanonicalCandidateKey.Create("test-ws", "test-col", "context", "seed-1", "v1")
+        };
+        var provider = new GraphCandidateProvider(
+            contextStore, relationStore: relationStore, memoryStore: null, tokenizerResolver: null);
+
+        var result = await provider.ExecuteAsync(MakeContext(
+            RetrievalExpert.Graph, includeContent: false, seedCandidates: new[] { seed }));
+
+        Assert.AreEqual(1, relationStore.BatchQueryCalls, "单种子也必须走批量邻居查询。");
+        Assert.AreEqual(0, relationStore.SingleQueryCalls, "不得回退到 QueryNeighborsAsync 单条路径。");
+        Assert.AreEqual(2, result.Envelopes.Count, "应召回 2 个图邻居候选。");
+    }
+
     // =======================================================================
     // 6. WorkingMemory Provider：IncludeContent 透传
     // =======================================================================
@@ -696,11 +726,18 @@ public sealed class R29H_SelectedOnlyHydrationTests
     {
         private readonly IReadOnlyList<ContextRelation> _relations;
 
+        internal int SingleQueryCalls;
+        internal int BatchQueryCalls;
+        internal RelationNeighborBatchQuery? LastBatchQuery;
+
         internal FakeRelationStore(IReadOnlyList<ContextRelation> relations) => _relations = relations;
 
         public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
             RelationNeighborQuery query, CancellationToken cancellationToken = default)
-            => Task.FromResult(_relations);
+        {
+            SingleQueryCalls++;
+            return Task.FromResult(_relations);
+        }
 
         public Task<IReadOnlyList<ContextRelation>> QueryAsync(
             ContextRelationQuery query, CancellationToken cancellationToken = default)
@@ -708,7 +745,30 @@ public sealed class R29H_SelectedOnlyHydrationTests
 
         public Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
             RelationNeighborBatchQuery query, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<RelationNeighborBatchResult>>(Array.Empty<RelationNeighborBatchResult>());
+        {
+            BatchQueryCalls++;
+            LastBatchQuery = query;
+            // 按种子过滤，构造与 QueryNeighborsAsync 等价的批量结果（Both 方向）。
+            var results = new List<RelationNeighborBatchResult>();
+            foreach (var seed in query.ItemIds)
+            {
+                var bucket = _relations
+                    .Where(r => string.Equals(r.SourceId, seed, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(r.TargetId, seed, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (bucket.Length == 0)
+                {
+                    continue;
+                }
+                results.Add(new RelationNeighborBatchResult
+                {
+                    ItemId = seed,
+                    Relations = bucket,
+                    Truncated = false
+                });
+            }
+            return Task.FromResult<IReadOnlyList<RelationNeighborBatchResult>>(results);
+        }
 
         public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
             => throw new NotSupportedException("本测试不写入关系。");
