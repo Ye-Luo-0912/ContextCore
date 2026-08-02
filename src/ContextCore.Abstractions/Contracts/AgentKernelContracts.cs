@@ -519,7 +519,9 @@ public sealed record ToolDispatchPrepareResult
 /// 不保证崩溃恢复的 exactly-once。生产部署应注入持久化实现（如基于 DB/WAL 的 journal）。
 ///
 /// Journal 写入顺序（与 <see cref="ContextCore.Core.Services.AgentRunRuntime.DefaultDurableToolExecutor"/> 调用点对应）：
-///   1. <see cref="PrepareAsync"/>：在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。
+///   1. <see cref="PrepareWithIntentAsync"/>（Item 5：Prepare + 前置 Intent 单次原子写）：
+///      在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。也可用
+///      <see cref="PrepareAsync"/> + <see cref="MarkDispatchingIntentAsync"/> 两步完成等价流程。
 ///   2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
 ///   3. <see cref="MarkCommittedAsync"/>：结果写入 durable result store 后。
 ///   4. <see cref="MarkResultDeliveredAsync"/>：结果成功送达后。
@@ -587,6 +589,24 @@ public interface IToolDispatchJournal
     /// 调用方（<see cref="IDurableToolExecutor"/>）应根据返回值决定是否 Dispatch、对账或返回缓存结果。
     /// </remarks>
     ValueTask<ToolDispatchPrepareResult> PrepareAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Item 5（性能优先级）：Prepare + 前置 Intent 合并为单次原子写。
+    /// 在外部 Tool 调用发起前一次性写入条目并推进到 <see cref="ToolDispatchState.DispatchingIntent"/>，
+    /// 替代"<see cref="PrepareAsync"/> + <see cref="MarkDispatchingIntentAsync"/> 两次往返"，
+    /// 每 Tool 分派减少一次持久化写入，且 durable 边界与条目创建原子化（无 Prepared 空窗）。
+    /// </summary>
+    /// <param name="entry">journal 条目（State 为 Prepared 或 DispatchingIntent；入口状态不影响写入结果）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 返回值语义与 <see cref="PrepareAsync"/> 一致，但 <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true
+    /// 时保证 journal 已处于 DispatchingIntent（本次新插入，或既有 Prepared 前驱已原子推进）——
+    /// 外部调用尚未开始，可安全执行 <see cref="IToolDispatcher.DispatchAsync"/>，无需再单独标记 Intent。
+    /// 既有 DispatchingIntent/Dispatched（上次崩溃残留或并发分派）→ NeedsReconciliation；
+    /// 既有 Committed/ResultDelivered → CachedResult（InMemory 自带缓存）或 ShouldDispatch=false（Postgres 由调用方查结果缓存）。
+    /// 语义等价校验与 <see cref="PrepareAsync"/> 一致（P0-3 CAS-2：RequestId 复用检测）。
+    /// </remarks>
+    ValueTask<ToolDispatchPrepareResult> PrepareWithIntentAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// P0-1: Mark that the external Tool call is about to start. Must be persisted BEFORE the actual external call.

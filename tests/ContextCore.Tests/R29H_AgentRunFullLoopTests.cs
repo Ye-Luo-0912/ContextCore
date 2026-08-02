@@ -438,6 +438,92 @@ public sealed class R29H_AgentRunFullLoopTests
             "应有 RunCompleted 事件标记循环结束。");
     }
 
+    /// <summary>
+    /// 验证：存在 Checkpoint Cursor 时，崩溃恢复走"从游标断点续读"快路径——
+    /// 从 checkpoint 本体还原对话流 / 工具观察 / 模型轮次，只重放游标之后的新事件。
+    /// 用只允许游标及之后读取的事件存储包装器证明恢复未读取游标之前的任何事件。
+    /// </summary>
+    [TestMethod]
+    public async Task Resume_FromCheckpointCursor_FastPath_RestoresContextAndCompletes()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var innerEventStore = new InMemoryAgentRunEventStore(runStore, checkpointStore);
+        // 只允许游标及之后读取：若恢复回退到全量重放（从 sequence 0 读取）则直接抛异常
+        var eventStore = new CursorEnforcingEventStore(innerEventStore);
+        var checkpointFactory = new StubCheckpointFactory();
+
+        var run = BuildRun("search 恢复验证", turnBudget: new AgentTurnBudget
+        {
+            MaxTurns = 10,
+            TurnsUsed = 0,
+            MaxModelCalls = 5
+        });
+        await runStore.CreateAsync(run);
+
+        // 阶段 1：执行一轮 Tool 调用（触发 checkpoint），第二次模型调用返回后取消 → 模拟崩溃。
+        // 取消时机保证第一轮已完整 flush（事件 + 状态 CAS + checkpoint cursor + 本体），
+        // 第二轮事件未 flush（模拟进程崩溃丢失），Run 停留在非终态 ContextBuilding。
+        var echoTriggers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["search"] = "echo"
+        };
+        using var phase1Cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var phase1Transport = new CountingTransport(
+            new DeterministicAgentModelTransport(echoTriggers),
+            cancelAfterCall: 2,
+            cts: phase1Cts);
+        var actor1 = new AgentRunActor(
+            runStore, eventStore, phase1Transport,
+            new DefaultAgentLoopPolicy(),
+            new EchoToolDispatcher(),
+            checkpointFactory: checkpointFactory,
+            checkpointStore: checkpointStore);
+        await actor1.ExecuteAsync(run, phase1Cts.Token);
+
+        // 断言：第一轮产生了 checkpoint cursor + 完整 metadata 的 checkpoint 本体
+        var cursor = await eventStore.GetCheckpointCursorAsync(run.WorkspaceId, run.RunId);
+        Assert.IsNotNull(cursor, "第一轮结束应写入 checkpoint cursor。");
+        var checkpointBody = await checkpointStore.GetAsync(run.WorkspaceId, cursor!.CheckpointId);
+        Assert.IsNotNull(checkpointBody, "checkpoint 本体应已持久化。");
+        Assert.IsTrue(checkpointBody!.Metadata.ContainsKey("conversationJson"),
+            "checkpoint metadata 应含 conversationJson（供快路径还原对话流）。");
+        Assert.IsTrue(checkpointBody.Metadata.ContainsKey("toolObservationsJson"),
+            "checkpoint metadata 应含 toolObservationsJson。");
+        Assert.IsTrue(checkpointBody.Metadata.ContainsKey("executionModelTurn"),
+            "checkpoint metadata 应含 executionModelTurn。");
+
+        var crashedRun = await runStore.GetAsync(run.WorkspaceId, run.RunId);
+        Assert.IsNotNull(crashedRun);
+        Assert.IsFalse(AgentRunStateMachine.IsTerminalState(crashedRun!.State),
+            $"崩溃后 Run 应停留在非终态（可恢复），实际 {crashedRun.State}。");
+
+        // 阶段 2：恢复——只允许读取游标及之后的事件。
+        // 快路径只读取游标之后的新事件（此处为 0 条）+ 游标锚点事件，因此不会触犯下限；
+        // 若恢复回退到全量重放（从 sequence 0 读取），会因越界读取抛异常 → Run 转 Failed。
+        eventStore.EnforceFromSequence(cursor.LastEventSequence);
+        var phase2Transport = new CountingTransport(new DeterministicAgentModelTransport(echoTriggers));
+        using var phase2Cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var actor2 = new AgentRunActor(
+            runStore, eventStore, phase2Transport,
+            new DefaultAgentLoopPolicy(),
+            new EchoToolDispatcher(),
+            checkpointFactory: checkpointFactory,
+            checkpointStore: checkpointStore);
+        await actor2.ExecuteAsync(crashedRun!, phase2Cts.Token);
+
+        // 断言：恢复完成（快路径被采用）
+        var finalRun = await runStore.GetAsync(run.WorkspaceId, run.RunId);
+        Assert.IsNotNull(finalRun);
+        Assert.AreEqual(AgentRunState.Completed, finalRun!.State,
+            $"恢复后 Run 应进入 Completed 终态，实际 {finalRun.State}（FailureReason={finalRun.FailureReason}）。");
+
+        // 断言：恢复后仅需一次模型调用——还原的对话流含 Tool 观察，直接产出最终答案
+        Assert.AreEqual(1, phase2Transport.CallCount,
+            "快路径应还原完整对话流，恢复后第一次模型调用即产出最终答案。");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(finalRun.FinalAnswer), "最终答案应已持久化。");
+    }
+
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
     private static AgentRun BuildRun(
@@ -551,6 +637,108 @@ public sealed class R29H_AgentRunFullLoopTests
                 StateJson = "{\"mode\":\"stub\",\"sessionId\":\"" + sessionId + "\"}"
             };
             return ValueTask.FromResult(checkpoint);
+        }
+    }
+
+    /// <summary>
+    /// 包装事件存储：禁止读取指定 sequence 之前的事件。
+    /// 用于证明崩溃恢复走游标快路径（不读取游标之前的任何事件）。
+    /// </summary>
+    private sealed class CursorEnforcingEventStore : IAgentRunEventStore
+    {
+        private readonly IAgentRunEventStore _inner;
+        private int _minAllowedSequence;
+
+        public CursorEnforcingEventStore(IAgentRunEventStore inner)
+        {
+            _inner = inner;
+        }
+
+        /// <summary>设置读取下限（含）；低于此 sequence 的读取直接抛异常。</summary>
+        public void EnforceFromSequence(int minAllowedSequence)
+        {
+            _minAllowedSequence = minAllowedSequence;
+        }
+
+        public ValueTask AppendAsync(
+            AgentRunEvent @event,
+            CancellationToken cancellationToken = default,
+            string? leaseToken = null,
+            long? fencingToken = null)
+            => _inner.AppendAsync(@event, cancellationToken, leaseToken, fencingToken);
+
+        public ValueTask AppendBatchAsync(
+            IReadOnlyList<AgentRunEvent> events,
+            AgentRunStateUpdate? runStateUpdate,
+            AgentCheckpointCursor? checkpointCursor,
+            AgentCheckpoint? checkpointBody,
+            CancellationToken cancellationToken = default)
+            => _inner.AppendBatchAsync(events, runStateUpdate, checkpointCursor, checkpointBody, cancellationToken);
+
+        public ValueTask<IReadOnlyList<AgentRunEvent>> ReadAsync(
+            string workspaceId,
+            string runId,
+            int fromSequence = 0,
+            int take = 1000,
+            CancellationToken cancellationToken = default)
+        {
+            if (fromSequence < _minAllowedSequence)
+            {
+                throw new InvalidOperationException(
+                    $"禁止读取游标之前的事件（fromSequence={fromSequence} < {_minAllowedSequence}）——恢复应走游标快路径。");
+            }
+            return _inner.ReadAsync(workspaceId, runId, fromSequence, take, cancellationToken);
+        }
+
+        public ValueTask<int> GetLastSequenceAsync(
+            string workspaceId, string runId, CancellationToken cancellationToken = default)
+            => _inner.GetLastSequenceAsync(workspaceId, runId, cancellationToken);
+
+        public ValueTask<AgentCheckpointCursor?> GetCheckpointCursorAsync(
+            string workspaceId, string runId, CancellationToken cancellationToken = default)
+            => _inner.GetCheckpointCursorAsync(workspaceId, runId, cancellationToken);
+    }
+
+    /// <summary>
+    /// 包装模型传输：统计调用次数，可选在第 N 次调用后取消 CTS（模拟崩溃时机）。
+    /// </summary>
+    private sealed class CountingTransport : IAgentModelTransport
+    {
+        private readonly IAgentModelTransport _inner;
+        private readonly CancellationTokenSource? _cts;
+        private readonly int _cancelAfterCall;
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public CountingTransport(
+            IAgentModelTransport inner,
+            int cancelAfterCall = int.MaxValue,
+            CancellationTokenSource? cts = null)
+        {
+            _inner = inner;
+            _cancelAfterCall = cancelAfterCall;
+            _cts = cts;
+        }
+
+        public ValueTask<AgentModelResponse> CallAsync(
+            string runId, string context, CancellationToken cancellationToken = default)
+            => _inner.CallAsync(runId, context, cancellationToken);
+
+        public ValueTask<AgentModelResponse> CallAsync(
+            string runId, IReadOnlyList<AgentMessage> messages, CancellationToken cancellationToken = default)
+            => _inner.CallAsync(runId, messages, cancellationToken);
+
+        public ValueTask<AgentModelResponse> CallAsync(
+            AgentModelRequest request, CancellationToken cancellationToken = default)
+        {
+            var n = Interlocked.Increment(ref _callCount);
+            var result = _inner.CallAsync(request, cancellationToken);
+            if (n >= _cancelAfterCall)
+            {
+                _cts?.Cancel();
+            }
+            return result;
         }
     }
 }

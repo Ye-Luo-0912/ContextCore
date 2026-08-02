@@ -13,10 +13,11 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 流程：
 //   1. 生成稳定 RequestId（基于 runId + toolCall 哈希，确保可重放时一致）
 //   2. 校验 ToolName 非空 + Dispatcher 支持
-//   3. Journal.PrepareAsync（若注入 journal）→ 根据 ToolDispatchPrepareResult 决策：
+//   3. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
+//      （Item 5：合并 PrepareAsync + MarkDispatchingIntentAsync 两次写为一次），根据结果决策：
 //      a. CachedResult 非空（Journal = Committed/ResultDelivered）→ 直接返回缓存结果，禁止重新 Dispatch
-//      b. NeedsReconciliation=true（Journal = Dispatched）→ 返回对账结果（携带 ExternalOperationId），不重新 Dispatch
-//      c. ShouldDispatch=true（Journal 不存在或 Prepared）→ 继续 Dispatch
+//      b. NeedsReconciliation=true（Journal = DispatchingIntent/Dispatched）→ 返回对账结果（携带 ExternalOperationId），不重新 Dispatch
+//      c. ShouldDispatch=true（本次新插入或既有 Prepared 已推进，journal 已处于 DispatchingIntent）→ 继续 Dispatch
 //   4. IToolDispatcher.DispatchAsync（携带 RequestId + IdempotencyKey）
 //   5. Journal.MarkDispatchedAsync（若注入 journal）
 //   6. 副作用分类：
@@ -121,7 +122,10 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 duration: stopwatch.Elapsed);
         }
 
-        // 4. Journal.PrepareAsync（若注入 journal）→ 根据 ToolDispatchPrepareResult 决策
+        // 4. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
+        //    （Item 5：合并 PrepareAsync + MarkDispatchingIntentAsync 两次往返为一次，且 durable 边界
+        //      与条目创建原子化——ShouldDispatch=true 时 journal 必已处于 DispatchingIntent）。
+        //    根据 ToolDispatchPrepareResult 决策：
         ToolDispatchPrepareResult? prepareResult = null;
         if (_dispatchJournal is not null)
         {
@@ -138,14 +142,14 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     RunId = runId,
                     UpdatedAt = startedAt
                 };
-                prepareResult = await _dispatchJournal.PrepareAsync(entry, cancellationToken).ConfigureAwait(false);
+                prepareResult = await _dispatchJournal.PrepareWithIntentAsync(entry, cancellationToken).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
-                // PrepareAsync 失败（如 RequestId 复用检测）→ 返回失败
+                // PrepareWithIntentAsync 失败（如 RequestId 复用检测）→ 返回失败
                 return BuildFailedResult(
                     requestId, idempotencyKey, ToolSideEffect.Unknown,
-                    error: $"Journal PrepareAsync 失败：{ex.Message}",
+                    error: $"Journal PrepareWithIntentAsync 失败：{ex.Message}",
                     journalState: ToolDispatchState.Prepared,
                     duration: stopwatch.Elapsed);
             }
@@ -196,28 +200,14 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     requestId, idempotencyKey, prepareResult.ExternalOperationId, stopwatch.Elapsed);
             }
 
-            // 4d. ShouldDispatch=true（Journal 不存在或 Prepared）→ 继续 Dispatch
-        }
-
-        // P0-1: Mark dispatching intent BEFORE external call (durable boundary for exactly-once)
-        // 若进程在此之后崩溃，恢复时知道外部调用可能已开始，需对账而非盲目重放。
-        if (_dispatchJournal is not null)
-        {
-            try
-            {
-                await _dispatchJournal.MarkDispatchingIntentAsync(requestId, cancellationToken).ConfigureAwait(false);
-            }
-            catch (InvalidOperationException)
-            {
-                // 状态已被并发推进（AlreadyAdvanced）→ 返回对账结果，不重新 Dispatch
-                stopwatch.Stop();
-                return BuildReconciliationResult(requestId, idempotencyKey, null, stopwatch.Elapsed);
-            }
+            // 4d. ShouldDispatch=true（本次新插入或既有 Prepared 已推进，journal 已处于 DispatchingIntent）→ 继续 Dispatch
         }
 
         // 5. Dispatch（携带 RequestId + P0-4 执行上下文：WorkspaceId/RunId/IdempotencyKey）
         // P0-4：将 WorkspaceId/RunId/IdempotencyKey 透传到 ToolDispatchRequest，
         // 由 RealToolDispatcher 构造 ToolExecutionContext 传递给 IToolHandler。
+        // Item 5：Intent 已在 PrepareWithIntentAsync 中前置落库（DispatchingIntent = durable 边界），
+        // 此处无需再单独标记；若进程在此之后崩溃，恢复时知道外部调用可能已开始，需对账而非盲目重放。
         ToolDispatchResult dispatchResult;
         try
         {

@@ -151,6 +151,77 @@ WHERE run_id = @run_id
 
     /// <inheritdoc />
     /// <remarks>
+    /// 批量续租约（心跳）：单条 SQL 续约全部租约——<c>UPDATE ... FROM unnest(@run_ids, @tokens)</c>，
+    /// 将整批续约压缩为一次数据库往返（替代 N 次单条 RenewAsync）。
+    /// 校验与单条路径一致：lease_token 匹配且 lease_expires_at &gt; clock_timestamp()。
+    /// RETURNING 返回成功续约的 run_id；未返回的即失败（租约被抢占或已过期）。
+    /// </remarks>
+    public async ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+        IReadOnlyList<AgentRunLeaseRenewal> leases,
+        TimeSpan extension,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(leases);
+        if (extension <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(extension), "续约时间必须为正。");
+        }
+        if (leases.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        var newExpiresAt = DateTimeOffset.UtcNow.Add(extension);
+
+        var runIds = new string[leases.Count];
+        var tokens = new string[leases.Count];
+        for (var i = 0; i < leases.Count; i++)
+        {
+            var lease = leases[i];
+            ArgumentException.ThrowIfNullOrWhiteSpace(lease.RunId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(lease.LeaseToken);
+            runIds[i] = lease.RunId;
+            tokens[i] = lease.LeaseToken;
+        }
+
+        var renewedIds = new HashSet<string>(StringComparer.Ordinal);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+UPDATE {Table("agent_run_leases")}
+SET lease_expires_at = @new_expires_at
+FROM unnest(@run_ids, @tokens) AS req(run_id, lease_token)
+WHERE {Table("agent_run_leases")}.run_id = req.run_id
+  AND {Table("agent_run_leases")}.lease_token = req.lease_token
+  AND {Table("agent_run_leases")}.lease_expires_at > clock_timestamp()
+RETURNING {Table("agent_run_leases")}.run_id;
+""";
+        command.Parameters.AddWithValue("run_ids", runIds);
+        command.Parameters.AddWithValue("tokens", tokens);
+        command.Parameters.AddWithValue("new_expires_at", newExpiresAt);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            renewedIds.Add(reader.GetString(0));
+        }
+
+        // 未出现在 RETURNING 中的 runId 即续约失败（租约被抢占/已过期）
+        var failed = new List<string>(leases.Count - renewedIds.Count);
+        foreach (var lease in leases)
+        {
+            if (!renewedIds.Contains(lease.RunId))
+            {
+                failed.Add(lease.RunId);
+            }
+        }
+        return failed;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
     /// 释放租约（主动让出）：DELETE WHERE lease_token = @token。
     /// 通常在 run 完成（Completed/Failed/Cancelled）后调用。0 行受影响不抛异常。
     /// </remarks>
@@ -229,12 +300,13 @@ LIMIT 1;
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：单 SQL 原子操作 — 只有无活跃租约 AND 状态匹配时才更新为 Failed。
+    /// P0-7：单 SQL 原子操作 — 只有无活跃租约 AND 状态匹配时才更新为 LeaseLost。
     /// 消除 Recovery Worker 中 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
     /// NOT EXISTS 子查询检查活跃租约（lease_expires_at >= clock_timestamp()）。
     /// 同步更新 data JSON 中的 State / UpdatedAt / FinishedAt（与 TransitionStateAsync 一致）。
+    /// 终态取 LeaseLost：Run 在非终态停留超时且无人持有租约，说明原 owner 丢租后未被接管。
     /// </remarks>
-    public async ValueTask<int> MarkFailedIfLeaseExpiredAsync(
+    public async ValueTask<int> MarkLeaseLostIfLeaseExpiredAsync(
         string workspaceId,
         string runId,
         AgentRunState expectedCurrentState,
@@ -251,10 +323,10 @@ LIMIT 1;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 UPDATE {Table("agent_runs")}
-SET state = @failed_state,
+SET state = @lease_lost_state,
     updated_at = @updated_at,
     finished_at = @finished_at,
-    data = data || jsonb_build_object('State', to_jsonb(@failed_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))
+    data = data || jsonb_build_object('State', to_jsonb(@lease_lost_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))
 WHERE workspace_id = @workspace_id
   AND run_id = @run_id
   AND state = @expected_state
@@ -267,8 +339,8 @@ WHERE workspace_id = @workspace_id
         command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("expected_state", (byte)expectedCurrentState);
-        command.Parameters.AddWithValue("failed_state", (byte)AgentRunState.Failed);
-        command.Parameters.AddWithValue("failed_state_name", AgentRunState.Failed.ToString());
+        command.Parameters.AddWithValue("lease_lost_state", (byte)AgentRunState.LeaseLost);
+        command.Parameters.AddWithValue("lease_lost_state_name", AgentRunState.LeaseLost.ToString());
         command.Parameters.AddWithValue("updated_at", now);
         command.Parameters.AddWithValue("finished_at", now);
 

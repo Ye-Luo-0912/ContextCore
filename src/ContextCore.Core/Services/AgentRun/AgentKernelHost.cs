@@ -49,6 +49,13 @@ public sealed class AgentKernelHost : IAsyncDisposable
     private readonly AgentHostOptions _options;
     private readonly ILogger<AgentKernelHost>? _logger;
     private readonly ConcurrentDictionary<string, ActiveRun> _activeRuns = new(StringComparer.Ordinal);
+    // 共享批量心跳：租约注册表（runId → 活跃租约条目）。
+    // 所有启用租约的 Run 在此登记，由单一心跳循环每周期批量续约一次，
+    // 替代"每个 Run 一个独立续约任务"（N 个 Run = N 次 DB 往返/周期 → 1 次）。
+    private readonly ConcurrentDictionary<string, ActiveLeaseEntry> _leaseRegistry = new(StringComparer.Ordinal);
+    private readonly object _heartbeatLock = new();
+    private Task? _heartbeatLoopTask;
+    private CancellationTokenSource? _heartbeatLoopCts;
     // P0-5：workspace 信号量改为 LRU 条目（含信号量 + 最后访问时间 + MaxCount），避免无界增长
     private readonly ConcurrentDictionary<string, WorkspaceSemaphoreEntry> _workspaceSemaphores = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _globalSemaphore;
@@ -218,8 +225,6 @@ public sealed class AgentKernelHost : IAsyncDisposable
         var workspaceAcquired = false;
         SemaphoreSlim? workspaceSemaphore = null;
         LeasedAgentRun? lease = null;
-        Task? heartbeatTask = null;
-        CancellationTokenSource? heartbeatCts = null;
 
         try
         {
@@ -248,14 +253,11 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 }
             }
 
-            // 子问题 9：启动 heartbeat 续租（若启用租约）
+            // 子问题 9：将租约登记到共享批量心跳（续约失败时取消 Actor 防止双执行）
             // P0-4：传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
             if (lease is not null && _runLease is not null)
             {
-                heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(activeRun.Cts.Token);
-                // P0-5：传入 workspaceId 以便丢租时推进到 LeaseLost 状态
-                heartbeatTask = RunHeartbeatAsync(
-                    run.WorkspaceId, run.RunId, lease.LeaseToken, lease.ExpiresAt, activeRun.Cts, heartbeatCts.Token);
+                RegisterLease(lease, activeRun.Cts);
             }
 
             // P0-4：将 leaseToken + fencingToken 传给 Actor，Actor 在每次副作用操作（FlushPendingEventsAsync）
@@ -273,14 +275,11 @@ public sealed class AgentKernelHost : IAsyncDisposable
         }
         finally
         {
-            // 停止 heartbeat
-            if (heartbeatTask is not null)
+            // 先从共享心跳注册表移除（停止续约；避免循环对已释放的 CTS 发起取消）
+            if (lease is not null && _runLease is not null)
             {
-                heartbeatCts?.Cancel();
-                try { await heartbeatTask.ConfigureAwait(false); }
-                catch { /* heartbeat 取消异常忽略 */ }
+                UnregisterLease(run.RunId);
             }
-            heartbeatCts?.Dispose();
 
             // P0-5：按标志位释放 permit，确保任何路径下已获取的 permit 都被释放
             // workspaceAcquired 为 true 时 workspaceSemaphore 必不为 null
@@ -305,44 +304,58 @@ public sealed class AgentKernelHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 子问题 9 + P0-4 + P0-5：后台 heartbeat 续租（直到 cancellationToken 取消）。
+    /// 将租约登记到共享批量心跳注册表（首次登记时启动共享心跳循环）。
     /// </summary>
-    /// <param name="workspaceId">Workspace ID（P0-5：丢租时推进 LeaseLost 状态需要）。</param>
-    /// <param name="runId">Agent Run ID。</param>
-    /// <param name="leaseToken">租约 token（来自 TryAcquireAsync）。</param>
-    /// <param name="actorCts">
-    /// P0-4：Actor 的 CancellationTokenSource。续租失败时调用 <see cref="CancellationTokenSource.Cancel"/>
-    /// 取消 Actor 执行，防止 lease 被抢占后当前实例继续执行副作用（双执行）。
-    /// </param>
-    /// <param name="cancellationToken">heartbeat 自身的取消令牌（Actor 结束后由 heartbeatCts 取消）。</param>
-    private async Task RunHeartbeatAsync(
-        string workspaceId,
-        string runId,
-        string leaseToken,
-        DateTimeOffset initialLeaseExpiresAt,
-        CancellationTokenSource actorCts,
-        CancellationToken cancellationToken)
+    private void RegisterLease(LeasedAgentRun lease, CancellationTokenSource actorCts)
     {
-        if (_runLease is null)
+        _leaseRegistry[lease.RunId] = new ActiveLeaseEntry
         {
-            return;
-        }
+            RunId = lease.RunId,
+            LeaseToken = lease.LeaseToken,
+            ActorCts = actorCts,
+            // P0-7：初始为租约获取时的 ExpiresAt；续约成功后更新为 UtcNow + extension
+            LastConfirmedExpiresTicks = lease.ExpiresAt.UtcTicks
+        };
 
+        // 懒启动共享心跳循环（租约存在期间持续运行；注册表为空时循环空转，不发起续约）
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatLoopTask is null || _heartbeatLoopTask.IsCompleted)
+            {
+                _heartbeatLoopCts?.Dispose();
+                _heartbeatLoopCts = new CancellationTokenSource();
+                _heartbeatLoopTask = RunBatchHeartbeatLoopAsync(_heartbeatLoopCts.Token);
+            }
+        }
+    }
+
+    /// <summary>从共享批量心跳注册表移除租约（Run 结束后停止续约）。</summary>
+    private void UnregisterLease(string runId)
+    {
+        _leaseRegistry.TryRemove(runId, out _);
+    }
+
+    /// <summary>
+    /// 共享批量心跳循环：每 <see cref="AgentHostOptions.HeartbeatInterval"/> 周期
+    /// 通过一次 <see cref="IAgentRunLease.RenewBatchAsync"/> 调用续约全部活跃租约，
+    /// 替代"每个 Run 一个独立续约任务 + 每次 DB 往返"的模式（N 次往返 → 1 次）。
+    /// </summary>
+    /// <remarks>
+    /// 失败语义与旧的每 Run 心跳一致：
+    ///   - 续约失败（租约被抢占/过期）→ 取消对应 Actor，防止双执行；
+    ///   - 连续续约异常超过阈值（数据库不可达）→ 取消对应 Actor；
+    ///   - 本地 watchdog：最后一次确认的租约 ExpiresAt 已过 → 立即取消 Actor
+    ///     （续约异常不延长本地期限，防止租约实际已过期仍执行副作用）。
+    /// </remarks>
+    private async Task RunBatchHeartbeatLoopAsync(CancellationToken cancellationToken)
+    {
         var interval = _options.HeartbeatInterval > TimeSpan.Zero
             ? _options.HeartbeatInterval
             : TimeSpan.FromSeconds(30);
         var extension = _options.LeaseDuration > TimeSpan.Zero
             ? _options.LeaseDuration
             : TimeSpan.FromMinutes(10);
-
-        // P0-5：本地 watchdog — 连续续约异常超过阈值时取消 Actor
-        // （防止数据库不可达时租约已过期但 Actor 继续执行副作用的双执行风险）
-        var consecutiveFailures = 0;
         const int MaxConsecutiveFailures = 3;
-
-        // P0-7：跟踪最后一次确认的租约 ExpiresAt — 续约异常时不更新（保持上一次确认的值）。
-        // 初始值为 lease 获取时的 ExpiresAt；续约成功后更新为 UtcNow + extension。
-        var lastConfirmedLeaseExpiresAt = initialLeaseExpiresAt;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -355,70 +368,114 @@ public sealed class AgentKernelHost : IAsyncDisposable
                 break;
             }
 
-            // P0-7：本地 watchdog — 检查最后一次确认的租约是否已过期。
-            // 续约数据库异常不得延长本地期限；租约过期后立即取消 Actor 防止双执行。
-            if (DateTimeOffset.UtcNow >= lastConfirmedLeaseExpiresAt)
+            var entries = _leaseRegistry.Values.ToList();
+            if (entries.Count == 0 || _runLease is null)
             {
-                _logger?.LogError("Run {RunId} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消 Actor。", runId, lastConfirmedLeaseExpiresAt);
-                try
-                {
-                    actorCts.Cancel();
-                }
-                catch (ObjectDisposedException)
-                {
-                    // Actor 已结束，CTS 已释放 — 无需处理
-                }
-                break;
+                continue;
             }
 
-            try
+            var now = DateTimeOffset.UtcNow;
+            var cancelSet = new HashSet<string>(StringComparer.Ordinal);
+
+            // 本地 watchdog：最后一次确认的租约已过期 → 取消 Actor（不发起续约）
+            foreach (var entry in entries)
             {
-                var renewed = await _runLease.RenewAsync(runId, leaseToken, extension, cancellationToken).ConfigureAwait(false);
-                if (!renewed)
+                if (now.UtcTicks >= Interlocked.Read(ref entry.LastConfirmedExpiresTicks))
                 {
-                    // P0-4：租约丢失 → 其他实例已接管，立即取消 Actor 防止双执行。
-                    // P0-5：旧 owner 不写入 LeaseLost（无 fencing token 会破坏新 owner 状态），
-                    //       仅本地取消 Actor；LeaseLost 由新 owner/recovery worker 写入。
-                    _logger?.LogWarning("Run {RunId} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", runId);
-                    try
-                    {
-                        actorCts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // Actor 已结束，CTS 已释放 — 无需处理
-                    }
-                    break;
-                }
-                // 续约成功 → 重置连续异常计数 + 更新最后确认的 ExpiresAt
-                consecutiveFailures = 0;
-                lastConfirmedLeaseExpiresAt = DateTimeOffset.UtcNow.Add(extension);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch
-            {
-                // P0-5：连续异常 watchdog — 超过阈值后取消 Actor 防止无 lease 的副作用
-                consecutiveFailures++;
-                _logger?.LogWarning("Run {RunId} heartbeat 续约异常（连续 {Count}/{Max}）。",
-                    runId, consecutiveFailures, MaxConsecutiveFailures);
-                if (consecutiveFailures >= MaxConsecutiveFailures)
-                {
-                    _logger?.LogError("Run {RunId} heartbeat 连续 {Count} 次异常，触发本地 watchdog 取消 Actor。",
-                        runId, consecutiveFailures);
-                    try
-                    {
-                        actorCts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // Actor 已结束，CTS 已释放 — 无需处理
-                    }
-                    break;
+                    _logger?.LogError(
+                        "Run {RunId} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消 Actor。",
+                        entry.RunId, new DateTimeOffset(entry.LastConfirmedExpiresTicks, TimeSpan.Zero));
+                    CancelActor(entry.ActorCts);
+                    cancelSet.Add(entry.RunId);
                 }
             }
+
+            // 批量续约剩余租约（单次 DB 往返）
+            var toRenew = entries
+                .Where(e => !cancelSet.Contains(e.RunId))
+                .Select(e => new AgentRunLeaseRenewal { RunId = e.RunId, LeaseToken = e.LeaseToken })
+                .ToList();
+
+            if (toRenew.Count > 0)
+            {
+                try
+                {
+                    var renewFailed = await _runLease.RenewBatchAsync(toRenew, extension, cancellationToken).ConfigureAwait(false);
+                    foreach (var entry in entries)
+                    {
+                        if (cancelSet.Contains(entry.RunId))
+                        {
+                            continue;
+                        }
+                        if (renewFailed.Contains(entry.RunId, StringComparer.Ordinal))
+                        {
+                            // P0-5：丢租后旧 owner 不写任何终态（无 fencing token 的写入会破坏新 owner 状态），
+                            // 仅本地取消 Actor 防止双执行。Run 保持非终态由 RecoveryWorker 重新入队恢复
+                            // （resume from checkpoint）；超时无人接管时由 RecoveryWorker 原子标记 LeaseLost。
+                            _logger?.LogWarning(
+                                "Run {RunId} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", entry.RunId);
+                            CancelActor(entry.ActorCts);
+                            cancelSet.Add(entry.RunId);
+                        }
+                        else
+                        {
+                            // 续约成功 → 重置连续异常计数 + 更新最后确认的 ExpiresAt
+                            Interlocked.Exchange(ref entry.ConsecutiveFailures, 0);
+                            Interlocked.Exchange(
+                                ref entry.LastConfirmedExpiresTicks,
+                                DateTimeOffset.UtcNow.Add(extension).UtcTicks);
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch
+                {
+                    // 连续异常 watchdog：超过阈值后取消 Actor，防止无 lease 的副作用
+                    foreach (var entry in entries)
+                    {
+                        if (cancelSet.Contains(entry.RunId))
+                        {
+                            continue;
+                        }
+                        var failures = Interlocked.Increment(ref entry.ConsecutiveFailures);
+                        _logger?.LogWarning("Run {RunId} heartbeat 续约异常（连续 {Count}/{Max}）。",
+                            entry.RunId, failures, MaxConsecutiveFailures);
+                        if (failures >= MaxConsecutiveFailures)
+                        {
+                            _logger?.LogError(
+                                "Run {RunId} heartbeat 连续 {Count} 次异常，触发本地 watchdog 取消 Actor。",
+                                entry.RunId, failures);
+                            CancelActor(entry.ActorCts);
+                            cancelSet.Add(entry.RunId);
+                        }
+                    }
+                }
+            }
+
+            // 移除已取消的条目（Run 的 finally 也会移除；此处提前清理避免下一周期重复续约/重复取消）
+            foreach (var entry in entries)
+            {
+                if (cancelSet.Contains(entry.RunId))
+                {
+                    _leaseRegistry.TryRemove(entry.RunId, out _);
+                }
+            }
+        }
+    }
+
+    /// <summary>取消 Actor（CTS 已释放时静默忽略）。</summary>
+    private static void CancelActor(CancellationTokenSource actorCts)
+    {
+        try
+        {
+            actorCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Actor 已结束，CTS 已释放 — 无需处理
         }
     }
 
@@ -661,6 +718,16 @@ public sealed class AgentKernelHost : IAsyncDisposable
         }
         finally
         {
+            // 停止共享批量心跳循环（若有运行中的租约心跳）
+            if (_heartbeatLoopCts is not null)
+            {
+                lock (_heartbeatLock)
+                {
+                    _heartbeatLoopCts?.Cancel();
+                    _heartbeatLoopCts?.Dispose();
+                    _heartbeatLoopCts = null;
+                }
+            }
             _workerCts.Cancel();
             _workerCts.Dispose();
         }
@@ -671,6 +738,21 @@ public sealed class AgentKernelHost : IAsyncDisposable
         AgentRunActor Actor,
         CancellationTokenSource Cts,
         LeasedAgentRun? Lease);
+
+    /// <summary>
+    /// 共享批量心跳注册表条目：租约 + 对应 Actor 的 CTS + 本地 watchdog 状态。
+    /// 续约成功/失败由共享心跳循环更新（多线程访问，计数器用 Interlocked）。
+    /// </summary>
+    private sealed class ActiveLeaseEntry
+    {
+        public required string RunId { get; init; }
+        public required string LeaseToken { get; init; }
+        public required CancellationTokenSource ActorCts { get; init; }
+        /// <summary>最后一次确认的租约过期时间（UTC ticks；续约异常时不更新）。</summary>
+        public long LastConfirmedExpiresTicks;
+        /// <summary>连续续约异常计数（超过阈值取消 Actor）。</summary>
+        public int ConsecutiveFailures;
+    }
 
     /// <summary>Channel work item（Run + key + ActiveRun）。</summary>
     private sealed record RunWorkItem(AgentRun Run, string Key, ActiveRun ActiveRun);

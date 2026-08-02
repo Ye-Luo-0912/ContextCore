@@ -1748,7 +1748,7 @@ public interface IAgentRunLease
 
     /// <summary>
     /// P0-6：查询指定 Run 是否存在有效（未过期）的活跃租约。
-    /// Recovery Worker 在标记 Run 为 Failed 前调用此方法，避免误杀正被活跃 Actor 持有合法租约的 Run。
+    /// Recovery Worker 在原子标记 Run 为 LeaseLost 前校验，避免误杀正被活跃 Actor 持有合法租约的 Run。
     /// </summary>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -1756,19 +1756,37 @@ public interface IAgentRunLease
     ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-7: Atomically mark a Run as Failed if it has no active lease and its deadline has passed.
-    /// This eliminates the check-then-act race between HasActiveLeaseAsync and TransitionStateAsync.
+    /// P0-7: Atomically mark a Run as LeaseLost if it has no active lease and its state matches.
+    /// 用于 Recovery Worker 的超时回收：Run 在非终态停留超过 RunExecutionTimeout 且无人持有租约，
+    /// 说明原 owner 已丢租（崩溃/网络分区）且未及时被接管——原子写入终态 LeaseLost（区别于 Failed）。
+    /// 单条 SQL 原子操作消除 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
     /// </summary>
     /// <param name="workspaceId">Workspace ID。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="expectedCurrentState">期望的当前状态（CAS 前件）。</param>
     /// <param name="ct">取消令牌。</param>
-    /// <returns>受影响的行数（1 = 成功标记为 Failed；0 = 存在活跃租约或状态不匹配）。</returns>
-    ValueTask<int> MarkFailedIfLeaseExpiredAsync(
+    /// <returns>受影响的行数（1 = 成功标记为 LeaseLost；0 = 存在活跃租约或状态不匹配）。</returns>
+    ValueTask<int> MarkLeaseLostIfLeaseExpiredAsync(
         string workspaceId,
         string runId,
         AgentRunState expectedCurrentState,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// 批量续租约（心跳）：单次调用续约多个 Run 的租约，减少高频心跳下的数据库往返次数。
+    /// 由 Host 的共享心跳循环在每周期调用一次，替代每个 Run 一个独立续约任务。
+    /// </summary>
+    /// <param name="leases">待续约的租约条目（runId + leaseToken）。</param>
+    /// <param name="extension">延长时间量。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 续约失败的 RunId 集合（租约已被抢占或已过期）。
+    /// 返回集合中的每个 Run，调用方应立即停止处理（取消对应 Actor）。
+    /// </returns>
+    ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+        IReadOnlyList<AgentRunLeaseRenewal> leases,
+        TimeSpan extension,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1801,6 +1819,19 @@ public sealed record LeasedAgentRun
     /// lease 被抢占时 0 行受影响，调用方检测并中止。
     /// </summary>
     public required long FencingToken { get; init; }
+}
+
+/// <summary>
+/// 批量续约的租约条目（runId + leaseToken）。
+/// 由 <see cref="IAgentRunLease.RenewBatchAsync"/> 使用；LeaseToken 来自 <see cref="IAgentRunLease.TryAcquireAsync"/>。
+/// </summary>
+public sealed record AgentRunLeaseRenewal
+{
+    /// <summary>Agent Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>租约 token（来自 TryAcquireAsync）。</summary>
+    public required string LeaseToken { get; init; }
 }
 
 /// <summary>

@@ -16,7 +16,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   - 这是 fallback 实现，生产环境应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
 //   - 不消耗真实 token；TokensConsumed = context.Length / 4（粗略估算，非精确 tokenizer）。
 //   - 线程安全：内部使用 ConcurrentDictionary 跟踪每个 runId 的调用次数，避免无限循环。
-//   - 当检测到 context 含 "[Tool:" 观察标记且无更多 Tool 需求时，产出最终答案。
+//   - 当检测到 context 含 "[Tool]" 观察标记（AgentMessage.Serialize 格式）且无更多 Tool 需求时，产出最终答案。
 // ===========================================================================
 
 /// <summary>
@@ -79,8 +79,11 @@ public sealed class DeterministicAgentModelTransport : IAgentModelTransport
             return ValueTask.FromResult(BuildFinalAnswerResponse(context, "已达到最大模型调用次数，强制终止。"));
         }
 
-        // 检测 context 中是否已包含 Tool 观察结果（[Tool:...] 标记）
-        var hasToolObservation = context.Contains("[Tool:", StringComparison.Ordinal);
+        // 检测 context 中是否已包含 Tool 观察结果。
+        // AgentMessage.Serialize 的格式为 "[Tool]:name\ncontent"（冒号在括号外），
+        // ModelGateway 提示拼接格式为 "[Tool:name]"（冒号在括号内），两种都识别。
+        var hasToolObservation = context.Contains("[Tool]", StringComparison.Ordinal)
+            || context.Contains("[Tool:", StringComparison.Ordinal);
 
         // 匹配 Tool 触发关键词
         var toolCall = MatchToolTrigger(context);

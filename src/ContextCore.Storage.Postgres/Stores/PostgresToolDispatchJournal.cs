@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Storage.Postgres.Infrastructure;
+using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -83,6 +84,109 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         // ON CONFLICT DO NOTHING：重复 Prepare 不覆盖已推进的状态（幂等，与 InMemory TryAdd 语义一致）
+        var affected = await InsertEntryAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+        if (affected > 0)
+        {
+            // 成功插入新条目 → ShouldDispatch = true
+            return new ToolDispatchPrepareResult
+            {
+                CurrentState = ToolDispatchState.Prepared,
+                ShouldDispatch = true,
+                NeedsReconciliation = false,
+                ExternalOperationId = null,
+                CachedResult = null
+            };
+        }
+
+        // P0-3 CAS-2：0 行插入意味着 request_id 已存在——读取既有行并验证语义等价，
+        // 防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
+        var (existingState, existingExternalOperationId) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+
+        // 语义等价：幂等成功（重复 Prepare 同一操作）。根据当前状态构建 Prepare 结果。
+        return new ToolDispatchPrepareResult
+        {
+            CurrentState = existingState,
+            ShouldDispatch = existingState == ToolDispatchState.Prepared,
+            NeedsReconciliation = existingState == ToolDispatchState.Dispatched || existingState == ToolDispatchState.DispatchingIntent,
+            ExternalOperationId = existingExternalOperationId,
+            CachedResult = null // Postgres 结果缓存由调用方管理
+        };
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Item 5：Prepare + 前置 Intent 合并为单次原子写——新条目直接以 DispatchingIntent 落库
+    /// （比 PrepareAsync 少一次 INSERT→UPDATE 往返），既有 Prepared 前驱（旧两步流程崩溃残留）
+    /// 经 CAS 原子推进到 DispatchingIntent。返回 ShouldDispatch=true 时 journal 必已处于
+    /// DispatchingIntent，调用方可直接 Dispatch，无需再单独 MarkDispatchingIntentAsync。
+    /// </remarks>
+    public async ValueTask<ToolDispatchPrepareResult> PrepareWithIntentAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.State != ToolDispatchState.Prepared && entry.State != ToolDispatchState.DispatchingIntent)
+        {
+            throw new ArgumentException(
+                $"PrepareWithIntentAsync 入口的 State 必须为 Prepared 或 DispatchingIntent，实际为 {entry.State}。", nameof(entry));
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        // 1. 直接以 DispatchingIntent 落库（单次 INSERT 即完成 Prepare + Intent）
+        var affected = await InsertEntryAsync(
+            connection, entry with { State = ToolDispatchState.DispatchingIntent }, cancellationToken).ConfigureAwait(false);
+        if (affected > 0)
+        {
+            return new ToolDispatchPrepareResult
+            {
+                CurrentState = ToolDispatchState.DispatchingIntent,
+                ShouldDispatch = true,
+                NeedsReconciliation = false,
+                ExternalOperationId = null,
+                CachedResult = null
+            };
+        }
+
+        // 2. 已存在：语义等价校验（P0-3 CAS-2：RequestId 复用检测）
+        var (existingState, existingExternalOperationId) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+
+        // 3. 既有 Prepared 前驱（旧两步流程崩溃残留）→ CAS 原子推进到 DispatchingIntent
+        if (existingState == ToolDispatchState.Prepared)
+        {
+            var advanced = await TryAdvanceToDispatchingIntentAsync(connection, entry.RequestId, cancellationToken).ConfigureAwait(false);
+            if (advanced)
+            {
+                return new ToolDispatchPrepareResult
+                {
+                    CurrentState = ToolDispatchState.DispatchingIntent,
+                    ShouldDispatch = true,
+                    NeedsReconciliation = false,
+                    ExternalOperationId = existingExternalOperationId,
+                    CachedResult = null
+                };
+            }
+
+            // 并发推进（0 行受影响）→ 重读实际状态后按矩阵返回
+            (existingState, existingExternalOperationId) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 4. 按当前状态构建决策矩阵
+        return new ToolDispatchPrepareResult
+        {
+            CurrentState = existingState,
+            ShouldDispatch = existingState == ToolDispatchState.Prepared,
+            NeedsReconciliation = existingState == ToolDispatchState.Dispatched || existingState == ToolDispatchState.DispatchingIntent,
+            ExternalOperationId = existingExternalOperationId,
+            CachedResult = null // Postgres 结果缓存由调用方管理
+        };
+    }
+
+    /// <summary>单条 INSERT（ON CONFLICT DO NOTHING），返回受影响行数（0 = request_id 已存在）。</summary>
+    private async Task<int> InsertEntryAsync(
+        NpgsqlConnection connection,
+        ToolDispatchJournalEntry entry,
+        CancellationToken cancellationToken)
+    {
         await using var insertCommand = connection.CreateCommand();
         insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         insertCommand.CommandText = $"""
@@ -104,24 +208,18 @@ ON CONFLICT (request_id) DO NOTHING;
         insertCommand.Parameters.AddWithValue("payload_digest", (object?)entry.PayloadDigest ?? DBNull.Value);
         insertCommand.Parameters.AddWithValue("workspace_id", (object?)entry.WorkspaceId ?? DBNull.Value);
         insertCommand.Parameters.AddWithValue("run_id", (object?)entry.RunId ?? DBNull.Value);
+        return await insertCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
 
-        var affected = await insertCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        if (affected > 0)
-        {
-            // 成功插入新条目 → ShouldDispatch = true
-            return new ToolDispatchPrepareResult
-            {
-                CurrentState = ToolDispatchState.Prepared,
-                ShouldDispatch = true,
-                NeedsReconciliation = false,
-                ExternalOperationId = null,
-                CachedResult = null
-            };
-        }
-
-        // P0-3 CAS-2：0 行插入意味着 request_id 已存在——读取既有行并验证语义等价，
-        // 防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
-        // 同时读取 state + external_operation_id 用于构建 Prepare 结果。
+    /// <summary>
+    /// P0-3 CAS-2：读取既有行并验证与本次条目语义等价（ToolName/IdempotencyKey/PayloadDigest/WorkspaceId/RunId）。
+    /// 任一不等价 → 抛 RequestIdReuseDetected；行缺失（并发删除）→ 抛审计链断裂异常。
+    /// </summary>
+    private async Task<(ToolDispatchState State, string? ExternalOperationId)> ReadAndValidateExistingAsync(
+        NpgsqlConnection connection,
+        ToolDispatchJournalEntry entry,
+        CancellationToken cancellationToken)
+    {
         await using var selectCommand = connection.CreateCommand();
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
@@ -136,7 +234,7 @@ LIMIT 1;
         {
             // 极端竞态：INSERT 0 行但 SELECT 也读不到（行被并发 DELETE）。视为审计链断裂。
             throw new InvalidOperationException(
-                $"Tool dispatch journal PrepareAsync 语义校验失败：request_id={entry.RequestId} 的既有行在读取时消失（并发删除？）。");
+                $"Tool dispatch journal Prepare 语义校验失败：request_id={entry.RequestId} 的既有行在读取时消失（并发删除？）。");
         }
 
         var existingToolName = reader.GetString(0);
@@ -176,15 +274,28 @@ LIMIT 1;
                 $"同一 RequestId 不能复用为另一项操作。差异：{string.Join("；", mismatches)}。");
         }
 
-        // 语义等价：幂等成功（重复 Prepare 同一操作）。根据当前状态构建 Prepare 结果。
-        return new ToolDispatchPrepareResult
-        {
-            CurrentState = existingState,
-            ShouldDispatch = existingState == ToolDispatchState.Prepared,
-            NeedsReconciliation = existingState == ToolDispatchState.Dispatched || existingState == ToolDispatchState.DispatchingIntent,
-            ExternalOperationId = existingExternalOperationId,
-            CachedResult = null // Postgres 结果缓存由调用方管理
-        };
+        return (existingState, existingExternalOperationId);
+    }
+
+    /// <summary>CAS 推进 Prepared → DispatchingIntent；0 行受影响表示状态已被并发推进。</summary>
+    private async Task<bool> TryAdvanceToDispatchingIntentAsync(
+        NpgsqlConnection connection,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var updateCommand = connection.CreateCommand();
+        updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+        updateCommand.CommandText = $"""
+UPDATE {Table("tool_dispatch_journal_entries")}
+SET state = @target_state, updated_at = @updated_at
+WHERE request_id = @request_id AND state = @expected_state;
+""";
+        updateCommand.Parameters.AddWithValue("request_id", requestId);
+        updateCommand.Parameters.AddWithValue("expected_state", (byte)ToolDispatchState.Prepared);
+        updateCommand.Parameters.AddWithValue("target_state", (byte)ToolDispatchState.DispatchingIntent);
+        updateCommand.Parameters.AddWithValue("updated_at", DateTimeOffset.UtcNow);
+        var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return affected > 0;
     }
 
     /// <inheritdoc />

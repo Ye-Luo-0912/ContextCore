@@ -100,6 +100,64 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
 
     /// <inheritdoc />
     /// <remarks>
+    /// Item 5：Prepare + 前置 Intent 合并为单次原子写——新条目直接以 DispatchingIntent 落库，
+    /// 既有 Prepared 前驱（旧两步流程崩溃残留）原子推进到 DispatchingIntent。
+    /// 返回 ShouldDispatch=true 时 journal 必已处于 DispatchingIntent，调用方可直接 Dispatch。
+    /// </remarks>
+    public ValueTask<ToolDispatchPrepareResult> PrepareWithIntentAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.State != ToolDispatchState.Prepared && entry.State != ToolDispatchState.DispatchingIntent)
+        {
+            throw new ArgumentException(
+                $"PrepareWithIntentAsync 入口的 State 必须为 Prepared 或 DispatchingIntent，实际为 {entry.State}。", nameof(entry));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var inserted = false;
+        var advancedFromPrepared = false;
+        // AddOrUpdate 原子语义：新插入 → DispatchingIntent；已存在 → 语义等价校验 + Prepared 前驱推进。
+        _entries.AddOrUpdate(
+            entry.RequestId,
+            _ =>
+            {
+                inserted = true;
+                return entry with { State = ToolDispatchState.DispatchingIntent, UpdatedAt = now };
+            },
+            (_, existing) =>
+            {
+                ValidateSemanticEquivalence(entry.RequestId, existing, entry);
+                if (existing.State == ToolDispatchState.Prepared)
+                {
+                    advancedFromPrepared = true;
+                    return existing with { State = ToolDispatchState.DispatchingIntent, UpdatedAt = now };
+                }
+                return existing; // 幂等：不覆盖已推进的状态
+            });
+
+        _entries.TryGetValue(entry.RequestId, out var current);
+        var currentState = current?.State ?? ToolDispatchState.DispatchingIntent;
+        DurableToolResult? cachedResult = null;
+        if (currentState >= ToolDispatchState.Committed)
+        {
+            _results.TryGetValue(entry.RequestId, out cachedResult);
+        }
+
+        return new ValueTask<ToolDispatchPrepareResult>(new ToolDispatchPrepareResult
+        {
+            CurrentState = currentState,
+            // 本次新插入或既有 Prepared 已推进 → 外部调用尚未开始，可安全 Dispatch
+            ShouldDispatch = inserted || advancedFromPrepared,
+            // 既有 DispatchingIntent/Dispatched（崩溃残留/并发分派）→ 外部调用可能已开始，需对账
+            NeedsReconciliation = !inserted && !advancedFromPrepared
+                                  && (currentState == ToolDispatchState.DispatchingIntent || currentState == ToolDispatchState.Dispatched),
+            ExternalOperationId = current?.ExternalOperationId,
+            CachedResult = cachedResult
+        });
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
     /// P0-1→在外部 Tool 调用发起前持久化 DispatchingIntent 状态，创建 durable 边界。
     /// 与 MarkDispatchedAsync 不同，本方法在状态已超过 DispatchingIntent 时抛异常（而非幂等成功），
     /// 因为继续 Dispatch 会导致外部副作用重复执行。

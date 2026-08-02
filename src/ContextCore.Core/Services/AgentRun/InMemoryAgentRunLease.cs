@@ -33,13 +33,13 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     private readonly object _reapLock = new();
     // P0-4：全局 fencing token 计数器（单调递增）。每次成功获取租约（含抢占过期）时递增。
     private long _globalFencingToken;
-    // P0-7：可选的 Run Store，用于 MarkFailedIfLeaseExpiredAsync 原子转移（测试/开发用）。
+    // P0-7：可选的 Run Store，用于 MarkLeaseLostIfLeaseExpiredAsync 原子转移（测试/开发用）。
     private readonly IAgentRunStore? _runStore;
 
     /// <summary>
     /// 初始化 InMemoryAgentRunLease（开发/测试用）。
     /// </summary>
-    /// <param name="runStore">P0-7：可选的 Run Store，提供时 MarkFailedIfLeaseExpiredAsync 会执行状态转移；null = 仅检查租约。</param>
+    /// <param name="runStore">P0-7：可选的 Run Store，提供时 MarkLeaseLostIfLeaseExpiredAsync 会执行状态转移；null = 仅检查租约。</param>
     public InMemoryAgentRunLease(IAgentRunStore? runStore = null)
     {
         _runStore = runStore;
@@ -141,6 +141,48 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// 进程内批量续约：逐条复用与 <see cref="RenewAsync"/> 相同的 token + 未过期校验，
+    /// 单次方法调用完成全部续约（内存实现天然单次"往返"）。
+    /// 续约失败不创建空条目（与单条 <see cref="RenewAsync"/> 不同，避免高频心跳下字典膨胀）；
+    /// CAS 更新失败按续约失败处理（fail-closed：调用方取消 Actor 更安全）。
+    /// </remarks>
+    public ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+        IReadOnlyList<AgentRunLeaseRenewal> leases,
+        TimeSpan extension,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(leases);
+        if (extension <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(extension), "续约时间必须为正。");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var failed = new List<string>();
+        foreach (var lease in leases)
+        {
+            if (lease is null || string.IsNullOrWhiteSpace(lease.RunId) || string.IsNullOrWhiteSpace(lease.LeaseToken))
+            {
+                continue;
+            }
+
+            // 读取 + CAS 更新：token 匹配且未过期 → 延长；否则不续约
+            if (_leases.TryGetValue(lease.RunId, out var existing)
+                && existing.LeaseToken == lease.LeaseToken
+                && existing.ExpiresAt > now
+                && _leases.TryUpdate(lease.RunId, existing with { ExpiresAt = now + extension }, existing))
+            {
+                continue;
+            }
+
+            failed.Add(lease.RunId);
+        }
+
+        return ValueTask.FromResult<IReadOnlyList<string>>(failed);
+    }
+
+    /// <inheritdoc />
     public ValueTask ReleaseAsync(
         string runId,
         string leaseToken,
@@ -197,11 +239,12 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 
     /// <inheritdoc />
     /// <remarks>
-    /// P0-7：InMemory 实现 — 检查无活跃租约后通过 IAgentRunStore 推进状态机到 Failed（CAS）。
+    /// P0-7：InMemory 实现 — 检查无活跃租约后通过 IAgentRunStore 推进状态机到 LeaseLost（CAS）。
     /// 注入 IAgentRunStore 时执行完整转移；未注入时仅返回"可以标记"信号（1=无活跃租约，0=有活跃租约）。
     /// 进程内单线程场景下无真实竞态，check-then-act 拆分可接受。
+    /// 终态取 LeaseLost：Run 在非终态停留超时且无人持有租约，说明原 owner 丢租后未被接管。
     /// </remarks>
-    public async ValueTask<int> MarkFailedIfLeaseExpiredAsync(
+    public async ValueTask<int> MarkLeaseLostIfLeaseExpiredAsync(
         string workspaceId,
         string runId,
         AgentRunState expectedCurrentState,
@@ -224,7 +267,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         try
         {
             await _runStore.TransitionStateAsync(
-                workspaceId, runId, expectedCurrentState, AgentRunState.Failed, ct).ConfigureAwait(false);
+                workspaceId, runId, expectedCurrentState, AgentRunState.LeaseLost, ct).ConfigureAwait(false);
             return 1;
         }
         catch (InvalidOperationException)

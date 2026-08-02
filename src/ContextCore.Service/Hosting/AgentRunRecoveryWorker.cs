@@ -12,8 +12,8 @@ namespace ContextCore.Service.Hosting;
 //   通过 <see cref="AgentKernelHost.StartRunAsync"/> 重新入队执行。
 //
 // 运行时能力补齐：
-//   1. 超时检测：Run 在非终态停留超过 RunExecutionTimeout 时标记为 Failed
-//      （进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；recovery worker 兜底）。
+//   1. 超时检测：Run 在非终态停留超过 RunExecutionTimeout 且无活跃租约时原子标记为 LeaseLost
+//      （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；recovery worker 兜底）。
 //   2. Checkpoint resume：扫描时记录 Run 是否有 checkpoint（日志），
 //      AgentRunActor.ExecuteAsync 通过 run.State + 事件流自动重建上下文。
 //
@@ -26,13 +26,13 @@ namespace ContextCore.Service.Hosting;
 //      <see cref="IAgentRunLease"/> 确保仅一个实例处理（ProductionHA profile）。
 //   3. 非终态扫描：Created / ContextBuilding / ModelCalling / AwaitingApproval /
 //      ToolDispatching / Observing / Checkpointing 均为可恢复状态。
-//      Completed / Failed / Cancelled 为终态，跳过。
+//      Completed / Failed / Cancelled / LeaseLost 为终态，跳过。
 //   4. 异常隔离：单个 Run 恢复失败不中断整个轮询循环（catch + log）。
 // ===========================================================================
 
 /// <summary>
 /// 生产 Composition Root：AgentRun Recovery Worker。
-/// 周期性扫描未完成的 Run 并重新入队执行；对超时未完成的 Run 标记为 Failed。
+/// 周期性扫描未完成的 Run 并重新入队执行；对超时且无人持有租约的 Run 原子标记为 LeaseLost。
 /// </summary>
 internal sealed class AgentRunRecoveryWorker : BackgroundService
 {
@@ -161,8 +161,9 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
             foreach (var run in runs)
             {
                 // 运行时能力补齐：超时检测
-                // Run 在非终态停留超过 RunExecutionTimeout → 标记为 Failed
-                // （进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；recovery worker 兜底）
+                // Run 在非终态停留超过 RunExecutionTimeout 且无人持有租约 → 原子标记为 LeaseLost
+                // （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；
+                //   recovery worker 兜底，LeaseLost 区别于 Failed——丢租而非执行失败）
                 if (timeout > TimeSpan.Zero)
                 {
                     var elapsed = now - run.UpdatedAt;
@@ -184,13 +185,13 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                         {
                             try
                             {
-                                var affected = await runLease.MarkFailedIfLeaseExpiredAsync(
+                                var affected = await runLease.MarkLeaseLostIfLeaseExpiredAsync(
                                     run.WorkspaceId, run.RunId, run.State, cancellationToken).ConfigureAwait(false);
                                 if (affected > 0)
                                 {
                                     totalTimedOut++;
                                     _logger.LogWarning(
-                                        "AgentRunRecoveryWorker: Run {RunId} 超时（状态={State}, 已停留 {Elapsed}min > {Timeout}min，无活跃租约，DeadlineAt={Deadline}），已原子标记为 Failed。",
+                                        "AgentRunRecoveryWorker: Run {RunId} 超时（状态={State}, 已停留 {Elapsed}min > {Timeout}min，无活跃租约，DeadlineAt={Deadline}），已原子标记为 LeaseLost。",
                                         run.RunId, run.State, elapsed.TotalMinutes, timeout.TotalMinutes, run.DeadlineAt);
                                 }
                             }

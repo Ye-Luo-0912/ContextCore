@@ -164,6 +164,138 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             "ExternalOperationId 不应被第二次 MarkDispatchedAsync 覆盖（已是 Committed 状态，幂等）。");
     }
 
+    /// <summary>
+    /// 验证（Item 5）：PrepareWithIntentAsync 首次调用单次原子写即落库 DispatchingIntent，
+    /// 返回 ShouldDispatch=true（外部调用尚未开始，可直接 Dispatch，无需再单独标记 Intent）。
+    /// </summary>
+    [TestMethod]
+    public async Task PrepareWithIntent_FreshCall_InsertsDispatchingIntentAndShouldDispatch()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-intent-fresh";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var result = await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+
+        Assert.IsTrue(result.ShouldDispatch, "首次 PrepareWithIntentAsync 应返回 ShouldDispatch=true。");
+        Assert.IsFalse(result.NeedsReconciliation, "首次调用不应要求对账。");
+        Assert.AreEqual(ToolDispatchState.DispatchingIntent, result.CurrentState,
+            "CurrentState 应为 DispatchingIntent（Intent 已前置落库）。");
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.IsNotNull(entry, "条目应已写入。");
+        Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State,
+            "journal 条目应直接处于 DispatchingIntent（Prepare + Intent 单次原子写）。");
+    }
+
+    /// <summary>
+    /// 验证（Item 5）：已处于 DispatchingIntent（上次崩溃残留/并发分派）时再次
+    /// PrepareWithIntentAsync → NeedsReconciliation=true（外部调用可能已开始，禁止重复 Dispatch）。
+    /// </summary>
+    [TestMethod]
+    public async Task PrepareWithIntent_ExistingDispatchingIntent_NeedsReconciliation()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-intent-residue";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // 第一次调用：写入 DispatchingIntent（模拟崩溃前已标记 Intent）
+        var first = await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+        Assert.IsTrue(first.ShouldDispatch);
+
+        // 第二次调用（崩溃恢复重试）：应判定为对账，而非再次 Dispatch
+        var second = await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+        Assert.IsFalse(second.ShouldDispatch, "既有 DispatchingIntent 不应再次 Dispatch。");
+        Assert.IsTrue(second.NeedsReconciliation, "既有 DispatchingIntent（外部调用可能已开始）应要求对账。");
+    }
+
+    /// <summary>
+    /// 验证（Item 5）：既有 Prepared 前驱（旧两步流程崩溃残留）经 PrepareWithIntentAsync
+    /// 原子推进到 DispatchingIntent，并返回 ShouldDispatch=true。
+    /// </summary>
+    [TestMethod]
+    public async Task PrepareWithIntent_ExistingPrepared_AdvancesAndShouldDispatch()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-intent-prepared";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // 旧两步流程残留：仅 PrepareAsync 写入 Prepared（外部调用从未开始）
+        await journal.PrepareAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+
+        var result = await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+
+        Assert.IsTrue(result.ShouldDispatch, "既有 Prepared（外部调用未开始）应返回 ShouldDispatch=true。");
+        Assert.IsFalse(result.NeedsReconciliation);
+
+        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        Assert.IsNotNull(entry);
+        Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State,
+            "既有 Prepared 前驱应被原子推进到 DispatchingIntent。");
+    }
+
+    /// <summary>
+    /// 验证（Item 5）：journal 已 Committed 时 PrepareWithIntentAsync 返回缓存结果
+    /// （InMemory 自带缓存），ShouldDispatch=false（禁止重新执行外部副作用）。
+    /// </summary>
+    [TestMethod]
+    public async Task PrepareWithIntent_Committed_ReturnsCachedResult()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-intent-committed";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // 完整执行到 Committed（带结果）
+        await journal.PrepareAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+        await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-1", cancellationToken: cts.Token);
+        await journal.MarkCommittedWithResultAsync(requestId, new DurableToolResult
+        {
+            ToolCallId = "call-1",
+            RequestId = requestId,
+            WorkspaceId = "ws-test-journal",
+            RunId = "run-test-journal",
+            InvocationId = requestId,
+            SideEffect = ToolSideEffect.None,
+            Result = "cached-result",
+            Succeeded = true,
+            DurationMs = 1
+        }, cts.Token);
+
+        var result = await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+
+        Assert.IsFalse(result.ShouldDispatch, "Committed 后不应再次 Dispatch。");
+        Assert.IsFalse(result.NeedsReconciliation);
+        Assert.IsNotNull(result.CachedResult, "InMemory journal 应返回缓存结果。");
+        Assert.AreEqual("cached-result", result.CachedResult!.Result);
+    }
+
+    /// <summary>
+    /// 验证（Item 5）：PrepareWithIntentAsync 语义等价校验与 PrepareAsync 一致——
+    /// 相同 RequestId 但不同 PayloadDigest → RequestIdReuseDetected（fails closed）。
+    /// </summary>
+    [TestMethod]
+    public async Task PrepareWithIntent_SemanticMismatch_Throws()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var requestId = "req-intent-conflict";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await journal.PrepareWithIntentAsync(
+            BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => journal.PrepareWithIntentAsync(
+                BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-B"), cts.Token).AsTask(),
+            "相同 RequestId 但不同 PayloadDigest 必须被拒绝（RequestIdReuseDetected）。");
+    }
+
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
     private static ToolDispatchJournalEntry BuildEntry(

@@ -414,6 +414,117 @@ public sealed class R29H_AgentRunProcessRestartTests
     }
 
     /// <summary>
+    /// 验证（Item 6 租约生命周期）：RecoveryWorker 对"非终态停留超时且无人持有租约"的 Run
+    /// 原子标记为 LeaseLost（原 owner 丢租后未被接管），区别于执行失败的 Failed。
+    /// </summary>
+    [TestMethod]
+    public async Task Lease_Lifecycle_RecoveryWorker_MarksAbandonedRunAsLeaseLost()
+    {
+        // 准备：持久化包装器 + 注入带 Run Store 的 InMemory 租约（使超时路径走原子标记）
+        var innerStore = new InMemoryAgentRunStore();
+        var persistentStore = new PersistentInMemoryAgentRunStore(innerStore);
+        var eventStore = new InMemoryAgentRunEventStore(persistentStore);
+        var lease = new InMemoryAgentRunLease(persistentStore);
+
+        // 创建一个非终态 Run，UpdatedAt 早于 RunExecutionTimeout（模拟崩溃前残留且已超时）
+        var run = BuildRun("超时丢租标记测试");
+        run = run with
+        {
+            State = AgentRunState.ContextBuilding,
+            UpdatedAt = DateTimeOffset.UtcNow.AddHours(-2)
+        };
+        await persistentStore.CreateAsync(run);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IAgentRunStore>(persistentStore);
+        services.AddSingleton<IPersistentAgentRunStore>(persistentStore);
+        services.AddSingleton<IAgentRunEventStore>(eventStore);
+        services.AddSingleton<IToolDispatcher>(new EchoToolDispatcher());
+        services.AddSingleton<IAgentModelTransport>(new DeterministicAgentModelTransport());
+        services.AddSingleton<IAgentRunLease>(lease);
+        services.AddSingleton<AgentKernelHost>();
+        services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
+        var serviceProvider = services.BuildServiceProvider();
+
+        await using (serviceProvider.GetRequiredService<AgentKernelHost>())
+        {
+            var options = new ProductionRuntimeOptions
+            {
+                EnableRunRecovery = true,
+                RunRecoveryInterval = TimeSpan.FromMilliseconds(100),
+                RunExecutionTimeout = TimeSpan.FromHours(1)
+            };
+
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+            var worker = new AgentRunRecoveryWorker(
+                serviceProvider, options, loggerFactory.CreateLogger<AgentRunRecoveryWorker>());
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await worker.StartAsync(cts.Token);
+
+            // 等待 Worker 将超时 Run 原子标记为 LeaseLost
+            var deadline = DateTime.UtcNow.AddSeconds(3);
+            AgentRun? finalRun = null;
+            while (DateTime.UtcNow < deadline)
+            {
+                finalRun = await persistentStore.GetAsync(run.WorkspaceId, run.RunId);
+                if (finalRun is not null && AgentRunStateMachine.IsTerminalState(finalRun.State))
+                {
+                    break;
+                }
+                await Task.Delay(100);
+            }
+
+            await worker.StopAsync(CancellationToken.None);
+
+            // 断言：超时且无活跃租约 → LeaseLost（而非 Failed）
+            Assert.IsNotNull(finalRun, "Run 应被 Worker 标记。");
+            Assert.AreEqual(AgentRunState.LeaseLost, finalRun!.State,
+                $"超时且无人持有租约的 Run 应标记为 LeaseLost，实际 {finalRun.State}。");
+        }
+    }
+
+    /// <summary>
+    /// 验证（Item 6 租约生命周期）：原子标记（MarkLeaseLostIfLeaseExpiredAsync）在
+    /// 有活跃租约时拒绝标记（0 行），无活跃租约时才写入 LeaseLost。
+    /// </summary>
+    [TestMethod]
+    public async Task Lease_Lifecycle_AtomicMark_RespectsActiveLease()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var lease = new InMemoryAgentRunLease(runStore);
+
+        // 无活跃租约 → 原子标记为 LeaseLost
+        var abandoned = BuildRun("无租约超时 Run");
+        abandoned = abandoned with { State = AgentRunState.ContextBuilding };
+        await runStore.CreateAsync(abandoned);
+
+        var affected = await lease.MarkLeaseLostIfLeaseExpiredAsync(
+            abandoned.WorkspaceId, abandoned.RunId, abandoned.State);
+        Assert.AreEqual(1, affected, "无活跃租约时应成功标记 1 行。");
+
+        var marked = await runStore.GetAsync(abandoned.WorkspaceId, abandoned.RunId);
+        Assert.IsNotNull(marked, "标记后的 Run 应可查询。");
+        Assert.AreEqual(AgentRunState.LeaseLost, marked!.State);
+
+        // 有活跃租约 → 拒绝标记（0 行），状态保持不变
+        var active = BuildRun("持有租约的 Run");
+        active = active with { State = AgentRunState.Observing };
+        await runStore.CreateAsync(active);
+        var acquired = await lease.TryAcquireAsync(active.RunId, TimeSpan.FromMinutes(5), "owner-test");
+        Assert.IsNotNull(acquired, "测试租约应获取成功。");
+
+        var affected2 = await lease.MarkLeaseLostIfLeaseExpiredAsync(
+            active.WorkspaceId, active.RunId, active.State);
+        Assert.AreEqual(0, affected2, "存在活跃租约时应拒绝标记。");
+
+        var unchanged = await runStore.GetAsync(active.WorkspaceId, active.RunId);
+        Assert.IsNotNull(unchanged, "Run 应仍可查询。");
+        Assert.AreEqual(AgentRunState.Observing, unchanged!.State,
+            "存在活跃租约时状态不应被推进。");
+    }
+
+    /// <summary>
     /// 验证：Postgres 持久化恢复——非终态 Run 跨进程重启后可恢复。
     /// Postgres 不可用时跳过（Assert.Inconclusive）。
     /// </summary>
@@ -458,6 +569,125 @@ public sealed class R29H_AgentRunProcessRestartTests
         {
             await factory.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// 验证：批量续约（RenewBatchAsync）一次续约全部有效租约，并报告
+    /// token 错误 / 不存在 / 已过期租约的 RunId（供共享心跳循环取消对应 Actor）。
+    /// </summary>
+    [TestMethod]
+    public async Task Heartbeat_RenewBatch_RenewsValidAndReportsStaleOrExpired()
+    {
+        var lease = new InMemoryAgentRunLease();
+        var duration = TimeSpan.FromMinutes(5);
+
+        var a = await lease.TryAcquireAsync("run-batch-a", duration, owner: "host-1");
+        var b = await lease.TryAcquireAsync("run-batch-b", duration, owner: "host-1");
+        Assert.IsNotNull(a, "租约 A 应获取成功。");
+        Assert.IsNotNull(b, "租约 B 应获取成功。");
+
+        // 两条有效租约 → 批量续约无失败
+        var ok = await lease.RenewBatchAsync(new[]
+        {
+            new AgentRunLeaseRenewal { RunId = a!.RunId, LeaseToken = a.LeaseToken },
+            new AgentRunLeaseRenewal { RunId = b!.RunId, LeaseToken = b.LeaseToken }
+        }, TimeSpan.FromMinutes(5));
+        Assert.AreEqual(0, ok.Count, "全部有效租约应续约成功。");
+        Assert.IsTrue(await lease.HasActiveLeaseAsync(a.RunId), "续约后租约 A 应仍活跃。");
+        Assert.IsTrue(await lease.HasActiveLeaseAsync(b.RunId), "续约后租约 B 应仍活跃。");
+
+        // 混合：一条有效 + 一条 token 错误 → 仅 token 错误的报告失败
+        var mixed = await lease.RenewBatchAsync(new[]
+        {
+            new AgentRunLeaseRenewal { RunId = a.RunId, LeaseToken = a.LeaseToken },
+            new AgentRunLeaseRenewal { RunId = b.RunId, LeaseToken = "wrong-token" }
+        }, TimeSpan.FromMinutes(5));
+        Assert.AreEqual(1, mixed.Count, "错误 token 的租约应续约失败。");
+        Assert.AreEqual(b.RunId, mixed[0], "失败集合应含错误 token 的 RunId。");
+
+        // 不存在的 Run → 续约失败
+        var missing = await lease.RenewBatchAsync(new[]
+        {
+            new AgentRunLeaseRenewal { RunId = "run-batch-nonexistent", LeaseToken = "x" }
+        }, TimeSpan.FromMinutes(5));
+        Assert.AreEqual(1, missing.Count, "不存在的租约应续约失败。");
+    }
+
+    /// <summary>
+    /// 验证：共享批量心跳循环——启用租约的 Run 由单一循环批量续约，
+    /// 续约失败（租约丢失）时取消对应 Actor（Run 进入 Cancelled 终态，防止双执行）。
+    /// </summary>
+    [TestMethod]
+    public async Task Heartbeat_SharedBatchLoop_CancelsActorOnLeaseLoss()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var lease = new FailingBatchRenewLease();
+        var transport = new GateModelTransport();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IAgentRunEventStore>(eventStore);
+        services.AddSingleton<IToolDispatcher>(new EchoToolDispatcher());
+        services.AddSingleton<IAgentModelTransport>(transport);
+        var serviceProvider = services.BuildServiceProvider();
+
+        var options = new AgentHostOptions
+        {
+            LeaseEnabled = true,
+            LeaseDuration = TimeSpan.FromMinutes(10),
+            HeartbeatInterval = TimeSpan.FromMilliseconds(50),
+            WorkerCount = 2,
+            ChannelCapacity = 16,
+            DrainTimeout = TimeSpan.FromSeconds(10)
+        };
+
+        await using var host = new AgentKernelHost(serviceProvider, runStore, lease, options);
+
+        var run = BuildRun("心跳批量续约测试", turnBudget: new AgentTurnBudget
+        {
+            MaxTurns = 10,
+            TurnsUsed = 0,
+            MaxModelCalls = 5
+        });
+        await runStore.CreateAsync(run);
+        await host.StartRunAsync(run);
+
+        // 等待 Actor 进入模型调用（阻塞在 GateModelTransport）
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && transport.CallCount == 0)
+        {
+            await Task.Delay(20);
+        }
+        Assert.IsTrue(transport.CallCount > 0, "Actor 应已进入模型调用。");
+
+        // 等待共享心跳循环完成至少一次批量续约（证明批量路径被使用）
+        deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && lease.RenewBatchCalls == 0)
+        {
+            await Task.Delay(20);
+        }
+        Assert.IsTrue(lease.RenewBatchCalls > 0, "共享心跳循环应调用 RenewBatchAsync。");
+
+        // 触发租约丢失：后续批量续约全部失败 → 共享循环应取消 Actor。
+        // InMemory（无 fencing 校验）下 Actor 的取消收尾写入 Cancelled；
+        // 生产 Postgres 下该写入因 fencing 校验失败而被拒绝，Run 保持非终态由 RecoveryWorker 恢复。
+        lease.FailRenewals();
+
+        deadline = DateTime.UtcNow.AddSeconds(5);
+        AgentRun? finalRun = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            finalRun = await runStore.GetAsync(run.WorkspaceId, run.RunId);
+            if (finalRun is not null && AgentRunStateMachine.IsTerminalState(finalRun.State))
+            {
+                break;
+            }
+            await Task.Delay(50);
+        }
+
+        Assert.IsNotNull(finalRun, "Run 应被心跳循环取消后进入终态。");
+        Assert.AreEqual(AgentRunState.Cancelled, finalRun!.State,
+            "租约丢失后共享心跳循环应取消 Actor，Run 应进入 Cancelled 终态。");
     }
 
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
@@ -565,5 +795,102 @@ public sealed class R29H_AgentRunProcessRestartTests
         public ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(
             AgentRunState state, int take = 100, CancellationToken cancellationToken = default)
             => _inner.ListByStateAsync(state, take, cancellationToken);
+    }
+
+    /// <summary>
+    /// IAgentRunLease 包装器：可随时切换为"全部续约失败"（模拟租约被抢占/数据库异常），
+    /// 并统计 RenewBatchAsync 调用次数（验证共享批量心跳路径被使用）。
+    /// </summary>
+    private sealed class FailingBatchRenewLease : IAgentRunLease
+    {
+        private readonly InMemoryAgentRunLease _inner = new();
+        private int _failRenewals;
+        private int _renewBatchCalls;
+
+        public int RenewBatchCalls => Volatile.Read(ref _renewBatchCalls);
+        public void FailRenewals() => Volatile.Write(ref _failRenewals, 1);
+
+        public ValueTask<LeasedAgentRun?> TryAcquireAsync(
+            string runId, TimeSpan leaseDuration, string owner, CancellationToken cancellationToken = default)
+            => _inner.TryAcquireAsync(runId, leaseDuration, owner, cancellationToken);
+
+        public ValueTask<bool> RenewAsync(
+            string runId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref _failRenewals) != 0)
+            {
+                return ValueTask.FromResult(false);
+            }
+            return _inner.RenewAsync(runId, leaseToken, extension, cancellationToken);
+        }
+
+        public async ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+            IReadOnlyList<AgentRunLeaseRenewal> leases, TimeSpan extension, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _renewBatchCalls);
+            if (Volatile.Read(ref _failRenewals) != 0)
+            {
+                // 全部续约失败（模拟租约丢失）
+                var failed = new List<string>(leases.Count);
+                foreach (var l in leases)
+                {
+                    failed.Add(l.RunId);
+                }
+                return failed;
+            }
+            return await _inner.RenewBatchAsync(leases, extension, cancellationToken).ConfigureAwait(false);
+        }
+
+        public ValueTask ReleaseAsync(string runId, string leaseToken, CancellationToken cancellationToken = default)
+            => _inner.ReleaseAsync(runId, leaseToken, cancellationToken);
+
+        public ValueTask<int> ReapExpiredAsync(CancellationToken cancellationToken = default)
+            => _inner.ReapExpiredAsync(cancellationToken);
+
+        public ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
+            => _inner.HasActiveLeaseAsync(runId, cancellationToken);
+
+        public ValueTask<int> MarkLeaseLostIfLeaseExpiredAsync(
+            string workspaceId, string runId, AgentRunState expectedCurrentState, CancellationToken ct = default)
+            => _inner.MarkLeaseLostIfLeaseExpiredAsync(workspaceId, runId, expectedCurrentState, ct);
+    }
+
+    /// <summary>
+    /// 门控模型传输：CallAsync 阻塞直到 Release 或取消令牌触发。
+    /// 用于让 Actor 停留在模型调用中，观察共享心跳循环的租约丢失取消行为。
+    /// </summary>
+    private sealed class GateModelTransport : IAgentModelTransport
+    {
+        private readonly TaskCompletionSource<bool> _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+        public void Release() => _gate.TrySetResult(true);
+
+        public ValueTask<AgentModelResponse> CallAsync(
+            string runId, string context, CancellationToken cancellationToken = default)
+            => CallAsyncCore(cancellationToken);
+
+        public ValueTask<AgentModelResponse> CallAsync(
+            string runId, IReadOnlyList<AgentMessage> messages, CancellationToken cancellationToken = default)
+            => CallAsyncCore(cancellationToken);
+
+        public ValueTask<AgentModelResponse> CallAsync(
+            AgentModelRequest request, CancellationToken cancellationToken = default)
+            => CallAsyncCore(cancellationToken);
+
+        private async ValueTask<AgentModelResponse> CallAsyncCore(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _callCount);
+            await _gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return new AgentModelResponse
+            {
+                Content = "门控传输放行",
+                ToolCalls = Array.Empty<AgentToolCallRequest>(),
+                IsFinalAnswer = true,
+                TokensConsumed = 1,
+                Duration = TimeSpan.FromMilliseconds(1)
+            };
+        }
     }
 }
