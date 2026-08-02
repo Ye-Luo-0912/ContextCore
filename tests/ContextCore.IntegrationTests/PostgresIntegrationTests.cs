@@ -273,6 +273,86 @@ public sealed class PostgresIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("Postgres")]
+    public async Task ContextStore_Query_ChineseFts_ShouldHitPreTokenizedQuery()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("ctxc_");
+        try
+        {
+            var store = new PostgresContextStore(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            // search_vector 生成侧已按 CJK 单字拆分；查询侧同样 cjk_pre_tokenize
+            // 后"机器学习" → "机 器 学 习"（AND），才能命中已拆分的向量。
+            var items = new[]
+            {
+                new ContextItem { Id = "c-1", WorkspaceId = "ws", CollectionId = "col", Type = "note", Title = "机器学习模型评估报告", Content = "模型评估与训练调参记录。", Importance = 0.9, CreatedAt = now, UpdatedAt = now },
+                new ContextItem { Id = "c-2", WorkspaceId = "ws", CollectionId = "col", Type = "note", Title = "深度学习与神经网络", Content = "深度网络的训练与推理。", Importance = 0.8, CreatedAt = now, UpdatedAt = now.AddMinutes(-1) },
+                new ContextItem { Id = "c-3", WorkspaceId = "ws", CollectionId = "col", Type = "note", Title = "数据库索引优化实践", Content = "postgres fts 索引优化。", Importance = 0.7, CreatedAt = now, UpdatedAt = now.AddMinutes(-2) }
+            };
+            foreach (var item in items)
+            {
+                await store.SaveAsync(item);
+            }
+
+            // 多字中文查询应命中（AND 语义：全部单字 token 存在）
+            var hit = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "机器学习",
+                Take = 10
+            });
+            CollectionAssert.AreEquivalent(
+                new[] { "c-1" },
+                hit.Select(i => i.Id).ToArray(),
+                "中文查询 '机器学习' 应命中已拆分向量的条目。");
+
+            var hit2 = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "深度",
+                Take = 10
+            });
+            CollectionAssert.AreEquivalent(
+                new[] { "c-2" },
+                hit2.Select(i => i.Id).ToArray(),
+                "中文查询 '深度' 应命中对应条目。");
+
+            // 精确性：不存在的单字 token 不应命中（非前缀匹配）
+            var miss = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "机器猫",
+                Take = 10
+            });
+            Assert.AreEqual(0, miss.Count, "包含文档中不存在字符的查询不应误命中。");
+
+            // 中英混合查询不受 cjk_pre_tokenize 影响
+            var mixed = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "索引 fts",
+                Take = 10
+            });
+            CollectionAssert.AreEquivalent(
+                new[] { "c-3" },
+                mixed.Select(i => i.Id).ToArray(),
+                "中英混合查询应正常命中。");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
     public async Task MemoryStore_SaveAndPromotion_ShouldRoundtrip()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }

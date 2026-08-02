@@ -221,17 +221,12 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         //   LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
         // - fts_hits 走 GIN、id_hits 走 B-tree / trigram，DISTINCT ON (workspace_id, collection_id, id) 去重（FTS 命中优先），
         //   避免 OR 条件退化为全表扫描，同时消除第二次往返与应用层合并去重。
-        // TODO(P1-8 中文检索改进)：search_vector 生成时已应用 cjk_pre_tokenize（拆分 CJK 单字），
-        //   但查询侧 websearch_to_tsquery('simple', @query_text) 未对 @query_text 应用 cjk_pre_tokenize，
-        //   导致中文查询（如"测试"）被当作单一 token，与已拆分的 search_vector 无法匹配，中文 FTS 基本失效。
-        //   改进方向：将 3 处 websearch_to_tsquery('simple', @query_text) 改为
-        //     websearch_to_tsquery('simple', cjk_pre_tokenize(@query_text))（本处 rankExpression + 2 处 WHERE）。
-        //   注意：cjk_pre_tokenize 只对 CJK 字符插入空格，对 ASCII/英文查询无影响，websearch 操作符（OR/-/"）不变；
-        //   改造后中文查询"测试"→"测 试"→ 测 & 试（AND），可命中已拆分的 search_vector；
-        //   需同步修改 rankExpression（ts_rank_cd）以保持排名一致；
-        //   改造前应补充中文 FTS 命中的单元/集成测试（当前无覆盖），避免回归。
+        // 查询侧与写入侧对称：search_vector 生成时已应用 cjk_pre_tokenize（拆分 CJK 单字），
+        // 查询侧同样对 @query_text 应用 cjk_pre_tokenize，否则中文查询（如"测试"）被当作单一
+        // token，无法命中已拆分的 search_vector。cjk_pre_tokenize 只对 CJK 字符插入空格，
+        // 对 ASCII/英文查询与 websearch 操作符（OR/-/"）无影响；"测试" → "测 试" → 测 & 试。
         string? rankExpression = hasQueryText
-            ? "ts_rank_cd(search_vector, websearch_to_tsquery('simple', @query_text))"
+            ? "ts_rank_cd(search_vector, websearch_to_tsquery('simple', cjk_pre_tokenize(@query_text)))"
             : null;
 
         var take = TakeOrDefault(query.Take);
@@ -314,7 +309,7 @@ WITH fts_hits AS (
            tags, refs, source_refs,
            {rankExpression} AS ts_rank, 0 AS source_order
     FROM {Table("context_items")}
-    WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
+    WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', cjk_pre_tokenize(@query_text))
     {ftsAfterSql}
     ORDER BY ts_rank DESC, importance DESC, updated_at DESC, id DESC
     {innerLimitSql}
@@ -375,7 +370,7 @@ WITH fts_hits AS (
     SELECT data, workspace_id, collection_id, id, importance, updated_at,
            {rankExpression} AS ts_rank, 0 AS source_order
     FROM {Table("context_items")}
-    WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', @query_text)
+    WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', cjk_pre_tokenize(@query_text))
     {ftsAfterSql}
     ORDER BY ts_rank DESC, importance DESC, updated_at DESC, id DESC
     {innerLimitSql}
