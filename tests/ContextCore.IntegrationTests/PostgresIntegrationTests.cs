@@ -698,6 +698,87 @@ public sealed class PostgresIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("Postgres")]
+    public async Task JobQueue_BatchAcquireLease_ClaimsAcrossWorkspacesFairly()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("jqbf_");
+        try
+        {
+            var queue = new PostgresContextJobQueue(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            for (var i = 0; i < 3; i++)
+            {
+                await queue.EnqueueAsync(new ContextJob
+                {
+                    JobId = $"fair-a-{i}", WorkspaceId = "ws-a", CollectionId = "col",
+                    Kind = ContextJobKind.Compression, State = ContextJobState.Queued,
+                    CreatedAt = now.AddMilliseconds(i)
+                });
+                await queue.EnqueueAsync(new ContextJob
+                {
+                    JobId = $"fair-b-{i}", WorkspaceId = "ws-b", CollectionId = "col",
+                    Kind = ContextJobKind.Compression, State = ContextJobState.Queued,
+                    CreatedAt = now.AddMilliseconds(i)
+                });
+            }
+
+            // take=4、perWorkspace=2：应恰好领取 4 个，且每个 workspace 至多 2 个
+            var claimed = await queue.AcquireLeaseBatchAsync("worker-1", TimeSpan.FromMinutes(1), take: 4, perWorkspace: 2);
+            Assert.AreEqual(4, claimed.Count, "应恰好领取 4 个作业");
+            var byWorkspace = claimed.GroupBy(j => j.WorkspaceId).ToDictionary(g => g.Key, g => g.Count());
+            Assert.IsTrue(byWorkspace.Keys.Contains("ws-a") && byWorkspace.Keys.Contains("ws-b"),
+                "两个 workspace 都应被覆盖");
+            Assert.IsTrue(byWorkspace.Values.All(c => c <= 2), "每个 workspace 至多领取 2 个");
+            Assert.IsTrue(claimed.All(j => j.State == ContextJobState.Running), "领取后状态应为 Running");
+
+            // 剩余 1+1 个作业可被继续领取
+            var remaining = await queue.AcquireLeaseBatchAsync("worker-1", TimeSpan.FromMinutes(1), take: 4, perWorkspace: 2);
+            Assert.AreEqual(2, remaining.Count, "剩余 2 个作业应可被继续领取");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
+    public async Task JobQueue_BatchAcquireLease_ReclaimsExpiredLeases()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("jqrl_");
+        try
+        {
+            var queue = new PostgresContextJobQueue(factory, serializer, migrationRunner);
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "lease-expired-1", WorkspaceId = "ws", CollectionId = "col",
+                Kind = ContextJobKind.IndexBuild, State = ContextJobState.Queued,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            var first = await queue.AcquireLeaseBatchAsync("worker-1", TimeSpan.FromSeconds(1), take: 5, perWorkspace: 5);
+            Assert.AreEqual(1, first.Count, "首批应领取 1 个作业");
+
+            // 租约 1 秒过期后，其他 worker 可抢占
+            await Task.Delay(TimeSpan.FromMilliseconds(1500));
+            var reclaimed = await queue.AcquireLeaseBatchAsync("worker-2", TimeSpan.FromMinutes(1), take: 5, perWorkspace: 5);
+            Assert.AreEqual(1, reclaimed.Count, "过期租约应可被其他 worker 抢占");
+            Assert.AreEqual(ContextJobState.Running, reclaimed[0].State);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
     public async Task PackageBuildTraceStore_SaveAndQuery_ShouldRoundtrip()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }

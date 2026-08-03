@@ -111,6 +111,8 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     private bool _isFrozen;
     // SupportedTools 缓存。首次读取后冻结为不可变集合，避免每次读取创建新 HashSet。
     private IReadOnlySet<string>? _supportedToolsCache;
+    // ToolDefinitions 缓存。与 _supportedToolsCache 同模式：注册变更时失效，冻结时物化。
+    private IReadOnlyList<AgentToolDefinition>? _toolDefinitionsCache;
 
     /// <summary>
     /// 构造 RealToolDispatcher。
@@ -166,6 +168,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
             }
             // 注册表变更后使缓存失效
             _supportedToolsCache = null;
+            _toolDefinitionsCache = null;
         }
     }
 
@@ -180,6 +183,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
             _isFrozen = true;
             // 冻结时立即物化缓存
             _supportedToolsCache ??= BuildSupportedTools();
+            _toolDefinitionsCache ??= BuildToolDefinitions();
         }
     }
 
@@ -232,6 +236,25 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
     /// <returns>不可变的 AgentToolDefinition 列表（按注册表当前快照构建）。</returns>
     public IReadOnlyList<AgentToolDefinition> GetToolDefinitions()
     {
+        // 缓存 ToolDefinitions，避免每次读取重建列表。与 SupportedTools 同模式：
+        // 注册变更（AddHandler）时失效；冻结后缓存永不变更。
+        if (_toolDefinitionsCache is { } cached)
+        {
+            return cached;
+        }
+        lock (_freezeGate)
+        {
+            if (_toolDefinitionsCache is { } cached2)
+            {
+                return cached2;
+            }
+            _toolDefinitionsCache = BuildToolDefinitions();
+            return _toolDefinitionsCache;
+        }
+    }
+
+    private IReadOnlyList<AgentToolDefinition> BuildToolDefinitions()
+    {
         return _handlers.Values
             .Select(h => new AgentToolDefinition
             {
@@ -239,7 +262,7 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
                 Description = h.Description,
                 ParametersJsonSchema = h.ParametersJsonSchema ?? "{}"
             })
-            .ToList();
+            .ToArray();
     }
 
     /// <inheritdoc />

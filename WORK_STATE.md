@@ -15,9 +15,14 @@
 
 ## 当前状态
 
-- **基线**：main @ `6065d366`（工作树干净）。
-- **进行中**：无。
-- **最近完成**：记录性能优化优先级（三组：正确性+性能 / 推理热路径 / CI 性能）到目标与计划。
+- **基线**：main @ `c94f8298`（工作树干净）。
+- **进行中**：性能优化 WP-P1 已完成，待提交（见下）。
+- **最近完成**：WP-P1 作业队列批量化 + Workspace 公平 + queue wait 指标 + 工具定义冻结缓存。
+
+### 性能优化工作包进度
+
+- **WP-P1 已完成**：`ILeasedJobQueue.AcquireLeaseBatchAsync`（批量领取 + per-workspace 公平，两阶段 ROW_NUMBER）；`ContextJobWorker` 改为批量领取并按空闲槽位分派；新增 `PostgresJobQueueMetrics.QueueWait` 直方图（入队→领取等待时长）；`RealToolDispatcher.GetToolDefinitions` 冻结缓存；`JobWorkerOptions.MaxPerWorkspaceClaim`（默认 10）。验证：build 0 错误；ContextCore.Tests 11 既有失败不变（+2 新测试通过）；Service.Tests 64 通过；集成测试本地跳过（Docker 不可用，CI 覆盖）。
+- WP-P2（检索 Selected-only Content 水合 + Exact token 只对 Selected）、WP-P3（推理热路径）、WP-P4（快照自动压缩）、WP-P5（CI Artifact）待做。
 
 ## 必要元信息
 

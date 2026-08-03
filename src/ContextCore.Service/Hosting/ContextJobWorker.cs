@@ -58,112 +58,143 @@ public sealed class ContextJobWorker : BackgroundService
 				continue;
 			}
 
-			// 每轮创建 scope，确保 scoped 存储或处理器生命周期正确。
+			// 每轮创建 scope 完成领取；处理阶段由 ProcessJobAsync 为每个作业自建 scope。
+			// 所有涉及服务均为 Singleton 注册（队列/dispatcher/event sink），
+			// 领取与处理跨 scope 解析到的实例一致。
+			IReadOnlyList<ContextJob> jobs;
 			var scope = _services.CreateScope();
-			var queue = scope.ServiceProvider.GetRequiredService<IContextJobQueue>();
-			// 检测队列是否支持租约语义。Postgres 实现 ILeasedJobQueue；InMemory/File 不实现。
-			var leasedQueue = queue as ILeasedJobQueue;
-
-			ContextJob? job;
-			if (leasedQueue is not null)
+			try
 			{
-				job = await leasedQueue.AcquireLeaseAsync(owner, leaseDuration, cancellationToken: stoppingToken)
-					.ConfigureAwait(false);
+				var queue = scope.ServiceProvider.GetRequiredService<IContextJobQueue>();
+				// 检测队列是否支持租约语义。Postgres 实现 ILeasedJobQueue；InMemory/File 不实现。
+				var leasedQueue = queue as ILeasedJobQueue;
+				if (leasedQueue is not null)
+				{
+					// 批量领取：一次性取满空闲槽位（至少 1），按 workspace 公平分配。
+					var available = Math.Max(1, semaphore.CurrentCount);
+					var take = Math.Min(concurrency, available);
+					jobs = await leasedQueue.AcquireLeaseBatchAsync(
+							owner, leaseDuration, take, _options.Value.MaxPerWorkspaceClaim, stoppingToken)
+						.ConfigureAwait(false);
+				}
+				else
+				{
+					var single = await queue.DequeueAsync(stoppingToken).ConfigureAwait(false);
+					jobs = single is null ? Array.Empty<ContextJob>() : new[] { single };
+				}
 			}
-			else
+			finally
 			{
-				job = await queue.DequeueAsync(stoppingToken).ConfigureAwait(false);
-			}
-
-			if (job is null)
-			{
-				semaphore.Release();
 				scope.Dispose();
-				// 队列为空时短暂休眠，避免空转占满 CPU。
+			}
+
+			if (jobs.Count == 0)
+			{
+				// 归还探查槽位；队列为空时短暂休眠，避免空转占满 CPU。
+				semaphore.Release();
 				await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
 				continue;
 			}
 
-			// 异步执行作业，不阻塞轮询循环，允许同时处理多个作业。
-			_ = Task.Run(async () =>
+			// 归还探查槽位，再为每个领取到的作业预留独立槽位（由处理任务释放）。
+			semaphore.Release();
+			foreach (var job in jobs)
 			{
-				// 租约路径下启动 heartbeat 任务，周期性续约。
-				// leaseCts 链接到 stoppingToken——host 关闭时也会取消租约。
-				// heartbeat 续约失败时取消 leaseCts，让 DispatchAsync 抛出 OperationCanceledException，
-				// 主任务据此识别租约丢失并跳过 Ack/Nack。
-				CancellationTokenSource? leaseCts = null;
-				Task? heartbeatTask = null;
+				await semaphore.WaitAsync(stoppingToken).ConfigureAwait(false);
+				// 异步执行作业，不阻塞轮询循环，允许同时处理多个作业。
+				_ = Task.Run(() => ProcessJobAsync(job, owner, leaseDuration, heartbeatInterval, semaphore, stoppingToken), stoppingToken);
+			}
+		}
+	}
 
-				if (leasedQueue is not null)
-				{
-					leaseCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-					heartbeatTask = RunHeartbeatAsync(
-						leasedQueue, job.JobId, owner, leaseDuration, heartbeatInterval, leaseCts);
-				}
+	/// <summary>
+	/// 处理单个作业：租约路径下启动 heartbeat 续约，分发执行后 Ack/Nack。
+	/// 每个作业自建 scope（与领取 scope 分离），保证 scoped 服务生命周期与作业一致。
+	/// </summary>
+	private async Task ProcessJobAsync(
+		ContextJob job,
+		string owner,
+		TimeSpan leaseDuration,
+		TimeSpan heartbeatInterval,
+		SemaphoreSlim semaphore,
+		CancellationToken stoppingToken)
+	{
+		using var scope = _services.CreateScope();
+		var queue = scope.ServiceProvider.GetRequiredService<IContextJobQueue>();
+		// 租约路径下启动 heartbeat 任务，周期性续约。
+		// leaseCts 链接到 stoppingToken——host 关闭时也会取消租约。
+		// heartbeat 续约失败时取消 leaseCts，让 DispatchAsync 抛出 OperationCanceledException，
+		// 主任务据此识别租约丢失并跳过 Ack/Nack。
+		var leasedQueue = queue as ILeasedJobQueue;
+		CancellationTokenSource? leaseCts = null;
+		Task? heartbeatTask = null;
 
-				var effectiveToken = leaseCts?.Token ?? stoppingToken;
+		if (leasedQueue is not null)
+		{
+			leaseCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+			heartbeatTask = RunHeartbeatAsync(
+				leasedQueue, job.JobId, owner, leaseDuration, heartbeatInterval, leaseCts);
+		}
 
-				try
+		var effectiveToken = leaseCts?.Token ?? stoppingToken;
+
+		try
+		{
+			var dispatcher = scope.ServiceProvider.GetRequiredService<IContextJobDispatcher>();
+			var eventSink = scope.ServiceProvider.GetRequiredService<IContextEventSink>();
+			await dispatcher.DispatchAsync(job, effectiveToken).ConfigureAwait(false);
+			await queue.AckAsync(job.JobId, stoppingToken).ConfigureAwait(false);
+			// Event Sink fail-open——作业已成功并 Ack，sink 发射失败不得触发 Nack/error 路径。
+			// 之前 EmitAsync 抛出会落入外层 catch，导致对已 Ack 的作业执行 NackAsync（CAS 下为 no-op）
+			// 并发射误导性的 Error 事件。现在单独捕获并降级为 Warning 日志。
+			try
+			{
+				await EmitAsync(eventSink, job, ContextEventLevel.Information, $"Job {job.JobId} succeeded.", stoppingToken).ConfigureAwait(false);
+			}
+			catch (Exception emitEx)
+			{
+				_logger.LogWarning(emitEx, "Event sink failed to emit success event for job {JobId}. Job already acked, ignoring.", job.JobId);
+			}
+		}
+		catch (OperationCanceledException) when (leaseCts is not null && leaseCts.IsCancellationRequested && !stoppingToken.IsCancellationRequested)
+		{
+			// 租约丢失——RenewHeartbeatAsync 返回 false，heartbeat 任务已取消 leaseCts。
+			// 不 Ack/Nack：保留 state='Running'，lease_expires_at 已过期，
+			// 其他 worker 的 AcquireLeaseBatchAsync 会通过 (state='Running' AND lease_expires_at <= now) 抢占恢复。
+			// 注意：仅在 stoppingToken 未取消时判定为租约丢失——host 关闭导致的取消不算租约丢失。
+			_logger.LogWarning("Job {JobId} aborted due to lease loss. Another worker may re-acquire.", job.JobId);
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+		{
+			_logger.LogError(ex, "Context job {JobId} failed.", job.JobId);
+			// 处理器抛出异常时 NackAsync，队列根据 retry_count 决定重试或终态。
+			// 各 store 的写入操作均幂等（ON CONFLICT），保证重试不会产生脏数据。
+			try
+			{
+				var eventSink2 = scope.ServiceProvider.GetRequiredService<IContextEventSink>();
+				await queue.NackAsync(job.JobId, ex.Message, CancellationToken.None).ConfigureAwait(false);
+				await EmitAsync(eventSink2, job, ContextEventLevel.Error, ex.Message, CancellationToken.None).ConfigureAwait(false);
+			}
+			catch (Exception nackEx)
+			{
+				_logger.LogError(nackEx, "Failed to nack job {JobId}.", job.JobId);
+			}
+		}
+		finally
+		{
+			// 停止 heartbeat 任务并释放 leaseCts。
+			// leaseCts.Cancel() 让 heartbeat 的 Task.Delay 抛出 OperationCanceledException 而退出。
+			if (leaseCts is not null)
+			{
+				leaseCts.Cancel();
+				if (heartbeatTask is not null)
 				{
-					var dispatcher = scope.ServiceProvider.GetRequiredService<IContextJobDispatcher>();
-					var eventSink = scope.ServiceProvider.GetRequiredService<IContextEventSink>();
-					await dispatcher.DispatchAsync(job, effectiveToken).ConfigureAwait(false);
-					await queue.AckAsync(job.JobId, stoppingToken).ConfigureAwait(false);
-					// Event Sink fail-open——作业已成功并 Ack，sink 发射失败不得触发 Nack/error 路径。
-					// 之前 EmitAsync 抛出会落入外层 catch，导致对已 Ack 的作业执行 NackAsync（CAS 下为 no-op）
-					// 并发射误导性的 Error 事件。现在单独捕获并降级为 Warning 日志。
-					try
-					{
-						await EmitAsync(eventSink, job, ContextEventLevel.Information, $"Job {job.JobId} succeeded.", stoppingToken).ConfigureAwait(false);
-					}
-					catch (Exception emitEx)
-					{
-						_logger.LogWarning(emitEx, "Event sink failed to emit success event for job {JobId}. Job already acked, ignoring.", job.JobId);
-					}
+					try { await heartbeatTask.ConfigureAwait(false); }
+					catch { /* heartbeat 异常已在内部记录，此处忽略 */ }
 				}
-				catch (OperationCanceledException) when (leaseCts is not null && leaseCts.IsCancellationRequested && !stoppingToken.IsCancellationRequested)
-				{
-					// 租约丢失——RenewHeartbeatAsync 返回 false，heartbeat 任务已取消 leaseCts。
-					// 不 Ack/Nack：保留 state='Running'，lease_expires_at 已过期，
-					// 其他 worker 的 AcquireLeaseAsync 会通过 (state='Running' AND lease_expires_at <= now) 抢占恢复。
-					// 注意：仅在 stoppingToken 未取消时判定为租约丢失——host 关闭导致的取消不算租约丢失。
-					_logger.LogWarning("Job {JobId} aborted due to lease loss. Another worker may re-acquire.", job.JobId);
-				}
-				catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
-				{
-					_logger.LogError(ex, "Context job {JobId} failed.", job.JobId);
-					// 处理器抛出异常时 NackAsync，队列根据 retry_count 决定重试或终态。
-					// 各 store 的写入操作均幂等（ON CONFLICT），保证重试不会产生脏数据。
-					try
-					{
-						var queue2 = scope.ServiceProvider.GetRequiredService<IContextJobQueue>();
-						var eventSink2 = scope.ServiceProvider.GetRequiredService<IContextEventSink>();
-						await queue2.NackAsync(job.JobId, ex.Message, CancellationToken.None).ConfigureAwait(false);
-						await EmitAsync(eventSink2, job, ContextEventLevel.Error, ex.Message, CancellationToken.None).ConfigureAwait(false);
-					}
-					catch (Exception nackEx)
-					{
-						_logger.LogError(nackEx, "Failed to nack job {JobId}.", job.JobId);
-					}
-				}
-				finally
-				{
-					// 停止 heartbeat 任务并释放 leaseCts。
-					// leaseCts.Cancel() 让 heartbeat 的 Task.Delay 抛出 OperationCanceledException 而退出。
-					if (leaseCts is not null)
-					{
-						leaseCts.Cancel();
-						if (heartbeatTask is not null)
-						{
-							try { await heartbeatTask.ConfigureAwait(false); }
-							catch { /* heartbeat 异常已在内部记录，此处忽略 */ }
-						}
-						leaseCts.Dispose();
-					}
-					semaphore.Release();
-					scope.Dispose();
-				}
-			}, stoppingToken);
+				leaseCts.Dispose();
+			}
+			semaphore.Release();
 		}
 	}
 

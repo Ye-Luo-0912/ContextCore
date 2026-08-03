@@ -2411,6 +2411,7 @@ M:ContextCore.Abstractions.ILearningLeaseStore.RenewAsync(System.String, System.
 M:ContextCore.Abstractions.ILearningLeaseStore.TryAcquireAsync(System.String, System.TimeSpan, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILearningPipelineSink.EnqueueAsync(ContextCore.Abstractions.LearningPipelineEvent, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedJobQueue.AcquireLeaseAsync(System.String, System.TimeSpan, System.Nullable<ContextCore.Abstractions.ContextJobKind>, System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.ILeasedJobQueue.AcquireLeaseBatchAsync(System.String, System.TimeSpan, System.Int32, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedJobQueue.RenewHeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedWorkStore<>.AckAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedWorkStore<>.HeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)

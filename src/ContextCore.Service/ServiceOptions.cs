@@ -91,6 +91,13 @@ public sealed class JobWorkerOptions
 	public int Concurrency { get; set; } = 1;
 
 	/// <summary>
+	/// 每轮批量领取时单个 workspace 最多领取的作业数，默认 10。
+	/// 仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效——
+	/// 批量领取按 workspace 公平分配，避免单一 workspace 占满整批。
+	/// </summary>
+	public int MaxPerWorkspaceClaim { get; set; } = 10;
+
+	/// <summary>
 	/// 作业租约有效期。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
 	/// worker 在处理过程中周期性调用 <c>RenewHeartbeatAsync</c> 续约；超过此时长未续约则租约过期，
 	/// 其他 worker 可通过 <c>AcquireLeaseAsync</c> 抢占（state=Running AND lease_expires_at &lt;= now）。

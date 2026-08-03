@@ -169,6 +169,25 @@ public interface ILeasedJobQueue
         string owner,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 原子地批量获取作业并设置租约，按 workspace 公平分配。
+    /// 选择条件与 <see cref="AcquireLeaseAsync"/> 相同（Queued/WaitingRetry 或已过期 Running），
+    /// 使用 SELECT FOR UPDATE SKIP LOCKED 确保多 worker / 多实例无重复消费。
+    /// 每个 workspace 最多领取 <paramref name="perWorkspace"/> 个，避免单一 workspace 占满整批。
+    /// </summary>
+    /// <param name="owner">租约持有者标识（worker 实例唯一）。</param>
+    /// <param name="leaseDuration">租约有效期。过期后其他 worker 可通过本方法抢占。</param>
+    /// <param name="take">最多领取的作业数。</param>
+    /// <param name="perWorkspace">每个 workspace 最多领取数；小于等于 0 时按 <paramref name="take"/> 处理。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>领取到的作业列表（state=Running），可能为空列表。</returns>
+    Task<IReadOnlyList<ContextJob>> AcquireLeaseBatchAsync(
+        string owner,
+        TimeSpan leaseDuration,
+        int take,
+        int perWorkspace,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>提供作业的查询功能。</summary>

@@ -177,7 +177,99 @@ WHERE job_id = @job_id;
         AddJson(updateCmd, "data", running);
         await updateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        PostgresJobQueueMetrics.QueueWait.Record((now - job.CreatedAt).TotalMilliseconds);
         return running;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ContextJob>> AcquireLeaseBatchAsync(
+        string owner,
+        TimeSpan leaseDuration,
+        int take,
+        int perWorkspace,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+        if (take <= 0)
+        {
+            return Array.Empty<ContextJob>();
+        }
+        if (perWorkspace <= 0)
+        {
+            perWorkspace = take;
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        var now = DateTimeOffset.UtcNow;
+        var leaseUntil = now.Add(leaseDuration);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("owner", owner);
+        command.Parameters.AddWithValue("lease_until", leaseUntil);
+        command.Parameters.AddWithValue("take", take);
+        command.Parameters.AddWithValue("per_workspace", perWorkspace);
+        // 两阶段公平领取：先按全局优先级取前 take 个（FOR UPDATE SKIP LOCKED 加锁），
+        // 再按 workspace 分区编号，每个 workspace 至多 per_workspace 个，避免单 workspace 占满整批。
+        command.CommandText = $"""
+WITH eligible AS (
+    SELECT workspace_id, job_id
+    FROM (
+        SELECT workspace_id, job_id,
+               ROW_NUMBER() OVER (
+                   PARTITION BY workspace_id
+                   ORDER BY priority DESC, created_at ASC, job_id ASC) AS ws_rank
+        FROM (
+            SELECT workspace_id, job_id, priority, created_at
+            FROM {Table("context_jobs")}
+            WHERE (state = 'Queued' OR state = 'WaitingRetry'
+                   OR (state = 'Running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= @now))
+            ORDER BY priority DESC, created_at ASC, job_id ASC
+            LIMIT @take
+            FOR UPDATE SKIP LOCKED
+        ) locked
+    ) ranked
+    WHERE ws_rank <= @per_workspace
+),
+updated AS (
+    UPDATE {Table("context_jobs")} cj
+    SET state = 'Running',
+        lease_owner = @owner,
+        lease_expires_at = @lease_until,
+        last_heartbeat_at = @now,
+        updated_at = @now,
+        data = data || jsonb_build_object(
+            'State', to_jsonb('Running'),
+            'StartedAt', to_jsonb(CASE WHEN data->>'StartedAt' IS NULL THEN @now ELSE (data->>'StartedAt')::timestamptz END))
+    FROM eligible e
+    WHERE cj.workspace_id = e.workspace_id AND cj.job_id = e.job_id
+    RETURNING cj.job_id, cj.data
+)
+SELECT job_id, data FROM updated;
+""";
+
+        var jobs = new List<ContextJob>();
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var claimed = Serializer.Deserialize<ContextJob>(reader.GetString(1));
+                if (claimed is null)
+                {
+                    continue;
+                }
+                jobs.Add(claimed);
+                PostgresJobQueueMetrics.QueueWait.Record((now - claimed.CreatedAt).TotalMilliseconds);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return jobs;
     }
 
     public async Task<bool> RenewHeartbeatAsync(

@@ -199,10 +199,68 @@ public class ContextJobWorkerTests
         Assert.AreEqual(0, fakeDispatcher.DispatchedJobs.Count, "Disabled 时不调用 Dispatcher");
     }
 
+    /// <summary>
+    /// 验证批量路径：worker 通过 AcquireLeaseBatchAsync 一次领取多个作业并逐个处理。
+    /// </summary>
+    [TestMethod]
+    [Timeout(15000)]
+    public async Task Worker_WithBatchQueue_ProcessesAllClaimedJobs()
+    {
+        var fakeQueue = new FakeBatchJobQueue(
+        [
+            WithId(SampleJob, "job-batch-1"),
+            WithId(SampleJob, "job-batch-2")
+        ]);
+        var fakeDispatcher = new FakeDispatcher(_ => Task.CompletedTask);
+        using var cts = new CancellationTokenSource();
+        using var provider = BuildServiceProvider(fakeQueue, fakeDispatcher, concurrency: 4);
+
+        var worker = provider.GetRequiredService<ContextJobWorker>();
+        await worker.StartAsync(cts.Token);
+
+        // 等待两个作业都被分派
+        await WaitUntilAsync(() => fakeDispatcher.DispatchedJobs.Count >= 2, TimeSpan.FromSeconds(5));
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.IsTrue(fakeQueue.AcquireLeaseBatchCalls >= 1, "应调用 AcquireLeaseBatchAsync");
+        Assert.AreEqual(2, fakeDispatcher.DispatchedJobs.Count, "批量领取的两个作业都应被处理");
+        Assert.IsTrue(fakeQueue.AckCalls >= 2, "两个作业都成功应各 Ack 一次");
+        Assert.AreEqual(0, fakeQueue.NackCalls, "成功路径不应 Nack");
+    }
+
+    private static ContextJob WithId(ContextJob source, string jobId) => new()
+    {
+        JobId = jobId,
+        WorkspaceId = source.WorkspaceId,
+        CollectionId = source.CollectionId,
+        Kind = source.Kind,
+        PayloadJson = source.PayloadJson,
+        State = source.State,
+        Priority = source.Priority,
+        RetryCount = source.RetryCount,
+        MaxRetryCount = source.MaxRetryCount,
+        CreatedAt = source.CreatedAt
+    };
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return;
+            }
+            await Task.Delay(25);
+        }
+        throw new TimeoutException("等待条件超时");
+    }
+
     private static ServiceProvider BuildServiceProvider(
         IContextJobQueue queue,
         IContextJobDispatcher dispatcher,
-        bool enabled = true)
+        bool enabled = true,
+        int concurrency = 1)
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
@@ -214,7 +272,7 @@ public class ContextJobWorkerTests
         {
             o.Enabled = enabled;
             o.PollIntervalMilliseconds = 50;  // 加快测试
-            o.Concurrency = 1;
+            o.Concurrency = concurrency;
             o.HeartbeatInterval = TimeSpan.FromMilliseconds(10);  // 快速触发续约
             o.LeaseDuration = TimeSpan.FromSeconds(5);
         });
@@ -284,6 +342,18 @@ public class ContextJobWorkerTests
                 result = null;
             }
             return Task.FromResult(result);
+        }
+
+        public Task<IReadOnlyList<ContextJob>> AcquireLeaseBatchAsync(
+            string owner, TimeSpan leaseDuration, int take, int perWorkspace,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref AcquireLeaseCalls);
+            if (_job is not null && Interlocked.CompareExchange(ref _acquired, 1, 0) == 0)
+            {
+                return Task.FromResult<IReadOnlyList<ContextJob>>(new[] { _job });
+            }
+            return Task.FromResult<IReadOnlyList<ContextJob>>(Array.Empty<ContextJob>());
         }
 
         public Task<bool> RenewHeartbeatAsync(
@@ -363,6 +433,64 @@ public class ContextJobWorkerTests
         {
             Interlocked.Increment(ref NackCalls);
             NackCalled.TrySetResult(true);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Fake 批量队列：首次 AcquireLeaseBatchAsync 返回整批作业，后续返回空。
+    /// </summary>
+    private sealed class FakeBatchJobQueue : IContextJobQueue, ILeasedJobQueue
+    {
+        private readonly ContextJob[] _jobs;
+        private int _claimed;
+        public int AcquireLeaseBatchCalls;
+        public int AckCalls;
+        public int NackCalls;
+
+        public FakeBatchJobQueue(ContextJob[] jobs)
+        {
+            _jobs = jobs;
+        }
+
+        public Task<IReadOnlyList<ContextJob>> AcquireLeaseBatchAsync(
+            string owner, TimeSpan leaseDuration, int take, int perWorkspace,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref AcquireLeaseBatchCalls);
+            if (Interlocked.CompareExchange(ref _claimed, 1, 0) == 0)
+            {
+                return Task.FromResult<IReadOnlyList<ContextJob>>(_jobs);
+            }
+            return Task.FromResult<IReadOnlyList<ContextJob>>(Array.Empty<ContextJob>());
+        }
+
+        public Task<ContextJob?> AcquireLeaseAsync(
+            string owner, TimeSpan leaseDuration, ContextJobKind? kind = null,
+            string? workspaceId = null, string? collectionId = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextJob?>(null);
+
+        public Task<bool> RenewHeartbeatAsync(
+            string jobId, string owner, TimeSpan leaseDuration,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task EnqueueAsync(ContextJob job, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<ContextJob?> DequeueAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextJob?>(null);
+
+        public Task AckAsync(string jobId, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref AckCalls);
+            return Task.CompletedTask;
+        }
+
+        public Task NackAsync(string jobId, string reason, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref NackCalls);
             return Task.CompletedTask;
         }
     }
