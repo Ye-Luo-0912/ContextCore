@@ -240,6 +240,12 @@ public sealed record ToolDescriptor
     public ToolRecoveryStrategy RecoveryStrategy { get; init; } = ToolRecoveryStrategy.RequireReconciliation;
     /// <summary>Reconciliation handler name (optional). When RecoveryStrategy=RequireReconciliation, an externally registered handler performs reconciliation.</summary>
     public string? ReconciliationHandler { get; init; }
+    /// <summary>
+    /// 对账截止时长（自对账记录创建起；默认 24 小时）。
+    /// 超期未决 → ControlRoom 列表高亮 + ToolReconciliationWorker 告警。
+    /// 经 <see cref="ToolExecutionResult.ReconciliationDeadline"/> 回传到对账记录 DeadlineUtc。
+    /// </summary>
+    public TimeSpan ReconciliationDeadline { get; init; } = TimeSpan.FromHours(24);
     /// <summary>Maximum execution time. Tool calls exceeding this are treated as timed out (RequiresReconciliation).</summary>
     public TimeSpan MaximumExecutionTime { get; init; } = TimeSpan.FromMinutes(5);
 }
@@ -358,6 +364,14 @@ public sealed record ToolReconciliationRecord
     /// <summary>对账处理程序名（ToolDescriptor.ReconciliationHandler；null = 仅人工裁决）。</summary>
     public string? ReconciliationHandler { get; init; }
 
+    /// <summary>
+    /// 对账截止时间（UTC；null = 无截止）。
+    /// 创建时由 Actor 按 ToolDescriptor.ReconciliationDeadline 计算（CreatedAt + 截止时长）。
+    /// 超期未决（DeadlineUtc &lt; now 且 Pending/Running）视为过期：
+    /// ControlRoom 列表高亮 + ToolReconciliationWorker 告警钩子。
+    /// </summary>
+    public DateTimeOffset? DeadlineUtc { get; init; }
+
     /// <summary>当前对账状态。</summary>
     public required ToolReconciliationStatus Status { get; init; }
 
@@ -412,6 +426,45 @@ public interface IToolReconciliationHandler
 }
 
 /// <summary>
+/// ControlRoom 对账列表查询（GET /api/agents/reconciliations 分页过滤条件）。
+/// </summary>
+public sealed record ReconciliationQuery
+{
+    /// <summary>按 Workspace 过滤（null = 全部 workspace）。</summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>按 Run 过滤（null = 全部 run）。</summary>
+    public string? RunId { get; init; }
+
+    /// <summary>按状态过滤（null = 全部状态）。</summary>
+    public ToolReconciliationStatus? Status { get; init; }
+
+    /// <summary>仅返回过期未决记录（DeadlineUtc &lt; now 且 Pending/Running）。</summary>
+    public bool OverdueOnly { get; init; }
+
+    /// <summary>分页偏移（默认 0）。</summary>
+    public int Offset { get; init; }
+
+    /// <summary>分页大小（默认 50；服务端 clamp ≤ 200）。</summary>
+    public int Limit { get; init; } = 50;
+}
+
+/// <summary>
+/// ControlRoom 对账列表结果：分页条目 + 总数 + 过期未决告警计数。
+/// </summary>
+public sealed record ReconciliationListResult
+{
+    /// <summary>当前页条目（按 CreatedAt 倒序，最新在前）。</summary>
+    public required IReadOnlyList<ToolReconciliationRecord> Items { get; init; }
+
+    /// <summary>过滤条件下的总条数（分页前）。</summary>
+    public required int Total { get; init; }
+
+    /// <summary>过滤条件下过期未决记录数（DeadlineUtc &lt; now 且 Pending/Running；告警计数）。</summary>
+    public required int OverdueCount { get; init; }
+}
+
+/// <summary>
 /// Tool 对账记录存储：持久化 <see cref="ToolReconciliationRecord"/>，
 /// 支撑 Run 级"未裁决不完成"约束与 ToolReconciliationWorker 轮询。
 /// </summary>
@@ -427,6 +480,12 @@ public interface IToolReconciliationStore
 
     /// <summary>按 Run 列出全部对账记录（含已裁决）。</summary>
     ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>按外部操作 ID 反查对账记录（跨 Run；ControlRoom / 运维按 journal externalOperationId 查询）。</summary>
+    ValueTask<IReadOnlyList<ToolReconciliationRecord>> QueryByExternalOperationIdAsync(string externalOperationId, CancellationToken cancellationToken = default);
+
+    /// <summary>ControlRoom 分页列表：按过滤条件（workspace/run/status/overdue）分页返回，附总数与过期告警计数。</summary>
+    ValueTask<ReconciliationListResult> ListAsync(ReconciliationQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>Run 是否存在未裁决（Pending/Running）对账记录。</summary>
     ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default);

@@ -92,6 +92,8 @@ public sealed class AgentRunActor
     // 强制 checkpoint 阈值 — 未 checkpoint 事件数达到此值时强制创建 checkpoint，
     // 防止事件流无限增长导致恢复时重放代价过大。
     private const int ForcedCheckpointEventThreshold = 1000;
+    // 对账记录默认截止时长（ToolDescriptor.ReconciliationDeadline 未回传时的兜底）。
+    private static readonly TimeSpan DefaultReconciliationDeadline = TimeSpan.FromHours(24);
     // 事件恢复 keyset pagination 页大小（基于 sequence 索引的分页读取）。
     private const int RecoveryEventPageSize = 500;
     // 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
@@ -2082,6 +2084,9 @@ public sealed class AgentRunActor
             ToolName = toolName,
             ExternalOperationId = toolResult.ExternalOperationId,
             ReconciliationHandler = toolResult.ReconciliationHandler,
+            // 对账截止：CreatedAt + ToolDescriptor.ReconciliationDeadline 回传值（未回传时用默认 24h）。
+            // 超期未决 → ControlRoom 高亮 + ToolReconciliationWorker 告警。
+            DeadlineUtc = DateTimeOffset.UtcNow + (toolResult.ReconciliationDeadline ?? DefaultReconciliationDeadline),
             Status = ToolReconciliationStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow

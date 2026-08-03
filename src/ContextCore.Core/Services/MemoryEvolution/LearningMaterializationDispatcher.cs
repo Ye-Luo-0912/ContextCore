@@ -442,6 +442,9 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
             _workerCts.Dispose();
+            // 幂等：本类同时以 Singleton 与 HostedService 双注册，DI 容器可能对同一实例
+            // 触发两次 DisposeAsync；置 null 后第二次 StopAsync 不再触碰已释放的 CTS。
+            _workerCts = null;
         }
     }
 

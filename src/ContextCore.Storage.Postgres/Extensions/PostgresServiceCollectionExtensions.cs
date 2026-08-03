@@ -288,6 +288,14 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunLease>();
         services.AddSingleton<IAgentRunLease>(sp => sp.GetRequiredService<PostgresAgentRunLease>());
 
+        // Tool Reconciliation Control Plane（P2-B1）：对账记录 PostgreSQL 持久化。
+        // 替代 InMemoryToolReconciliationStore 成为 ProductionHA 组合根下的真相源：
+        // 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一数据库，
+        // 杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失。
+        // 注册顺序在 AddContextCore() 的 TryAddSingleton 之前 → Postgres 实现胜出。
+        services.AddSingleton<PostgresToolReconciliationStore>();
+        services.AddSingleton<IToolReconciliationStore>(sp => sp.GetRequiredService<PostgresToolReconciliationStore>());
+
         // 注册 ILeasedWorkStore 用于 Agent Run 租约（统一租约基础设施 — dual-registration）。
         // 与 IAgentRunLease 共享同一底层表（agent_run_leases），使用统一的 ILeasedWorkStore 接口。
         // 消费方（AgentKernelHost）暂不改用 ILeasedWorkStore，先通过 dual-registration 证明语义覆盖。

@@ -1630,6 +1630,51 @@
         }
       }
     },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Production Runtime 就绪探针（检查 Worker / Postgres / Model Activation）",
+        "operationId": "ProductionRuntimeReady",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductionRuntimeReadinessResult"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/runtime/status": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "获取 Production Runtime 当前激活组件报告（Profile / Worker / Model / Transport / Canary）",
+        "operationId": "GetRuntimeStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductionRuntimeStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -2259,7 +2304,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "按条件查询上下文条目列表",
+        "summary": "按条件查询上下文条目列表（Keyset 分页：返回不透明签名 NextCursor）",
         "operationId": "QueryContextItems",
         "requestBody": {
           "content": {
@@ -2277,10 +2322,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContextItem"
-                  }
+                  "$ref": "#/components/schemas/ContextQueryPage"
                 }
               }
             }
@@ -5755,6 +5797,47 @@
         }
       }
     },
+    "/api/learning/feedback/run": {
+      "post": {
+        "tags": [
+          "Learning"
+        ],
+        "summary": "提交针对已完成 AgentRun 的延迟用户反馈；写入反馈账本并入队 learning pipeline",
+        "operationId": "SubmitDelayedUserFeedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelayedUserFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelayedUserFeedbackResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/learning/feedback/summary": {
       "get": {
         "tags": [
@@ -7744,12 +7827,1593 @@
           }
         }
       }
+    },
+    "/api/models/register": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "注册新模型工件（指定 artifact 路径或显式提供 content_hash）",
+        "operationId": "RegisterModel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelArtifactDescriptorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/validate": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "验证模型（schema 存在性 / calibration 参数 / ONNX 格式）",
+        "operationId": "ValidateModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateModelResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/warmup": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "预热模型（加载并执行 Golden Probe warmup，不替换 active；返回 Staged Handle）",
+        "operationId": "WarmupModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/shadow": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "加载 Challenger 模型到影子模式（不替换 active；推理结果仅用于对比）",
+        "operationId": "ShadowModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShadowModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShadowModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/activate": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "激活模型（热切换，替换当前 active；可传入 stagedHandleId 从 warmup 缓存发布）",
+        "operationId": "ActivateModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivateModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/rollback": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "回滚到指定模型（重新激活为 active）",
+        "operationId": "RollbackModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/retire": {
+      "post": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "退役模型（active 模型退役将 CAS 更新 slot 为 Inactive 并停用）",
+        "operationId": "RetireModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetireModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/active": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "获取当前 active 模型（Champion）与 shadow 模型（Challenger）信息",
+        "operationId": "GetActiveModel",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveModelResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "列出所有已注册模型工件描述符",
+        "operationId": "ListModels",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "获取模型工件描述符详情",
+        "operationId": "GetModel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelArtifactDescriptorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/ready": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "readiness 检查：模型是否已加载且可推理",
+        "operationId": "GetModelReadiness",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelReadinessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/consistency": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "节点一致性报告：本节点当前 active 模型（HA 多节点对账用）",
+        "operationId": "GetNodeConsistency",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeConsistencyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{id}/audit": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "查询模型激活审计历史",
+        "operationId": "GetModelAuditHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelAuditHistoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/utility-ledger/feedback": {
+      "post": {
+        "tags": [
+          "UtilityLedger"
+        ],
+        "summary": "提交用户显式反馈（thumbs up/down / 评分修正 / 文本反馈 / 举报）写入 Utility Ledger",
+        "operationId": "SubmitUserFeedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserFeedbackSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserFeedbackSubmitResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "UtilityLedger"
+        ],
+        "summary": "查询用户反馈条目（按 workspace / decision / candidate / kind / 时间窗过滤）",
+        "operationId": "QueryUserFeedback",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decisionId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "candidateItemId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "givenBy",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "take",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserFeedbackEntry"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/utility-ledger/feedback/latest": {
+      "get": {
+        "tags": [
+          "UtilityLedger"
+        ],
+        "summary": "查询指定 candidate 的最新反馈条目",
+        "operationId": "GetLatestUserFeedback",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "candidateItemId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserFeedbackEntry"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs": {
+      "post": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "创建并启动 Agent Run",
+        "operationId": "CreateAgentRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}": {
+      "get": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "获取 Agent Run 状态",
+        "operationId": "GetAgentRun",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "取消 Agent Run",
+        "operationId": "CancelAgentRun",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CancelRunRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}/events": {
+      "get": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "订阅 Agent Run 事件流（SSE；支持 Last-Event-ID 断线重连）",
+        "operationId": "StreamAgentRunEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}/events/raw": {
+      "get": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "管理员审计：读取 Run 的原始事件流（含完整 Tool 参数、模型输出、异常堆栈）",
+        "operationId": "GetAgentRunRawEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunRawEventsPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}/approvals/{approvalId}": {
+      "post": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "提交 Agent Run 的 approval 决策（approve/reject）",
+        "operationId": "SubmitAgentRunApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}/reconciliations/{reconciliationId}/resolve": {
+      "post": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "裁决 Tool 对账记录（确认外部副作用真相 / 拒绝重放）",
+        "operationId": "ResolveAgentRunReconciliation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveReconciliationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/reconciliations": {
+      "get": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "Tool 对账 Control Room：分页待决列表（过期高亮 + 告警计数）或按 ExternalOperationId 反查",
+        "operationId": "ListAgentRunReconciliations",
+        "parameters": [
+          {
+            "name": "externalOperationId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ToolReconciliationStatus"
+            }
+          },
+          {
+            "name": "overdueOnly",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationListResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ActionOfInferencePhaseAndTimeSpan": { },
+      "ActivateModelRequest": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OnnxInferenceEngineOptions"
+              }
+            ]
+          },
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stagedHandleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivateModelResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "previousModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activeModelVersion": {
+            "type": "string"
+          },
+          "activeContentHash": {
+            "type": "string"
+          }
+        }
+      },
+      "ActiveModelResponse": {
+        "type": "object",
+        "properties": {
+          "hasActive": {
+            "type": "boolean"
+          },
+          "active": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelArtifactDescriptorResponse"
+              }
+            ]
+          },
+          "hasShadow": {
+            "type": "boolean"
+          },
+          "shadow": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelArtifactDescriptorResponse"
+              }
+            ]
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AgentModelTransportStatus": {
+        "required": [
+          "isRegistered",
+          "implementationType",
+          "isReal",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "isRegistered": {
+            "type": "boolean"
+          },
+          "implementationType": {
+            "type": "string"
+          },
+          "isReal": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentRunEvent": {
+        "required": [
+          "eventId",
+          "runId",
+          "workspaceId",
+          "sequence",
+          "eventType",
+          "state",
+          "payload",
+          "occurredAt"
+        ],
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "sequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/AgentRunEventType"
+          },
+          "state": {
+            "$ref": "#/components/schemas/AgentRunState"
+          },
+          "payload": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "prevChainHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentRunEventType": {
+        "type": "integer"
+      },
+      "AgentRunRawEventsPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRunEvent"
+            }
+          },
+          "nextSequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentRunState": {
+        "type": "integer"
+      },
       "AnchorType": {
         "type": "integer"
+      },
+      "ApprovalRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "approver": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "decisionRequestId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CalibrationValidationResponse": {
+        "type": "object",
+        "properties": {
+          "isValid": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "errorCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "warningCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CanaryStatus": {
+        "required": [
+          "progressionEnabled",
+          "leaderEnabled",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "progressionEnabled": {
+            "type": "boolean"
+          },
+          "leaderEnabled": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          }
+        }
+      },
+      "CancelRunRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "CandidateConstraintReviewRecord": {
         "type": "object",
@@ -10926,6 +12590,22 @@
             ],
             "format": "double"
           },
+          "sourceOrder": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "searchRank": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
           "version": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
@@ -11608,6 +13288,9 @@
               "string"
             ],
             "format": "int32"
+          },
+          "includeContent": {
+            "type": "boolean"
           }
         }
       },
@@ -12586,11 +14269,86 @@
             ],
             "format": "int32"
           },
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContextQueryCursor"
+              }
+            ]
+          },
+          "cursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "includeContent": {
             "type": "boolean"
           },
           "includeDerived": {
             "type": "boolean"
+          }
+        }
+      },
+      "ContextQueryCursor": {
+        "type": "object",
+        "properties": {
+          "sourceOrder": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tsRank": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "importance": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "ContextQueryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextItem"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "queryRevision": {
+            "type": "string"
           }
         }
       },
@@ -13093,6 +14851,210 @@
           }
         }
       },
+      "CostBudgetRequest": {
+        "type": "object",
+        "properties": {
+          "maxTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxTurns": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxCostUsd": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "CostBudgetResponse": {
+        "type": "object",
+        "properties": {
+          "maxTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tokensUsed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxCostUsd": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "costUsedUsd": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "CreateRunRequest": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workspaceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sessionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toolIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "idempotencyKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "costBudget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CostBudgetRequest"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "DelayedUserFeedbackRequest": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "decisionId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UserFeedbackKind"
+          },
+          "feedbackValue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "feedbackText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "givenBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "idempotencyKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DelayedUserFeedbackResult": {
+        "type": "object",
+        "properties": {
+          "feedbackEntryId": {
+            "type": "string"
+          },
+          "pipelineEventId": {
+            "type": "string"
+          },
+          "feedbackPersisted": {
+            "type": "boolean"
+          },
+          "pipelineEnqueued": {
+            "type": "boolean"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "DroppedContextItem": {
         "type": "object",
         "properties": {
@@ -13180,6 +15142,9 @@
             "format": "int32"
           }
         }
+      },
+      "InferenceEngineKind": {
+        "type": "integer"
       },
       "ItemScoreBreakdown": {
         "type": "object",
@@ -13785,6 +15750,25 @@
       "LearningFeedbackTargetType": {
         "type": "integer"
       },
+      "ListModelsResponse": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelArtifactDescriptorResponse"
+            }
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "MetricsSnapshot": {
         "required": [
           "totalRequests",
@@ -13850,6 +15834,186 @@
           }
         }
       },
+      "ModelActivationAuditEntryResponse": {
+        "type": "object",
+        "properties": {
+          "auditId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "previousModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ModelActivationStatus": {
+        "required": [
+          "enabled",
+          "registryRegistered",
+          "activationManagerRegistered",
+          "activeModelArtifactId",
+          "activeModelName"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "registryRegistered": {
+            "type": "boolean"
+          },
+          "activationManagerRegistered": {
+            "type": "boolean"
+          },
+          "activeModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activeModelName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ModelArtifactDescriptorResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "featureSchemaVersion": {
+            "type": "string"
+          },
+          "calibrationVersion": {
+            "type": "string"
+          },
+          "engineKind": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "artifactName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ModelAuditHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelActivationAuditEntryResponse"
+            }
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ModelReadinessResponse": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "hasActiveModel": {
+            "type": "boolean"
+          },
+          "activeModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activeModelVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "warmupCompleted": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "ModelRouteResolveRequest": {
         "type": "object",
         "properties": {
@@ -13897,6 +16061,224 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "NodeConsistencyResponse": {
+        "type": "object",
+        "properties": {
+          "nodeId": {
+            "type": "string"
+          },
+          "activeModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activeModelVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activeContentHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasActiveModel": {
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "OnnxExecutionProvider": {
+        "type": "integer"
+      },
+      "OnnxInferenceEngineOptions": {
+        "required": [
+          "inputTensorName",
+          "scoreOutputName"
+        ],
+        "type": "object",
+        "properties": {
+          "modelPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "inputTensorName": {
+            "type": "string"
+          },
+          "scoreOutputName": {
+            "type": "string"
+          },
+          "confidenceOutputName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scoreOutputIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "confidenceOutputIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "applySigmoid": {
+            "type": "boolean"
+          },
+          "applySigmoidToConfidence": {
+            "type": "boolean"
+          },
+          "intraOpNumThreads": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "interOpNumThreads": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "inferenceTimeoutMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "enableMemoryPattern": {
+            "type": "boolean"
+          },
+          "maxBatchSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "enableWarmup": {
+            "type": "boolean"
+          },
+          "maxConcurrentInferences": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "circuitBreakerThreshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "circuitBreakerResetMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "previousEngineGracePeriodMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "batchQueueCapacity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "dynamicBatchWindow": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cpuOversubscriptionGuard": {
+            "type": "boolean"
+          },
+          "maxOrphanedInferences": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "inferencePhaseTimingCallback": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActionOfInferencePhaseAndTimeSpan"
+              }
+            ]
+          },
+          "executionProvider": {
+            "$ref": "#/components/schemas/OnnxExecutionProvider"
+          },
+          "executionProviderDeviceId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "enableDynamicBatching": {
+            "type": "boolean"
           }
         }
       },
@@ -14318,6 +16700,89 @@
           }
         }
       },
+      "ProductionRuntimeReadinessResult": {
+        "required": [
+          "overallStatus",
+          "profile",
+          "checks"
+        ],
+        "type": "object",
+        "properties": {
+          "overallStatus": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheckItem"
+            }
+          }
+        }
+      },
+      "ProductionRuntimeStatusResponse": {
+        "required": [
+          "profile",
+          "applicationStarted",
+          "workers",
+          "canary",
+          "checkedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string"
+          },
+          "applicationStarted": {
+            "type": "boolean"
+          },
+          "workers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerStatus"
+            }
+          },
+          "modelActivation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelActivationStatus"
+              }
+            ]
+          },
+          "agentModelTransport": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentModelTransportStatus"
+              }
+            ]
+          },
+          "toolDispatcher": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolDispatcherStatus"
+              }
+            ]
+          },
+          "canary": {
+            "$ref": "#/components/schemas/CanaryStatus"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "PromoteRequest": {
         "type": "object",
         "properties": {
@@ -14637,6 +17102,25 @@
           }
         }
       },
+      "ReadinessCheckItem": {
+        "required": [
+          "name",
+          "status",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "RecentContextItem": {
         "type": "object",
         "properties": {
@@ -14685,6 +17169,91 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ReconciliationListResult": {
+        "required": [
+          "items",
+          "total",
+          "overdueCount"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolReconciliationRecord"
+            }
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "overdueCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "RegisterModelRequest": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "featureSchemaVersion": {
+            "type": "string"
+          },
+          "calibrationVersion": {
+            "type": "string"
+          },
+          "engineKind": {
+            "$ref": "#/components/schemas/InferenceEngineKind"
+          },
+          "artifactPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contentHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -15650,6 +18219,57 @@
           }
         }
       },
+      "ResolveReconciliationRequest": {
+        "type": "object",
+        "properties": {
+          "sideEffectOccurred": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RetireModelRequest": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RetireModelResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
       "RetrievalAnchorEntry": {
         "required": [
           "name",
@@ -15856,6 +18476,136 @@
           }
         }
       },
+      "RollbackModelRequest": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OnnxInferenceEngineOptions"
+              }
+            ]
+          },
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RollbackModelResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "previousModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activeModelVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "RunResponse": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "turn": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "modelCallsUsed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "failureReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "finalAnswer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "turnBudget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TurnBudgetResponse"
+              }
+            ]
+          },
+          "costBudget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CostBudgetResponse"
+              }
+            ]
+          }
+        }
+      },
       "RuntimeProbeCheckResponse": {
         "type": "object",
         "properties": {
@@ -16005,6 +18755,53 @@
                 "$ref": "#/components/schemas/ShortTermMaintenanceStatusResponse"
               }
             ]
+          }
+        }
+      },
+      "ShadowModelRequest": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OnnxInferenceEngineOptions"
+              }
+            ]
+          },
+          "operator": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ShadowModelResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "championModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "note": {
+            "type": "string"
           }
         }
       },
@@ -17830,6 +20627,347 @@
           }
         }
       },
+      "ToolDispatcherStatus": {
+        "required": [
+          "isRegistered",
+          "implementationType",
+          "isReal",
+          "mode",
+          "supportedToolCount"
+        ],
+        "type": "object",
+        "properties": {
+          "isRegistered": {
+            "type": "boolean"
+          },
+          "implementationType": {
+            "type": "string"
+          },
+          "isReal": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "supportedToolCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ToolReconciliationRecord": {
+        "required": [
+          "reconciliationId",
+          "runId",
+          "workspaceId",
+          "requestId",
+          "toolName",
+          "status",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "reconciliationId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "externalOperationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reconciliationHandler": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deadlineUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ToolReconciliationStatus"
+          },
+          "result": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sideEffectOccurred": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ToolReconciliationStatus": {
+        "type": "integer"
+      },
+      "TurnBudgetResponse": {
+        "type": "object",
+        "properties": {
+          "maxTurns": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "turnsUsed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxModelCalls": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "modelCallsUsed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UserFeedbackEntry": {
+        "required": [
+          "feedbackEntryId",
+          "workspaceId",
+          "collectionId",
+          "decisionId",
+          "candidateItemId",
+          "kind",
+          "feedbackValue",
+          "givenAt",
+          "idempotencyKey"
+        ],
+        "type": "object",
+        "properties": {
+          "feedbackEntryId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "decisionId": {
+            "type": "string"
+          },
+          "candidateItemId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UserFeedbackKind"
+          },
+          "feedbackValue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "feedbackText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "givenBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "givenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UserFeedbackKind": {
+        "type": "integer"
+      },
+      "UserFeedbackSubmitRequest": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "decisionId": {
+            "type": "string"
+          },
+          "candidateItemId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UserFeedbackKind"
+          },
+          "feedbackValue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "feedbackText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "givenBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "idempotencyKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "metadata": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UserFeedbackSubmitResult": {
+        "type": "object",
+        "properties": {
+          "feedbackEntryId": {
+            "type": "string"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "idempotentReplaced": {
+            "type": "boolean"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/UserFeedbackEntry"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ValidateModelResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaRegistered": {
+            "type": "boolean"
+          },
+          "calibrationValidation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalibrationValidationResponse"
+              }
+            ]
+          },
+          "onnxFormatValid": {
+            "type": "boolean"
+          }
+        }
+      },
       "VectorIndexDiagnostic": {
         "type": "object",
         "properties": {
@@ -19383,6 +22521,62 @@
           }
         }
       },
+      "WarmupModelResponse": {
+        "type": "object",
+        "properties": {
+          "modelArtifactId": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "calibrationValid": {
+            "type": "boolean"
+          },
+          "schemaValid": {
+            "type": "boolean"
+          },
+          "stagedHandleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "note": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "WorkerStatus": {
+        "required": [
+          "name",
+          "type",
+          "enabled",
+          "registered",
+          "started"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "registered": {
+            "type": "boolean"
+          },
+          "started": {
+            "type": "boolean"
+          }
+        }
+      },
       "WorkingMemoryActiveContext": {
         "type": "object",
         "properties": {
@@ -19594,6 +22788,15 @@
     },
     {
       "name": "Vector"
+    },
+    {
+      "name": "ModelControlPlane"
+    },
+    {
+      "name": "UtilityLedger"
+    },
+    {
+      "name": "AgentExecution"
     }
   ]
 }

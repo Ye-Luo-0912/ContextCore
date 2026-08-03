@@ -60,6 +60,46 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
     }
 
     /// <inheritdoc />
+    public ValueTask<IReadOnlyList<ToolReconciliationRecord>> QueryByExternalOperationIdAsync(string externalOperationId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(externalOperationId);
+        var records = _records.Values
+            .Where(r => string.Equals(r.ExternalOperationId, externalOperationId, StringComparison.Ordinal))
+            .OrderByDescending(r => r.CreatedAt)
+            .ToList();
+        return ValueTask.FromResult<IReadOnlyList<ToolReconciliationRecord>>(records);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<ReconciliationListResult> ListAsync(ReconciliationQuery query, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(query);
+        var now = DateTimeOffset.UtcNow;
+        var filtered = _records.Values
+            .Where(r => query.WorkspaceId is null || string.Equals(r.WorkspaceId, query.WorkspaceId, StringComparison.Ordinal))
+            .Where(r => query.RunId is null || string.Equals(r.RunId, query.RunId, StringComparison.Ordinal))
+            .Where(r => query.Status is null || r.Status == query.Status)
+            .Where(r => !query.OverdueOnly || IsOverdue(r, now))
+            .OrderByDescending(r => r.CreatedAt)
+            .ToList();
+
+        var overdueCount = filtered.Count(r => IsOverdue(r, now));
+        var page = filtered
+            .Skip(Math.Max(0, query.Offset))
+            .Take(Math.Clamp(query.Limit > 0 ? query.Limit : 50, 1, 200))
+            .ToList();
+
+        return ValueTask.FromResult(new ReconciliationListResult
+        {
+            Items = page,
+            Total = filtered.Count,
+            OverdueCount = overdueCount
+        });
+    }
+
+    /// <inheritdoc />
     public ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -142,6 +182,12 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult(MarkTerminal(reconciliationId, ToolReconciliationStatus.Rejected, outcome));
     }
+
+    /// <summary>过期判定：设置了截止且未裁决（Pending/Running）且已超期。</summary>
+    private static bool IsOverdue(ToolReconciliationRecord record, DateTimeOffset now)
+        => record.DeadlineUtc.HasValue
+           && (record.Status == ToolReconciliationStatus.Pending || record.Status == ToolReconciliationStatus.Running)
+           && record.DeadlineUtc.Value < now;
 
     private bool MarkTerminal(string reconciliationId, ToolReconciliationStatus target, ToolReconciliationOutcome outcome)
     {

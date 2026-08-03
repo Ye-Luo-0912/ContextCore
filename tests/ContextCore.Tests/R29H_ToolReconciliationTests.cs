@@ -175,6 +175,64 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual("rec-3", pending[1].ReconciliationId);
     }
 
+    /// <summary>
+    /// 验证（P2-B1 Control Plane）：按 ExternalOperationId 跨 Run 反查（InMemory 实现与 Postgres 同语义）。
+    /// </summary>
+    [TestMethod]
+    public async Task Store_QueryByExternalOperationId_AcrossRuns()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "tool-a", runId: "run-a", createdAt: DateTimeOffset.UtcNow.AddSeconds(-3)) with { ExternalOperationId = "ext-op-9" }, cts.Token);
+        await store.CreateAsync(BuildRecord("rec-2", "req-2", "tool-b", runId: "run-b", createdAt: DateTimeOffset.UtcNow.AddSeconds(-1)) with { ExternalOperationId = "ext-op-9" }, cts.Token);
+        await store.CreateAsync(BuildRecord("rec-3", "req-3", "tool-c", runId: "run-c", createdAt: DateTimeOffset.UtcNow) with { ExternalOperationId = "ext-op-other" }, cts.Token);
+
+        var matches = await store.QueryByExternalOperationIdAsync("ext-op-9", cts.Token);
+        Assert.AreEqual(2, matches.Count, "应反查到两条同 externalOperationId 的记录（跨 Run）。");
+        Assert.AreEqual("rec-2", matches[0].ReconciliationId, "跨 Run 反查按 CreatedAt 倒序（最新在前）。");
+        Assert.AreEqual("rec-1", matches[1].ReconciliationId);
+
+        var none = await store.QueryByExternalOperationIdAsync("ext-op-missing", cts.Token);
+        Assert.AreEqual(0, none.Count, "未匹配的 externalOperationId 应返回空列表。");
+    }
+
+    /// <summary>
+    /// 验证（P2-B1 Control Plane）：ControlRoom 分页列表 —— 过期高亮（DeadlineUtc &lt; now 且未裁决）
+    /// + 告警计数（OverdueCount）+ OverdueOnly 过滤（InMemory 实现与 Postgres 同语义）。
+    /// </summary>
+    [TestMethod]
+    public async Task Store_ControlRoomList_OverdueHighlight_AndAlertCount()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var now = DateTimeOffset.UtcNow;
+
+        await store.CreateAsync(BuildRecord("rec-old-1", "req-old-1", "tool-a", createdAt: now.AddSeconds(-5)) with { DeadlineUtc = now - TimeSpan.FromHours(2) }, cts.Token);
+        await store.CreateAsync(BuildRecord("rec-fresh", "req-fresh", "tool-b", createdAt: now.AddSeconds(-4)) with { DeadlineUtc = now + TimeSpan.FromHours(2) }, cts.Token);
+        // 已裁决但过期：不计告警
+        await store.CreateAsync(BuildRecord("rec-resolved", "req-resolved", "tool-c", createdAt: now.AddSeconds(-3)) with { DeadlineUtc = now - TimeSpan.FromHours(1) }, cts.Token);
+        await store.MarkRejectedAsync("rec-resolved", new ToolReconciliationOutcome { SideEffectOccurred = false }, cts.Token);
+        // 其他 Run 的同 workspace 记录不干扰分页（workspace 过滤）
+        await store.CreateAsync(BuildRecord("rec-ws2", "req-ws2", "tool-d", runId: "run-ws2") with { WorkspaceId = "ws-other", DeadlineUtc = now - TimeSpan.FromHours(3) }, cts.Token);
+
+        var all = await store.ListAsync(new ReconciliationQuery { WorkspaceId = Ws, Limit = 50 }, cts.Token);
+        Assert.AreEqual(3, all.Total, "workspace 过滤应排除其他 workspace 记录。");
+        Assert.AreEqual(1, all.OverdueCount, "告警计数 = 过期未决（Pending 且 deadline<now）1 条。");
+        CollectionAssert.AreEquivalent(
+            new[] { "rec-old-1", "rec-fresh", "rec-resolved" },
+            all.Items.Select(r => r.ReconciliationId).ToList(),
+            "列表应包含当前 workspace 全部条目。");
+
+        var overdueOnly = await store.ListAsync(new ReconciliationQuery { WorkspaceId = Ws, OverdueOnly = true }, cts.Token);
+        Assert.AreEqual(1, overdueOnly.Total, "OverdueOnly 应只返回过期未决记录。");
+        Assert.AreEqual("rec-old-1", overdueOnly.Items.Single().ReconciliationId);
+
+        var paged = await store.ListAsync(new ReconciliationQuery { WorkspaceId = Ws, Limit = 2, Offset = 1 }, cts.Token);
+        Assert.AreEqual(2, paged.Items.Count, "分页 offset=1 limit=2 应返回 2 条。");
+        Assert.AreEqual(3, paged.Total, "分页结果仍应携带过滤后总数。");
+    }
+
     // ── 2. 对账协调器单元测试 ──────────────────────────────────────────────
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using ContextCore.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ContextCore.Service.Infrastructure;
 
@@ -25,20 +26,17 @@ public sealed class AuditLogMiddleware
     private readonly SecurityOptions _security;
     private readonly ILogger<AuditLogMiddleware> _logger;
     private readonly ContextCoreMetrics _metrics;
-    private readonly IWorkspaceContextAccessor? _workspaceContextAccessor;
 
     public AuditLogMiddleware(
         RequestDelegate next,
         SecurityOptions security,
         ILogger<AuditLogMiddleware> logger,
-        ContextCoreMetrics metrics,
-        IWorkspaceContextAccessor? workspaceContextAccessor = null)
+        ContextCoreMetrics metrics)
     {
         _next = next;
         _security = security;
         _logger = logger;
         _metrics = metrics;
-        _workspaceContextAccessor = workspaceContextAccessor;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -50,6 +48,11 @@ public sealed class AuditLogMiddleware
             await _next(context).ConfigureAwait(false);
             return;
         }
+
+        // IWorkspaceContextAccessor 为 Scoped 服务；.NET 10 起约定式中间件在启动时
+        // 从根容器解析构造函数依赖（ApplicationBuilder.Build 阶段），因此改为
+        // 请求期从 RequestServices 解析（与 endpoint filter 一致），避免启动失败。
+        var workspaceContextAccessor = context.RequestServices.GetService<IWorkspaceContextAccessor>();
 
         var requestId = Activity.Current?.Id ?? context.TraceIdentifier;
         var sw = Stopwatch.StartNew();
@@ -76,9 +79,9 @@ public sealed class AuditLogMiddleware
         {
             sw.Stop();
             var statusCode = context.Response.StatusCode;
-            var workspaceId = ExtractWorkspaceId(context);
+            var workspaceId = ExtractWorkspaceId(context, workspaceContextAccessor);
             var caller = GetCaller(context);
-            var apiKeyName = ExtractApiKeyName(context);
+            var apiKeyName = ExtractApiKeyName(workspaceContextAccessor);
 
             if (statusCode >= 400)
             {
@@ -116,10 +119,10 @@ public sealed class AuditLogMiddleware
     /// 提取 workspaceId：优先从 IWorkspaceContextAccessor（已由 WorkspaceContextMiddleware 填充）读取，
     /// 回退到查询字符串 workspaceId 参数（向后兼容旧实现）。
     /// </summary>
-    private string? ExtractWorkspaceId(HttpContext context)
+    private string? ExtractWorkspaceId(HttpContext context, IWorkspaceContextAccessor? workspaceContextAccessor)
     {
         // 优先从 WorkspaceContext 读取（包含 header / API Key 元数据 / 查询字符串解析结果）
-        if (_workspaceContextAccessor?.Current is { } workspaceContext
+        if (workspaceContextAccessor?.Current is { } workspaceContext
             && !string.IsNullOrWhiteSpace(workspaceContext.WorkspaceId))
         {
             return workspaceContext.WorkspaceId;
@@ -135,9 +138,9 @@ public sealed class AuditLogMiddleware
     }
 
     /// <summary>从 WorkspaceContext 提取 API Key 显示名（不暴露 key 本身）。</summary>
-    private string? ExtractApiKeyName(HttpContext context)
+    private string? ExtractApiKeyName(IWorkspaceContextAccessor? workspaceContextAccessor)
     {
-        return _workspaceContextAccessor?.Current?.ApiKeyName;
+        return workspaceContextAccessor?.Current?.ApiKeyName;
     }
 
     /// <summary>返回调用方标识，优先取 RemoteIp；不暴露 API Key 内容。</summary>

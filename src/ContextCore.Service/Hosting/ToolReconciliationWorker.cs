@@ -109,6 +109,21 @@ public sealed class ToolReconciliationWorker : BackgroundService
             return;
         }
 
+        // 告警钩子：超期未决（DeadlineUtc < now 且 Pending/Running）→ 告警日志。
+        // ControlRoom 列表（GET /api/agents/reconciliations）同步按 DeadlineUtc 计算过期高亮。
+        var now = DateTimeOffset.UtcNow;
+        var overdue = pending
+            .Where(r => r.DeadlineUtc.HasValue && r.DeadlineUtc.Value < now)
+            .ToList();
+        foreach (var record in overdue)
+        {
+            _logger.LogWarning(
+                "ToolReconciliationWorker 告警：对账记录 {Id}（tool={Tool}, run={Run}, handler={Handler}）已超期未决（截止 {Deadline}，状态 {Status}）。" +
+                "请人工介入裁决或检查 Handler 可用性。",
+                record.ReconciliationId, record.ToolName, record.RunId, record.ReconciliationHandler ?? "<无>",
+                record.DeadlineUtc?.ToString("O") ?? "<无截止>", record.Status);
+        }
+
         foreach (var group in pending.GroupBy(r => r.RunId, StringComparer.Ordinal))
         {
             // Worker 接管该 Run 的对账：AwaitingReconciliation → ReconciliationRunning（best-effort）。

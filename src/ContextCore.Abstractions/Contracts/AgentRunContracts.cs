@@ -1761,6 +1761,12 @@ public sealed record ToolExecutionResult
     /// </summary>
     public string? ReconciliationHandler { get; init; }
 
+    /// <summary>
+    /// 对账截止时长（ToolDescriptor.ReconciliationDeadline 回传；null = 由 Actor 使用默认 24h）。
+    /// Actor 创建对账记录时计算 DeadlineUtc = CreatedAt + ReconciliationDeadline。
+    /// </summary>
+    public TimeSpan? ReconciliationDeadline { get; init; }
+
     /// <summary>Tool 输出（成功时）。</summary>
     public string? Result { get; init; }
 

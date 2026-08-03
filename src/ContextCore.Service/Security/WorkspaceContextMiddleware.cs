@@ -1,6 +1,7 @@
 using System.Threading;
 using ContextCore.Abstractions;
 using ContextCore.Service.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ContextCore.Service.Security;
 
@@ -48,27 +49,28 @@ public sealed class WorkspaceContextMiddleware
     private readonly SecurityOptions _options;
     private readonly IApiKeyStore? _apiKeyStore;
     private readonly IWorkspaceRbacService _rbacService;
-    private readonly IWorkspaceContextAccessor _contextAccessor;
     private readonly ILogger<WorkspaceContextMiddleware> _logger;
 
     public WorkspaceContextMiddleware(
         RequestDelegate next,
         SecurityOptions options,
         IWorkspaceRbacService rbacService,
-        IWorkspaceContextAccessor contextAccessor,
         ILogger<WorkspaceContextMiddleware> logger,
         IApiKeyStore? apiKeyStore = null)
     {
         _next = next;
         _options = options;
         _rbacService = rbacService;
-        _contextAccessor = contextAccessor;
         _logger = logger;
         _apiKeyStore = apiKeyStore;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // IWorkspaceContextAccessor 为 Scoped 服务；.NET 10 起约定式中间件在启动时
+        // 从根容器解析构造函数依赖（ApplicationBuilder.Build 阶段），因此这里改为
+        // 请求期从 RequestServices 解析（与 endpoint filter 一致），避免启动失败。
+        var contextAccessor = context.RequestServices.GetService<IWorkspaceContextAccessor>();
         var workspaceId = ResolveWorkspaceId(context, out var source);
         var apiKeyId = ResolveApiKeyId(context);
 
@@ -103,7 +105,7 @@ public sealed class WorkspaceContextMiddleware
             IsAuthenticated = apiKeyId is not null || !_options.RequireApiKey
         };
 
-        _contextAccessor.Set(ctx);
+        contextAccessor?.Set(ctx);
 
         try
         {
@@ -111,7 +113,7 @@ public sealed class WorkspaceContextMiddleware
         }
         finally
         {
-            _contextAccessor.Clear();
+            contextAccessor?.Clear();
         }
     }
 

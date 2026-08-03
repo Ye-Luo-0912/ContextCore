@@ -104,8 +104,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   防止另一 Run 覆盖已有 Tool Result；tool_call_id / idempotency_key 改为 partial index。
     /// v50 → v51，utility_ledger_entries 追加 (decision_id, candidate_item_id, expert) UNIQUE 索引，
     ///   防御性兜底 Learning Lease 过期后旧/新 Worker 重复物化产生重复 ledger 条目（entry_id 幂等之外的数据库层约束）。
+    /// v51 → v52，新增 tool_reconciliation_entries 表与索引（Tool Reconciliation Control Plane 持久化）：
+    ///   - 对账记录跨进程持久化，HA 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一真相源
+    ///     （替代 InMemoryToolReconciliationStore，杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失）。
+    ///   - (run_id, request_id) UNIQUE 约束：按 RunId+RequestId 幂等创建（重复创建返回既有记录）。
+    ///   - external_operation_id partial 索引：支持按 journal externalOperationId 反查（ControlRoom 运维）。
+    ///   - deadline_utc 列 + (status, created_at) 索引：过期未决高亮（ControlRoom）与 Worker 轮询。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v51";
+    public const string SchemaVersion = "cc-schema-v52";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -210,7 +216,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Cluster Model Slot (single champion source of truth, single-row table + CAS on revision)
         "cluster_model_slots",
         // Model Node Applied State（节点已应用状态：每节点记录最后成功应用的集群槽位 Revision 与模型内容）
-        "model_node_applied_state"
+        "model_node_applied_state",
+        // Tool Reconciliation Control Plane（对账记录跨进程持久化 + ExternalOperationId 反查 + deadline 高亮）
+        "tool_reconciliation_entries"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -393,7 +401,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // agent_run_leases：按 lease_expires_at 扫描过期租约（ReapExpiredAsync）
         ("agent_run_leases", "expires"),
         // Desired Model State Store 索引（按 updated_at 倒序列举全部状态）
-        ("desired_model_states", "updated")
+        ("desired_model_states", "updated"),
+        // Tool Reconciliation Control Plane 索引
+        //（workspace 列表 + run 列表 + pending 轮询 + externalOperationId 反查）
+        ("tool_reconciliation_entries", "workspace"),
+        ("tool_reconciliation_entries", "run"),
+        ("tool_reconciliation_entries", "status"),
+        ("tool_reconciliation_entries", "external_op")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -522,6 +536,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var clusterModelSlots = Infrastructure.PostgresNames.Table(options, "cluster_model_slots");
         // Model Node Applied State（节点已应用状态）
         var modelNodeAppliedStates = Infrastructure.PostgresNames.Table(options, "model_node_applied_state");
+        // Tool Reconciliation Control Plane（对账记录持久化表）
+        var toolReconciliationEntries = Infrastructure.PostgresNames.Table(options, "tool_reconciliation_entries");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -2346,6 +2362,45 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
     applied_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (node_id, slot_name)
 );
+
+-- Tool Reconciliation Control Plane（对账记录持久化表）
+-- 与 ToolReconciliationRecord 字段一一对应；完整对象同时存入 data jsonb（供审计/反序列化）。
+-- (run_id, request_id) UNIQUE：按 RunId+RequestId 幂等创建（重复创建返回既有记录）。
+-- status 存 smallint（ToolReconciliationStatus 枚举值）。
+CREATE TABLE IF NOT EXISTS {toolReconciliationEntries} (
+    reconciliation_id text NOT NULL,
+    run_id text NOT NULL,
+    workspace_id text NOT NULL,
+    request_id text NOT NULL,
+    tool_name text NOT NULL,
+    external_operation_id text NULL,
+    reconciliation_handler text NULL,
+    status smallint NOT NULL,
+    result text NULL,
+    side_effect_occurred boolean NULL,
+    reason text NULL,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NULL,
+    resolved_at timestamptz NULL,
+    deadline_utc timestamptz NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (reconciliation_id),
+    CONSTRAINT {Infrastructure.PostgresNames.Constraint(options, "tool_reconciliation_entries", "ws_run_request_unique")}
+        UNIQUE (run_id, request_id)
+);
+
+-- ControlRoom 列表（按 workspace + 状态 + 时间倒序分页）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_reconciliation_entries", "workspace")}
+    ON {toolReconciliationEntries} (workspace_id, status, created_at DESC);
+-- 按 Run 列出全部对账记录（含已裁决）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_reconciliation_entries", "run")}
+    ON {toolReconciliationEntries} (run_id, created_at ASC);
+-- Worker 轮询 Pending 记录（按创建时间升序，自然优先处理最早/最可能过期的记录）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_reconciliation_entries", "status")}
+    ON {toolReconciliationEntries} (status, created_at ASC);
+-- 按 journal externalOperationId 反查（ControlRoom / 运维）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_reconciliation_entries", "external_op")}
+    ON {toolReconciliationEntries} (external_operation_id) WHERE external_operation_id IS NOT NULL;
 """;
     }
 

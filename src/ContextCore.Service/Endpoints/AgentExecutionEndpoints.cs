@@ -784,6 +784,63 @@ internal static class AgentExecutionEndpoints
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
+        // ── Tool Reconciliation Control Plane（P2-B1）────────────────────
+        // GET /api/agents/reconciliations 双模式：
+        //   ?externalOperationId=…  → 按 journal 外部操作 ID 反查（跨 Run 运维查询）；
+        //   无 externalOperationId   → ControlRoom 分页待决列表（过期高亮 + 告警计数）。
+        var reconciliationGroup = app.MapGroup("/api/agents/reconciliations").WithTags(Tag);
+        reconciliationGroup.MapGet("/", async Task<IResult> (
+            [FromQuery] string? externalOperationId,
+            [FromQuery] string? workspaceId,
+            [FromQuery] string? runId,
+            [FromQuery] ToolReconciliationStatus? status,
+            [FromQuery] bool? overdueOnly,
+            [FromQuery] int? offset,
+            [FromQuery] int? limit,
+            [FromServices] IToolReconciliationStore? reconciliationStore,
+            IWorkspaceContextAccessor workspaceContextAccessor,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (reconciliationStore is null)
+            {
+                return ContextCoreHttpResultMapper.InternalError(
+                    httpContext, string.Empty, "agents.reconciliations",
+                    "未注册 IToolReconciliationStore，无法提供对账列表。");
+            }
+
+            // 模式 1：按 journal externalOperationId 反查（跨 Run）。
+            if (!string.IsNullOrWhiteSpace(externalOperationId))
+            {
+                var matches = await reconciliationStore
+                    .QueryByExternalOperationIdAsync(externalOperationId.Trim(), ct).ConfigureAwait(false);
+                return Results.Ok(new
+                {
+                    externalOperationId = externalOperationId.Trim(),
+                    items = matches
+                });
+            }
+
+            // 模式 2：ControlRoom 分页列表（workspace 默认从认证上下文解析）。
+            var resolvedWorkspaceId = ResolveWorkspaceId(workspaceContextAccessor, workspaceId);
+            var query = new ReconciliationQuery
+            {
+                WorkspaceId = string.IsNullOrWhiteSpace(resolvedWorkspaceId) ? null : resolvedWorkspaceId,
+                RunId = string.IsNullOrWhiteSpace(runId) ? null : runId,
+                Status = status,
+                OverdueOnly = overdueOnly ?? false,
+                Offset = offset ?? 0,
+                Limit = limit ?? 50
+            };
+            var result = await reconciliationStore.ListAsync(query, ct).ConfigureAwait(false);
+            return Results.Ok(result);
+        })
+        .WithName("ListAgentRunReconciliations")
+        .RequireWorkspacePermission(WorkspacePermission.AgentRun)
+        .WithSummary("Tool 对账 Control Room：分页待决列表（过期高亮 + 告警计数）或按 ExternalOperationId 反查")
+        .Produces<ReconciliationListResult>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status500InternalServerError);
+
         return app;
     }
 
