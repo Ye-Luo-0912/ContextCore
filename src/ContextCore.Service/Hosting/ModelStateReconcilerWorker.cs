@@ -76,22 +76,83 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 
         _logger.LogInformation("ModelStateReconcilerWorker 已启动，实例 ID：{InstanceId}", _instanceId);
 
+        var consecutiveFailures = 0;
         while (!stoppingToken.IsCancellationRequested)
         {
+            var succeeded = false;
             try
             {
-                await ReconcileAsync(stoppingToken).ConfigureAwait(false);
+                succeeded = await ReconcileAsync(stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ModelStateReconcilerWorker 轮询异常。");
             }
 
-            await Task.Delay(options.PollInterval, stoppingToken).ConfigureAwait(false);
+            // 指数退避：成功复位；连续失败按 BackoffBaseDelay × 2^n 增长，
+            // 上限 BackoffMaxDelay / MaxRetryCount，避免故障风暴下高频空转。
+            if (succeeded)
+            {
+                consecutiveFailures = 0;
+            }
+            else
+            {
+                consecutiveFailures++;
+                if (consecutiveFailures == 1)
+                {
+                    _logger.LogWarning(
+                        "ModelStateReconcilerWorker 应用期望状态失败，进入退避重试（连续失败 {ConsecutiveFailures} 次）。",
+                        consecutiveFailures);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "ModelStateReconcilerWorker 应用期望状态仍失败（连续失败 {ConsecutiveFailures} 次，下次退避 {NextDelay}）。",
+                        consecutiveFailures, ComputeBackoffDelay(options, consecutiveFailures));
+                }
+            }
+
+            var delay = consecutiveFailures == 0
+                ? options.PollInterval
+                : ComputeBackoffDelay(options, consecutiveFailures);
+            try
+            {
+                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 
-    private async Task ReconcileAsync(CancellationToken ct)
+    /// <summary>
+    /// 计算退避延迟：连续失败 n 次 → min(BackoffBaseDelay × 2^(n-1), BackoffMaxDelay)；
+    /// 指数在 MaxRetryCount 后封顶（保持 BackoffMaxDelay，不继续增长）。internal static 供单元测试。
+    /// </summary>
+    internal static TimeSpan ComputeBackoffDelay(ModelStateReconcilerOptions options, int consecutiveFailures)
+    {
+        if (consecutiveFailures <= 0)
+        {
+            return options.PollInterval;
+        }
+
+        var exponent = Math.Min(consecutiveFailures - 1, Math.Max(0, options.MaxRetryCount - 1));
+        var baseMs = options.BackoffBaseDelay.TotalMilliseconds;
+        var candidateMs = baseMs * Math.Pow(2.0, exponent);
+        var cappedMs = Math.Min(candidateMs, options.BackoffMaxDelay.TotalMilliseconds);
+        return TimeSpan.FromMilliseconds(cappedMs);
+    }
+
+    /// <summary>
+    /// 执行一轮同步。返回 true 表示本轮成功（含无变更/已收敛/漂移已隔离等已处理情形）；
+    /// 返回 false 表示应用期望状态失败（激活/停用失败或异常），由调用方驱动退避重试。
+    /// </summary>
+    private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
         // 从单一 Champion 槽位（"primary"）读取期望状态。
         var slot = await _clusterSlotStore.GetAsync("primary", ct).ConfigureAwait(false);
@@ -99,7 +160,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         // slot 为 null 表示槽位尚未初始化（无任何 activate/retire 操作），无需同步。
         if (slot is null)
         {
-            return;
+            return true;
         }
 
         // 首次启动立即应用期望状态：不在此提前 return，而是继续走下方 apply 逻辑。
@@ -141,7 +202,9 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         // 乐观并发控制：仅当远端 Revision > 本地已应用 Revision 时才应用变更
         if (slot.Revision <= _appliedClusterSlotRevision)
         {
-            // Revision 相同但 ContentHash 不匹配 → 记录漂移告警
+            // Revision 相同但 ContentHash 不匹配 → 漂移：记录告警并将本节点标记为隔离
+            // （漂移自动隔离）。隔离事实持久化到节点已应用状态，集群注册表据此
+            // 计算 DriftedNodeCount / IsRolloutReady，使"Slot=A、Engine=B"错位可见、不可伪装收敛。
             if (slot.Revision == _appliedClusterSlotRevision
                 && slot.DesiredStatus == ClusterModelSlotDesiredStatus.Active
                 && !string.IsNullOrEmpty(slot.ContentHash)
@@ -150,10 +213,28 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             {
                 _logger.LogWarning(
                     "检测到 ContentHash 漂移：模型 {ModelId} 期望 {DesiredHash}，实际 {ActualHash}。" +
-                    "可能跨节点加载了不同内容的模型。",
-                    slot.ActiveModelArtifactId, slot.ContentHash, _activationManager.ContentHash);
+                    "可能跨节点加载了不同内容的模型，节点 {NodeId} 已自动隔离。",
+                    slot.ActiveModelArtifactId, slot.ContentHash, _activationManager.ContentHash, _nodeId);
+
+                if (_appliedStateStore is not null)
+                {
+                    try
+                    {
+                        await _appliedStateStore.MarkIsolatedAsync(
+                            _nodeId,
+                            "primary",
+                            $"ContentHash 漂移：期望 {slot.ContentHash}，实际 {_activationManager.ContentHash}。",
+                            ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "标记节点 {NodeId} 漂移隔离失败（不影响本轮结果）：Revision {Revision}",
+                            _nodeId, slot.Revision);
+                    }
+                }
             }
-            return;
+            return true;
         }
 
         try
@@ -183,8 +264,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                         _logger.LogError(
                             "激活模型 {ModelId} 失败：{Error}（Revision {Revision}）",
                             modelId, result.Error, slot.Revision);
-                        // 不更新 AppliedClusterSlotRevision，下次轮询重试
-                        return;
+                        // 不更新 AppliedClusterSlotRevision，下次轮询重试（退避）
+                        return false;
                     }
                 }
             }
@@ -200,18 +281,20 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                     _logger.LogError(
                         "停用模型失败：{Error}（Revision {Revision}）",
                         result.Error, slot.Revision);
-                    return;
+                    return false;
                 }
             }
 
             _appliedClusterSlotRevision = slot.Revision;
             await RecordAppliedStateAsync(slot, ct).ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "应用期望状态失败：Revision {Revision}",
                 slot.Revision);
+            return false;
         }
     }
 
@@ -235,6 +318,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                 AppliedRevision = slot.Revision,
                 ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,
                 ContentHash = _activationManager.ContentHash,
+                // 应用时刻本地引擎代次：与集群槽位 Revision 分离（Slot=A、Engine=B 错位可审计）。
+                EngineGeneration = _activationManager.ActiveGeneration,
                 AppliedAt = DateTimeOffset.UtcNow
             };
             await _appliedStateStore.UpsertAsync(applied, ct).ConfigureAwait(false);
@@ -281,6 +366,15 @@ public sealed class ModelStateReconcilerOptions
     /// <summary>是否启用 Reconciler（HA 模式）。</summary>
     public bool Enabled { get; set; }
 
-    /// <summary>轮询间隔。</summary>
+    /// <summary>轮询间隔（成功轮询后的正常等待时间）。</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>失败退避基准延迟（连续失败时第 1 次重试的等待时间）。</summary>
+    public TimeSpan BackoffBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>失败退避最大延迟（指数增长的上限，防止长时间无界等待）。</summary>
+    public TimeSpan BackoffMaxDelay { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>退避指数上限（连续失败超过该次数后保持 BackoffMaxDelay，不继续指数增长）。</summary>
+    public int MaxRetryCount { get; set; } = 8;
 }

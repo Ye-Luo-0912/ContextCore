@@ -68,6 +68,7 @@ public static class PostgresMigrationStepRegistry
     public static IReadOnlyList<IPostgresMigrationStep> Steps { get; } =
     [
         new PostgresMigrationToolDispatchResultsResultKey(),
-        new PostgresMigrationAgentRunScheduling()
+        new PostgresMigrationAgentRunScheduling(),
+        new PostgresMigrationModelNodeAppliedStateIsolation()
     ];
 }

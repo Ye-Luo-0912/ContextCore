@@ -36,11 +36,47 @@ public sealed class InMemoryModelNodeAppliedStateStore : IModelNodeAppliedStateS
         ArgumentException.ThrowIfNullOrWhiteSpace(state.SlotName);
 
         // CAS：仅当新 AppliedRevision ≥ 已存 AppliedRevision 时覆盖，防止陈旧节点回写。
+        // 成功应用（记录反映本地引擎实际内容）时 Isolated=false，漂移隔离随之清除。
         var updated = _states.AddOrUpdate(
             (state.NodeId, state.SlotName),
             state,
             (_, existing) => state.AppliedRevision >= existing.AppliedRevision ? state : existing);
         return new ValueTask<ModelNodeAppliedState>(updated);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<ModelNodeAppliedState?> MarkIsolatedAsync(
+        string nodeId,
+        string slotName,
+        string reason,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        var now = DateTimeOffset.UtcNow;
+        var updated = _states.AddOrUpdate(
+            (nodeId, slotName),
+            // 无记录时创建隔离标记（保持审计链完整：隔离事实不因缺少应用记录而丢失）。
+            _ => new ModelNodeAppliedState
+            {
+                NodeId = nodeId,
+                SlotName = slotName,
+                AppliedRevision = 0,
+                AppliedAt = now,
+                Isolated = true,
+                DriftReportedAt = now,
+                IsolationReason = reason
+            },
+            (_, existing) => existing with
+            {
+                Isolated = true,
+                DriftReportedAt = now,
+                IsolationReason = reason
+            });
+        return new ValueTask<ModelNodeAppliedState?>(updated);
     }
 
     /// <inheritdoc />

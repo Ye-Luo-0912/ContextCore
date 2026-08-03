@@ -33,20 +33,28 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
 
         var desiredRevision = slot?.Revision ?? 0;
         var desiredStatus = slot?.DesiredStatus ?? ClusterModelSlotDesiredStatus.Inactive;
+        var desiredModelId = slot?.ActiveModelArtifactId;
+        var desiredHash = slot?.ContentHash;
+
+        var driftedCount = ComputeDriftedNodeCount(nodes, desiredRevision, desiredModelId, desiredHash);
+        var converged = nodes.Count > 0 && nodes.All(n => n.AppliedRevision == desiredRevision);
 
         return new ClusterSlotAppliedSummary
         {
             SlotName = slotName,
             DesiredRevision = desiredRevision,
             DesiredStatus = desiredStatus,
-            DesiredModelArtifactId = slot?.ActiveModelArtifactId,
-            DesiredContentHash = slot?.ContentHash,
+            DesiredModelArtifactId = desiredModelId,
+            DesiredContentHash = desiredHash,
             NodeCount = nodes.Count,
             MinAppliedRevision = nodes.Count == 0 ? 0 : nodes.Min(n => n.AppliedRevision),
             MaxAppliedRevision = nodes.Count == 0 ? 0 : nodes.Max(n => n.AppliedRevision),
-            Converged = nodes.Count > 0 && nodes.All(n => n.AppliedRevision == desiredRevision),
+            Converged = converged,
             NodesBehind = nodes.Count(n => n.AppliedRevision < desiredRevision),
             ContentHashConflictCount = ComputeContentHashConflictCount(nodes),
+            DriftedNodeCount = driftedCount,
+            // 上线就绪：至少一个节点、全部收敛、无漂移/隔离节点。
+            IsRolloutReady = converged && driftedCount == 0,
             LatestAppliedAtUtc = nodes.Count == 0 ? null : nodes.Max(n => n.AppliedAt),
             ComputedAtUtc = DateTimeOffset.UtcNow
         };
@@ -77,10 +85,46 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
                 IsCurrent = n.AppliedRevision == desiredRevision
                     && string.Equals(n.ModelArtifactId, desiredModelId, StringComparison.Ordinal)
                     && string.Equals(n.ContentHash, desiredHash, StringComparison.Ordinal),
-                IsBehind = n.AppliedRevision < desiredRevision
+                IsBehind = n.AppliedRevision < desiredRevision,
+                Isolated = n.Isolated,
+                IsolationReason = n.IsolationReason
             })
             .ToArray();
         return entries;
+    }
+
+    /// <summary>
+    /// 漂移节点数：已隔离节点 + 已上报 Revision 与期望一致但模型内容与期望不一致的节点。
+    /// 漂移意味着节点实际加载的模型内容与集群期望不一致（Slot=A、Engine=B 类错位）。
+    /// </summary>
+    private static int ComputeDriftedNodeCount(
+        IReadOnlyList<ModelNodeAppliedState> nodes,
+        long desiredRevision,
+        string? desiredModelId,
+        string? desiredHash)
+    {
+        var drifted = 0;
+        foreach (var node in nodes)
+        {
+            if (node.Isolated)
+            {
+                drifted++;
+                continue;
+            }
+
+            // 内容不一致仅在同 Revision 下才有意义（落后节点由 NodesBehind 单独统计；
+            // 期望 Inactive / 无期望内容时无漂移可比）。
+            if (node.AppliedRevision == desiredRevision
+                && !string.IsNullOrEmpty(desiredModelId)
+                && !string.IsNullOrEmpty(desiredHash)
+                && (!string.Equals(node.ModelArtifactId, desiredModelId, StringComparison.Ordinal)
+                    || !string.Equals(node.ContentHash, desiredHash, StringComparison.Ordinal)))
+            {
+                drifted++;
+            }
+        }
+
+        return drifted;
     }
 
     /// <summary>

@@ -59,6 +59,18 @@ public sealed record ClusterSlotAppliedSummary
     /// </summary>
     public required int ContentHashConflictCount { get; init; }
 
+    /// <summary>
+    /// 漂移节点数：已隔离节点 + 已上报 Revision 与期望一致但 ContentHash 与期望不一致的节点。
+    /// 漂移意味着节点实际加载的模型内容与集群期望不一致（Slot=A、Engine=B 类错位）。
+    /// </summary>
+    public required int DriftedNodeCount { get; init; }
+
+    /// <summary>
+    /// 模型上线就绪（rollout readiness）：至少一个节点、全部收敛（AppliedRevision == DesiredRevision）、
+    /// 且无任何漂移/隔离节点。为 true 时才允许将当前 Champion 视为全集群生效。
+    /// </summary>
+    public required bool IsRolloutReady { get; init; }
+
     /// <summary>最近一次节点应用时间（无节点时为 null）。</summary>
     public DateTimeOffset? LatestAppliedAtUtc { get; init; }
 
@@ -91,6 +103,12 @@ public sealed record ClusterNodeAppliedEntry
 
     /// <summary>是否落后于期望 Revision。</summary>
     public required bool IsBehind { get; init; }
+
+    /// <summary>是否已被隔离（漂移自动隔离；节点内容与期望不一致时 Reconciler 标记）。</summary>
+    public required bool Isolated { get; init; }
+
+    /// <summary>隔离原因（未隔离时为 null）。</summary>
+    public string? IsolationReason { get; init; }
 }
 
 /// <summary>

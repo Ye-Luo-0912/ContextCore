@@ -344,6 +344,22 @@ public sealed record ModelNodeAppliedState
     /// <summary>已应用模型的内容哈希（Inactive 期望状态下为 null）。</summary>
     public string? ContentHash { get; init; }
 
+    /// <summary>
+    /// 应用时刻本地引擎代次（ActiveGeneration）。
+    /// 与集群槽位 Revision 是独立计数空间：Revision 跟踪"槽位期望变更"，EngineGeneration
+    /// 跟踪"本地激活次数"。二者分离使"Slot=A、Engine=B"的错位可被审计检出。
+    /// </summary>
+    public long? EngineGeneration { get; init; }
+
+    /// <summary>是否已被隔离（漂移自动隔离：节点内容与期望不一致时 Reconciler 标记）。</summary>
+    public bool Isolated { get; init; }
+
+    /// <summary>隔离时间（未隔离时为 null）。</summary>
+    public DateTimeOffset? DriftReportedAt { get; init; }
+
+    /// <summary>隔离原因（未隔离时为 null）。</summary>
+    public string? IsolationReason { get; init; }
+
     /// <summary>应用时间。</summary>
     public required DateTimeOffset AppliedAt { get; init; }
 }
@@ -361,8 +377,19 @@ public interface IModelNodeAppliedStateStore
     /// <summary>
     /// 写入节点已应用状态（CAS on AppliedRevision）：仅当新 AppliedRevision 大于等于
     /// 已存记录的 AppliedRevision 时生效。返回实际生效的记录（CAS 拒绝时返回已存记录）。
+    /// 成功应用（记录反映本地引擎实际内容）时 Isolated=false，漂移隔离随之清除。
     /// </summary>
     ValueTask<ModelNodeAppliedState> UpsertAsync(ModelNodeAppliedState state, CancellationToken ct = default);
+
+    /// <summary>
+    /// 将节点标记为隔离（漂移自动隔离）：设置 Isolated=true / DriftReportedAt / IsolationReason。
+    /// 幂等：已隔离时仅更新原因与时间；无记录时创建隔离标记（保持审计链完整）。
+    /// </summary>
+    ValueTask<ModelNodeAppliedState?> MarkIsolatedAsync(
+        string nodeId,
+        string slotName,
+        string reason,
+        CancellationToken ct = default);
 
     /// <summary>
     /// 列出某槽位下所有节点的已应用状态记录（集群注册表聚合用），按 NodeId 字典序排序。

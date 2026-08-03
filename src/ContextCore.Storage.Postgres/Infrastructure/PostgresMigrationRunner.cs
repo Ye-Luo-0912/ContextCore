@@ -119,8 +119,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），跨进程重启保留，
     ///   供规划器按计划签名聚合自适应策略（预算收敛 / 召回增强），
     ///   支持按签名或全量清除以重置自适应状态。
+    /// v55 → v56，model_node_applied_state 追加 engine_generation / is_isolated /
+    ///   drift_reported_at / isolation_reason 列：
+    ///   - engine_generation：应用时刻本地引擎代次，与集群槽位 Revision 分离
+    ///     （杜绝"Slot=A、Engine=B"错位被伪装为收敛——两套计数空间独立可审计）。
+    ///   - is_isolated / drift_reported_at / isolation_reason：漂移自动隔离事实持久化，
+    ///     集群注册表据此计算 DriftedNodeCount 与 IsRolloutReady（上线就绪门禁）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v55";
+    public const string SchemaVersion = "cc-schema-v56";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2447,6 +2453,10 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
     applied_revision bigint NOT NULL,
     model_artifact_id text,
     content_hash text,
+    engine_generation bigint NULL,
+    is_isolated boolean NOT NULL DEFAULT false,
+    drift_reported_at timestamptz NULL,
+    isolation_reason text NULL,
     applied_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (node_id, slot_name)
 );
