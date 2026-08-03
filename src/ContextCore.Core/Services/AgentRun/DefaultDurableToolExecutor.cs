@@ -63,6 +63,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     private readonly IToolDispatcher _toolDispatcher;
     private readonly IToolDispatchJournal? _dispatchJournal;
     private readonly IDurableToolResultStore? _resultStore;
+    private readonly IToolEffectPolicy _effectPolicy;
 
     /// <summary>
     /// 构造 Durable Tool 执行器。
@@ -74,14 +75,20 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     /// 注入后在 Committed 时缓存结果，供后续 PrepareAsync 查询（Postgres journal 不自带缓存）。
     /// null 时仅依赖 journal 内置缓存（InMemory journal 自带；Postgres journal 不缓存）。
     /// </param>
+    /// <param name="effectPolicy">
+    /// Tool 执行策略引擎（可选；null 时使用 <see cref="DefaultToolEffectPolicy"/>）。
+    /// 决定 Dispatch 后是否自动提交（严格矩阵），防止危险状态被误提交。
+    /// </param>
     public DefaultDurableToolExecutor(
         IToolDispatcher toolDispatcher,
         IToolDispatchJournal? dispatchJournal = null,
-        IDurableToolResultStore? resultStore = null)
+        IDurableToolResultStore? resultStore = null,
+        IToolEffectPolicy? effectPolicy = null)
     {
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
         _dispatchJournal = dispatchJournal;
         _resultStore = resultStore;
+        _effectPolicy = effectPolicy ?? new DefaultToolEffectPolicy();
     }
 
     /// <inheritdoc />
@@ -320,78 +327,117 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             }
         }
 
-        // 7. 副作用分类决定是否自动提交
+        // 7. 执行后策略处置：由 Tool Policy Engine 决定提交 / 对账 / 拒绝
         //    声明权威：Descriptor 明确声明副作用类型（非 Unknown）时以声明为准，
         //    运行时结果仅用于验证（不一致时由调用方审计）；未声明（null/Unknown）时以运行时结果为准。
         var effectiveSideEffect = descriptor is { DeclaredSideEffect: not ToolSideEffect.Unknown }
             ? descriptor.DeclaredSideEffect
             : dispatchResult.SideEffect;
         var effectiveExternalOperationId = dispatchResult.ExternalOperationId ?? externalOperationId;
-        ToolDispatchState finalJournalState;
-        if (effectiveSideEffect != ToolSideEffect.Unknown)
-        {
-            // 构造 DurableToolResult，用 MarkCommittedWithResultAsync 原子提交 state + result
-            // 填充 WorkspaceId / RunId / InvocationId，写入 tool_dispatch_results 的隔离键列，
-            // 配合 UNIQUE(workspace_id, run_id, invocation_id) 约束防止另一 Run 覆盖已有 Tool Result。
-            // InvocationId 取 requestId（代码层 RequestId 即稳定调用身份 InvocationId）。
-            var durableResult = new DurableToolResult
-            {
-                ToolCallId = toolCallId,
-                RequestId = requestId,
-                WorkspaceId = workspaceId,
-                RunId = runId,
-                InvocationId = requestId,
-                IdempotencyKey = effectiveIdempotencyKey,
-                SideEffect = effectiveSideEffect,
-                ExternalOperationId = effectiveExternalOperationId,
-                Result = dispatchResult.Result,
-                Succeeded = dispatchResult.Succeeded,
-                Error = dispatchResult.Error,
-                DurationMs = stopwatch.Elapsed.TotalMilliseconds
-            };
 
-            if (_dispatchJournal is not null)
+        // 构造临时执行结果供策略引擎解析（JournalState 暂按 Dispatched——尚未提交）。
+        var policyResult = new ToolExecutionResult
+        {
+            RequestId = requestId,
+            IdempotencyKey = effectiveIdempotencyKey,
+            SideEffect = effectiveSideEffect,
+            ExternalOperationId = effectiveExternalOperationId,
+            JournalState = ToolDispatchState.Dispatched,
+            Result = dispatchResult.Result,
+            Succeeded = dispatchResult.Succeeded,
+            Error = dispatchResult.Error,
+            Duration = stopwatch.Elapsed
+        };
+        var policy = _effectPolicy.Resolve(
+            descriptor ?? new ToolDescriptor
             {
-                try
+                // Dispatcher 未提供前置声明（如 EchoToolDispatcher）→ 以运行时观测副作用合成描述符，
+                // 策略按观测值保守处置（Unknown → 不自动提交）。
+                Name = toolCall.ToolName,
+                DeclaredSideEffect = effectiveSideEffect
+            },
+            prepareResult, policyResult);
+
+        ToolDispatchState finalJournalState;
+        switch (policy.Disposition)
+        {
+            case ToolExecutionDisposition.Commit:
+                // 结果确定且策略允许 → 原子提交 state + result。
+                // 构造 DurableToolResult，用 MarkCommittedWithResultAsync 原子提交 state + result，
+                // 填充 WorkspaceId / RunId / InvocationId，写入 tool_dispatch_results 的隔离键列，
+                // 配合 UNIQUE(workspace_id, run_id, invocation_id) 约束防止另一 Run 覆盖已有 Tool Result。
+                // InvocationId 取 requestId（代码层 RequestId 即稳定调用身份 InvocationId）。
+                var durableResult = new DurableToolResult
                 {
-                    await _dispatchJournal.MarkCommittedWithResultAsync(
-                        requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                    ToolCallId = toolCallId,
+                    RequestId = requestId,
+                    WorkspaceId = workspaceId,
+                    RunId = runId,
+                    InvocationId = requestId,
+                    IdempotencyKey = effectiveIdempotencyKey,
+                    SideEffect = effectiveSideEffect,
+                    ExternalOperationId = effectiveExternalOperationId,
+                    Result = dispatchResult.Result,
+                    Succeeded = dispatchResult.Succeeded,
+                    Error = dispatchResult.Error,
+                    DurationMs = stopwatch.Elapsed.TotalMilliseconds
+                };
+
+                if (_dispatchJournal is not null)
+                {
+                    try
+                    {
+                        await _dispatchJournal.MarkCommittedWithResultAsync(
+                            requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                        finalJournalState = ToolDispatchState.Committed;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // MarkCommitted 失败 → 查询实际状态
+                        var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        finalJournalState = entry?.State ?? ToolDispatchState.Dispatched;
+                    }
+                }
+                else
+                {
                     finalJournalState = ToolDispatchState.Committed;
                 }
-                catch (InvalidOperationException)
-                {
-                    // MarkCommitted 失败 → 查询实际状态
-                    var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
-                    finalJournalState = entry?.State ?? ToolDispatchState.Dispatched;
-                }
-            }
-            else
-            {
-                finalJournalState = ToolDispatchState.Committed;
-            }
 
-            // 写入 IDurableToolResultStore（仅当 journal 不在同事务内持久化结果时）。
-            // Postgres journal 的 MarkCommittedWithResultAsync 已在同事务内 UPSERT 结果到 tool_dispatch_results，
-            // 此处冗余写入可跳过；InMemory journal 自带缓存但 PersistsResults=false，仍需走 resultStore（若注入）。
-            // 无 journal 路径（_dispatchJournal=null）也走 resultStore（若注入）。
-            // 使用按 request_id 的新路径（Result 主键），写入全部隔离键列。
-            var journalPersistsResults = _dispatchJournal?.PersistsResults ?? false;
-            if (!journalPersistsResults && _resultStore is not null)
-            {
-                try
+                // 写入 IDurableToolResultStore（仅当 journal 不在同事务内持久化结果时）。
+                // Postgres journal 的 MarkCommittedWithResultAsync 已在同事务内 UPSERT 结果到 tool_dispatch_results，
+                // 此处冗余写入可跳过；InMemory journal 自带缓存但 PersistsResults=false，仍需走 resultStore（若注入）。
+                // 无 journal 路径（_dispatchJournal=null）也走 resultStore（若注入）。
+                // 使用按 request_id 的新路径（Result 主键），写入全部隔离键列。
+                var journalPersistsResults = _dispatchJournal?.PersistsResults ?? false;
+                if (!journalPersistsResults && _resultStore is not null)
                 {
-                    await _resultStore.SaveByRequestIdAsync(durableResult, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await _resultStore.SaveByRequestIdAsync(durableResult, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // 结果缓存写入失败不阻断主流程（journal 已 Committed，结果已持久化在 dispatchResult 中）
+                    }
                 }
-                catch
-                {
-                    // 结果缓存写入失败不阻断主流程（journal 已 Committed，结果已持久化在 dispatchResult 中）
-                }
-            }
-        }
-        else
-        {
-            // Unknown 副作用 → 不自动提交，停留在 Dispatched（模糊状态）
-            finalJournalState = ToolDispatchState.Dispatched;
+                break;
+
+            case ToolExecutionDisposition.HoldForReconciliation:
+                // 策略要求不自动提交：journal 保持 Dispatched（模糊状态），等待对账。
+                // 外部副作用可能已发生但未提交，调用方需经对账（Reconciliation）确认后提交。
+                finalJournalState = ToolDispatchState.Dispatched;
+                break;
+
+            case ToolExecutionDisposition.FailClosed:
+            default:
+                // 策略禁止 → fail-closed：返回失败，不提交。
+                // journal 停留在 Dispatched；若外部副作用已发生则由调用方对账裁决。
+                stopwatch.Stop();
+                return BuildFailedResult(
+                    requestId, effectiveIdempotencyKey, effectiveSideEffect,
+                    error: $"Tool 执行策略拒绝（fail-closed）：{policy.Reason}",
+                    journalState: ToolDispatchState.Dispatched,
+                    duration: stopwatch.Elapsed);
         }
 
         stopwatch.Stop();

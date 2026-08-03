@@ -245,6 +245,74 @@ public sealed record ToolDescriptor
 }
 
 /// <summary>
+/// Tool 执行策略处置结果：提交 / 等待对账 / 拒绝执行。
+/// 由 <see cref="IToolEffectPolicy"/> 根据 Descriptor 前置声明 + Journal 状态 + 执行结果解析，
+/// 替代执行器"副作用非 Unknown 即自动提交"的宽松判定，
+/// 防止 NonIdempotentWrite / RequiresReconciliation / 外部调用失败副作用未知等危险状态被误提交。
+/// </summary>
+public enum ToolExecutionDisposition : byte
+{
+    /// <summary>结果确定且策略允许 → 立即提交（MarkCommittedWithResultAsync 原子写 state + result）。</summary>
+    Commit = 0,
+
+    /// <summary>
+    /// 结果不确定或策略要求 → 不自动提交，journal 保持模糊状态（DispatchingIntent/Dispatched），
+    /// 等待对账确认（Reconciliation）后由裁决方决定提交。
+    /// </summary>
+    HoldForReconciliation = 1,
+
+    /// <summary>前置条件不满足或策略禁止 → 拒绝执行（fail-closed，不触碰外部副作用）。</summary>
+    FailClosed = 2
+}
+
+/// <summary>Tool 执行策略解析结果。</summary>
+public sealed record ToolExecutionPolicy
+{
+    /// <summary>处置结果（Commit / HoldForReconciliation / FailClosed）。</summary>
+    public required ToolExecutionDisposition Disposition { get; init; }
+
+    /// <summary>决策原因（审计/诊断；写入结果 Error 或日志）。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>
+    /// 是否要求提交前对账确认（RequiresReconciliation / NonIdempotentWrite 等声明）。
+    /// true 时即使结果成功也不自动提交，必须经对账确认外部副作用真相后提交。
+    /// </summary>
+    public bool RequiresReconciliationBeforeCommit { get; init; }
+}
+
+/// <summary>
+/// Tool 执行策略引擎：根据 Descriptor 前置声明 + Journal 状态 + 执行结果，
+/// 解析提交 / 对账 / 拒绝处置。执行器以此决定是否自动提交。
+/// </summary>
+/// <remarks>
+/// 严格提交矩阵（Descriptor.DeclaredSideEffect → 执行后处置）：
+/// <list type="bullet">
+/// <item>None / ReadOnly → 结果确定后 Commit（只读，重放安全）。</item>
+/// <item>Write → 执行成功（Succeeded）时 Commit；失败时 Hold（副作用是否发生未知）。</item>
+/// <item>IdempotentWrite → 稳定幂等键明确返回且执行成功时 Commit；否则 Hold。</item>
+/// <item>FencedWrite → 有效 Fence 确认（执行成功且 Fence 窗口内）时 Commit；否则 Hold。</item>
+/// <item>NonIdempotentWrite → 永不自动提交：Approval + 外部操作身份确认后经对账提交（Hold）。</item>
+/// <item>RequiresReconciliation → 永不自动提交：必须经 Reconciliation Handler 确认后提交（Hold）。</item>
+/// <item>Unknown → 永不自动提交（保守策略，Hold）。</item>
+/// </list>
+/// </remarks>
+public interface IToolEffectPolicy
+{
+    /// <summary>
+    /// 解析 Tool 执行策略。
+    /// </summary>
+    /// <param name="descriptor">Tool 前置声明（副作用 / 审批 / 幂等 / fence / 恢复策略）。</param>
+    /// <param name="journal">PrepareWithIntentAsync 返回的 journal 状态与身份；无 journal（降级直连）时为 null。</param>
+    /// <param name="result">Dispatch 后的执行结果；未分派（前置校验失败）时为 null。</param>
+    /// <returns>执行策略处置。</returns>
+    ToolExecutionPolicy Resolve(
+        ToolDescriptor descriptor,
+        ToolDispatchPrepareResult? journal,
+        ToolExecutionResult? result);
+}
+
+/// <summary>
 /// Tool 分派结果。
 /// </summary>
 public sealed record ToolDispatchResult

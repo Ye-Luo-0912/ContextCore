@@ -842,6 +842,10 @@ internal static class CoreExtensions
 		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。
 		services.TryAddSingleton<IDurableToolExecutor, DefaultDurableToolExecutor>();
 
+		// Tool 执行策略引擎：Descriptor 严格提交矩阵（提交 / 对账 / 拒绝）。
+		// 由 DefaultDurableToolExecutor 消费，决定 Dispatch 后是否自动提交。
+		services.TryAddSingleton<IToolEffectPolicy, DefaultToolEffectPolicy>();
+
 		// 子问题 8：IToolDispatchJournal（进程内默认实现；Postgres provider 可覆盖）。
 		// 注册为 singleton 让 DefaultDurableToolExecutor 与各 Run 共享同一 journal 实例。
 		services.TryAddSingleton<IToolDispatchJournal, InMemoryToolDispatchJournal>();

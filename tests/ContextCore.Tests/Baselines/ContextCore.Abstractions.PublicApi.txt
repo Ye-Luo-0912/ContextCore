@@ -975,6 +975,9 @@ F:ContextCore.Abstractions.ToolDispatchState.DispatchingIntent
 F:ContextCore.Abstractions.ToolDispatchState.Prepared
 F:ContextCore.Abstractions.ToolDispatchState.Reconciling
 F:ContextCore.Abstractions.ToolDispatchState.ResultDelivered
+F:ContextCore.Abstractions.ToolExecutionDisposition.Commit
+F:ContextCore.Abstractions.ToolExecutionDisposition.FailClosed
+F:ContextCore.Abstractions.ToolExecutionDisposition.HoldForReconciliation
 F:ContextCore.Abstractions.ToolExecutionMode.Echo
 F:ContextCore.Abstractions.ToolExecutionMode.RealDispatch
 F:ContextCore.Abstractions.ToolRecoveryStrategy.NeverReplay
@@ -2386,6 +2389,7 @@ M:ContextCore.Abstractions.IToolDispatchJournal.PrepareAsync(ContextCore.Abstrac
 M:ContextCore.Abstractions.IToolDispatchJournal.PrepareWithIntentAsync(ContextCore.Abstractions.ToolDispatchJournalEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.DispatchAsync(ContextCore.Abstractions.ToolDispatchRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.GetDescriptor(System.String)
+M:ContextCore.Abstractions.IToolEffectPolicy.Resolve(ContextCore.Abstractions.ToolDescriptor, ContextCore.Abstractions.ToolDispatchPrepareResult, ContextCore.Abstractions.ToolExecutionResult)
 M:ContextCore.Abstractions.ITrainingDataExporter.ExportAsync(ContextCore.Abstractions.TrainingDataExportRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalConflictSetLedger.AppendConflictSetsAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ConflictSet>, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalContextStore.SaveAsync(ContextCore.Abstractions.Models.ContextItem, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
@@ -5186,6 +5190,13 @@ M:ContextCore.Abstractions.ToolExecutionContext.Equals(System.Object)
 M:ContextCore.Abstractions.ToolExecutionContext.GetHashCode()
 M:ContextCore.Abstractions.ToolExecutionContext.GetType()
 M:ContextCore.Abstractions.ToolExecutionContext.ToString()
+M:ContextCore.Abstractions.ToolExecutionPolicy.#ctor()
+M:ContextCore.Abstractions.ToolExecutionPolicy.<Clone>$()
+M:ContextCore.Abstractions.ToolExecutionPolicy.Equals(ContextCore.Abstractions.ToolExecutionPolicy)
+M:ContextCore.Abstractions.ToolExecutionPolicy.Equals(System.Object)
+M:ContextCore.Abstractions.ToolExecutionPolicy.GetHashCode()
+M:ContextCore.Abstractions.ToolExecutionPolicy.GetType()
+M:ContextCore.Abstractions.ToolExecutionPolicy.ToString()
 M:ContextCore.Abstractions.ToolExecutionResult.#ctor()
 M:ContextCore.Abstractions.ToolExecutionResult.<Clone>$()
 M:ContextCore.Abstractions.ToolExecutionResult.Equals(ContextCore.Abstractions.ToolExecutionResult)
@@ -10699,6 +10710,9 @@ P:ContextCore.Abstractions.ToolExecutionContext.Payload (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.RequestId (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.RunId (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.WorkspaceId (get|init)
+P:ContextCore.Abstractions.ToolExecutionPolicy.Disposition (get|init)
+P:ContextCore.Abstractions.ToolExecutionPolicy.Reason (get|init)
+P:ContextCore.Abstractions.ToolExecutionPolicy.RequiresReconciliationBeforeCommit (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.Duration (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.Error (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.ExternalOperationId (get|init)
@@ -11190,6 +11204,7 @@ T:ContextCore.Abstractions.IToolAuthorizer (Interface)
 T:ContextCore.Abstractions.IToolCatalog (Interface)
 T:ContextCore.Abstractions.IToolDispatchJournal (Interface)
 T:ContextCore.Abstractions.IToolDispatcher (Interface)
+T:ContextCore.Abstractions.IToolEffectPolicy (Interface)
 T:ContextCore.Abstractions.ITrainingDataExporter (Interface)
 T:ContextCore.Abstractions.ITransactionalConflictSetLedger (Interface)
 T:ContextCore.Abstractions.ITransactionalContextStore (Interface)
@@ -11793,7 +11808,9 @@ T:ContextCore.Abstractions.ToolDispatchRequest
 T:ContextCore.Abstractions.ToolDispatchResult
 T:ContextCore.Abstractions.ToolDispatchState (Enum)
 T:ContextCore.Abstractions.ToolExecutionContext
+T:ContextCore.Abstractions.ToolExecutionDisposition (Enum)
 T:ContextCore.Abstractions.ToolExecutionMode (Enum)
+T:ContextCore.Abstractions.ToolExecutionPolicy
 T:ContextCore.Abstractions.ToolExecutionResult
 T:ContextCore.Abstractions.ToolObservation
 T:ContextCore.Abstractions.ToolRecoveryStrategy (Enum)
