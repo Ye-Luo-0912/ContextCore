@@ -17,7 +17,7 @@ namespace ContextCore.Core.Services.AgentKernel;
 /// <remarks>
 /// 仅支持 <c>"echo"</c> tool。DispatchAsync 原样返回 <see cref="ToolDispatchRequest.Payload"/>。
 /// </remarks>
-public sealed class EchoToolDispatcher : IToolDispatcher
+public sealed class EchoToolDispatcher : IToolDispatcher, IToolCatalog
 {
     private static readonly IReadOnlySet<string> s_supportedTools =
         new HashSet<string>(StringComparer.Ordinal) { "echo" };
@@ -28,6 +28,10 @@ public sealed class EchoToolDispatcher : IToolDispatcher
     /// <inheritdoc />
     /// <summary>echo 无前置声明（纯函数），返回 null。</summary>
     public ToolDescriptor? GetDescriptor(string toolName) => null;
+
+    /// <inheritdoc />
+    /// <summary>echo 无 Tool 定义（模型不感知 echo；仅供测试往返）。</summary>
+    public IReadOnlyList<AgentToolDefinition> GetToolDefinitions() => Array.Empty<AgentToolDefinition>();
 
     /// <inheritdoc />
     public ValueTask<ToolDispatchResult> DispatchAsync(ToolDispatchRequest request, CancellationToken cancellationToken = default)

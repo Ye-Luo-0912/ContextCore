@@ -350,13 +350,16 @@ internal static class ProductionRuntimeExtensions
             return;
         }
 
-        // 移除 AddContextCore 注册的 EchoToolDispatcher
+        // 移除 AddContextCore 注册的 EchoToolDispatcher（含 IToolCatalog 别名）
         RemoveService(services, typeof(IToolDispatcher));
+        RemoveService(services, typeof(IToolCatalog));
 
         // 注册 RealToolDispatcher：通过 IToolHandler 注册表分派 Tool 调用。
         // 默认无注册 Handler——生产部署应通过 DI 注册所需 IToolHandler 实现。
         // 已注册的 IToolHandler 实例会通过 IEnumerable<IToolHandler> 自动注入。
-        services.AddSingleton<IToolDispatcher>(sp =>
+        // 同一实例同时注册为 IToolDispatcher 与 IToolCatalog（Actor 经 IToolCatalog 读取
+        // Tool 定义声明给模型，无需向下转型到具体 RealToolDispatcher）。
+        services.AddSingleton(sp =>
         {
             var handlers = sp.GetServices<IToolHandler>();
             var logger = sp.GetService<ILogger<RealToolDispatcher>>();
@@ -366,6 +369,8 @@ internal static class ProductionRuntimeExtensions
             dispatcher.Freeze();
             return dispatcher;
         });
+        services.AddSingleton<IToolDispatcher>(sp => sp.GetRequiredService<RealToolDispatcher>());
+        services.AddSingleton<IToolCatalog>(sp => sp.GetRequiredService<RealToolDispatcher>());
     }
 
     // ── 配置组合验证 ─────────────────────────────────────────────────────

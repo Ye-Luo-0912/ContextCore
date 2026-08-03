@@ -66,7 +66,8 @@ public sealed class AgentRunActor
     private readonly IToolReconciliationStore? _reconciliationStore;
     // 模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
     private readonly IAgentModelContextProjector? _modelContextProjector;
-    // Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
+    // Tool 定义列表（从 IToolCatalog 构建，用于原生 function calling 声明；
+    // 未注入 Catalog 或实现无定义 → 空列表，模型不感知 Tool）。
     private IReadOnlyList<AgentToolDefinition> _toolDefinitions;  // mutable for AllowedToolIds filtering in ExecuteAsync
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
@@ -177,6 +178,7 @@ public sealed class AgentRunActor
     /// <param name="modelContextProjector">模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
     /// <param name="approvalStore">审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
     /// <param name="reconciliationStore">Tool 对账记录存储（null 时跳过"未裁决不完成"约束）。</param>
+    /// <param name="toolCatalog">Tool 目录（提供模型 function calling 声明；null 时回退到 toolDispatcher 的 IToolCatalog 实现，均无则空列表）。</param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -191,7 +193,8 @@ public sealed class AgentRunActor
         IAgentCheckpointStore? checkpointStore = null,
         IDurableToolExecutor? durableToolExecutor = null,
         IAgentModelContextProjector? modelContextProjector = null,
-        IToolReconciliationStore? reconciliationStore = null)
+        IToolReconciliationStore? reconciliationStore = null,
+        IToolCatalog? toolCatalog = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -207,9 +210,11 @@ public sealed class AgentRunActor
         _durableToolExecutor = durableToolExecutor;
         _modelContextProjector = modelContextProjector;
         _reconciliationStore = reconciliationStore;
-        // 从 RealToolDispatcher 构建 Tool 定义（原生 function calling）；
-        // EchoToolDispatcher 或其他实现无 Tool 定义 → 空列表（模型不感知 Tool）。
-        _toolDefinitions = (toolDispatcher as RealToolDispatcher)?.GetToolDefinitions()
+        // 从 IToolCatalog 构建 Tool 定义（原生 function calling；与具体分派器解耦）。
+        // 未注入 Catalog 时回退到 toolDispatcher 的 IToolCatalog 实现（如 RealToolDispatcher），
+        // 两者均无定义（EchoToolDispatcher 等）→ 空列表，模型不感知 Tool。
+        _toolDefinitions = toolCatalog?.GetToolDefinitions()
+            ?? (toolDispatcher as IToolCatalog)?.GetToolDefinitions()
             ?? Array.Empty<AgentToolDefinition>();
         _modelCallsUsed = 0;
         _turnStartState = AgentRunState.Created;

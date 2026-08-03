@@ -778,6 +778,8 @@ internal static class CoreExtensions
 		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，PostgresAgentCheckpointStore 生效）。
 		services.TryAddSingleton<IAgentCheckpointStore, InMemoryAgentCheckpointStore>();
 		services.TryAddSingleton<IToolDispatcher, EchoToolDispatcher>();
+		// Tool 目录与分派器同实例注册（Actor 经 IToolCatalog 读取 Tool 定义，避免向下转型到具体类型）。
+		services.TryAddSingleton<IToolCatalog, EchoToolDispatcher>();
 
 		// 子问题 8：Agent Run Actor 生产化注册（模型驱动的 Agent 执行循环）。
 		// 注册顺序：底层依赖（Store / Journal / Executor）→ 策略 / 校验 / 审批 → ModelTransport → Host。
