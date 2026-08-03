@@ -9049,6 +9049,120 @@
         }
       }
     },
+    "/api/agents/runs/{id}/compact": {
+      "post": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "压缩 Run 事件流前缀（折叠为快照并归档，锚点保留哈希链完整性）",
+        "operationId": "CompactAgentRunEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "upToSequence",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunCompactionResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/runs/{id}/events/snapshot": {
+      "get": {
+        "tags": [
+          "AgentExecution"
+        ],
+        "summary": "读取 Run 事件流压缩快照（未压缩时 404）",
+        "operationId": "GetAgentRunEventSnapshot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunEventSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agents/reconciliations": {
       "get": {
         "tags": [
@@ -9261,6 +9375,60 @@
           }
         }
       },
+      "AgentRunCompactionResult": {
+        "required": [
+          "workspaceId",
+          "runId",
+          "compactedThroughSequence",
+          "foldedEventCount",
+          "archivedRowCount",
+          "chainHeadHash",
+          "compactedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "compactedThroughSequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "foldedEventCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "archivedRowCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "chainHeadHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "compactedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "AgentRunEvent": {
         "required": [
           "eventId",
@@ -9313,6 +9481,54 @@
             ]
           },
           "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentRunEventSnapshot": {
+        "required": [
+          "workspaceId",
+          "runId",
+          "sequence",
+          "foldedEventCount",
+          "stateJson",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "chainHeadHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "foldedEventCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "stateJson": {
+            "type": "string"
+          },
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           }

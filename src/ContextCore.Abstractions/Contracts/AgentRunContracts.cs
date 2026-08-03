@@ -2448,3 +2448,103 @@ public interface IRecoveryAlertSink
     /// <param name="cancellationToken">取消令牌。</param>
     ValueTask NotifyInterventionRequiredAsync(AgentRunAlert alert, CancellationToken cancellationToken = default);
 }
+
+// ── Run 事件流快照与压缩（Event Snapshot & Compaction）───────────────────
+
+/// <summary>
+/// Run 事件流快照（压缩锚点）。
+/// </summary>
+/// <remarks>
+/// 快照记录一次压缩操作的结果锚点：<see cref="Sequence"/> 是压缩后保留在
+/// 热表 <c>agent_run_events</c> 中的锚点事件序号；sequence &lt; 该值的事件已
+/// 折叠归档到 <c>agent_run_events_archive</c>（审计不丢失），sequence &gt; 该值
+/// 的事件保持原样（哈希链未破坏）。<see cref="ChainHeadHash"/> 是锚点事件的
+/// content_hash——后续事件链校验的基准。
+/// </remarks>
+public sealed record AgentRunEventSnapshot
+{
+    /// <summary>Workspace ID（隔离边界）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>所属 Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>压缩锚点 sequence（保留在热表中的最小事件序号）。</summary>
+    public required int Sequence { get; init; }
+
+    /// <summary>锚点事件 content_hash（链头；后续事件链校验基准）。</summary>
+    public string? ChainHeadHash { get; init; }
+
+    /// <summary>已折叠（归档）的事件数。</summary>
+    public required int FoldedEventCount { get; init; }
+
+    /// <summary>折叠状态摘要（JSON；锚点事件的完整 data 序列化，作为状态重建基准）。</summary>
+    public required string StateJson { get; init; }
+
+    /// <summary>快照创建时间（UTC）。</summary>
+    public required DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>
+/// Run 事件流压缩结果。
+/// </summary>
+public sealed record AgentRunCompactionResult(
+    string WorkspaceId,
+    string RunId,
+    int CompactedThroughSequence,
+    int FoldedEventCount,
+    int ArchivedRowCount,
+    string? ChainHeadHash,
+    DateTimeOffset CompactedAt);
+
+/// <summary>
+/// Run 事件流快照与压缩抽象（Event Snapshot &amp; Compaction）。
+/// </summary>
+/// <remarks>
+/// 将 Run 事件流前缀 [0..upToSequence] 折叠为快照：归档折叠事件（审计保留）、
+/// 保留锚点事件维持哈希链完整性、写入快照锚点。用于控制长生命周期 Run 的
+/// 热表无界增长，同时保证状态重建（快照 + 锚点后事件）与审计（归档表）不丢失。
+/// Postgres 实现：<c>ContextCore.Storage.Postgres.Stores.PostgresAgentRunEventCompactor</c>。
+/// 非 Postgres provider 不注册——调用方检测 null 时返回 503（不可用）。
+/// </remarks>
+public interface IAgentRunEventCompactor
+{
+    /// <summary>
+    /// 将 [0..upToSequence] 的事件折叠为快照并压缩热表。幂等：
+    /// 重复调用同一 upToSequence 返回相同结果；upToSequence 超过当前最后
+    /// sequence 时自动钳制到最后事件。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="upToSequence">折叠上界（含）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>压缩结果（折叠/归档计数 + 锚点链头哈希）。</returns>
+    Task<AgentRunCompactionResult> CompactAsync(
+        string workspaceId,
+        string runId,
+        int upToSequence,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 读取当前压缩快照（未压缩过时返回 null）。
+    /// </summary>
+    ValueTask<AgentRunEventSnapshot?> GetSnapshotAsync(
+        string workspaceId,
+        string runId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 读取已归档（折叠）事件——审计补读，与热表事件同构（含完整哈希链字段）。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="fromSequence">起始 sequence（含）。</param>
+    /// <param name="take">单次读取上限。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask<IReadOnlyList<AgentRunEvent>> GetArchivedEventsAsync(
+        string workspaceId,
+        string runId,
+        int fromSequence = 0,
+        int take = 1000,
+        CancellationToken cancellationToken = default);
+}

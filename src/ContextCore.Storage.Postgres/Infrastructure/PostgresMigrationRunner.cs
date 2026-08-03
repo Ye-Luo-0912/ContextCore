@@ -110,8 +110,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   - (run_id, request_id) UNIQUE 约束：按 RunId+RequestId 幂等创建（重复创建返回既有记录）。
     ///   - external_operation_id partial 索引：支持按 journal externalOperationId 反查（ControlRoom 运维）。
     ///   - deadline_utc 列 + (status, created_at) 索引：过期未决高亮（ControlRoom）与 Worker 轮询。
+    /// v53 → v54，新增 agent_run_event_snapshots + agent_run_events_archive 表
+    ///   （Agent Run 事件流快照与压缩：折叠前缀事件归档 + 锚点事件保留 + 快照 upsert）。
+    ///   - agent_run_events_archive：被折叠的 [0, upToSequence] 前缀事件归档表（幂等迁移，重复压缩不产生重复行）。
+    ///   - agent_run_event_snapshots：per-run 单行快照（锚点 sequence + chain_head_hash + state_json + 折叠计数），
+    ///     压缩后事件流从锚点续读，哈希链完整性不受影响。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v53";
+    public const string SchemaVersion = "cc-schema-v54";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -195,6 +200,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Agent Run 状态机 + 事件流哈希链持久化
         "agent_runs",
         "agent_run_events",
+        "agent_run_event_snapshots",
+        "agent_run_events_archive",
         // Canary HA 聚合（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
         "canary_metrics_samples",
         "canary_leader_leases",
@@ -518,6 +525,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Agent Run 状态机 + 事件流哈希链持久化表
         var agentRuns = Infrastructure.PostgresNames.Table(options, "agent_runs");
         var agentRunEvents = Infrastructure.PostgresNames.Table(options, "agent_run_events");
+        // Agent Run 事件流快照与压缩持久化表（折叠前缀归档 + per-run 快照）
+        var agentRunEventSnapshots = Infrastructure.PostgresNames.Table(options, "agent_run_event_snapshots");
+        var agentRunEventsArchive = Infrastructure.PostgresNames.Table(options, "agent_run_events_archive");
         // Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
         var canaryMetricsSamples = Infrastructure.PostgresNames.Table(options, "canary_metrics_samples");
         var canaryLeaderLeases = Infrastructure.PostgresNames.Table(options, "canary_leader_leases");
@@ -2038,6 +2048,44 @@ CREATE TABLE IF NOT EXISTS {agentRunEvents} (
     occurred_at timestamptz NOT NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (workspace_id, run_id, sequence)
+);
+
+-- v54 → v54：Agent Run 事件流快照与压缩持久化表
+-- agent_run_events_archive：被折叠的 [0, upToSequence] 前缀事件归档表。
+--   PK = (workspace_id, run_id, sequence)：幂等迁移——重复压缩同一前缀不会产生重复行（ON CONFLICT DO NOTHING）。
+--   结构复制自 agent_run_events（不含 prev_chain_hash 链接，归档事件不再参与链校验）。
+CREATE TABLE IF NOT EXISTS {agentRunEventsArchive} (
+    event_id text NOT NULL,
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    sequence integer NOT NULL,
+    event_type smallint NOT NULL,
+    state smallint NOT NULL,
+    payload text NOT NULL DEFAULT '',
+    content_hash text,
+    occurred_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (workspace_id, run_id, sequence)
+);
+
+-- agent_run_event_snapshots：per-run 单行压缩快照。
+--   PK = (workspace_id, run_id)：每个 Run 最多一行，压缩时 UPSERT 覆盖。
+--   anchor_sequence：锚点事件 sequence（压缩后事件流链头），折叠前缀为 [0, anchor_sequence)。
+--   chain_head_hash：锚点事件 content_hash，后续 AppendAsync 从锚点续链。
+--   state_json：锚点事件完整 AgentRunEvent JSON（含序列化后的 State），供 GetSnapshotAsync 直接返回。
+--   folded_event_count：本次压缩折叠的事件数（累计，供运维观测）。
+--   archived_row_count：本次压缩归档到 archive 表的行数。
+--   compacted_at：最近一次压缩时间。
+CREATE TABLE IF NOT EXISTS {agentRunEventSnapshots} (
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    anchor_sequence integer NOT NULL,
+    chain_head_hash text,
+    state_json text NOT NULL DEFAULT '',
+    folded_event_count integer NOT NULL DEFAULT 0,
+    archived_row_count integer NOT NULL DEFAULT 0,
+    compacted_at timestamptz NOT NULL,
+    PRIMARY KEY (workspace_id, run_id)
 );
 
 -- Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）

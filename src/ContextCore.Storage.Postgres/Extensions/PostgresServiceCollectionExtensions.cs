@@ -276,6 +276,11 @@ public static class PostgresServiceCollectionExtensions
             sp.GetService<IAgentRunEventNotifier>()));
         services.AddSingleton<IAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
         services.AddSingleton<IPersistentAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
+        // Agent Run 事件流快照与压缩（Event Snapshot & Compaction）。
+        // 将 Run 事件流前缀折叠为快照并归档折叠事件，控制长生命周期 Run 热表无界增长；
+        // 仅 Postgres provider 注册——Service 端点检测 null 时返回 503（不可用）。
+        services.AddSingleton<PostgresAgentRunEventCompactor>();
+        services.AddSingleton<IAgentRunEventCompactor>(sp => sp.GetRequiredService<PostgresAgentRunEventCompactor>());
 
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化（PostgreSQL）。
         // - IAgentApprovalStore：让 DefaultAgentApprovalGate 自动注入持久化实现，

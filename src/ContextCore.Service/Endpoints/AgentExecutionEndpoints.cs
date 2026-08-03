@@ -17,6 +17,8 @@ namespace ContextCore.Service.Endpoints;
 //   POST   /api/agents/runs/{id}/cancel           — 取消 Run
 //   GET    /api/agents/runs/{id}/events           — SSE 事件流（支持 Last-Event-ID 断线重连）
 //   POST   /api/agents/runs/{id}/approvals/{approvalId} — 提交 approval 决策
+//   POST   /api/agents/runs/{id}/compact          — 压缩事件流前缀（Operator；折叠为快照并归档）
+//   GET    /api/agents/runs/{id}/events/snapshot  — 读取压缩快照（Operator；未压缩时 404）
 //
 // 设计原则：
 //   1. 遵循 ContextCore Minimal API 模式（IEndpointRouteBuilder 扩展方法）。
@@ -844,6 +846,93 @@ internal static class AgentExecutionEndpoints
         .WithSummary("Tool 对账 Control Room：分页待决列表（过期高亮 + 告警计数）或按 ExternalOperationId 反查")
         .Produces<ReconciliationListResult>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status500InternalServerError);
+
+        // ── 事件流压缩（Event Snapshot & Compaction）───────────────────
+        // Operator 运维端点：将 Run 事件流前缀 [0..upToSequence] 折叠为快照并归档，
+        // 控制长生命周期 Run 热表无界增长（锚点事件保留，哈希链完整性不受影响）。
+        // 仅 Postgres provider 注册 compactor；未注册时返回 503（不可用）。
+        group.MapPost("/{id}/compact", async Task<IResult> (
+            string id,
+            IAgentRunStore runStore,
+            [FromServices] IAgentRunEventCompactor? compactor,
+            IWorkspaceContextAccessor workspaceContextAccessor,
+            HttpContext httpContext,
+            CancellationToken ct,
+            int? upToSequence = null) =>
+        {
+            var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, null);
+
+            var run = await runStore.GetAsync(workspaceId, id, ct).ConfigureAwait(false);
+            if (run is null)
+            {
+                return ContextCoreHttpResultMapper.NotFound(
+                    httpContext, string.Empty, "agents.runs.compact",
+                    $"未找到 RunId='{id}'。");
+            }
+
+            if (compactor is null)
+            {
+                return ContextCoreHttpResultMapper.Misconfigured(
+                    httpContext, string.Empty, "agents.runs.compact",
+                    "IAgentRunEventCompactor 未注册到 DI 容器（仅 Postgres provider 支持事件流压缩）。");
+            }
+
+            // upToSequence 省略时折叠到当前最后事件（钳制到流末尾，锚点 = 最后事件）。
+            var result = await compactor.CompactAsync(
+                workspaceId, id, upToSequence ?? -1, ct).ConfigureAwait(false);
+            return Results.Ok(result);
+        })
+        .WithName("CompactAgentRunEvents")
+        .RequireWorkspaceRole(WorkspaceRole.Operator)
+        .WithSummary("压缩 Run 事件流前缀（折叠为快照并归档，锚点保留哈希链完整性）")
+        .Produces<AgentRunCompactionResult>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status503ServiceUnavailable);
+
+        // ── 读取事件流压缩快照 ────────────────────────────────────────
+        // Operator 运维端点：返回 per-run 压缩快照（锚点 sequence + 链头哈希 + 状态摘要）。
+        // 未压缩过的 Run 返回 404；非 Postgres provider 未注册 compactor → 503。
+        group.MapGet("/{id}/events/snapshot", async Task<IResult> (
+            string id,
+            IAgentRunStore runStore,
+            [FromServices] IAgentRunEventCompactor? compactor,
+            IWorkspaceContextAccessor workspaceContextAccessor,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, null);
+
+            var run = await runStore.GetAsync(workspaceId, id, ct).ConfigureAwait(false);
+            if (run is null)
+            {
+                return ContextCoreHttpResultMapper.NotFound(
+                    httpContext, string.Empty, "agents.runs.events.snapshot",
+                    $"未找到 RunId='{id}'。");
+            }
+
+            if (compactor is null)
+            {
+                return ContextCoreHttpResultMapper.Misconfigured(
+                    httpContext, string.Empty, "agents.runs.events.snapshot",
+                    "IAgentRunEventCompactor 未注册到 DI 容器（仅 Postgres provider 支持事件流快照）。");
+            }
+
+            var snapshot = await compactor.GetSnapshotAsync(workspaceId, id, ct).ConfigureAwait(false);
+            if (snapshot is null)
+            {
+                return ContextCoreHttpResultMapper.NotFound(
+                    httpContext, string.Empty, "agents.runs.events.snapshot",
+                    $"RunId='{id}' 尚未执行事件流压缩。");
+            }
+
+            return Results.Ok(snapshot);
+        })
+        .WithName("GetAgentRunEventSnapshot")
+        .RequireWorkspaceRole(WorkspaceRole.Operator)
+        .WithSummary("读取 Run 事件流压缩快照（未压缩时 404）")
+        .Produces<AgentRunEventSnapshot>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
         return app;
     }
