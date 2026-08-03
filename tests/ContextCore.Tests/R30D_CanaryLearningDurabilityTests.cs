@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.MemoryEvolution;
+using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Tests;

@@ -281,14 +281,14 @@ public sealed class R30E_RetrievalDecisionTruthTests
         var store = new InMemoryRelationStore();
         var service = new DefaultSelectedRelationHydrationService(store);
 
-        await Assert.ThrowsExactlyAsync<ArgumentException>(() => service.HydrateAsync(new RelationHydrationRequest
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.HydrateAsync(new RelationHydrationRequest
         {
             WorkspaceId = string.Empty,
             CollectionId = "col-1",
             RelationIds = ["r1"]
         }));
 
-        await Assert.ThrowsExactlyAsync<ArgumentException>(() => service.HydrateAsync(new RelationHydrationRequest
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.HydrateAsync(new RelationHydrationRequest
         {
             WorkspaceId = "ws-1",
             CollectionId = "col-1",

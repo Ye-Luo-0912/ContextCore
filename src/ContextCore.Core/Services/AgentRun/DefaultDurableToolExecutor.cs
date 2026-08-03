@@ -156,6 +156,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 requestId, idempotencyKey, ToolSideEffect.Unknown,
                 error: $"不支持的 tool: {toolCall.ToolName}",
                 journalState: ToolDispatchState.Prepared,
+                errorKind: DispatchErrorKind.UnregisteredTool,
                 duration: stopwatch.Elapsed);
         }
 

@@ -852,6 +852,47 @@
         }
       }
     },
+    "/api/relations/hydration": {
+      "post": {
+        "tags": [
+          "Relations"
+        ],
+        "summary": "按 ID 批量水合 Selected 关系（完整 Metadata），优先批量水合存储，缺失时回退逐条查询",
+        "operationId": "HydrateSelectedRelations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationHydrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationHydrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/constraints": {
       "get": {
         "tags": [
@@ -11089,7 +11130,8 @@
           "appliedRevision",
           "appliedAt",
           "isCurrent",
-          "isBehind"
+          "isBehind",
+          "isolated"
         ],
         "type": "object",
         "properties": {
@@ -11125,6 +11167,15 @@
           },
           "isBehind": {
             "type": "boolean"
+          },
+          "isolated": {
+            "type": "boolean"
+          },
+          "isolationReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -11139,6 +11190,8 @@
           "converged",
           "nodesBehind",
           "contentHashConflictCount",
+          "driftedNodeCount",
+          "isRolloutReady",
           "computedAtUtc"
         ],
         "type": "object",
@@ -11211,6 +11264,17 @@
               "string"
             ],
             "format": "int32"
+          },
+          "driftedNodeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "isRolloutReady": {
+            "type": "boolean"
           },
           "latestAppliedAtUtc": {
             "type": [
@@ -18992,6 +19056,142 @@
             }
           },
           "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RelationHydrationEntry": {
+        "type": "object",
+        "properties": {
+          "relationId": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "relationType": {
+            "type": "string"
+          },
+          "weight": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "confidence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "reviewStatus": {
+            "type": "string"
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "provenance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RelationHydrationRequest": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "relationIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RelationHydrationResponse": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requestedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hydratedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "missingCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "source": {
+            "type": "string"
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationHydrationEntry"
+            }
+          },
+          "missingIds": {
             "type": "array",
             "items": {
               "type": "string"

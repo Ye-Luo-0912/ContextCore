@@ -238,7 +238,8 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
         };
 
         var result = await AgentExecutionEndpoints.CreateAgentRunHandlerAsync(
-            request, harness.RunStore, harness.Host, workspaceContextAccessor: null, httpContext, CancellationToken.None);
+            // 配额路径不消费 workspace 访问器（请求已显式携带 WorkspaceId），传 null 仅用于隔离测试。
+            request, harness.RunStore, harness.Host, workspaceContextAccessor: null!, httpContext, CancellationToken.None);
         await result.ExecuteAsync(httpContext);
 
         httpContext.Response.Body.Position = 0;

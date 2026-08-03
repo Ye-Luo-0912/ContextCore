@@ -145,7 +145,7 @@ public sealed class R30A_KillPointMatrixTests
         // 完整执行 Dispatch（外部副作用 1 次）+ MarkDispatched + MarkCommittedWithResult，
         // 但跳过 MarkResultDelivered —— 等价于 AsyncDurable 崩溃窗口残留。
         await journal.PrepareWithIntentAsync(
-            BuildJournalEntry(requestId, ToolDispatchState.Prepared, ToolDispatchJournalEntry.ComputePayloadDigest("arg-delivered-before")), cts.Token);
+            BuildJournalEntry(requestId, ToolDispatchState.Prepared, ToolDispatchJournalEntry.ComputePayloadDigest("arg-delivered-before"), "email"), cts.Token);
         await dispatcher.DispatchAsync(new ToolDispatchRequest
         {
             ToolName = "email",
@@ -266,10 +266,11 @@ public sealed class R30A_KillPointMatrixTests
     private static ToolDispatchJournalEntry BuildJournalEntry(
         string requestId,
         ToolDispatchState state,
-        string payloadDigest) => new()
+        string payloadDigest,
+        string toolName = "weather") => new()
         {
             RequestId = requestId,
-            ToolName = "weather",
+            ToolName = toolName,
             State = state,
             IdempotencyKey = "idem-r30a",
             PayloadDigest = payloadDigest,

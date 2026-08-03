@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core.Services.Graph;
 
@@ -42,25 +43,34 @@ public sealed class DefaultSelectedRelationHydrationService : ISelectedRelationH
             throw new ArgumentException("relationIds 至少需要 1 个关系 ID。", nameof(request));
         }
 
-        // 去重且保持请求顺序；跳过空白 ID（计入 missing 统计，避免下游按空串查询）。
-        var uniqueIds = request.RelationIds
-            .Where(id => !string.IsNullOrWhiteSpace(id))
+        // 去重且保持请求顺序；空白 ID 不参与下游查询（避免按空串查询），但计入 missing 统计。
+        var requestedIds = request.RelationIds
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        if (uniqueIds.Length == 0)
+        if (requestedIds.Length == 0)
         {
-            throw new ArgumentException("relationIds 至少需要 1 个有效关系 ID。", nameof(request));
+            throw new ArgumentException("relationIds 至少需要 1 个关系 ID。", nameof(request));
         }
 
-        var relations = new List<ContextRelation>(uniqueIds.Length);
-        var missing = new List<string>(uniqueIds.Length);
+        var queryIds = requestedIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToArray();
+        var relations = new List<ContextRelation>(queryIds.Length);
+        var missing = new List<string>(requestedIds.Length);
+        // 空白 ID 直接计入 missing（契约：跳过空白 ID 计入 missing 统计）。
+        missing.AddRange(requestedIds.Where(id => string.IsNullOrWhiteSpace(id)));
         string source;
 
-        if (_hydrationStore is not null)
+        if (queryIds.Length == 0)
+        {
+            // 全部为空白 ID：无有效查询键，跳过存储访问，直接返回全 missing。
+            source = _hydrationStore is not null ? "relation-hydration-store" : "relation-store-fallback";
+        }
+        else if (_hydrationStore is not null)
         {
             source = "relation-hydration-store";
             var hydrated = await _hydrationStore.HydrateRelationsAsync(
-                request.WorkspaceId, request.CollectionId, uniqueIds, cancellationToken).ConfigureAwait(false);
+                request.WorkspaceId, request.CollectionId, queryIds, cancellationToken).ConfigureAwait(false);
             // 存储实现不保证返回顺序（如 Postgres 按主键索引序）；先按 ID 建索引，
             // 再按请求顺序重排——契约要求 Relations 保持请求顺序（与回退路径一致）。
             var hydratedById = new Dictionary<string, ContextRelation>(StringComparer.Ordinal);
@@ -68,7 +78,7 @@ public sealed class DefaultSelectedRelationHydrationService : ISelectedRelationH
             {
                 hydratedById.TryAdd(relation.Id, relation);
             }
-            foreach (var id in uniqueIds)
+            foreach (var id in queryIds)
             {
                 if (hydratedById.TryGetValue(id, out var relation))
                 {
@@ -83,7 +93,7 @@ public sealed class DefaultSelectedRelationHydrationService : ISelectedRelationH
         else
         {
             source = "relation-store-fallback";
-            foreach (var id in uniqueIds)
+            foreach (var id in queryIds)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var relation = await _relationStore.GetAsync(
@@ -104,7 +114,7 @@ public sealed class DefaultSelectedRelationHydrationService : ISelectedRelationH
             OperationId = request.OperationId,
             WorkspaceId = request.WorkspaceId,
             CollectionId = request.CollectionId,
-            RequestedCount = uniqueIds.Length,
+            RequestedCount = requestedIds.Length,
             HydratedCount = relations.Count,
             MissingCount = missing.Count,
             Source = source,

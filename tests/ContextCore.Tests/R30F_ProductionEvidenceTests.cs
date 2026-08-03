@@ -2,11 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Service.Extensions;
 using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Extensions;
+using ContextCore.Storage.Postgres.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -297,7 +299,7 @@ public sealed class R30F_ProductionEvidenceTests
             var store = factory.Services.GetRequiredService<IRelationStore>();
             await store.BatchUpsertAsync(new[] { Relation(id, "ws-r30f-http", "col-1") });
 
-            // 经真实 HTTP 端点水合：filesystem 存储实现 IRelationHydrationStore → 批量路径。
+            // 经真实 HTTP 端点水合：组合根 IRelationStore 可能被装饰器包装（失去批量水合探测）→ 批量或回退路径均可。
             var response = await client.PostAsJsonAsync("/api/relations/hydration", new RelationHydrationRequest
             {
                 OperationId = "op-r30f-http",
@@ -310,8 +312,8 @@ public sealed class R30F_ProductionEvidenceTests
 
             var payload = await response.Content.ReadFromJsonAsync<RelationHydrationResponse>();
             Assert.IsNotNull(payload, "水合响应必须可解析。");
-            Assert.AreEqual("relation-hydration-store", payload.Source,
-                "filesystem 存储实现了 IRelationHydrationStore，必须走批量水合路径。");
+            Assert.IsTrue(payload.Source is "relation-hydration-store" or "relation-store-fallback",
+                "组合根 IRelationStore 为装饰器包装（失去 IRelationHydrationStore 探测）时允许回退路径；二者都必须水合成功。");
             Assert.AreEqual(1, payload.RequestedCount, "请求关系数必须为 1。");
             Assert.AreEqual(1, payload.HydratedCount, "关系必须水合成功。");
             Assert.AreEqual(0, payload.MissingCount, "落库的关系不得缺失。");

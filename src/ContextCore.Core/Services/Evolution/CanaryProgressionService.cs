@@ -783,7 +783,7 @@ public sealed class CanaryProgressionService
         // == 0 表示 legacy 数据（尚未经单真相源写入），交给 canary_pipelines 回退路径。
         var snapshotRestored = new HashSet<string>(StringComparer.Ordinal);
         var snapshotRuns = await _pipelineRunStore.ListRunsByStageAsync(
-            OptimizationStage.ScopedCanary, cancellationToken).ConfigureAwait(false);
+            OptimizationStage.ScopedCanary, take: 100, cancellationToken).ConfigureAwait(false);
         foreach (var run in snapshotRuns)
         {
             if (IsTerminal(run.Status) || run.CanaryRevision <= 0)
