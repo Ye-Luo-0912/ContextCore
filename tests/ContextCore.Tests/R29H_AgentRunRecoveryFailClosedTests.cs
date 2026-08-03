@@ -13,7 +13,8 @@ namespace ContextCore.Tests;
 //   RecoveryDependencyUnavailable：事件存储读取失败 → 标记 RecoveryDependencyUnavailable；
 //   RecoveryBlocked：非 Created 状态但事件流为空（数据丢失）→ 标记 RecoveryBlocked；
 //   Created + 零事件：仍走全新启动路径（无回归）；
-//   状态机：三个恢复失败状态为终态，任意非终态可跳入，终态不可跳出。
+//   状态机：RecoveryBlocked / RecoveryCorrupted 为终态、RecoveryDependencyUnavailable 可重试
+//   （P2-4 退避重试），任意非终态可跳入恢复失败状态，终态不可跳出。
 // ===========================================================================
 
 [TestClass]
@@ -152,21 +153,30 @@ public sealed class R29H_AgentRunRecoveryFailClosedTests
     }
 
     // ---------------------------------------------------------------------------
-    // 状态机：恢复失败状态为终态，任意非终态可跳入
+    // 状态机：RecoveryBlocked/RecoveryCorrupted 为终态；RecoveryDependencyUnavailable 可重试
     // ---------------------------------------------------------------------------
 
     [TestMethod]
     public void StateMachine_RecoveryStates_AreTerminalAndReachableFromNonTerminal()
     {
+        // P2-4：RecoveryBlocked / RecoveryCorrupted（数据损坏）为终态；
+        // RecoveryDependencyUnavailable（依赖暂时不可用）不再是终态——退避重试，由恢复 Worker 重新入队。
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.RecoveryBlocked));
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.RecoveryCorrupted));
-        Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.RecoveryDependencyUnavailable));
+        Assert.IsFalse(AgentRunStateMachine.IsTerminalState(AgentRunState.RecoveryDependencyUnavailable));
+        // 三个状态均属"恢复失败状态"：Actor 主循环据此退出执行槽（fail-closed，不得继续执行）。
+        Assert.IsTrue(AgentRunStateMachine.IsRecoveryFailureState(AgentRunState.RecoveryBlocked));
+        Assert.IsTrue(AgentRunStateMachine.IsRecoveryFailureState(AgentRunState.RecoveryCorrupted));
+        Assert.IsTrue(AgentRunStateMachine.IsRecoveryFailureState(AgentRunState.RecoveryDependencyUnavailable));
 
         // 任意非终态可跳入恢复失败状态（fail-closed 短路）。
         AgentRunStateMachine.ValidateTransition(AgentRunState.ContextBuilding, AgentRunState.RecoveryBlocked);
         AgentRunStateMachine.ValidateTransition(AgentRunState.ModelCalling, AgentRunState.RecoveryCorrupted);
         AgentRunStateMachine.ValidateTransition(AgentRunState.ToolDispatching, AgentRunState.RecoveryDependencyUnavailable);
         AgentRunStateMachine.ValidateTransition(AgentRunState.AwaitingApproval, AgentRunState.RecoveryBlocked);
+
+        // P2-4：RecoveryDependencyUnavailable → ContextBuilding 为合法前向流转（退避重试恢复执行）。
+        AgentRunStateMachine.ValidateTransition(AgentRunState.RecoveryDependencyUnavailable, AgentRunState.ContextBuilding);
     }
 
     [TestMethod]

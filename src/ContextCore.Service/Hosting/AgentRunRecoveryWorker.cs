@@ -66,6 +66,10 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// 审批决策由外部 POST /approvals/{approvalId} 端点提交，端点将状态推进到
     /// PendingToolExecution（批准）或 Failed（拒绝）后才由 Recovery Worker 重新入队执行。
     /// 周期性重启 AwaitingApproval 会导致 Actor 重复加载审批状态、重复持久化 ApprovalRequested 事件。
+    ///
+    /// P2-4：RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
+    /// 由本 Worker 在退避门（NextRetryAtUtc）通过后重新入队执行（退避期内跳过，不触发
+    /// 超时→LeaseLost 逻辑；LeaseLost 会把等待退避的 Run 误判为卡死并移出恢复路径）。
     /// </remarks>
     private static readonly AgentRunState[] RecoverableStates =
     [
@@ -75,7 +79,8 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
         AgentRunState.ToolDispatching,
         AgentRunState.Observing,
         AgentRunState.Checkpointing,
-        AgentRunState.PendingToolExecution
+        AgentRunState.PendingToolExecution,
+        AgentRunState.RecoveryDependencyUnavailable
     ];
 
     public AgentRunRecoveryWorker(
@@ -190,6 +195,38 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
             foreach (var run in runs)
             {
+                // P2-4 Recovery Integrity State：RecoveryDependencyUnavailable（17）是退避重试状态。
+                // 跳过超时→LeaseLost 逻辑（Run 是故意等待退避门而非卡死——标记 LeaseLost 会把它
+                // 移出恢复路径，破坏 fail-closed 语义），并在退避门（NextRetryAtUtc）未通过时
+                // 跳过本轮入队；通过后重新入队，Actor 恢复路径重新读取事件流（依赖已恢复则继续，
+                // 仍未恢复则再次进入 17 并递增 RecoveryAttempt）。
+                if (run.State == AgentRunState.RecoveryDependencyUnavailable)
+                {
+                    if (run.NextRetryAtUtc is not null && run.NextRetryAtUtc > now)
+                    {
+                        _logger.LogDebug(
+                            "AgentRunRecoveryWorker: Run {RunId} 处于 RecoveryDependencyUnavailable，退避门未到（{NextRetryAt}），跳过。",
+                            run.RunId, run.NextRetryAtUtc);
+                        continue;
+                    }
+                    try
+                    {
+                        await host.StartRunAsync(run, cancellationToken).ConfigureAwait(false);
+                        totalRecovered++;
+                        _logger.LogInformation(
+                            "AgentRunRecoveryWorker: 恢复 Run {RunId}（状态=RecoveryDependencyUnavailable，退避门已过，workspace={WorkspaceId}，attempt={Attempt}）。",
+                            run.RunId, run.WorkspaceId, run.RecoveryAttempt);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 单个 Run 恢复失败不中断整个扫描
+                        _logger.LogError(ex,
+                            "AgentRunRecoveryWorker: 恢复 Run {RunId} 失败（状态=RecoveryDependencyUnavailable）。",
+                            run.RunId);
+                    }
+                    continue;
+                }
+
                 // 运行时能力补齐：超时检测
                 // Run 在非终态停留超过 RunExecutionTimeout 且无人持有租约 → 原子标记为 LeaseLost
                 // （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；

@@ -110,6 +110,11 @@ public sealed class AgentRunActor
     // Tool 副作用 fence 使用它替代 Run.DeadlineAt 推导值，让 fence 边界与数据库 lease_expires_at 一致。
     private Func<DateTimeOffset?>? _leaseExpiresAtProvider;
 
+    // P2-4 Recovery Integrity State：Host 选项（提供恢复退避参数；null 时用默认值）。
+    private readonly AgentHostOptions? _hostOptions;
+    // P2-4 Recovery Integrity State：人工介入告警接收器（null = 不告警，best-effort 钩子）。
+    private readonly IRecoveryAlertSink? _alertSink;
+
     /// <summary>
     /// 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
     /// 统一管理 Run 元数据 / 结构化上下文 / 模型响应 / checkpoint / 事件序列与哈希链。
@@ -181,6 +186,8 @@ public sealed class AgentRunActor
     /// <param name="approvalStore">审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
     /// <param name="reconciliationStore">Tool 对账记录存储（null 时跳过"未裁决不完成"约束）。</param>
     /// <param name="toolCatalog">Tool 目录（提供模型 function calling 声明；null 时回退到 toolDispatcher 的 IToolCatalog 实现，均无则空列表）。</param>
+    /// <param name="hostOptions">Host 选项（提供恢复退避参数；null 时用默认值 30s base / 30min cap）。</param>
+    /// <param name="alertSink">人工介入告警接收器（null = 不告警；best-effort 钩子）。</param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -196,7 +203,9 @@ public sealed class AgentRunActor
         IDurableToolExecutor? durableToolExecutor = null,
         IAgentModelContextProjector? modelContextProjector = null,
         IToolReconciliationStore? reconciliationStore = null,
-        IToolCatalog? toolCatalog = null)
+        IToolCatalog? toolCatalog = null,
+        AgentHostOptions? hostOptions = null,
+        IRecoveryAlertSink? alertSink = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -220,6 +229,8 @@ public sealed class AgentRunActor
             ?? Array.Empty<AgentToolDefinition>();
         _modelCallsUsed = 0;
         _turnStartState = AgentRunState.Created;
+        _hostOptions = hostOptions;
+        _alertSink = alertSink;
     }
 
     /// <summary>
@@ -332,7 +343,13 @@ public sealed class AgentRunActor
             // 无需再推进（避免重复 StateTransition 事件）
 
             // 主循环
-            while (!AgentRunStateMachine.IsTerminalState(state.Run.State) && !cancellationToken.IsCancellationRequested)
+            // P2-4 Recovery Integrity State：进入恢复失败状态后立即退出执行槽。
+            // RecoveryDependencyUnavailable 虽非终态（依赖恢复后由恢复 Worker 在退避门通过后
+            // 重新入队执行），但 fail-closed 下不得在本次执行槽内继续推进——依赖不可用时执行
+            // 任何 Agent 逻辑（调用模型 / 分派 Tool）都基于不可信上下文，可能重复外部副作用。
+            while (!AgentRunStateMachine.IsTerminalState(state.Run.State)
+                   && !AgentRunStateMachine.IsRecoveryFailureState(state.Run.State)
+                   && !cancellationToken.IsCancellationRequested)
             {
                 // 审批通过后从 PendingToolExecution 状态恢复——直接执行原 Tool，不重新调用模型。
                 // #6：PendingToolCommands 为列表，依次执行同轮所有未完成 Tool Call。
@@ -707,20 +724,27 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// 进入恢复失败终态（fail-closed）并尽力持久化。
+    /// 进入恢复失败状态（fail-closed）并尽力持久化。
     /// </summary>
     /// <param name="state">当前执行状态。</param>
     /// <param name="recoveryState">恢复失败状态（RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>已标记恢复失败状态的执行状态（本地为终态，主循环不会执行）。</returns>
+    /// <returns>已标记恢复失败状态的执行状态（本地为恢复失败状态，主循环不会执行）。</returns>
     /// <remarks>
     /// 恢复失败路径不向事件流追加事件：事件流本身可能已损坏或不可用，追加 StateTransition
     /// 事件需要读取真实尾事件作为序列/哈希链锚点，而依赖不可用时无法读取；且向待运维修复的
     /// 事件流写入会引入更多不确定状态。因此采用状态直写（与 RecoveryWorker / Endpoints 的
     /// "无事件状态推进"路径一致）：run store 的 state CAS（expected = _turnStartState）+
-    /// 字段更新（FailureReason）。持久化失败（典型场景：RecoveryDependencyUnavailable 时
-    /// 存储本身不可用）时静默降级并记录警告——Run 保持原非终态，由 RecoveryWorker 在依赖
-    /// 恢复后重试恢复；不抛给 FailAsync，避免把恢复失败误标为 Failed 而丢失 Recovery* 语义。
+    /// 字段更新（FailureReason / RecoveryAttempt / NextRetryAtUtc）。持久化失败（典型场景：
+    /// RecoveryDependencyUnavailable 时存储本身不可用）时静默降级并记录警告——Run 保持原
+    /// 非终态，由 RecoveryWorker 在依赖恢复后重试恢复；不抛给 FailAsync，避免把恢复失败
+    /// 误标为 Failed 而丢失 Recovery* 语义。
+    ///
+    /// P2-4 Recovery Integrity State：
+    ///   - RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入），每次进入均告警；
+    ///   - RecoveryDependencyUnavailable 可重试：按指数退避（base × 2^(attempt-1)，封顶 cap）
+    ///     计算 <see cref="AgentRun.NextRetryAtUtc"/>，递增 <see cref="AgentRun.RecoveryAttempt"/>，
+    ///     由 Recovery Worker 在退避门通过后重新入队；仅首次（attempt==1）告警避免告警风暴。
     /// </remarks>
     private async Task<AgentRunExecutionState> EnterRecoveryFailureStateAsync(
         AgentRunExecutionState state,
@@ -734,17 +758,85 @@ public sealed class AgentRunActor
             _ => "RecoveryDependencyUnavailable：事件存储不可用，等待依赖恢复后由恢复 Worker 重试。"
         };
 
-        // 本地推进为终态（不缓冲事件）：主循环据此退出，不执行任何 Agent 逻辑。
+        // P2-4 退避重试：仅 RecoveryDependencyUnavailable 可重试（依赖暂时不可用，非数据损坏）。
+        // 计算本次恢复失败尝试序号与下次重试门（指数退避 base × 2^(attempt-1)，封顶 cap）。
+        // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏），不计算退避、不自动重试。
+        var isRetryable = recoveryState == AgentRunState.RecoveryDependencyUnavailable;
+        var recoveryAttempt = isRetryable ? state.Run.RecoveryAttempt + 1 : 0;
+        DateTimeOffset? nextRetryAtUtc = null;
+        if (isRetryable)
+        {
+            var backoffBase = _hostOptions?.RetryBackoffBase > TimeSpan.Zero
+                ? _hostOptions.RetryBackoffBase
+                : TimeSpan.FromSeconds(30);
+            var backoffCap = _hostOptions?.RetryBackoffMax > TimeSpan.Zero
+                ? _hostOptions.RetryBackoffMax
+                : TimeSpan.FromMinutes(30);
+            var baseDelay = backoffBase > backoffCap ? backoffCap : backoffBase;
+            // attempt 从 1 开始：首次失败等待 1×base，与 Durable Scheduler 的重试退避语义对齐
+            //（retry_count 从 0 起算时同样 base × 2^(retry_count)）。
+            var delay = baseDelay * Math.Pow(2, Math.Max(0, recoveryAttempt - 1));
+            if (delay > backoffCap)
+            {
+                delay = backoffCap;
+            }
+            nextRetryAtUtc = DateTimeOffset.UtcNow + delay;
+        }
+
+        // 本地推进为恢复失败状态（不缓冲事件）：主循环据此退出，不执行任何 Agent 逻辑。
         state = TransitionStateLocal(state, recoveryState, bufferEvent: false);
         try
         {
             await _runStore.TransitionStateAsync(
                 state.Run.WorkspaceId, state.Run.RunId, _turnStartState, recoveryState,
                 cancellationToken, _leaseToken, _fencingToken).ConfigureAwait(false);
+            // RecoveryAttempt / NextRetryAtUtc 仅写入 jsonb（data 全量序列化），无独立列、无迁移。
             await _runStore.UpdateAsync(
-                state.Run with { FailureReason = failureReason, UpdatedAt = DateTimeOffset.UtcNow },
+                state.Run with
+                {
+                    FailureReason = failureReason,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    RecoveryAttempt = isRetryable ? recoveryAttempt : state.Run.RecoveryAttempt,
+                    NextRetryAtUtc = nextRetryAtUtc
+                },
                 cancellationToken).ConfigureAwait(false);
             _turnStartState = recoveryState;
+
+            // P2-4 人工介入告警（best-effort，仅在持久化成功后投递）：
+            //  - RecoveryBlocked / RecoveryCorrupted：数据损坏级事件，每次进入均告警。
+            //  - RecoveryDependencyUnavailable：仅首次（RecoveryAttempt == 1）告警，
+            //    持续不可用时只记日志，避免告警风暴；依赖长期不恢复仍由运维巡检发现。
+            var alertKind = recoveryState switch
+            {
+                AgentRunState.RecoveryBlocked => AgentRunAlertKind.RecoveryBlocked,
+                AgentRunState.RecoveryCorrupted => AgentRunAlertKind.RecoveryCorrupted,
+                _ => AgentRunAlertKind.RecoveryDependencyUnavailable
+            };
+            var shouldAlert = _alertSink is not null
+                && (alertKind != AgentRunAlertKind.RecoveryDependencyUnavailable || recoveryAttempt == 1);
+            if (shouldAlert)
+            {
+                var alert = new AgentRunAlert
+                {
+                    RunId = state.Run.RunId,
+                    WorkspaceId = state.Run.WorkspaceId,
+                    SessionId = state.Run.SessionId,
+                    Kind = alertKind,
+                    Reason = failureReason,
+                    Attempt = alertKind == AgentRunAlertKind.RecoveryDependencyUnavailable ? recoveryAttempt : 0
+                };
+                try
+                {
+                    await _alertSink!.NotifyInterventionRequiredAsync(alert, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception alertEx)
+                {
+                    // best-effort：告警投递失败不阻断执行（catch + log）。
+                    System.Diagnostics.Trace.TraceWarning(
+                        "[AgentRunActor] 投递人工介入告警 {0} 失败（run={1}，workspace={2}）：{3}。",
+                        alertKind, state.Run.RunId, state.Run.WorkspaceId, alertEx.Message);
+                }
+            }
         }
         catch (Exception ex)
         {

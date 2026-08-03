@@ -120,6 +120,8 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
         var deadLetterBatch = options.DeadLetterBatchSize > 0 ? options.DeadLetterBatchSize : 50;
         var claimBatch = options.PendingClaimBatchSize > 0 ? options.PendingClaimBatchSize : 50;
         var perWorkspace = options.PendingClaimPerWorkspace > 0 ? options.PendingClaimPerWorkspace : 10;
+        // P2-4 Recovery Integrity State：人工介入告警接收器（未注册时跳过告警，best-effort 钩子）。
+        var alertSink = scope.ServiceProvider.GetService<IRecoveryAlertSink>();
 
         // 1. 死信重试耗尽的 Run（Failed 且 retry_count >= max_retries）。
         IReadOnlyList<AgentRun> deadLettered;
@@ -142,6 +144,8 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
             _logger.LogWarning(
                 "PostgresPendingRunClaimer: 死信 {Count} 个重试耗尽的 Run（retry_count 达到 max_retries，需运维介入）。",
                 deadLettered.Count);
+            // P2-4：死信属需人工介入事件（重试预算耗尽），best-effort 投递告警。
+            await NotifyDeadLetterAlertsAsync(alertSink, deadLettered).ConfigureAwait(false);
         }
 
         // 2. 领取 pending Run（SKIP LOCKED，优先级倒序 + 每 workspace 公平上限）。
@@ -169,6 +173,7 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
 
         var enqueued = 0;
         var retried = 0;
+        var recoveryClaimed = 0;
         foreach (var run in claimed)
         {
             var result = await host.TryEnqueueAsync(run, cancellationToken).ConfigureAwait(false);
@@ -187,15 +192,54 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
                 {
                     retried++;
                 }
+                // P2-4：RecoveryDependencyUnavailable 的 Run 被领取 = 恢复依赖重试（非 Failed 重试）。
+                if (run.State == AgentRunState.RecoveryDependencyUnavailable)
+                {
+                    recoveryClaimed++;
+                }
             }
             // AlreadyActive：同进程已有活跃 Run（重复入队竞争）→ 跳过，非错误。
         }
 
-        if (enqueued > 0 || retried > 0)
+        if (enqueued > 0 || retried > 0 || recoveryClaimed > 0)
         {
             _logger.LogInformation(
-                "PostgresPendingRunClaimer: 本周期入队 {Enqueued} 个 Run（其中重试 {Retried} 个）。",
-                enqueued, retried);
+                "PostgresPendingRunClaimer: 本周期入队 {Enqueued} 个 Run（其中重试 {Retried} 个，恢复依赖重试 {RecoveryClaimed} 个）。",
+                enqueued, retried, recoveryClaimed);
+        }
+    }
+
+    /// <summary>
+    /// P2-4：死信 Run 人工介入告警（best-effort，失败不阻断领取周期）。
+    /// </summary>
+    private static async Task NotifyDeadLetterAlertsAsync(IRecoveryAlertSink? alertSink, IReadOnlyList<AgentRun> deadLettered)
+    {
+        if (alertSink is null)
+        {
+            return;
+        }
+        foreach (var run in deadLettered)
+        {
+            var alert = new AgentRunAlert
+            {
+                RunId = run.RunId,
+                WorkspaceId = run.WorkspaceId,
+                SessionId = run.SessionId,
+                Kind = AgentRunAlertKind.DeadLetterExhausted,
+                Reason = $"DeadLettered：重试预算耗尽（retry_count={run.RetryCount}，max_retries={run.MaxRetries}），需运维介入排查失败根因。",
+                Attempt = run.RetryCount
+            };
+            try
+            {
+                await alertSink.NotifyInterventionRequiredAsync(alert, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // best-effort：告警投递失败不阻断领取周期（catch + log）。
+                System.Diagnostics.Trace.TraceWarning(
+                    "[PostgresPendingRunClaimer] 投递死信告警失败（run={0}，workspace={1}）：{2}。",
+                    run.RunId, run.WorkspaceId, ex.Message);
+            }
         }
     }
 }

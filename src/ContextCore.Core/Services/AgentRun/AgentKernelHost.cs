@@ -792,6 +792,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var reconciliationStore = _serviceProvider.GetService(typeof(IToolReconciliationStore)) as IToolReconciliationStore;
         // 解析 IToolCatalog（提供模型 function calling 的 Tool 定义；未注册时 Actor 回退到 dispatcher 实现）
         var toolCatalog = _serviceProvider.GetService(typeof(IToolCatalog)) as IToolCatalog;
+        // P2-4 Recovery Integrity State：解析人工介入告警接收器（未注册时 Actor 不告警，best-effort 钩子）。
+        var recoveryAlertSink = _serviceProvider.GetService(typeof(IRecoveryAlertSink)) as IRecoveryAlertSink;
 
         return new AgentRunActor(
             _runStore,
@@ -808,7 +810,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             durableToolExecutor,
             modelContextProjector,
             reconciliationStore,
-            toolCatalog);
+            toolCatalog,
+            _options,
+            recoveryAlertSink);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

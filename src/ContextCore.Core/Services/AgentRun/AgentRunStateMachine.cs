@@ -83,11 +83,13 @@ public static class AgentRunStateMachine
         {
             throw new InvalidOperationException(
                 $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
-                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/RecoveryDependencyUnavailable/DeadLettered）不可再推进。");
+                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered）不可再推进。");
         }
 
-        // 恢复失败状态（fail-closed）：任意非终态可跳入；进入后即为终态，
-        // 等待运维介入（不自动重试、不推进、不回退为全新启动）。
+        // 恢复失败状态（fail-closed）：任意非终态可跳入。
+        // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入，不自动重试）；
+        // RecoveryDependencyUnavailable 为可重试状态（依赖恢复后由恢复 Worker 在退避门通过后
+        // 重新入队执行），其 → ContextBuilding 的合法流转在 IsValidForwardTransition 中声明。
         if (to == AgentRunState.RecoveryBlocked
             || to == AgentRunState.RecoveryCorrupted
             || to == AgentRunState.RecoveryDependencyUnavailable)
@@ -107,8 +109,13 @@ public static class AgentRunStateMachine
 
     /// <summary>
     /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost / ReconciliationRejected /
-    /// RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable / DeadLettered）。
+    /// RecoveryBlocked / RecoveryCorrupted / DeadLettered）。
     /// </summary>
+    /// <remarks>
+    /// <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 不是终态：它表示恢复依赖（事件存储）
+    /// 暂时不可用，fail-closed 下不得回退为全新启动，但依赖恢复后由恢复 Worker 在退避门
+    /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（P2-4 退避重试）。
+    /// </remarks>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
     public static bool IsTerminalState(AgentRunState state)
@@ -119,8 +126,22 @@ public static class AgentRunStateMachine
            || state == AgentRunState.ReconciliationRejected
            || state == AgentRunState.RecoveryBlocked
            || state == AgentRunState.RecoveryCorrupted
-           || state == AgentRunState.RecoveryDependencyUnavailable
            || state == AgentRunState.DeadLettered;
+
+    /// <summary>
+    /// 判断指定状态是否为恢复失败状态（RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable）。
+    /// </summary>
+    /// <remarks>
+    /// Actor 主循环据此退出执行槽：进入恢复失败状态后不得继续执行任何 Agent 逻辑
+    /// （RecoveryDependencyUnavailable 虽非终态，但 fail-closed 下同样不得继续执行，
+    /// 需等待恢复 Worker 在退避门通过后重新入队，而非在本次执行槽内继续推进）。
+    /// </remarks>
+    /// <param name="state">待判断的状态。</param>
+    /// <returns>恢复失败状态返回 true；否则返回 false。</returns>
+    public static bool IsRecoveryFailureState(AgentRunState state)
+        => state == AgentRunState.RecoveryBlocked
+           || state == AgentRunState.RecoveryCorrupted
+           || state == AgentRunState.RecoveryDependencyUnavailable;
 
     /// <summary>
     /// 判断 from → to 是否为合法前向推进（不含 Failed/Cancelled 短路；调用方已先短路）。
@@ -188,6 +209,12 @@ public static class AgentRunStateMachine
 
             // ReconciliationRejected 已是终态（仅可跳转 Failed/Cancelled，由调用方短路处理）
             AgentRunState.ReconciliationRejected => false,
+
+            // RecoveryDependencyUnavailable → ContextBuilding（P2-4 退避重试）：
+            // 恢复依赖（事件存储）恢复后，由恢复 Worker 在退避门（NextRetryAtUtc）通过后
+            // 重新入队执行；Actor 恢复路径将本地状态规范化为 ContextBuilding。
+            // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入），不在此声明。
+            AgentRunState.RecoveryDependencyUnavailable => to == AgentRunState.ContextBuilding,
 
             // 终态已在调用方短路；此处不应到达
             _ => false

@@ -309,6 +309,14 @@ public sealed record AgentRun
     /// 防止重试热点循环（失败 → 重置 → 立即再执行）。
     /// </summary>
     public DateTimeOffset? NextRetryAtUtc { get; init; }
+
+    /// <summary>
+    /// 恢复失败重试次数（仅 jsonb 持久化，无独立列）。
+    /// 每次 Run 进入 <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 时递增，
+    /// 并按指数退避计算 <see cref="NextRetryAtUtc"/>（base × 2^(attempt-1)，封顶 cap）。
+    /// 依赖恢复后由 Recovery Worker 在退避门通过后重新入队执行；0 表示尚未发生过恢复失败。
+    /// </summary>
+    public int RecoveryAttempt { get; init; }
 }
 
 /// <summary>
@@ -2357,4 +2365,86 @@ public sealed record ApprovalResolveResult
 
     /// <summary>Run 推进后的新状态（RunStateChanged=true 时填充）。</summary>
     public AgentRunState? NewRunState { get; init; }
+}
+
+// ── Recovery Integrity State（恢复完整性：退避重试 + 人工介入告警钩子）──────
+
+/// <summary>
+/// Agent Run 需人工介入的告警类别。
+/// </summary>
+public enum AgentRunAlertKind : byte
+{
+    /// <summary>
+    /// 恢复被阻塞（RecoveryBlocked）：事件流为空（事件数据丢失），无法安全重建执行状态。
+    /// 每次进入该状态均告警——属数据损坏级事件，需运维介入修复或重建 Run。
+    /// </summary>
+    RecoveryBlocked = 0,
+
+    /// <summary>
+    /// 恢复发现事件流损坏（RecoveryCorrupted）：哈希链断裂 / 序列不连续 / ContentHash 重算不匹配。
+    /// 每次进入该状态均告警——属数据损坏级事件，需运维介入修复事件流。
+    /// </summary>
+    RecoveryCorrupted = 1,
+
+    /// <summary>
+    /// 重试耗尽死信（DeadLettered）：Run 的 RetryCount 达到 MaxRetries 仍持续失败。
+    /// 由 Durable Scheduler 在死信标记后告警——需运维介入排查失败根因。
+    /// </summary>
+    DeadLetterExhausted = 2,
+
+    /// <summary>
+    /// 恢复依赖不可用（RecoveryDependencyUnavailable）：事件存储读取失败。
+    /// 仅在首次（RecoveryAttempt == 1）告警——依赖恢复后由恢复 Worker 自动重试，
+    /// 持续不可用时仅记日志，避免告警风暴；长期不恢复仍需运维介入。
+    /// </summary>
+    RecoveryDependencyUnavailable = 3
+}
+
+/// <summary>
+/// 需人工介入的 Agent Run 告警（发布到 <see cref="IRecoveryAlertSink"/>）。
+/// </summary>
+public sealed record AgentRunAlert
+{
+    /// <summary>Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>Workspace ID（隔离边界）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>Session ID（可选；审计上下文）。</summary>
+    public string? SessionId { get; init; }
+
+    /// <summary>告警类别。</summary>
+    public required AgentRunAlertKind Kind { get; init; }
+
+    /// <summary>告警原因（人类可读，含状态机 failure reason / 失败摘要）。</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>
+    /// 关联的重试计数：DeadLetterExhausted 为 <c>RetryCount</c>；
+    /// RecoveryDependencyUnavailable 为 <c>RecoveryAttempt</c>；其余为 0。
+    /// </summary>
+    public int Attempt { get; init; }
+
+    /// <summary>告警发生时间（UTC）。</summary>
+    public DateTimeOffset OccurredAtUtc { get; init; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// 人工介入告警接收器（Recovery Integrity State 的告警钩子）。
+/// </summary>
+/// <remarks>
+/// 生产环境将告警投递到 PagerDuty / Slack / 邮件等人工通道；默认实现
+/// <c>LoggingRecoveryAlertSink</c> 仅记录 <c>LogWarning</c>/<c>LogError</c> 日志。
+/// 告警投递为 best-effort：失败不阻断 Run 状态推进（catch + log），
+/// 保证告警基础设施故障不影响 Agent 执行循环。
+/// </remarks>
+public interface IRecoveryAlertSink
+{
+    /// <summary>
+    /// 通知需人工介入的 Run 恢复事件。
+    /// </summary>
+    /// <param name="alert">告警内容（RunId / Kind / Reason / Attempt / OccurredAtUtc）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask NotifyInterventionRequiredAsync(AgentRunAlert alert, CancellationToken cancellationToken = default);
 }

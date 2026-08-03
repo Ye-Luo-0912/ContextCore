@@ -425,7 +425,7 @@ LIMIT @take;
 
     /// <inheritdoc />
     /// <remarks>
-    /// 单条 SQL 事务内完成"领取 Created + 重试重置 Failed"：
+    /// 单条 SQL 事务内完成"领取 Created + 重试重置 Failed + 恢复依赖重试"：
     ///   1. 三层嵌套（Postgres 限制：FOR UPDATE 不能与窗口函数同层）：
     ///      内层 SELECT ... FOR UPDATE SKIP LOCKED（锁定候选行，被锁行跳过下轮再取）；
     ///      中层 ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY priority DESC, created_at ASC, run_id ASC)
@@ -434,6 +434,9 @@ LIMIT @take;
     ///   2. UPDATE ... FROM eligible：state=8（Failed）且可重试的行重置为 Created + retry_count+1 +
     ///      next_retry_at=指数退避（base × 2^(retry_count-1)，封顶 cap）；Created 行仅锁定领取、状态不变
     ///      （Actor 以 state=Created 判定全新启动，领取不改状态列）。
+    ///      P2-4：state=17（RecoveryDependencyUnavailable）可重试且非终态——退避门
+    ///      （NextRetryAtUtc）通过后同样领取，但状态列与事件流均保持不变（Actor 恢复路径将本地
+    ///      状态规范化为 ContextBuilding 后重新执行，事件流按哈希链重放，不回退为全新启动）。
     ///   3. 重试重置行同步清空事件流（DELETE FROM agent_run_events）与 checkpoint 指针——
     ///      全新启动需事件链从 sequence 0 重新开始，残留的失败尝试事件会导致 AppendBatchAsync 链校验失败。
     ///   4. data jsonb 同步打补丁（State/UpdatedAt/RetryCount/NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），
@@ -489,6 +492,13 @@ WITH eligible AS (
                 -- Failed 且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
                 (state = 8 AND max_retries > 0 AND retry_count < max_retries
                  AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
+                OR
+                -- P2-4 Recovery Integrity State：恢复依赖不可用（state = 17）为可重试状态（非终态），
+                -- 退避门（NextRetryAtUtc）通过后由 Durable Scheduler 领取重新入队。
+                -- 领取不改状态列（CASE WHEN ar.state = 8 的 ELSE 分支仅打 UpdatedAt 补丁），
+                -- Actor 恢复路径将本地状态规范化为 ContextBuilding 后重新执行；事件流保留
+                --（依赖恢复后按哈希链重放，不回退为全新启动）。
+                (state = 17 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
             )
             ORDER BY priority DESC, created_at ASC, run_id ASC
             LIMIT @take

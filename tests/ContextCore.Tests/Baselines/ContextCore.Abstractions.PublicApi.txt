@@ -46,6 +46,10 @@ F:ContextCore.Abstractions.AgentModelMode.RealModel
 F:ContextCore.Abstractions.AgentRetrievalQueryType.Hybrid
 F:ContextCore.Abstractions.AgentRetrievalQueryType.Keyword
 F:ContextCore.Abstractions.AgentRetrievalQueryType.Vector
+F:ContextCore.Abstractions.AgentRunAlertKind.DeadLetterExhausted
+F:ContextCore.Abstractions.AgentRunAlertKind.RecoveryBlocked
+F:ContextCore.Abstractions.AgentRunAlertKind.RecoveryCorrupted
+F:ContextCore.Abstractions.AgentRunAlertKind.RecoveryDependencyUnavailable
 F:ContextCore.Abstractions.AgentRunEnqueueStatus.Accepted
 F:ContextCore.Abstractions.AgentRunEnqueueStatus.AlreadyActive
 F:ContextCore.Abstractions.AgentRunEnqueueStatus.Closed
@@ -1260,6 +1264,13 @@ M:ContextCore.Abstractions.AgentRun.Equals(System.Object)
 M:ContextCore.Abstractions.AgentRun.GetHashCode()
 M:ContextCore.Abstractions.AgentRun.GetType()
 M:ContextCore.Abstractions.AgentRun.ToString()
+M:ContextCore.Abstractions.AgentRunAlert.#ctor()
+M:ContextCore.Abstractions.AgentRunAlert.<Clone>$()
+M:ContextCore.Abstractions.AgentRunAlert.Equals(ContextCore.Abstractions.AgentRunAlert)
+M:ContextCore.Abstractions.AgentRunAlert.Equals(System.Object)
+M:ContextCore.Abstractions.AgentRunAlert.GetHashCode()
+M:ContextCore.Abstractions.AgentRunAlert.GetType()
+M:ContextCore.Abstractions.AgentRunAlert.ToString()
 M:ContextCore.Abstractions.AgentRunCreateResult.#ctor()
 M:ContextCore.Abstractions.AgentRunCreateResult.<Clone>$()
 M:ContextCore.Abstractions.AgentRunCreateResult.Equals(ContextCore.Abstractions.AgentRunCreateResult)
@@ -2395,6 +2406,7 @@ M:ContextCore.Abstractions.IPromotionJudge.JudgeAsync(ContextCore.Abstractions.P
 M:ContextCore.Abstractions.IPromotionPolicyEvaluator.Evaluate(ContextCore.Abstractions.Models.PromotionEvaluationRequest)
 M:ContextCore.Abstractions.IPromotionRecordStore.QueryPromotionRecordsAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPromotionRecordStore.SavePromotionRecordAsync(ContextCore.Abstractions.Models.ContextPromotionRecord, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRecoveryAlertSink.NotifyInterventionRequiredAsync(ContextCore.Abstractions.AgentRunAlert, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationBackfillPolicy.CanBackfillDeterministicEvidence(ContextCore.Abstractions.Models.ContextRelation)
 M:ContextCore.Abstractions.IRelationBackfillPolicy.NormalizeAndBackfillFixtureRelation(ContextCore.Abstractions.Models.ContextRelation, System.String)
 M:ContextCore.Abstractions.IRelationHydrationStore.HydrateRelationsAsync(System.String, System.String, System.Collections.Generic.IReadOnlyList<System.String>, System.Threading.CancellationToken)
@@ -5688,6 +5700,7 @@ P:ContextCore.Abstractions.AgentRun.ModelCallsUsed (get|init)
 P:ContextCore.Abstractions.AgentRun.ModelContextTokenBudget (get|init)
 P:ContextCore.Abstractions.AgentRun.NextRetryAtUtc (get|init)
 P:ContextCore.Abstractions.AgentRun.Priority (get|init)
+P:ContextCore.Abstractions.AgentRun.RecoveryAttempt (get|init)
 P:ContextCore.Abstractions.AgentRun.RetryCount (get|init)
 P:ContextCore.Abstractions.AgentRun.RunId (get|init)
 P:ContextCore.Abstractions.AgentRun.SessionId (get|init)
@@ -5697,6 +5710,13 @@ P:ContextCore.Abstractions.AgentRun.Turn (get|init)
 P:ContextCore.Abstractions.AgentRun.TurnBudget (get|init)
 P:ContextCore.Abstractions.AgentRun.UpdatedAt (get|init)
 P:ContextCore.Abstractions.AgentRun.WorkspaceId (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.Attempt (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.Kind (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.OccurredAtUtc (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.Reason (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.RunId (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.SessionId (get|init)
+P:ContextCore.Abstractions.AgentRunAlert.WorkspaceId (get|init)
 P:ContextCore.Abstractions.AgentRunCreateResult.Created (get|init)
 P:ContextCore.Abstractions.AgentRunCreateResult.Run (get|init)
 P:ContextCore.Abstractions.AgentRunCreateResult.WasExisting (get|init)
@@ -11165,6 +11185,8 @@ T:ContextCore.Abstractions.AgentRetrievalPlannerInput
 T:ContextCore.Abstractions.AgentRetrievalQuery
 T:ContextCore.Abstractions.AgentRetrievalQueryType (Enum)
 T:ContextCore.Abstractions.AgentRun
+T:ContextCore.Abstractions.AgentRunAlert
+T:ContextCore.Abstractions.AgentRunAlertKind (Enum)
 T:ContextCore.Abstractions.AgentRunCreateResult
 T:ContextCore.Abstractions.AgentRunEnqueueResult
 T:ContextCore.Abstractions.AgentRunEnqueueStatus (Enum)
@@ -11453,6 +11475,7 @@ T:ContextCore.Abstractions.IPromotionCandidateStore (Interface)
 T:ContextCore.Abstractions.IPromotionJudge (Interface)
 T:ContextCore.Abstractions.IPromotionPolicyEvaluator (Interface)
 T:ContextCore.Abstractions.IPromotionRecordStore (Interface)
+T:ContextCore.Abstractions.IRecoveryAlertSink (Interface)
 T:ContextCore.Abstractions.IRelationBackfillPolicy (Interface)
 T:ContextCore.Abstractions.IRelationHydrationStore (Interface)
 T:ContextCore.Abstractions.IRelationOutboxStore (Interface)

@@ -889,6 +889,10 @@ internal static class CoreExtensions
 		// 子问题 9：AgentHostOptions 配置（默认单节点模式；生产部署通过配置覆盖）。
 		services.TryAddSingleton(AgentHostOptionsDefaultFactory);
 
+		// P2-4 Recovery Integrity State：人工介入告警接收器（默认日志实现；
+		// 生产环境可注册 PagerDuty / Slack 等真实通道覆盖——TryAddSingleton 不覆盖已注册实现）。
+		services.TryAddSingleton<IRecoveryAlertSink, LoggingRecoveryAlertSink>();
+
 		// 子问题 8：AgentKernelHost（Singleton，per-run Actor 通过 IServiceProvider 解析）。
 		services.TryAddSingleton<AgentKernelHost>();
 		// Agent Run 调度器抽象与 Host 同实例注册（端点经 IAgentRunScheduler 非阻塞入队，
