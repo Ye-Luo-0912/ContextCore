@@ -181,6 +181,48 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
         }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// 单真相源写入 canary 状态（WP-D）。CAS 语义：仅当 run 的
+    /// <see cref="PipelineRunSnapshot.CanaryRevision"/> == <paramref name="expectedCanaryRevision"/>
+    /// 时更新 canary_percentage / canary_revision / canary_epoch（CanaryRevision = 期望值 + 1）。
+    /// </remarks>
+    public Task<PipelineRunSnapshot?> UpdateCanaryStateAsync(
+        string runId,
+        long expectedCanaryRevision,
+        int newPercentage,
+        long newEpoch,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_transitionLock)
+        {
+            if (!_runs.TryGetValue(runId, out var current))
+            {
+                return Task.FromResult<PipelineRunSnapshot?>(null);
+            }
+
+            // CAS 检查：canary revision 不匹配 → 已被其他推进者更新
+            if (current.CanaryRevision != expectedCanaryRevision)
+            {
+                return Task.FromResult<PipelineRunSnapshot?>(null);
+            }
+
+            var next = current with
+            {
+                CanaryPercentage = newPercentage,
+                CanaryRevision = expectedCanaryRevision + 1,
+                CanaryEpoch = newEpoch,
+                UpdatedAt = updatedAt
+            };
+            _runs[runId] = next;
+            return Task.FromResult<PipelineRunSnapshot?>(next);
+        }
+    }
+
     // ---------- Canary assignments ----------
 
     /// <inheritdoc />

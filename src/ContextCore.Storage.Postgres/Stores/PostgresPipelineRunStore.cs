@@ -45,11 +45,13 @@ public sealed class PostgresPipelineRunStore : PostgresStoreBase, IPipelineRunSt
 INSERT INTO {Table("pipeline_runs")} (
     run_id, proposal_id, proposal_major, proposal_minor, target_component,
     current_stage, status, started_at, updated_at, completed_at, rollback_reason,
-    revision, lease_owner, lease_expires_at, last_transition_id, data)
+    revision, lease_owner, lease_expires_at, last_transition_id,
+    canary_percentage, canary_revision, canary_epoch, data)
 VALUES (
     @run_id, @proposal_id, @proposal_major, @proposal_minor, @target_component,
     @current_stage, @status, @started_at, @updated_at, @completed_at, @rollback_reason,
-    @revision, @lease_owner, @lease_expires_at, @last_transition_id, @data)
+    @revision, @lease_owner, @lease_expires_at, @last_transition_id,
+    @canary_percentage, @canary_revision, @canary_epoch, @data)
 ON CONFLICT (run_id) DO UPDATE SET
     proposal_id = EXCLUDED.proposal_id,
     proposal_major = EXCLUDED.proposal_major,
@@ -65,6 +67,9 @@ ON CONFLICT (run_id) DO UPDATE SET
     lease_owner = EXCLUDED.lease_owner,
     lease_expires_at = EXCLUDED.lease_expires_at,
     last_transition_id = EXCLUDED.last_transition_id,
+    canary_percentage = EXCLUDED.canary_percentage,
+    canary_revision = EXCLUDED.canary_revision,
+    canary_epoch = EXCLUDED.canary_epoch,
     data = EXCLUDED.data;
 """;
         command.Parameters.AddWithValue("run_id", snapshot.RunId);
@@ -83,6 +88,10 @@ ON CONFLICT (run_id) DO UPDATE SET
         command.Parameters.AddWithValue("lease_owner", (object?)snapshot.LeaseOwner ?? DBNull.Value);
         command.Parameters.AddWithValue("lease_expires_at", (object?)snapshot.LeaseExpiresAt ?? DBNull.Value);
         command.Parameters.AddWithValue("last_transition_id", (object?)snapshot.LastTransitionId ?? DBNull.Value);
+        // Canary 单一真相源字段
+        command.Parameters.AddWithValue("canary_percentage", snapshot.CanaryPercentage);
+        command.Parameters.AddWithValue("canary_revision", snapshot.CanaryRevision);
+        command.Parameters.AddWithValue("canary_epoch", snapshot.CanaryEpoch);
         AddJson(command, "data", snapshot);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -100,11 +109,13 @@ ON CONFLICT (run_id) DO UPDATE SET
 INSERT INTO {Table("pipeline_runs")} (
     run_id, proposal_id, proposal_major, proposal_minor, target_component,
     current_stage, status, started_at, updated_at, completed_at, rollback_reason,
-    revision, lease_owner, lease_expires_at, last_transition_id, data)
+    revision, lease_owner, lease_expires_at, last_transition_id,
+    canary_percentage, canary_revision, canary_epoch, data)
 VALUES (
     @run_id, @proposal_id, @proposal_major, @proposal_minor, @target_component,
     @current_stage, @status, @started_at, @updated_at, @completed_at, @rollback_reason,
-    @revision, @lease_owner, @lease_expires_at, @last_transition_id, @data)
+    @revision, @lease_owner, @lease_expires_at, @last_transition_id,
+    @canary_percentage, @canary_revision, @canary_epoch, @data)
 ON CONFLICT (run_id) DO NOTHING;
 """;
         command.Parameters.AddWithValue("run_id", snapshot.RunId);
@@ -122,6 +133,9 @@ ON CONFLICT (run_id) DO NOTHING;
         command.Parameters.AddWithValue("lease_owner", (object?)snapshot.LeaseOwner ?? DBNull.Value);
         command.Parameters.AddWithValue("lease_expires_at", (object?)snapshot.LeaseExpiresAt ?? DBNull.Value);
         command.Parameters.AddWithValue("last_transition_id", (object?)snapshot.LastTransitionId ?? DBNull.Value);
+        command.Parameters.AddWithValue("canary_percentage", snapshot.CanaryPercentage);
+        command.Parameters.AddWithValue("canary_revision", snapshot.CanaryRevision);
+        command.Parameters.AddWithValue("canary_epoch", snapshot.CanaryEpoch);
         AddJson(command, "data", snapshot);
         var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return rowsAffected > 0;
@@ -305,6 +319,9 @@ SET proposal_id = @proposal_id,
     lease_owner = @lease_owner,
     lease_expires_at = @lease_expires_at,
     last_transition_id = @last_transition_id,
+    canary_percentage = @canary_percentage,
+    canary_revision = @canary_revision,
+    canary_epoch = @canary_epoch,
     data = @data
 WHERE run_id = @run_id
   AND revision = @expected_revision
@@ -325,6 +342,9 @@ WHERE run_id = @run_id
                 updateCmd.Parameters.AddWithValue("lease_owner", (object?)next.LeaseOwner ?? DBNull.Value);
                 updateCmd.Parameters.AddWithValue("lease_expires_at", (object?)next.LeaseExpiresAt ?? DBNull.Value);
                 updateCmd.Parameters.AddWithValue("last_transition_id", (object?)next.LastTransitionId ?? DBNull.Value);
+                updateCmd.Parameters.AddWithValue("canary_percentage", next.CanaryPercentage);
+                updateCmd.Parameters.AddWithValue("canary_revision", next.CanaryRevision);
+                updateCmd.Parameters.AddWithValue("canary_epoch", next.CanaryEpoch);
                 updateCmd.Parameters.AddWithValue("expected_revision", expectedRevision);
                 updateCmd.Parameters.AddWithValue("expected_stage", expectedStage.ToString());
                 AddJson(updateCmd, "data", next);
@@ -661,5 +681,118 @@ ORDER BY transitioned_at ASC, transition_id ASC;
         command.Parameters.AddWithValue("run_id", runId);
 
         return await ExecuteReaderJsonAsync<StageTransitionRecord>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    // ---------- Canary 单一真相源（WP-D） ----------
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// 单真相源写入 canary 状态（WP-D）。在单事务内完成：
+    /// <list type="number">
+    /// <item>SELECT data FOR UPDATE 锁定 run 行（防止并发推进状态分裂）。</item>
+    /// <item>CAS 检查：current.CanaryRevision == expectedCanaryRevision；不匹配返回 null。</item>
+    /// <item>修补快照（CanaryPercentage / CanaryRevision / CanaryEpoch / UpdatedAt），
+    ///   UPDATE 整行（WHERE run_id AND canary_revision = @expected 数据库层双保险）。</item>
+    /// <item>COMMIT 并返回修补后的快照。</item>
+    /// </list>
+    /// 与 <see cref="TryTransitionAsync"/> 的 lifecycle CAS（revision + stage）相互独立，
+    /// 避免 canary 推进与 pipeline 生命周期推进争用同一 CAS 维度。
+    /// </remarks>
+    public async Task<PipelineRunSnapshot?> UpdateCanaryStateAsync(
+        string runId,
+        long expectedCanaryRevision,
+        int newPercentage,
+        long newEpoch,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        if (newPercentage is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(newPercentage), "Canary 百分比必须在 0-100 之间。");
+        }
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Step 1: SELECT FOR UPDATE 锁定行
+            PipelineRunSnapshot? current;
+            {
+                await using var selectCmd = connection.CreateCommand();
+                selectCmd.Transaction = transaction;
+                selectCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                selectCmd.CommandText = $"""
+SELECT data
+FROM {Table("pipeline_runs")}
+WHERE run_id = @run_id
+FOR UPDATE;
+""";
+                selectCmd.Parameters.AddWithValue("run_id", runId);
+                current = await ExecuteScalarJsonAsync<PipelineRunSnapshot>(selectCmd, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (current is null)
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            // Step 2: CAS 检查（canary revision 不匹配 → 已被其他推进者更新）
+            if (current.CanaryRevision != expectedCanaryRevision)
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            var next = current with
+            {
+                CanaryPercentage = newPercentage,
+                CanaryRevision = expectedCanaryRevision + 1,
+                CanaryEpoch = newEpoch,
+                UpdatedAt = updatedAt
+            };
+
+            // Step 3: UPDATE（数据库层 WHERE canary_revision 双保险）
+            int rowsAffected;
+            {
+                await using var updateCmd = connection.CreateCommand();
+                updateCmd.Transaction = transaction;
+                updateCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                updateCmd.CommandText = $"""
+UPDATE {Table("pipeline_runs")}
+SET canary_percentage = @canary_percentage,
+    canary_revision = @canary_revision,
+    canary_epoch = @canary_epoch,
+    updated_at = @updated_at,
+    data = @data
+WHERE run_id = @run_id
+  AND canary_revision = @expected_canary_revision;
+""";
+                updateCmd.Parameters.AddWithValue("canary_percentage", next.CanaryPercentage);
+                updateCmd.Parameters.AddWithValue("canary_revision", next.CanaryRevision);
+                updateCmd.Parameters.AddWithValue("canary_epoch", next.CanaryEpoch);
+                updateCmd.Parameters.AddWithValue("updated_at", updatedAt);
+                updateCmd.Parameters.AddWithValue("run_id", runId);
+                updateCmd.Parameters.AddWithValue("expected_canary_revision", expectedCanaryRevision);
+                AddJson(updateCmd, "data", next);
+                rowsAffected = await updateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (rowsAffected == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return next;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 }

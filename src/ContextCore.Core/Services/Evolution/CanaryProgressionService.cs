@@ -472,6 +472,10 @@ public sealed class CanaryProgressionService
                             UpdateInMemoryPercentage(runId, nextPercentage);
                             // DB CAS 成功 → 本地与 DB 一致，清除任何遗留的本地状态标记。
                             _localStates[runId] = CanaryLocalState.Consistent;
+                            // WP-D：单真相源写入 — canary 状态并入 pipeline run snapshot
+                            await PersistCanaryStateToRunAsync(
+                                runId, nextPercentage, dbResult.NewEpoch,
+                                _timeProvider.GetUtcNow(), cancellationToken).ConfigureAwait(false);
                         }
 
                         return new CanaryProgressionResult
@@ -502,6 +506,10 @@ public sealed class CanaryProgressionService
                         Decision = CanaryProgressionDecision.Advance,
                         Rationale = evaluation.Rationale
                     }, cancellationToken).ConfigureAwait(false);
+
+                    // WP-D：单真相源写入 — canary 状态并入 pipeline run snapshot（epoch 自增）
+                    await PersistCanaryStateToRunAsync(
+                        runId, nextPercentage, newEpoch: null, now, cancellationToken).ConfigureAwait(false);
 
                     return new CanaryProgressionResult
                     {
@@ -628,6 +636,9 @@ public sealed class CanaryProgressionService
             {
                 // DB CAS 成功 → 本地与 DB 一致
                 _localStates[runId] = CanaryLocalState.Consistent;
+                // WP-D：单真相源写入 — 回滚到 0%
+                await PersistCanaryStateToRunAsync(
+                    runId, 0, dbResult.NewEpoch, now, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -663,6 +674,9 @@ public sealed class CanaryProgressionService
                 Decision = CanaryProgressionDecision.Rollback,
                 Rationale = $"Canary 自动回滚：reason={reason}"
             }, cancellationToken).ConfigureAwait(false);
+
+            // WP-D：单真相源写入 — 回滚到 0%（epoch 自增）
+            await PersistCanaryStateToRunAsync(runId, 0, newEpoch: null, now, cancellationToken).ConfigureAwait(false);
         }
 
         // 同步持久化 RollbackRecord 到 store（供 Pipeline 的 GetRollbackRecordAsync 查询）
@@ -731,66 +745,100 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// 从 DB（<c>canary_pipelines</c> 表）恢复 in-memory 状态。
+    /// 恢复 in-memory 状态（WP-D：单一真相源优先）。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>恢复的活跃 pipeline 数量（0 = 无活跃 pipeline 或 decisionApplier 未注入）。</returns>
+    /// <returns>恢复的活跃 pipeline 数量（0 = 无活跃 pipeline）。</returns>
     /// <remarks>
     /// <b>问题背景</b>：Canary 百分比有三个真值源——
     /// <list type="number">
-    /// <item><c>canary_pipelines</c> 表（DB，权威，由 <see cref="ICanaryDecisionApplier"/> 维护）。</item>
+    /// <item><c>canary_pipelines</c> 表（DB，legacy，由 <see cref="ICanaryDecisionApplier"/> 维护）。</item>
     /// <item><c>_runStates</c>（进程内 ConcurrentDictionary）。</item>
     /// <item><see cref="CutoverController"/> 的 <c>_cutoverPercentage</c>（进程内 int）。</item>
     /// </list>
-    /// 进程重启后 #2/#3 丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时
-    /// 调用 <see cref="ICanaryDecisionApplier.GetAllActivePipelineStatesAsync"/> 读取所有活跃
-    /// pipeline，逐个调用 <see cref="UpdateInMemoryPercentage"/> 重建进程内路由状态
-    /// （同时恢复 CutoverController 百分比与 <c>_runStates</c> 字典）。
+    /// 进程重启后 #2/#3 丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时重建
+    /// 进程内路由状态（CutoverController 百分比与 <c>_runStates</c> 字典）。
     /// <para>
-    /// <b>幂等性</b>：可安全重复调用；已存在的 run 会被最新 DB 值覆盖。
-    /// <b>无 DB 写入</b>：本方法只读取 DB，不修改任何持久化状态。
+    /// <b>WP-D 合并方向</b>：canary 状态已并入 <see cref="PipelineRunSnapshot"/>
+    /// （CanaryPercentage / CanaryRevision / CanaryEpoch，由 <see cref="PersistCanaryStateToRunAsync"/>
+    /// 经 <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> 持久化）。因此本方法
+    /// <b>优先从 <see cref="IPipelineRunStore"/> 的 ScopedCanary 阶段 run snapshot 恢复</b>
+    /// （snapshot.CanaryPercentage 权威，消除对 canary_pipelines 表的依赖）；
+    /// 仅当 run 尚未持久化 canary 数据（CanaryRevision == 0，legacy 数据）时，回退到
+    /// <see cref="ICanaryDecisionApplier.GetAllActivePipelineStatesAsync"/>。
+    /// </para>
+    /// <para>
+    /// <b>幂等性</b>：可安全重复调用；已存在的 run 会被最新值覆盖。
+    /// <b>无 DB 写入</b>：本方法只读取 store，不修改任何持久化状态。
     /// </para>
     /// </remarks>
     public async Task<int> RecoverFromStoreAsync(CancellationToken cancellationToken = default)
     {
-        if (_decisionApplier is null)
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var restored = 0;
+
+        // 优先从 pipeline run snapshot 恢复（单一真相源）。
+        // snapshot.CanaryRevision > 0 表示 canary 状态已由 PersistCanaryStateToRunAsync 持久化；
+        // == 0 表示 legacy 数据（尚未经单真相源写入），交给 canary_pipelines 回退路径。
+        var snapshotRestored = new HashSet<string>(StringComparer.Ordinal);
+        var snapshotRuns = await _pipelineRunStore.ListRunsByStageAsync(
+            OptimizationStage.ScopedCanary, cancellationToken).ConfigureAwait(false);
+        foreach (var run in snapshotRuns)
         {
-            // 单节点/测试场景（无 Postgres storage 注册）：无 DB 可恢复，跳过。
-            return 0;
+            if (IsTerminal(run.Status) || run.CanaryRevision <= 0)
+            {
+                continue;
+            }
+            snapshotRestored.Add(run.RunId);
+            restored++;
+
+            // 集群级 Kill Switch 优先：存在活跃紧急覆盖时强制 0% + 紧急本地状态，
+            // 且不得标记 Consistent（运维清除覆盖前推进被拒绝，路由层已强制回退 V1）。
+            // 避免重启后覆盖仍生效却按 DB 百分比恢复，导致 Kill Switch 被绕过。
+            if (_emergencyOverrideStore is not null
+                && await _emergencyOverrideStore.GetActiveAsync(run.RunId, cancellationToken).ConfigureAwait(false) is not null)
+            {
+                UpdateInMemoryPercentage(run.RunId, 0);
+                _localStates[run.RunId] = CanaryLocalState.LocalEmergencyRollback | CanaryLocalState.OperatorAlertRequired;
+                _logger.LogWarning(
+                    "Canary run {RunId} 存在活跃紧急覆盖（Kill Switch），恢复为 0% 且标记紧急回滚，等待运维清除覆盖。",
+                    run.RunId);
+                continue;
+            }
+
+            // UpdateInMemoryPercentage 同时恢复 CutoverController 百分比与 _runStates[runId]。
+            UpdateInMemoryPercentage(run.RunId, run.CanaryPercentage);
+            _localStates[run.RunId] = CanaryLocalState.Consistent;
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
+        // legacy 回退路径（canary_pipelines 表）：仅覆盖 snapshot 未恢复的 run
+        // （decisionApplier 为 null 时无 legacy 可恢复，仅 snapshot 恢复）。
+        if (_decisionApplier is null)
+        {
+            return restored;
+        }
 
         var activeStates = await _decisionApplier.GetAllActivePipelineStatesAsync(cancellationToken).ConfigureAwait(false);
         if (activeStates.Count == 0)
         {
-            return 0;
+            return restored;
         }
 
-        // 合并 canary_pipelines 表与 IPipelineRunStore 为单一 Pipeline Run 状态源。
-        // 当前存在两个持久化聚合：
-        //   1. canary_pipelines 表（由 ICanaryDecisionApplier 维护，存储 canary 百分比 + revision + epoch）
-        //   2. IPipelineRunStore（存储 PipelineRunSnapshot + 审计记录，由 DefaultGuardedOptimizationPipeline 维护）
-        // 两者语义重叠（都记录 run 的当前状态），但 schema 与 CAS 维度不同：
-        //   - canary_pipelines 按 run_id CAS revision（canary 百分比推进专用）
-        //   - IPipelineRunStore 按 run_id CAS revision + stage（覆盖整个 pipeline 生命周期）
-        // 合并方向：将 canary_pipelines 的 percentage/revision/epoch 字段并入 PipelineRunSnapshot
-        // （新增 CanaryPercentage / CanaryRevision / CanaryEpoch 字段），让 IPipelineRunStore
-        // 成为唯一的 run 状态真相源，消除 RecoverFromStoreAsync 的需要。
-        // 改造成本：需迁移 canary_pipelines 表数据、修改 ICanaryDecisionApplier 实现、
-        // 更新所有 percentage 读取方（CutoverController 同步、metrics epoch 等）。
-        // 短期方案：保持双真相源，但通过本方法在启动时同步，并通过 _localStates 在运行时
-        // 显式建模不一致（P1-6）。
         foreach (var state in activeStates)
         {
             if (string.IsNullOrWhiteSpace(state.RunId))
             {
                 continue;
             }
+            if (snapshotRestored.Contains(state.RunId))
+            {
+                // 已由 snapshot 恢复（snapshot 是权威真相源）；跳过避免双重计数。
+                continue;
+            }
+            restored++;
 
-            // 集群级 Kill Switch 优先：存在活跃紧急覆盖时强制 0% + 紧急本地状态，
-            // 且不得标记 Consistent（运维清除覆盖前推进被拒绝，路由层已强制回退 V1）。
-            // 避免重启后覆盖仍生效却按 DB 百分比恢复，导致 Kill Switch 被绕过。
+            // 集群级 Kill Switch 优先（与 snapshot 路径一致）
             if (_emergencyOverrideStore is not null
                 && await _emergencyOverrideStore.GetActiveAsync(state.RunId, cancellationToken).ConfigureAwait(false) is not null)
             {
@@ -808,7 +856,7 @@ public sealed class CanaryProgressionService
             _localStates[state.RunId] = CanaryLocalState.Consistent;
         }
 
-        return activeStates.Count;
+        return restored;
     }
 
     /// <summary>获取指定 run 的所有 stage transition 审计记录（按时间升序）。</summary>
@@ -1000,6 +1048,62 @@ public sealed class CanaryProgressionService
         _stageTransitions.TryAdd(record.TransitionId, record);
         // 持久化到 store（权威来源；同 TransitionId 覆盖）
         await _pipelineRunStore.SaveStageTransitionAsync(record, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 单真相源写入（WP-D）：将 canary 推进状态并入 pipeline run snapshot。
+    /// </summary>
+    /// <remarks>
+    /// 合并方向：canary_pipelines 的 percentage/revision/epoch 并入
+    /// <see cref="PipelineRunSnapshot"/>（CanaryPercentage / CanaryRevision / CanaryEpoch），
+    /// 让 <see cref="IPipelineRunStore"/> 成为 run 状态唯一真相源，重启后可直接从 snapshot
+    /// 恢复（<see cref="RecoverFromStoreAsync"/> 优先读取 snapshot）。
+    /// <para>
+    /// 失败语义：run 不存在或 canary revision CAS 不匹配时仅记录日志，<b>不阻断推进</b>——
+    /// legacy canary_pipelines 写入已由 <see cref="ICanaryDecisionApplier"/> 完成，双真相源
+    /// 过渡期内不丢状态；后续推进的 CAS 以最新 snapshot 为准自然收敛。
+    /// </para>
+    /// </remarks>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="newPercentage">推进后的百分比档。</param>
+    /// <param name="newEpoch">推进后的 stage epoch；null 时从 snapshot.CanaryEpoch + 1 自增。</param>
+    /// <param name="updatedAt">更新时间（UTC）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private async ValueTask PersistCanaryStateToRunAsync(
+        string runId,
+        int newPercentage,
+        long? newEpoch,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var snapshot = await _pipelineRunStore.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+            if (snapshot is null)
+            {
+                // run 尚未创建（如直接驱动 CanaryProgressionService 的测试场景）：无可持久化的 snapshot。
+                return;
+            }
+
+            var updated = await _pipelineRunStore.UpdateCanaryStateAsync(
+                runId,
+                snapshot.CanaryRevision,
+                newPercentage,
+                newEpoch ?? snapshot.CanaryEpoch + 1,
+                updatedAt,
+                cancellationToken).ConfigureAwait(false);
+            if (updated is null)
+            {
+                _logger.LogWarning(
+                    "Canary run {RunId} 单真相源写入失败（canary revision CAS 不匹配）；" +
+                    "保留 legacy canary_pipelines 状态，下次推进自然收敛。",
+                    runId);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Canary run {RunId} 单真相源写入异常；不阻断推进。", runId);
+        }
     }
 
     private static bool IsTerminal(PipelineRunStatus status) => status switch

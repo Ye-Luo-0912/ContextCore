@@ -125,8 +125,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///     （杜绝"Slot=A、Engine=B"错位被伪装为收敛——两套计数空间独立可审计）。
     ///   - is_isolated / drift_reported_at / isolation_reason：漂移自动隔离事实持久化，
     ///     集群注册表据此计算 DriftedNodeCount 与 IsRolloutReady（上线就绪门禁）。
+    /// v56 → v57，Recovery、Canary 与 Learning Durability：
+    ///   - pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列：
+    ///     Canary 状态并入 PipelineRunSnapshot（单一真相源，UpdateCanaryStateAsync CAS 维护），
+    ///     重启后可从 run snapshot 直接恢复，不再依赖 canary_pipelines 表恢复。
+    ///   - 新建 learning_leases 表：Learning Materialization worker 池级租约
+    ///     （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v56";
+    public const string SchemaVersion = "cc-schema-v57";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -225,6 +231,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "retrieval_plan_feedback",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
         "learning_event_outbox",
+        // Learning Materialization worker 池级租约（ILearningLeaseStore）
+        "learning_leases",
         // Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
         "model_activation_audit",
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化
@@ -550,6 +558,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // 集群级 Canary Kill Switch（运维紧急覆盖表）
         var canaryEmergencyOverrides = Infrastructure.PostgresNames.Table(options, "canary_emergency_overrides");
         var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
+        // Learning Materialization worker 池级租约表（ILearningLeaseStore）
+        var learningLeases = Infrastructure.PostgresNames.Table(options, "learning_leases");
         // Model Control Plane 激活审计持久化表
         var modelActivationAudit = Infrastructure.PostgresNames.Table(options, "model_activation_audit");
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化表
@@ -1566,6 +1576,8 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_t
 -- 表反规范化 proposal_id / status / run_id 字段以便按 proposal/status/run 索引查询；
 -- 完整 PipelineRunSnapshot / CanaryAssignment / RollbackRecord / BaselineComparison 对象保存在 data jsonb，由 store 反序列化。
 -- 新增 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
+-- 新增 canary_percentage / canary_revision / canary_epoch 列（v56→v57）：Canary 状态并入
+-- PipelineRunSnapshot（单一真相源），由 IPipelineRunStore.UpdateCanaryStateAsync CAS 维护。
 CREATE TABLE IF NOT EXISTS {pipelineRuns} (
     run_id text NOT NULL,
     proposal_id text NOT NULL,
@@ -1582,6 +1594,9 @@ CREATE TABLE IF NOT EXISTS {pipelineRuns} (
     lease_owner text NULL,
     lease_expires_at timestamptz NULL,
     last_transition_id text NULL,
+    canary_percentage integer NOT NULL DEFAULT 0,
+    canary_revision bigint NOT NULL DEFAULT 0,
+    canary_epoch bigint NOT NULL DEFAULT 0,
     data jsonb NOT NULL,
     PRIMARY KEY (run_id)
 );
@@ -1591,6 +1606,10 @@ ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS revision bigint NOT NULL DEF
 ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS lease_owner text NULL;
 ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz NULL;
 ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS last_transition_id text NULL;
+-- v56 → v57 升级路径 — canary 单一真相源列（幂等）
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS canary_percentage integer NOT NULL DEFAULT 0;
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS canary_revision bigint NOT NULL DEFAULT 0;
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS canary_epoch bigint NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "proposal")} ON {pipelineRuns} (proposal_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "status")} ON {pipelineRuns} (status, updated_at DESC);
@@ -2333,6 +2352,19 @@ ALTER TABLE {learningEventOutbox} ADD COLUMN IF NOT EXISTS lease_token text;
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "state")} ON {learningEventOutbox} (state, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "lease")} ON {learningEventOutbox} (state, lease_expires_at);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "learning_event_outbox", "workspace")} ON {learningEventOutbox} (workspace_id, collection_id);
+
+-- Learning Materialization worker 池级租约表（v56→v57 新增）。
+-- ILearningLeaseStore：per lease_id 至多一行；CAS 获取（INSERT ... ON CONFLICT DO UPDATE
+-- WHERE lease_expires_at < now）/ 续约 / 释放（lease_token CAS）/ 过期清理。
+-- 与 learning_event_outbox 的记录级租约互补：本表协调"哪个 worker 实例负责物化调度"。
+CREATE TABLE IF NOT EXISTS {learningLeases} (
+    lease_id text NOT NULL,
+    lease_owner text NOT NULL,
+    lease_token text NOT NULL,
+    acquired_at timestamptz NOT NULL DEFAULT now(),
+    lease_expires_at timestamptz NOT NULL,
+    PRIMARY KEY (lease_id)
+);
 
 -- Model Control Plane 激活审计持久化表
 -- model_activation_audit: append-only 审计表，记录 Activate / Rollback / Retire / Shadow / Warmup /

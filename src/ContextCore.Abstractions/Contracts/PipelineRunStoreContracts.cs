@@ -106,6 +106,31 @@ public sealed record PipelineRunSnapshot
     /// store 可识别为已应用并返回当前快照（幂等）。
     /// </summary>
     public string? LastTransitionId { get; init; }
+
+    // ---------- Canary 状态（WP-D：单一真相源） ----------
+
+    /// <summary>
+    /// Canary 当前百分比档（0-100）。由 <see cref="CanaryProgressionService"/> 维护。
+    /// </summary>
+    /// <remarks>
+    /// <b>WP-D 合并方向</b>：将 <c>canary_pipelines</c> 表的 percentage/revision/epoch
+    /// 并入 <see cref="PipelineRunSnapshot"/>，让 <see cref="IPipelineRunStore"/> 成为
+    /// pipeline run 状态的唯一真相源。重启后可直接从 snapshot 恢复 canary 状态，
+    /// 不再依赖 <c>canary_pipelines</c>（legacy 兼容期内仍由
+    /// <see cref="ICanaryDecisionApplier"/> 维护）。
+    /// </remarks>
+    public int CanaryPercentage { get; init; }
+
+    /// <summary>
+    /// Canary 推进版本号（单调递增；初始 0 = 未初始化/legacy）。
+    /// <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> 以其为 CAS 乐观锁。
+    /// </summary>
+    public long CanaryRevision { get; init; }
+
+    /// <summary>
+    /// Canary stage epoch（单调递增，与 <c>canary_run_epochs</c> 语义对齐；重启后不回退）。
+    /// </summary>
+    public long CanaryEpoch { get; init; }
 }
 
 /// <summary>
@@ -265,6 +290,38 @@ public interface IPipelineRunStore
         OptimizationStage expectedStage,
         PipelineRunSnapshot next,
         PipelineAuditBatch? audit = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 单真相源写入 canary 推进状态（WP-D）。
+    /// </summary>
+    /// <remarks>
+    /// CAS 语义：仅当 store 内 run 的 <see cref="PipelineRunSnapshot.CanaryRevision"/>
+    /// 等于 <paramref name="expectedCanaryRevision"/> 时，更新
+    /// canary_percentage / canary_revision / canary_epoch（快照 <c>data</c> 同步修补），
+    /// 并刷新 <see cref="PipelineRunSnapshot.UpdatedAt"/>。
+    /// <para>
+    /// 与 <see cref="TryTransitionAsync"/> 的 lifecycle CAS（revision + stage）相互独立：
+    /// canary 推进在 ScopedCanary 阶段内部进行，不应与 pipeline 生命周期推进争用同一把锁，
+    /// 故以 canary_revision 单独作为 CAS 维度。
+    /// </para>
+    /// </remarks>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="expectedCanaryRevision">期望的当前 canary revision（CAS 乐观锁）。</param>
+    /// <param name="newPercentage">推进后的百分比档（0-100）。</param>
+    /// <param name="newEpoch">推进后的 stage epoch（单调递增）。</param>
+    /// <param name="updatedAt">更新时间（UTC）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 更新后的快照；run 不存在或 canary revision CAS 不匹配时返回 null（调用方不阻断推进，
+    /// 因为 legacy <c>canary_pipelines</c> 写入已由 <see cref="ICanaryDecisionApplier"/> 完成）。
+    /// </returns>
+    Task<PipelineRunSnapshot?> UpdateCanaryStateAsync(
+        string runId,
+        long expectedCanaryRevision,
+        int newPercentage,
+        long newEpoch,
+        DateTimeOffset updatedAt,
         CancellationToken cancellationToken = default);
 
     // ---------- Canary assignments ----------
