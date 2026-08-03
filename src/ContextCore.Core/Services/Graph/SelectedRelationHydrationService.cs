@@ -61,17 +61,20 @@ public sealed class DefaultSelectedRelationHydrationService : ISelectedRelationH
             source = "relation-hydration-store";
             var hydrated = await _hydrationStore.HydrateRelationsAsync(
                 request.WorkspaceId, request.CollectionId, uniqueIds, cancellationToken).ConfigureAwait(false);
-            var hydratedIds = new HashSet<string>(StringComparer.Ordinal);
+            // 存储实现不保证返回顺序（如 Postgres 按主键索引序）；先按 ID 建索引，
+            // 再按请求顺序重排——契约要求 Relations 保持请求顺序（与回退路径一致）。
+            var hydratedById = new Dictionary<string, ContextRelation>(StringComparer.Ordinal);
             foreach (var relation in hydrated)
             {
-                if (hydratedIds.Add(relation.Id))
-                {
-                    relations.Add(relation);
-                }
+                hydratedById.TryAdd(relation.Id, relation);
             }
             foreach (var id in uniqueIds)
             {
-                if (!hydratedIds.Contains(id))
+                if (hydratedById.TryGetValue(id, out var relation))
+                {
+                    relations.Add(relation);
+                }
+                else
                 {
                     missing.Add(id);
                 }

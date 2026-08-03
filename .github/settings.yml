@@ -1,0 +1,29 @@
+# =============================================================================
+# 仓库保护真相源（WP-R30.1-F：Production Evidence 与性能门禁）。
+#
+# 本文件声明 main 分支的保护策略，是"证据门禁可强制"的配置层：
+#   - required_status_checks：唯一必查 check = evidence（ci.yml 的 evidence job，
+#     聚合 build/unit/integration/architecture/public-api/openapi-snapshot 六路证据）；
+#   - strict: true：分支在通过前必须与最新 main 同步（堵住"过时绿"）；
+#   - enforce_admins: true：管理员与仓库所有者同样受规则约束；
+#   - allow_force_pushes / allow_deletions: false：不可逆破坏性操作一律禁用。
+#
+# 由 scripts/assert-branch-protection.py 逐行校验（stdlib-only，无 YAML 依赖），
+# 并作为管理员在 GitHub 仓库设置中配置 branch protection 的声明式依据。
+# =============================================================================
+
+repository:
+  default_branch: main
+
+branch_protection:
+  - branch: main
+    # 唯一必查 check：evidence job（ci.yml 最后一步聚合门禁）。
+    required_status_checks:
+      strict: true
+      contexts:
+        - evidence
+    # 管理员与仓库所有者同样受上述规则约束。
+    enforce_admins: true
+    # 禁止 force push 与删除分支（不可逆操作一律禁用）。
+    allow_force_pushes: false
+    allow_deletions: false

@@ -361,10 +361,15 @@ jobs:
           path: evidence/trx/openapi-snapshot
         if: always()
 
+      # TRX 清单：固化被门禁的 TRX 文件集，供 gate 做双重一致性校验（WP-R30.1-F）。
+      - name: Write TRX manifest
+        if: always()
+        run: python3 scripts/write-trx-manifest.py --manifest-dir ci-manifests --out evidence/trx-manifest.json evidence/trx
+
       # 门禁：0 Failed / 0 Inconclusive / 0 未声明跳过 + 每类必测（manifest 驱动）。
       - name: Gate — production evidence manifest
         if: always()
-        run: python3 scripts/gate-evidence.py --manifest-dir ci-manifests evidence/trx
+        run: python3 scripts/gate-evidence.py --manifest-dir ci-manifests --trx-manifest evidence/trx-manifest.json evidence/trx
 
       # 记录 HEAD 可追溯证据：head-evidence.json 含 commit sha / run id / 各 job 结果 /
       # policy manifest 快照（由 ci-manifests/*.json 单一来源生成）。
