@@ -404,7 +404,7 @@ internal static class ModelControlPlaneEndpoints
             // CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
             // 一次 UPDATE 原子完成"旧 Champion 失效 + 新 Champion 激活"，无需同事务改多条 DesiredModelState。
             var (casConflict, _) = await TryUpdateClusterSlotAsync(
-                clusterSlotStore, id, descriptor.ContentHash, "Active", updatedBy, ct).ConfigureAwait(false);
+                clusterSlotStore, id, descriptor.ContentHash, ClusterModelSlotDesiredStatus.Active, updatedBy, ct).ConfigureAwait(false);
             if (casConflict)
             {
                 return Results.Conflict(new ContextCoreErrorResponse
@@ -419,7 +419,10 @@ internal static class ModelControlPlaneEndpoints
             ModelActivationResult result;
             if (!string.IsNullOrWhiteSpace(request.StagedHandleId))
             {
-                result = await activationManager.PromoteStagedAsync(request.StagedHandleId, ct).ConfigureAwait(false);
+                // 发布前校验 Staged Descriptor 与本次激活的模型一致（fail-closed）：
+                // 防止误传其他模型的 Staged Handle（陈旧 warmup / 跨模型错配）被发布为 active。
+                result = await activationManager.PromoteStagedAsync(
+                    request.StagedHandleId, descriptor.ModelArtifactId, descriptor.ContentHash, ct).ConfigureAwait(false);
             }
             else
             {
@@ -496,7 +499,7 @@ internal static class ModelControlPlaneEndpoints
 
             // CAS 更新 ClusterModelSlot（单一真相源）—— 先更新期望状态，不再先本地激活。
             var (casConflict, _) = await TryUpdateClusterSlotAsync(
-                clusterSlotStore, id, descriptor.ContentHash, "Active", updatedBy, ct).ConfigureAwait(false);
+                clusterSlotStore, id, descriptor.ContentHash, ClusterModelSlotDesiredStatus.Active, updatedBy, ct).ConfigureAwait(false);
             if (casConflict)
             {
                 return Results.Conflict(new ContextCoreErrorResponse
@@ -573,7 +576,7 @@ internal static class ModelControlPlaneEndpoints
             if (isActiveModel)
             {
                 var (casConflict, _) = await TryUpdateClusterSlotAsync(
-                    clusterSlotStore, null, null, "Inactive", updatedBy, ct).ConfigureAwait(false);
+                    clusterSlotStore, null, null, ClusterModelSlotDesiredStatus.Inactive, updatedBy, ct).ConfigureAwait(false);
                 if (casConflict)
                 {
                     return Results.Conflict(new ContextCoreErrorResponse
@@ -905,7 +908,7 @@ internal static class ModelControlPlaneEndpoints
         IClusterModelSlotStore? clusterSlotStore,
         string? activeModelArtifactId,
         string? contentHash,
-        string desiredStatus,
+        ClusterModelSlotDesiredStatus desiredStatus,
         string updatedBy,
         CancellationToken ct)
     {

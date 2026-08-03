@@ -101,6 +101,8 @@ F:ContextCore.Abstractions.CanaryProgressionDecision.Advance
 F:ContextCore.Abstractions.CanaryProgressionDecision.Hold
 F:ContextCore.Abstractions.CanaryProgressionDecision.Promoted
 F:ContextCore.Abstractions.CanaryProgressionDecision.Rollback
+F:ContextCore.Abstractions.ClusterModelSlotDesiredStatus.Active
+F:ContextCore.Abstractions.ClusterModelSlotDesiredStatus.Inactive
 F:ContextCore.Abstractions.ComparisonOperator.Equals
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThan
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThanOrEqual
@@ -2101,7 +2103,7 @@ M:ContextCore.Abstractions.ICandidateProvider.ExecuteAsync(ContextCore.Abstracti
 M:ContextCore.Abstractions.ICanonicalCandidateMerger.Merge(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ExpertExecutionResult>)
 M:ContextCore.Abstractions.IClusterModelSlotStore.GetAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IClusterModelSlotStore.GetOrCreateAsync(System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IClusterModelSlotStore.TryUpdateAsync(System.String, System.Int64, System.String, System.String, System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IClusterModelSlotStore.TryUpdateAsync(System.String, System.Int64, System.String, System.String, ContextCore.Abstractions.ClusterModelSlotDesiredStatus, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IComponentHealthRegistry.GetComponentHealth(ContextCore.Abstractions.ComponentKind, System.String)
 M:ContextCore.Abstractions.IComponentHealthRegistry.GetDegradedComponents(System.String)
 M:ContextCore.Abstractions.IComponentHealthRegistry.RecordComponentFallback(ContextCore.Abstractions.ComponentKind, System.String, System.String, System.Threading.CancellationToken)
@@ -2281,6 +2283,8 @@ M:ContextCore.Abstractions.IModelArtifactRegistry.GetLatestAsync(System.String, 
 M:ContextCore.Abstractions.IModelArtifactRegistry.ListAllAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelArtifactRegistry.ListByVersionAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelArtifactRegistry.RegisterAsync(ContextCore.Abstractions.ModelArtifactDescriptor, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IModelNodeAppliedStateStore.GetAsync(System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IModelNodeAppliedStateStore.UpsertAsync(ContextCore.Abstractions.ModelNodeAppliedState, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelRegistry.GetAsync(System.String, ContextCore.Abstractions.ModelArtifactVersion, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelRegistry.ListAsync(System.String, System.Nullable<ContextCore.Abstractions.ModelArtifactStatus>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelRegistry.PromoteAsync(System.String, ContextCore.Abstractions.ModelArtifactVersion, ContextCore.Abstractions.ModelArtifactStatus, System.Threading.CancellationToken)
@@ -2697,6 +2701,13 @@ M:ContextCore.Abstractions.ModelExecutionSnapshot.Equals(System.Object)
 M:ContextCore.Abstractions.ModelExecutionSnapshot.GetHashCode()
 M:ContextCore.Abstractions.ModelExecutionSnapshot.GetType()
 M:ContextCore.Abstractions.ModelExecutionSnapshot.ToString()
+M:ContextCore.Abstractions.ModelNodeAppliedState.#ctor()
+M:ContextCore.Abstractions.ModelNodeAppliedState.<Clone>$()
+M:ContextCore.Abstractions.ModelNodeAppliedState.Equals(ContextCore.Abstractions.ModelNodeAppliedState)
+M:ContextCore.Abstractions.ModelNodeAppliedState.Equals(System.Object)
+M:ContextCore.Abstractions.ModelNodeAppliedState.GetHashCode()
+M:ContextCore.Abstractions.ModelNodeAppliedState.GetType()
+M:ContextCore.Abstractions.ModelNodeAppliedState.ToString()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.#ctor()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.<Clone>$()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.Equals(ContextCore.Abstractions.Models.ArtifactDescriptor)
@@ -6591,6 +6602,12 @@ P:ContextCore.Abstractions.ModelExecutionSnapshot.EngineKind (get|init)
 P:ContextCore.Abstractions.ModelExecutionSnapshot.FeatureSchemaVersion (get|init)
 P:ContextCore.Abstractions.ModelExecutionSnapshot.ModelArtifactId (get|init)
 P:ContextCore.Abstractions.ModelExecutionSnapshot.ModelVersion (get|init)
+P:ContextCore.Abstractions.ModelNodeAppliedState.AppliedAt (get|init)
+P:ContextCore.Abstractions.ModelNodeAppliedState.AppliedRevision (get|init)
+P:ContextCore.Abstractions.ModelNodeAppliedState.ContentHash (get|init)
+P:ContextCore.Abstractions.ModelNodeAppliedState.ModelArtifactId (get|init)
+P:ContextCore.Abstractions.ModelNodeAppliedState.NodeId (get|init)
+P:ContextCore.Abstractions.ModelNodeAppliedState.SlotName (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CapabilityId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CollectionId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.DateShard (get|init)
@@ -11026,6 +11043,7 @@ T:ContextCore.Abstractions.CandidateUtilityScore
 T:ContextCore.Abstractions.CandidateWorkingSet
 T:ContextCore.Abstractions.CanonicalCandidateKey (Struct)
 T:ContextCore.Abstractions.ClusterModelSlot
+T:ContextCore.Abstractions.ClusterModelSlotDesiredStatus (Enum)
 T:ContextCore.Abstractions.ComparisonOperator (Enum)
 T:ContextCore.Abstractions.ComponentFallbackOptions
 T:ContextCore.Abstractions.ComponentFallbackPolicy
@@ -11228,6 +11246,7 @@ T:ContextCore.Abstractions.IMemoryStoreMetadataLookup (Interface)
 T:ContextCore.Abstractions.IMemoryUtilityStatsStore (Interface)
 T:ContextCore.Abstractions.IModelActivationAuditStore (Interface)
 T:ContextCore.Abstractions.IModelArtifactRegistry (Interface)
+T:ContextCore.Abstractions.IModelNodeAppliedStateStore (Interface)
 T:ContextCore.Abstractions.IModelRegistry (Interface)
 T:ContextCore.Abstractions.IOfflineReplayGate (Interface)
 T:ContextCore.Abstractions.IPackageDeltaPlanner (Interface)
@@ -11344,6 +11363,7 @@ T:ContextCore.Abstractions.ModelCompatibilityLevel (Enum)
 T:ContextCore.Abstractions.ModelExecutionMode (Enum)
 T:ContextCore.Abstractions.ModelExecutionOptions
 T:ContextCore.Abstractions.ModelExecutionSnapshot
+T:ContextCore.Abstractions.ModelNodeAppliedState
 T:ContextCore.Abstractions.Models.AnchorType (Enum)
 T:ContextCore.Abstractions.Models.ArtifactDescriptor
 T:ContextCore.Abstractions.Models.ArtifactKind (Enum)

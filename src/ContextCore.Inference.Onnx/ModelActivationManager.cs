@@ -423,9 +423,12 @@ public sealed class ModelActivationManager : IModelActivationManager
     /// <inheritdoc />
     public ValueTask<ModelActivationResult> PromoteStagedAsync(
         string stagedHandleId,
+        string? expectedModelArtifactId = null,
+        string? expectedContentHash = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stagedHandleId);
+        cancellationToken.ThrowIfCancellationRequested();
 
         // 原子移除 —— 使用 TryRemove 返回值确保并发 Promote 只有一个成功。
         // 两个并发 PromoteStagedAsync 都可能先 TryGetValue 读到同一个 staged，
@@ -444,6 +447,25 @@ public sealed class ModelActivationManager : IModelActivationManager
             return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
                 $"Staged Handle '{stagedHandleId}' 的 Descriptor 为 null，无法发布。"));
         }
+
+        // 发布前校验 Staged Descriptor 与调用方期望的模型一致（fail-closed）：
+        // 任一期望值非空且不匹配即拒绝发布，避免"激活了调用方并未声明的模型"。
+        if (expectedModelArtifactId is not null
+            && !string.Equals(staged.Descriptor.ModelArtifactId, expectedModelArtifactId, StringComparison.Ordinal))
+        {
+            return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
+                $"Staged Handle '{stagedHandleId}' 的模型工件 Id '{staged.Descriptor.ModelArtifactId}' " +
+                $"与期望的 '{expectedModelArtifactId}' 不匹配，拒绝发布（fail-closed）。"));
+        }
+
+        if (expectedContentHash is not null
+            && !string.Equals(staged.Descriptor.ContentHash, expectedContentHash, StringComparison.Ordinal))
+        {
+            return new ValueTask<ModelActivationResult>(ModelActivationResult.Failed(
+                $"Staged Handle '{stagedHandleId}' 的内容哈希 '{staged.Descriptor.ContentHash}' " +
+                $"与期望的 '{expectedContentHash}' 不匹配，拒绝发布（fail-closed）。"));
+        }
+
         var published = PublishAtomicWithGracePeriod(staged.Engine, staged.Descriptor, staged.CalibrationValidation, 30000);
         return new ValueTask<ModelActivationResult>(published);
     }

@@ -30,10 +30,15 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 {
     private readonly IClusterModelSlotStore _clusterSlotStore;
     private readonly IModelActivationManager _activationManager;
+    private readonly IModelNodeAppliedStateStore? _appliedStateStore;
     private readonly IOptionsMonitor<ModelStateReconcilerOptions> _options;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModelStateReconcilerWorker> _logger;
     private readonly string _instanceId;
+
+    // 节点标识：机器名是跨进程重启保持稳定的节点身份，用于 model_node_applied_state 的 node_id；
+    // _instanceId 仅用于日志区分同一机器上的多个进程。
+    private readonly string _nodeId;
 
     // 本地已应用的最新集群槽位 Revision（AppliedClusterSlotRevision）。
     // 与本地引擎代次（ActiveGeneration，LocalEngineGeneration）是独立计数空间——
@@ -47,14 +52,17 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         IModelActivationManager activationManager,
         IOptionsMonitor<ModelStateReconcilerOptions> options,
         IConfiguration configuration,
-        ILogger<ModelStateReconcilerWorker> logger)
+        ILogger<ModelStateReconcilerWorker> logger,
+        IModelNodeAppliedStateStore? appliedStateStore = null)
     {
         _clusterSlotStore = clusterSlotStore;
         _activationManager = activationManager;
+        _appliedStateStore = appliedStateStore;
         _options = options;
         _configuration = configuration;
         _logger = logger;
         _instanceId = Environment.MachineName + "-" + Guid.NewGuid().ToString("N")[..8];
+        _nodeId = Environment.MachineName;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -102,6 +110,29 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         // "本地代次高 → 跳过集群期望"的错误跳过（期望模型从未被加载）。
         if (Interlocked.Exchange(ref _initialSyncDone, 1) == 0)
         {
+            // 从节点已应用状态恢复：仅当本地引擎与已应用记录一致（同宿主内 Reconciler 重建）时
+            // 才从 AppliedRevision 继续收敛，避免重复应用已生效的期望状态；
+            // 引擎为空（进程重启，冷启动）时绝不据此跳过——冷启动必须重新应用当前期望状态。
+            if (_appliedStateStore is not null)
+            {
+                var applied = await _appliedStateStore.GetAsync(_nodeId, "primary", ct).ConfigureAwait(false);
+                if (applied is not null)
+                {
+                    var engineMatchesApplied =
+                        _activationManager.ActiveDescriptor is not null
+                        && string.Equals(applied.ModelArtifactId, _activationManager.ActiveDescriptor.ModelArtifactId, StringComparison.Ordinal)
+                        && string.Equals(applied.ContentHash, _activationManager.ContentHash, StringComparison.Ordinal);
+                    if (engineMatchesApplied)
+                    {
+                        _appliedClusterSlotRevision = applied.AppliedRevision;
+                    }
+
+                    _logger.LogInformation(
+                        "ModelStateReconcilerWorker 节点 {NodeId} 上次已应用 Revision={AppliedRevision}（模型 {ModelId}），引擎状态一致={EngineMatchesApplied}。",
+                        _nodeId, applied.AppliedRevision, applied.ModelArtifactId, engineMatchesApplied);
+                }
+            }
+
             _logger.LogInformation(
                 "ModelStateReconcilerWorker 初始同步，当前 slot Revision={Revision}，DesiredStatus={DesiredStatus}，立即应用。",
                 slot.Revision, slot.DesiredStatus);
@@ -112,7 +143,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         {
             // Revision 相同但 ContentHash 不匹配 → 记录漂移告警
             if (slot.Revision == _appliedClusterSlotRevision
-                && string.Equals(slot.DesiredStatus, "Active", StringComparison.OrdinalIgnoreCase)
+                && slot.DesiredStatus == ClusterModelSlotDesiredStatus.Active
                 && !string.IsNullOrEmpty(slot.ContentHash)
                 && !string.IsNullOrEmpty(slot.ActiveModelArtifactId)
                 && !string.Equals(slot.ContentHash, _activationManager.ContentHash, StringComparison.Ordinal))
@@ -127,7 +158,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 
         try
         {
-            if (string.Equals(slot.DesiredStatus, "Active", StringComparison.OrdinalIgnoreCase)
+            if (slot.DesiredStatus == ClusterModelSlotDesiredStatus.Active
                 && !string.IsNullOrEmpty(slot.ActiveModelArtifactId))
             {
                 var modelId = slot.ActiveModelArtifactId!;
@@ -157,7 +188,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                     }
                 }
             }
-            else if (string.Equals(slot.DesiredStatus, "Inactive", StringComparison.OrdinalIgnoreCase))
+            else if (slot.DesiredStatus == ClusterModelSlotDesiredStatus.Inactive)
             {
                 // 调用 DeactivateAsync 停用模型，回退到 fallback。
                 _logger.LogInformation(
@@ -174,11 +205,44 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             }
 
             _appliedClusterSlotRevision = slot.Revision;
+            await RecordAppliedStateAsync(slot, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "应用期望状态失败：Revision {Revision}",
+                slot.Revision);
+        }
+    }
+
+    /// <summary>
+    /// 记录节点已应用状态（最佳努力持久化）：写入本节点对当前 slot 最后成功应用的 Revision
+    /// 与本地引擎实际生效的模型内容。记录失败不影响已应用的期望状态。
+    /// </summary>
+    private async ValueTask RecordAppliedStateAsync(ClusterModelSlot slot, CancellationToken ct)
+    {
+        if (_appliedStateStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var applied = new ModelNodeAppliedState
+            {
+                NodeId = _nodeId,
+                SlotName = slot.SlotName,
+                AppliedRevision = slot.Revision,
+                ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,
+                ContentHash = _activationManager.ContentHash,
+                AppliedAt = DateTimeOffset.UtcNow
+            };
+            await _appliedStateStore.UpsertAsync(applied, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "记录节点已应用状态失败（不影响已应用的期望状态）：Revision {Revision}",
                 slot.Revision);
         }
     }

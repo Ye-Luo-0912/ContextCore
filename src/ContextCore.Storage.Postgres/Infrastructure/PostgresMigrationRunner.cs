@@ -205,7 +205,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Desired Model State Store 持久化（HA 多节点模型期望状态同步）
         "desired_model_states",
         // Cluster Model Slot (single champion source of truth, single-row table + CAS on revision)
-        "cluster_model_slots"
+        "cluster_model_slots",
+        // Model Node Applied State（节点已应用状态：每节点记录最后成功应用的集群槽位 Revision 与模型内容）
+        "model_node_applied_state"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -513,6 +515,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var desiredModelStates = Infrastructure.PostgresNames.Table(options, "desired_model_states");
         // Cluster Model Slot (single champion source of truth)
         var clusterModelSlots = Infrastructure.PostgresNames.Table(options, "cluster_model_slots");
+        // Model Node Applied State（节点已应用状态）
+        var modelNodeAppliedStates = Infrastructure.PostgresNames.Table(options, "model_node_applied_state");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -2286,6 +2290,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "desired
 -- Cluster Model Slot (single champion source of truth)
 -- Single-row table per slot_name (e.g., "primary"). CAS on revision atomically switches ActiveModelArtifactId.
 -- Replaces desired_model_states multi-row Active/Inactive model: one UPDATE invalidates old champion + activates new.
+-- desired_status 由 CHECK 约束限定为 ('Inactive', 'Active')，防止脏数据写入非法期望状态。
 CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
     slot_name text PRIMARY KEY DEFAULT 'primary',
     active_model_artifact_id text,
@@ -2293,7 +2298,22 @@ CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
     revision bigint NOT NULL DEFAULT 0,
     desired_status text NOT NULL DEFAULT 'Inactive',
     updated_at timestamptz NOT NULL DEFAULT now(),
-    updated_by text
+    updated_by text,
+    CONSTRAINT {Infrastructure.PostgresNames.Constraint(options, "cluster_model_slots", "desired_status_check")}
+        CHECK (desired_status IN ('Inactive', 'Active'))
+);
+
+-- Model Node Applied State（节点已应用状态）
+-- 每个 (node_id, slot_name) 一行：记录该节点最后成功应用的集群槽位 Revision 与模型内容。
+-- 节点重启后据此查询本节点上次应用了什么（审计 / 漂移分析），不与本地引擎代次计数混用。
+CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
+    node_id text NOT NULL,
+    slot_name text NOT NULL DEFAULT 'primary',
+    applied_revision bigint NOT NULL,
+    model_artifact_id text,
+    content_hash text,
+    applied_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (node_id, slot_name)
 );
 """;
     }

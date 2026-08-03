@@ -55,6 +55,19 @@ internal static partial class PostgresNames
         return $"{options.SchemaName}.{indexName}";
     }
 
+    public static string Constraint(PostgresOptions options, string tableSuffix, string constraintSuffix)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (!SafeIdentifier().IsMatch(options.TablePrefix) ||
+            !SafeIdentifier().IsMatch(tableSuffix) ||
+            !SafeIdentifier().IsMatch(constraintSuffix))
+        {
+            throw new InvalidOperationException("PostgreSQL 约束名称只能包含字母、数字和下划线，且必须以字母或下划线开头。");
+        }
+
+        return $"{options.TablePrefix}{tableSuffix}_{constraintSuffix}";
+    }
+
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
     private static partial Regex SafeIdentifier();
 }

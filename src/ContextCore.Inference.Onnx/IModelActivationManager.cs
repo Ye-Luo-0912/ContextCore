@@ -124,12 +124,18 @@ public interface IModelActivationManager : IBatchInferenceEngine, IAsyncDisposab
     /// <summary>
     /// 将先前 <see cref="LoadAndWarmupAsync"/> 产生的 Staged Handle 原子发布为 active。
     /// 未找到 handleId 时返回 Failed。成功后 Staged Handle 从内部暂存表中移除。
+    /// 发布前校验 Staged Descriptor 与期望模型一致（fail-closed）：任一期望值非空且不匹配
+    /// 即拒绝发布，防止误传其他模型的 Staged Handle 被发布为 active。
     /// </summary>
     /// <param name="stagedHandleId">由 <see cref="LoadAndWarmupAsync"/> 返回的 handle id。</param>
+    /// <param name="expectedModelArtifactId">期望的模型工件 Id；null 表示跳过该字段校验。</param>
+    /// <param name="expectedContentHash">期望的内容哈希；null 表示跳过该字段校验。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>激活结果（含已发布的引擎）。</returns>
     ValueTask<ModelActivationResult> PromoteStagedAsync(
         string stagedHandleId,
+        string? expectedModelArtifactId = null,
+        string? expectedContentHash = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

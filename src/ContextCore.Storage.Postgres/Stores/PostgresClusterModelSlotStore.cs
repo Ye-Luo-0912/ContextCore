@@ -55,7 +55,7 @@ WHERE slot_name = @slot_name;
         long expectedRevision,
         string? activeModelArtifactId,
         string? contentHash,
-        string desiredStatus,
+        ClusterModelSlotDesiredStatus desiredStatus,
         string? updatedBy,
         CancellationToken ct = default)
     {
@@ -86,7 +86,7 @@ RETURNING slot_name, active_model_artifact_id, content_hash, revision, desired_s
         command.Parameters.AddWithValue("expectedRevision", expectedRevision);
         command.Parameters.AddWithValue("artifactId", (object?)activeModelArtifactId ?? DBNull.Value);
         command.Parameters.AddWithValue("contentHash", (object?)contentHash ?? DBNull.Value);
-        command.Parameters.AddWithValue("desiredStatus", desiredStatus);
+        command.Parameters.AddWithValue("desiredStatus", desiredStatus.ToString());
         command.Parameters.AddWithValue("updatedBy", (object?)updatedBy ?? DBNull.Value);
 
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -148,7 +148,11 @@ RETURNING slot_name, active_model_artifact_id, content_hash, revision, desired_s
             ActiveModelArtifactId = reader.IsDBNull(artifactIdOrdinal) ? null : reader.GetString(artifactIdOrdinal),
             ContentHash = reader.IsDBNull(contentHashOrdinal) ? null : reader.GetString(contentHashOrdinal),
             Revision = reader.GetInt64(revisionOrdinal),
-            DesiredStatus = reader.GetString(desiredStatusOrdinal),
+            // 非法值回退 Inactive（fail-safe：绝不因脏数据自动激活未声明模型）。
+            DesiredStatus = Enum.TryParse<ClusterModelSlotDesiredStatus>(
+                reader.GetString(desiredStatusOrdinal), ignoreCase: true, out var desiredStatus)
+                ? desiredStatus
+                : ClusterModelSlotDesiredStatus.Inactive,
             UpdatedAt = reader.GetFieldValue<DateTimeOffset>(updatedAtOrdinal),
             UpdatedBy = reader.IsDBNull(updatedByOrdinal) ? null : reader.GetString(updatedByOrdinal)
         };

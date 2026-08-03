@@ -46,7 +46,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
         const string contentHash = "sha256:s4-champion-v1";
         var slotStore = new InMemoryClusterModelSlotStore();
         await slotStore.GetOrCreateAsync("primary");
-        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelId, contentHash, "Active", "control-plane");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelId, contentHash, ClusterModelSlotDesiredStatus.Active, "control-plane");
 
         var (manager, factory) = BuildActivationManager(modelId);
         using var worker = CreateWorker(slotStore, manager);
@@ -76,7 +76,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
         const string modelId = "s4-champion-v1";
         var slotStore = new InMemoryClusterModelSlotStore();
         await slotStore.GetOrCreateAsync("primary");
-        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, null, null, "Inactive", "control-plane");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, null, null, ClusterModelSlotDesiredStatus.Inactive, "control-plane");
 
         var (manager, factory) = BuildActivationManager(modelId);
         using var worker = CreateWorker(slotStore, manager);
@@ -103,7 +103,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
         const string hashB = "sha256:s4-champion-v2";
         var slotStore = new InMemoryClusterModelSlotStore();
         await slotStore.GetOrCreateAsync("primary");
-        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, "Active", "control-plane");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, ClusterModelSlotDesiredStatus.Active, "control-plane");
 
         var (manager, factory) = BuildActivationManager(modelA, modelB);
         using var worker = CreateWorker(slotStore, manager);
@@ -115,7 +115,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
             Assert.AreEqual(modelA, d1.ModelArtifactId);
 
             // Desired State 先写（Revision CAS 1 → 2），节点随后 reconcile 切换
-            var updated = await slotStore.TryUpdateAsync("primary", expectedRevision: 1, modelB, hashB, "Active", "control-plane");
+            var updated = await slotStore.TryUpdateAsync("primary", expectedRevision: 1, modelB, hashB, ClusterModelSlotDesiredStatus.Active, "control-plane");
             Assert.IsNotNull(updated, "期望状态 CAS 更新应成功。");
 
             var d2 = await WaitForActiveAsync(manager, modelB, "期望状态更新后节点应切换至模型 B。");
@@ -142,7 +142,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
         var slotStore = new InMemoryClusterModelSlotStore();
         await slotStore.GetOrCreateAsync("primary");
         // 集群期望 Revision = 1（DesiredStatus=Active，目标模型 A）
-        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, "Active", "control-plane");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, ClusterModelSlotDesiredStatus.Active, "control-plane");
 
         var (manager, factory) = BuildActivationManager(modelA, modelB);
         // 节点先本地激活模型 B（ActiveGeneration=1，本地引擎代次 ≥ 集群 Revision）
@@ -167,6 +167,205 @@ public sealed class R29H_ModelHAStructuredFailureTests
         {
             await worker.StopAsync(CancellationToken.None);
         }
+    }
+
+    // ===========================================================================
+    // Model Node Applied State：节点已应用状态记录 + 冷启动/热引擎恢复语义
+    // ===========================================================================
+
+    [TestMethod]
+    public async Task Reconciler_RecordsAppliedState_AfterActivation()
+    {
+        const string modelId = "s4-champion-v1";
+        const string contentHash = "sha256:s4-champion-v1";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelId, contentHash, ClusterModelSlotDesiredStatus.Active, "control-plane");
+
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        var (manager, _) = BuildActivationManager(modelId);
+        using var worker = CreateWorker(slotStore, manager, appliedStore);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitForActiveAsync(manager, modelId, "节点应应用集群期望状态并记录已应用状态。");
+            var applied = await WaitForAppliedAsync(appliedStore, Environment.MachineName, "primary",
+                "激活后节点应写入已应用状态记录。");
+
+            Assert.AreEqual(1, applied.AppliedRevision);
+            Assert.AreEqual(modelId, applied.ModelArtifactId);
+            Assert.AreEqual(contentHash, applied.ContentHash);
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// 验证：节点已应用状态不得成为冷启动跳过集群期望的依据——
+    /// 进程重启后本地引擎为空，即使已应用状态声称"本节点已应用过该 Revision"，
+    /// 也必须重新应用当前期望状态（与 P0-7 的计数空间隔离原则一致）。
+    /// </summary>
+    [TestMethod]
+    public async Task Reconciler_ColdEngine_AppliesDesiredDespiteAppliedState()
+    {
+        const string modelA = "s4-champion-v1";
+        const string hashA = "sha256:s4-champion-v1";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, ClusterModelSlotDesiredStatus.Active, "control-plane");
+
+        // 预置节点已应用状态（Revision=1，模型 A），但本地引擎为空（冷启动）。
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        await appliedStore.UpsertAsync(new ModelNodeAppliedState
+        {
+            NodeId = Environment.MachineName,
+            SlotName = "primary",
+            AppliedRevision = 1,
+            ModelArtifactId = modelA,
+            ContentHash = hashA,
+            AppliedAt = DateTimeOffset.UtcNow
+        });
+
+        var (manager, factory) = BuildActivationManager(modelA);
+        using var worker = CreateWorker(slotStore, manager, appliedStore);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            var descriptor = await WaitForActiveAsync(manager, modelA, "冷启动必须重新应用集群期望状态。");
+            Assert.AreEqual(modelA, descriptor.ModelArtifactId);
+            Assert.AreEqual(1, factory.CreateCallCount,
+                "冷启动（引擎为空）时已应用状态不得跳过集群期望的激活。");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// 验证：本地引擎与节点已应用状态一致（同宿主内 Reconciler 重建）时，
+    /// 从 AppliedRevision 继续收敛，不重复激活已生效的模型。
+    /// </summary>
+    [TestMethod]
+    public async Task Reconciler_WarmEngineMatchingAppliedState_DoesNotReapply()
+    {
+        const string modelA = "s4-champion-v1";
+        const string hashA = "sha256:s4-champion-v1";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, ClusterModelSlotDesiredStatus.Active, "control-plane");
+
+        // 本地引擎先激活模型 A（引擎热），节点已应用状态与之匹配（Revision=1，模型 A）。
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        await appliedStore.UpsertAsync(new ModelNodeAppliedState
+        {
+            NodeId = Environment.MachineName,
+            SlotName = "primary",
+            AppliedRevision = 1,
+            ModelArtifactId = modelA,
+            ContentHash = hashA,
+            AppliedAt = DateTimeOffset.UtcNow
+        });
+
+        var (manager, factory) = BuildActivationManager(modelA);
+        var local = await manager.ActivateAsync(modelA, new OnnxInferenceEngineOptions
+        {
+            InputTensorName = "input",
+            ScoreOutputName = "score"
+        });
+        Assert.IsTrue(local.Success, $"本地激活应成功：{local.Error}");
+
+        using var worker = CreateWorker(slotStore, manager, appliedStore);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await Task.Delay(400); // 覆盖至少一个轮询周期
+            Assert.AreEqual(modelA, manager.ActiveDescriptor?.ModelArtifactId);
+            Assert.AreEqual(1, factory.CreateCallCount,
+                "引擎已与节点已应用状态一致，不应重复激活。");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    // ===========================================================================
+    // PromoteStaged 发布前 Descriptor 校验（fail-closed）
+    // ===========================================================================
+
+    [TestMethod]
+    public async Task PromoteStaged_MatchingDescriptor_Publishes()
+    {
+        const string modelA = "s4-champion-v1";
+        const string hashA = "sha256:s4-champion-v1";
+        var (manager, _) = BuildActivationManager(modelA);
+
+        var staged = await manager.LoadAndWarmupAsync(modelA, CreateDefaultOnnxOptions());
+        Assert.IsTrue(staged.Success, $"Warmup 应成功：{staged.Error}");
+        Assert.IsNotNull(staged.Descriptor);
+
+        var result = await manager.PromoteStagedAsync(staged.HandleId, modelA, hashA);
+
+        Assert.IsTrue(result.Success, $"期望匹配时应发布成功：{result.Error}");
+        Assert.AreEqual(modelA, manager.ActiveDescriptor?.ModelArtifactId);
+        Assert.AreEqual(hashA, manager.ContentHash);
+    }
+
+    [TestMethod]
+    public async Task PromoteStaged_WrongModelArtifactId_FailsClosed()
+    {
+        const string modelA = "s4-champion-v1";
+        var (manager, factory) = BuildActivationManager(modelA);
+
+        var staged = await manager.LoadAndWarmupAsync(modelA, CreateDefaultOnnxOptions());
+        Assert.IsTrue(staged.Success, $"Warmup 应成功：{staged.Error}");
+
+        // 期望模型 Id 与实际 Staged Descriptor 不匹配 → 拒绝发布（fail-closed）。
+        var result = await manager.PromoteStagedAsync(staged.HandleId, "s4-other-model", "sha256:other");
+
+        Assert.IsFalse(result.Success, "期望模型 Id 不匹配时不得发布。");
+        StringAssert.Contains(result.Error, "不匹配");
+        Assert.IsNull(manager.ActiveDescriptor, "发布被拒绝时不得切换 active 引擎。");
+        Assert.AreEqual(1, factory.CreateCallCount, "失败路径不得创建额外 session。");
+    }
+
+    [TestMethod]
+    public async Task PromoteStaged_WrongContentHash_FailsClosed()
+    {
+        const string modelA = "s4-champion-v1";
+        var (manager, factory) = BuildActivationManager(modelA);
+
+        var staged = await manager.LoadAndWarmupAsync(modelA, CreateDefaultOnnxOptions());
+        Assert.IsTrue(staged.Success, $"Warmup 应成功：{staged.Error}");
+
+        // 期望内容哈希与实际 Staged Descriptor 不匹配 → 拒绝发布（fail-closed）。
+        var result = await manager.PromoteStagedAsync(staged.HandleId, modelA, "sha256:wrong-hash");
+
+        Assert.IsFalse(result.Success, "期望内容哈希不匹配时不得发布。");
+        StringAssert.Contains(result.Error, "不匹配");
+        Assert.IsNull(manager.ActiveDescriptor, "发布被拒绝时不得切换 active 引擎。");
+        Assert.AreEqual(1, factory.CreateCallCount, "失败路径不得创建额外 session。");
+    }
+
+    [TestMethod]
+    public async Task PromoteStaged_NullExpectations_Publishes()
+    {
+        const string modelA = "s4-champion-v1";
+        var (manager, _) = BuildActivationManager(modelA);
+
+        var staged = await manager.LoadAndWarmupAsync(modelA, CreateDefaultOnnxOptions());
+        Assert.IsTrue(staged.Success, $"Warmup 应成功：{staged.Error}");
+
+        // 期望值均为 null（未指定）→ 跳过校验，保持向后兼容发布语义。
+        var result = await manager.PromoteStagedAsync(staged.HandleId);
+
+        Assert.IsTrue(result.Success, $"未指定期望值时按原语义发布：{result.Error}");
+        Assert.AreEqual(modelA, manager.ActiveDescriptor?.ModelArtifactId);
     }
 
     // ===========================================================================
@@ -337,9 +536,36 @@ public sealed class R29H_ModelHAStructuredFailureTests
         return null!;
     }
 
+    private static async Task<ModelNodeAppliedState> WaitForAppliedAsync(
+        IModelNodeAppliedStateStore store,
+        string nodeId,
+        string slotName,
+        string message)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            var applied = await store.GetAsync(nodeId, slotName);
+            if (applied is not null)
+            {
+                return applied;
+            }
+            await Task.Delay(50);
+        }
+        Assert.Fail($"{message}（等待节点已应用状态写入超时）。");
+        return null!;
+    }
+
+    private static OnnxInferenceEngineOptions CreateDefaultOnnxOptions() => new()
+    {
+        InputTensorName = "input",
+        ScoreOutputName = "score"
+    };
+
     private static ModelStateReconcilerWorker CreateWorker(
         IClusterModelSlotStore slotStore,
-        IModelActivationManager manager)
+        IModelActivationManager manager,
+        IModelNodeAppliedStateStore? appliedStateStore = null)
     {
         var options = new ModelStateReconcilerOptions
         {
@@ -351,7 +577,8 @@ public sealed class R29H_ModelHAStructuredFailureTests
             manager,
             new TestOptionsMonitor<ModelStateReconcilerOptions>(options),
             new ConfigurationBuilder().Build(),
-            NullLogger<ModelStateReconcilerWorker>.Instance);
+            NullLogger<ModelStateReconcilerWorker>.Instance,
+            appliedStateStore);
     }
 
     private static (ModelActivationManager Manager, TrackingSessionFactory Factory) BuildActivationManager(

@@ -754,6 +754,11 @@ internal static class CoreExtensions
 		// 供 ModelStateReconcilerWorker 构造注入，以及控制面端点 CAS 更新使用。
 		services.TryAddSingleton<IClusterModelSlotStore, InMemoryClusterModelSlotStore>();
 
+		// IModelNodeAppliedStateStore 默认实现（InMemory）—— 节点已应用状态。
+		// 供 ModelStateReconcilerWorker 记录/查询本节点已应用的集群槽位 Revision；
+		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，Postgres 持久化实现生效。
+		services.TryAddSingleton<IModelNodeAppliedStateStore, InMemoryModelNodeAppliedStateStore>();
+
 		// ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
 		// 不抛异常：返回结构化 CalibrationValidationResult（Error / Warning / Info），
 		// 让 ModelArtifactRegistry 加载 descriptor 后能拒绝在统计上不合理的校准配置，

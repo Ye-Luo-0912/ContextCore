@@ -191,6 +191,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresClusterModelSlotStore>();
         services.AddSingleton<IClusterModelSlotStore>(sp => sp.GetRequiredService<PostgresClusterModelSlotStore>());
 
+        // Model Node Applied State 持久化（PostgreSQL）。
+        // 记录各节点最后成功应用的集群槽位 Revision 与模型内容，供 Reconciler 重启后查询
+        // 本节点上次应用了什么（审计 / 漂移分析）；Upsert 通过 AppliedRevision CAS 防陈旧回写。
+        services.AddSingleton<PostgresModelNodeAppliedStateStore>();
+        services.AddSingleton<IModelNodeAppliedStateStore>(sp => sp.GetRequiredService<PostgresModelNodeAppliedStateStore>());
+
         // Model Activation Audit 持久化（PostgreSQL）。
         // 替代 FileSystem / InMemory provider 下的 InMemory 默认实现，让 HA 场景下
         // 模型生命周期审计记录（Activate / Rollback / Retire / Shadow 等）可跨进程持久化与查询。

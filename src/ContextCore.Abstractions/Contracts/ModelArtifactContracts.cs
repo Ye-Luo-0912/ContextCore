@@ -258,6 +258,18 @@ public interface IDesiredModelStateStore
 // ===========================================================================
 
 /// <summary>
+/// 集群模型槽位期望状态。仅两个合法值，与数据库 CHECK 约束保持一致。
+/// </summary>
+public enum ClusterModelSlotDesiredStatus
+{
+    /// <summary>停用：回退到 fallback 引擎，不激活任何模型。</summary>
+    Inactive = 0,
+
+    /// <summary>激活 ActiveModelArtifactId 指定的模型。</summary>
+    Active = 1
+}
+
+/// <summary>
 /// Single champion cluster model slot. The single source of truth for which model is active across the cluster.
 /// Only one row per slot name (e.g., "primary"). CAS updates ensure atomic model switching.
 /// </summary>
@@ -275,8 +287,8 @@ public sealed record ClusterModelSlot
     /// <summary>Monotonically increasing revision (CAS token).</summary>
     public required long Revision { get; init; } = 0;
 
-    /// <summary>Desired status: "Active" or "Inactive".</summary>
-    public required string DesiredStatus { get; init; } = "Inactive";
+    /// <summary>Desired status of the slot (which model should be active).</summary>
+    public required ClusterModelSlotDesiredStatus DesiredStatus { get; init; } = ClusterModelSlotDesiredStatus.Inactive;
 
     /// <summary>When the slot was last updated.</summary>
     public required DateTimeOffset UpdatedAt { get; init; }
@@ -302,10 +314,53 @@ public interface IClusterModelSlotStore
         long expectedRevision,
         string? activeModelArtifactId,
         string? contentHash,
-        string desiredStatus,
+        ClusterModelSlotDesiredStatus desiredStatus,
         string? updatedBy,
         CancellationToken ct = default);
 
     /// <summary>Initialize the slot if it doesn't exist. Returns the slot (existing or newly created).</summary>
     ValueTask<ClusterModelSlot> GetOrCreateAsync(string slotName, CancellationToken ct = default);
+}
+
+/// <summary>
+/// 单节点已应用的集群槽位状态。记录某节点对某 slot 最后成功应用的 Revision 与模型内容，
+/// 是 <see cref="IClusterModelSlotStore"/> 期望状态的节点侧持久化镜像：
+/// 节点重启后可查询"本节点上次应用了什么"（审计 / 漂移分析），且不与本地引擎代次计数混用。
+/// </summary>
+public sealed record ModelNodeAppliedState
+{
+    /// <summary>节点 Id（稳定节点标识，如机器名；跨进程重启保持同一身份）。</summary>
+    public required string NodeId { get; init; }
+
+    /// <summary>槽位名（如 "primary"）。</summary>
+    public required string SlotName { get; init; }
+
+    /// <summary>该节点已应用的最新集群槽位 Revision。</summary>
+    public required long AppliedRevision { get; init; }
+
+    /// <summary>已应用模型的工件 Id（Inactive 期望状态下为 null）。</summary>
+    public string? ModelArtifactId { get; init; }
+
+    /// <summary>已应用模型的内容哈希（Inactive 期望状态下为 null）。</summary>
+    public string? ContentHash { get; init; }
+
+    /// <summary>应用时间。</summary>
+    public required DateTimeOffset AppliedAt { get; init; }
+}
+
+/// <summary>
+/// 节点已应用状态存储：每个 (node_id, slot_name) 一行，记录该节点最后成功应用的
+/// 集群槽位 Revision 与模型内容。Upsert 通过 AppliedRevision 做乐观并发控制（CAS），
+/// 仅当新 Revision ≥ 已存 Revision 时生效，防止陈旧节点回写覆盖更新的应用记录。
+/// </summary>
+public interface IModelNodeAppliedStateStore
+{
+    /// <summary>读取节点对某槽位最后成功应用的状态；无记录返回 null。</summary>
+    ValueTask<ModelNodeAppliedState?> GetAsync(string nodeId, string slotName, CancellationToken ct = default);
+
+    /// <summary>
+    /// 写入节点已应用状态（CAS on AppliedRevision）：仅当新 AppliedRevision 大于等于
+    /// 已存记录的 AppliedRevision 时生效。返回实际生效的记录（CAS 拒绝时返回已存记录）。
+    /// </summary>
+    ValueTask<ModelNodeAppliedState> UpsertAsync(ModelNodeAppliedState state, CancellationToken ct = default);
 }

@@ -34,7 +34,7 @@ public sealed class InMemoryClusterModelSlotStore : IClusterModelSlotStore
         long expectedRevision,
         string? activeModelArtifactId,
         string? contentHash,
-        string desiredStatus,
+        ClusterModelSlotDesiredStatus desiredStatus,
         string? updatedBy,
         CancellationToken ct = default)
     {
@@ -90,7 +90,7 @@ public sealed class InMemoryClusterModelSlotStore : IClusterModelSlotStore
             ActiveModelArtifactId = null,
             ContentHash = null,
             Revision = 0,
-            DesiredStatus = "Inactive",
+            DesiredStatus = ClusterModelSlotDesiredStatus.Inactive,
             UpdatedAt = DateTimeOffset.UtcNow,
             UpdatedBy = null
         });
