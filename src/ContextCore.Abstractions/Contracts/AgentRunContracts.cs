@@ -2535,6 +2535,20 @@ public sealed record AgentRunCompactionResult(
     DateTimeOffset CompactedAt);
 
 /// <summary>
+/// 待自动压缩的候选 Run（热表事件数达到阈值）。
+/// </summary>
+/// <remarks>
+/// 由后台自动压缩 worker 每轮扫描产生：<see cref="EventCount"/> 为热表当前事件数，
+/// <see cref="LastSequence"/> 为当前最后 sequence（worker 以此为折叠上界，
+/// 使锚点 = 最后事件、前缀全部归档——避免依赖 -1 哨兵只锚定首事件而不折叠）。
+/// </remarks>
+public sealed record AgentRunCompactionCandidate(
+    string WorkspaceId,
+    string RunId,
+    int EventCount,
+    int LastSequence);
+
+/// <summary>
 /// Run 事件流快照与压缩抽象（Event Snapshot &amp; Compaction）。
 /// </summary>
 /// <remarks>
@@ -2583,5 +2597,17 @@ public interface IAgentRunEventCompactor
         string runId,
         int fromSequence = 0,
         int take = 1000,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 找出热表事件数达到阈值、适合自动压缩的候选 Run（按事件数降序，限量返回）。
+    /// 供后台自动压缩 worker 每轮扫描；返回空列表表示当前无超阈值 Run。
+    /// </summary>
+    /// <param name="minEventCount">事件数阈值（含）。</param>
+    /// <param name="limit">单次返回上限。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task<IReadOnlyList<AgentRunCompactionCandidate>> FindCandidatesAsync(
+        int minEventCount,
+        int limit,
         CancellationToken cancellationToken = default);
 }

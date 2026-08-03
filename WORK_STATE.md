@@ -15,16 +15,17 @@
 
 ## 当前状态
 
-- **基线**：main @ `c140eb3f`（工作树干净）。
-- **进行中**：性能优化 WP-P4（Event 快照自动压缩后台 worker）。
-- **最近完成**：WP-P3 推理热路径（profile 并发、DirectML、相位计时、指标）。
+- **基线**：main @ `544479e5`（工作树干净）。
+- **进行中**：性能优化 WP-P5（CI Artifact 瘦身/分项目）。
+- **最近完成**：WP-P4 Event 快照自动压缩后台 worker（简单阈值策略）。
 
 ### 性能优化工作包进度
 
 - **WP-P1 已完成**：`ILeasedJobQueue.AcquireLeaseBatchAsync`（批量领取 + per-workspace 公平，两阶段 ROW_NUMBER）；`ContextJobWorker` 改为批量领取并按空闲槽位分派；新增 `PostgresJobQueueMetrics.QueueWait` 直方图（入队→领取等待时长）；`RealToolDispatcher.GetToolDefinitions` 冻结缓存；`JobWorkerOptions.MaxPerWorkspaceClaim`（默认 10）。验证：build 0 错误；ContextCore.Tests 11 既有失败不变（+2 新测试通过）；Service.Tests 64 通过；集成测试本地跳过（Docker 不可用，CI 覆盖）。
 - **WP-P2 已完成**：检索 Selected-only 正文水合 + Exact token 只对 Selected。keyword/mandatory 通道保留 IncludeContent=true（评分依赖正文，不改基线）；向量通道改为元数据投影召回（探测 `IContextStoreMetadataLookup`/`IMemoryStoreMetadataLookup`，缺失则回退批量/单条）；Postgres context/memory 元数据投影补齐存储元数据字典（`data->'Metadata'`，修正 metadata 路径下 deprecated 过滤）；pack 阶段 token 估算回退摄取持久化的 `__content_token_cost`；新增 `SelectedCandidateContentHydrator`，Pack 后仅对 Selected 候选批量水合正文并重算 token；`HybridContextRetriever` 可选接入 tokenizer。验证：build 0 错误（无新增警告）；全量 ContextCore.Tests 3379 总数 / 11 既有失败不变（+4 新测试通过）；Service.Tests 0 失败 64 通过；集成测试本地跳过（CI 覆盖）。
 - **WP-P3 已完成**：推理热路径。MaxConcurrency 按 profile 配置（CPU=ProcessorCount，CUDA/TensorRT/DirectML 单 GPU 默认 1）；新增 `OnnxExecutionProvider.DirectML`（`AppendExecutionProvider_DML(deviceId)`）；`InferencePhaseTimingCallback` 接线到 `DefaultComponentHealthRegistry.RecordInferencePhaseTime`（scopeKey "default"，两处生产配置构造点）；新增 `InferenceMetrics`（Meter "ContextCore.Inference.Onnx"：session_contention / shards_executed / queue_wait / batch_fill_ratio / cancellation_waste 五项）；减少每请求分配（stackalloc int[2]、rowOffsets 走 ArrayPool；NamedOnnxValue[] 因 ORT 无 span 重载保留）。验证：build 0 错误（仅既有 CS8625 警告）；R30 新测试 6/6；既有推理测试 39 通过 1 跳过；Service.Tests 0 失败 64 通过（1 跳过）。
-- **WP-P4（快照自动压缩）**、**WP-P5（CI Artifact）** 待做。
+- **WP-P4 已完成**：Event 快照自动压缩后台 worker。`IAgentRunEventCompactor` 新增 `FindCandidatesAsync`（热表按 Run 分组统计事件数，HAVING 阈值 + 限量降序）；新增 `AgentRunCompactionCandidate`（含 LastSequence，worker 以之为折叠上界全量折叠——避免 -1 哨兵只锚定首事件）；新增 `AgentRunEventCompactionWorker`（profile-agnostic，非 Postgres 自退出；简单阈值策略：每轮扫描 ≥MinEventCount(默认 1000) 的 Run，按事件数降序最多压缩 MaxRunsPerPass(20) 个；单 Run 失败不影响本轮其他 Run，连续失败指数退避）；新增 `AgentRunEventCompactionOptions`（"EventCompaction" 配置节）；抽取 `WorkerBackoff` 共享退避，`ModelStateReconcilerWorker.ComputeBackoffDelay` 委托复用；三 profile 统一注册 + workerRegistry。验证：build 0 错误（无新增警告）；R30S 新测试 10/10；PublicApi baseline 通过；R29S/R29H 注册与对账相关定向测试通过（唯一失败为 11 个既有项之一）。
+- **WP-P5（CI Artifact）** 待做。
 
 ## 必要元信息
 

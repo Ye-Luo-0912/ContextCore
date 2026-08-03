@@ -190,6 +190,55 @@ LIMIT @take;
         return await ExecuteReaderJsonAsync<AgentRunEvent>(command, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// 热表按 Run 分组统计（PK (workspace_id, run_id, sequence) 覆盖分组扫描），
+    /// 按事件数降序取前 limit 个，供后台 worker 逐轮处理。
+    /// </remarks>
+    public async Task<IReadOnlyList<AgentRunCompactionCandidate>> FindCandidatesAsync(
+        int minEventCount,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (minEventCount < 1)
+        {
+            minEventCount = 1;
+        }
+
+        if (limit < 1)
+        {
+            limit = 50;
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT workspace_id, run_id, COUNT(*) AS event_count, MAX(sequence) AS last_sequence
+FROM {Table("agent_run_events")}
+GROUP BY workspace_id, run_id
+HAVING COUNT(*) >= @min_event_count
+ORDER BY event_count DESC
+LIMIT @limit;
+""";
+        command.Parameters.AddWithValue("min_event_count", minEventCount);
+        command.Parameters.AddWithValue("limit", limit);
+
+        var candidates = new List<AgentRunCompactionCandidate>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            candidates.Add(new AgentRunCompactionCandidate(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetInt32(2),
+                reader.GetInt32(3)));
+        }
+
+        return candidates;
+    }
+
     /// <summary>
     /// 纯函数折叠计算（供单元测试直接验证）：
     /// 按 sequence 升序排序，锚点 = sequence == upToSequence 的事件（钳制后），

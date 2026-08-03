@@ -125,6 +125,9 @@ internal static class ProductionRuntimeExtensions
         // 绑定 LearningMaterializationOptions（LearningMaterializationWorker 依赖）
         services.Configure<LearningMaterializationOptions>(configuration.GetSection("LearningMaterialization"));
 
+        // 绑定 AgentRunEventCompactionOptions（AgentRunEventCompactionWorker 依赖）
+        services.Configure<AgentRunEventCompactionOptions>(configuration.GetSection("EventCompaction"));
+
         // 读取 Storage provider 用于跨配置验证
         var storageProvider = configuration["Storage:Provider"] ?? "filesystem";
         var storageIsPostgres = string.Equals(storageProvider, "postgres", StringComparison.OrdinalIgnoreCase)
@@ -153,6 +156,11 @@ internal static class ProductionRuntimeExtensions
                     $"未知的 RuntimeProfile 值：{runtimeOptions.Profile}。" +
                     $"支持的值：Development, SingleNode, ProductionHA。");
         }
+
+        // Event 快照自动压缩 worker：profile-agnostic（非 Postgres provider 时
+        // IAgentRunEventCompactor 未注册，worker 检测到 null 后自退出 no-op）。
+        services.AddHostedService<AgentRunEventCompactionWorker>();
+        workerRegistry.Add<AgentRunEventCompactionWorker>();
 
         // CanaryProgressionHostedService 和 CanaryLeaderHostedService 记录到 registry 供 readiness 端点查询。
         // 实际 HostedService 注册按 Profile 互斥（避免单节点 + HA 双推进器）。

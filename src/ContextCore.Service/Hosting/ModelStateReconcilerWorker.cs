@@ -137,19 +137,16 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     /// <summary>
     /// 计算退避延迟：连续失败 n 次 → min(BackoffBaseDelay × 2^(n-1), BackoffMaxDelay)；
     /// 指数在 MaxRetryCount 后封顶（保持 BackoffMaxDelay，不继续增长）。internal static 供单元测试。
+    /// 语义与 <see cref="WorkerBackoff.Compute"/> 一致，此处委托共享实现。
     /// </summary>
     internal static TimeSpan ComputeBackoffDelay(ModelStateReconcilerOptions options, int consecutiveFailures)
     {
-        if (consecutiveFailures <= 0)
-        {
-            return options.PollInterval;
-        }
-
-        var exponent = Math.Min(consecutiveFailures - 1, Math.Max(0, options.MaxRetryCount - 1));
-        var baseMs = options.BackoffBaseDelay.TotalMilliseconds;
-        var candidateMs = baseMs * Math.Pow(2.0, exponent);
-        var cappedMs = Math.Min(candidateMs, options.BackoffMaxDelay.TotalMilliseconds);
-        return TimeSpan.FromMilliseconds(cappedMs);
+        return WorkerBackoff.Compute(
+            options.PollInterval,
+            options.BackoffBaseDelay,
+            options.BackoffMaxDelay,
+            options.MaxRetryCount,
+            consecutiveFailures);
     }
 
     /// <summary>
