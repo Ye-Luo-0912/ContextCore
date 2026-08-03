@@ -111,7 +111,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   - external_operation_id partial 索引：支持按 journal externalOperationId 反查（ControlRoom 运维）。
     ///   - deadline_utc 列 + (status, created_at) 索引：过期未决高亮（ControlRoom）与 Worker 轮询。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v52";
+    public const string SchemaVersion = "cc-schema-v53";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -375,6 +375,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Agent Run 索引（按 session 列举 + 按 state 拉取待处理；events 主键已覆盖按 run 查询）
         ("agent_runs", "session"),
         ("agent_runs", "state"),
+        // B3 Durable Scheduler 领取索引（state + priority DESC + created_at ASC）
+        ("agent_runs", "scheduling"),
         // idempotency_key partial UNIQUE 索引（按 workspace + idempotency_key 点查 + 去重）
         ("agent_runs", "idempotency"),
         // Canary HA 聚合索引
@@ -1975,6 +1977,10 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
     task text NOT NULL DEFAULT '',
     state smallint NOT NULL DEFAULT 0,
     turn integer NOT NULL DEFAULT 0,
+    priority integer NOT NULL DEFAULT 0,
+    max_retries integer NOT NULL DEFAULT 0,
+    retry_count integer NOT NULL DEFAULT 0,
+    next_retry_at timestamptz NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     finished_at timestamptz NULL,
@@ -1998,8 +2004,18 @@ ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS last_checkpoint_sequence intege
 -- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效，幂等）
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS idempotency_key text NULL;
 
+-- v52 → v53 迁移：为已有 agent_runs 表补充调度/重试列（priority / max_retries / retry_count / next_retry_at）
+-- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效，幂等）
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS priority integer NOT NULL DEFAULT 0;
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS max_retries integer NOT NULL DEFAULT 0;
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS retry_count integer NOT NULL DEFAULT 0;
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS next_retry_at timestamptz NULL;
+
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);
+-- v52 → v53：Durable Scheduler 领取索引（state + 优先级倒序 + 创建时间升序），
+-- 支撑 ClaimPendingBatchAsync 的 FOR UPDATE SKIP LOCKED 领取排序（优先级高者先、同优先级先到先得）。
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "scheduling")} ON {agentRuns} (state, priority DESC, created_at ASC);
 -- partial UNIQUE 索引让同一 workspace 内 idempotency_key 全局唯一（NULL 不参与唯一约束），
 -- 防止客户端重试/网络抖动产生重复 Run； GetByIdempotencyKeyAsync 走此索引点查。
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "idempotency")} ON {agentRuns} (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;

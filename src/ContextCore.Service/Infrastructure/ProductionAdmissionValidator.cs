@@ -361,6 +361,7 @@ public sealed class ProductionAdmissionValidator
         var expected = new List<string>
         {
             nameof(AgentRunRecoveryWorker),
+            nameof(PostgresPendingRunClaimer),
             nameof(LearningMaterializationWorker),
             nameof(ToolReconciliationWorker),
             nameof(CanaryLeaderHostedService),
@@ -369,6 +370,7 @@ public sealed class ProductionAdmissionValidator
         if (!_runtimeOptions.EnableAgentRunRecovery)
         {
             expected.Remove(nameof(AgentRunRecoveryWorker));
+            expected.Remove(nameof(PostgresPendingRunClaimer));
         }
 
         var registered = _workerRegistry.WorkerTypeNames;

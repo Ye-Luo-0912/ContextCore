@@ -58,7 +58,8 @@ public interface IPostgresMigrationStep
 
 /// <summary>
 /// 版本化迁移步骤注册表，按 FromSchemaVersion / ToSchemaVersion 升序排列。
-/// 当前包含 v48 → v49 的 tool_dispatch_results 主键迁移示例；后续 schema 演进在此追加新步骤。
+/// 当前包含 v48 → v49 的 tool_dispatch_results 主键迁移、v52 → v53 的 agent_runs
+/// 调度/重试列迁移；后续 schema 演进在此追加新步骤。
 /// 注册表是不可变的，启动时构建一次。
 /// </summary>
 public static class PostgresMigrationStepRegistry
@@ -66,6 +67,7 @@ public static class PostgresMigrationStepRegistry
     /// <summary>已知迁移步骤，按版本升序排列。</summary>
     public static IReadOnlyList<IPostgresMigrationStep> Steps { get; } =
     [
-        new PostgresMigrationToolDispatchResultsResultKey()
+        new PostgresMigrationToolDispatchResultsResultKey(),
+        new PostgresMigrationAgentRunScheduling()
     ];
 }

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Threading.Channels;
 using ContextCore.Abstractions;
 using Microsoft.Extensions.Logging;
 
@@ -12,23 +11,24 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
 //   2. 通过 IServiceProvider 解析 Actor 所需依赖（与 DI 容器集成）；
 //   3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceId:runId）；
-//   4. StartRunAsync 创建 Actor 并写入 bounded Channel（fire-and-forget）；
+//   4. StartRunAsync 创建 Actor 并写入 bounded 优先级队列（fire-and-forget）；
 //   5. GetRunStatusAsync 查询 Run 状态（通过 IAgentRunStore）；
 //   6. CancelRunAsync 取消指定 Run（TransitionState → Cancelled + CTS 触发）。
 //
 // 子问题 9 生产化增强：
-//   - HA Run Lease：P0-4 方案 A — Worker 从 Channel 取到 Run + 获得执行槽之后再
+//   - HA Run Lease：P0-4 方案 A — Worker 取到 Run + 获得执行槽之后再
 //     IAgentRunLease.TryAcquireAsync 获取租约，然后立即启动 heartbeat；入队前不获取 lease。
 //     heartbeat 续租失败时 CancellationTokenSource.Cancel() 取消 Actor（防止双执行）；
 //     处理完成后 Release；
 //   - 全局并发上限：SemaphoreSlim(MaxGlobalRuns)；
 //   - Workspace 级并发上限：per-workspace SemaphoreSlim(MaxWorkspaceRuns)；
 //
-// Learning Loop Durable Outbox 增强（替代 Task.Factory.StartNew）：
-//   - bounded Channel + 固定 worker 池：消除每 Run 一个 Task 的 Task 风暴风险；
-//   - 队列深度管理：ChannelCapacity 上限，超过后 StartRunAsync 拒绝入队（拒绝策略）；
-//   - 公平调度：FIFO Channel 保证先入队的 Run 先被 worker 拉取；
-//   - 优雅 drain：IAsyncDisposable.DisposeAsync 完成 Channel 并等待 worker 排空（DrainTimeout）。
+// B3 Durable Scheduler 增强（替代 Task.Factory.StartNew / FIFO Channel）：
+//   - bounded 优先级队列（PriorityQueue + SemaphoreSlim 背压）+ 固定 worker 池：
+//     消除每 Run 一个 Task 的 Task 风暴风险；
+//   - 优先级调度：Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）；
+//   - 队列深度管理：ChannelCapacity 上限，超过后拒绝入队（QueueFull 拒绝策略）；
+//   - 优雅 drain：IAsyncDisposable.DisposeAsync 标记关闭 + 唤醒 worker 排空（DrainTimeout）。
 // ===========================================================================
 
 /// <summary>
@@ -37,8 +37,8 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// 为每个 Run 创建独立的 <see cref="AgentRunActor"/> 实例，实现真正的多 Session 隔离。
 /// </summary>
 /// <remarks>
-/// Learning Loop Durable Outbox 增强后，Run 执行通过 bounded Channel + 固定 worker 池调度，
-/// 替代原 Task.Factory.StartNew 模式。Channel 提供队列深度管理与拒绝策略；
+/// B3 Durable Scheduler 增强后，Run 执行通过 bounded 优先级队列 + 固定 worker 池调度，
+/// 替代原 Task.Factory.StartNew / FIFO Channel 模式。队列提供深度管理、优先级排序与拒绝策略；
 /// worker 池提供固定并发上限与优雅 drain。
 /// </remarks>
 public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
@@ -62,8 +62,17 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     // workspace 信号量 LRU 最大条目数（超过时淘汰空闲条目）
     private const int WorkspaceSemaphoreMaxEntries = 128;
 
-    // bounded Channel + 固定 worker 池（替代 Task.Factory.StartNew）
-    private readonly Channel<RunWorkItem> _channel;
+    // bounded 优先级队列 + 固定 worker 池（替代 Task.Factory.StartNew / FIFO Channel）
+    // B3：调度从 FIFO 升级为按 Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）。
+    // 队列使用 PriorityQueue（最小堆）+ 互斥锁保护（多 worker 并发出队）；
+    // 背压由 _queueCapacity SemaphoreSlim(容量) 表达——TryEnqueue 非阻塞尝试获取槽位，
+    // 满时立即返回 QueueFull（与旧 Channel.TryWrite 语义一致）；
+    // _queueSignal 通知 worker 有新任务（计数 = 队列中待执行数）。
+    private readonly object _queueLock = new();
+    private readonly PriorityQueue<RunWorkItem, (int ReversePriority, long Sequence)> _queue = new();
+    private readonly SemaphoreSlim _queueCapacity;
+    private readonly SemaphoreSlim _queueSignal;
+    private long _queueSequence;
     private readonly Task[] _workers;
     private readonly CancellationTokenSource _workerCts;
     private readonly int _workerCount;
@@ -100,14 +109,10 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var globalMax = _options.MaxGlobalRuns > 0 ? _options.MaxGlobalRuns : 100;
         _globalSemaphore = new SemaphoreSlim(globalMax, globalMax);
 
-        // bounded Channel：队列深度管理 + 拒绝策略。
+        // bounded 优先级队列：容量上限 = ChannelCapacity（保留 256 默认与 QueueFull 拒绝策略）。
         var capacity = _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
-        _channel = Channel.CreateBounded<RunWorkItem>(new BoundedChannelOptions(capacity)
-        {
-            FullMode = BoundedChannelFullMode.Wait,
-            SingleReader = false,
-            SingleWriter = false
-        });
+        _queueCapacity = new SemaphoreSlim(capacity, capacity);
+        _queueSignal = new SemaphoreSlim(0, int.MaxValue);
 
         // 固定 worker 池：默认 = MaxGlobalRuns（worker 阻塞在 SemaphoreSlim 等待槽位，不成为瓶颈）。
         _workerCount = _options.WorkerCount > 0 ? _options.WorkerCount : globalMax;
@@ -128,7 +133,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// <returns>表示入队完成的任务（不等待执行完成）。</returns>
     /// <exception cref="InvalidOperationException">Host 已关闭（<see cref="AgentRunEnqueueStatus.Closed"/>）。</exception>
     /// <remarks>
-    /// 方案 A：入队前不获取 lease。Worker 从 Channel 取到 Run + 获得执行槽之后再
+    /// 方案 A：入队前不获取 lease。Worker 从队列取到 Run + 获得执行槽之后再
     /// <see cref="RunWithLeaseAndConcurrencyAsync"/> 中 Acquire Lease，然后立即启动 heartbeat。
     /// 避免排队期间 lease 过期导致 heartbeat 无法续租、双实例并发执行同一 Run。
     /// 队列满时不阻塞（非致命：Run 已持久化，RecoveryWorker 稍后接管）。
@@ -173,7 +178,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 "AgentKernelHost 已关闭，无法入队新的 Run。"));
         }
 
-        // 方案 A：入队前不获取 lease；Worker 从 Channel 取到 Run + 获得执行槽之后再 Acquire Lease。
+        // 方案 A：入队前不获取 lease；Worker 从队列取到 Run + 获得执行槽之后再 Acquire Lease。
         // 避免排队期间 lease 过期导致 heartbeat 无法续租、双实例并发执行同一 Run。
         var actor = CreateActor();
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -188,23 +193,37 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 "同进程内已有活跃 Run（并发竞争），跳过重复入队。"));
         }
 
-        // 非阻塞入队（替代 WriteAsync：满队列不无限等待，立即返回 QueueFull）。
-        // TryWrite 在 Channel 已 Completed 时返回 false（DisposeAsync 竞态窗口）。
+        // 非阻塞入队：先尝试获取容量槽位（满队列立即返回 QueueFull，不无限等待），
+        // 获取槽位后在锁内二次检查 disposed（与释放槽位原子配对，避免 Dispose 竞态泄漏槽位），
+        // 入队后释放 _queueSignal 唤醒 worker。优先级键 = (-Priority, 递增序号)：
+        // PriorityQueue 是最小堆，-Priority 最小 = 最高优先级先出队；序号保证同优先级 FIFO。
         var workItem = new RunWorkItem(run, key, activeRun);
-        if (!_channel.Writer.TryWrite(workItem))
+        if (!_queueCapacity.Wait(0))
         {
             // 失败路径清理：移除活跃 Run 跟踪 + 释放 CTS（不留残留）
             _activeRuns.TryRemove(key, out _);
             cts.Dispose();
 
-            var closed = Volatile.Read(ref _disposed) != 0;
             return ValueTask.FromResult(BuildEnqueueResult(
-                closed ? AgentRunEnqueueStatus.Closed : AgentRunEnqueueStatus.QueueFull,
-                run.RunId, capacity,
-                closed
-                    ? "AgentKernelHost 已关闭，无法入队新的 Run。"
-                    : $"调度队列已满（容量 {capacity}），Run 已持久化，将由 RecoveryWorker 稍后接管执行。"));
+                AgentRunEnqueueStatus.QueueFull, run.RunId, capacity,
+                $"调度队列已满（容量 {capacity}），Run 已持久化，将由 RecoveryWorker 稍后接管执行。"));
         }
+
+        lock (_queueLock)
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                // Dispose 竞态窗口：释放槽位 + 清理跟踪（不留残留）
+                _queueCapacity.Release();
+                _activeRuns.TryRemove(key, out _);
+                cts.Dispose();
+                return ValueTask.FromResult(BuildEnqueueResult(
+                    AgentRunEnqueueStatus.Closed, run.RunId, capacity,
+                    "AgentKernelHost 已关闭，无法入队新的 Run。"));
+            }
+            _queue.Enqueue(workItem, (-run.Priority, _queueSequence++));
+        }
+        _queueSignal.Release();
 
         return ValueTask.FromResult(BuildEnqueueResult(
             AgentRunEnqueueStatus.Accepted, run.RunId, capacity, null));
@@ -216,30 +235,72 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         {
             Status = status,
             RunId = runId,
-            QueueDepth = _channel.Reader.Count,
+            QueueDepth = QueueDepth,
             ActiveCount = _activeRuns.Count,
             Capacity = capacity,
             Detail = detail
         };
 
     /// <summary>当前队列深度（等待执行的 Run 数；诊断/监控用）。</summary>
-    public int QueueDepth => _channel.Reader.Count;
+    public int QueueDepth
+    {
+        get
+        {
+            lock (_queueLock)
+            {
+                return _queue.Count;
+            }
+        }
+    }
 
     /// <summary>调度队列容量上限（诊断/监控用）。</summary>
     public int QueueCapacity => _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
 
-    /// <summary>固定 worker 数（从 Channel 拉取 Run 并执行的后台任务数）。</summary>
+    /// <summary>固定 worker 数（从队列拉取 Run 并执行的后台任务数）。</summary>
     public int WorkerCount => _workerCount;
 
     /// <summary>
-    /// 固定 worker 循环：从 Channel 读取 Run work item，调用 RunWithLeaseAndConcurrencyAsync。
+    /// 固定 worker 循环：从优先级队列读取 Run work item，调用 RunWithLeaseAndConcurrencyAsync。
+    /// 每轮先在锁内检查队列（有任务 → 出队执行；空且已 dispose → 退出；空且未 dispose → 等待信号）。
+    /// check-before-wait 结构保证优雅 drain：Dispose 设置 disposed 后 worker 排空剩余任务，
+    /// 队列为空时在下一次循环检查中退出（不依赖 drain 超时强制取消）。
     /// </summary>
     private async Task RunWorkerLoopAsync(int workerId, CancellationToken cancellationToken)
     {
         try
         {
-            await foreach (var item in _channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            while (true)
             {
+                RunWorkItem? item = null;
+                lock (_queueLock)
+                {
+                    if (_queue.Count > 0)
+                    {
+                        item = _queue.Dequeue();
+                    }
+                    else if (Volatile.Read(ref _disposed) != 0)
+                    {
+                        // 已排空且 Host 已关闭 → 退出 worker。
+                        break;
+                    }
+                }
+
+                if (item is null)
+                {
+                    // 无任务：等待新任务入队（Dispose 会释放唤醒信号，worker 醒来重查退出条件）。
+                    try
+                    {
+                        await _queueSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    continue;
+                }
+
+                _queueCapacity.Release();
+
                 try
                 {
                     await RunWithLeaseAndConcurrencyAsync(item.Run, item.Key, item.ActiveRun)
@@ -268,7 +329,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// 子问题 9 + P0-4 + 带租约心跳 + 并发上限的 Run 执行包装。
     /// </summary>
     /// <remarks>
-    /// 方案 A：Worker 从 Channel 取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，
+    /// 方案 A：Worker 从队列取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，
     /// 然后立即启动 heartbeat。避免排队期间 lease 过期导致 heartbeat 无法续租。
     /// heartbeat 续租失败时通过 <see cref="CancellationTokenSource.Cancel"/> 取消 Actor，
     /// 防止 lease 被抢占后当前实例继续执行副作用（双执行）。
@@ -754,7 +815,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         => $"{workspaceId}:{runId}";
 
     /// <summary>
-    /// 优雅 drain：完成 Channel（不再接受新 Run），等待 worker 排空当前队列（最多 DrainTimeout）。
+    /// 优雅 drain：标记关闭（不再接受新 Run），唤醒全部 worker 排空剩余队列（最多 DrainTimeout）。
     /// 由 DI 容器在 Singleton 释放时自动调用。
     /// </summary>
     public async ValueTask DisposeAsync()
@@ -764,8 +825,13 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             return;
         }
 
-        // 信号 Channel 不再接受新写入，让 worker 排空剩余项。
-        _channel.Writer.TryComplete();
+        // 唤醒等待中的 worker：每 worker 释放一个信号，使其醒来重查退出条件
+        // （check-before-wait：队列非空则继续排空，空则退出）。
+        // 正在执行 Run 的 worker 完成后会在下一轮循环检查中退出，无需信号。
+        for (var i = 0; i < _workerCount; i++)
+        {
+            _queueSignal.Release();
+        }
 
         var drainTimeout = _options.DrainTimeout > TimeSpan.Zero
             ? _options.DrainTimeout
@@ -826,7 +892,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         public int ConsecutiveFailures;
     }
 
-    /// <summary>Channel work item（Run + key + ActiveRun）。</summary>
+    /// <summary>优先级队列 work item（Run + key + ActiveRun）。</summary>
     private sealed record RunWorkItem(AgentRun Run, string Key, ActiveRun ActiveRun);
 
     /// <summary>

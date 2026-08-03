@@ -303,6 +303,7 @@ public sealed class ProductionRuntimeReadinessService
         return
         [
             (nameof(Hosting.AgentRunRecoveryWorker), "AgentRunRecovery", _runtimeOptions.EnableAgentRunRecovery),
+            (nameof(Hosting.PostgresPendingRunClaimer), "PendingRunClaimer", _runtimeOptions.EnableAgentRunRecovery),
             (nameof(Hosting.LearningMaterializationWorker), "LearningMaterialization", true),
             (nameof(CanaryProgressionHostedService), "CanaryProgression", !isHA),
             (nameof(Hosting.CanaryLeaderHostedService), "CanaryLeader", isHA),

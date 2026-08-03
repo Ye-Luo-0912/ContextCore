@@ -134,7 +134,11 @@ internal static class AgentExecutionEndpoints
                 AllowedToolIds = allowedToolIds,
                 DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
                 ModelContextTokenBudget = 8192,
-                IdempotencyKey = idempotencyKey
+                IdempotencyKey = idempotencyKey,
+                // B3 Durable Scheduler：优先级（高者先执行）+ Run 级重试预算（0 = 不重试）。
+                // MaxRetries < 0 视为 0（非法负值收敛为"不重试"，与默认语义一致）。
+                Priority = request.Priority,
+                MaxRetries = request.MaxRetries > 0 ? request.MaxRetries : 0
             };
 
             AgentRunCreateResult createResult;
@@ -1098,6 +1102,10 @@ internal static class AgentExecutionEndpoints
             FinishedAt = run.FinishedAt,
             FailureReason = run.FailureReason,
             FinalAnswer = run.FinalAnswer,
+            Priority = run.Priority,
+            MaxRetries = run.MaxRetries,
+            RetryCount = run.RetryCount,
+            NextRetryAtUtc = run.NextRetryAtUtc,
             TurnBudget = run.TurnBudget is null ? null : new TurnBudgetResponse
             {
                 MaxTurns = run.TurnBudget.MaxTurns,
@@ -1145,6 +1153,18 @@ public sealed class CreateRunRequest
 
     /// <summary>执行超时（秒；默认 300）。</summary>
     public int TimeoutSeconds { get; init; }
+
+    /// <summary>
+    /// 调度优先级（可选；数值越大越先执行，默认 0）。
+    /// Durable Scheduler 领取时按优先级倒序 + 创建时间升序排序。
+    /// </summary>
+    public int Priority { get; init; }
+
+    /// <summary>
+    /// Run 级最大重试次数（可选；默认 0 = 不重试，失败保持 Failed 终态）。
+    /// &gt; 0 时失败 Run 由 Durable Scheduler 自动重试（指数退避），达到上限后进入 DeadLettered 死信。
+    /// </summary>
+    public int MaxRetries { get; init; }
 }
 
 /// <summary>Cost 预算请求。</summary>
@@ -1286,6 +1306,18 @@ public sealed class RunResponse
 
     /// <summary>最终答案（State=Completed 时设置）。</summary>
     public string? FinalAnswer { get; init; }
+
+    /// <summary>调度优先级（数值越大越先执行；默认 0）。</summary>
+    public int Priority { get; init; }
+
+    /// <summary>Run 级最大重试次数（0 = 不重试；达到上限后进入 DeadLettered 死信）。</summary>
+    public int MaxRetries { get; init; }
+
+    /// <summary>已重试次数（每次重试重置递增）。</summary>
+    public int RetryCount { get; init; }
+
+    /// <summary>下一次可重试时间（退避门；null = 立即可领取）。</summary>
+    public DateTimeOffset? NextRetryAtUtc { get; init; }
 
     /// <summary>Turn 预算使用情况。</summary>
     public TurnBudgetResponse? TurnBudget { get; init; }

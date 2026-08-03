@@ -319,5 +319,15 @@ public sealed class R29L_AgentRunRecoveryScanTests
             }
             return page;
         }
+
+        // B3 Durable Scheduler 接口成员：恢复扫描测试不使用领取/死信路径 → 返回空。
+        public ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
+            int take, int perWorkspace, TimeSpan retryBackoffBase, TimeSpan retryBackoffMax,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
+
+        public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
+            int take, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
     }
 }

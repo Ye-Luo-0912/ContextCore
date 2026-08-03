@@ -132,7 +132,16 @@ public enum AgentRunState : byte
     /// 恢复依赖（事件存储）不可用：读取事件流失败（存储故障 / 网络分区）。
     /// fail-closed：不得回退为全新启动；待依赖恢复后由恢复 Worker 重试。
     /// </summary>
-    RecoveryDependencyUnavailable = 17
+    RecoveryDependencyUnavailable = 17,
+
+    /// <summary>
+    /// 重试耗尽（死信）：Run 配置了 MaxRetries &gt; 0，但 RetryCount 已达到 MaxRetries
+    /// 仍持续失败，由 Durable Scheduler 原子标记为死信。区别于 <see cref="Failed"/>——
+    /// Failed 表示单次执行失败（可能仍有重试机会），DeadLettered 表示重试预算耗尽、
+    /// 不再自动恢复，需运维介入。MaxRetries = 0（默认，不重试）的 Run 失败后保持
+    /// <see cref="Failed"/> 终态，不会进入死信。
+    /// </summary>
+    DeadLettered = 18
 }
 
 /// <summary>
@@ -272,6 +281,34 @@ public sealed record AgentRun
     /// 幂等键（从 API 入参写入 Run，用于外部系统去重）。
     /// </summary>
     public string? IdempotencyKey { get; init; }
+
+    /// <summary>
+    /// 调度优先级（数值越大越先执行；默认 0）。
+    /// Durable Scheduler 领取 pending Run 时按 (Priority DESC, CreatedAt ASC) 排序；
+    /// 同优先级按入队顺序（FIFO）执行。
+    /// </summary>
+    public int Priority { get; init; }
+
+    /// <summary>
+    /// Run 级最大重试次数（默认 0 = 不重试，失败保持 <see cref="AgentRunState.Failed"/> 终态，
+    /// 与既有行为一致）。&gt; 0 时，Failed 的 Run 由 Durable Scheduler 在
+    /// <c>RetryCount &lt; MaxRetries</c> 期间自动重置为 <see cref="AgentRunState.Created"/>
+    /// 并递增 <see cref="RetryCount"/>（事件流同步重置，作为全新启动重试）；
+    /// 达到上限后原子标记为 <see cref="AgentRunState.DeadLettered"/>（死信，需运维介入）。
+    /// </summary>
+    public int MaxRetries { get; init; }
+
+    /// <summary>
+    /// 已重试次数（Durable Scheduler 每次重试重置时递增；初始 0）。
+    /// </summary>
+    public int RetryCount { get; init; }
+
+    /// <summary>
+    /// 下一次可重试时间（UTC；重试退避门）。null = 立即可领取。
+    /// Scheduler 领取 SQL 以 <c>next_retry_at IS NULL OR next_retry_at &lt;= now()</c> 门控，
+    /// 防止重试热点循环（失败 → 重置 → 立即再执行）。
+    /// </summary>
+    public DateTimeOffset? NextRetryAtUtc { get; init; }
 }
 
 /// <summary>
@@ -1392,8 +1429,50 @@ public interface IAgentRunStore
 /// <summary>
 /// 持久化 Agent Run Store 标记接口（复用 IPersistentAgentCheckpointStore 模式）。
 /// </summary>
+/// <remarks>
+/// 由 Postgres 实现继承 <see cref="IAgentRunStore"/>。B3 Durable Scheduler 依赖的
+/// 领取 / 死信能力仅对持久化存储有意义（InMemory store 进程重启后数据丢失）。
+/// </remarks>
 public interface IPersistentAgentRunStore : IAgentRunStore
 {
+    /// <summary>
+    /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置。
+    /// 单条 SQL 事务内完成：
+    ///   - Created（state=0）且退避门通过（next_retry_at 为 null 或已到期）→ 直接领取，状态不变
+    ///     （Actor 以 state=Created 判定全新启动，因此领取不改状态列）；
+    ///   - Failed（state=8）且 max_retries &gt; 0 且 retry_count &lt; max_retries 且退避门通过
+    ///     → 重置为 Created + retry_count+1 + next_retry_at=退避时间（事件流同步清空，
+    ///     作为全新启动重试）；
+    ///   - 排序 (Priority DESC, CreatedAt ASC, RunId ASC)，LIMIT take；
+    ///   - 每 workspace 最多领取 <paramref name="perWorkspace"/> 个（ROW_NUMBER PARTITION BY，
+    ///     公平轮转防止单 workspace 独占批次）。
+    /// 领取行由 FOR UPDATE SKIP LOCKED 加锁，多实例并发安全（被锁行跳过，下轮再取）。
+    /// </summary>
+    /// <param name="take">本批次最多领取数（全局上限）。</param>
+    /// <param name="perWorkspace">每 workspace 本批次最多领取数（公平性上限）。</param>
+    /// <param name="retryBackoffBase">重试退避基数（重试 i 次后等待 retryBackoffBase × 2^(i-1)）。</param>
+    /// <param name="retryBackoffMax">重试退避上限（封顶，防止指数爆炸）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>领取的 Run 列表（含重置后的 Created 状态与递增的 RetryCount）。</returns>
+    ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
+        int take,
+        int perWorkspace,
+        TimeSpan retryBackoffBase,
+        TimeSpan retryBackoffMax,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 原子死信一批重试耗尽的 Run：Failed（state=8）且 max_retries &gt; 0 且
+    /// retry_count &gt;= max_retries 且退避门通过 → 标记为 <see cref="AgentRunState.DeadLettered"/>
+    /// （终态，保留 failure_reason / 事件流作为审计证据；数据 jsonb 同步打补丁）。
+    /// 无 SKIP LOCKED 竞争语义（终态写入天然幂等），LIMIT take 分批。
+    /// </summary>
+    /// <param name="take">本批次最多死信数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>本次死信的 Run 列表（已标记为 DeadLettered）。</returns>
+    ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
+        int take,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1982,6 +2061,39 @@ public sealed class AgentHostOptions
 
     /// <summary>优雅 drain 超时（DisposeAsync 时等待 worker 排空的最长时间）。默认 30 秒。</summary>
     public TimeSpan DrainTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Durable Scheduler（PostgresPendingRunClaimer）轮询间隔：
+    /// 每次周期先死信重试耗尽的 Run，再领取 pending Run 入队。默认 5 秒。
+    /// </summary>
+    public TimeSpan PendingClaimInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Durable Scheduler 每周期全局最多领取的 Run 数（ClaimPendingBatchAsync 的 take 上限）。
+    /// 默认 50。
+    /// </summary>
+    public int PendingClaimBatchSize { get; set; } = 50;
+
+    /// <summary>
+    /// Durable Scheduler 每周期每 workspace 最多领取的 Run 数
+    /// （公平轮转上限，防止单 workspace 独占整批领取）。默认 10。
+    /// </summary>
+    public int PendingClaimPerWorkspace { get; set; } = 10;
+
+    /// <summary>
+    /// Durable Scheduler 每周期最多死信的 Run 数（DeadLetterExhaustedRunsAsync 的 take 上限）。
+    /// 默认 50。
+    /// </summary>
+    public int DeadLetterBatchSize { get; set; } = 50;
+
+    /// <summary>
+    /// Run 级重试退避基数：第 i 次重试（RetryCount=i）的等待时长 = min(
+    /// RetryBackoffBase × 2^(i-1), RetryBackoffMax)。默认 30 秒。
+    /// </summary>
+    public TimeSpan RetryBackoffBase { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Run 级重试退避上限（封顶，防止指数爆炸）。默认 30 分钟。</summary>
+    public TimeSpan RetryBackoffMax { get; set; } = TimeSpan.FromMinutes(30);
 }
 
 // ── Agent Run 调度（IAgentRunScheduler：非阻塞入队 + 队列快照）──────────────

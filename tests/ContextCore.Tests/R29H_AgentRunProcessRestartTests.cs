@@ -833,6 +833,16 @@ public sealed class R29H_AgentRunProcessRestartTests
             DateTimeOffset? afterUpdatedAt = null, string? afterRunId = null,
             CancellationToken cancellationToken = default)
             => _inner.ListByStateAsync(state, take, afterUpdatedAt, afterRunId, cancellationToken);
+
+        // B3 Durable Scheduler 接口成员：进程重启测试不使用领取/死信路径 → 返回空。
+        public ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
+            int take, int perWorkspace, TimeSpan retryBackoffBase, TimeSpan retryBackoffMax,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
+
+        public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
+            int take, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
     }
 
     /// <summary>

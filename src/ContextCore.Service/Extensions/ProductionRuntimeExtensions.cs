@@ -188,6 +188,11 @@ internal static class ProductionRuntimeExtensions
         {
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
+
+            // B3 Durable Scheduler：PostgresPendingRunClaimer 周期性领取持久化 pending Run 入队
+            // （优先级 + 重试 + 死信）。Development profile 使用 InMemory store 时 worker 自退出 no-op。
+            services.AddHostedService<PostgresPendingRunClaimer>();
+            workerRegistry.Add<PostgresPendingRunClaimer>();
         }
 
         // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
@@ -221,6 +226,10 @@ internal static class ProductionRuntimeExtensions
         {
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
+
+            // B3 Durable Scheduler：PostgresPendingRunClaimer（SingleNode profile 使用 Postgres 持久化）。
+            services.AddHostedService<PostgresPendingRunClaimer>();
+            workerRegistry.Add<PostgresPendingRunClaimer>();
         }
 
         // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
@@ -275,6 +284,10 @@ internal static class ProductionRuntimeExtensions
         {
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
+
+            // B3 Durable Scheduler：PostgresPendingRunClaimer（ProductionHA 多实例竞争 SKIP LOCKED 领取）。
+            services.AddHostedService<PostgresPendingRunClaimer>();
+            workerRegistry.Add<PostgresPendingRunClaimer>();
         }
 
         // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。

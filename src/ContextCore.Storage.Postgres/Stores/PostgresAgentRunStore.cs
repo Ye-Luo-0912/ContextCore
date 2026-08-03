@@ -44,10 +44,12 @@ public sealed class PostgresAgentRunStore : PostgresStoreBase, IAgentRunStore, I
         command.CommandText = $"""
 INSERT INTO {Table("agent_runs")} (
     workspace_id, run_id, session_id, task, state, turn,
+    priority, max_retries, retry_count, next_retry_at,
     created_at, updated_at, finished_at, failure_reason, final_answer,
     turn_budget_json, cost_budget_json, idempotency_key, data)
 VALUES (
     @workspace_id, @run_id, @session_id, @task, @state, @turn,
+    @priority, @max_retries, @retry_count, @next_retry_at,
     @created_at, @updated_at, @finished_at, @failure_reason, @final_answer,
     @turn_budget_json, @cost_budget_json, @idempotency_key, @data)
 ON CONFLICT (workspace_id, run_id) DO NOTHING;
@@ -58,6 +60,10 @@ ON CONFLICT (workspace_id, run_id) DO NOTHING;
         command.Parameters.AddWithValue("task", run.Task ?? string.Empty);
         command.Parameters.AddWithValue("state", (byte)run.State);
         command.Parameters.AddWithValue("turn", run.Turn);
+        command.Parameters.AddWithValue("priority", run.Priority);
+        command.Parameters.AddWithValue("max_retries", run.MaxRetries);
+        command.Parameters.AddWithValue("retry_count", run.RetryCount);
+        command.Parameters.AddWithValue("next_retry_at", (object?)run.NextRetryAtUtc ?? DBNull.Value);
         command.Parameters.AddWithValue("created_at", run.CreatedAt);
         command.Parameters.AddWithValue("updated_at", run.UpdatedAt);
         command.Parameters.AddWithValue("finished_at", (object?)run.FinishedAt ?? DBNull.Value);
@@ -136,10 +142,12 @@ LIMIT 1;
         insertCommand.CommandText = $"""
 INSERT INTO {Table("agent_runs")} (
     workspace_id, run_id, session_id, task, state, turn,
+    priority, max_retries, retry_count, next_retry_at,
     created_at, updated_at, finished_at, failure_reason, final_answer,
     turn_budget_json, cost_budget_json, idempotency_key, data)
 VALUES (
     @workspace_id, @run_id, @session_id, @task, @state, @turn,
+    @priority, @max_retries, @retry_count, @next_retry_at,
     @created_at, @updated_at, @finished_at, @failure_reason, @final_answer,
     @turn_budget_json, @cost_budget_json, @idempotency_key, @data)
 ON CONFLICT (workspace_id, run_id) DO NOTHING
@@ -150,6 +158,10 @@ RETURNING data;
         insertCommand.Parameters.AddWithValue("task", run.Task ?? string.Empty);
         insertCommand.Parameters.AddWithValue("state", (byte)run.State);
         insertCommand.Parameters.AddWithValue("turn", run.Turn);
+        insertCommand.Parameters.AddWithValue("priority", run.Priority);
+        insertCommand.Parameters.AddWithValue("max_retries", run.MaxRetries);
+        insertCommand.Parameters.AddWithValue("retry_count", run.RetryCount);
+        insertCommand.Parameters.AddWithValue("next_retry_at", (object?)run.NextRetryAtUtc ?? DBNull.Value);
         insertCommand.Parameters.AddWithValue("created_at", run.CreatedAt);
         insertCommand.Parameters.AddWithValue("updated_at", run.UpdatedAt);        insertCommand.Parameters.AddWithValue("finished_at", (object?)run.FinishedAt ?? DBNull.Value);
         insertCommand.Parameters.AddWithValue("failure_reason", (object?)run.FailureReason ?? DBNull.Value);
@@ -213,7 +225,8 @@ RETURNING data;
         var isTerminal = newState == AgentRunState.Completed
                          || newState == AgentRunState.Failed
                          || newState == AgentRunState.Cancelled
-                         || newState == AgentRunState.LeaseLost;
+                         || newState == AgentRunState.LeaseLost
+                         || newState == AgentRunState.DeadLettered;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -309,12 +322,18 @@ LIMIT 1;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // 注意：UPDATE 不修改 state 列（避免旁路 CAS）；state 只能通过 TransitionStateAsync 推进
+        // 注意：UPDATE 不修改 state 列（避免旁路 CAS）；state 只能通过 TransitionStateAsync 推进。
+        // 调度/重试列（priority / max_retries / retry_count / next_retry_at）随 data 同步归一化，
+        // 保证列与 data jsonb 中 AgentRun 记录一致（与 CreateAsync 相同的反规范化模式）。
         command.CommandText = $"""
 UPDATE {Table("agent_runs")}
 SET session_id = @session_id,
     task = @task,
     turn = @turn,
+    priority = @priority,
+    max_retries = @max_retries,
+    retry_count = @retry_count,
+    next_retry_at = @next_retry_at,
     updated_at = @updated_at,
     finished_at = @finished_at,
     failure_reason = @failure_reason,
@@ -329,6 +348,10 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
         command.Parameters.AddWithValue("session_id", run.SessionId);
         command.Parameters.AddWithValue("task", run.Task ?? string.Empty);
         command.Parameters.AddWithValue("turn", run.Turn);
+        command.Parameters.AddWithValue("priority", run.Priority);
+        command.Parameters.AddWithValue("max_retries", run.MaxRetries);
+        command.Parameters.AddWithValue("retry_count", run.RetryCount);
+        command.Parameters.AddWithValue("next_retry_at", (object?)run.NextRetryAtUtc ?? DBNull.Value);
         command.Parameters.AddWithValue("updated_at", run.UpdatedAt);
         command.Parameters.AddWithValue("finished_at", (object?)run.FinishedAt ?? DBNull.Value);
         command.Parameters.AddWithValue("failure_reason", (object?)run.FailureReason ?? DBNull.Value);
@@ -397,6 +420,190 @@ LIMIT @take;
         command.Parameters.AddWithValue("take", take);
         command.Parameters.AddWithValue("after_updated_at", (object?)afterUpdatedAt ?? DBNull.Value);
         command.Parameters.AddWithValue("after_run_id", (object?)afterRunId ?? DBNull.Value);
+        return await ExecuteReaderJsonAsync<AgentRun>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// 单条 SQL 事务内完成"领取 Created + 重试重置 Failed"：
+    ///   1. 三层嵌套（Postgres 限制：FOR UPDATE 不能与窗口函数同层）：
+    ///      内层 SELECT ... FOR UPDATE SKIP LOCKED（锁定候选行，被锁行跳过下轮再取）；
+    ///      中层 ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY priority DESC, created_at ASC, run_id ASC)
+    ///      计算每 workspace 内排名（公平轮转上限）；
+    ///      外层 WHERE ws_rank &lt;= @per_workspace。
+    ///   2. UPDATE ... FROM eligible：state=8（Failed）且可重试的行重置为 Created + retry_count+1 +
+    ///      next_retry_at=指数退避（base × 2^(retry_count-1)，封顶 cap）；Created 行仅锁定领取、状态不变
+    ///      （Actor 以 state=Created 判定全新启动，领取不改状态列）。
+    ///   3. 重试重置行同步清空事件流（DELETE FROM agent_run_events）与 checkpoint 指针——
+    ///      全新启动需事件链从 sequence 0 重新开始，残留的失败尝试事件会导致 AppendBatchAsync 链校验失败。
+    ///   4. data jsonb 同步打补丁（State/UpdatedAt/RetryCount/NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），
+    ///      保持"state 列 == data JSON.State"的单真源约束（与 TransitionStateAsync 同一模式）。
+    /// </remarks>
+    public async ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
+        int take,
+        int perWorkspace,
+        TimeSpan retryBackoffBase,
+        TimeSpan retryBackoffMax,
+        CancellationToken cancellationToken = default)
+    {
+        if (take <= 0)
+        {
+            return Array.Empty<AgentRun>();
+        }
+        if (perWorkspace <= 0)
+        {
+            perWorkspace = take;
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        var backoffBase = retryBackoffBase > TimeSpan.Zero ? retryBackoffBase : TimeSpan.FromSeconds(30);
+        var backoffMax = retryBackoffMax > TimeSpan.Zero ? retryBackoffMax : TimeSpan.FromMinutes(30);
+        var backoffInterval = backoffBase > backoffMax ? backoffMax : backoffBase;
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.Parameters.AddWithValue("take", take);
+        command.Parameters.AddWithValue("per_workspace", perWorkspace);
+        // interval 参数：Npgsql 将 TimeSpan 映射为 interval；LEAST(interval × 2^n, cap) 实现指数退避封顶。
+        command.Parameters.AddWithValue("backoff_base", backoffInterval);
+        command.Parameters.AddWithValue("backoff_cap", backoffMax);
+        command.CommandText = $"""
+WITH eligible AS (
+    SELECT workspace_id, run_id, was_failed, ws_rank
+    FROM (
+        SELECT workspace_id, run_id, (state = 8) AS was_failed,
+               ROW_NUMBER() OVER (
+                   PARTITION BY workspace_id
+                   ORDER BY priority DESC, created_at ASC, run_id ASC) AS ws_rank
+        FROM (
+            SELECT workspace_id, run_id, priority, created_at, state
+            FROM {Table("agent_runs")}
+            WHERE (
+                -- Created 且退避门通过（next_retry_at 为 null 或已到期）
+                (state = 0 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
+                OR
+                -- Failed 且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
+                (state = 8 AND max_retries > 0 AND retry_count < max_retries
+                 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
+            )
+            ORDER BY priority DESC, created_at ASC, run_id ASC
+            LIMIT @take
+            FOR UPDATE SKIP LOCKED
+        ) locked
+    ) ranked
+    WHERE ws_rank <= @per_workspace
+),
+updated AS (
+    UPDATE {Table("agent_runs")} ar
+    SET state = CASE WHEN ar.state = 8 THEN 0 ELSE ar.state END,
+        retry_count = CASE WHEN ar.state = 8 THEN ar.retry_count + 1 ELSE ar.retry_count END,
+        next_retry_at = CASE WHEN ar.state = 8
+            THEN clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)
+            ELSE ar.next_retry_at END,
+        updated_at = clock_timestamp(),
+        finished_at = CASE WHEN ar.state = 8 THEN NULL ELSE ar.finished_at END,
+        failure_reason = CASE WHEN ar.state = 8 THEN NULL ELSE ar.failure_reason END,
+        final_answer = CASE WHEN ar.state = 8 THEN NULL ELSE ar.final_answer END,
+        last_checkpoint_id = CASE WHEN ar.state = 8 THEN NULL ELSE ar.last_checkpoint_id END,
+        last_checkpoint_sequence = CASE WHEN ar.state = 8 THEN NULL ELSE ar.last_checkpoint_sequence END,
+        data = CASE WHEN ar.state = 8
+            THEN data || jsonb_build_object(
+                'State', to_jsonb('Created'),
+                'UpdatedAt', to_jsonb(clock_timestamp()),
+                'RetryCount', to_jsonb(ar.retry_count + 1),
+                'NextRetryAtUtc', to_jsonb(clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)),
+                'FinishedAt', to_jsonb(NULL::text),
+                'FailureReason', to_jsonb(NULL::text),
+                'FinalAnswer', to_jsonb(NULL::text))
+            ELSE data || jsonb_build_object('UpdatedAt', to_jsonb(clock_timestamp())) END
+    FROM eligible e
+    WHERE ar.workspace_id = e.workspace_id AND ar.run_id = e.run_id
+    RETURNING ar.workspace_id, ar.run_id, ar.data, e.was_failed
+)
+SELECT workspace_id, run_id, data, was_failed FROM updated;
+""";
+
+        var runs = new List<AgentRun>();
+        var retriedIds = new List<(string WorkspaceId, string RunId)>();
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var data = reader.GetString(2);
+                var run = Serializer.Deserialize<AgentRun>(data);
+                if (run is not null)
+                {
+                    runs.Add(run);
+                }
+                if (reader.GetBoolean(3))
+                {
+                    retriedIds.Add((reader.GetString(0), reader.GetString(1)));
+                }
+            }
+        }
+
+        // 重试重置的行清空事件流（全新启动需事件链从 sequence 0 重建；
+        // 残留失败尝试事件会导致 AppendBatchAsync 的链连续性校验失败）。
+        if (retriedIds.Count > 0)
+        {
+            await using var deleteCmd = connection.CreateCommand();
+            deleteCmd.Transaction = transaction;
+            deleteCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+            deleteCmd.CommandText = $"""
+DELETE FROM {Table("agent_run_events")}
+WHERE workspace_id = ANY(@workspace_ids) AND run_id = ANY(@run_ids);
+""";
+            deleteCmd.Parameters.AddWithValue("workspace_ids", retriedIds.Select(x => x.WorkspaceId).ToArray());
+            deleteCmd.Parameters.AddWithValue("run_ids", retriedIds.Select(x => x.RunId).ToArray());
+            await deleteCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return runs;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// 原子死信：Failed（state=8）且 max_retries &gt; 0 且 retry_count &gt;= max_retries 且退避门通过
+    /// → state=DeadLettered（终态）+ finished_at + data jsonb 打补丁（State/UpdatedAt/FinishedAt）。
+    /// 保留 failure_reason / 事件流作为审计证据（死信后不再自动恢复，需运维介入）。
+    /// 终态写入天然幂等（重复执行无副作用），LIMIT take 分批；无需 SKIP LOCKED。
+    /// </remarks>
+    public async ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        if (take <= 0)
+        {
+            return Array.Empty<AgentRun>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.Parameters.AddWithValue("take", take);
+        command.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = 18,
+    updated_at = clock_timestamp(),
+    finished_at = COALESCE(finished_at, clock_timestamp()),
+    data = data || jsonb_build_object(
+        'State', to_jsonb('DeadLettered'),
+        'UpdatedAt', to_jsonb(clock_timestamp()),
+        'FinishedAt', to_jsonb(COALESCE(finished_at, clock_timestamp())))
+WHERE state = 8
+  AND max_retries > 0
+  AND retry_count >= max_retries
+  AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp())
+ORDER BY priority DESC, created_at ASC
+LIMIT @take
+RETURNING data;
+""";
         return await ExecuteReaderJsonAsync<AgentRun>(command, cancellationToken).ConfigureAwait(false);
     }
 }
