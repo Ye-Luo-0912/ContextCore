@@ -160,6 +160,9 @@ public sealed class CanaryProgressionService
     // 可选的 DB 决策应用器，用于启动时从 canary_pipelines 表恢复 in-memory 状态。
     // 为 null 时（如单元测试使用 InMemoryPipelineRunStore）RecoverFromStoreAsync 为 no-op。
     private readonly ICanaryDecisionApplier? _decisionApplier;
+    // 可选的集群级 Kill Switch 存储。非空时 RecoverFromStoreAsync 对存在活跃紧急覆盖的
+    // run 强制恢复 0% 且不进入 Consistent；路由层在命中 V2 时也会先检查本存储。
+    private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
     // per-run 本地状态标记（DB 一致性），用于在 DB CAS 失败时拒绝后续推进。
     // Consistent = 与 DB 一致；非 Consistent = 本地有未持久化变更，AdvanceAsync 应拒绝推进。
     private readonly ConcurrentDictionary<string, CanaryLocalState> _localStates
@@ -189,6 +192,11 @@ public sealed class CanaryProgressionService
     /// <c>canary_pipelines</c> 表读取活跃 pipeline 状态并恢复 in-memory 百分比
     /// （CutoverController + <c>_runStates</c>）。为 null 时恢复为 no-op（单节点/测试场景）。
     /// </param>
+    /// <param name="emergencyOverrideStore">
+    /// 可选的集群级 Kill Switch 存储。非空时 <see cref="RecoverFromStoreAsync"/> 对存在
+    /// 活跃紧急覆盖的 run 强制恢复为 0% 且不进入 <see cref="CanaryLocalState.Consistent"/>，
+    /// 直到运维显式清除覆盖。
+    /// </param>
     /// <param name="logger">
     /// 可选的日志器。非空时在紧急回滚（DB CAS 失败）记录告警；为 null 时使用 NullLogger。
     /// </param>
@@ -199,6 +207,7 @@ public sealed class CanaryProgressionService
         TimeProvider? timeProvider = null,
         CutoverControllerRegistry? registry = null,
         ICanaryDecisionApplier? decisionApplier = null,
+        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null,
         ILogger<CanaryProgressionService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(pipelineRunStore);
@@ -209,6 +218,7 @@ public sealed class CanaryProgressionService
         _timeProvider = timeProvider ?? TimeProvider.System;
         _registry = registry;
         _decisionApplier = decisionApplier;
+        _emergencyOverrideStore = emergencyOverrideStore;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CanaryProgressionService>.Instance;
     }
 
@@ -777,6 +787,21 @@ public sealed class CanaryProgressionService
             {
                 continue;
             }
+
+            // 集群级 Kill Switch 优先：存在活跃紧急覆盖时强制 0% + 紧急本地状态，
+            // 且不得标记 Consistent（运维清除覆盖前推进被拒绝，路由层已强制回退 V1）。
+            // 避免重启后覆盖仍生效却按 DB 百分比恢复，导致 Kill Switch 被绕过。
+            if (_emergencyOverrideStore is not null
+                && await _emergencyOverrideStore.GetActiveAsync(state.RunId, cancellationToken).ConfigureAwait(false) is not null)
+            {
+                UpdateInMemoryPercentage(state.RunId, 0);
+                _localStates[state.RunId] = CanaryLocalState.LocalEmergencyRollback | CanaryLocalState.OperatorAlertRequired;
+                _logger.LogWarning(
+                    "Canary run {RunId} 存在活跃紧急覆盖（Kill Switch），恢复为 0% 且标记紧急回滚，等待运维清除覆盖。",
+                    state.RunId);
+                continue;
+            }
+
             // UpdateInMemoryPercentage 同时恢复 CutoverController 百分比与 _runStates[runId]。
             UpdateInMemoryPercentage(state.RunId, state.Percentage);
             // DB 是权威真相源，恢复后本地与 DB 一致，清除任何紧急回滚标记。

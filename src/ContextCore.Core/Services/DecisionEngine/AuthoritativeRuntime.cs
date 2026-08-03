@@ -268,6 +268,9 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     // 可选的 Canary 指标采集器。非空时 Mixed mode + Sampled shadow 路径会调用
     // RecordObservation 上报 V2/Legacy 耗时与 parity，让 CanaryProgressionHostedService 有生产样本可消费。
     private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
+    // 可选的集群级 Canary Kill Switch 存储。非空时在 canary 命中 V2 后检查活跃紧急覆盖，
+    // 存在则强制回退 V1（Emergency Override 优先级高于 canary DB 百分比与 Cutover 配置）。
+    private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
 
     /// <summary>构造 Retrieval 权威路径运行时。</summary>
     public AuthoritativeRetrievalRuntime(
@@ -279,7 +282,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         ShadowGate? shadowGate = null,
         DecisionExperimentPlaneIntegration? experimentPlane = null,
         ICutoverControllerResolver? cutoverResolver = null,
-        ICanaryMetricsCollector? canaryMetricsCollector = null)
+        ICanaryMetricsCollector? canaryMetricsCollector = null,
+        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null)
     {
         _legacyRetriever = legacyRetriever ?? throw new ArgumentNullException(nameof(legacyRetriever));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -290,6 +294,27 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         _experimentPlane = experimentPlane;
         _cutoverResolver = cutoverResolver;
         _canaryMetricsCollector = canaryMetricsCollector;
+        _emergencyOverrideStore = emergencyOverrideStore;
+    }
+
+    /// <summary>
+    /// 检查请求所属 canary run 是否存在活跃紧急覆盖（Kill Switch）。
+    /// 存储为 null 或请求未携带 canaryRunId 时返回 false（不拦截非 canary 流量）。
+    /// </summary>
+    private async ValueTask<bool> IsEmergencyOverrideActiveAsync(
+        IReadOnlyDictionary<string, string>? metadata,
+        CancellationToken cancellationToken)
+    {
+        if (_emergencyOverrideStore is null)
+        {
+            return false;
+        }
+        var runId = CanaryRunIdResolver.TryGetCanaryRunId(metadata);
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return false;
+        }
+        return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
     }
 
     /// <summary>
@@ -322,6 +347,12 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         // 按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
         var cutoverController = ResolveController(request);
         var useV2 = cutoverController.ShouldUseV2(request.OperationId);
+
+        // 集群级 Kill Switch：存在活跃紧急覆盖时强制回退 V1（优先级高于 canary 百分比与 Cutover 配置）。
+        if (useV2 && await IsEmergencyOverrideActiveAsync(request.Metadata, cancellationToken).ConfigureAwait(false))
+        {
+            useV2 = false;
+        }
 
         // 100% V2 时跳过 Legacy，直接执行 V2-only 路径
         // 若 sampled shadow 启用，按采样率执行 Legacy + shadow 收集实验数据
@@ -637,6 +668,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     private readonly ICutoverControllerResolver? _cutoverResolver;
     // 可选的 Canary 指标采集器（语义同 Retrieval 运行时）。
     private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
+    // 可选的集群级 Canary Kill Switch 存储（语义同 Retrieval 运行时）。
+    private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
 
     /// <summary>构造 Package 权威路径运行时。</summary>
     public AuthoritativePackageRuntime(
@@ -648,7 +681,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         ShadowGate? shadowGate = null,
         DecisionExperimentPlaneIntegration? experimentPlane = null,
         ICutoverControllerResolver? cutoverResolver = null,
-        ICanaryMetricsCollector? canaryMetricsCollector = null)
+        ICanaryMetricsCollector? canaryMetricsCollector = null,
+        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null)
     {
         _legacyPackageBuilder = legacyPackageBuilder ?? throw new ArgumentNullException(nameof(legacyPackageBuilder));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -659,6 +693,26 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         _experimentPlane = experimentPlane;
         _cutoverResolver = cutoverResolver;
         _canaryMetricsCollector = canaryMetricsCollector;
+        _emergencyOverrideStore = emergencyOverrideStore;
+    }
+
+    /// <summary>
+    /// 检查请求所属 canary run 是否存在活跃紧急覆盖（Kill Switch，语义同 Retrieval 运行时）。
+    /// </summary>
+    private async ValueTask<bool> IsEmergencyOverrideActiveAsync(
+        IReadOnlyDictionary<string, string>? metadata,
+        CancellationToken cancellationToken)
+    {
+        if (_emergencyOverrideStore is null)
+        {
+            return false;
+        }
+        var runId = CanaryRunIdResolver.TryGetCanaryRunId(metadata);
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return false;
+        }
+        return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
     }
 
     /// <summary>
@@ -699,6 +753,12 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         // 按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
         var cutoverController = ResolveController(request);
         var useV2 = cutoverController.ShouldUseV2(request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText);
+
+        // 集群级 Kill Switch：存在活跃紧急覆盖时强制回退 V1（优先级高于 canary 百分比与 Cutover 配置）。
+        if (useV2 && await IsEmergencyOverrideActiveAsync(request.Metadata, cancellationToken).ConfigureAwait(false))
+        {
+            useV2 = false;
+        }
 
         // 100% V2 时跳过 Legacy，直接执行 V2-only 路径
         // 若 sampled shadow 启用，按采样率执行 Legacy + shadow 收集实验数据

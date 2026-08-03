@@ -195,6 +195,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
         "canary_pipelines",
         "canary_transition_audit",
+        // 集群级 Canary Kill Switch（运维紧急覆盖：活跃覆盖强制回退 V1）
+        "canary_emergency_overrides",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
         "learning_event_outbox",
         // Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
@@ -506,6 +508,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Canary 严格 HA 单事务接口（pipeline revision CAS + transition audit）
         var canaryPipelines = Infrastructure.PostgresNames.Table(options, "canary_pipelines");
         var canaryTransitionAudit = Infrastructure.PostgresNames.Table(options, "canary_transition_audit");
+        // 集群级 Canary Kill Switch（运维紧急覆盖表）
+        var canaryEmergencyOverrides = Infrastructure.PostgresNames.Table(options, "canary_emergency_overrides");
         var learningEventOutbox = Infrastructure.PostgresNames.Table(options, "learning_event_outbox");
         // Model Control Plane 激活审计持久化表
         var modelActivationAudit = Infrastructure.PostgresNames.Table(options, "model_activation_audit");
@@ -2166,6 +2170,26 @@ CREATE TABLE IF NOT EXISTS {canaryTransitionAudit} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_transition_audit", "run")} ON {canaryTransitionAudit} (run_id, transitioned_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_transition_audit", "transition")} ON {canaryTransitionAudit} (run_id, transition_id);
+
+-- 集群级 Canary Kill Switch 持久化表。
+-- canary_emergency_overrides：运维手动触发的紧急覆盖（Kill Switch），每 run 至多一行。
+--   活跃语义：cleared_at IS NULL。路由层在 canary 命中 V2 时先检查本表，存在活跃覆盖则强制回退 V1；
+--   CanaryProgressionService 恢复时同样优先本表（活跃覆盖期间不进入 Consistent）。
+--   TrySetOverrideAsync 通过 ON CONFLICT (run_id) DO UPDATE WHERE cleared_at IS NOT NULL 保证
+--   不覆盖已有活跃覆盖；部分唯一索引 (run_id) WHERE cleared_at IS NULL 在数据库层兜底保证
+--   同一 run 至多一条活跃覆盖。
+CREATE TABLE IF NOT EXISTS {canaryEmergencyOverrides} (
+    run_id text NOT NULL,
+    reason text NOT NULL,
+    operator_name text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    cleared_at timestamptz,
+    cleared_by text,
+    PRIMARY KEY (run_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_emergency_overrides", "active")}
+    ON {canaryEmergencyOverrides} (run_id) WHERE cleared_at IS NULL;
 
 -- Learning Loop Durable Outbox：Decision 物化事件持久化表。
 -- 替代 fire-and-forget Task.Run → MaterializeAsync → catch-all 模式，消除进程崩溃时静默丢训练数据。

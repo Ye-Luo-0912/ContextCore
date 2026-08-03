@@ -619,6 +619,10 @@ internal static class CoreExtensions
 		// error_rate / p95_latency_ms，供 CanaryProgressionService.EvaluateAsync 消费。
 		services.AddSingleton<ICanaryMetricsCollector, DefaultCanaryMetricsCollector>();
 
+		// 集群级 Canary Kill Switch 存储。默认 in-memory（单节点可用）；
+		// Postgres provider 注册 Postgres 实现（AddSingleton 先注册，TryAdd 跳过）。
+		services.TryAddSingleton<ICanaryEmergencyOverrideStore, InMemoryCanaryEmergencyOverrideStore>();
+
 		// Canary Progression HostedService。
 		// CanarySchedulerOptions 改用 Configure<T>() 注册（Options Pipeline），
 		// 让 IOptionsMonitor<CanarySchedulerOptions> 消费者能感知后续 PostConfigure 覆盖
@@ -642,12 +646,14 @@ internal static class CoreExtensions
 			var registry = sp.GetService<CutoverControllerRegistry>();
 			var timeProvider = sp.GetService<TimeProvider>();
 			var decisionApplier = sp.GetService<ICanaryDecisionApplier>();
+			var emergencyOverrideStore = sp.GetService<ICanaryEmergencyOverrideStore>();
 			return new CanaryProgressionService(
 				store, defaultController,
 				options: CanaryGateOptions.FromEnvironment(),
 			 timeProvider: timeProvider,
 				registry: registry,
-				decisionApplier: decisionApplier);
+				decisionApplier: decisionApplier,
+				emergencyOverrideStore: emergencyOverrideStore);
 		});
 		// HostedService 注册从 AddContextCore 移除——由 AddContextCoreRuntime
 		// 按 Profile 选择性注册（避免单节点 + HA 双推进器）。

@@ -534,6 +534,65 @@ public sealed record CanaryPipelineState
 }
 
 /// <summary>
+/// 集群级 Canary 紧急停止（Kill Switch）记录。
+/// </summary>
+/// <remarks>
+/// 该记录代表一次由运维人员手动触发的紧急干预：无论 <c>canary_pipelines</c> 表中
+/// 的百分比是多少，只要存在未清除（<c>ClearedAt == null</c>）的记录，路由层就必须
+/// 强制回退到 V1（百分比按 0 处理），且 <c>CanaryProgressionService</c> 不得把
+/// 恢复后的本地状态标记为 <c>Consistent</c>，直到运维显式清除该覆盖。
+/// </remarks>
+public sealed record CanaryEmergencyOverride
+{
+    /// <summary>被 Kill 的 Canary run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>触发原因（人工填写的说明，如 "v2 返回 P95 恶化"）。</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>触发人（运维账号）。</summary>
+    public required string OperatorName { get; init; }
+
+    /// <summary>触发时间。</summary>
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>清除时间（null = 覆盖仍生效）。</summary>
+    public DateTimeOffset? ClearedAt { get; init; }
+
+    /// <summary>清除人（null = 尚未清除）。</summary>
+    public string? ClearedBy { get; init; }
+}
+
+/// <summary>
+/// 集群级 Canary 紧急覆盖的持久化存储。
+/// </summary>
+/// <remarks>
+/// 实现必须保证「活跃覆盖」的读取语义：同一 runId 至多一条 <c>ClearedAt == null</c>
+/// 的记录（Postgres 实现通过 <c>ON CONFLICT</c> + 唯一索引保证），并且
+/// <c>TrySetOverrideAsync</c> / <c>TryClearOverrideAsync</c> 必须返回是否真正生效，
+/// 供调用方判断竞争失败。
+/// </remarks>
+public interface ICanaryEmergencyOverrideStore
+{
+    /// <summary>读取指定 runId 的活跃覆盖（<c>ClearedAt == null</c>）；无则返回 null。</summary>
+    ValueTask<CanaryEmergencyOverride?> GetActiveAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>读取全部活跃覆盖；无则返回空列表。</summary>
+    ValueTask<IReadOnlyList<CanaryEmergencyOverride>> GetActiveOverridesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 为 runId 设置活跃覆盖。若该 runId 已存在活跃覆盖则返回 false（不覆盖、不报错）。
+    /// </summary>
+    ValueTask<bool> TrySetOverrideAsync(string runId, string reason, string operatorName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 清除 runId 的活跃覆盖。仅当存在活跃覆盖且由同一位运维（或任一运维）清除时返回 true；
+    /// 无活跃覆盖时返回 false。
+    /// </summary>
+    ValueTask<bool> TryClearOverrideAsync(string runId, string operatorName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Canary Leader HostedService 配置。
 /// </summary>
 public sealed class CanaryLeaderOptions

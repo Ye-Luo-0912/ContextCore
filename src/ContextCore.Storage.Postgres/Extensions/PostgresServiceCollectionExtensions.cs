@@ -321,6 +321,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresCanaryLeaderLease>();
         services.AddSingleton<ICanaryLeaderLease>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
         services.AddSingleton<ICanaryDecisionApplier>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
+        // 集群级 Canary Kill Switch 存储（PostgreSQL 持久化）。
+        // 先于 CoreExtensions 的 TryAddSingleton 默认实现注册，确保 HA 模式下路由层与
+        // CanaryProgressionService 恢复逻辑读取集群共享的紧急覆盖。
+        services.AddSingleton<PostgresCanaryEmergencyOverrideStore>();
+        services.AddSingleton<ICanaryEmergencyOverrideStore>(sp => sp.GetRequiredService<PostgresCanaryEmergencyOverrideStore>());
 
         // 注册 ILeasedWorkStore 用于 Canary Leader 租约（统一租约基础设施）。
         // 与 ICanaryLeaderLease 共享同一底层表（canary_leader_leases），但使用统一的 ILeasedWorkStore 接口。
