@@ -89,8 +89,7 @@ public static class SecurityServiceCollectionExtensions
             };
 
             // 全局 fallback 策略（无 workspace / endpoint 匹配时使用）
-            var defaultPolicy = securityOptions.RateLimit.DefaultPolicy;
-            options.GlobalLimiter = CreatePartitionedLimiter(defaultPolicy, securityOptions);
+            options.GlobalLimiter = CreatePartitionedLimiter(securityOptions);
         });
 
         return services;
@@ -98,11 +97,12 @@ public static class SecurityServiceCollectionExtensions
 
     /// <summary>
     /// 创建按 workspace 分区的 RateLimiter（自定义 PartitionedRateLimiter）。
-    /// 通过 IWorkspaceContextAccessor 获取 workspaceId 作为分区键。
+    /// 每个请求按"endpoint 路径前缀（最长匹配）&gt; workspace 策略 &gt; 全局默认"解析
+    /// 有效策略，使 <see cref="RateLimitOptions.WorkspacePolicies"/> 与
+    /// <see cref="RateLimitOptions.EndpointPolicies"/> 真正生效（此前仅 DefaultPolicy 被消费）。
+    /// 分区键：策略 PerWorkspace=true 时按 workspaceId 隔离配额，否则共享 "global" 配额。
     /// </summary>
-    private static PartitionedRateLimiter<HttpContext> CreatePartitionedLimiter(
-        RateLimitPolicyOptions policy,
-        SecurityOptions securityOptions)
+    internal static PartitionedRateLimiter<HttpContext> CreatePartitionedLimiter(SecurityOptions securityOptions)
     {
         return PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         {
@@ -112,20 +112,59 @@ public static class SecurityServiceCollectionExtensions
                     ? ws
                     : "global";
 
+            var policy = ResolveEffectivePolicy(httpContext, workspaceId, securityOptions);
             // 按 workspace 隔离配额（PerWorkspace=true）或共享全局配额（PerWorkspace=false）
             var partitionKey = policy.PerWorkspace ? workspaceId : "global";
 
-            var rateLimiter = CreateRateLimiter(policy);
-            return RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey,
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = policy.TokenLimit,
-                    Window = TimeSpan.FromSeconds(Math.Max(1, policy.TokenRatePerSecond)),
-                    QueueLimit = policy.QueueLimit,
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-                });
+            // 按策略类型创建对应的 RateLimiter（Concurrency / FixedWindow / TokenBucket 均生效）。
+            // 旧实现总是 GetFixedWindowLimiter，Concurrency 等策略类型被静默忽略。
+            return RateLimitPartition.Get(partitionKey, _ => CreateRateLimiter(policy));
         });
+    }
+
+    /// <summary>
+    /// 解析请求的有效限流策略：endpoint 路径前缀（最长匹配优先，避免短前缀吞掉长前缀）
+    /// &gt; workspace 策略覆盖 &gt; 全局默认。
+    /// </summary>
+    internal static RateLimitPolicyOptions ResolveEffectivePolicy(
+        HttpContext httpContext,
+        string workspaceId,
+        SecurityOptions securityOptions)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(securityOptions);
+
+        var rateLimit = securityOptions.RateLimit;
+        var path = httpContext.Request.Path.Value ?? string.Empty;
+
+        // 1. Endpoint 路径前缀覆盖（最长前缀优先）
+        RateLimitPolicyOptions? endpointPolicy = null;
+        var longestPrefix = -1;
+        foreach (var (prefix, policy) in rateLimit.EndpointPolicies)
+        {
+            if (!string.IsNullOrWhiteSpace(prefix)
+                && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && prefix.Length > longestPrefix)
+            {
+                endpointPolicy = policy;
+                longestPrefix = prefix.Length;
+            }
+        }
+        if (endpointPolicy is not null)
+        {
+            return endpointPolicy;
+        }
+
+        // 2. Workspace 策略覆盖（"global" 表示未解析到 workspace，跳过）
+        if (!string.IsNullOrWhiteSpace(workspaceId)
+            && !string.Equals(workspaceId, "global", StringComparison.Ordinal)
+            && rateLimit.WorkspacePolicies.TryGetValue(workspaceId, out var workspacePolicy))
+        {
+            return workspacePolicy;
+        }
+
+        // 3. 全局默认
+        return rateLimit.DefaultPolicy;
     }
 
     /// <summary>根据策略类型创建对应的 RateLimiter（当前简化实现统一使用 FixedWindowLimiter）。</summary>

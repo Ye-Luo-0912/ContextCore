@@ -170,6 +170,9 @@ app.UseMiddleware<AuditLogMiddleware>();
 // 请求阶段生产准入门（ProductionHA）：运行时实时探针失败时对业务请求返回 503。
 // 位于 AuditLog 之后——被拒绝的请求仍经过认证与审计；健康/诊断路径豁免。
 app.UseMiddleware<ProductionAdmissionMiddleware>();
+// 请求阶段 workspace 配额门禁（Security:Quota:Enabled=true 时生效）：配额已耗尽的
+// workspace 创建 Agent Run 返回 429。同样位于 AuditLog 之后（被拒请求仍留审计轨迹）。
+app.UseMiddleware<WorkspaceQuotaMiddleware>();
 
 // ── OpenAPI / Scalar UI ──────────────────────────────────────────────
 // MapOpenApi 提供 /openapi/v1.json 规范文档；Scalar 将其渲染为交互式 UI

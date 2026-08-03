@@ -42,7 +42,7 @@ public sealed class R30A_KillPointMatrixTests
         var toolCall = BuildToolCall("weather", "arg-prepare-before");
 
         // 崩溃于 Prepare 前：journal 无任何条目。
-        var before = await journal.GetByRequestIdAsync(
+        var before = await journal.GetEntryAsync(
             DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0), cts.Token);
         Assert.IsNull(before, "前置：journal 应无任何记录（崩溃于 Prepare 前）。");
 

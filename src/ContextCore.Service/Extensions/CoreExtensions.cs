@@ -820,7 +820,18 @@ internal static class CoreExtensions
 
 		// 子问题 8：循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
 		services.TryAddSingleton<IAgentLoopPolicy, DefaultAgentLoopPolicy>();
-		services.TryAddSingleton<IAgentToolCallValidator, DefaultAgentToolCallValidator>();
+		// Tool 校验器绑定 SecurityOptions.ApprovalPolicy（费用/token 阈值触发审批）。
+		// 使用工厂注册以注入 approvalPolicy，同时避免 DI 解析 IReadOnlySet<string> 可空参数失败。
+		services.TryAddSingleton<IAgentToolCallValidator>(sp =>
+		{
+			var securityOptions = sp.GetService<IOptions<SecurityOptions>>()?.Value
+				?? sp.GetService<SecurityOptions>();
+			return new DefaultAgentToolCallValidator(
+				dispatcher: sp.GetService<IToolDispatcher>(),
+				catalog: sp.GetService<IToolCatalog>(),
+				dangerousTools: null,
+				approvalPolicy: securityOptions?.ApprovalPolicy);
+		});
 		// 审批门绑定 SecurityOptions.ApprovalPolicy 配置。
 		// 旧版参数less 注册使用 autoApproveAll=true 默认值，无视 ApprovalPolicy 配置——
 		// 生产环境即便显式 Enabled=true 也被忽略，所有 Tool 静默自动放行。
@@ -847,7 +858,8 @@ internal static class CoreExtensions
 				approvalRequiredTools: approvalRequiredTools,
 				autoApproveAll: autoApproveAll,
 				approvalStore: approvalStore,
-				logger: logger);
+				logger: logger,
+				approvalPolicy: approvalPolicy);
 		});
 
 		// 子问题 8：IAgentCheckpointFactory（默认实现）。

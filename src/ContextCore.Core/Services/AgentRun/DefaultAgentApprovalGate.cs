@@ -37,6 +37,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     private readonly IReadOnlySet<string> _approvalRequiredTools;
     private readonly bool _autoApproveAll;
     private readonly IAgentApprovalStore? _approvalStore;
+    private readonly ApprovalPolicyOptions? _approvalPolicy;
     private readonly ILogger<DefaultAgentApprovalGate>? _logger;
 
     /// <summary>
@@ -53,16 +54,26 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     /// 可选日志器。注入后持久化失败会记录为错误并抛出异常（fail-closed，由 Actor 的 FailAsync 处理）。
     /// null = 不记录日志（向后兼容测试场景）。
     /// </param>
+    /// <param name="approvalPolicy">
+    /// WP-B：Approval Policy 配置（SecurityOptions.ApprovalPolicy）。非 null 且 Enabled=true 时，
+    /// 在需审批 Tool 列表之外，还按 CostThresholdUsd / TokenThreshold 触发审批——
+    /// Tool 调用携带 <see cref="AgentToolCallRequest.EstimatedCostUsd"/> / 
+    /// <see cref="AgentToolCallRequest.EstimatedTokens"/> 且超过阈值时需人工审批；
+    /// WorkspaceOverrides 按 workspace 合并覆盖（Tool 列表 / 费用阈值 / token 阈值）。
+    /// null = 仅按 approvalRequiredTools 判定（向后兼容）。
+    /// </param>
     public DefaultAgentApprovalGate(
         IReadOnlySet<string>? approvalRequiredTools = null,
         bool autoApproveAll = true,
         IAgentApprovalStore? approvalStore = null,
-        ILogger<DefaultAgentApprovalGate>? logger = null)
+        ILogger<DefaultAgentApprovalGate>? logger = null,
+        ApprovalPolicyOptions? approvalPolicy = null)
     {
         _approvalRequiredTools = approvalRequiredTools ?? new HashSet<string>(0, StringComparer.OrdinalIgnoreCase);
         _autoApproveAll = autoApproveAll;
         _approvalStore = approvalStore;
         _logger = logger;
+        _approvalPolicy = approvalPolicy;
     }
 
     /// <inheritdoc />
@@ -94,9 +105,22 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
             };
         }
 
-        // 配置模式下：检查是否在需审批列表中
+        // 配置模式下：检查是否在需审批列表中 / 是否超过费用 / token 审批阈值
+        // （有效策略 = 全局 ApprovalPolicyOptions + 当前 workspace 的 WorkspaceOverrides 合并）。
+        var (effectiveTools, effectiveCostThreshold, effectiveTokenThreshold) = ResolveEffectivePolicy(workspaceId);
+
         var requiresHuman = !string.IsNullOrWhiteSpace(toolCall.ToolName)
-            && _approvalRequiredTools.Contains(toolCall.ToolName);
+            && effectiveTools.Contains(toolCall.ToolName);
+        if (!requiresHuman && effectiveCostThreshold > 0 && (toolCall.EstimatedCostUsd ?? 0) >= effectiveCostThreshold)
+        {
+            // 预估费用超过阈值 → 需人工审批（与 Tool 名称无关的审批触发条件）。
+            requiresHuman = true;
+        }
+        else if (!requiresHuman && effectiveTokenThreshold > 0 && (toolCall.EstimatedTokens ?? 0) >= effectiveTokenThreshold)
+        {
+            // 预估 token 消耗超过阈值 → 需人工审批。
+            requiresHuman = true;
+        }
 
         if (requiresHuman)
         {
@@ -211,5 +235,30 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
                 workspaceId, runId, approvalId, toolCall.ToolName);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 解析当前 workspace 的有效审批策略：全局 ApprovalPolicyOptions + WorkspaceOverrides 合并。
+    /// Workspace 覆盖存在时：Tool 列表整体替换（null = 继承全局）、费用/token 阈值按非 null 字段覆盖。
+    /// </summary>
+    private (IReadOnlySet<string> Tools, double CostThresholdUsd, long TokenThreshold) ResolveEffectivePolicy(string workspaceId)
+    {
+        var tools = _approvalRequiredTools;
+        var costThreshold = _approvalPolicy?.CostThresholdUsd ?? 0;
+        var tokenThreshold = _approvalPolicy?.TokenThreshold ?? 0;
+
+        if (_approvalPolicy is not null
+            && !string.IsNullOrWhiteSpace(workspaceId)
+            && _approvalPolicy.WorkspaceOverrides.TryGetValue(workspaceId, out var workspaceOverride))
+        {
+            if (workspaceOverride.ApprovalRequiredTools is not null)
+            {
+                tools = new HashSet<string>(workspaceOverride.ApprovalRequiredTools, StringComparer.OrdinalIgnoreCase);
+            }
+            costThreshold = workspaceOverride.CostThresholdUsd ?? costThreshold;
+            tokenThreshold = workspaceOverride.TokenThreshold ?? tokenThreshold;
+        }
+
+        return (tools, costThreshold, tokenThreshold);
     }
 }

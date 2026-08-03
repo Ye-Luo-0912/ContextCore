@@ -156,6 +156,25 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// 不残留活跃 Run 跟踪。
     /// </summary>
     public ValueTask<AgentRunEnqueueResult> TryEnqueueAsync(AgentRun run, CancellationToken cancellationToken = default)
+        => EnqueueInternalAsync(run, TimeSpan.Zero, cancellationToken);
+
+    /// <inheritdoc />
+    /// <summary>
+    /// 带超时的入队：等待队列槽位最多 <paramref name="timeout"/>（TimeSpan.Zero = 非阻塞，
+    /// 等价于 <see cref="TryEnqueueAsync"/>）。超时仍无槽位时返回 QueueFull（不无限等待）；
+    /// Host 已关闭返回 Closed。供内部调度/恢复路径在队列饱和时有界等待，提高吞吐。
+    /// </summary>
+    public ValueTask<AgentRunEnqueueResult> EnqueueAsync(AgentRun run, TimeSpan timeout, CancellationToken cancellationToken = default)
+        => EnqueueInternalAsync(run, timeout, cancellationToken);
+
+    /// <summary>
+    /// 入队核心实现（TryEnqueueAsync 与 EnqueueAsync 的公共路径）。
+    /// timeout=0 时非阻塞获取槽位（立即返回 QueueFull）；timeout&gt;0 时等待槽位最多
+    /// <paramref name="timeout"/>，超时/取消仍无槽位则返回 QueueFull（绝不无限等待）。
+    /// 所有失败路径清理 <see cref="_activeRuns"/> 条目与 CTS，不残留活跃 Run 跟踪。
+    /// </summary>
+    private async ValueTask<AgentRunEnqueueResult> EnqueueInternalAsync(
+        AgentRun run, TimeSpan timeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
 
@@ -165,17 +184,17 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         // 本地活跃 Run 去重（同进程内不重复启动）
         if (_activeRuns.ContainsKey(key))
         {
-            return ValueTask.FromResult(BuildEnqueueResult(
+            return BuildEnqueueResult(
                 AgentRunEnqueueStatus.AlreadyActive, run.RunId, capacity,
-                "同进程内已有活跃 Run，跳过重复入队。"));
+                "同进程内已有活跃 Run，跳过重复入队。");
         }
 
         // Host 已 Dispose（Channel 已 Completed）→ Closed，不再尝试入队
         if (Volatile.Read(ref _disposed) != 0)
         {
-            return ValueTask.FromResult(BuildEnqueueResult(
+            return BuildEnqueueResult(
                 AgentRunEnqueueStatus.Closed, run.RunId, capacity,
-                "AgentKernelHost 已关闭，无法入队新的 Run。"));
+                "AgentKernelHost 已关闭，无法入队新的 Run。");
         }
 
         // 方案 A：入队前不获取 lease；Worker 从队列取到 Run + 获得执行槽之后再 Acquire Lease。
@@ -188,25 +207,24 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         {
             // 并发竞争：其他线程先添加 → 清理并退出
             cts.Dispose();
-            return ValueTask.FromResult(BuildEnqueueResult(
+            return BuildEnqueueResult(
                 AgentRunEnqueueStatus.AlreadyActive, run.RunId, capacity,
-                "同进程内已有活跃 Run（并发竞争），跳过重复入队。"));
+                "同进程内已有活跃 Run（并发竞争），跳过重复入队。");
         }
 
-        // 非阻塞入队：先尝试获取容量槽位（满队列立即返回 QueueFull，不无限等待），
-        // 获取槽位后在锁内二次检查 disposed（与释放槽位原子配对，避免 Dispose 竞态泄漏槽位），
-        // 入队后释放 _queueSignal 唤醒 worker。优先级键 = (-Priority, 递增序号)：
-        // PriorityQueue 是最小堆，-Priority 最小 = 最高优先级先出队；序号保证同优先级 FIFO。
-        var workItem = new RunWorkItem(run, key, activeRun);
-        if (!_queueCapacity.Wait(0))
+        // 获取容量槽位：timeout=0 等价于非阻塞 Wait(0)（满队列立即返回 QueueFull）；
+        // timeout>0 有界等待（Enqueue Timeout），超时仍满 → QueueFull。不无限等待。
+        var acquired = await AcquireQueueSlotAsync(timeout, cancellationToken).ConfigureAwait(false);
+        if (!acquired)
         {
             // 失败路径清理：移除活跃 Run 跟踪 + 释放 CTS（不留残留）
             _activeRuns.TryRemove(key, out _);
             cts.Dispose();
 
-            return ValueTask.FromResult(BuildEnqueueResult(
-                AgentRunEnqueueStatus.QueueFull, run.RunId, capacity,
-                $"调度队列已满（容量 {capacity}），Run 已持久化，将由 RecoveryWorker 稍后接管执行。"));
+            var detail = timeout > TimeSpan.Zero
+                ? $"调度队列已满（容量 {capacity}），等待槽位 {timeout.TotalSeconds:F1}s 超时；Run 已持久化，将由 RecoveryWorker 稍后接管执行。"
+                : $"调度队列已满（容量 {capacity}），Run 已持久化，将由 RecoveryWorker 稍后接管执行。";
+            return BuildEnqueueResult(AgentRunEnqueueStatus.QueueFull, run.RunId, capacity, detail);
         }
 
         lock (_queueLock)
@@ -217,16 +235,37 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 _queueCapacity.Release();
                 _activeRuns.TryRemove(key, out _);
                 cts.Dispose();
-                return ValueTask.FromResult(BuildEnqueueResult(
+                return BuildEnqueueResult(
                     AgentRunEnqueueStatus.Closed, run.RunId, capacity,
-                    "AgentKernelHost 已关闭，无法入队新的 Run。"));
+                    "AgentKernelHost 已关闭，无法入队新的 Run。");
             }
-            _queue.Enqueue(workItem, (-run.Priority, _queueSequence++));
+            _queue.Enqueue(new RunWorkItem(run, key, activeRun), (-run.Priority, _queueSequence++));
         }
         _queueSignal.Release();
 
-        return ValueTask.FromResult(BuildEnqueueResult(
-            AgentRunEnqueueStatus.Accepted, run.RunId, capacity, null));
+        return BuildEnqueueResult(
+            AgentRunEnqueueStatus.Accepted, run.RunId, capacity, null);
+    }
+
+    /// <summary>
+    /// 获取队列容量槽位：timeout &lt;= 0 时非阻塞（Wait(0)）；timeout &gt; 0 时有界等待。
+    /// 取消时视为未获取（返回 false，调用方按 QueueFull 处理——Run 已持久化，非致命）。
+    /// </summary>
+    private async ValueTask<bool> AcquireQueueSlotAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            return _queueCapacity.Wait(0);
+        }
+
+        try
+        {
+            return await _queueCapacity.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     private AgentRunEnqueueResult BuildEnqueueResult(

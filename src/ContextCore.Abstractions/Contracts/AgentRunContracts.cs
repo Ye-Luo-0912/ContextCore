@@ -510,6 +510,18 @@ public sealed record AgentToolCallRequest
     /// 用于将后续 Tool 观察结果与本次调用关联。确定性 fallback 路径可留空。
     /// </summary>
     public string? ToolCallId { get; init; }
+
+    /// <summary>
+    /// 预估 token 消耗（可选；由调用方 / model transport 填充）。
+    /// 供 Approval Policy 的 <c>TokenThreshold</c> 触发审批；null = 未知，跳过阈值检查。
+    /// </summary>
+    public long? EstimatedTokens { get; init; }
+
+    /// <summary>
+    /// 预估费用（USD，可选；由调用方 / model transport 填充）。
+    /// 供 Approval Policy 的 <c>CostThresholdUsd</c> 触发审批；null = 未知，跳过阈值检查。
+    /// </summary>
+    public double? EstimatedCostUsd { get; init; }
 }
 
 /// <summary>
@@ -2074,6 +2086,16 @@ public sealed class AgentHostOptions
     public TimeSpan DrainTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// 入队等待槽位的超时上限（Enqueue Timeout）。
+    /// 默认 TimeSpan.Zero = 非阻塞：队列满时 <see cref="IAgentRunScheduler.TryEnqueueAsync"/>
+    /// 立即返回 <see cref="AgentRunEnqueueStatus.QueueFull"/>，不等待槽位（HTTP 入口语义）。
+    /// 设为正数时 <see cref="IAgentRunScheduler.EnqueueAsync"/> 等待队列槽位最多
+    /// <see cref="EnqueueTimeout"/>，超时仍无槽位则返回 QueueFull——
+    /// 内部调度/恢复路径可用有界等待提高吞吐，但任何路径都在确定时间内返回，绝不无限等待。
+    /// </summary>
+    public TimeSpan EnqueueTimeout { get; set; } = TimeSpan.Zero;
+
+    /// <summary>
     /// Durable Scheduler（PostgresPendingRunClaimer）轮询间隔：
     /// 每次周期先死信重试耗尽的 Run，再领取 pending Run 入队。默认 5 秒。
     /// </summary>
@@ -2166,6 +2188,18 @@ public interface IAgentRunScheduler
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>入队结果（含状态与队列快照）。</returns>
     ValueTask<AgentRunEnqueueResult> TryEnqueueAsync(AgentRun run, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 带超时的入队：等待队列槽位最多 <paramref name="timeout"/>（TimeSpan.Zero = 非阻塞，
+    /// 等价于 <see cref="TryEnqueueAsync"/>）。任何情况下都在确定时间内返回——
+    /// 槽位可得 → Accepted；超时仍满 → QueueFull；Host 已关闭 → Closed。
+    /// 供内部调度/恢复路径在队列饱和时以有界等待提高吞吐，而非无限阻塞或立即放弃。
+    /// </summary>
+    /// <param name="run">待执行的 Run 元数据。</param>
+    /// <param name="timeout">等待槽位的最大时长（TimeSpan.Zero = 非阻塞，立即返回）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>入队结果（含状态与队列快照）。</returns>
+    ValueTask<AgentRunEnqueueResult> EnqueueAsync(AgentRun run, TimeSpan timeout, CancellationToken cancellationToken = default);
 }
 
 // ── Durable Approval（运行时能力补齐：持久化审批状态）──────────────────────

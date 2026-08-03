@@ -459,3 +459,64 @@ public interface IAuditRetentionService
     /// <summary>归档超期审计记录到冷存储（可选；未实现时直接 Purge）。</summary>
     ValueTask<int> ArchiveOlderAsync(TimeSpan retention, string archivePath, CancellationToken cancellationToken = default);
 }
+
+// ── Approval Policy（契约层：IAgentApprovalGate / IAgentToolCallValidator 消费）────
+
+/// <summary>Approval Policy 配置。</summary>
+/// <remarks>
+/// 定义在契约层（而非 Service 配置层），因为 <c>IAgentApprovalGate</c> /
+/// <c>IAgentToolCallValidator</c> 的默认实现位于 ContextCore.Core，
+/// 需要消费 CostThresholdUsd / TokenThreshold / WorkspaceOverrides 触发审批。
+/// </remarks>
+public sealed class ApprovalPolicyOptions
+{
+    /// <summary>
+    /// 是否启用 Approval Policy。默认 false（向后兼容：所有 Tool 自动通过）。
+    /// 设为 true 时 ApprovalPolicy 工具调用需经过 IAgentApprovalGate 审批。
+    /// </summary>
+    public bool Enabled { get; init; } = false;
+
+    /// <summary>
+    /// 需要人工审批的 Tool 名称列表（按 workspace 配置覆盖）。
+    /// 默认包含常见危险 Tool：file_delete / shell_exec / registry_set / process_kill。
+    /// </summary>
+    public IReadOnlyList<string> ApprovalRequiredTools { get; init; } = new[]
+    {
+        "file_delete",
+        "shell_exec",
+        "registry_set",
+        "process_kill"
+    };
+
+    /// <summary>
+    /// 触发审批的费用阈值（USD）。Tool 调用预估费用（<see cref="AgentToolCallRequest.EstimatedCostUsd"/>）
+    /// 超过此值时需要审批。默认 1.0；设为 0 时禁用费用触发审批（仅按 Tool 名称触发）。
+    /// </summary>
+    public double CostThresholdUsd { get; init; } = 1.0;
+
+    /// <summary>
+    /// 触发审批的 token 阈值。Tool 调用预估 token（<see cref="AgentToolCallRequest.EstimatedTokens"/>）
+    /// 超过此值时需要审批。默认 100000；设为 0 时禁用 token 触发审批。
+    /// </summary>
+    public long TokenThreshold { get; init; } = 100_000;
+
+    /// <summary>
+    /// 按 workspace 配置的 Approval Policy 覆盖。
+    /// key=workspaceId，value=该 workspace 的策略（合并到全局策略之上）。
+    /// </summary>
+    public IReadOnlyDictionary<string, WorkspaceApprovalOverride> WorkspaceOverrides { get; init; }
+        = new Dictionary<string, WorkspaceApprovalOverride>(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>按 workspace 配置的 Approval Policy 覆盖。</summary>
+public sealed class WorkspaceApprovalOverride
+{
+    /// <summary>覆盖全局 ApprovalRequiredTools（null = 继承全局配置）。</summary>
+    public IReadOnlyList<string>? ApprovalRequiredTools { get; init; }
+
+    /// <summary>覆盖全局 CostThresholdUsd（null = 继承全局配置）。</summary>
+    public double? CostThresholdUsd { get; init; }
+
+    /// <summary>覆盖全局 TokenThreshold（null = 继承全局配置）。</summary>
+    public long? TokenThreshold { get; init; }
+}

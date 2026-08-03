@@ -5,6 +5,7 @@ using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ContextCore.Service.Endpoints;
 
@@ -69,110 +70,10 @@ internal static class AgentExecutionEndpoints
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Task))
-            {
-                return ContextCoreHttpResultMapper.InvalidRequest(
-                    httpContext, string.Empty, "agents.runs.create",
-                    "Task 不能为空。", field: "task");
-            }
-
-            if (host is null)
-            {
-                return ContextCoreHttpResultMapper.Misconfigured(
-                    httpContext, string.Empty, "agents.runs.create",
-                    "AgentKernelHost 未注册到 DI 容器。");
-            }
-
-            // 解析 workspaceId：优先认证上下文，回退请求体，再回退默认值
-            var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, request.WorkspaceId);
-
-            // Atomic idempotent creation - eliminates TOCTOU race between check and create
-            var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey;
-
-            var runId = Guid.NewGuid().ToString("N");
-            var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
-                ? $"session-{runId}"
-                : request.SessionId!;
-            var now = DateTimeOffset.UtcNow;
-
-            // Build budgets (defaults when not provided)
-            var turnBudget = request.CostBudget is null
-                ? new AgentTurnBudget { MaxTurns = 20, TurnsUsed = 0, MaxModelCalls = 60 }
-                : new AgentTurnBudget
-                {
-                    MaxTurns = request.CostBudget.MaxTurns > 0 ? request.CostBudget.MaxTurns : 20,
-                    TurnsUsed = 0,
-                    MaxModelCalls = request.CostBudget.MaxTurns > 0 ? request.CostBudget.MaxTurns * 3 : 60
-                };
-            var costBudget = request.CostBudget is null
-                ? new AgentCostBudget { MaxTokens = 100000, TokensUsed = 0, MaxCostUsd = 10.0, CostUsedUsd = 0.0 }
-                : new AgentCostBudget
-                {
-                    MaxTokens = request.CostBudget.MaxTokens > 0 ? request.CostBudget.MaxTokens : 100000,
-                    TokensUsed = 0,
-                    MaxCostUsd = request.CostBudget.MaxCostUsd > 0 ? request.CostBudget.MaxCostUsd : 10.0,
-                    CostUsedUsd = 0.0
-                };
-
-            var timeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : 300;
-            var allowedToolIds = request.ToolIds is { Count: > 0 } toolIds
-                ? new HashSet<string>(toolIds, StringComparer.Ordinal)
-                : new HashSet<string>(StringComparer.Ordinal);
-
-            var run = new AgentRun
-            {
-                RunId = runId,
-                WorkspaceId = workspaceId,
-                SessionId = sessionId,
-                Task = request.Task!,
-                State = AgentRunState.Created,
-                Turn = 0,
-                ModelCallsUsed = 0,
-                CreatedAt = now,
-                UpdatedAt = now,
-                TurnBudget = turnBudget,
-                CostBudget = costBudget,
-                ModelArtifactId = string.IsNullOrWhiteSpace(request.ModelId) ? null : request.ModelId,
-                AllowedToolIds = allowedToolIds,
-                DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
-                ModelContextTokenBudget = 8192,
-                IdempotencyKey = idempotencyKey,
-                // B3 Durable Scheduler：优先级（高者先执行）+ Run 级重试预算（0 = 不重试）。
-                // MaxRetries < 0 视为 0（非法负值收敛为"不重试"，与默认语义一致）。
-                Priority = request.Priority,
-                MaxRetries = request.MaxRetries > 0 ? request.MaxRetries : 0
-            };
-
-            AgentRunCreateResult createResult;
-            try
-            {
-                createResult = await runStore.CreateOrGetByIdempotencyKeyAsync(run, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
-            }
-
-            if (createResult.WasExisting)
-            {
-                // Idempotent replay: return existing run (200 OK)
-                return Results.Ok(ToRunResponse(createResult.Run));
-            }
-
-            // Created: try to enqueue to Host. Queue full → 429 (prompt rejection,
-            // run is persisted, client can poll or Recovery will pick it up);
-            // Host closed → 202 Accepted (run is persisted, Recovery will pick it up).
-            var enqueue = await host.TryEnqueueAsync(createResult.Run, CancellationToken.None).ConfigureAwait(false);
-            var response = ToRunResponse(createResult.Run);
-            return enqueue.Status switch
-            {
-                AgentRunEnqueueStatus.QueueFull => Results.Json(
-                    response,
-                    statusCode: StatusCodes.Status429TooManyRequests),
-                AgentRunEnqueueStatus.Closed => Results.Accepted(
-                    $"/api/agents/runs/{createResult.Run.RunId}", response),
-                _ => Results.Created($"/api/agents/runs/{createResult.Run.RunId}", response)
-            };
+            // 处理逻辑提取到 internal static handler（端点单元测试直接调用）：
+            // 幂等创建 → workspace 配额预留 → 入队调度。
+            return await CreateAgentRunHandlerAsync(
+                request, runStore, host, workspaceContextAccessor, httpContext, ct).ConfigureAwait(false);
         })
         .WithName("CreateAgentRun")
         .RequireWorkspacePermission(WorkspacePermission.AgentRun)
@@ -1210,8 +1111,154 @@ internal static class AgentExecutionEndpoints
                 CostUsedUsd = run.CostBudget.CostUsedUsd
             }
         };
-}
 
+    /// <summary>
+    /// 创建并启动 AgentRun 的处理逻辑（internal static，供端点单元测试直接调用）。
+    /// 流程：幂等创建（CreateOrGetByIdempotencyKeyAsync）→ workspace 配额预留
+    /// （IWorkspaceQuotaService.TryConsumeAsync，Security:Quota:Enabled=true 时）→
+    /// 入队调度（TryEnqueueAsync，非阻塞）。配额预留失败 → 429；队列满 → 429；
+    /// Host 已关闭 → 202（Run 已持久化，由 Recovery 接管）。
+    /// </summary>
+    internal static async Task<IResult> CreateAgentRunHandlerAsync(
+        CreateRunRequest request,
+        IAgentRunStore runStore,
+        AgentKernelHost? host,
+        IWorkspaceContextAccessor workspaceContextAccessor,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Task))
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext, string.Empty, "agents.runs.create",
+                "Task 不能为空。", field: "task");
+        }
+
+        if (host is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext, string.Empty, "agents.runs.create",
+                "AgentKernelHost 未注册到 DI 容器。");
+        }
+
+        // 解析 workspaceId：优先认证上下文，回退请求体，再回退默认值
+        var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, request.WorkspaceId);
+
+        // Atomic idempotent creation - eliminates TOCTOU race between check and create
+        var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey;
+
+        var runId = Guid.NewGuid().ToString("N");
+        var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
+            ? $"session-{runId}"
+            : request.SessionId!;
+        var now = DateTimeOffset.UtcNow;
+
+        // Build budgets (defaults when not provided)
+        var turnBudget = request.CostBudget is null
+            ? new AgentTurnBudget { MaxTurns = 20, TurnsUsed = 0, MaxModelCalls = 60 }
+            : new AgentTurnBudget
+            {
+                MaxTurns = request.CostBudget.MaxTurns > 0 ? request.CostBudget.MaxTurns : 20,
+                TurnsUsed = 0,
+                MaxModelCalls = request.CostBudget.MaxTurns > 0 ? request.CostBudget.MaxTurns * 3 : 60
+            };
+        var costBudget = request.CostBudget is null
+            ? new AgentCostBudget { MaxTokens = 100000, TokensUsed = 0, MaxCostUsd = 10.0, CostUsedUsd = 0.0 }
+            : new AgentCostBudget
+            {
+                MaxTokens = request.CostBudget.MaxTokens > 0 ? request.CostBudget.MaxTokens : 100000,
+                TokensUsed = 0,
+                MaxCostUsd = request.CostBudget.MaxCostUsd > 0 ? request.CostBudget.MaxCostUsd : 10.0,
+                CostUsedUsd = 0.0
+            };
+
+        var timeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : 300;
+        var allowedToolIds = request.ToolIds is { Count: > 0 } toolIds
+            ? new HashSet<string>(toolIds, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+
+        var run = new AgentRun
+        {
+            RunId = runId,
+            WorkspaceId = workspaceId,
+            SessionId = sessionId,
+            Task = request.Task!,
+            State = AgentRunState.Created,
+            Turn = 0,
+            ModelCallsUsed = 0,
+            CreatedAt = now,
+            UpdatedAt = now,
+            TurnBudget = turnBudget,
+            CostBudget = costBudget,
+            ModelArtifactId = string.IsNullOrWhiteSpace(request.ModelId) ? null : request.ModelId,
+            AllowedToolIds = allowedToolIds,
+            DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
+            ModelContextTokenBudget = 8192,
+            IdempotencyKey = idempotencyKey,
+            // B3 Durable Scheduler：优先级（高者先执行）+ Run 级重试预算（0 = 不重试）。
+            // MaxRetries < 0 视为 0（非法负值收敛为"不重试"，与默认语义一致）。
+            Priority = request.Priority,
+            MaxRetries = request.MaxRetries > 0 ? request.MaxRetries : 0
+        };
+
+        AgentRunCreateResult createResult;
+        try
+        {
+            createResult = await runStore.CreateOrGetByIdempotencyKeyAsync(run, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
+        }
+
+        if (createResult.WasExisting)
+        {
+            // Idempotent replay: return existing run (200 OK)
+            return Results.Ok(ToRunResponse(createResult.Run));
+        }
+
+        // WP-B Workspace 配额强制：仅新创建的 Run 预留配额（幂等重放不重复扣减）。
+        // 配额启用且服务已注册时，按 Run 预算（MaxTokens / MaxCostUsd）预留；
+        // 预留失败（workspace 配额已耗尽）→ 429（中间件已做耗尽快路径，此处为权威扣减点）。
+        var securityOptions = httpContext.RequestServices.GetService<SecurityOptions>();
+        var quotaService = httpContext.RequestServices.GetService<IWorkspaceQuotaService>();
+        if (securityOptions is not null && securityOptions.Quota.Enabled && quotaService is not null)
+        {
+            var consumption = await quotaService.TryConsumeAsync(
+                workspaceId,
+                run.CostBudget?.MaxTokens ?? 0,
+                run.CostBudget?.MaxCostUsd ?? 0,
+                ct).ConfigureAwait(false);
+            if (!consumption.Allowed)
+            {
+                return Results.Json(
+                    new
+                    {
+                        error = "workspace_quota_exhausted",
+                        message = consumption.FailureReason ?? "Workspace 配额已耗尽，无法创建新的 Agent Run。",
+                        workspaceId
+                    },
+                    statusCode: StatusCodes.Status429TooManyRequests);
+            }
+        }
+
+        // Created: try to enqueue to Host. Queue full → 429 (prompt rejection,
+        // run is persisted, client can poll or Recovery will pick it up);
+        // Host closed → 202 Accepted (run is persisted, Recovery will pick it up).
+        var enqueue = await host.TryEnqueueAsync(createResult.Run, CancellationToken.None).ConfigureAwait(false);
+        var response = ToRunResponse(createResult.Run);
+        return enqueue.Status switch
+        {
+            AgentRunEnqueueStatus.QueueFull => Results.Json(
+                response,
+                statusCode: StatusCodes.Status429TooManyRequests),
+            AgentRunEnqueueStatus.Closed => Results.Accepted(
+                $"/api/agents/runs/{createResult.Run.RunId}", response),
+            _ => Results.Created($"/api/agents/runs/{createResult.Run.RunId}", response)
+        };
+    }
+
+}
 // ---------------------------------------------------------------------------
 // Agent Execution API 请求 / 响应 DTO
 // ---------------------------------------------------------------------------
@@ -1445,4 +1492,5 @@ public sealed class CostBudgetResponse
 
     /// <summary>当前已产生费用（美元）。</summary>
     public double CostUsedUsd { get; init; }
+
 }
