@@ -293,13 +293,19 @@ jobs:
           path: '**/TestResults/*.trx'
           retention-days: 7
 
-  # 生产证据固化 job —— 汇总各测试 job 的 TRX 结果：
-  #   1. no-Inconclusive 门禁：任何测试以 Inconclusive 跳过都导致 CI 失败，
-  #      不允许用 Inconclusive 掩盖缺失的证据（例如 Docker 未就绪导致的静默跳过）。
-  #   2. 记录当前 HEAD（commit sha + run id + 各 job 结果）为可追溯证据，
-  #      上传 evidence 工件（保留 90 天）。
+  # 生产证据固化 job —— 汇总各测试 job 的 TRX 结果并硬性验证证据完整性：
+  #   1. assert-required-jobs.py：硬断言所有必需上游 job（required-jobs.json）均为 success，
+  #      上游任一失败 ⇒ Evidence 失败，堵住"上游失败、Evidence 单独绿"的假绿路径。
+  #   2. 下载全部必需测试结果工件（required-artifacts.json），不再 continue-on-error，
+  #      任一工件缺失（上游未上传/下载失败）即失败。
+  #   3. gate-evidence.py 门禁：0 Failed / 0 Inconclusive / 0 未声明跳过，
+  #      且每个必测类别（unit/integration/architecture/public-api/openapi-snapshot）
+  #      至少 minExecuted 条真实执行（0 执行 = 环境跳过必测项，失败）。
+  #   4. write-head-evidence.py 记录当前 HEAD（commit sha + run id + 各 job 结果 +
+  #      policy manifest 快照）为可追溯证据，上传 evidence 工件（保留 90 天）。
+  #   注：Branch protection 需在仓库设置中将本 job 设为唯一必查 check。
   evidence:
-    name: Evidence (no-Inconclusive gate + HEAD traceability)
+    name: Evidence (manifest gate + HEAD traceability)
     needs: [build, unit, integration-postgres, architecture, public-api, openapi-snapshot]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -308,67 +314,80 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 硬断言：所有必需上游 job 均为 success（否则 Evidence 失败，不允许单独绿）。
+      - name: Assert required jobs succeeded
+        if: always()
+        env:
+          NEEDS_BUILD: ${{ needs.build.result }}
+          NEEDS_UNIT: ${{ needs.unit.result }}
+          NEEDS_INTEGRATION_POSTGRES: ${{ needs.integration-postgres.result }}
+          NEEDS_ARCHITECTURE: ${{ needs.architecture.result }}
+          NEEDS_PUBLIC_API: ${{ needs.public-api.result }}
+          NEEDS_OPENAPI_SNAPSHOT: ${{ needs.openapi-snapshot.result }}
+        run: python3 scripts/assert-required-jobs.py --manifest-dir ci-manifests
+
       - name: Download unit test results
         uses: actions/download-artifact@v4
         with:
           name: unit-tests-${{ github.run_id }}
           path: evidence/trx/unit
-        continue-on-error: true
+        if: always()
 
       - name: Download integration test results
         uses: actions/download-artifact@v4
         with:
           name: integration-tests-${{ github.run_id }}
           path: evidence/trx/integration
-        continue-on-error: true
+        if: always()
 
       - name: Download architecture test results
         uses: actions/download-artifact@v4
         with:
           name: architecture-tests-${{ github.run_id }}
           path: evidence/trx/architecture
-        continue-on-error: true
+        if: always()
 
       - name: Download public API test results
         uses: actions/download-artifact@v4
         with:
           name: public-api-tests-${{ github.run_id }}
           path: evidence/trx/public-api
-        continue-on-error: true
+        if: always()
 
       - name: Download OpenAPI snapshot test results
         uses: actions/download-artifact@v4
         with:
           name: openapi-snapshot-tests-${{ github.run_id }}
           path: evidence/trx/openapi-snapshot
-        continue-on-error: true
+        if: always()
 
-      # 门禁：拒绝 Inconclusive。TRX 缺失（目录为空）同样失败（证据不完整）。
-      - name: Gate — no Inconclusive test results
-        run: python3 scripts/gate-no-inconclusive.py evidence/trx
+      # 门禁：0 Failed / 0 Inconclusive / 0 未声明跳过 + 每类必测（manifest 驱动）。
+      - name: Gate — production evidence manifest
+        if: always()
+        run: python3 scripts/gate-evidence.py --manifest-dir ci-manifests evidence/trx
 
+      # 记录 HEAD 可追溯证据：head-evidence.json 含 commit sha / run id / 各 job 结果 /
+      # policy manifest 快照（由 ci-manifests/*.json 单一来源生成）。
       - name: Record HEAD evidence
+        if: always()
+        env:
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHORT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          NEEDS_BUILD: ${{ needs.build.result }}
+          NEEDS_UNIT: ${{ needs.unit.result }}
+          NEEDS_INTEGRATION_POSTGRES: ${{ needs.integration-postgres.result }}
+          NEEDS_ARCHITECTURE: ${{ needs.architecture.result }}
+          NEEDS_PUBLIC_API: ${{ needs.public-api.result }}
+          NEEDS_OPENAPI_SNAPSHOT: ${{ needs.openapi-snapshot.result }}
+        run: python3 scripts/write-head-evidence.py --manifest-dir ci-manifests --out evidence/head-evidence.json
+
+      - name: Publish Evidence summary
+        if: always()
         run: |
-          mkdir -p evidence
-          cat > evidence/head-evidence.json <<EOF
-          {
-            "headSha": "${{ github.sha }}",
-            "headShortSha": "${{ github.sha }}",
-            "runId": "${{ github.run_id }}",
-            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "repository": "${{ github.repository }}",
-            "branch": "${{ github.ref_name }}",
-            "jobs": {
-              "build": "${{ needs.build.result }}",
-              "unit": "${{ needs.unit.result }}",
-              "integration-postgres": "${{ needs.integration-postgres.result }}",
-              "architecture": "${{ needs.architecture.result }}",
-              "public-api": "${{ needs.public-api.result }}",
-              "openapi-snapshot": "${{ needs.openapi-snapshot.result }}"
-            },
-            "gate": "no-inconclusive"
-          }
-          EOF
           echo "## WP-S6 Evidence (HEAD=${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **runId**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY

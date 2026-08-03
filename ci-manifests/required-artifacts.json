@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "description": "Evidence job 必须下载的全部测试结果工件。name 中的 {runId} 在 CI 中替换为 github.run_id；dir 为下载到 evidence/trx 下的存放目录，gate-evidence.py 按 dir 校验每类证据必须存在。任一工件缺失（上游 job 失败或未上传）即 Evidence 失败。",
+  "artifacts": [
+    { "name": "unit-tests-{runId}", "dir": "unit", "job": "unit" },
+    { "name": "integration-tests-{runId}", "dir": "integration", "job": "integration-postgres" },
+    { "name": "architecture-tests-{runId}", "dir": "architecture", "job": "architecture" },
+    { "name": "public-api-tests-{runId}", "dir": "public-api", "job": "public-api" },
+    { "name": "openapi-snapshot-tests-{runId}", "dir": "openapi-snapshot", "job": "openapi-snapshot" }
+  ]
+}

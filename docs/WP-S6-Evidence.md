@@ -10,11 +10,17 @@
 
 | 设施 | 位置 | 作用 |
 | --- | --- | --- |
-| no-Inconclusive 门禁 | `.github/workflows/ci.yml` → `evidence` job + `scripts/gate-no-inconclusive.py` | 任何测试以 Inconclusive 跳过都导致 CI 失败；不允许用 Inconclusive 掩盖缺失证据 |
-| HEAD 可追溯记录 | `ci.yml` `evidence` job → `head-evidence.json` 工件 | 记录 commit sha + run id + 各 job 结果，随工件保留 90 天 |
+| Evidence Manifest 门禁 | `.github/workflows/ci.yml` → `evidence` job + `scripts/gate-evidence.py` + `ci-manifests/*.json` | 硬断言所有必需上游 job 均为 success（`assert-required-jobs.py`）；0 Failed / 0 Inconclusive / 0 未声明跳过（NotExecuted/Skipped 仅白名单内已知 [Ignore] 允许）；每个必测类别至少 minExecuted 条真实执行（环境跳过必测项失败）；任一必需工件缺失 → exit 2 |
+| 必需上游 job 断言 | `scripts/assert-required-jobs.py` + `ci-manifests/required-jobs.json` | 上游任一 job 非 success ⇒ Evidence 失败，堵住"上游失败、Evidence 单独绿"假绿路径 |
+| 必测类别清单 | `ci-manifests/required-test-categories.json` | unit / integration / architecture / public-api / openapi-snapshot 每类必须真实执行 ≥ 1 条（含文档化 [Ignore] 白名单） |
+| HEAD 可追溯记录 | `ci.yml` `evidence` job → `scripts/write-head-evidence.py` → `head-evidence.json` 工件 | 记录 commit sha + run id + 各 job 结果 + policy manifest 快照，随工件保留 90 天 |
 | 基准 HEAD 绑定 | `.github/workflows/benchmark-main.yml` → `head-commit.json` | 基准结果与产生它的提交绑定（可追溯到具体 commit） |
 | CI 结构验收 | `tests/ContextCore.Tests/R29H_CiEvidenceAcceptanceTests.cs` | 文本断言 CI 证据设施结构完整（不实际运行 CI） |
 | 本证据文档 | `docs/WP-S6-Evidence.md` | 本文件 |
+
+> **Branch protection**：Evidence job 是唯一必查 check。仓库设置在 main 分支保护中把
+> `Evidence (manifest gate + HEAD traceability)` 设为 required check 即可——上游任一 job
+> 失败时 Evidence 自身失败，因此只需一个必查项即可代表整条 CI 链（无需逐个勾选各测试 job）。
 
 ## 2. 当前 HEAD 的本地验证证据
 
@@ -30,7 +36,7 @@
 
 > Docker 未在本机启动：Postgres 集成测试（含 WP-S6 新增故障测试）以
 > `Assert.Inconclusive` 本地跳过，由 CI `integration-postgres` job（mandatory Docker）
-> 真实执行并受 no-Inconclusive 门禁约束。
+> 真实执行并受 evidence manifest 门禁约束（0 Inconclusive / 每类必测）。
 
 ## 3. WP-S6 新增生产证据测试
 

@@ -54,3 +54,7 @@ connectionstrings.local.json
 !src/ContextCore.Inference.Onnx/
 !src/ContextCore.Inference.Onnx/*.cs
 !src/ContextCore.Inference.Onnx/*.csproj
+
+# Python gate scripts (ci evidence)
+__pycache__/
+*.pyc

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "description": "必测类别：每个类别必须有 >= minExecuted 条真实执行结果（executed = Passed + Failed）。executed == 0 即环境跳过（Docker 未就绪、过滤错误等），Evidence 失败。allowNotExecuted 为文档化已知 [Ignore] 测试名单（后缀匹配 testName），白名单外的 NotExecuted / Skipped 一律视为未声明的环境跳过并失败。",
+  "categories": [
+    {
+      "job": "unit",
+      "dir": "unit",
+      "name": "unit",
+      "filter": "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract",
+      "minExecuted": 1,
+      "allowNotExecuted": [
+        "ContextCoreTraceFaultInjectionTests.TraceSink_QueueFull_NotYetImplemented",
+        "ContextCoreTraceFaultInjectionTests.TraceSink_ShutdownDuringFlush_NotYetImplemented",
+        "ContextCoreTraceFaultInjectionTests.TraceSink_PostgresUnavailable_CoveredByThrowingFakeTests",
+        "ContextCoreTraceSinkVerificationTests.FileSink_BoundedQueueCapacity_NotYetImplemented",
+        "ContextCoreTraceSinkVerificationTests.FileSink_BatchAppend_NotYetImplemented",
+        "ContextCoreTraceSinkVerificationTests.FileSink_ShutdownDrain_NotYetImplemented",
+        "ContextCoreTraceSinkVerificationTests.FileSink_QueueSaturationDetection_NotYetImplemented",
+        "ContextCoreTraceSinkVerificationTests.FileSink_WriterRecreation_NotYetImplemented"
+      ]
+    },
+    {
+      "job": "integration-postgres",
+      "dir": "integration",
+      "name": "integration",
+      "filter": "TestCategory=Integration",
+      "minExecuted": 1,
+      "allowNotExecuted": []
+    },
+    {
+      "job": "architecture",
+      "dir": "architecture",
+      "name": "architecture",
+      "filter": "TestCategory=Architecture",
+      "minExecuted": 1,
+      "allowNotExecuted": [
+        "ContextCoreDiArchitectureTests.ProductionComposition_Postgres_IContextStateVersionStore_ResolvesToPostgresImplementation"
+      ]
+    },
+    {
+      "job": "public-api",
+      "dir": "public-api",
+      "name": "public-api",
+      "filter": "FullyQualifiedName~PublicApiBaselineTests",
+      "minExecuted": 1,
+      "allowNotExecuted": [
+        "PublicApiBaselineTests.PublicApi_RegenerateBaselineFile"
+      ]
+    },
+    {
+      "job": "openapi-snapshot",
+      "dir": "openapi-snapshot",
+      "name": "openapi-snapshot",
+      "filter": "FullyQualifiedName~OpenApiSnapshotDriftTests",
+      "minExecuted": 1,
+      "allowNotExecuted": [
+        "OpenApiSnapshotDriftTests.OpenApi_RegenerateSnapshot"
+      ]
+    }
+  ]
+}

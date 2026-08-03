@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "description": "Evidence job 的硬性上游依赖：任一 job 非 success 即 Evidence 失败，防止“上游失败、Evidence 单独绿”的假绿路径。assert-required-jobs.py 读取本文件并从 NEEDS_<JOB> 环境变量断言每个 job 的 needs.<job>.result == success。",
+  "jobs": [
+    "build",
+    "unit",
+    "integration-postgres",
+    "architecture",
+    "public-api",
+    "openapi-snapshot"
+  ]
+}
