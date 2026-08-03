@@ -146,7 +146,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 requestId, idempotencyKey, ToolSideEffect.Unknown,
                 error: "ToolName 不能为空。",
                 journalState: ToolDispatchState.Prepared,
-                duration: stopwatch.Elapsed);
+                duration: stopwatch.Elapsed,
+                failurePhase: ToolFailurePhase.BeforeIntent);
         }
 
         // 3. 校验 Dispatcher 支持
@@ -157,7 +158,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 error: $"不支持的 tool: {toolCall.ToolName}",
                 journalState: ToolDispatchState.Prepared,
                 errorKind: DispatchErrorKind.UnregisteredTool,
-                duration: stopwatch.Elapsed);
+                duration: stopwatch.Elapsed,
+                failurePhase: ToolFailurePhase.BeforeIntent);
         }
 
         // 4. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
@@ -185,12 +187,20 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             }
             catch (InvalidOperationException ex)
             {
-                // PrepareWithIntentAsync 失败（如 RequestId 复用检测）→ 返回失败
+                // PrepareWithIntentAsync 失败（如 RequestId 复用检测 / 语义等价校验失败）。
+                // P0-1：不得无条件伪造 Prepared——若既有条目已处于更高级状态
+                // （复用检测命中历史调用），必须按真实状态返回并进入对账。
+                var prepareState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
+                var afterIntent = prepareState > ToolDispatchState.Prepared;
                 return BuildFailedResult(
                     requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
                     error: $"Journal PrepareWithIntentAsync 失败：{ex.Message}",
-                    journalState: ToolDispatchState.Prepared,
-                    duration: stopwatch.Elapsed);
+                    journalState: afterIntent ? prepareState : ToolDispatchState.Prepared,
+                    duration: stopwatch.Elapsed,
+                    failurePhase: afterIntent ? ToolFailurePhase.AfterIntentBeforeProvider : ToolFailurePhase.BeforeIntent,
+                    reconciliationHandler: afterIntent ? descriptor?.ReconciliationHandler : null,
+                    reconciliationDeadline: afterIntent ? descriptor?.ReconciliationDeadline : null,
+                    externalOperationId: externalOperationId);
             }
 
             // Journal 是调用身份的权威来源：PrepareWithIntentAsync 原子返回
@@ -234,7 +244,10 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     }
 
                     // 无 resultStore 或缓存未命中，但 journal 已 Committed/ResultDelivered → 模糊状态，返回对账结果
-                    // 不重新 Dispatch（journal 明确指示 UseCachedResult，重新执行会违反 exactly-once）
+                    // 不重新 Dispatch（journal 明确指示 UseCachedResult，重新执行会违反 exactly-once）。
+                    // 注意：此处 JournalState 保持 Dispatched（安全方向）——journal 虽已 Committed 但结果缺失，
+                    // 返回真实状态会使 Actor 跳过对账（RequiresReconciliation(Committed)=false），Run 无法恢复结果；
+                    // Dispatched 强制调用方对账找回结果。
                     stopwatch.Stop();
                     return BuildReconciliationResult(
                         requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed,
@@ -243,10 +256,12 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
                 // 4b. Journal = DispatchingIntent/Dispatched/Reconciling 模糊态 → 返回对账结果，不重新 Dispatch。
                 // 外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决。
+                // P0-1：JournalState 回传真实状态（prepareResult.CurrentState），不伪造。
                 case ToolDispatchRecoveryDecision.Reconcile:
                     stopwatch.Stop();
                     return BuildReconciliationResult(
                         requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed,
+                        journalState: prepareResult.CurrentState,
                         reconciliationHandler: descriptor?.ReconciliationHandler,
                         reconciliationDeadline: descriptor?.ReconciliationDeadline);
 
@@ -298,23 +313,36 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 // NonIdempotentWrite 在 ProductionHA 下无外部幂等或 fencing 支持时必须 fail-closed。
                 if (leaseFence is not null && DateTimeOffset.UtcNow >= leaseFence.ExpiresAt)
                 {
+                    // P0-1：Intent 已在 PrepareWithIntentAsync 中持久化（journal=DispatchingIntent），
+                    // 必须按真实状态返回并进入对账（确认外部无副作用后裁决），不得伪造 Prepared。
+                    var fenceState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
                     return BuildFailedResult(
                         requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
-                        error: $"Lease 已过期（ExpiresAt={leaseFence.ExpiresAt:O}），Tool 执行被 fence 阻止。",
-                        journalState: ToolDispatchState.Prepared,
+                        error: $"Lease 已过期（ExpiresAt={leaseFence.ExpiresAt:O}），Tool 执行被 fence 阻止（journal={fenceState}，需对账确认外部无副作用）。",
+                        journalState: fenceState,
                         duration: stopwatch.Elapsed,
-                        errorKind: DispatchErrorKind.LeaseFenceViolation);
+                        errorKind: DispatchErrorKind.LeaseFenceViolation,
+                        failurePhase: ToolFailurePhase.AfterIntentBeforeProvider,
+                        reconciliationHandler: descriptor?.ReconciliationHandler,
+                        reconciliationDeadline: descriptor?.ReconciliationDeadline,
+                        externalOperationId: externalOperationId);
                 }
 
                 // 声明要求 lease fence 但调用方未提供 → fail-closed（副作用 Tool 无 fencing 保护时禁止执行）
                 if (descriptor is { RequiresLeaseFence: true } && leaseFence is null)
                 {
+                    // P0-1：同 fence 过期——Intent 已持久化，按真实状态返回并进入对账。
+                    var fenceState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
                     return BuildFailedResult(
                         requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
-                        error: $"Tool '{toolCall.ToolName}' 声明 RequiresLeaseFence，但调用未携带 LeaseFence，执行被拒绝（fail-closed）。",
-                        journalState: ToolDispatchState.Prepared,
+                        error: $"Tool '{toolCall.ToolName}' 声明 RequiresLeaseFence，但调用未携带 LeaseFence，执行被拒绝（fail-closed，journal={fenceState}，需对账确认外部无副作用）。",
+                        journalState: fenceState,
                         duration: stopwatch.Elapsed,
-                        errorKind: DispatchErrorKind.LeaseFenceViolation);
+                        errorKind: DispatchErrorKind.LeaseFenceViolation,
+                        failurePhase: ToolFailurePhase.AfterIntentBeforeProvider,
+                        reconciliationHandler: descriptor?.ReconciliationHandler,
+                        reconciliationDeadline: descriptor?.ReconciliationDeadline,
+                        externalOperationId: externalOperationId);
                 }
 
                 dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
@@ -351,7 +379,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 break;
             }
 
-            // 失败 → 策略决定是否重试（副作用重试安全 + 未达上限）。
+            // 失败 → 策略决定是否重试（重试安全契约 + 未达上限）。
             var failureResult = new ToolExecutionResult
             {
                 RequestId = requestId,
@@ -364,6 +392,12 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 ErrorKind = dispatchException is not null
                     ? DispatchErrorKind.HandlerException
                     : dispatchResult?.ErrorKind ?? DispatchErrorKind.Unknown,
+                // P0-1：异常 → Provider 调用结果不明确（可能已发生副作用）；返回确定失败 → ProviderReturned。
+                FailurePhase = dispatchException is not null
+                    ? ToolFailurePhase.ProviderCallAmbiguous
+                    : ToolFailurePhase.ProviderReturned,
+                // P0-2：仅当 Provider 明确确认无副作用时才允许 ProviderConfirmedNoEffect 重试。
+                NoEffectConfirmed = dispatchResult?.NoEffectConfirmed ?? false,
                 Duration = stopwatch.Elapsed
             };
             var retryPolicy = _effectPolicy.Resolve(
@@ -386,27 +420,40 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             await Task.Delay(retryPolicy.Retry.Delay, cancellationToken).ConfigureAwait(false);
         }
 
-        // 重试耗尽仍为异常 → 返回失败（journal 停留在 Prepared；重试过则记录重试次数）。
+        // 重试耗尽仍为异常 → 返回失败。P0-1：Intent 已持久化，必须查询并返回真实 Journal 状态
+        // （库里是 DispatchingIntent 就返回 DispatchingIntent，使 Actor 创建对账记录），
+        // 不得伪造 Prepared——外部副作用可能已发生。
         if (dispatchException is not null)
         {
             var error = retryAttemptsPerformed > 0
                 ? $"Dispatch 重试 {retryAttemptsPerformed} 次后仍异常：{dispatchException.Message}"
                 : $"Dispatch 异常：{dispatchException.Message}";
+            var exhaustedState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
             return BuildFailedResult(
                 requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
                 error: error,
-                journalState: ToolDispatchState.Prepared,
-                duration: stopwatch.Elapsed);
+                journalState: exhaustedState,
+                duration: stopwatch.Elapsed,
+                failurePhase: ToolFailurePhase.ProviderCallAmbiguous,
+                reconciliationHandler: descriptor?.ReconciliationHandler,
+                reconciliationDeadline: descriptor?.ReconciliationDeadline,
+                externalOperationId: externalOperationId);
         }
 
         // 非异常路径 → DispatchAsync 已成功返回（结果可能 Succeeded=false），dispatchResult 必非空。
         if (dispatchResult is null)
         {
+            // 内部不一致（正常返回但无结果）→ 按模糊失败处理：真实 Journal 状态 + 强制对账。
+            var nullState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
             return BuildFailedResult(
                 requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
                 error: "Tool dispatch 未返回结果（内部不一致）。",
-                journalState: ToolDispatchState.Prepared,
-                duration: stopwatch.Elapsed);
+                journalState: nullState,
+                duration: stopwatch.Elapsed,
+                failurePhase: ToolFailurePhase.ProviderCallAmbiguous,
+                reconciliationHandler: descriptor?.ReconciliationHandler,
+                reconciliationDeadline: descriptor?.ReconciliationDeadline,
+                externalOperationId: externalOperationId);
         }
 
 
@@ -446,6 +493,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             Succeeded = dispatchResult.Succeeded,
             Error = dispatchResult.Error,
             ErrorKind = dispatchResult.ErrorKind,
+            FailurePhase = dispatchResult.Succeeded ? null : ToolFailurePhase.ProviderReturned,
+            NoEffectConfirmed = dispatchResult.NoEffectConfirmed,
             Duration = stopwatch.Elapsed
         };
         var policy = _effectPolicy.Resolve(
@@ -459,6 +508,9 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             prepareResult, policyResult, finalAttempt, approvalGranted);
 
         ToolDispatchState finalJournalState;
+        // P0-1：Journal 提交失败标记——MarkCommittedWithResultAsync CAS 失败时置位，
+        // 最终结果携带 FailurePhase=JournalCommitFailed（外部副作用已发生但 journal 未达 Committed，必须对账）。
+        var journalCommitFailed = false;
         switch (policy.Disposition)
         {
             case ToolExecutionDisposition.Commit:
@@ -493,7 +545,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     }
                     catch (InvalidOperationException)
                     {
-                        // MarkCommitted 失败 → 查询实际状态
+                        // MarkCommitted 失败 → 查询实际状态（外部副作用已发生，journal 未达 Committed → 对账）
+                        journalCommitFailed = true;
                         var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
                         finalJournalState = entry?.State ?? ToolDispatchState.Dispatched;
                     }
@@ -575,6 +628,11 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             Succeeded = dispatchResult.Succeeded,
             Error = dispatchResult.Error,
             ErrorKind = dispatchResult.ErrorKind,
+            // P0-1：提交失败 → JournalCommitFailed（对账）；Provider 明确失败 → ProviderReturned；成功 → null。
+            FailurePhase = journalCommitFailed
+                ? ToolFailurePhase.JournalCommitFailed
+                : (dispatchResult.Succeeded ? null : ToolFailurePhase.ProviderReturned),
+            NoEffectConfirmed = dispatchResult.NoEffectConfirmed,
             Duration = stopwatch.Elapsed
         };
     }
@@ -604,14 +662,16 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     }
 
     /// <summary>
-    /// 构建对账结果（Journal = Dispatched 模糊状态，外部副作用可能已执行但未提交）。
+    /// 构建对账结果（Journal = DispatchingIntent/Dispatched 模糊状态，外部副作用可能已执行但未提交）。
     /// 调用方需查询外部系统或人工裁决后决定是否重新执行。
+    /// P0-1：JournalState 必须反映真实状态（调用方据此决定是否创建对账记录）。
     /// </summary>
     private static ToolExecutionResult BuildReconciliationResult(
         string requestId,
         string? idempotencyKey,
         string? externalOperationId,
         TimeSpan elapsed,
+        ToolDispatchState journalState = ToolDispatchState.Dispatched,
         string? reconciliationHandler = null,
         TimeSpan? reconciliationDeadline = null)
     {
@@ -621,12 +681,13 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             IdempotencyKey = idempotencyKey,
             SideEffect = ToolSideEffect.Unknown, // 模糊状态视为 Unknown
             ExternalOperationId = externalOperationId,
-            JournalState = ToolDispatchState.Dispatched,
+            JournalState = journalState,
             ReconciliationHandler = reconciliationHandler,
             ReconciliationDeadline = reconciliationDeadline,
             Result = null,
             Succeeded = false,
-            Error = $"Tool dispatch 处于 Dispatched 模糊状态（外部副作用可能已执行但未提交）。" +
+            FailurePhase = ToolFailurePhase.ProviderCallAmbiguous,
+            Error = $"Tool dispatch 处于 {journalState} 模糊状态（外部副作用可能已执行但未提交）。" +
                      $"ExternalOperationId={externalOperationId ?? "<null>"}，需对账后决定是否重新执行。",
             Duration = elapsed
         };
@@ -661,14 +722,16 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         TimeSpan duration,
         string? reconciliationHandler = null,
         TimeSpan? reconciliationDeadline = null,
-        DispatchErrorKind errorKind = DispatchErrorKind.Unknown)
+        DispatchErrorKind errorKind = DispatchErrorKind.Unknown,
+        ToolFailurePhase? failurePhase = null,
+        string? externalOperationId = null)
     {
         return new ToolExecutionResult
         {
             RequestId = requestId,
             IdempotencyKey = idempotencyKey,
             SideEffect = sideEffect,
-            ExternalOperationId = null,
+            ExternalOperationId = externalOperationId,
             JournalState = journalState,
             ReconciliationHandler = reconciliationHandler,
             ReconciliationDeadline = reconciliationDeadline,
@@ -676,7 +739,42 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             Succeeded = false,
             Error = error,
             ErrorKind = errorKind,
+            FailurePhase = failurePhase,
             Duration = duration
         };
+    }
+
+    /// <summary>
+    /// 查询 Journal 真实状态（P0-1）：Intent 持久化后的失败路径必须返回数据库真实状态，不得伪造 Prepared。
+    /// 查询失败或条目缺失 → fail-closed：按最高安全级别返回 <see cref="ToolDispatchState.DispatchingIntent"/>
+    /// （强制对账，避免外部副作用真相悬空），并保留在错误信息中供审计。
+    /// 无 journal（降级直连）→ 返回 Prepared（无 durable 边界，视为从未开始）。
+    /// </summary>
+    private async ValueTask<ToolDispatchState> QueryJournalStateAsync(
+        string workspaceId, string runId, string requestId, CancellationToken cancellationToken)
+    {
+        if (_dispatchJournal is null)
+        {
+            return ToolDispatchState.Prepared;
+        }
+
+        try
+        {
+            var state = await _dispatchJournal.GetStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
+            if (state is not null)
+            {
+                return state.Value;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // 查询失败 → fail-closed：DispatchingIntent（强制对账），绝不伪造 Prepared。
+        }
+
+        return ToolDispatchState.DispatchingIntent;
     }
 }

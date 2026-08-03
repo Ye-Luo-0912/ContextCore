@@ -115,7 +115,8 @@ public sealed class R30A_KillPointMatrixTests
 
         Assert.IsFalse(result.Succeeded, "Dispatched 前 kill point：不得伪装 Completed。");
         Assert.AreEqual(1, handler.InvocationCount, "Dispatched 前 kill point：外部副作用不得重复执行。");
-        Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState, "应返回对账所需模糊态。");
+        Assert.AreEqual(ToolDispatchState.DispatchingIntent, result.JournalState,
+            "P0-1：对账结果回传真实 Journal 状态（journal 仍为 DispatchingIntent）。");
     }
 
     // ── Kill Point：ResultDelivered 前（AsyncDurable：Committed 后、送达标记前）─

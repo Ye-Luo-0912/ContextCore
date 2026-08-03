@@ -236,6 +236,16 @@ public sealed record ToolDescriptor
     public bool RequiresIdempotencyKey { get; init; } = false;
     /// <summary>Whether lease fence is required. When true, executor must validate a valid LeaseFence before dispatch.</summary>
     public bool RequiresLeaseFence { get; init; } = false;
+
+    /// <summary>
+    /// 自动重试安全契约（P0-2）：普通 Write 失败/超时 ≠ 副作用未发生，
+    /// 不能仅凭 <see cref="MaxRetries"/> &gt; 0 自动重试。默认 <see cref="ToolRetrySafety.Never"/>——
+    /// 描述符作者必须显式声明 Provider 幂等键能力（<see cref="ToolRetrySafety.ProviderIdempotent"/>）
+    /// 或无副作用确认能力（<see cref="ToolRetrySafety.ProviderConfirmedNoEffect"/>）后才允许自动重试。
+    /// None/ReadOnly 无外部副作用面，天然重试安全（<see cref="ToolRetrySafety.BeforeDispatchOnly"/> 语义）。
+    /// </summary>
+    public ToolRetrySafety RetrySafety { get; init; } = ToolRetrySafety.Never;
+
     /// <summary>Recovery strategy. How to handle unfinished Tool calls during crash recovery.</summary>
     public ToolRecoveryStrategy RecoveryStrategy { get; init; } = ToolRecoveryStrategy.RequireReconciliation;
     /// <summary>Reconciliation handler name (optional). When RecoveryStrategy=RequireReconciliation, an externally registered handler performs reconciliation.</summary>
@@ -251,8 +261,11 @@ public sealed record ToolDescriptor
 
     /// <summary>
     /// 最大自动重试次数（Dispatch 失败时；默认 0 = 不自动重试）。
-    /// 仅对重试安全的副作用生效（None/ReadOnly/带稳定幂等键的 IdempotentWrite/显式配置的 Write）。
-    /// 非幂等写 / 需对账 / Fence 写 / 副作用未知永不自动重试。
+    /// <b>必须配合 <see cref="RetrySafety"/> 使用</b>：普通 Write 默认
+    /// <see cref="ToolRetrySafety.Never"/>，即使 MaxRetries &gt; 0 也不自动重试
+    /// （外部写失败/超时 ≠ 副作用未发生）。仅当描述符显式声明重试安全契约
+    /// （None/ReadOnly，或 ProviderIdempotent + 稳定幂等键，或 ProviderConfirmedNoEffect）
+    /// 且未达上限时才自动重试。非幂等写 / 需对账 / Fence 写 / 副作用未知永不自动重试。
     /// </summary>
     public int MaxRetries { get; init; } = 0;
 
@@ -287,6 +300,63 @@ public enum ToolRetryBackoffPolicy : byte
     /// 快速失败场景下避免对下游系统的重试风暴。
     /// </summary>
     Exponential = 2
+}
+
+/// <summary>
+/// Tool 失败阶段（P0-1）：定位失败发生在 Durable Journal 生命周期中的位置。
+/// 失败发生在 <see cref="ToolDispatchState.DispatchingIntent"/> 之后
+/// （<see cref="AfterIntentBeforeProvider"/> 及以后）时，外部副作用可能已发生，
+/// 调用方<b>必须进入对账（Reconciliation）</b>，不得按普通失败处理。
+/// </summary>
+public enum ToolFailurePhase : byte
+{
+    /// <summary>Journal Intent 写入之前（校验/准入失败；无 durable 边界，可安全返回普通失败）。</summary>
+    BeforeIntent = 0,
+
+    /// <summary>
+    /// Intent 已写入但 Provider 尚未被调用（如 Lease Fence 校验失败）。
+    /// 外部副作用确定未发生，但 journal 已持久化到 DispatchingIntent——必须按真实状态返回并进入对账确认。
+    /// </summary>
+    AfterIntentBeforeProvider = 1,
+
+    /// <summary>Provider 调用结果不明确（异常/超时/重试耗尽）——外部副作用可能已发生，必须对账。</summary>
+    ProviderCallAmbiguous = 2,
+
+    /// <summary>Provider 已返回确定结果（成功或明确失败）——副作用真相由结果确定，但 journal 提交可能未完成。</summary>
+    ProviderReturned = 3,
+
+    /// <summary>Journal 提交失败（MarkCommitted/MarkResultDelivered 等 CAS 失败）——外部副作用已发生但 journal 未达 Committed，必须对账。</summary>
+    JournalCommitFailed = 4
+}
+
+/// <summary>
+/// Tool 自动重试安全契约（P0-2）。
+/// 外部写调用失败或超时 ≠ 副作用没有发生（例如：请求发送成功 → 外部系统完成写入 → 返回包丢失）。
+/// 因此普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，不能依据本地 retry 配置自动重试。
+/// 描述符作者必须显式声明本契约，策略引擎（<see cref="IToolEffectPolicy"/>）才允许自动重试。
+/// </summary>
+public enum ToolRetrySafety : byte
+{
+    /// <summary>
+    /// 不可自动重试（默认）。所有 Write 家族副作用未显式声明时的保守值——
+    /// 外部写失败/超时 ≠ 副作用未发生，禁止依据本地 retry 配置自动重试。
+    /// </summary>
+    Never = 0,
+
+    /// <summary>
+    /// 仅在 Dispatch 前重试安全（None/ReadOnly 等无外部副作用面，重试前无副作用可重复）。
+    /// 语义上等价于 <see cref="ToolSideEffect.None"/> / <see cref="ToolSideEffect.ReadOnly"/> 的固有重放安全。
+    /// </summary>
+    BeforeDispatchOnly = 1,
+
+    /// <summary>Provider 明确支持稳定 IdempotencyKey，可凭幂等键去重后安全跨调用重试。</summary>
+    ProviderIdempotent = 2,
+
+    /// <summary>
+    /// Provider 明确返回 <c>NoEffectConfirmed=true</c>（失败响应确认外部副作用未发生）
+    /// 时才可重试；未确认时仍禁止自动重试。
+    /// </summary>
+    ProviderConfirmedNoEffect = 3
 }
 
 /// <summary>Tool 结果投递模式。</summary>
@@ -696,6 +766,13 @@ public sealed record ToolDispatchResult
 
     /// <summary>结构化错误类别（失败时；成功时为 <see cref="DispatchErrorKind.None"/>）。</summary>
     public DispatchErrorKind ErrorKind { get; init; } = DispatchErrorKind.None;
+
+    /// <summary>
+    /// Provider 是否明确确认本次失败未产生外部副作用（失败响应中的 NoEffectConfirmed=true）。
+    /// 仅当 Provider 支持该语义且本次返回 true 时，<see cref="ToolRetrySafety.ProviderConfirmedNoEffect"/>
+    /// 声明的自动重试才被允许——否则"失败"不构成"未发生"的证据，禁止自动重试。
+    /// </summary>
+    public bool NoEffectConfirmed { get; init; }
 }
 
 /// <summary>
@@ -1194,6 +1271,19 @@ public interface IToolDispatchJournal
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>journal 条目；不存在时返回 null（表示 tool 从未被调用，可安全重新执行）。</returns>
     ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(string requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 查询指定调用（完整租户键 workspace_id + run_id + request_id）的当前 journal 状态。
+    /// 用于异常/失败路径返回<b>真实</b> journal 状态（P0-1）——执行器在 Intent 持久化后的
+    /// 失败不得伪造 <see cref="ToolDispatchState.Prepared"/>，必须按数据库真实状态返回，
+    /// 使调用方（Actor）正确进入对账（Reconciliation）。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="requestId">Tool RequestId。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前状态；条目不存在（或租户键不匹配）时返回 null。</returns>
+    ValueTask<ToolDispatchState?> GetStateAsync(string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

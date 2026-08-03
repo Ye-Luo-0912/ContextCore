@@ -28,13 +28,15 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 防止绕过 Actor 审批门的直连调用自动执行外部写副作用。
 // Actor 经 IAgentApprovalGate 放行后传 approvalGranted=true，保持既有提交流程。
 //
-// 重试决策（Dispatch 失败时）：
-// 仅对重试安全的副作用自动重试：
-// None/ReadOnly → 重试安全（无外部副作用，重放无影响）
-// IdempotentWrite（带稳定幂等键） → 外部系统可凭幂等键去重，重试安全
-// Write（显式配置 MaxRetries>0） → Descriptor 作者显式声明可接受重放
-// NonIdempotentWrite/RequiresReconciliation/FencedWrite/Unknown → 永不自动重试
-// 退避：Linear = 固定 RetryDelay；Exponential = RetryDelay * 2^(attempt-1)。
+// 重试决策（Dispatch 失败时，P0-2 安全契约）：
+// 外部写调用失败/超时 ≠ 副作用没有发生（请求发送成功 → 外部系统完成写入 → 返回包丢失）。
+// 因此普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，不能依据本地 retry 配置自动重试。
+// 允许自动重试的唯一条件（Descriptor.RetrySafety 显式声明 + 运行时验证）：
+// - None/ReadOnly → 无外部副作用面（BeforeDispatchOnly 语义），重放安全；
+// - ProviderIdempotent → Provider 明确支持稳定幂等键（且本次携带稳定键）；
+// - ProviderConfirmedNoEffect → Provider 本次明确返回 NoEffectConfirmed=true；
+// 其余（Never / 未满足条件 / NonIdempotentWrite / RequiresReconciliation / FencedWrite / Unknown）
+// → 永不自动重试。退避：Linear = 固定 RetryDelay；Exponential = RetryDelay * 2^(attempt-1)。
 // ===========================================================================
 
 /// <summary>
@@ -180,8 +182,8 @@ public sealed class DefaultToolEffectPolicy : IToolEffectPolicy
     }
 
     /// <summary>
-    /// 重试决策：Dispatch 失败且副作用重试安全、未达上限时 Retry（含退避延迟）；
-    /// 否则 Abort（成功 / 未配置重试 / 达上限 / 副作用不可重放）。
+    /// 重试决策：Dispatch 失败且满足 <see cref="ToolRetrySafety"/> 安全契约、未达上限时 Retry（含退避延迟）；
+    /// 否则 Abort（成功 / 未配置重试 / 达上限 / 重试不安全）。
     /// </summary>
     private static ToolRetryDecision DecideRetry(
         ToolDescriptor descriptor,
@@ -206,29 +208,73 @@ public sealed class DefaultToolEffectPolicy : IToolEffectPolicy
             return ToolRetryDecision.Abort($"已达最大重试次数（MaxRetries={descriptor.MaxRetries}）");
         }
 
-        // 副作用重试安全门：只有重放/去重安全的副作用才允许自动重试。
+        // 重试安全门（P0-2）：普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，
+        // 不能依据本地 retry 配置自动重试——外部写失败/超时 ≠ 副作用未发生。
+        // 允许自动重试的唯一条件：None/ReadOnly；或 Descriptor 显式声明 ProviderIdempotent
+        // （Provider 支持稳定幂等键）且本次携带稳定键；或 ProviderConfirmedNoEffect
+        // 且 Provider 本次明确返回 NoEffectConfirmed=true。
         switch (descriptor.DeclaredSideEffect)
         {
             case ToolSideEffect.None:
             case ToolSideEffect.ReadOnly:
-                // 只读/无副作用：重试安全（无外部副作用，重复调用无影响）。
+                // 只读/无副作用：无外部副作用面（BeforeDispatchOnly 语义），重试安全。
                 break;
 
             case ToolSideEffect.IdempotentWrite:
-                // 幂等写：外部系统可凭幂等键去重；无稳定键时重试不安全。
+                // 幂等写：仅当 Descriptor 显式声明 ProviderIdempotent（Provider 支持稳定幂等键）
+                // 且本次携带稳定幂等键时才允许重试——声明副作用类型本身不代表 Provider 支持去重。
+                if (descriptor.RetrySafety != ToolRetrySafety.ProviderIdempotent)
+                {
+                    return ToolRetryDecision.Abort(
+                        $"幂等写未声明 RetrySafety=ProviderIdempotent（Provider 未确认支持稳定幂等键），禁止自动重试");
+                }
                 if (string.IsNullOrWhiteSpace(result.IdempotencyKey))
                 {
                     return ToolRetryDecision.Abort("幂等写重试需要稳定幂等键（IdempotencyKey），缺失时不安全");
                 }
                 break;
 
-            case ToolSideEffect.Write:
-                // 普通写：仅当 Descriptor 显式配置 MaxRetries>0 时允许重试——
-                // 作者显式声明了可接受的重放边界（配合 RetryDelay/Backoff 控制重试节奏）。
+            case ToolSideEffect.FencedWrite:
+                // Fenced 写：仅当 Descriptor 声明 ProviderConfirmedNoEffect 且 Provider 本次
+                // 明确返回 NoEffectConfirmed=true（外部 Fence 已确认阻止旧请求、无副作用）时允许。
+                if (descriptor.RetrySafety != ToolRetrySafety.ProviderConfirmedNoEffect)
+                {
+                    return ToolRetryDecision.Abort(
+                        "Fenced 写未声明 RetrySafety=ProviderConfirmedNoEffect（Fence 未确认阻止旧请求），禁止自动重试");
+                }
+                if (!result.NoEffectConfirmed)
+                {
+                    return ToolRetryDecision.Abort("Fenced 写未获得 Provider NoEffectConfirmed=true，禁止自动重试");
+                }
                 break;
 
+            case ToolSideEffect.Write:
+                // 普通写（P0-2）：默认 RetrySafety=Never → 即使 MaxRetries>0 也不自动重试。
+                // 仅当 Descriptor 显式声明 ProviderIdempotent（+ 稳定幂等键）或
+                // ProviderConfirmedNoEffect（+ 本次 NoEffectConfirmed=true）时允许。
+                if (descriptor.RetrySafety == ToolRetrySafety.ProviderIdempotent)
+                {
+                    if (string.IsNullOrWhiteSpace(result.IdempotencyKey))
+                    {
+                        return ToolRetryDecision.Abort(
+                            "普通写声明 RetrySafety=ProviderIdempotent 但缺少稳定幂等键，重试不安全");
+                    }
+                    break;
+                }
+                if (descriptor.RetrySafety == ToolRetrySafety.ProviderConfirmedNoEffect)
+                {
+                    if (!result.NoEffectConfirmed)
+                    {
+                        return ToolRetryDecision.Abort(
+                            "普通写声明 RetrySafety=ProviderConfirmedNoEffect 但 Provider 未返回 NoEffectConfirmed=true，禁止自动重试");
+                    }
+                    break;
+                }
+                return ToolRetryDecision.Abort(
+                    $"普通写 RetrySafety={descriptor.RetrySafety}：外部写失败/超时 ≠ 副作用未发生，禁止依据本地重试配置自动重试");
+
             default:
-                // NonIdempotentWrite / RequiresReconciliation / FencedWrite / Unknown：
+                // NonIdempotentWrite / RequiresReconciliation / Unknown：
                 // 外部副作用不可重放或真相未知 → 永不自动重试。
                 return ToolRetryDecision.Abort(
                     $"副作用 {descriptor.DeclaredSideEffect} 不允许自动重试（外部副作用不可重放）");

@@ -726,6 +726,40 @@ LIMIT 1;
         };
     }
 
+    /// <inheritdoc />
+    public async ValueTask<ToolDispatchState?> GetStateAsync(
+        string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            return null;
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 完整租户键（workspace_id + run_id + request_id）——P0-1：异常路径必须读取真实状态。
+        command.CommandText = $"""
+SELECT state
+FROM {Table("tool_dispatch_journal_entries")}
+WHERE request_id = @request_id
+  AND workspace_id = @workspace_id
+  AND run_id = @run_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("request_id", requestId);
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return (ToolDispatchState)reader.GetByte(0);
+    }
+
     /// <summary>
     /// 原子推进状态机（精确前驱状态 CAS）：
     /// <c>UPDATE ... WHERE request_id = @id AND state = @expected_state</c>。

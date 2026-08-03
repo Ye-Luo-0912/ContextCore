@@ -1886,6 +1886,19 @@ public sealed record ToolExecutionResult
     /// <summary>结构化错误类别（失败时；成功时为 <see cref="DispatchErrorKind.None"/>）。</summary>
     public DispatchErrorKind ErrorKind { get; init; } = DispatchErrorKind.None;
 
+    /// <summary>
+    /// 失败阶段（P0-1）：定位失败发生在 Journal 生命周期中的位置。
+    /// 失败发生在 <see cref="ToolDispatchState.DispatchingIntent"/> 之后
+    /// （<see cref="ToolFailurePhase.AfterIntentBeforeProvider"/> 及以后）时，
+    /// 调用方<b>必须进入对账（Reconciliation）</b>，不得按普通失败处理——
+    /// 即使 <see cref="JournalState"/> 查询失败也按最高安全级别对待（fail-closed）。
+    /// 成功或 BeforeIntent 失败时为 null。
+    /// </summary>
+    public ToolFailurePhase? FailurePhase { get; init; }
+
+    /// <summary>Provider 是否明确确认本次失败未产生外部副作用（见 <see cref="ToolDispatchResult.NoEffectConfirmed"/>）。</summary>
+    public bool NoEffectConfirmed { get; init; }
+
     /// <summary>执行耗时。</summary>
     public required TimeSpan Duration { get; init; }
 }

@@ -17,10 +17,16 @@
 
 - **基线**：main @ `10c86ee2`（TODO.md 路线图更新已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-C1 事件压缩仅限终态 Run（P0-10 即时安全）。
+- **最近完成**：WP-A1 Tool 失败阶段 + 重试安全契约（P0-1 + P0-2）。
 
 ### R30.1 P0 阻断项修复进度
 
+- **WP-A1 已完成**（P0-1 + P0-2）：Tool 失败阶段 + 重试安全契约。
+  - 契约（Abstractions，PublicApi baseline 已更新）：`ToolFailurePhase`（BeforeIntent / AfterIntentBeforeProvider / ProviderCallAmbiguous / ProviderReturned / JournalCommitFailed）；`ToolRetrySafety`（Never / BeforeDispatchOnly / ProviderIdempotent / ProviderConfirmedNoEffect）；`ToolDescriptor.RetrySafety`（默认 Never）；`ToolExecutionResult.FailurePhase`（可空）+ `NoEffectConfirmed`；`ToolDispatchResult.NoEffectConfirmed`；`ToolHandlerResult.NoEffectConfirmed`（Core，Provider 侧确认无副作用）；`IToolDispatchJournal.GetStateAsync(workspaceId, runId, requestId)`（完整租户键查询真实状态）。
+  - P0-1 修复（DefaultDurableToolExecutor）：Intent 持久化后的失败路径（Lease Fence 过期/缺失、Dispatcher 异常耗尽、内部不一致、Prepare 异常命中高级状态）不再伪造 `Prepared`——统一经 `QueryJournalStateAsync` 查询真实 Journal 状态并原样返回（查询失败 fail-closed 返回 DispatchingIntent 强制对账），失败结果保留 ExternalOperationId / IdempotencyKey / ReconciliationHandler / ReconciliationDeadline / FailurePhase；Reconcile 恢复决策回传真实 CurrentState（DispatchingIntent 不再伪装 Dispatched）；Commit CAS 失败标记 JournalCommitFailed。Actor 无需改动——`RequiresReconciliation(JournalState)` 命中即创建对账记录。
+  - P0-2 修复（DefaultToolEffectPolicy.DecideRetry）：重试安全门改为显式契约驱动——None/ReadOnly 天然可重试；IdempotentWrite/Write 仅当 `RetrySafety=ProviderIdempotent` 且携带稳定幂等键，或 `RetrySafety=ProviderConfirmedNoEffect` 且 Provider 返回 `NoEffectConfirmed=true`（FencedWrite 同后者）时才自动重试；普通 Write 默认 Never → 即使 MaxRetries>0 也不自动重试（外部写失败/超时 ≠ 副作用未发生）。RealToolDispatcher 贯通 NoEffectConfirmed。
+  - 测试：新增 `R30X_ToolFailurePhaseTests`（8 项：异常路径真实状态 + 对账字段 + ExternalOperationId 保留、重试耗尽、状态查询失败 fail-closed、Fence 过期、ProviderReturned 字段回传、ProviderConfirmedNoEffect 端到端重试）；反转 `Policy_Retry_WriteWithMaxRetries_RetriesWithDelay` 为默认不可重试并新增 6 项安全门矩阵；`Executor_RequiresLeaseFence_NoFence_FailsClosed` 断言从 Prepared 改为 DispatchingIntent；两处 Reconcile 路径断言从 Dispatched 改为 DispatchingIntent（真实状态）。
+  - 验证：build 0 错误；定向 111 项全通过（含 PublicApi baseline）；Service.Tests 无受影响断言。
 - **WP-C1 已完成**（P0-10 即时安全）：事件压缩仅限终态 Run。`PostgresAgentRunEventCompactor.FindCandidatesAsync` JOIN `agent_runs` 过滤——终态（Completed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered）直接可压缩，Failed 仅在重试已耗尽（retry_count >= max_retries）时可压缩（仍可重试的 Failed 会被调度器重放事件流）；新增公共静态 `IsCompactableRunState`（Storage.Postgres，非 Abstractions，无 baseline 影响）；操作员 `POST /{id}/compact` 端点增加同规则守卫（非终态 409）。背景：当前 Recovery 不读快照/归档，非终态压缩会导致重启恢复判定 RecoveryCorrupted。验证：build 0 错误；新测试 4/4 + R30S/R29S 压缩相关 18 项全通过。
 
 ### 性能优化工作包进度

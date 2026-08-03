@@ -81,7 +81,8 @@ public sealed class R29H_KillPointExternalEffectTests
         var result = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
 
         Assert.IsFalse(result.Succeeded, "DispatchingIntent 模糊态应返回对账失败结果。");
-        Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState, "对账结果应标记为模糊 Dispatched 状态。");
+        Assert.AreEqual(ToolDispatchState.DispatchingIntent, result.JournalState,
+            "P0-1：对账结果必须回传真实 Journal 状态（DispatchingIntent），不伪造。");
         Assert.AreEqual(0, handler.InvocationCount, "DispatchingIntent kill point：不得静默调用外部副作用。");
 
         var entry = await journal.GetEntryAsync(requestId, cts.Token);
@@ -344,7 +345,12 @@ public sealed class R29H_KillPointExternalEffectTests
         var result = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
 
         Assert.IsFalse(result.Succeeded, "缺少 LeaseFence 必须 fail-closed。");
-        Assert.AreEqual(ToolDispatchState.Prepared, result.JournalState);
+        // P0-1：Intent 已在 PrepareWithIntentAsync 持久化（journal=DispatchingIntent），
+        // 即使 Provider 未被调用，也必须回传真实状态进入对账，不得伪造 Prepared。
+        Assert.AreEqual(ToolDispatchState.DispatchingIntent, result.JournalState,
+            "fail-closed 但 Intent 已持久化 → 返回真实 Journal 状态（强制对账）。");
+        Assert.AreEqual(ToolFailurePhase.AfterIntentBeforeProvider, result.FailurePhase,
+            "Fence 失败发生在 Intent 之后、Provider 调用之前 → AfterIntentBeforeProvider。");
         Assert.AreEqual(0, handler.InvocationCount, "fail-closed 时不得触碰外部副作用。");
         StringAssert.Contains(result.Error!, "RequiresLeaseFence");
     }

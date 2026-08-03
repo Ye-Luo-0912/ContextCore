@@ -426,6 +426,26 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         return ValueTask.FromResult(entry);
     }
 
+    /// <inheritdoc />
+    public ValueTask<ToolDispatchState?> GetStateAsync(
+        string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            return ValueTask.FromResult<ToolDispatchState?>(null);
+        }
+
+        // 完整租户键匹配（workspace_id + run_id + request_id）；条目缺失或租户不匹配 → null。
+        if (_entries.TryGetValue(requestId, out var entry)
+            && (string.IsNullOrWhiteSpace(entry.WorkspaceId) || string.IsNullOrWhiteSpace(entry.RunId)
+                || (entry.WorkspaceId == workspaceId && entry.RunId == runId)))
+        {
+            return ValueTask.FromResult<ToolDispatchState?>(entry.State);
+        }
+
+        return ValueTask.FromResult<ToolDispatchState?>(null);
+    }
+
     /// <summary>
     /// 应用精确前驱状态转换。
     /// <list type="bullet">

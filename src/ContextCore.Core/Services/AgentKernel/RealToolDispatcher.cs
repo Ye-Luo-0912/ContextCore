@@ -91,6 +91,13 @@ public sealed record ToolHandlerResult
     /// Used for reconciliation when dispatch result is ambiguous (timeout/exception).
     /// </summary>
     public string? ExternalOperationId { get; init; }
+
+    /// <summary>
+    /// Provider 是否明确确认本次失败未产生外部副作用（P0-2）。
+    /// 失败响应中显式置 true 时，<see cref="ToolRetrySafety.ProviderConfirmedNoEffect"/> 的自动重试才被允许；
+    /// 否则"失败"不构成"未发生"的证据，禁止自动重试。
+    /// </summary>
+    public bool NoEffectConfirmed { get; init; }
 }
 
 /// <summary>
@@ -318,7 +325,8 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
                     : handlerResult.Error ?? "Tool 处理失败（无错误信息）。",
                 Duration = sw.Elapsed,
                 SideEffect = handlerResult.SideEffect,
-                ExternalOperationId = handlerResult.ExternalOperationId
+                ExternalOperationId = handlerResult.ExternalOperationId,
+                NoEffectConfirmed = handlerResult.NoEffectConfirmed
             };
         }
         catch (OperationCanceledException)

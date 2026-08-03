@@ -303,18 +303,104 @@ public sealed class R29H_ToolEffectPolicyTests
     }
 
     /// <summary>
-    /// 验证：显式配置 MaxRetries&gt;0 的普通写 → 允许自动重试（Linear = 固定 RetryDelay）。
+    /// 验证（P0-2）：普通写默认 RetrySafety=Never → 即使显式配置 MaxRetries&gt;0 也不自动重试——
+    /// 外部写失败/超时 ≠ 副作用未发生，不能依据本地 retry 配置自动重试。
     /// </summary>
     [TestMethod]
-    public void Policy_Retry_WriteWithMaxRetries_RetriesWithDelay()
+    public void Policy_Retry_WriteDefaultNever_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Write, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear, retryDelay: TimeSpan.FromSeconds(2));
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "普通写未声明 RetrySafety → 禁止自动重试（外部副作用不可重放）。");
+    }
+
+    /// <summary>
+    /// 验证（P0-2）：普通写声明 RetrySafety=ProviderIdempotent 且携带稳定幂等键 → 允许自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_WriteProviderIdempotent_WithKey_Retries()
     {
         var policy = new DefaultToolEffectPolicy();
 
         var retry = Resolve(policy, ToolSideEffect.Write, success: false,
-            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear, retryDelay: TimeSpan.FromSeconds(2));
-        Assert.IsTrue(retry.Retry.ShouldRetry, "显式配置 MaxRetries>0 的普通写 → 允许自动重试。");
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear, retryDelay: TimeSpan.FromSeconds(2),
+            retrySafety: ToolRetrySafety.ProviderIdempotent);
+        Assert.IsTrue(retry.Retry.ShouldRetry, "Provider 明确支持稳定幂等键 → 可凭幂等键去重后安全重试。");
         Assert.AreEqual(TimeSpan.FromSeconds(2), retry.Retry.Delay, "Linear 退避 → 固定 RetryDelay。");
         Assert.AreEqual(2, retry.Retry.AttemptsRemaining, "MaxRetries=3、attempt=0 → 剩余 2 次。");
+    }
+
+    /// <summary>
+    /// 验证（P0-2）：普通写声明 ProviderIdempotent 但缺少稳定幂等键 → 禁止自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_WriteProviderIdempotent_WithoutKey_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Write, success: false,
+            idempotencyKey: null, maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear,
+            retrySafety: ToolRetrySafety.ProviderIdempotent);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "ProviderIdempotent 但无稳定幂等键 → 外部无法去重，重试不安全。");
+    }
+
+    /// <summary>
+    /// 验证（P0-2）：普通写声明 ProviderConfirmedNoEffect 且 Provider 返回 NoEffectConfirmed=true → 允许自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_WriteProviderConfirmedNoEffect_WithConfirmation_Retries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var retry = Resolve(policy, ToolSideEffect.Write, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear,
+            retrySafety: ToolRetrySafety.ProviderConfirmedNoEffect, noEffectConfirmed: true);
+        Assert.IsTrue(retry.Retry.ShouldRetry, "Provider 明确确认无副作用 → 可安全重试。");
+    }
+
+    /// <summary>
+    /// 验证（P0-2）：普通写声明 ProviderConfirmedNoEffect 但 Provider 未确认无副作用 → 禁止自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_WriteProviderConfirmedNoEffect_WithoutConfirmation_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Write, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear,
+            retrySafety: ToolRetrySafety.ProviderConfirmedNoEffect, noEffectConfirmed: false);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "未获得 NoEffectConfirmed=true → 失败≠未发生，禁止自动重试。");
+    }
+
+    /// <summary>
+    /// 验证（P0-2）：幂等写声明 IdempotentWrite 但未声明 RetrySafety=ProviderIdempotent → 禁止自动重试
+    /// （声明副作用类型本身不代表 Provider 支持去重）。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_IdempotentWrite_WithoutRetrySafety_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.IdempotentWrite, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "幂等写未显式声明 RetrySafety=ProviderIdempotent → 禁止自动重试。");
+    }
+
+    /// <summary>
+    /// 验证（P0-2）：Fenced 写声明 ProviderConfirmedNoEffect 且本次确认无副作用 → 允许自动重试
+    /// （外部 Fence 已确认阻止旧请求）。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_FencedWrite_ConfirmedNoEffect_Retries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var retry = Resolve(policy, ToolSideEffect.FencedWrite, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear,
+            retrySafety: ToolRetrySafety.ProviderConfirmedNoEffect, noEffectConfirmed: true);
+        Assert.IsTrue(retry.Retry.ShouldRetry, "Fence 已确认阻止旧请求 → 可安全重试。");
     }
 
     /// <summary>
@@ -432,14 +518,15 @@ public sealed class R29H_ToolEffectPolicyTests
     // ── 执行器集成：重试循环 / 投递模式 / 审批门 ─────────────────────────────
 
     /// <summary>
-    /// 验证：Dispatch 失败 2 次后成功 → 自动重试（MaxRetries=2）→ 提交。
+    /// 验证：Dispatch 失败 2 次后成功 → 自动重试（MaxRetries=2，声明 ProviderIdempotent 安全契约）→ 提交。
     /// 重试使用同一 RequestId/幂等键/ExternalOperationId（外部 Provider 幂等记录可命中）。
     /// </summary>
     [TestMethod]
     public async Task Executor_RetryLoop_RetriesThenSucceeds()
     {
         var handler = CreateHandler("charge", ToolSideEffect.Write,
-            failTimes: 2, descriptor: RetryDescriptor("charge", maxRetries: 2));
+            failTimes: 2, descriptor: RetryDescriptor("charge", maxRetries: 2,
+                sideEffect: ToolSideEffect.IdempotentWrite, retrySafety: ToolRetrySafety.ProviderIdempotent));
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var (_, executor, journal, _) = CreateExecutor(handler);
 
@@ -459,7 +546,8 @@ public sealed class R29H_ToolEffectPolicyTests
     public async Task Executor_RetryLoop_ExhaustedThenHolds()
     {
         var handler = CreateHandler("charge", ToolSideEffect.Write,
-            succeed: false, descriptor: RetryDescriptor("charge", maxRetries: 2));
+            succeed: false, descriptor: RetryDescriptor("charge", maxRetries: 2,
+                sideEffect: ToolSideEffect.IdempotentWrite, retrySafety: ToolRetrySafety.ProviderIdempotent));
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var (_, executor, journal, _) = CreateExecutor(handler);
 
@@ -468,6 +556,8 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.IsFalse(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "重试耗尽仍失败 → 禁止自动提交（副作用是否发生未知）。");
+        Assert.AreEqual(ToolFailurePhase.ProviderReturned, result.FailurePhase,
+            "Provider 返回确定失败 → FailurePhase=ProviderReturned。");
         Assert.AreEqual(3, handler.InvocationCount, "1 次初始 + 2 次重试后放弃。");
         var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
@@ -480,7 +570,8 @@ public sealed class R29H_ToolEffectPolicyTests
     public async Task Executor_RetryLoop_ExceptionThenSucceeds()
     {
         var handler = CreateHandler("charge", ToolSideEffect.Write,
-            throwTimes: 1, descriptor: RetryDescriptor("charge", maxRetries: 2));
+            throwTimes: 1, descriptor: RetryDescriptor("charge", maxRetries: 2,
+                sideEffect: ToolSideEffect.IdempotentWrite, retrySafety: ToolRetrySafety.ProviderIdempotent));
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var (_, executor, journal, _) = CreateExecutor(handler);
 
@@ -583,7 +674,9 @@ public sealed class R29H_ToolEffectPolicyTests
         ToolDeliveryMode deliveryMode = ToolDeliveryMode.Synchronous,
         bool requiresApproval = false,
         int attempt = 0,
-        bool approvalGranted = false) => policy.Resolve(
+        bool approvalGranted = false,
+        ToolRetrySafety retrySafety = ToolRetrySafety.Never,
+        bool noEffectConfirmed = false) => policy.Resolve(
         new ToolDescriptor
         {
             Name = "t",
@@ -592,7 +685,8 @@ public sealed class R29H_ToolEffectPolicyTests
             RetryBackoffPolicy = backoff,
             RetryDelay = retryDelay ?? TimeSpan.FromSeconds(5),
             DeliveryMode = deliveryMode,
-            RequiresApproval = requiresApproval
+            RequiresApproval = requiresApproval,
+            RetrySafety = retrySafety
         },
         journal: null,
         result: new ToolExecutionResult
@@ -602,6 +696,7 @@ public sealed class R29H_ToolEffectPolicyTests
             SideEffect = sideEffect,
             JournalState = ToolDispatchState.Dispatched,
             Succeeded = success,
+            NoEffectConfirmed = noEffectConfirmed,
             Duration = TimeSpan.Zero
         },
         attempt,
@@ -625,7 +720,8 @@ public sealed class R29H_ToolEffectPolicyTests
         TimeSpan? retryDelay = null,
         ToolSideEffect sideEffect = ToolSideEffect.Write,
         ToolDeliveryMode deliveryMode = ToolDeliveryMode.Synchronous,
-        bool requiresApproval = false) => new()
+        bool requiresApproval = false,
+        ToolRetrySafety retrySafety = ToolRetrySafety.Never) => new()
     {
         Name = name,
         DeclaredSideEffect = sideEffect,
@@ -633,7 +729,8 @@ public sealed class R29H_ToolEffectPolicyTests
         RetryBackoffPolicy = backoff,
         RetryDelay = retryDelay ?? TimeSpan.FromMilliseconds(1),
         DeliveryMode = deliveryMode,
-        RequiresApproval = requiresApproval
+        RequiresApproval = requiresApproval,
+        RetrySafety = retrySafety
     };
 
     private static (RealToolDispatcher Dispatcher, DefaultDurableToolExecutor Executor, InMemoryToolDispatchJournal Journal, InMemoryDurableToolResultStore ResultStore) CreateExecutor(
