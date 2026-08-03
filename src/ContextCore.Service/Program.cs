@@ -167,6 +167,9 @@ if (securityOptions.AllowedOrigins.Count > 0)
 app.UseMiddleware<ApiKeyMiddleware>();
 app.UseMiddleware<WorkspaceContextMiddleware>();
 app.UseMiddleware<AuditLogMiddleware>();
+// 请求阶段生产准入门（ProductionHA）：运行时实时探针失败时对业务请求返回 503。
+// 位于 AuditLog 之后——被拒绝的请求仍经过认证与审计；健康/诊断路径豁免。
+app.UseMiddleware<ProductionAdmissionMiddleware>();
 
 // ── OpenAPI / Scalar UI ──────────────────────────────────────────────
 // MapOpenApi 提供 /openapi/v1.json 规范文档；Scalar 将其渲染为交互式 UI

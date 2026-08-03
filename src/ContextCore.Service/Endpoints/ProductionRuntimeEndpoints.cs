@@ -69,6 +69,28 @@ internal static class ProductionRuntimeEndpoints
         .WithSummary("获取 Production Runtime 当前激活组件报告（Profile / Worker / Model / Transport / Canary）")
         .Produces<ProductionRuntimeStatusResponse>(StatusCodes.Status200OK);
 
+        // ── /api/admission/status：生产准入状态（实时探针 + TTL 缓存）────────
+        // 返回当前生产准入报告（静态强制项 + 实时探针）。
+        // force=true 时忽略 TTL 强制刷新；该路径在请求阶段准入中间件的豁免列表中。
+        app.MapGet("/api/admission/status", async Task<IResult> (
+            ProductionAdmissionController admissionController,
+            bool force = false,
+            CancellationToken ct = default) =>
+        {
+            var report = await admissionController.GetOrRefreshAsync(force, ct).ConfigureAwait(false);
+            return Results.Ok(new ProductionAdmissionStatusResponse(
+                report.AdmissionRequired,
+                report.AllPassed,
+                report.Checks,
+                report.CheckedAt,
+                admissionController.ProbeInterval));
+        })
+        .WithTags("Status")
+        .WithName("GetProductionAdmissionStatus")
+        .RequireWorkspaceRole(WorkspaceRole.Operator)
+        .WithSummary("获取生产准入状态报告（实时探针 + TTL 缓存；force=true 强制刷新）")
+        .Produces<ProductionAdmissionStatusResponse>(StatusCodes.Status200OK);
+
         return app;
     }
 }
@@ -102,3 +124,11 @@ internal sealed class ProductionRuntimeStatusResponse
     /// <summary>检查时间（UTC）。</summary>
     public required DateTimeOffset CheckedAt { get; init; }
 }
+
+/// <summary>/api/admission/status 端点响应。</summary>
+internal sealed record ProductionAdmissionStatusResponse(
+    bool AdmissionRequired,
+    bool AllPassed,
+    IReadOnlyList<ProductionAdmissionCheck> Checks,
+    DateTimeOffset CheckedAt,
+    TimeSpan ProbeInterval);

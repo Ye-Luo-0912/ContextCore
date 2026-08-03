@@ -1675,6 +1675,37 @@
         }
       }
     },
+    "/api/admission/status": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "获取生产准入状态报告（实时探针 + TTL 缓存；force=true 强制刷新）",
+        "operationId": "GetProductionAdmissionStatus",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductionAdmissionStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -9057,7 +9088,6 @@
           {
             "name": "overdueOnly",
             "in": "query",
-            "required": true,
             "schema": {
               "type": "boolean"
             }
@@ -9065,7 +9095,6 @@
           {
             "name": "offset",
             "in": "query",
-            "required": true,
             "schema": {
               "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
@@ -14976,6 +15005,22 @@
               "string"
             ],
             "format": "int32"
+          },
+          "priority": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxRetries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -16697,6 +16742,60 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ProductionAdmissionCheck": {
+        "required": [
+          "name",
+          "status",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProductionAdmissionCheckStatus"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductionAdmissionCheckStatus": {
+        "type": "integer"
+      },
+      "ProductionAdmissionStatusResponse": {
+        "required": [
+          "admissionRequired",
+          "allPassed",
+          "checks",
+          "checkedAt",
+          "probeInterval"
+        ],
+        "type": "object",
+        "properties": {
+          "admissionRequired": {
+            "type": "boolean"
+          },
+          "allPassed": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductionAdmissionCheck"
+            }
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "probeInterval": {
+            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+            "type": "string"
           }
         }
       },
@@ -18583,6 +18682,37 @@
               "null",
               "string"
             ]
+          },
+          "priority": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxRetries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "retryCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "nextRetryAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           },
           "turnBudget": {
             "oneOf": [

@@ -171,6 +171,21 @@ internal static class ProductionRuntimeExtensions
                 sp.GetService<SecurityOptions>() ?? new SecurityOptions(),
                 sp.GetService<ILogger<ProductionAdmissionValidator>>()
                     ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProductionAdmissionValidator>.Instance));
+
+        // 注册请求阶段生产准入（实时探针 + TTL 缓存）。
+        // ProductionAdmissionOptions 从 "ProductionAdmission" 配置节绑定（ProbeInterval / ProbeTimeout）。
+        var admissionOptions = new ProductionAdmissionOptions();
+        configuration.GetSection("ProductionAdmission").Bind(admissionOptions);
+        services.AddSingleton(admissionOptions);
+
+        services.TryAddSingleton<ProductionAdmissionController>(sp =>
+            new ProductionAdmissionController(
+                sp.GetRequiredService<ProductionAdmissionValidator>(),
+                sp,
+                sp.GetRequiredService<IHostApplicationLifetime>(),
+                sp.GetRequiredService<ProductionAdmissionOptions>(),
+                sp.GetService<ILogger<ProductionAdmissionController>>()
+                    ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProductionAdmissionController>.Instance));
     }
 
     // ── Development profile ─────────────────────────────────────────────
