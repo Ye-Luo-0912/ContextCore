@@ -158,10 +158,10 @@ public sealed class ServiceApiIntegrationTests
             });
             queryResponse.EnsureSuccessStatusCode();
 
-            var results = await queryResponse.Content.ReadFromJsonAsync<ContextItem[]>();
+            var results = await queryResponse.Content.ReadFromJsonAsync<ContextQueryPage>();
             Assert.IsNotNull(results);
-            Assert.IsTrue(results!.Any(result => result.Id == item.Id));
-            Assert.IsTrue(results.Any(result => result.Metadata.GetValueOrDefault("custom") == "preserved"));
+            Assert.IsTrue(results!.Items.Any(result => result.Id == item.Id));
+            Assert.IsTrue(results.Items.Any(result => result.Metadata.GetValueOrDefault("custom") == "preserved"));
         }
         finally
         {
@@ -594,7 +594,7 @@ public sealed class ServiceApiIntegrationTests
                 Take = 10
             });
             queryResponse.EnsureSuccessStatusCode();
-            var items = await queryResponse.Content.ReadFromJsonAsync<ContextItem[]>();
+            var queryPage = await queryResponse.Content.ReadFromJsonAsync<ContextQueryPage>();
 
             using var packageResponse = await client.PostAsJsonAsync("/api/package/build", new ContextPackageRequest
             {
@@ -620,8 +620,8 @@ public sealed class ServiceApiIntegrationTests
             Assert.IsNotNull(ingestion);
             Assert.IsTrue(ingestion!.Created);
             Assert.AreEqual("alpha-smoke-ingest", ingestion.OperationId);
-            Assert.IsNotNull(items);
-            Assert.IsTrue(items!.Any(item => item.Id == ingestion.Item.Id));
+            Assert.IsNotNull(queryPage);
+            Assert.IsTrue(queryPage!.Items.Any(item => item.Id == ingestion.Item.Id));
             Assert.IsNotNull(package);
             Assert.AreEqual("workspace-alpha", package!.WorkspaceId);
             Assert.AreEqual("collection-alpha", package.CollectionId);
@@ -2069,9 +2069,9 @@ public sealed class ServiceApiIntegrationTests
             });
             queryResponse.EnsureSuccessStatusCode();
 
-            var summaries = await queryResponse.Content.ReadFromJsonAsync<ContextItem[]>();
+            var summaries = await queryResponse.Content.ReadFromJsonAsync<ContextQueryPage>();
             Assert.IsNotNull(summaries);
-            Assert.IsTrue(summaries!.Any(summary => summary.Type == "summary"));
+            Assert.IsTrue(summaries!.Items.Any(summary => summary.Type == "summary"));
         }
         finally
         {

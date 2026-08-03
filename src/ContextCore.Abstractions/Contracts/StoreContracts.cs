@@ -32,6 +32,36 @@ public interface IContextStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Keyset 分页查询能力接口。实现此接口的存储可返回 HasMore + 类型化 NextCursor，
+/// 供服务端构造不透明分页 token（<see cref="ContextQueryPage.NextCursor"/>）。
+/// </summary>
+public interface IContextQueryPageStore
+{
+    /// <summary>
+    /// 按 keyset 分页查询上下文条目，返回是否还有下一页及下一页的类型化游标。
+    /// 语义与 <see cref="IContextStore.QueryAsync"/> 完全一致（含 After 续取与 Skip 回退），
+    /// 仅额外返回分页元数据；实现应读取 Take + 1 条以判定 HasMore。
+    /// </summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<ContextQueryPageResult> QueryPageAsync(
+        ContextQuery query,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Keyset 分页查询结果：条目 + HasMore + 类型化下一页游标。</summary>
+public sealed record ContextQueryPageResult
+{
+    /// <summary>当前页条目（最多请求的 Take 条）。</summary>
+    public IReadOnlyList<ContextItem> Items { get; init; } = Array.Empty<ContextItem>();
+
+    /// <summary>是否还有下一页。</summary>
+    public bool HasMore { get; init; }
+
+    /// <summary>下一页类型化游标（HasMore=false 时为 null；由服务端编码为不透明 token）。</summary>
+    public ContextQueryCursor? NextCursor { get; init; }
+}
+
 /// <summary>提供集合级别的元数据管理操作。</summary>
 public interface IContextCollectionStore
 {

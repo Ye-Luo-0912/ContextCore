@@ -5,6 +5,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Policy;
 using ContextCore.Core.Services.Retrieval;
@@ -528,6 +529,103 @@ public sealed class PurposeSemanticAcceptanceTests
         var materialA = execution.WorkingSet.Materials[allocationsByEntity["cand-a"].CandidateKey];
         Assert.AreEqual("hydrated content for cand-a", materialA.Content,
             "WorkingSet.Materials 必须使用 hydrator 修复后的真实正文。");
+
+        // P1-3：被 Hydration/预算修复移出的候选必须进入最终 DroppedEnvelopes——
+        // 否则 DroppedCount 偏小、Utility Ledger 不记录真实淘汰项、ConflictSet 缺样本。
+        Assert.AreEqual(1, decision.Outcome.DroppedCount,
+            "DroppedCount 必须包含被预算修复移出的候选（真实淘汰项）。");
+        Assert.AreEqual(1, decision.DroppedEnvelopes.Count,
+            "DroppedEnvelopes 必须包含被预算修复移出的候选。");
+        var droppedEnvelope = decision.DroppedEnvelopes[0];
+        Assert.AreEqual("Mandatory:cand-b", droppedEnvelope.CandidateId,
+            "被预算修复移出的候选必须出现在 DroppedEnvelopes。");
+        Assert.AreEqual(CandidateDecisionReasonCode.TokenBudgetExceeded,
+            droppedEnvelope.Safety.BlockReasonCode,
+            "预算修复裁剪候选的 reason code 必须为 TokenBudgetExceeded。");
+        Assert.AreEqual(1, decision.Outcome.BudgetExceededCount,
+            "BudgetExceededCount 必须重算（Engine 0 + 预算修复裁剪 1），而非水化前结果。");
+        Assert.IsTrue(decision.Outcome.Sections.Contains("mandatory"),
+            "Outcome.Sections 必须按修复后保留的 Selected 候选重建（水化前结果可能为空/过时）。");
+
+        // Learning Ledger 输入：所有 candidate（selected/dropped）都写入 ledger（P8 硬边界）——
+        // DroppedEnvelopes 修复后，ledger 才能记录真实淘汰项。
+        var ledgerStore = new InMemoryUtilityLedgerStore();
+        var conflictStore = new InMemoryConflictSetStore();
+        var ledgerMaterializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
+        await ledgerMaterializer.MaterializeAsync(decision, "test-ws", "test-col", CancellationToken.None);
+        var ledgerEntries = await ledgerStore.QueryAsync(
+            new UtilityLedgerQuery { WorkspaceId = "test-ws", CollectionId = "test-col" }, CancellationToken.None);
+        Assert.AreEqual(2, ledgerEntries.Count,
+            "Ledger 必须记录 selected + dropped 全部候选（P8 硬边界：所有 candidate 都写入）。");
+        var droppedLedgerEntry = ledgerEntries.Single(e => !e.IsSelected);
+        Assert.AreEqual("Mandatory:cand-b", droppedLedgerEntry.CandidateItemId,
+            "Ledger 必须记录被预算修复移出的候选（真实淘汰项）。");
+    }
+
+    [TestMethod]
+    public async Task LateHydrationFailureDroppedCandidate_ClassifiedAsEvidenceMissing()
+    {
+        // P1-3：hydration 失败（缺正文/证据）的候选必须进入 DroppedEnvelopes，
+        // 分类为 EvidenceMissing（而非 TokenBudgetExceeded），且不计入 BudgetExceededCount。
+        var store = new TwoItemContextStore(new[]
+        {
+            new ContextItem
+            {
+                Id = "cand-a",
+                WorkspaceId = "test-ws",
+                CollectionId = "test-col",
+                Content = "cand-a content",
+                Type = "test",
+                Tags = new[] { "mandatory" }
+            },
+            new ContextItem
+            {
+                Id = "cand-b",
+                WorkspaceId = "test-ws",
+                CollectionId = "test-col",
+                Content = "cand-b content",
+                Type = "test",
+                Tags = new[] { "mandatory" }
+            }
+        });
+        var provider = new MandatoryCandidateProvider(store);
+        // 注入报告 hydration 失败的 hydrator Stub（模拟 store miss / 正文为空）
+        var hydrator = new FailLastHydrator(dropSuffix: "cand-b");
+
+        var runtime = ArtifactTruthAcceptanceTests.BuildRuntime(
+            providers: new[] { provider },
+            selectedCandidateHydrator: hydrator);
+
+        var request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = "req-late-hydration-failure",
+            Scope = new ContextDecisionScope("test-ws", "test-col"),
+            Purpose = ContextDecisionPurpose.Retrieval,
+            TokenBudget = 4096,
+            TopK = 10,
+            RetrievalInput = new RetrievalInput { IncludeContent = false }
+        };
+
+        var execution = await runtime.ExecuteWithWorkingSetAsync(request, CancellationToken.None);
+        var decision = execution.Decision;
+
+        Assert.AreEqual(1, decision.SelectedEnvelopes.Count,
+            "hydration 失败后仅保留成功候选。");
+        Assert.AreEqual(1, decision.Outcome.DroppedCount,
+            "DroppedCount 必须包含 hydration 失败的候选。");
+        var droppedEnvelope = decision.DroppedEnvelopes.Single();
+        Assert.AreEqual("Mandatory:cand-b", droppedEnvelope.CandidateId,
+            "hydration 失败的候选必须出现在 DroppedEnvelopes。");
+        Assert.AreEqual(CandidateDecisionReasonCode.EvidenceMissing,
+            droppedEnvelope.Safety.BlockReasonCode,
+            "hydration 失败候选必须分类为 EvidenceMissing（缺证据），而非 budget 拦截。");
+
+        var candBAllocation = decision.AllocationDecisions.Single(d => d.CandidateKey.EntityId == "cand-b");
+        Assert.AreEqual(CandidateDecisionReasonCode.EvidenceMissing,
+            candBAllocation.ReasonCode,
+            "AllocationDecisions 必须与 DroppedEnvelopes 的 reason code 一致（EvidenceMissing）。");
+        Assert.AreEqual(0, decision.Outcome.BudgetExceededCount,
+            "hydration 失败不计入 BudgetExceededCount（非 budget 拦截）。");
     }
 
     [TestMethod]
@@ -1569,6 +1667,87 @@ internal sealed class DropLastHydrator : ISelectedCandidateHydrator
             WorkingSet = repairedWorkingSet,
             HydratedCount = retained.Count,
             FailedCount = 0,
+            BudgetExceeded = false,
+            Repair = repair
+        };
+        return ValueTask.FromResult(result);
+    }
+}
+
+/// <summary>
+/// 丢弃指定后缀候选并报告 hydration 失败的 ISelectedCandidateHydrator Stub。
+/// 模拟生产 hydrator store miss / 空正文场景：HydrationDropped 中的候选同时出现在
+/// HydrationFailures（EvidenceMissing 分类），验证 Runtime 重建 DroppedEnvelopes 的分类语义。
+/// </summary>
+internal sealed class FailLastHydrator : ISelectedCandidateHydrator
+{
+    private readonly string _dropSuffix;
+
+    public FailLastHydrator(string dropSuffix) => _dropSuffix = dropSuffix;
+
+    public ValueTask<HydrationResult> HydrateAsync(
+        IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
+        CandidateWorkingSet workingSet,
+        int tokenBudget = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var retained = new List<ContextCandidateEnvelope>(selectedEnvelopes.Count);
+        var dropped = new List<ContextCandidateEnvelope>();
+        foreach (var envelope in selectedEnvelopes)
+        {
+            if (envelope.CandidateId.EndsWith(_dropSuffix, StringComparison.Ordinal))
+                dropped.Add(envelope);
+            else
+                retained.Add(envelope);
+        }
+
+        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(retained.Count);
+        var hydratedSelected = new List<string>(retained.Count);
+        var updatedDecisions = new List<CandidateAllocationDecision>(selectedEnvelopes.Count);
+        foreach (var envelope in retained)
+        {
+            var content = $"hydrated content for {envelope.CanonicalKey.EntityId}";
+            materials[envelope.CanonicalKey] = R28BTestHelpers.MakeMaterial(envelope.CanonicalKey, content);
+            hydratedSelected.Add(envelope.CandidateId);
+            updatedDecisions.Add(new CandidateAllocationDecision
+            {
+                CandidateKey = envelope.CanonicalKey,
+                Section = "context",
+                IncludedTokens = 40,
+                ReasonCode = CandidateDecisionReasonCode.SelectedMandatory
+            });
+        }
+
+        var hydrationDropped = new List<string>(dropped.Count);
+        var hydrationFailures = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var envelope in dropped)
+        {
+            hydrationDropped.Add(envelope.CandidateId);
+            hydrationFailures[envelope.CandidateId] = "store miss or empty content";
+            updatedDecisions.Add(new CandidateAllocationDecision
+            {
+                CandidateKey = envelope.CanonicalKey,
+                Section = "context",
+                IncludedTokens = 0,
+                ReasonCode = CandidateDecisionReasonCode.EvidenceMissing
+            });
+        }
+
+        // 与生产 hydrator 一致：WorkingSet.Envelopes 保持原集合，仅替换 Materials
+        var repairedWorkingSet = workingSet with { Materials = materials };
+        var repair = new HydrationRepairDecision
+        {
+            HydratedSelected = hydratedSelected,
+            HydrationDropped = hydrationDropped,
+            UpdatedAllocationDecisions = updatedDecisions,
+            ExactTokenCount = 42,
+            HydrationFailures = hydrationFailures
+        };
+        var result = new HydrationResult
+        {
+            WorkingSet = repairedWorkingSet,
+            HydratedCount = retained.Count,
+            FailedCount = dropped.Count,
             BudgetExceeded = false,
             Repair = repair
         };

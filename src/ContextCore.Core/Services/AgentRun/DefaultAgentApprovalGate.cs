@@ -87,6 +87,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
             return new AgentApprovalResult
             {
                 Approved = true,
+                ApprovalId = approvalId,
                 RejectionReason = null,
                 ApproverId = "auto-rule",
                 DecidedAt = now
@@ -134,6 +135,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
         return new AgentApprovalResult
         {
             Approved = true,
+            ApprovalId = approvalId,
             RejectionReason = null,
             ApproverId = "auto-rule",
             DecidedAt = now
@@ -181,14 +183,22 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
 
         try
         {
-            await _approvalStore.CreateAsync(approval, cancellationToken).ConfigureAwait(false);
-
-            // 自动批准/拒绝时立即裁决（Pending → Approved/Rejected）
+            // 自动批准/拒绝：原子创建并裁决（单次写入最终状态，避免 Create(Pending) + Resolve 两步
+            // 的中间状态与两次往返）；需人工审批：仅创建 Pending 记录，等待外部 ResolveAsync。
             if (initialStatus != AgentApprovalStatus.Pending)
             {
-                await _approvalStore.ResolveAsync(
-                    workspaceId, approvalId, initialStatus, approverId, rejectionReason, cancellationToken)
-                    .ConfigureAwait(false);
+                await _approvalStore.CreateResolvedApprovalAsync(approval with
+                {
+                    Status = initialStatus,
+                    ApproverId = approverId,
+                    RejectionReason = initialStatus == AgentApprovalStatus.Rejected ? rejectionReason : null,
+                    DecisionRequestId = $"auto:{approvalId}",
+                    ResolvedAt = createdAt
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _approvalStore.CreateAsync(approval, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)

@@ -988,7 +988,8 @@ public sealed class RelationNeighborBatchQuery
 
     /// <summary>
     /// 单次查询所有种子合计的全局返回边数上限（硬上限，默认 <see cref="GraphQueryLimits.MaxTotalEdges"/>）。
-    /// 存储层在 SQL/遍历中强制：累计返回边数达到上限即停止读取并截断，命中种子标记
+    /// 存储层在 SQL/遍历中强制：每个种子先获得最低配额 <c>floor(GlobalEdgeLimit / 种子数)</c>（至少 1），
+    /// 余额按种子序再分配；累计交付达到上限即停止读取并截断，命中种子标记
     /// <see cref="RelationNeighborBatchResult.Truncated"/>。调用方（BFS 引擎 / Provider）可传入自身剩余预算。
     /// </summary>
     public int GlobalEdgeLimit { get; init; } = GraphQueryLimits.MaxTotalEdges;
@@ -997,10 +998,15 @@ public sealed class RelationNeighborBatchQuery
 /// <summary>
 /// 单个种子的批量邻居查询结果。
 /// 引擎按 <see cref="ItemId"/> 索引结果以扩展 BFS frontier。
-/// 新增 <see cref="Truncated"/> 信号，标记存储层是否因 <c>MaxScan</c>（或 Postgres 全局 LIMIT）
-/// 截断了该种子的候选集。true 表示返回的 <see cref="Relations"/> 可能不完整，
-/// 调用方（如 BFS 引擎）应据此设置自身的 Truncated 标记并向用户告警。
 /// </summary>
+/// <remarks>
+/// 公平性契约：存储层对每个种子保证最低扫描配额
+/// （<c>floor(GlobalEdgeLimit / 种子数)</c>，至少 1），早期富种子无法耗尽全部全局预算；
+/// 配额之外的余额按种子序再分配（每种子至多补到 per-seed MaxScan 窗口）。
+/// 结果始终按 <see cref="SeedOrdinal"/> 升序返回，每个种子都有一条结果（即使 <see cref="Relations"/> 为空），
+/// 保证调用方总能获得 per-seed 诊断（<see cref="ScannedCount"/>、<see cref="CandidateCountBeforeGlobalLimit"/>、
+/// <see cref="SkippedByGlobalBudget"/>）。
+/// </remarks>
 public sealed class RelationNeighborBatchResult
 {
     /// <summary>对应的种子条目 ID（来自查询的 ItemIds）。</summary>
@@ -1010,11 +1016,40 @@ public sealed class RelationNeighborBatchResult
     public required IReadOnlyList<ContextRelation> Relations { get; init; }
 
     /// <summary>
+    /// 种子在去重、MaxSeeds 截断后的种子列表中的序号（0 起）。结果按此字段升序返回，
+    /// 调用方可依赖该排序获得跨执行计划确定性的扩展顺序。
+    /// </summary>
+    public int SeedOrdinal { get; init; }
+
+    /// <summary>
+    /// 该种子实际读取的候选边数（per-seed MaxScan 扫描窗口内、受全局预算约束）。
+    /// 对因全局预算耗尽而未扫描的种子为 0。
+    /// </summary>
+    public int ScannedCount { get; init; }
+
+    /// <summary>
+    /// 全局预算截断前该种子存在的候选边数（受 per-seed MaxScan 扫描窗口约束）。
+    /// 未命中全局预算时等于 <see cref="ScannedCount"/>；命中时可能大于 ScannedCount
+    /// （存储层观测到更多候选但未交付）。Postgres 在预算耗尽后无法继续观测，
+    /// 对被跳过的种子报告 0（InMemory/FileSystem 因全量物化可报告真实桶大小）。
+    /// </summary>
+    public int CandidateCountBeforeGlobalLimit { get; init; }
+
+    /// <summary>
+    /// true 表示全局边数预算在该种子被扫描前即已耗尽，其候选（若有）完全未交付。
+    /// 仅当 GlobalEdgeLimit 小于种子数（每种子最低配额为 1 仍无法全覆盖）时出现。
+    /// Postgres 对被跳过的种子保守报告 true（无法区分"有候选"与"无候选"）；
+    /// InMemory/FileSystem 仅在确认该种子确有候选时报告 true。
+    /// </summary>
+    public bool SkippedByGlobalBudget { get; init; }
+
+    /// <summary>
     /// true 表示存储层对该种子的候选集进行了截断，<see cref="Relations"/> 可能不完整。
     /// 触发条件（任一即置 true）：
     /// <list type="bullet">
-    /// <item>InMemory/FileSystem：该种子过滤后的候选数大于 <c>MaxScan</c>。</item>
-    /// <item>Postgres：该种子的桶大小大于 <c>MaxScan</c>，或 SQL 全局 LIMIT 命中（保守标记所有非空桶）。</item>
+    /// <item>该种子的候选数超过 per-seed 扫描上限（InMemory/FileSystem 精确判定；
+    /// Postgres 以 LATERAL LIMIT 命中保守判定，含恰好等于上限的边界）。</item>
+    /// <item>全局预算在该种子交付完成前耗尽（交付数 &lt; 可观测候选数）。</item>
     /// </list>
     /// 默认 false（未截断）。
     /// </summary>

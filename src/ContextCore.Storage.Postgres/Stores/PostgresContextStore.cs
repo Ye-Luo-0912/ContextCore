@@ -10,7 +10,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 上下文条目与集合元数据存储。
 /// 完整 DTO 保存在 jsonb 中，同时抽取常用筛选列以便查询和索引。
 /// </summary>
-public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextStoreMetadataLookup, ITransactionalContextStore
+public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextStoreMetadataLookup, ITransactionalContextStore, IContextQueryPageStore
 {
     public PostgresContextStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -335,7 +335,7 @@ deduped AS (
 )
 SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
-       tags, refs, source_refs, ts_rank
+       tags, refs, source_refs, ts_rank, source_order
 FROM deduped
 ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
 {finalLimitSql};
@@ -356,9 +356,10 @@ ORDER BY importance DESC, updated_at DESC, id DESC
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             var tsRankColumnIndex = hasQueryText && rankExpression is not null ? 14 : -1;
+            var sourceOrderColumnIndex = hasQueryText && rankExpression is not null ? 15 : -1;
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                results.Add(ReadMetadataRow(reader, tsRankColumnIndex));
+                results.Add(ReadMetadataRow(reader, tsRankColumnIndex, sourceOrderColumnIndex));
             }
         }
         else
@@ -392,7 +393,7 @@ combined AS (
 deduped AS (
     SELECT DISTINCT ON (workspace_id, collection_id, id) * FROM combined ORDER BY workspace_id, collection_id, id, source_order
 )
-SELECT data, ts_rank
+SELECT data, ts_rank, source_order
 FROM deduped
 ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
 {finalLimitSql};
@@ -418,7 +419,17 @@ ORDER BY importance DESC, updated_at DESC, id DESC
                 if (hasRankColumn && !fullReader.IsDBNull(1))
                 {
                     var rank = fullReader.GetDouble(1);
-                    item = WithTsRank(item, rank);
+                    // 查询文本路径的最终排序按 source_order 分组（0=FTS，1=ID 命中）——
+                    // 注入 source_order，让分页游标与条目自身携带来源信息。
+                    var sourceOrder = fullReader.FieldCount > 2 && !fullReader.IsDBNull(2)
+                        ? fullReader.GetInt32(2)
+                        : 1;
+                    item = WithTsRank(item, rank, sourceOrder);
+                }
+                else if (!hasRankColumn)
+                {
+                    // 无查询文本路径：排序键为 (importance, updated_at, id)，等价于 ID 命中源。
+                    item = WithSourceOrder(item, 1);
                 }
                 results.Add(item);
             }
@@ -432,6 +443,49 @@ ORDER BY importance DESC, updated_at DESC, id DESC
 
     /// <summary>ID 命中源与无 QueryText 路径的 keyset 排序键。</summary>
     private static readonly string[] IdAfterColumns = ["importance", "updated_at", "id"];
+
+    /// <inheritdoc />
+    public async Task<ContextQueryPageResult> QueryPageAsync(
+        ContextQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // 取 Take + 1 条判定 HasMore；返回前 Take 条，下一页游标取自末条排序键。
+        var take = TakeOrDefault(query.Take);
+        var fetchQuery = query.CloneWith(take: take + 1);
+        var items = (await QueryAsync(fetchQuery, cancellationToken).ConfigureAwait(false)).ToList();
+
+        var hasMore = items.Count > take;
+        var pageItems = hasMore ? items.Take(take).ToList() : items;
+
+        if (pageItems.Count == 0)
+        {
+            return new ContextQueryPageResult { Items = pageItems, HasMore = false, NextCursor = null };
+        }
+
+        // 游标排序键与 SQL 最终排序一致：
+        // 查询文本路径按 (source_order, ts_rank, importance, updated_at, id) 排序；
+        // 无查询文本路径按 (importance, updated_at, id) 排序（等价于 ID 命中源）。
+        var hasQueryText = !string.IsNullOrWhiteSpace(query.QueryText);
+        var last = pageItems[^1];
+        var nextCursor = new ContextQueryCursor
+        {
+            SourceOrder = hasQueryText ? last.SourceOrder : 1,
+            TsRank = hasQueryText ? last.SearchRank : 0,
+            Importance = last.Importance,
+            UpdatedAt = last.UpdatedAt,
+            Id = last.Id
+        };
+
+        return new ContextQueryPageResult
+        {
+            Items = pageItems,
+            HasMore = hasMore,
+            NextCursor = hasMore ? nextCursor : null
+        };
+    }
 
     /// <summary>
     /// 生成 DESC 排序下“严格位于游标之后”的 keyset 谓词：
@@ -510,7 +564,12 @@ ORDER BY importance DESC, updated_at DESC, id DESC
     /// updated_at(7), created_at(8), content_hash(9), content_token_cost(10),
     /// tags(11), refs(12), source_refs(13), ts_rank?(14)。
     /// </remarks>
-    private static ContextItem ReadMetadataRow(System.Data.Common.DbDataReader reader, int tsRankColumnIndex = -1)
+    /// <param name="tsRankColumnIndex">ts_rank 列索引（查询文本路径）；-1 = 无该列。</param>
+    /// <param name="sourceOrderColumnIndex">source_order 列索引（查询文本路径）；-1 = 无该列。</param>
+    private static ContextItem ReadMetadataRow(
+        System.Data.Common.DbDataReader reader,
+        int tsRankColumnIndex = -1,
+        int sourceOrderColumnIndex = -1)
     {
         var workspaceId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
         var collectionId = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
@@ -540,11 +599,16 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         }
         // IncludeContent=false 路径下，ts_rank 仍需写入 Metadata——
         // LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
+        double searchRank = 0;
         if (tsRankColumnIndex >= 0 && !reader.IsDBNull(tsRankColumnIndex))
         {
-            var rank = reader.GetDouble(tsRankColumnIndex);
-            metadata[ContentMetadataKeys.TsRank] = (rank * 100.0).ToString(CultureInfo.InvariantCulture);
+            searchRank = reader.GetDouble(tsRankColumnIndex);
+            metadata[ContentMetadataKeys.TsRank] = (searchRank * 100.0).ToString(CultureInfo.InvariantCulture);
         }
+        // source_order：0 = FTS 命中，1 = ID 精确/前缀命中；无该列（无 QueryText 路径）时按 ID 命中源处理。
+        var sourceOrder = sourceOrderColumnIndex >= 0 && !reader.IsDBNull(sourceOrderColumnIndex)
+            ? reader.GetInt32(sourceOrderColumnIndex)
+            : 1;
 
         return new ContextItem
         {
@@ -562,6 +626,8 @@ ORDER BY importance DESC, updated_at DESC, id DESC
             Refs = refs,
             SourceRefs = sourceRefs,
             Importance = importance,
+            SourceOrder = sourceOrder,
+            SearchRank = searchRank,
             Version = version,
             Checksum = contentHash,
             // 填充 created_at——Provider 派生 EntityVersion 时可能用到。
@@ -571,8 +637,8 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         };
     }
 
-    /// <summary>返回带 __ts_rank 注入的 ContextItem 副本（不可变 init 属性 → 用 with 重建）。</summary>
-    private static ContextItem WithTsRank(ContextItem item, double rank)
+    /// <summary>返回带 __ts_rank 注入与来源排序信息的 ContextItem 副本（不可变 init 属性 → 显式重建）。</summary>
+    private static ContextItem WithTsRank(ContextItem item, double rank, int sourceOrder = 0)
     {
         var metadata = new Dictionary<string, string>(item.Metadata)
         {
@@ -592,6 +658,34 @@ ORDER BY importance DESC, updated_at DESC, id DESC
             SourceRefs = item.SourceRefs,
             Metadata = metadata,
             Importance = item.Importance,
+            SourceOrder = sourceOrder,
+            SearchRank = rank,
+            Version = item.Version,
+            Checksum = item.Checksum,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        };
+    }
+
+    /// <summary>返回仅更新来源排序的 ContextItem 副本（无查询文本路径按 ID 命中源排序）。</summary>
+    private static ContextItem WithSourceOrder(ContextItem item, int sourceOrder)
+    {
+        return new ContextItem
+        {
+            Id = item.Id,
+            WorkspaceId = item.WorkspaceId,
+            CollectionId = item.CollectionId,
+            Type = item.Type,
+            Title = item.Title,
+            Content = item.Content,
+            ContentFormat = item.ContentFormat,
+            Tags = item.Tags,
+            Refs = item.Refs,
+            SourceRefs = item.SourceRefs,
+            Metadata = item.Metadata,
+            Importance = item.Importance,
+            SourceOrder = sourceOrder,
+            SearchRank = item.SearchRank,
             Version = item.Version,
             Checksum = item.Checksum,
             CreatedAt = item.CreatedAt,

@@ -370,6 +370,8 @@ ORDER BY created_at ASC;
     public async ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(
         AgentRunState state,
         int take = 100,
+        DateTimeOffset? afterUpdatedAt = null,
+        string? afterRunId = null,
         CancellationToken cancellationToken = default)
     {
         if (take <= 0)
@@ -385,11 +387,16 @@ ORDER BY created_at ASC;
 SELECT data
 FROM {Table("agent_runs")}
 WHERE state = @state
-ORDER BY created_at ASC
+  AND (@after_updated_at IS NULL
+       OR updated_at > @after_updated_at
+       OR (updated_at = @after_updated_at AND run_id > @after_run_id))
+ORDER BY updated_at ASC, run_id ASC
 LIMIT @take;
 """;
         command.Parameters.AddWithValue("state", (byte)state);
         command.Parameters.AddWithValue("take", take);
+        command.Parameters.AddWithValue("after_updated_at", (object?)afterUpdatedAt ?? DBNull.Value);
+        command.Parameters.AddWithValue("after_run_id", (object?)afterRunId ?? DBNull.Value);
         return await ExecuteReaderJsonAsync<AgentRun>(command, cancellationToken).ConfigureAwait(false);
     }
 }

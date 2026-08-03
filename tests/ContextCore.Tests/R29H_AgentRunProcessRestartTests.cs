@@ -829,8 +829,10 @@ public sealed class R29H_AgentRunProcessRestartTests
             => _inner.ListBySessionAsync(workspaceId, sessionId, cancellationToken);
 
         public ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(
-            AgentRunState state, int take = 100, CancellationToken cancellationToken = default)
-            => _inner.ListByStateAsync(state, take, cancellationToken);
+            AgentRunState state, int take = 100,
+            DateTimeOffset? afterUpdatedAt = null, string? afterRunId = null,
+            CancellationToken cancellationToken = default)
+            => _inner.ListByStateAsync(state, take, afterUpdatedAt, afterRunId, cancellationToken);
     }
 
     /// <summary>

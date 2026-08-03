@@ -28,6 +28,9 @@ namespace ContextCore.Service.Hosting;
 //      ToolDispatching / Observing / Checkpointing 均为可恢复状态。
 //      Completed / Failed / Cancelled / LeaseLost 为终态，跳过。
 //   4. 异常隔离：单个 Run 恢复失败不中断整个轮询循环（catch + log）。
+//   5. 扫描防饥饿：每状态 keyset 游标（ORDER BY updated_at, run_id）跨轮次推进，
+//      每轮每状态最多扫描 MaxRunsPerStatePerScan 条，且状态按 round-robin 轮转起始——
+//      早期富状态无法独占扫描预算，后续状态与状态内后进 Run 都能持续获得超时检测/恢复机会。
 // ===========================================================================
 
 /// <summary>
@@ -39,6 +42,21 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     private readonly IServiceProvider _services;
     private readonly ContextCoreRuntimeOptions _options;
     private readonly ILogger<AgentRunRecoveryWorker> _logger;
+
+    /// <summary>
+    /// 每状态每次扫描的运行数预算。超过预算的 Run 由 keyset 游标保留到后续轮次继续扫描，
+    /// 防止单状态海量 Run 独占整轮扫描（其余状态与状态内后进 Run 饥饿）。
+    /// </summary>
+    private const int MaxRunsPerStatePerScan = 50;
+
+    /// <summary>每状态 keyset 扫描游标（上一轮最后扫描到的 Run 位置），跨轮次持久。</summary>
+    private readonly Dictionary<AgentRunState, RunScanCursor> _stateCursors = [];
+
+    /// <summary>round-robin 起始状态索引：每轮从不同状态开始扫描，保证各状态轮转公平。</summary>
+    private int _roundRobinIndex;
+
+    /// <summary>keyset 游标：上一轮最后扫描到的 (UpdatedAt, RunId)，用于下一轮续扫。</summary>
+    private sealed record RunScanCursor(DateTimeOffset UpdatedAt, string RunId);
 
     /// <summary>
     /// 需要扫描恢复的非终态状态列表。
@@ -123,8 +141,9 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     }
 
     /// <summary>
-    /// 执行一次恢复扫描：遍历所有非终态状态，列出未完成 Run，
-    /// 对超时 Run 标记为 Failed，对可恢复 Run 重新入队。
+    /// 执行一次恢复扫描：按 round-robin 轮转遍历所有非终态状态，
+    /// 每状态以 keyset 游标（updated_at, run_id）在预算内续扫，
+    /// 对超时 Run 标记为 LeaseLost，对可恢复 Run 重新入队。
     /// </summary>
     private async Task RecoverOnceAsync(CancellationToken cancellationToken)
     {
@@ -148,13 +167,24 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
         var totalRecovered = 0;
         var totalTimedOut = 0;
 
-        foreach (var state in RecoverableStates)
+        // 状态轮转：本轮从 _roundRobinIndex 开始依次扫描各状态（每状态预算内），
+        // 下一轮从下一状态开始——忙状态无法独占整轮扫描预算，所有状态持续获得扫描机会。
+        for (var step = 0; step < RecoverableStates.Length; step++)
         {
-            var runs = await runStore.ListByStateAsync(state, take: 100, cancellationToken)
-                .ConfigureAwait(false);
+            var state = RecoverableStates[(_roundRobinIndex + step) % RecoverableStates.Length];
+            var cursor = _stateCursors.TryGetValue(state, out var existing) ? existing : null;
+
+            var runs = await runStore.ListByStateAsync(
+                state,
+                take: MaxRunsPerStatePerScan,
+                afterUpdatedAt: cursor?.UpdatedAt,
+                afterRunId: cursor?.RunId,
+                cancellationToken).ConfigureAwait(false);
 
             if (runs.Count == 0)
             {
+                // 该状态已扫描完（或本就从空开始）：重置游标，下轮从头续扫（新 Run 可能已出现）。
+                _stateCursors.Remove(state);
                 continue;
             }
 
@@ -251,7 +281,23 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                         run.RunId, run.State);
                 }
             }
+
+            // 推进游标到本状态最后扫描的 Run：
+            // 满预算（== 每状态预算）说明可能还有更多 → 保留游标下轮续扫；
+            // 不足预算说明已扫完 → 重置游标，下轮从头（新 Run 可能已出现）。
+            var last = runs[^1];
+            if (runs.Count >= MaxRunsPerStatePerScan)
+            {
+                _stateCursors[state] = new RunScanCursor(last.UpdatedAt, last.RunId);
+            }
+            else
+            {
+                _stateCursors.Remove(state);
+            }
         }
+
+        // round-robin 推进：下轮从下一状态开始扫描。
+        _roundRobinIndex = (_roundRobinIndex + 1) % RecoverableStates.Length;
 
         if (totalRecovered > 0 || totalTimedOut > 0)
         {

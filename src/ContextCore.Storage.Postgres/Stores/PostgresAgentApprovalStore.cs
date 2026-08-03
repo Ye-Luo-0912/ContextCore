@@ -39,10 +39,12 @@ public sealed class PostgresAgentApprovalStore : PostgresStoreBase, IAgentApprov
         command.CommandText = $"""
 INSERT INTO {Table("agent_run_approvals")} (
     workspace_id, approval_id, run_id, tool_call_id, tool_name, status,
-    reason, rejection_reason, approver_id, created_at, resolved_at, data)
+    reason, rejection_reason, approver_id, decision_request_id, target_run_state,
+    created_at, resolved_at, data)
 VALUES (
     @workspace_id, @approval_id, @run_id, @tool_call_id, @tool_name, @status,
-    @reason, @rejection_reason, @approver_id, @created_at, @resolved_at, @data)
+    @reason, @rejection_reason, @approver_id, @decision_request_id, @target_run_state,
+    @created_at, @resolved_at, @data)
 ON CONFLICT (workspace_id, approval_id) DO NOTHING;
 """;
         command.Parameters.AddWithValue("workspace_id", approval.WorkspaceId);
@@ -54,6 +56,51 @@ ON CONFLICT (workspace_id, approval_id) DO NOTHING;
         command.Parameters.AddWithValue("reason", (object?)approval.Reason ?? DBNull.Value);
         command.Parameters.AddWithValue("rejection_reason", (object?)approval.RejectionReason ?? DBNull.Value);
         command.Parameters.AddWithValue("approver_id", (object?)approval.ApproverId ?? DBNull.Value);
+        command.Parameters.AddWithValue("decision_request_id", (object?)approval.DecisionRequestId ?? DBNull.Value);
+        command.Parameters.AddWithValue("target_run_state",
+            approval.TargetRunState is { } trs ? (byte)trs : DBNull.Value);
+        command.Parameters.AddWithValue("created_at", approval.CreatedAt);
+        command.Parameters.AddWithValue("resolved_at", (object?)approval.ResolvedAt ?? DBNull.Value);
+        AddJson(command, "data", approval);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask CreateResolvedApprovalAsync(AgentApproval approval, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+        if (approval.Status == AgentApprovalStatus.Pending)
+        {
+            throw new ArgumentException(
+                $"CreateResolvedApprovalAsync 要求 Status 为 Approved/Rejected，实际为 Pending。", nameof(approval));
+        }
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+INSERT INTO {Table("agent_run_approvals")} (
+    workspace_id, approval_id, run_id, tool_call_id, tool_name, status,
+    reason, rejection_reason, approver_id, decision_request_id, target_run_state,
+    created_at, resolved_at, data)
+VALUES (
+    @workspace_id, @approval_id, @run_id, @tool_call_id, @tool_name, @status,
+    @reason, @rejection_reason, @approver_id, @decision_request_id, @target_run_state,
+    @created_at, @resolved_at, @data)
+ON CONFLICT (workspace_id, approval_id) DO NOTHING;
+""";
+        command.Parameters.AddWithValue("workspace_id", approval.WorkspaceId);
+        command.Parameters.AddWithValue("approval_id", approval.ApprovalId);
+        command.Parameters.AddWithValue("run_id", approval.RunId);
+        command.Parameters.AddWithValue("tool_call_id", approval.ToolCallId);
+        command.Parameters.AddWithValue("tool_name", approval.ToolName ?? string.Empty);
+        command.Parameters.AddWithValue("status", (byte)approval.Status);
+        command.Parameters.AddWithValue("reason", (object?)approval.Reason ?? DBNull.Value);
+        command.Parameters.AddWithValue("rejection_reason", (object?)approval.RejectionReason ?? DBNull.Value);
+        command.Parameters.AddWithValue("approver_id", (object?)approval.ApproverId ?? DBNull.Value);
+        command.Parameters.AddWithValue("decision_request_id", (object?)approval.DecisionRequestId ?? DBNull.Value);
+        command.Parameters.AddWithValue("target_run_state",
+            approval.TargetRunState is { } trs ? (byte)trs : DBNull.Value);
         command.Parameters.AddWithValue("created_at", approval.CreatedAt);
         command.Parameters.AddWithValue("resolved_at", (object?)approval.ResolvedAt ?? DBNull.Value);
         AddJson(command, "data", approval);
@@ -111,7 +158,9 @@ ORDER BY created_at ASC;
         AgentApprovalStatus decision,
         string? approverId,
         string? rejectionReason,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null,
+        AgentRunState? targetRunState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(approvalId);
@@ -129,18 +178,23 @@ ORDER BY created_at ASC;
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
-            // 同步更新 data JSON 中的 Status / ApproverId / RejectionReason / ResolvedAt 字段
+            // 同步更新 data JSON 中的 Status / ApproverId / RejectionReason / ResolvedAt /
+            // DecisionRequestId / TargetRunState 字段（JsonStringEnumConverter 枚举名字符串）。
             updateCommand.CommandText = $"""
 UPDATE {Table("agent_run_approvals")}
 SET status = @new_status,
     approver_id = @approver_id,
     rejection_reason = @rejection_reason,
     resolved_at = @resolved_at,
+    decision_request_id = @decision_request_id,
+    target_run_state = @target_run_state,
     data = data || jsonb_build_object(
         'Status', to_jsonb(@new_status_name),
         'ApproverId', to_jsonb(@approver_id::text),
         'RejectionReason', to_jsonb(@rejection_reason::text),
-        'ResolvedAt', to_jsonb(@resolved_at))
+        'ResolvedAt', to_jsonb(@resolved_at),
+        'DecisionRequestId', to_jsonb(@decision_request_id::text),
+        'TargetRunState', to_jsonb(@target_run_state_name::text))
 WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND status = @pending_status;
 """;
             updateCommand.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -152,6 +206,11 @@ WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND status = @
             updateCommand.Parameters.AddWithValue("rejection_reason",
                 decision == AgentApprovalStatus.Rejected ? (object?)rejectionReason ?? DBNull.Value : DBNull.Value);
             updateCommand.Parameters.AddWithValue("resolved_at", now);
+            updateCommand.Parameters.AddWithValue("decision_request_id", (object?)decisionRequestId ?? DBNull.Value);
+            updateCommand.Parameters.AddWithValue("target_run_state",
+                targetRunState is { } trs ? (byte)trs : DBNull.Value);
+            updateCommand.Parameters.AddWithValue("target_run_state_name",
+                targetRunState is { } trs2 ? trs2.ToString() : DBNull.Value);
 
             var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             if (affected > 0)
@@ -164,7 +223,8 @@ WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND status = @
         await using var selectCommand = connection.CreateCommand();
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
-SELECT status FROM {Table("agent_run_approvals")}
+SELECT status, decision_request_id
+FROM {Table("agent_run_approvals")}
 WHERE workspace_id = @workspace_id AND approval_id = @approval_id
 LIMIT 1;
 """;
@@ -174,6 +234,22 @@ LIMIT 1;
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var currentStatus = (AgentApprovalStatus)reader.GetByte(0);
+            var storedRequestId = reader.IsDBNull(1) ? null : reader.GetString(1);
+
+            // 幂等重试：相同 decisionRequestId 时，决策一致 → 幂等成功（不重复裁决）；
+            // 决策相反 → 冲突。无幂等键或键不匹配 → 冲突（旧行为）。
+            if (!string.IsNullOrEmpty(decisionRequestId)
+                && string.Equals(storedRequestId, decisionRequestId, StringComparison.Ordinal))
+            {
+                if (currentStatus == decision)
+                {
+                    return; // 幂等成功：决策已生效
+                }
+                throw new InvalidOperationException(
+                    $"审批幂等键冲突：approval_id={approvalId}，decisionRequestId={decisionRequestId}。" +
+                    $"已存决策={currentStatus}，与本次决策={decision} 相反（拒绝覆盖已生效决策）。");
+            }
+
             throw new InvalidOperationException(
                 $"审批 CAS 失败：approval_id={approvalId}，期望当前状态=Pending，实际={currentStatus}。" +
                 $"审批已被裁决，不可重复裁决。");
@@ -201,7 +277,9 @@ LIMIT 1;
         string? approverId,
         string? rejectionReason,
         AgentRunEvent approvalEvent,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null,
+        AgentRunState? targetRunState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
@@ -214,10 +292,10 @@ LIMIT 1;
         }
 
         // 目标状态：批准 → PendingToolExecution（Actor 恢复时直接执行原 Tool）；
-        //           拒绝 → Failed（终态，设置 finished_at）。
-        var newState = decision == AgentApprovalStatus.Approved
+        //           拒绝 → Failed（终态，设置 finished_at）。调用方可通过 targetRunState 显式指定。
+        var newState = targetRunState ?? (decision == AgentApprovalStatus.Approved
             ? AgentRunState.PendingToolExecution
-            : AgentRunState.Failed;
+            : AgentRunState.Failed);
         var isTerminal = newState == AgentRunState.Failed;
         var now = DateTimeOffset.UtcNow;
 
@@ -227,12 +305,13 @@ LIMIT 1;
 
         // 1. 校验 approval 存在且 RunId 匹配（防跨 Run 误裁决）
         byte currentStatusByte;
+        string? storedRequestId;
         await using (var selectCommand = connection.CreateCommand())
         {
             selectCommand.Transaction = transaction;
             selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
             selectCommand.CommandText = $"""
-SELECT status
+SELECT status, decision_request_id
 FROM {Table("agent_run_approvals")}
 WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND run_id = @run_id
 LIMIT 1;
@@ -252,6 +331,86 @@ LIMIT 1;
                 };
             }
             currentStatusByte = reader.GetByte(0);
+            storedRequestId = reader.IsDBNull(1) ? null : reader.GetString(1);
+        }
+
+        // 1b. 幂等重试：审批已裁决且 decisionRequestId 匹配时，
+        //     决策一致 → 幂等成功（不重复写入事件/推进状态）；决策相反 → 冲突。
+        var currentStatus = (AgentApprovalStatus)currentStatusByte;
+        if (currentStatus != AgentApprovalStatus.Pending)
+        {
+            var idempotentMatch = !string.IsNullOrEmpty(decisionRequestId)
+                && string.Equals(storedRequestId, decisionRequestId, StringComparison.Ordinal);
+            if (!idempotentMatch)
+            {
+                return new ApprovalResolveResult
+                {
+                    Succeeded = false,
+                    ApprovalResolved = false,
+                    RunStateChanged = false,
+                    FailureReason = $"审批已裁决，不可重复裁决：approval_id={approvalId}，当前状态={currentStatus}。"
+                };
+            }
+            if (currentStatus != decision)
+            {
+                return new ApprovalResolveResult
+                {
+                    Succeeded = false,
+                    ApprovalResolved = false,
+                    RunStateChanged = false,
+                    FailureReason = $"审批幂等键冲突：approval_id={approvalId}，decisionRequestId={decisionRequestId}。" +
+                        $"已存决策={currentStatus}，与本次决策={decision} 相反（拒绝覆盖已生效决策）。"
+                };
+            }
+
+            // 幂等成功：确认 Run 已处于目标状态（首次裁决的原子事务应已推进）；
+            // 若 Run 状态不符（异常半状态），返回冲突避免掩盖问题。
+            byte runStateByte;
+            await using (var verifyRunCommand = connection.CreateCommand())
+            {
+                verifyRunCommand.Transaction = transaction;
+                verifyRunCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                verifyRunCommand.CommandText = $"""
+SELECT state FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+                verifyRunCommand.Parameters.AddWithValue("workspace_id", workspaceId);
+                verifyRunCommand.Parameters.AddWithValue("run_id", runId);
+                await using var runReader = await verifyRunCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await runReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    return new ApprovalResolveResult
+                    {
+                        Succeeded = false,
+                        ApprovalResolved = false,
+                        RunStateChanged = false,
+                        FailureReason = $"Run 不存在：workspace_id={workspaceId}, run_id={runId}。"
+                    };
+                }
+                runStateByte = runReader.GetByte(0);
+            }
+            var actualRunState = (AgentRunState)runStateByte;
+            if (actualRunState != newState)
+            {
+                return new ApprovalResolveResult
+                {
+                    Succeeded = false,
+                    ApprovalResolved = false,
+                    RunStateChanged = false,
+                    FailureReason = $"幂等重试校验失败：审批决策已生效（{currentStatus}），但 Run 状态={actualRunState}，期望={newState}。" +
+                        "可能存在异常半状态，需运维介入。"
+                };
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return new ApprovalResolveResult
+            {
+                Succeeded = true,
+                ApprovalResolved = true,
+                RunStateChanged = false,
+                NewRunState = newState
+            };
         }
 
         // 2. CAS 裁决审批（UPDATE WHERE status=Pending）
@@ -266,11 +425,15 @@ SET status = @new_status,
     approver_id = @approver_id,
     rejection_reason = @rejection_reason,
     resolved_at = @resolved_at,
+    decision_request_id = @decision_request_id,
+    target_run_state = @target_run_state,
     data = data || jsonb_build_object(
         'Status', to_jsonb(@new_status_name),
         'ApproverId', to_jsonb(@approver_id::text),
         'RejectionReason', to_jsonb(@rejection_reason::text),
-        'ResolvedAt', to_jsonb(@resolved_at))
+        'ResolvedAt', to_jsonb(@resolved_at),
+        'DecisionRequestId', to_jsonb(@decision_request_id::text),
+        'TargetRunState', to_jsonb(@target_run_state_name::text))
 WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND status = @pending_status;
 """;
             resolveCommand.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -282,19 +445,23 @@ WHERE workspace_id = @workspace_id AND approval_id = @approval_id AND status = @
             resolveCommand.Parameters.AddWithValue("rejection_reason",
                 decision == AgentApprovalStatus.Rejected ? (object?)rejectionReason ?? DBNull.Value : DBNull.Value);
             resolveCommand.Parameters.AddWithValue("resolved_at", now);
+            resolveCommand.Parameters.AddWithValue("decision_request_id", (object?)decisionRequestId ?? DBNull.Value);
+            resolveCommand.Parameters.AddWithValue("target_run_state",
+                targetRunState is { } trs ? (byte)trs : DBNull.Value);
+            resolveCommand.Parameters.AddWithValue("target_run_state_name",
+                targetRunState is { } trs2 ? trs2.ToString() : DBNull.Value);
             approvalAffected = await resolveCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (approvalAffected == 0)
         {
-            // 步骤 1 已确认记录存在且 runId 匹配，0 行 = status ≠ Pending（已被并发裁决）
-            var currentStatus = (AgentApprovalStatus)currentStatusByte;
+            // 步骤 1 已确认记录存在且 runId 匹配且 status=Pending，0 行 = 并发裁决
             return new ApprovalResolveResult
             {
                 Succeeded = false,
                 ApprovalResolved = false,
                 RunStateChanged = false,
-                FailureReason = $"审批已裁决，不可重复裁决：approval_id={approvalId}，当前状态={currentStatus}。"
+                FailureReason = $"审批被并发裁决：approval_id={approvalId}。"
             };
         }
 

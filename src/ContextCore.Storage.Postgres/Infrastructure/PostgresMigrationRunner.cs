@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
@@ -2264,11 +2265,17 @@ CREATE TABLE IF NOT EXISTS {agentRunApprovals} (
     reason text NULL,
     rejection_reason text NULL,
     approver_id text NULL,
+    decision_request_id text NULL,
+    target_run_state smallint NULL,
     created_at timestamptz NOT NULL,
     resolved_at timestamptz NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (workspace_id, approval_id)
 );
+
+-- 为已有 agent_run_approvals 表补充幂等键 / 目标状态列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）
+ALTER TABLE {agentRunApprovals} ADD COLUMN IF NOT EXISTS decision_request_id text NULL;
+ALTER TABLE {agentRunApprovals} ADD COLUMN IF NOT EXISTS target_run_state smallint NULL;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_approvals", "run_pending")} ON {agentRunApprovals} (workspace_id, run_id, status, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_run_approvals", "run")} ON {agentRunApprovals} (workspace_id, run_id, created_at ASC);
@@ -2408,12 +2415,149 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
         }
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandText = BuildMigrationSql(_connectionFactory.Options);
-        command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // 多实例互斥：pg_advisory_lock 保证同一时刻仅一个实例执行 DDL（HA 部署多节点同时启动时）。
+            await AcquireMigrationLockAsync(connection, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // 锁内复查：本实例等待期间另一实例可能已完成迁移。
+                var currentVersion = await GetAppliedVersionAsync(cancellationToken).ConfigureAwait(false);
+                if (currentVersion == SchemaVersion)
+                {
+                    return;
+                }
 
-        // 记录本次已应用的 schema 版本，幂等（ON CONFLICT DO NOTHING）。
+                // 版本化迁移步骤（Online / Backfill / ConstraintValidate 三阶段，幂等可重入）。
+                await ApplyPendingMigrationStepsAsync(connection, cancellationToken).ConfigureAwait(false);
+
+                // 基线累计批次（幂等 CREATE TABLE IF NOT EXISTS），带 DDL 计时。
+                var baselineStopwatch = Stopwatch.StartNew();
+                await using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = BuildMigrationSql(_connectionFactory.Options);
+                    command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
+                    await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+                baselineStopwatch.Stop();
+                PostgresMigrationMetrics.DdlDuration.Record(baselineStopwatch.Elapsed.TotalMilliseconds);
+
+                // 记录本次已应用的 schema 版本，幂等（ON CONFLICT DO NOTHING）。
+                await RecordSchemaVersionAsync(connection, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                try
+                {
+                    await ReleaseMigrationLockAsync(connection).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // 释放失败不掩盖主异常；连接关闭时 Postgres 会自动释放会话级 advisory lock。
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PostgresMigrationMetrics.FailedVersions.Add(
+                1,
+                new KeyValuePair<string, object?>("version", SchemaVersion));
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 获取迁移互斥锁（pg_advisory_lock）。锁键由 schema 名称 + 表名前缀经 FNV-1a 64 位哈希派生，
+    /// 掩掉最高位得到正 long 作为 Postgres bigint 键。等待耗时记入 LockWaitDuration 指标。
+    /// </summary>
+    private async Task AcquireMigrationLockAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
+        command.CommandText = "SELECT pg_advisory_lock(@lock_key);";
+        command.Parameters.AddWithValue("lock_key", ComputeMigrationLockKey());
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        stopwatch.Stop();
+        PostgresMigrationMetrics.LockWaitDuration.Record(stopwatch.Elapsed.TotalMilliseconds);
+    }
+
+    /// <summary>释放迁移互斥锁。使用 CancellationToken.None 确保释放总是完成，避免锁残留在池化连接上。</summary>
+    private async Task ReleaseMigrationLockAsync(NpgsqlConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
+        command.CommandText = "SELECT pg_advisory_unlock(@lock_key);";
+        command.Parameters.AddWithValue("lock_key", ComputeMigrationLockKey());
+        await command.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 按注册表顺序应用版本化迁移步骤。每个步骤先 PreCheck：
+    /// null → 跳过（已应用或目标表不存在）；非空 → 阻断性错误抛出；
+    /// 空字符串 → 按阶段顺序执行，每个阶段计时并记录 DdlDuration / StepsApplied 指标，
+    /// 全部阶段成功后把步骤写入 context_schema_migrations。
+    /// </summary>
+    private async Task ApplyPendingMigrationStepsAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
+        var options = _connectionFactory.Options;
+        foreach (var step in PostgresMigrationStepRegistry.Steps)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var preCheck = await step.PreCheckAsync(connection, options, cancellationToken).ConfigureAwait(false);
+            if (preCheck is null)
+            {
+                continue;
+            }
+            if (preCheck.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Postgres 迁移步骤 {step.MigrationId}（{step.FromSchemaVersion} → {step.ToSchemaVersion}）前置检查失败：{preCheck}");
+            }
+
+            foreach (var stage in step.Stages)
+            {
+                var stageStopwatch = Stopwatch.StartNew();
+                await step.ExecuteStageAsync(stage, connection, options, cancellationToken).ConfigureAwait(false);
+                stageStopwatch.Stop();
+                PostgresMigrationMetrics.DdlDuration.Record(stageStopwatch.Elapsed.TotalMilliseconds);
+                PostgresMigrationMetrics.StepsApplied.Add(
+                    1,
+                    new KeyValuePair<string, object?>("step", step.MigrationId));
+            }
+
+            await RecordMigrationStepAsync(connection, step, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>把已成功执行的版本化步骤写入 context_schema_migrations，幂等（ON CONFLICT DO UPDATE）。</summary>
+    private async Task RecordMigrationStepAsync(
+        NpgsqlConnection connection,
+        IPostgresMigrationStep step,
+        CancellationToken cancellationToken)
+    {
+        var migrationsTable = Infrastructure.PostgresNames.Table(_connectionFactory.Options, "context_schema_migrations");
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+            INSERT INTO {migrationsTable} (migration_id, schema_version, applied_at, checksum, metadata)
+            VALUES (@migration_id, @schema_version, @applied_at, @checksum, jsonb_build_object())
+            ON CONFLICT (migration_id) DO UPDATE
+            SET schema_version = EXCLUDED.schema_version,
+                applied_at = EXCLUDED.applied_at,
+                checksum = EXCLUDED.checksum;
+            """;
+        command.Parameters.AddWithValue("migration_id", step.MigrationId);
+        command.Parameters.AddWithValue("schema_version", step.ToSchemaVersion);
+        command.Parameters.AddWithValue("applied_at", DateTimeOffset.UtcNow);
+        command.Parameters.AddWithValue("checksum", $"step:{step.MigrationId}");
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>记录本次迁移应用的 schema 版本与基线 migration 行，幂等（ON CONFLICT DO NOTHING / DO UPDATE）。</summary>
+    private async Task RecordSchemaVersionAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
         var versionTable = Infrastructure.PostgresNames.Table(_connectionFactory.Options, "schema_versions");
         var migrationsTable = Infrastructure.PostgresNames.Table(_connectionFactory.Options, "context_schema_migrations");
         await using var versionCmd = connection.CreateCommand();
@@ -2442,6 +2586,24 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
         migrationCmd.Parameters.AddWithValue("applied_at", DateTimeOffset.UtcNow);
         migrationCmd.Parameters.AddWithValue("checksum", "db5-0-vector-index-provider");
         await migrationCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 计算迁移互斥锁键：FNV-1a 64 位哈希（schema 名称 + 表名前缀），掩掉最高位得到正 long。
+    /// 同一部署的多个实例必须收敛到同一键，因此只使用确定性输入，不依赖实例随机状态。
+    /// </summary>
+    private long ComputeMigrationLockKey()
+    {
+        var seed = $"{_connectionFactory.Options.SchemaName}|{_connectionFactory.Options.TablePrefix}";
+        const ulong offsetBasis = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+        var hash = offsetBasis;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(seed))
+        {
+            hash ^= b;
+            hash *= prime;
+        }
+        return unchecked((long)(hash & 0x7FFFFFFFFFFFFFFFUL));
     }
 
     /// <summary>查询数据库中已记录的最高 schema 版本，未迁移时返回 null。</summary>

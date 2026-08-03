@@ -262,7 +262,8 @@ SET retry_count = retry_count + 1,
     dead_letter_reason = CASE WHEN retry_count + 1 >= max_retry_count THEN @error_message ELSE NULL END
 WHERE event_id = @event_id
   AND lease_token = @lease_token
-  AND state = 'Processing';";
+  AND state = 'Processing'
+  AND lease_expires_at > clock_timestamp();";
         command.Parameters.AddWithValue("event_id", eventId);
         command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("error_message", errorMessage ?? string.Empty);
@@ -285,15 +286,17 @@ WHERE event_id = @event_id
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // CAS——仅当 lease_token 匹配且 state=Processing 时才续约。
+        // CAS——仅当 lease_token 匹配、state=Processing 且 lease 未过期时才续约。
         // 用 lease_token 替代原 lease_owner 校验更严格（owner 名可能复用，token 全局唯一）。
+        // lease_expires_at > clock_timestamp() 防止旧 Worker 在租约过期被抢占后越权续约。
         command.CommandText = $@"
 UPDATE {Table("learning_event_outbox")}
 SET lease_expires_at = @lease_expires_at,
     updated_at = @updated_at
 WHERE event_id = @event_id
   AND lease_token = @lease_token
-  AND state = 'Processing';";
+  AND state = 'Processing'
+  AND lease_expires_at > clock_timestamp();";
         command.Parameters.AddWithValue("event_id", eventId);
         command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("lease_expires_at", now.Add(leaseDuration));
@@ -302,19 +305,21 @@ WHERE event_id = @event_id
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlySet<string>> RenewLeaseBatchAsync(
+    public async Task<IReadOnlyDictionary<string, DateTimeOffset>> RenewLeaseBatchAsync(
         IReadOnlyList<(string EventId, string LeaseToken)> leases,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default)
     {
-        if (leases.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
+        if (leases.Count == 0) return new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
 
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now.Add(leaseDuration);
-        var renewed = new HashSet<string>(StringComparer.Ordinal);
+        var renewed = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
 
         // 批量 UPDATE——用 unnest 展开参数，一次 DB 往返续约所有 lease。
+        // 仅续约 state=Processing、lease_token 匹配且未过期（lease_expires_at > clock_timestamp()）的 lease；
+        // RETURNING 返回数据库确认的新 lease_expires_at，供 worker 以 DB 时间为准更新本地期限。
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -327,7 +332,8 @@ WHERE {Table("learning_event_outbox")}.event_id = t.event_id
   AND {Table("learning_event_outbox")}.lease_token = t.lease_token
   AND {Table("learning_event_outbox")}.state = 'Processing'
   AND {Table("learning_event_outbox")}.lease_expires_at > clock_timestamp()
-RETURNING {Table("learning_event_outbox")}.event_id;";
+RETURNING {Table("learning_event_outbox")}.event_id,
+          {Table("learning_event_outbox")}.lease_expires_at;";
 
         AddTextArray(command, "event_ids", leases.Select(l => l.EventId).ToArray());
         AddTextArray(command, "lease_tokens", leases.Select(l => l.LeaseToken).ToArray());
@@ -337,7 +343,7 @@ RETURNING {Table("learning_event_outbox")}.event_id;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            renewed.Add(reader.GetString(0));
+            renewed[reader.GetString(0)] = ReadTimestamp(reader, "lease_expires_at");
         }
         return renewed;
     }

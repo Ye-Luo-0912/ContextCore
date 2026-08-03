@@ -198,16 +198,22 @@ public sealed class ContextCoreControlRoomServiceModeTests
         {
             Assert.AreEqual(HttpMethod.Post, request.Method);
             Assert.AreEqual("/api/context/query", request.RequestUri?.AbsolutePath);
-            return Json(new[]
+            return Json(new ContextQueryPage
             {
-                new ContextItem
-                {
-                    Id = "query-1",
-                    WorkspaceId = "workspace-test",
-                    CollectionId = "collection-test",
-                    Type = "note",
-                    Content = "query result content"
-                }
+                Items =
+                [
+                    new ContextItem
+                    {
+                        Id = "query-1",
+                        WorkspaceId = "workspace-test",
+                        CollectionId = "collection-test",
+                        Type = "note",
+                        Content = "query result content"
+                    }
+                ],
+                HasMore = false,
+                NextCursor = null,
+                QueryRevision = "qrv1:test"
             });
         }))
         {
@@ -229,7 +235,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             });
             var rendered = ServiceOperationRenderer.RenderQueryResult(response);
 
-            Assert.AreEqual(1, response.Count);
+            Assert.AreEqual(1, response.Items.Count);
             StringAssert.Contains(rendered, "query-1");
         }
 

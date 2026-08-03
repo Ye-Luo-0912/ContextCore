@@ -63,15 +63,15 @@ public sealed class LearningMaterializationDispatcher : IHostedService, IAsyncDi
     /// <param name="logger">日志（null = 静默）。</param>
     public LearningMaterializationDispatcher(
         UtilityLedgerMaterializer? materializer,
-        ILearningEventOutboxStore? outboxStore,
-        LearningMaterializationOptions options,
-        LearningMaterializationMetrics metrics,
+        ILearningEventOutboxStore? outboxStore = null,
+        LearningMaterializationOptions? options = null,
+        LearningMaterializationMetrics? metrics = null,
         ILogger<LearningMaterializationDispatcher>? logger = null)
     {
         _materializer = materializer;
         _outboxStore = outboxStore;
         _options = options ?? new LearningMaterializationOptions();
-        _metrics = metrics;
+        _metrics = metrics ?? new LearningMaterializationMetrics();
         _logger = logger;
 
         _useOutbox = outboxStore is not null;

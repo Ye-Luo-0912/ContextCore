@@ -58,6 +58,12 @@ public sealed class ContextItem
 
     public double Importance { get; init; }
 
+    /// <summary>条目在查询结果中的来源排序：0 = FTS 命中，1 = ID 精确/前缀命中；非查询路径为 1。</summary>
+    public int SourceOrder { get; init; }
+
+    /// <summary>条目在查询结果中的原始检索相关度分（ts_rank_cd 原值，未放大）；非 FTS 命中为 0。</summary>
+    public double SearchRank { get; init; }
+
     public long Version { get; init; }
 
     public string? Checksum { get; init; }
@@ -111,9 +117,38 @@ public sealed class ContextQuery
     /// <summary>Keyset 游标（上一页末条）。设置后存储层从游标之后续取下一页并忽略 Skip；未设置时维持 OFFSET 分页。</summary>
     public ContextQueryCursor? After { get; init; }
 
+    /// <summary>
+    /// 不透明分页游标 token（由 <see cref="ContextQueryPage.NextCursor"/> 返回）。
+    /// 服务端解码为 <see cref="After"/> 后交给存储层续取；调用方不应解析或自行构造其内容。
+    /// 同时设置 Cursor 与 After 时以 Cursor 为准。
+    /// </summary>
+    public string? Cursor { get; init; }
+
     public bool IncludeContent { get; init; } = true;
 
     public bool IncludeDerived { get; init; } = true;
+
+    /// <summary>克隆当前查询并覆盖可选分页字段（Take / After / Cursor）。用于 keyset 分页续取。</summary>
+    public ContextQuery CloneWith(int? take = null, ContextQueryCursor? after = null, string? cursor = null)
+    {
+        return new ContextQuery
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            QueryText = QueryText,
+            Tags = Tags,
+            Types = Types,
+            ExcludedTypes = ExcludedTypes,
+            ExcludedIds = ExcludedIds,
+            Refs = Refs,
+            Skip = Skip,
+            Take = take ?? Take,
+            After = after ?? After,
+            Cursor = cursor ?? Cursor,
+            IncludeContent = IncludeContent,
+            IncludeDerived = IncludeDerived
+        };
+    }
 }
 
 /// <summary>
@@ -145,6 +180,31 @@ public sealed class ContextQueryResponse
     public IReadOnlyList<ContextItem> Items { get; init; } = Array.Empty<ContextItem>();
 
     public int Count { get; init; }
+}
+
+/// <summary>
+/// Keyset 分页查询响应契约。公开响应携带不透明 <see cref="NextCursor"/>，
+/// 调用方无需自行构造 Cursor（不再依赖 SourceOrder / TsRank / Importance / UpdatedAt / Id 内部排序字段）。
+/// </summary>
+public sealed class ContextQueryPage
+{
+    /// <summary>当前页条目（最多请求的 Take 条）。</summary>
+    public IReadOnlyList<ContextItem> Items { get; init; } = Array.Empty<ContextItem>();
+
+    /// <summary>
+    /// 下一页不透明游标 token（版本化 + 签名，调用方不可解析或篡改）。
+    /// HasMore=false 时为 null。
+    /// </summary>
+    public string? NextCursor { get; init; }
+
+    /// <summary>是否还有下一页（当前页是否被截断）。</summary>
+    public bool HasMore { get; init; }
+
+    /// <summary>
+    /// 查询修订标识：查询语义（workspace/collection/query text/过滤条件）的稳定哈希。
+    /// 语义变化后修订标识变化，调用方应重置游标重新开始分页。
+    /// </summary>
+    public string QueryRevision { get; init; } = string.Empty;
 }
 
 /// <summary>构建后供 LLM 或下游任务消费的结构化上下文包。</summary>

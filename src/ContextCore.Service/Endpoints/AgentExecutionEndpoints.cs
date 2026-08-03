@@ -41,6 +41,19 @@ internal static class AgentExecutionEndpoints
     /// </summary>
     private static readonly TimeSpan WatchdogInterval = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// 终态补读轮次上限。Run 进入终态后循环补读尾部事件，直至无新事件或达到本上限，
+    /// 防御病态路径（终态 Run 仍被追加事件）导致连接永不关闭的资源泄漏。
+    /// 每轮最多读取 100 条 → 上限覆盖 5000 条事件，远超正常 Run 的事件量。
+    /// </summary>
+    private const int MaxTerminalDrainRounds = 50;
+
+    /// <summary>管理员 raw 事件分页默认页大小。</summary>
+    private const int DefaultRawEventsPageSize = 200;
+
+    /// <summary>管理员 raw 事件分页服务端页大小上限（clamp 用户 limit，防止无界读取）。</summary>
+    private const int MaxRawEventsPageSize = 500;
+
     public static IEndpointRouteBuilder MapAgentExecutionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/agents/runs").WithTags(Tag);
@@ -341,11 +354,41 @@ internal static class AgentExecutionEndpoints
                     lastEventSequence = lastSentSequence;
                 }
 
-                // d. 检查 Run 是否已进入终态 → 关闭连接
+                // d. 检查 Run 是否已进入终态 → 终态补读后关闭连接
                 var currentRun = await runStore.GetAsync(workspaceId, id, streamCt)
                     .ConfigureAwait(false);
                 if (currentRun is null || AgentRunStateMachine.IsTerminalState(currentRun.State))
                 {
+                    // 终态补读循环：Run 进入终态时，尾部事件可能尚未送达——
+                    // 状态 CAS 与事件可能在同一批提交（终态判定先于事件落库），
+                    // 或单轮补读上限（100 条）内仍有剩余。反复补读直到无新事件，
+                    // 确保客户端收到完整事件流后再关闭连接。
+                    for (var drainRound = 0; drainRound < MaxTerminalDrainRounds; drainRound++)
+                    {
+                        int drained;
+                        try
+                        {
+                            drained = await StreamNewEventsAsync(
+                                writer, eventStore, workspaceId, id,
+                                lastEventSequence, streamCt).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (streamCt.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                        catch (Exception)
+                        {
+                            // 读取异常时跳出（避免无限重试占用连接）
+                            break;
+                        }
+
+                        if (drained < 0)
+                        {
+                            break;
+                        }
+                        lastEventSequence = drained;
+                    }
+
                     // 推送终态事件给客户端（确保客户端收到最终状态）
                     await WriteTerminalEventAsync(writer, currentRun, streamCt).ConfigureAwait(false);
                     break;
@@ -396,17 +439,20 @@ internal static class AgentExecutionEndpoints
         .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
-        // ── 管理员审计：读取原始事件流 ───────────────────────────────
+        // ── 管理员审计：读取原始事件流（游标分页）───────────────────────
         // SSE 公开端点隐藏敏感信息（Tool 参数、原始模型输出、异常堆栈），
         // 管理员需要完整 Payload 进行审计/调试时通过此端点获取原始 AgentRunEvent。
         // 需要 WorkspaceRole.Admin 角色（RBAC 强制校验未启用时自动放行，仅记录审计日志）。
+        // 分页参数：after = 上一页 NextSequence（省略或 -1 = 从头）；limit = 页大小（服务端 clamp 到上限）。
         group.MapGet("/{id}/events/raw", async Task<IResult> (
             string id,
             IAgentRunStore runStore,
             IAgentRunEventStore eventStore,
             IWorkspaceContextAccessor workspaceContextAccessor,
             HttpContext httpContext,
-            CancellationToken ct) =>
+            CancellationToken ct,
+            int? after = null,
+            int? limit = null) =>
         {
             var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, null);
 
@@ -418,16 +464,27 @@ internal static class AgentExecutionEndpoints
                     $"未找到 RunId='{id}'。");
             }
 
-            // 读取完整事件流（含 Payload / ContentHash / PrevChainHash，用于审计与哈希链校验）
-            var events = await eventStore.ReadAsync(workspaceId, id, 0, int.MaxValue, ct)
+            // 游标分页：多读 1 条判定 HasMore，服务端 clamp 页大小上限（替代旧 take=int.MaxValue 无界读取）。
+            var fromSequence = (after ?? -1) + 1;
+            var pageSize = Math.Clamp(limit ?? DefaultRawEventsPageSize, 1, MaxRawEventsPageSize);
+            var events = await eventStore.ReadAsync(workspaceId, id, fromSequence, pageSize + 1, ct)
                 .ConfigureAwait(false);
 
-            return Results.Ok(events);
+            var hasMore = events.Count > pageSize;
+            var items = hasMore ? events.Take(pageSize).ToArray() : events;
+            var nextSequence = hasMore && items.Count > 0 ? items[^1].Sequence : -1;
+
+            return Results.Ok(new AgentRunRawEventsPage
+            {
+                Items = items,
+                NextSequence = nextSequence,
+                HasMore = hasMore
+            });
         })
         .WithName("GetAgentRunRawEvents")
         .RequireWorkspaceRole(WorkspaceRole.Admin)
         .WithSummary("管理员审计：读取 Run 的原始事件流（含完整 Tool 参数、模型输出、异常堆栈）")
-        .Produces<IReadOnlyList<AgentRunEvent>>(StatusCodes.Status200OK)
+        .Produces<AgentRunRawEventsPage>(StatusCodes.Status200OK)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         // ── 提交 approval 决策 ───────────────────────────────────────
@@ -468,6 +525,11 @@ internal static class AgentExecutionEndpoints
             var decision = isReject
                 ? AgentApprovalStatus.Rejected
                 : AgentApprovalStatus.Approved;
+            // 决策推进的 Run 目标状态：批准 → PendingToolExecution（Actor 恢复时直接执行原 Tool）；
+            // 拒绝 → Failed（终态）。持久化用于幂等重试校验。
+            var targetRunState = isReject
+                ? AgentRunState.Failed
+                : AgentRunState.PendingToolExecution;
 
             // c：先构建审批事件（哈希链计算），供原子方法或回退路径使用。
             var lastSequence = await eventStore.GetLastSequenceAsync(workspaceId, id, ct)
@@ -501,7 +563,7 @@ internal static class AgentExecutionEndpoints
                         workspaceId, id, approvalId,
                         expectedRunState: run.State,
                         decision, approver, request.Reason,
-                        approvalEvent, ct).ConfigureAwait(false);
+                        approvalEvent, ct, request.DecisionRequestId, targetRunState).ConfigureAwait(false);
 
                     if (!result.Succeeded)
                     {
@@ -575,7 +637,8 @@ internal static class AgentExecutionEndpoints
                 try
                 {
                     await approvalStore.ResolveAsync(
-                        workspaceId, approvalId, decision, approver, request.Reason, ct)
+                        workspaceId, approvalId, decision, approver, request.Reason, ct,
+                        request.DecisionRequestId, targetRunState)
                         .ConfigureAwait(false);
                 }
                 catch (InvalidOperationException ex)
@@ -1107,6 +1170,12 @@ public sealed class ApprovalRequest
 
     /// <summary>审批者标识（可选；未提供时从认证上下文读取）。</summary>
     public string? Approver { get; init; }
+
+    /// <summary>
+    /// 客户端幂等键（可选）。重试提交同一决策时携带：与已存决策一致 → 幂等成功（200/202）；
+    /// 相反决策 → 409 冲突。未提供时退化为旧语义（已裁决即冲突）。
+    /// </summary>
+    public string? DecisionRequestId { get; init; }
 }
 
 /// <summary>裁决 Tool 对账记录请求（POST /runs/{runId}/reconciliations/{id}/resolve）。</summary>

@@ -65,10 +65,12 @@ public interface IRelationStore
 
     /// <summary>
     /// 批量邻居查询。一次返回多个种子节点各自的邻居列表，消除 BFS 逐节点往返。
-    /// 实现应在单次存储访问内完成（Postgres 单条 SQL；File/InMemory 单次内存扫描）。
+    /// 实现应在单次存储访问内完成（Postgres 批量 SQL；File/InMemory 单次内存扫描）。
     /// Take/Skip/MaxScan 仍为 per-seed 语义；<see cref="RelationDirection.Both"/> 方向下，
     /// 同时连接两个种子的边会出现在两者各自的结果集中（由调用者去重）。
-    /// 返回结果可只包含有邻居的种子；调用者应容忍某种子未出现在结果中（视为空邻居）。
+    /// 每个种子（去重、MaxSeeds 截断后）都返回一条结果，按 <see cref="RelationNeighborBatchResult.SeedOrdinal"/>
+    /// 升序；无邻居的种子返回空 <see cref="RelationNeighborBatchResult.Relations"/> 与诊断信息。
+    /// 全局边数预算按每种子最低配额分配，避免早期富种子耗尽预算导致后续种子无结果。
     /// </summary>
     [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(

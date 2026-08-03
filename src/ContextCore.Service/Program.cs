@@ -298,6 +298,62 @@ app.Lifetime.ApplicationStarted.Register(() =>
 	}
 });
 
+// ── Production Admission 校验（ProductionHA 强制项从 warning 升为 error）────────
+// 生产准入门：ProductionHA 下，任一强制项不满足（API Key / 显式 Workspace / RBAC /
+// Approval 与高风险 Tool 覆盖 / Tool Schema / 原生 Tool Calling 路由 / Model Slot /
+// Hydration 管道 / Worker 集群）时记录 Critical 并中止进程，防止半配置环境静默上线。
+// 在 ApplicationStarted 后执行，确保所有 Worker 已启动（worker-fleet-started 可判定）。
+if (app.Services.GetRequiredService<ContextCoreRuntimeOptions>().Profile == RuntimeProfile.ProductionHA)
+{
+	app.Lifetime.ApplicationStarted.Register(() =>
+	{
+		_ = RunProductionAdmissionAsync(app, logger);
+	});
+}
+
+// 生产准入校验执行器：任一强制项不满足时记录 Critical 并停止应用。
+static async Task RunProductionAdmissionAsync(WebApplication app, ILogger<Program> logger)
+{
+	try
+	{
+		var validator = app.Services.GetRequiredService<ProductionAdmissionValidator>();
+		var report = await validator.ValidateAsync(CancellationToken.None).ConfigureAwait(false);
+		var failed = report.Checks
+			.Where(c => c.Status == ProductionAdmissionCheckStatus.Fail)
+			.ToList();
+		foreach (var check in report.Checks)
+		{
+			if (check.Status == ProductionAdmissionCheckStatus.Fail)
+			{
+				logger.LogCritical("[ADMISSION] {CheckName}: {Message}", check.Name, check.Message);
+			}
+			else
+			{
+				logger.LogInformation("[ADMISSION] {CheckName}: {Message}", check.Name, check.Message);
+			}
+		}
+
+		if (!report.AllPassed)
+		{
+			logger.LogCritical(
+				"[FATAL] Production Admission 未通过（{FailedCount}/{Total}）。服务将中止。",
+				failed.Count, report.Checks.Count);
+			await app.StopAsync().ConfigureAwait(false);
+		}
+		else
+		{
+			logger.LogInformation(
+				"Production Admission 通过：{Total} 项强制项全部满足。",
+				report.Checks.Count);
+		}
+	}
+	catch (Exception ex)
+	{
+		logger.LogCritical(ex, "[FATAL] Production Admission 校验异常。服务将中止。");
+		await app.StopAsync().ConfigureAwait(false);
+	}
+}
+
 // ── PostgreSQL 启动连接、schema bootstrap 与 version 验证（fail-fast）────────────
 // 在 app.Run() 前先执行 SELECT 1 确认 Postgres 可达；然后（若 AutoBootstrap=true）应用幂等 baseline migration
 // 打破“缺 schema → 服务退出 → 无法访问迁移 HTTP 接口”自锁；最后校验 schema version 是否与代码期望一致。

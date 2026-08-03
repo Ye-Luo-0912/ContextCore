@@ -446,6 +446,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             : BuildAllocationDecisions(engineResult.SelectedEnvelopes, engineResult.DroppedEnvelopes);
         var rebuildSelectedCount = engineResult.Outcome.SelectedCount;
         var rebuildEstimatedTokens = engineResult.Outcome.EstimatedTokens;
+        var rebuildSections = engineResult.Outcome.Sections;
+        var rebuildBudgetExceededCount = engineResult.Outcome.BudgetExceededCount;
+        // 被 Hydration 或预算修复移出的候选（repair.HydrationDropped → DroppedEnvelopes）。
+        IReadOnlyList<ContextCandidateEnvelope> hydrationDroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>();
         if (repair is not null)
         {
             // fail-closed: mandatory/hard constraint hydration failure in AgentContext/Package must throw.
@@ -494,6 +498,24 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
             // Update EstimatedTokens with ExactTokenCount (recomputed from real content, not estimate)
             rebuildEstimatedTokens = repair.ExactTokenCount;
+
+            // Sections 重建：以修复后实际保留的 Selected 候选为准（水化前结果可能过时或为空）。
+            rebuildSections = RebuildSections(rebuildSelected);
+
+            // 被 Hydration 或预算修复移出的候选必须进入最终 DroppedEnvelopes——否则 DroppedCount 偏小、
+            // Utility Ledger 不记录真实淘汰项、ConflictSet 缺样本。
+            // 候选分区完整重建：Retained Selected（rebuildSelected）/ Hydration Failed Dropped /
+            // Budget Repair Dropped / Engine Dropped / Early Admission Dropped。
+            hydrationDroppedEnvelopes = BuildHydrationDroppedEnvelopes(engineResult.SelectedEnvelopes, repair);
+
+            // BudgetExceededCount 重算：预算修复裁剪（HydrationDropped 中非 hydration 失败的候选）
+            // 计入 budget 拦截；hydration 失败（EvidenceMissing）不计入 budget 拦截。
+            var budgetTrimmedCount = 0;
+            foreach (var droppedCandidateId in repair.HydrationDropped)
+            {
+                if (!repair.HydrationFailures.ContainsKey(droppedCandidateId)) budgetTrimmedCount++;
+            }
+            rebuildBudgetExceededCount += budgetTrimmedCount;
         }
 
         // Use Engine result directly, no second Allocate.
@@ -502,10 +524,15 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // If hydration occurred, rebuildAllocationDecisions already replaced by Repair.UpdatedAllocationDecisions.
         var allocationDecisions = rebuildAllocationDecisions;
 
-        // Step 9：合并 EarlyRejected + Engine.DroppedEnvelopes（Blocker-6）
+        // Step 9：合并 EarlyRejected + Engine.DroppedEnvelopes（Blocker-6），
+        // 再追加 Hydration/Budget Repair Dropped——重建完整候选分区。
         var finalDropped = earlyRejected.Count == 0
             ? engineResult.DroppedEnvelopes
             : CombineDroppedWithEarlyRejected(engineResult.DroppedEnvelopes, earlyRejected, partition.RejectReasons);
+        if (hydrationDroppedEnvelopes.Count > 0)
+        {
+            finalDropped = AppendDroppedEnvelopes(finalDropped, hydrationDroppedEnvelopes);
+        }
 
         // 合并 AllocationDecisions：补建 EarlyRejected 候选的 allocation decision
         var finalAllocationDecisions = earlyRejected.Count == 0
@@ -579,9 +606,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 DroppedCount = finalDropped.Count,
                 EstimatedTokens = rebuildEstimatedTokens,
                 TokenBudget = engineResult.Outcome.TokenBudget,
-                Sections = engineResult.Outcome.Sections,
+                Sections = rebuildSections,
                 SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,
-                BudgetExceededCount = engineResult.Outcome.BudgetExceededCount,
+                BudgetExceededCount = rebuildBudgetExceededCount,
                 // + 保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
                 // 并补充 Runtime 级 diagnostics（earlyAdmission.rejectedCount）
                 Diagnostics = mergedDiagnostics
@@ -998,6 +1025,76 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var outputs = results.Select(r => r.Item1).ToList();
         var reports = results.Select(r => r.Item2).ToList();
         return (outputs, reports);
+    }
+
+    /// <summary>
+    /// 为被 Hydration 或预算修复移出的候选构建 DroppedEnvelopes。
+    /// 分类：hydration 失败（缺少正文/证据）→ EvidenceMissing；预算修复裁剪 → TokenBudgetExceeded。
+    /// 与 AllocationDecisions（repair.UpdatedAllocationDecisions）的 reason code 保持一致。
+    /// 按 repair.HydrationDropped 顺序排列（确定性）。
+    /// </summary>
+    private static IReadOnlyList<ContextCandidateEnvelope> BuildHydrationDroppedEnvelopes(
+        IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes,
+        HydrationRepairDecision repair)
+    {
+        var droppedIdSet = new HashSet<string>(repair.HydrationDropped, StringComparer.Ordinal);
+        var result = new List<ContextCandidateEnvelope>(repair.HydrationDropped.Count);
+        foreach (var envelope in selectedEnvelopes)
+        {
+            if (!droppedIdSet.Contains(envelope.CandidateId)) continue;
+
+            var isHydrationFailure = repair.HydrationFailures.ContainsKey(envelope.CandidateId);
+            result.Add(envelope with
+            {
+                Safety = envelope.Safety with
+                {
+                    PassesSafetyGate = false,
+                    BlockReasonCode = isHydrationFailure
+                        ? CandidateDecisionReasonCode.EvidenceMissing
+                        : CandidateDecisionReasonCode.TokenBudgetExceeded,
+                    BlockReasonDetail = isHydrationFailure
+                        ? "hydration failed: " + repair.HydrationFailures[envelope.CandidateId]
+                        : "budget repair trimmed after hydration"
+                }
+            });
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 将补充 dropped envelope 追加到基础集合，按 CanonicalKey 去重（候选只出现一次）。
+    /// </summary>
+    private static IReadOnlyList<ContextCandidateEnvelope> AppendDroppedEnvelopes(
+        IReadOnlyList<ContextCandidateEnvelope> baseDropped,
+        IReadOnlyList<ContextCandidateEnvelope> additions)
+    {
+        if (additions.Count == 0) return baseDropped;
+
+        var combined = new List<ContextCandidateEnvelope>(baseDropped.Count + additions.Count);
+        combined.AddRange(baseDropped);
+
+        var existingKeys = new HashSet<CanonicalCandidateKey>(baseDropped.Select(e => e.CanonicalKey));
+        foreach (var envelope in additions)
+        {
+            if (existingKeys.Add(envelope.CanonicalKey))
+            {
+                combined.Add(envelope);
+            }
+        }
+        return combined;
+    }
+
+    /// <summary>
+    /// 以修复后实际保留的 Selected 候选重建 Outcome.Sections（去重 + 确定序）。
+    /// </summary>
+    private static IReadOnlyList<string> RebuildSections(IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes)
+    {
+        var sections = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var envelope in selectedEnvelopes)
+        {
+            sections.Add(ResolveSectionForAllocation(envelope));
+        }
+        return sections.OrderBy(s => s, StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>

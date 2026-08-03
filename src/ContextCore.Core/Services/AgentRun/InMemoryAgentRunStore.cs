@@ -209,6 +209,8 @@ public sealed class InMemoryAgentRunStore : IAgentRunStore
     public ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(
         AgentRunState state,
         int take = 100,
+        DateTimeOffset? afterUpdatedAt = null,
+        string? afterRunId = null,
         CancellationToken cancellationToken = default)
     {
         if (take < 0)
@@ -216,9 +218,20 @@ public sealed class InMemoryAgentRunStore : IAgentRunStore
             take = 100;
         }
 
-        var results = _runs.Values
-            .Where(r => r.State == state)
-            .OrderBy(r => r.CreatedAt)
+        IEnumerable<AgentRun> query = _runs.Values.Where(r => r.State == state);
+
+        // keyset 游标：从 (UpdatedAt, RunId) 之后续取（对齐 Postgres 的 keyset 分页语义）
+        if (afterUpdatedAt is not null && !string.IsNullOrEmpty(afterRunId))
+        {
+            var cursorUpdatedAt = afterUpdatedAt.Value;
+            query = query.Where(r => r.UpdatedAt > cursorUpdatedAt
+                || (r.UpdatedAt == cursorUpdatedAt
+                    && string.CompareOrdinal(r.RunId, afterRunId) > 0));
+        }
+
+        var results = query
+            .OrderBy(r => r.UpdatedAt)
+            .ThenBy(r => r.RunId, StringComparer.Ordinal)
             .Take(take)
             .ToList();
         return ValueTask.FromResult<IReadOnlyList<AgentRun>>(results);

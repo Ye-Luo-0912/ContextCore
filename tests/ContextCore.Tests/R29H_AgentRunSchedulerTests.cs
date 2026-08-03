@@ -393,8 +393,11 @@ public sealed class R29H_AgentRunSchedulerTests
             => Inner.UpdateAsync(run, cancellationToken);
         public ValueTask<IReadOnlyList<AgentRun>> ListBySessionAsync(string workspaceId, string sessionId, CancellationToken cancellationToken = default)
             => Inner.ListBySessionAsync(workspaceId, sessionId, cancellationToken);
-        public ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(AgentRunState state, int take = 100, CancellationToken cancellationToken = default)
-            => Inner.ListByStateAsync(state, take, cancellationToken);
+        public ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(
+            AgentRunState state, int take = 100,
+            DateTimeOffset? afterUpdatedAt = null, string? afterRunId = null,
+            CancellationToken cancellationToken = default)
+            => Inner.ListByStateAsync(state, take, afterUpdatedAt, afterRunId, cancellationToken);
     }
 
     /// <summary>transport stub：首次调用阻塞在 TCS，直到测试主动 Release。</summary>

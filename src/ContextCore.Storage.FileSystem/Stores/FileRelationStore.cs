@@ -287,7 +287,8 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
 
     /// <summary>
     /// 批量邻居查询。单次读文件 + 单次内存扫描，按种子 ID 分桶；
-    /// per-seed 排序 + MaxScan + Skip + Take。
+    /// per-seed 排序 + MaxScan + Skip + Take；全局预算按每种子最低配额两阶段分配，
+    /// 结果按种子序返回且每个种子都带诊断（ScannedCount / CandidateCountBeforeGlobalLimit / SkippedByGlobalBudget）。
     /// </summary>
     public async Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
         RelationNeighborBatchQuery query,
@@ -393,53 +394,105 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
             }
         }
 
-        var results = new List<RelationNeighborBatchResult>(seeds.Count);
-        var totalRead = 0;
-        foreach (var seed in seeds)
+        // 每种子最低配额 = floor(GlobalEdgeLimit / 种子数)，至少 1。
+        // 阶段 1 保证每个种子扫描到配额内的候选；阶段 2 把余额按种子序再分配（每种子至多补到 maxScan 窗口）。
+        // 由于 seeds * floor ≤ global，正常情形下预算永不提前耗尽 → 后续种子不再被早期富种子饿死。
+        var seedCount = seeds.Count;
+        var perSeedFloor = Math.Max(1, globalEdgeLimit / seedCount);
+        var phase1Cap = Math.Min(maxScan, perSeedFloor);
+
+        // 排序窗口按需物化（仅对实际交付的种子排序；被跳过/无候选的种子不浪费排序）。
+        var windows = new ContextRelation[seedCount][];
+        ContextRelation[] WindowOf(int ordinal)
         {
-            // 先排序并物化，便于检测 MaxScan 截断。
-            var sorted = buckets[seed]
-                .OrderByDescending(r => r.Weight)
-                .ThenByDescending(r => r.Confidence)
-                .ThenByDescending(r => r.CreatedAt)
-                .ToArray();
-            var truncated = sorted.Length > maxScan;
+            var window = windows[ordinal];
+            if (window is null)
+            {
+                window = buckets[seeds[ordinal]]
+                    .OrderByDescending(r => r.Weight)
+                    .ThenByDescending(r => r.Confidence)
+                    .ThenByDescending(r => r.CreatedAt)
+                    .Take(maxScan)
+                    .ToArray();
+                windows[ordinal] = window;
+            }
+            return window;
+        }
+
+        var delivered = new int[seedCount];
+        var totalRead = 0;
+        var skippedStart = -1;
+
+        // 阶段 1：每种子最低配额，按种子序发放（对齐 Postgres 阶段 1 LATERAL LIMIT 语义）。
+        for (var ordinal = 0; ordinal < seedCount; ordinal++)
+        {
             if (totalRead >= globalEdgeLimit)
             {
-                // 全局预算已耗尽，后续种子不再返回结果（对齐 Postgres 外层 LIMIT @global_limit 语义）。
+                skippedStart = ordinal;
                 break;
             }
+            var window = WindowOf(ordinal);
+            var take = Math.Min(phase1Cap, window.Length);
+            delivered[ordinal] = take;
+            totalRead += take;
+        }
 
-            // per-seed 扫描窗口（对齐 Postgres LATERAL 顺序：先 per-seed 扫描上限 → 全局上限 → Skip/Take 分页）。
-            var scanWindow = sorted.Length > maxScan ? sorted.Take(maxScan).ToArray() : sorted;
+        // 阶段 2：余额按种子序再分配（每种子至多补到 maxScan 窗口；对齐 Postgres OFFSET+LIMIT 语义）。
+        if (totalRead < globalEdgeLimit)
+        {
             var remaining = globalEdgeLimit - totalRead;
-            ContextRelation[] window;
-            if (scanWindow.Length >= remaining)
+            for (var ordinal = 0; ordinal < seedCount && remaining > 0; ordinal++)
             {
-                // 预算在该种子窗口内耗尽（含恰好用尽）：只发剩余行数，并保守标记 Truncated
-                // （Postgres 无法区分"桶恰好读完"与"还有更多"，此处复刻同一保守语义保证跨存储一致）。
-                window = scanWindow.Take(remaining).ToArray();
-                truncated = true;
+                var window = WindowOf(ordinal);
+                var extra = Math.Min(remaining, window.Length - delivered[ordinal]);
+                if (extra > 0)
+                {
+                    delivered[ordinal] += extra;
+                    remaining -= extra;
+                }
+            }
+        }
+
+        var results = new List<RelationNeighborBatchResult>(seedCount);
+        for (var ordinal = 0; ordinal < seedCount; ordinal++)
+        {
+            var seed = seeds[ordinal];
+            var bucketCount = buckets[seed].Count;
+            var window = windows[ordinal];
+            var deliveredCount = delivered[ordinal];
+
+            ContextRelation[] paged;
+            if (deliveredCount > 0 && window is not null)
+            {
+                paged = window
+                    .Take(deliveredCount)
+                    .Skip(effectiveSkip)
+                    .Take(effectiveTake)
+                    .ToArray();
             }
             else
             {
-                window = scanWindow;
+                paged = Array.Empty<ContextRelation>();
             }
-            totalRead += window.Length;
 
-            var paged = window
-                .Skip(effectiveSkip)
-                .Take(effectiveTake)
-                .ToArray();
-            if (paged.Length > 0)
+            // 跳过信号：全局预算在该种子被扫描前即已耗尽（仅 GlobalEdgeLimit < 种子数 时出现）。
+            // 空桶种子（无候选）不算被跳过。
+            var skipped = skippedStart >= 0 && ordinal >= skippedStart && bucketCount > 0;
+
+            // 截断信号：候选数超过 per-seed 扫描窗口，或全局预算在交付完成前耗尽。
+            var truncated = bucketCount > maxScan
+                || deliveredCount < Math.Min(bucketCount, maxScan);
+
+            results.Add(new RelationNeighborBatchResult
             {
-                results.Add(new RelationNeighborBatchResult
-                {
-                    ItemId = seed,
-                    Relations = paged,
-                    Truncated = truncated
-                });
-            }
+                ItemId = seed,
+                SeedOrdinal = ordinal,
+                Relations = paged,
+                Truncated = truncated,
+                SkippedByGlobalBudget = skipped,
+                ScannedCount = deliveredCount,
+                CandidateCountBeforeGlobalLimit = Math.Min(bucketCount, maxScan)
+            });
         }
 
         return results;

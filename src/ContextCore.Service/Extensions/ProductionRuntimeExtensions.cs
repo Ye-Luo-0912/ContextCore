@@ -160,6 +160,17 @@ internal static class ProductionRuntimeExtensions
         // 注册 ProductionRuntimeWorkerRegistry 和 ProductionRuntimeReadinessService
         services.AddSingleton(workerRegistry);
         services.TryAddSingleton<ProductionRuntimeReadinessService>();
+
+        // 注册生产准入校验器（ProductionHA 强制项从 warning 升为 error）。
+        // SecurityOptions 在 Program.cs 注册为具体类型单例；测试容器未注册时回退到默认值。
+        services.TryAddSingleton<ProductionAdmissionValidator>(sp =>
+            new ProductionAdmissionValidator(
+                sp,
+                sp.GetRequiredService<ContextCoreRuntimeOptions>(),
+                sp.GetRequiredService<ProductionRuntimeWorkerRegistry>(),
+                sp.GetService<SecurityOptions>() ?? new SecurityOptions(),
+                sp.GetService<ILogger<ProductionAdmissionValidator>>()
+                    ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProductionAdmissionValidator>.Instance));
     }
 
     // ── Development profile ─────────────────────────────────────────────

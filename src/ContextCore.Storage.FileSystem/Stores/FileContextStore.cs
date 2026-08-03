@@ -13,7 +13,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 原子替换只保证单文件完整，不保证 content+metadata 组成同一快照。
 /// collection 级 metadata cache 带 mtime 双重校验和容量上限。
 /// </remarks>
-public sealed class FileContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup
+public sealed class FileContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextQueryPageStore
 {
     private const int MaxCacheEntries = 256;
 
@@ -304,6 +304,45 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
         {
             _gate.Release();
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<ContextQueryPageResult> QueryPageAsync(
+        ContextQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        // 取 Take + 1 条判定 HasMore；返回前 Take 条，下一页游标取自末条排序键。
+        var take = query.Take > 0 ? query.Take : 50;
+        var fetchQuery = query.CloneWith(take: take + 1);
+        var items = (await QueryAsync(fetchQuery, cancellationToken).ConfigureAwait(false)).ToList();
+
+        var hasMore = items.Count > take;
+        var pageItems = hasMore ? items.Take(take).ToList() : items;
+
+        if (pageItems.Count == 0)
+        {
+            return new ContextQueryPageResult { Items = pageItems, HasMore = false, NextCursor = null };
+        }
+
+        // 文件存储按 (updated_at, id) 排序——等价于 ID 命中源（SourceOrder=1，无 ts_rank）。
+        var last = pageItems[^1];
+        var nextCursor = new ContextQueryCursor
+        {
+            SourceOrder = 1,
+            TsRank = 0,
+            Importance = last.Importance,
+            UpdatedAt = last.UpdatedAt,
+            Id = last.Id
+        };
+
+        return new ContextQueryPageResult
+        {
+            Items = pageItems,
+            HasMore = hasMore,
+            NextCursor = hasMore ? nextCursor : null
+        };
     }
 
     public async Task DeleteAsync(

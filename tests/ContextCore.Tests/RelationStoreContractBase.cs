@@ -664,7 +664,7 @@ public abstract class RelationStoreContractBase
     }
 
     [TestMethod]
-    public async Task QueryNeighborsBatch_NoMatches_ReturnsEmpty()
+    public async Task QueryNeighborsBatch_NoMatches_ReturnsDiagnosticRow()
     {
         var store = await PrepareAsync(MakeRelation("r1", "a", "b", "related_to"));
         try
@@ -678,7 +678,14 @@ public abstract class RelationStoreContractBase
                 Take = 100
             }, CancellationToken.None);
 
-            Assert.AreEqual(0, results.Count, "无邻居的种子不应出现在结果中（contract: 调用者容忍缺失）");
+            Assert.AreEqual(1, results.Count, "无邻居的种子仍应返回诊断行（空 Relations + 诊断字段）");
+            Assert.AreEqual("nonexistent-seed", results[0].ItemId);
+            Assert.AreEqual(0, results[0].SeedOrdinal);
+            Assert.AreEqual(0, results[0].Relations.Count, "无候选时 Relations 应为空");
+            Assert.IsFalse(results[0].SkippedByGlobalBudget, "无候选不等于被预算跳过");
+            Assert.IsFalse(results[0].Truncated, "无候选不应标记截断");
+            Assert.AreEqual(0, results[0].ScannedCount);
+            Assert.AreEqual(0, results[0].CandidateCountBeforeGlobalLimit);
         }
         finally
         {
@@ -911,12 +918,15 @@ public abstract class RelationStoreContractBase
     // ── 全局边数预算（GlobalEdgeLimit）下推语义 ──────────────────────────
 
     /// <summary>
-    /// GlobalEdgeLimit 跨种子累计截断：3 个种子各 4 条出边（weight 1-4，降序），
-    /// 全局上限 5 → 种子 A 全量 4 条，种子 B 只返回 1 条（weight 4）并标记 Truncated，种子 C 无结果。
-    /// 三个 store 必须一致（Postgres 外层 LIMIT / InMemory·FileSystem 遍历累计）。
+    /// GlobalEdgeLimit 跨种子公平分配（每种子最低配额 + 余额按序再分配）：
+    /// 3 个种子各 4 条出边（weight 1-4，降序），全局上限 5 → 每种子最低配额 floor(5/3)=1，
+    /// 余额 2 按种子序再分配：种子 A 补满至 3 条，种子 B/C 各 1 条。
+    /// 每个种子都有结果（后续种子不再被早期富种子饿死），总返回 5 条，
+    /// 且每个种子都标记 Truncated（无一种子全量交付，Relations 不完整）。
+    /// 三个 store 必须一致（Postgres 两阶段 LATERAL / InMemory·FileSystem 两阶段遍历）。
     /// </summary>
     [TestMethod]
-    public async Task QueryNeighborsBatch_GlobalEdgeLimit_TruncatesAcrossSeeds()
+    public async Task QueryNeighborsBatch_GlobalEdgeLimit_FairShareNoStarvation()
     {
         var relations = new List<ContextRelation>();
         foreach (var seed in new[] { "seedA", "seedB", "seedC" })
@@ -939,14 +949,25 @@ public abstract class RelationStoreContractBase
                 GlobalEdgeLimit = 5
             }, CancellationToken.None);
 
+            Assert.AreEqual(3, batch.Count, "每个种子都应有结果（公平配额，不再饿死后继种子）");
+            Assert.AreEqual(0, batch[0].SeedOrdinal, "结果应按 SeedOrdinal 升序返回");
+            Assert.AreEqual(1, batch[1].SeedOrdinal);
+            Assert.AreEqual(2, batch[2].SeedOrdinal);
+
             var bySeed = batch.ToDictionary(b => b.ItemId, b => b, StringComparer.OrdinalIgnoreCase);
-            Assert.AreEqual(2, batch.Count, "全局预算耗尽后 seedC 不应有结果");
-            Assert.AreEqual(4, bySeed["seedA"].Relations.Count, "seedA 应全量返回 4 条");
-            Assert.IsFalse(bySeed["seedA"].Truncated, "seedA 未触及全局上限，不应截断");
-            Assert.AreEqual(1, bySeed["seedB"].Relations.Count, "seedB 应只剩 1 条预算");
-            Assert.AreEqual(4.0, bySeed["seedB"].Relations[0].Weight, "seedB 只返回 weight 最高的 1 条");
-            Assert.IsTrue(bySeed["seedB"].Truncated, "预算在 seedB 窗口内耗尽，应标记 Truncated");
+            Assert.AreEqual(3, bySeed["seedA"].Relations.Count, "种子 A 应得配额 1 + 再分配 2 = 3 条");
+            Assert.AreEqual(1, bySeed["seedB"].Relations.Count, "种子 B 应得配额 1 条（余额在 A 用尽）");
+            Assert.AreEqual(1, bySeed["seedC"].Relations.Count, "种子 C 应得配额 1 条（余额在 A 用尽）");
+            Assert.AreEqual(4.0, bySeed["seedA"].Relations[0].Weight, "种子内仍按 weight 降序");
+            Assert.AreEqual(3.0, bySeed["seedA"].Relations[1].Weight, "种子 A 第二条应为 weight 3");
+            Assert.IsTrue(bySeed["seedA"].Truncated, "种子 A 有 4 条候选但只交付 3 条，应标记 Truncated");
+            Assert.IsTrue(bySeed["seedB"].Truncated, "种子 B 有 4 条候选但只交付 1 条，应标记 Truncated");
+            Assert.IsTrue(bySeed["seedC"].Truncated, "种子 C 有 4 条候选但只交付 1 条，应标记 Truncated");
+            Assert.IsFalse(batch.Any(b => b.SkippedByGlobalBudget), "GlobalEdgeLimit(5) ≥ 种子数(3)，不应有种子被跳过");
             Assert.AreEqual(5, batch.Sum(b => b.Relations.Count), "全局返回边数不得超过 GlobalEdgeLimit");
+            Assert.AreEqual(5, batch.Sum(b => b.ScannedCount), "ScannedCount 合计应等于全局预算");
+            Assert.IsTrue(batch.All(b => b.CandidateCountBeforeGlobalLimit >= b.ScannedCount),
+                "全局截断前的候选数不得小于实际扫描数");
         }
         finally
         {
@@ -956,8 +977,8 @@ public abstract class RelationStoreContractBase
 
     /// <summary>
     /// GlobalEdgeLimit 与 per-seed MaxScan 叠加：每种子 4 条候选、扫描窗口 2（weight 4、3），
-    /// 全局上限 4 → 种子 A 返回窗口 2 条（per-seed 截断，Truncated=true）；种子 B 恰好用尽剩余 2 条
-    /// （保守标记 Truncated=true）；种子 C 无结果。总返回 4 条。
+    /// 全局上限 4 → 每种子最低配额 floor(4/3)=1；种子 A 再分配 1 条后窗口恰好用尽（2 条，per-seed 截断），
+    /// 种子 B/C 各 1 条（余额在 A 用尽）。三个种子都有结果，总返回 4 条，全部标记 Truncated。
     /// </summary>
     [TestMethod]
     public async Task QueryNeighborsBatch_GlobalEdgeLimit_CombinesWithMaxScan()
@@ -985,11 +1006,13 @@ public abstract class RelationStoreContractBase
             }, CancellationToken.None);
 
             var bySeed = batch.ToDictionary(b => b.ItemId, b => b, StringComparer.OrdinalIgnoreCase);
-            Assert.AreEqual(2, batch.Count, "全局预算耗尽后 seedC 不应有结果");
-            Assert.AreEqual(2, bySeed["seedA"].Relations.Count, "seedA 应返回扫描窗口内的 2 条");
-            Assert.IsTrue(bySeed["seedA"].Truncated, "seedA 候选数(4) > MaxScan(2)，per-seed 截断应标记 Truncated");
-            Assert.AreEqual(2, bySeed["seedB"].Relations.Count, "seedB 应恰好用尽剩余 2 条");
-            Assert.IsTrue(bySeed["seedB"].Truncated, "seedB 恰好消费到全局上限，应保守标记 Truncated");
+            Assert.AreEqual(3, batch.Count, "每个种子都应有结果（公平配额）");
+            Assert.AreEqual(2, bySeed["seedA"].Relations.Count, "种子 A 应返回扫描窗口内的 2 条（配额 1 + 再分配 1）");
+            Assert.IsTrue(bySeed["seedA"].Truncated, "种子 A 候选数(4) > MaxScan(2)，per-seed 截断应标记 Truncated");
+            Assert.AreEqual(1, bySeed["seedB"].Relations.Count, "种子 B 应仅得配额 1 条");
+            Assert.IsTrue(bySeed["seedB"].Truncated, "种子 B 有 4 条候选但只交付 1 条，应标记 Truncated");
+            Assert.AreEqual(1, bySeed["seedC"].Relations.Count, "种子 C 应仅得配额 1 条");
+            Assert.IsTrue(bySeed["seedC"].Truncated, "种子 C 有 4 条候选但只交付 1 条，应标记 Truncated");
             Assert.AreEqual(4, batch.Sum(b => b.Relations.Count), "全局返回边数不得超过 GlobalEdgeLimit");
         }
         finally

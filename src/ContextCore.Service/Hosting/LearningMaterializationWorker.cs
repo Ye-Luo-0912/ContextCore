@@ -232,9 +232,10 @@ public sealed class LearningMaterializationWorker : BackgroundService
             // leaseCts 由协调器在检测到租约丢失时 cancel，信号 worker 中止该 record 处理。
             // 如果 record 未被消费（Channel 关闭/异常），下面的 try-catch 会调用 RemoveLease 清理。
             var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            // 本地记录 DB 确认的 ExpiresAt——续约异常时不更新，
-            // DB 不可达超过 LeaseDuration 后过期 → watchdog cancel leaseCts → linked CTS 取消 MaterializeAsync。
-            var confirmedExpiresAt = DateTimeOffset.UtcNow.Add(leaseDuration);
+            // 本地记录 DB 确认的 ExpiresAt——AcquirePendingAsync 的 RETURNING 返回数据库写入的实际到期时间，
+            // 不重新以应用时钟估算（避免应用时钟与 DB clock_timestamp() 偏差导致 watchdog 误判）。
+            // 续约异常时不更新；DB 不可达超过 LeaseDuration 后过期 → watchdog cancel leaseCts → linked CTS 取消 MaterializeAsync。
+            var confirmedExpiresAt = record.LeaseExpiresAt ?? DateTimeOffset.UtcNow.Add(leaseDuration);
             _activeLeases[record.EventId] = (record.LeaseToken, leaseCts, confirmedExpiresAt);
 
             try
@@ -445,7 +446,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
             }
             if (renewals.Count == 0) continue;
 
-            IReadOnlySet<string> renewed;
+            IReadOnlyDictionary<string, DateTimeOffset> renewed;
             try
             {
                 renewed = await outboxStore.RenewLeaseBatchAsync(renewals, leaseDuration, cancellationToken)
@@ -463,16 +464,16 @@ public sealed class LearningMaterializationWorker : BackgroundService
                 continue;
             }
 
-            // 续约成功——更新本地确认的 ExpiresAt；未续约且未过期的（lease 被抢占）→ cancel 该 record 的 CTS。
-            var newConfirmedExpiresAt = DateTimeOffset.UtcNow.Add(leaseDuration);
+            // 续约成功——以数据库 RETURNING 返回的新 LeaseExpiresAt 更新本地确认期限（不重新以应用时钟估算）；
+            // 未续约且未过期的（lease 被抢占）→ cancel 该 record 的 CTS。
             foreach (var kv in snapshot)
             {
-                if (renewed.Contains(kv.Key))
+                if (renewed.TryGetValue(kv.Key, out var confirmedExpiresAt))
                 {
-                    // 续约成功——更新 ConfirmedExpiresAt 为本次确认的过期时间。
+                    // 续约成功——更新 ConfirmedExpiresAt 为数据库确认的过期时间。
                     if (_activeLeases.TryGetValue(kv.Key, out var current))
                     {
-                        _activeLeases[kv.Key] = (current.LeaseToken, current.Cts, newConfirmedExpiresAt);
+                        _activeLeases[kv.Key] = (current.LeaseToken, current.Cts, confirmedExpiresAt);
                     }
                 }
                 else if (now < kv.Value.ConfirmedExpiresAt)

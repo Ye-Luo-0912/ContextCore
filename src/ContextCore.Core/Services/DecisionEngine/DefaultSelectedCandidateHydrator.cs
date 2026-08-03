@@ -357,13 +357,18 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             if (isDropped)
             {
                 hydrationDropped.Add(cid);
+                // 与 Runtime 重建 DroppedEnvelopes 的分类一致：
+                // hydration 失败（缺正文/证据）→ EvidenceMissing；预算修复裁剪 → TokenBudgetExceeded。
+                var isHydrationFailure = hydrationFailures.ContainsKey(cid);
                 updatedDecisions.Add(new CandidateAllocationDecision
                 {
                     CandidateKey = key,
                     Section = section,
                     IncludedTokens = 0,
                     IsTruncated = false,
-                    ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+                    ReasonCode = isHydrationFailure
+                        ? CandidateDecisionReasonCode.EvidenceMissing
+                        : CandidateDecisionReasonCode.TokenBudgetExceeded
                 });
             }
             else

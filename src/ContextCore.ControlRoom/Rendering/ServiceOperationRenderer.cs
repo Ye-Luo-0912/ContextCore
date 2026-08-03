@@ -25,12 +25,14 @@ public static class ServiceOperationRenderer
         return builder.ToString();
     }
 
-    public static string RenderQueryResult(ContextQueryResponse response)
+    public static string RenderQueryResult(ContextQueryPage response)
     {
         var builder = new StringBuilder();
         builder.AppendLine("Service Query");
         builder.AppendLine("=============");
-        builder.AppendLine($"Count: {response.Count}");
+        builder.AppendLine($"Count: {response.Items.Count}");
+        builder.AppendLine($"HasMore: {response.HasMore}");
+        builder.AppendLine($"QueryRevision: {response.QueryRevision ?? "(none)"}");
 
         foreach (var item in response.Items.Take(10))
         {

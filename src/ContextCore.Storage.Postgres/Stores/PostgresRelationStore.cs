@@ -438,20 +438,23 @@ LIMIT @take OFFSET @skip;
     }
 
     /// <summary>
-    /// / P7 / 批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
-    /// 每个种子独立扫描 + 排序 + LIMIT @per_seed_scan，命中 (workspace_id, source_id) / (workspace_id, target_id) 索引。
+    /// 批量邻居查询。使用 CROSS JOIN LATERAL 实现 per-seed TopN，
+    /// 每个种子独立扫描 + 排序 + LIMIT，命中 (workspace_id, source_id) / (workspace_id, target_id) 索引。
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item>per-seed LIMIT @per_seed_scan 替代旧 ANY(@item_ids) 全局扫描方案，命中单侧索引。</item>
-    /// <item>P1-9 全局 LIMIT 下推：每批外层 <c>LIMIT @global_limit</c> = <c>MaxTotalEdges - totalRead</c>，
-    /// 数据库只排序/生成 ≤ MaxTotalEdges 行结构列，不再为 MaxSeeds × maxScan 条候选产生完整 Relation JSON。</item>
-    /// <item>P1-9 Seed 分批：每批 <c>SeedBatchSize</c> 个种子，避免单次 LATERAL unnest 过大。</item>
-    /// <item>P1-9 在线路径只返回结构列（id/source/target/relation_type/weight/confidence/created_at）
+    /// <item>per-seed LATERAL 替代旧 ANY(@item_ids) 全局扫描方案，命中单侧索引。</item>
+    /// <item>全局预算按两阶段分配：阶段 1 每种子保证最低配额 floor(GlobalEdgeLimit/种子数)（LATERAL LIMIT 配额窗口）；
+    /// 阶段 2 余额按种子序再分配（LATERAL OFFSET 配额 + LIMIT 窗口余量）。外层全局 LIMIT 兜底，
+    /// 数据库只排序/生成 ≤ GlobalEdgeLimit 行结构列，同时早期富种子无法耗尽预算饿死后继种子。</item>
+    /// <item>Seed 分批执行：每批 <c>SeedBatchSize</c> 个种子，避免单次 LATERAL unnest 过大。</item>
+    /// <item>只返回结构列（id/source/target/relation_type/weight/confidence/created_at）
     /// 加廉价 JSON 提取（lifecycle/review_status/source_node_kind/target_node_kind），不反序列化完整 Relation JSON。
     /// 完整 Metadata 由 <see cref="HydrateRelationsAsync"/> 在客户端 Selected 后批量补全。</item>
     /// <item>Both 方向：(source_id = seed.id OR target_id = seed.id)。自环边只返回一次。</item>
-    /// <item>truncated 信号：bucket.Count &gt;= maxScan 表示 LATERAL LIMIT 命中；globalCapHit 时 cutoff 种子保守标记。</item>
+    /// <item>结果按 <see cref="RelationNeighborBatchResult.SeedOrdinal"/> 升序返回，每个种子都有一条结果；
+    /// 携带 ScannedCount / CandidateCountBeforeGlobalLimit / SkippedByGlobalBudget 诊断。</item>
+    /// <item>truncated 信号：阶段 1/2 的 per-seed LIMIT 命中（候选 ≥ 配额/窗口）或全局预算截断时保守标记。</item>
     /// </list>
     /// </remarks>
     public async Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
@@ -496,40 +499,149 @@ LIMIT @take OFFSET @skip;
             ? Math.Min(query.GlobalEdgeLimit, GraphQueryLimits.MaxTotalEdges)
             : GraphQueryLimits.MaxTotalEdges;
 
+        // 每种子最低配额 = floor(GlobalEdgeLimit / 种子数)，至少 1。
+        // 阶段 1 保证每个种子扫描到配额内的候选（per-seed LATERAL LIMIT = phase1Cap）；
+        // 阶段 2 把余额按种子序再分配（每种子至多补到 maxScan 窗口）。
+        // 由于 seeds * floor ≤ global，正常情形下外层全局 LIMIT 永不提前截断，
+        // 早期富种子无法耗尽全部预算 → 后续种子不再饿死。
+        var seedCount = seeds.Count;
+        var perSeedFloor = Math.Max(1, globalEdgeLimit / seedCount);
+        var phase1Cap = Math.Min(maxScan, perSeedFloor);
+        var phase2Extra = Math.Max(0, maxScan - phase1Cap);
+
         // 读取 (seed_id, 结构列) 对，按 seed_id 分桶。LATERAL 内已排序，分桶保持顺序。
-        var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
-        foreach (var seed in seeds)
+        var phase1Buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
+        var phase2Buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
+        var ordinalOfSeed = new Dictionary<string, int>(seeds.Count, StringComparer.OrdinalIgnoreCase);
+        for (var ordinal = 0; ordinal < seeds.Count; ordinal++)
         {
-            buckets[seed] = new List<ContextRelation>();
+            phase1Buckets[seeds[ordinal]] = new List<ContextRelation>();
+            phase2Buckets[seeds[ordinal]] = new List<ContextRelation>();
+            ordinalOfSeed[seeds[ordinal]] = ordinal;
         }
 
-        // 全局硬上限 — 总读取边数达到 MaxTotalEdges 即停止读取，截断信号传播到 cutoff 种子。
+        // 全局硬上限 — 总读取边数达到 GlobalEdgeLimit 即停止读取，截断信号传播到 cutoff 种子。
         var totalRead = 0;
         var globalCapHit = false;
-        string? lastReadSeedId = null;
+        // 阶段 1 / 阶段 2 各自最后产出行的种子序号（-1 表示未产出）。
+        // 用于区分"被全局预算跳过"与"已扫描但为空"：序号 > 阶段 1 最后产出序号的种子从未被扫描。
+        var phase1LastReadSeedOrdinal = -1;
+
+        // 构建 LATERAL 过滤条件与参数（阶段 1/2 复用）。
+        // 过滤条件全部下推到 LATERAL 内，每个种子独立使用 (workspace_id, source_id) / (workspace_id, target_id) 索引。
+        var (filterSql, filterParams) = BuildFilters();
 
         // Seed 分批执行，避免单次 LATERAL unnest(@item_ids) 过大。
         // 全局 LIMIT @global_limit 下推到 SQL：每批 = 全局上限（GlobalEdgeLimit）- totalRead 的剩余预算，
         // 数据库只需为每批排序/生成 ≤ remainingBudget 行结构列。
         const int SeedBatchSize = 10;
+
+        // 阶段 1：每种子最低配额。per-seed LATERAL LIMIT = phase1Cap（配额窗口），
+        // 外层 LIMIT 兜底（仅 GlobalEdgeLimit < 种子数 时会命中，此时后续种子标记 SkippedByGlobalBudget）。
         for (var batchStart = 0; batchStart < seeds.Count && totalRead < globalEdgeLimit; batchStart += SeedBatchSize)
         {
             var batchSize = Math.Min(SeedBatchSize, seeds.Count - batchStart);
             var batchSeeds = seeds.Skip(batchStart).Take(batchSize).ToArray();
             var remainingBudget = globalEdgeLimit - totalRead;
+            var lastRead = await ReadBatchAsync(batchSeeds, remainingBudget, phase1Buckets, "LIMIT @per_seed_limit", phase1Cap, 0).ConfigureAwait(false);
+            if (lastRead > phase1LastReadSeedOrdinal)
+            {
+                phase1LastReadSeedOrdinal = lastRead;
+            }
 
-            await using var command = connection.CreateCommand();
-            command.CommandTimeout = Options.CommandTimeoutSeconds;
+            if (totalRead >= globalEdgeLimit)
+            {
+                globalCapHit = true;
+                break;
+            }
+        }
 
-            // LATERAL 内部 WHERE 引用外层 seed.id（correlated subquery）。
-            // 过滤条件全部下推到 LATERAL 内，每个种子独立使用 (workspace_id, source_id) / (workspace_id, target_id) 索引。
+        // 阶段 2：余额按种子序再分配（每种子至多补到 maxScan 窗口）。
+        // per-seed LATERAL OFFSET @per_seed_offset 从阶段 1 已交付的配额行之后继续，
+        // 外层 LIMIT @global_limit 按种子序截断 → 与 InMemory/FileSystem 的按序再分配语义一致。
+        var phase2LastReadSeedOrdinal = -1;
+        if (phase2Extra > 0 && totalRead < globalEdgeLimit)
+        {
+            for (var batchStart = 0; batchStart < seeds.Count && totalRead < globalEdgeLimit; batchStart += SeedBatchSize)
+            {
+                var batchSize = Math.Min(SeedBatchSize, seeds.Count - batchStart);
+                var batchSeeds = seeds.Skip(batchStart).Take(batchSize).ToArray();
+                var remainingBudget = globalEdgeLimit - totalRead;
+                var lastRead = await ReadBatchAsync(batchSeeds, remainingBudget, phase2Buckets, "OFFSET @per_seed_offset LIMIT @per_seed_limit", phase2Extra, phase1Cap).ConfigureAwait(false);
+                if (lastRead > phase2LastReadSeedOrdinal)
+                {
+                    phase2LastReadSeedOrdinal = lastRead;
+                }
+
+                if (totalRead >= globalEdgeLimit)
+                {
+                    globalCapHit = true;
+                    break;
+                }
+            }
+        }
+
+        var results = new List<RelationNeighborBatchResult>(seeds.Count);
+        for (var ordinal = 0; ordinal < seeds.Count; ordinal++)
+        {
+            var seed = seeds[ordinal];
+            var p1 = phase1Buckets[seed];
+            var p2 = phase2Buckets[seed];
+            var phase1Rows = p1.Count;
+            var phase2Rows = p2.Count;
+            var delivered = phase1Rows + phase2Rows;
+
+            // 跳过信号：全局预算在阶段 1 扫描到该种子之前即已耗尽（仅 GlobalEdgeLimit < 种子数 时出现）。
+            // 已扫描过的种子（序号 ≤ 阶段 1 最后产出序号）即使 0 条也视为"空种子"而非被跳过，
+            // 与 InMemory/FileSystem 的 skippedStart 语义对齐。
+            var skipped = globalCapHit && delivered == 0 && ordinal > phase1LastReadSeedOrdinal;
+
+            // 阶段 2 是否扫描过该种子（阶段 2 最后产出序号 ≥ 该种子序号）。
+            var phase2Scanned = phase2LastReadSeedOrdinal >= 0 && ordinal <= phase2LastReadSeedOrdinal;
+            // 全局预算恰好在该种子的阶段 2 交付过程中耗尽（外层 LIMIT 命中，余量未读完）。
+            var phase2CutHere = globalCapHit && ordinal == phase2LastReadSeedOrdinal;
+
+            // 完整交付判定：阶段 1 未达到配额上限（窗口已尽），
+            // 或阶段 2 扫描过该种子且余量未用尽且未被全局预算截断。
+            // 其余情形保守标记 truncated——Postgres 无法区分 bucket == limit 与 bucket > limit。
+            var complete = phase1Rows < phase1Cap
+                || (phase2Extra > 0 && phase2Scanned && phase2Rows < phase2Extra && !phase2CutHere);
+
+            var truncated = !complete || skipped;
+
+            // 桶内已排序（LATERAL 内 ORDER BY），阶段 2 紧随阶段 1 之后，合并后直接 Skip + Take 完成分页。
+            var combined = new List<ContextRelation>(delivered);
+            combined.AddRange(p1);
+            combined.AddRange(p2);
+            var seedRelations = combined
+                .Skip(effectiveSkip)
+                .Take(effectiveTake)
+                .ToArray();
+
+            results.Add(new RelationNeighborBatchResult
+            {
+                ItemId = seed,
+                SeedOrdinal = ordinal,
+                Relations = seedRelations,
+                Truncated = truncated,
+                SkippedByGlobalBudget = skipped,
+                ScannedCount = delivered,
+                CandidateCountBeforeGlobalLimit = skipped ? 0 : delivered
+            });
+        }
+
+        return results;
+
+        // 构建 LATERAL WHERE 过滤条件与参数列表（阶段 1/2 复用同一组过滤语义）。
+        (List<string> Filters, List<(string Name, object? Value)> Params) BuildFilters()
+        {
             var filters = new List<string> { "workspace_id = @workspace_id" };
-            command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+            var parameters = new List<(string, object?)> { ("workspace_id", query.WorkspaceId) };
 
             if (!string.IsNullOrWhiteSpace(query.CollectionId))
             {
                 filters.Add("collection_id = @collection_id");
-                command.Parameters.AddWithValue("collection_id", query.CollectionId);
+                parameters.Add(("collection_id", query.CollectionId));
             }
 
             // 方向过滤改为与 seed.id 的等值比较（替代 ANY(@item_ids)），让 LATERAL 走索引。
@@ -551,7 +663,7 @@ LIMIT @take OFFSET @skip;
             if (!string.IsNullOrWhiteSpace(query.RelationType))
             {
                 filters.Add("relation_type = @relation_type");
-                command.Parameters.AddWithValue("relation_type", query.RelationType);
+                parameters.Add(("relation_type", query.RelationType));
             }
 
             if (query.AllowedRelationTypes.Count > 0)
@@ -561,7 +673,7 @@ LIMIT @take OFFSET @skip;
                 {
                     var paramName = $"allowed_rt_{i}";
                     paramNames.Add($"@{paramName}");
-                    command.Parameters.AddWithValue(paramName, query.AllowedRelationTypes[i]);
+                    parameters.Add((paramName, query.AllowedRelationTypes[i]));
                 }
                 filters.Add($"relation_type IN ({string.Join(", ", paramNames)})");
             }
@@ -569,7 +681,7 @@ LIMIT @take OFFSET @skip;
             if (query.MinConfidence > 0)
             {
                 filters.Add("confidence >= @min_confidence");
-                command.Parameters.AddWithValue("min_confidence", query.MinConfidence);
+                parameters.Add(("min_confidence", query.MinConfidence));
             }
 
             if (query.ExcludedLifecycles.Count > 0)
@@ -579,7 +691,7 @@ LIMIT @take OFFSET @skip;
                 {
                     var paramName = $"ex_lc_{i}";
                     paramNames.Add($"@{paramName}");
-                    command.Parameters.AddWithValue(paramName, query.ExcludedLifecycles[i]);
+                    parameters.Add((paramName, query.ExcludedLifecycles[i]));
                 }
                 filters.Add($"(data ->> 'Lifecycle' IS NULL OR data ->> 'Lifecycle' NOT IN ({string.Join(", ", paramNames)}))");
             }
@@ -591,12 +703,36 @@ LIMIT @take OFFSET @skip;
                 {
                     var paramName = $"ex_rs_{i}";
                     paramNames.Add($"@{paramName}");
-                    command.Parameters.AddWithValue(paramName, query.ExcludedReviewStatuses[i]);
+                    parameters.Add((paramName, query.ExcludedReviewStatuses[i]));
                 }
                 filters.Add($"(data ->> 'ReviewStatus' IS NULL OR data ->> 'ReviewStatus' NOT IN ({string.Join(", ", paramNames)}))");
             }
 
-            command.Parameters.AddWithValue("per_seed_scan", maxScan);
+            return (filters, parameters);
+        }
+
+        // 执行一批种子的邻居读取：LATERAL 尾（LIMIT / OFFSET+LIMIT）+ 外层全局 LIMIT，
+        // 行按种子序产出，累积到 targetBuckets 并维护全局读取计数；返回本批最后产出行的种子序号（无产出为 -1）。
+        async Task<int> ReadBatchAsync(
+            IReadOnlyList<string> batchSeeds,
+            int remainingBudget,
+            Dictionary<string, List<ContextRelation>> targetBuckets,
+            string lateralTail,
+            int perSeedLimit,
+            int perSeedOffset)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+            foreach (var (name, value) in filterParams)
+            {
+                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            }
+            command.Parameters.AddWithValue("per_seed_limit", perSeedLimit);
+            if (perSeedOffset > 0)
+            {
+                command.Parameters.AddWithValue("per_seed_offset", perSeedOffset);
+            }
             command.Parameters.AddWithValue("global_limit", remainingBudget);
             command.Parameters.AddWithValue("item_ids", batchSeeds);
 
@@ -620,14 +756,15 @@ FROM unnest(@item_ids) AS seed(id)
 CROSS JOIN LATERAL (
     SELECT id, collection_id, source_id, target_id, relation_type, weight, confidence, created_at, data
     FROM {Table("relations")}
-    WHERE {string.Join(" AND ", filters)}
+    WHERE {string.Join(" AND ", filterSql)}
     ORDER BY weight DESC, confidence DESC, created_at DESC
-    LIMIT @per_seed_scan
+    {lateralTail}
 ) r
 LIMIT @global_limit;
 """;
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            var batchLastReadOrdinal = -1;
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (totalRead >= globalEdgeLimit)
@@ -640,48 +777,15 @@ LIMIT @global_limit;
                 var relation = ReadStructuralRelation(reader, query.WorkspaceId);
                 if (relation is null) continue;
 
-                if (buckets.TryGetValue(seedId, out var bucket))
+                if (targetBuckets.TryGetValue(seedId, out var bucket))
                 {
                     bucket.Add(relation);
                     totalRead++;
-                    lastReadSeedId = seedId;
+                    batchLastReadOrdinal = ordinalOfSeed[seedId];
                 }
             }
-
-            if (totalRead >= globalEdgeLimit)
-            {
-                globalCapHit = true;
-                break;
-            }
+            return batchLastReadOrdinal;
         }
-
-        var results = new List<RelationNeighborBatchResult>(seeds.Count);
-        foreach (var seed in seeds)
-        {
-            var bucket = buckets[seed];
-            // truncated 信号来自 LATERAL LIMIT 命中。
-            // bucket.Count >= maxScan 表示 LATERAL 返回了 maxScan 行（达到 LIMIT 上限），可能还有更多低权重行未读。
-            // bucket.Count < maxScan 表示该种子所有匹配行已读全（无截断）。
-            // globalCapHit 时 cutoff 种子（最后读取的）保守标记 truncated，与单批语义一致。
-            var truncated = bucket.Count >= maxScan
-                || (globalCapHit && string.Equals(seed, lastReadSeedId, StringComparison.OrdinalIgnoreCase));
-            // 桶内已排序（LATERAL 内 ORDER BY），直接 Skip + Take 完成分页。
-            var seedRelations = bucket
-                .Skip(effectiveSkip)
-                .Take(effectiveTake)
-                .ToArray();
-            if (seedRelations.Length > 0)
-            {
-                results.Add(new RelationNeighborBatchResult
-                {
-                    ItemId = seed,
-                    Relations = seedRelations,
-                    Truncated = truncated
-                });
-            }
-        }
-
-        return results;
     }
 
     /// <summary>

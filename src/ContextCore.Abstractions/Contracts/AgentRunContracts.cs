@@ -318,6 +318,26 @@ public sealed record AgentRunEvent
 }
 
 /// <summary>
+/// 管理员 raw 事件游标分页响应。事件按 <see cref="AgentRunEvent.Sequence"/> 升序返回，
+/// 调用方用 <see cref="NextSequence"/>（<see cref="HasMore"/> 为 true 时）作为下一次请求的
+/// <c>after</c> 游标续取，替代一次性读取全量事件（旧实现 take=int.MaxValue 无界读取）。
+/// </summary>
+public sealed class AgentRunRawEventsPage
+{
+    /// <summary>当前页原始事件（最多服务端页大小上限；含完整 Payload 供审计与哈希链校验）。</summary>
+    public IReadOnlyList<AgentRunEvent> Items { get; init; } = Array.Empty<AgentRunEvent>();
+
+    /// <summary>
+    /// 下一页游标 = 当前页最后一条事件的 Sequence。
+    /// <see cref="HasMore"/> 为 false 时为 -1（已到流末尾）。
+    /// </summary>
+    public int NextSequence { get; init; } = -1;
+
+    /// <summary>是否还有下一页（当前页是否被服务端页大小截断）。</summary>
+    public bool HasMore { get; init; }
+}
+
+/// <summary>
 /// Agent Run 事件类型。
 /// </summary>
 public enum AgentRunEventType : byte
@@ -1349,8 +1369,24 @@ public interface IAgentRunStore
     /// <summary>按 SessionId 列出所有 Run。</summary>
     ValueTask<IReadOnlyList<AgentRun>> ListBySessionAsync(string workspaceId, string sessionId, CancellationToken cancellationToken = default);
 
-    /// <summary>按状态列出 Run（用于 HostedService 拉取待处理 Run）。</summary>
-    ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(AgentRunState state, int take = 100, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 按状态 keyset 分页列出 Run（用于 HostedService 拉取待处理 Run）。
+    /// 按 (UpdatedAt, RunId) 升序返回；提供 <paramref name="afterUpdatedAt"/> / <paramref name="afterRunId"/>
+    /// 游标时从游标之后续取（keyset 分页，替代 OFFSET 与首页重复扫描），
+    /// 恢复扫描以此推进状态内扫描位置——每次扫描从上一轮游标继续，
+    /// 避免只扫描每状态前 take 条导致的饥饿（后进 Run 永远等不到超时检测/恢复）。
+    /// </summary>
+    /// <param name="state">待列出的状态。</param>
+    /// <param name="take">最多返回条数（默认 100）。</param>
+    /// <param name="afterUpdatedAt">上一页末条的 UpdatedAt 游标（null = 从头读取）。</param>
+    /// <param name="afterRunId">上一页末条的 RunId 游标（与 <paramref name="afterUpdatedAt"/> 成对，作为排序决胜键）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask<IReadOnlyList<AgentRun>> ListByStateAsync(
+        AgentRunState state,
+        int take = 100,
+        DateTimeOffset? afterUpdatedAt = null,
+        string? afterRunId = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -2048,6 +2084,18 @@ public sealed record AgentApproval
     /// <summary>审批者标识（人工审批时为用户 ID；自动审批时为规则 ID）。</summary>
     public string? ApproverId { get; init; }
 
+    /// <summary>
+    /// 客户端幂等键（决策请求 ID）。客户端重试提交同一决策时携带：
+    /// 与已存决策一致返回幂等成功（不重复裁决）；相反决策返回冲突。
+    /// </summary>
+    public string? DecisionRequestId { get; init; }
+
+    /// <summary>
+    /// 决策推进的 Run 目标状态（批准 → PendingToolExecution；拒绝 → Failed）。
+    /// 持久化用于幂等重放时校验目标状态一致性。
+    /// </summary>
+    public AgentRunState? TargetRunState { get; init; }
+
     /// <summary>创建时间（UTC）。</summary>
     public required DateTimeOffset CreatedAt { get; init; }
 
@@ -2073,6 +2121,15 @@ public interface IAgentApprovalStore
     /// <summary>创建审批记录（Pending 状态；幂等：ON CONFLICT DO NOTHING）。</summary>
     ValueTask CreateAsync(AgentApproval approval, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 原子创建并裁决审批（单次写入，Status 直接为 Approved/Rejected，不留 Pending 中间态）。
+    /// </summary>
+    /// <remarks>
+    /// 自动审批路径（Gate 自动批准）使用本方法替代 CreateAsync(Pending) + ResolveAsync 两步，
+    /// 避免中间状态与两次往返。幂等：同 (workspace_id, approval_id) 已存在时不覆盖。
+    /// </remarks>
+    ValueTask CreateResolvedApprovalAsync(AgentApproval approval, CancellationToken cancellationToken = default);
+
     /// <summary>按 approval_id 获取审批记录。</summary>
     ValueTask<AgentApproval?> GetAsync(string workspaceId, string approvalId, CancellationToken cancellationToken = default);
 
@@ -2088,14 +2145,21 @@ public interface IAgentApprovalStore
     /// <param name="approverId">审批者标识。</param>
     /// <param name="rejectionReason">拒绝原因（Rejected 时填写）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="InvalidOperationException">审批不存在或已裁决（CAS 失败）。</exception>
+    /// <param name="decisionRequestId">
+    /// 客户端幂等键（可选）。已裁决记录存在相同幂等键时：决策一致 → 幂等成功（不抛异常）；
+    /// 决策相反 → 抛 <see cref="InvalidOperationException"/>（冲突）。无幂等键或键不匹配 → 冲突。
+    /// </param>
+    /// <param name="targetRunState">决策推进的 Run 目标状态（可选，持久化用于审计与幂等校验）。</param>
+    /// <exception cref="InvalidOperationException">审批不存在、已裁决（无匹配幂等键）或幂等键冲突（相反决策）。</exception>
     ValueTask ResolveAsync(
         string workspaceId,
         string approvalId,
         AgentApprovalStatus decision,
         string? approverId,
         string? rejectionReason,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null,
+        AgentRunState? targetRunState = null);
 }
 
 /// <summary>
@@ -2128,6 +2192,11 @@ public interface IPersistentAgentApprovalStore : IAgentApprovalStore
     /// <param name="rejectionReason">拒绝原因（Rejected 时填写）。</param>
     /// <param name="approvalEvent">预构建的 ApprovalResolved 事件（Sequence / PrevChainHash 已由调用方计算）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="decisionRequestId">
+    /// 客户端幂等键（可选）。审批已裁决且幂等键匹配时：决策一致 → 幂等成功（Succeeded=true，
+    /// 不重复写入事件/推进状态）；决策相反 → 冲突（Succeeded=false）。
+    /// </param>
+    /// <param name="targetRunState">决策推进的 Run 目标状态（可选；提供时覆盖内部默认计算）。</param>
     /// <returns>原子操作结果（含成功标志、各子步骤是否完成、失败原因、新 Run 状态）。</returns>
     ValueTask<ApprovalResolveResult> ResolveApprovalAndAdvanceRunAsync(
         string workspaceId,
@@ -2138,7 +2207,9 @@ public interface IPersistentAgentApprovalStore : IAgentApprovalStore
         string? approverId,
         string? rejectionReason,
         AgentRunEvent approvalEvent,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null,
+        AgentRunState? targetRunState = null);
 }
 
 /// <summary>

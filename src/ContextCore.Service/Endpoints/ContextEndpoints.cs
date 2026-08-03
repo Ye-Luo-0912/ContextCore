@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Core.Services.Context;
 using ContextCore.Service.Infrastructure;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
@@ -101,17 +102,66 @@ internal static class ContextEndpoints
 		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/context/query
+		// 返回 ContextQueryPage（Items + 不透明签名 NextCursor + HasMore + QueryRevision）。
+		// 请求可携带上一页返回的 Cursor（不透明 token，服务端解码为 keyset 游标）。
 		group.MapPost("/query", async Task<IResult> (
 			ContextQuery query,
 			IContextStore store,
+			ContextQueryCursorCodec cursorCodec,
+			HttpContext httpContext,
 			CancellationToken ct) =>
 		{
-			var items = await store.QueryAsync(query, ct);
-			return Results.Ok(items);
+			try
+			{
+				// 不透明 Cursor token → 类型化 keyset 游标（签名/版本无效时抛异常）。
+				if (!string.IsNullOrWhiteSpace(query.Cursor))
+				{
+					var after = cursorCodec.Decode(query.Cursor);
+					query = query.CloneWith(after: after);
+				}
+
+				ContextQueryPageResult page;
+				if (store is IContextQueryPageStore pageStore)
+				{
+					page = await pageStore.QueryPageAsync(query, ct);
+				}
+				else
+				{
+					// 存储未实现分页能力：退化为列表查询，不返回游标（HasMore 无法判定）。
+					var items = await store.QueryAsync(query, ct);
+					page = new ContextQueryPageResult { Items = items, HasMore = false, NextCursor = null };
+				}
+
+				var response = new ContextQueryPage
+				{
+					Items = page.Items,
+					NextCursor = page.HasMore && page.NextCursor is not null
+						? cursorCodec.Encode(page.NextCursor)
+						: null,
+					HasMore = page.HasMore,
+					QueryRevision = ContextQueryRevision.Compute(query)
+				};
+				return Results.Ok(response);
+			}
+			catch (InvalidDataException ex)
+			{
+				// 游标 token 签名/版本/结构非法 → 400，而不是 500。
+				return ContextCoreHttpResultMapper.InvalidRequest(
+					httpContext,
+					string.Empty,
+					"context.query",
+					$"分页游标无效：{ex.Message}",
+					field: "cursor");
+			}
+			catch (Exception ex)
+			{
+				return ContextCoreHttpResultMapper.Error(
+					httpContext, ex, string.Empty, "context.query");
+			}
 		})
 		.WithName("QueryContextItems")
-		.WithSummary("按条件查询上下文条目列表")
-		.Produces<IReadOnlyList<ContextItem>>(StatusCodes.Status200OK);
+		.WithSummary("按条件查询上下文条目列表（Keyset 分页：返回不透明签名 NextCursor）")
+		.Produces<ContextQueryPage>(StatusCodes.Status200OK);
 
 		// DELETE /api/context/{workspaceId}/{collectionId}/{id}
 		group.MapDelete("/{workspaceId}/{collectionId}/{id}", async Task<IResult> (

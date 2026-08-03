@@ -196,13 +196,15 @@ public interface ILearningEventOutboxStore
     /// <summary>
     /// 批量续约当前实例持有的多个 lease。由 batched heartbeat coordinator 调用，
     /// 替代每 record 独立 heartbeat Task，消除高积压下大量 Task/Timer/DB UPDATE。
+    /// 仅当记录仍为 Processing、lease_token 匹配且 lease 未过期（lease_expires_at > now）时续约。
     /// </summary>
     /// <param name="leases">要续约的 (eventId, leaseToken) 集合。</param>
     /// <param name="leaseDuration">续约时长。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>成功续约的 eventId 集合（失败的表示 lease 已丢失或被抢占）。</returns>
+    /// <returns>成功续约的 eventId → 数据库确认的新 LeaseExpiresAt（UTC）。
+    /// 未包含在结果中的 eventId 表示 lease 已丢失、被抢占或已过期，调用方应停止处理。</returns>
     [StoreOperation(StoreOperationKind.Write)]
-    Task<IReadOnlySet<string>> RenewLeaseBatchAsync(
+    Task<IReadOnlyDictionary<string, DateTimeOffset>> RenewLeaseBatchAsync(
         IReadOnlyList<(string EventId, string LeaseToken)> leases,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);

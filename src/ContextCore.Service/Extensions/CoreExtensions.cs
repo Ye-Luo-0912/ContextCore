@@ -6,6 +6,7 @@ using ContextCore.Core.Services;
 using ContextCore.Core.Services.Agent;
 using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.AgentRunRuntime;
+using ContextCore.Core.Services.Context;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.MemoryEvolution;
@@ -98,6 +99,10 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextInputValidator>();
 		services.AddSingleton<ContextInputHasher>();
 		services.AddSingleton<ContextInputSequencer>();
+		// FTS Keyset 分页游标编解码器（不透明 + 版本化 + HMAC 签名）。
+		// 端点 /api/context/query 注入以编码 NextCursor / 解码请求 Cursor；
+		// 生产环境应通过构造参数注入独立签名密钥（默认开发密钥仅限测试/本地）。
+		services.AddSingleton<ContextQueryCursorCodec>();
 		// 使用工厂委托让 DI 解析 IWriteTransactionScopeFactory（Postgres provider 注册时非空，
 		// InMemory/FileSystem 不注册时为 null）。null 时 BasicContextIngestionService 自动回退到非事务路径。
 		services.AddSingleton<ContextInputIngestionService>(sp => new ContextInputIngestionService(
@@ -850,6 +855,10 @@ internal static class CoreExtensions
 
 		// IAgentModelContextProjector（从 WorkingSet.Materials 取正文 + Token 预算控制）。
 		services.TryAddSingleton<IAgentModelContextProjector, DefaultAgentModelContextProjector>();
+
+		// Agent 受控检索查询规划器（受控优先：有界查询集 + 必需/排除 ID + 图种子 + Token 预算）。
+		// 纯内存、确定性、幂等；由 AgentRunActor 的 ContextBuilding 阶段按计划驱动检索。
+		services.TryAddSingleton<IAgentRetrievalQueryPlanner, DefaultAgentRetrievalQueryPlanner>();
 
 		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
 		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。

@@ -300,6 +300,169 @@ public sealed class R29H_LearningEventAcceptanceTests
             "需要实现独立 DatasetSnapshot + completeness 报告后启用本验收点。");
     }
 
+    // -----------------------------------------------------------------------
+    // 4. ExpiredLease_AckNackRenewAllRejected
+    //    验证：lease 过期后，Ack/MarkFailed/RenewLease/RenewLeaseBatch 全部被拒绝
+    //    （CAS 统一校验 lease_expires_at > now）——旧 Worker 无法续活过期 lease，
+    //    也无法在过期后把记录回退/死信/确认。过期 Processing 记录仍可被新 Worker 重新抢占。
+    // -----------------------------------------------------------------------
+    [TestMethod]
+    [TestCategory("Learning-Event")]
+    public async Task ExpiredLease_AckNackRenewAllRejected()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var outboxStore = new InMemoryLearningEventOutboxStore();
+        var now = DateTimeOffset.UtcNow;
+
+        // 入队一条事件并用"负时长"租约取出——取出的瞬间 lease 已过期（lease_expires_at <= now）。
+        await outboxStore.EnqueueAsync(
+            new LearningEventOutboxRecord
+            {
+                EventId = "ev-lease-expired",
+                WorkspaceId = "ws-lease",
+                CollectionId = "col-lease",
+                DecisionId = "dec-lease-expired",
+                Payload = "{}",
+                State = LearningEventOutboxStates.Pending,
+                MaxRetryCount = 3,
+                CreatedAt = now,
+                UpdatedAt = now
+            }, cancellationToken: cts.Token);
+
+        var acquired = await outboxStore.AcquirePendingAsync(
+            limit: 10, owner: "stale-worker", leaseDuration: TimeSpan.FromSeconds(-60), cts.Token);
+        Assert.AreEqual(1, acquired.Count, "应能取出 1 条事件。");
+        var record = acquired[0];
+        Assert.AreEqual(LearningEventOutboxStates.Processing, record.State, "取出后应为 Processing。");
+        Assert.IsNotNull(record.LeaseToken, "取出后应携带 lease_token。");
+        Assert.IsNotNull(record.LeaseExpiresAt, "取出后应携带数据库确认的 LeaseExpiresAt。");
+
+        // 过期 lease 上所有写操作必须全部被拒绝——与 Postgres 的
+        // lease_token = @token AND state = 'Processing' AND lease_expires_at > clock_timestamp() 一致。
+        var acked = await outboxStore.MarkAckedAsync(record.EventId, record.LeaseToken!, cts.Token);
+        Assert.IsFalse(acked, "过期 lease 上 Ack 应被拒绝。");
+
+        var failed = await outboxStore.MarkFailedAsync(record.EventId, record.LeaseToken!, "boom", cts.Token);
+        Assert.IsFalse(failed, "过期 lease 上 MarkFailed 应被拒绝（不得把记录回退/死信）。");
+
+        var renewed = await outboxStore.RenewLeaseAsync(
+            record.EventId, record.LeaseToken!, TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsFalse(renewed, "过期 lease 上单条 Renew 应被拒绝（不得续活过期 lease）。");
+
+        var batchRenewed = await outboxStore.RenewLeaseBatchAsync(
+            new[] { (record.EventId, record.LeaseToken!) }, TimeSpan.FromMinutes(5), cts.Token);
+        Assert.AreEqual(0, batchRenewed.Count, "过期 lease 上批量 Renew 应被拒绝。");
+
+        // 记录必须保持原样（仍为 Processing、原 lease_token、原过期时间）——未被任何操作篡改。
+        var stateCounts = await outboxStore.CountByStateAsync(cts.Token);
+        Assert.AreEqual(1, stateCounts[LearningEventOutboxStates.Processing], "记录应仍为 Processing。");
+
+        // 过期 Processing 记录可被新 Worker 重新抢占——旧 Worker 的写操作全部失效。
+        var reacquired = await outboxStore.AcquirePendingAsync(
+            limit: 10, owner: "fresh-worker", leaseDuration: TimeSpan.FromMinutes(1), cts.Token);
+        Assert.AreEqual(1, reacquired.Count, "过期 Processing 记录应可被新 Worker 重新抢占。");
+        Assert.AreNotEqual(
+            record.LeaseToken, reacquired[0].LeaseToken,
+            "重新抢占后 lease_token 应更新为新的唯一 token。");
+        Assert.IsTrue(
+            reacquired[0].LeaseExpiresAt > DateTimeOffset.UtcNow,
+            "重新抢占后 LeaseExpiresAt 应为未来的有效时间。");
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. RenewLeaseBatch_ReturnsDbConfirmedExpiry
+    //    验证：批量续约返回每个成功续约 eventId 的数据库确认新到期时间（Postgres 为
+    //    RETURNING lease_expires_at）——Worker 以该值更新本地期限，不再以应用时钟重新估算。
+    // -----------------------------------------------------------------------
+    [TestMethod]
+    [TestCategory("Learning-Event")]
+    public async Task RenewLeaseBatch_ReturnsDbConfirmedExpiry()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var outboxStore = new InMemoryLearningEventOutboxStore();
+        var now = DateTimeOffset.UtcNow;
+
+        await outboxStore.EnqueueAsync(
+            new LearningEventOutboxRecord
+            {
+                EventId = "ev-renew-batch",
+                WorkspaceId = "ws-lease",
+                CollectionId = "col-lease",
+                DecisionId = "dec-renew-batch",
+                Payload = "{}",
+                State = LearningEventOutboxStates.Pending,
+                MaxRetryCount = 3,
+                CreatedAt = now,
+                UpdatedAt = now
+            }, cancellationToken: cts.Token);
+
+        var acquired = await outboxStore.AcquirePendingAsync(
+            limit: 10, owner: "worker-a", leaseDuration: TimeSpan.FromMinutes(1), cts.Token);
+        var record = acquired[0];
+
+        var renewed = await outboxStore.RenewLeaseBatchAsync(
+            new[] { (record.EventId, record.LeaseToken!) }, TimeSpan.FromMinutes(5), cts.Token);
+
+        Assert.AreEqual(1, renewed.Count, "有效 lease 应续约成功。");
+        Assert.IsTrue(
+            renewed.TryGetValue(record.EventId, out var confirmedExpiry),
+            "返回值应包含续约成功的 eventId → 新到期时间。");
+        var remaining = (confirmedExpiry - DateTimeOffset.UtcNow).TotalMinutes;
+        Assert.IsTrue(
+            remaining is > 4.5 and < 5.5,
+            $"返回的到期时间应为续约时长后的 DB 确认值（当前剩余 {remaining:F1} 分钟）。");
+        Assert.IsTrue(
+            confirmedExpiry > record.LeaseExpiresAt,
+            "续约后的到期时间应晚于续约前的到期时间。");
+
+        // 续约后 lease 有效——其他 worker 无法抢占，且状态仍为 Processing。
+        var stolen = await outboxStore.AcquirePendingAsync(
+            limit: 10, owner: "worker-b", leaseDuration: TimeSpan.FromSeconds(1), cts.Token);
+        Assert.AreEqual(0, stolen.Count, "续约后未过期，其他 worker 不应抢占。");
+        var counts = await outboxStore.CountByStateAsync(cts.Token);
+        Assert.AreEqual(1, counts[LearningEventOutboxStates.Processing], "记录应仍为 Processing。");
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. Acquire_ReturnsDbConfirmedLeaseExpiresAt
+    //    验证：AcquirePendingAsync 返回的记录携带数据库确认的 LeaseExpiresAt
+    //    （Postgres RETURNING lease_expires_at）——Worker 本地期限直接采用该值。
+    // -----------------------------------------------------------------------
+    [TestMethod]
+    [TestCategory("Learning-Event")]
+    public async Task Acquire_ReturnsDbConfirmedLeaseExpiresAt()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var outboxStore = new InMemoryLearningEventOutboxStore();
+        var now = DateTimeOffset.UtcNow;
+        var leaseDuration = TimeSpan.FromMinutes(3);
+
+        await outboxStore.EnqueueAsync(
+            new LearningEventOutboxRecord
+            {
+                EventId = "ev-acquire-expiry",
+                WorkspaceId = "ws-lease",
+                CollectionId = "col-lease",
+                DecisionId = "dec-acquire-expiry",
+                Payload = "{}",
+                State = LearningEventOutboxStates.Pending,
+                MaxRetryCount = 3,
+                CreatedAt = now,
+                UpdatedAt = now
+            }, cancellationToken: cts.Token);
+
+        var acquired = await outboxStore.AcquirePendingAsync(
+            limit: 10, owner: "worker-a", leaseDuration: leaseDuration, cts.Token);
+
+        Assert.AreEqual(1, acquired.Count, "应取出 1 条事件。");
+        var record = acquired[0];
+        Assert.IsNotNull(record.LeaseExpiresAt, "Acquire 返回的记录必须携带 LeaseExpiresAt。");
+        var remaining = (record.LeaseExpiresAt!.Value - DateTimeOffset.UtcNow).TotalMinutes;
+        Assert.IsTrue(
+            remaining is > 2.5 and < 3.5,
+            $"返回的 LeaseExpiresAt 应为数据库确认的到期时间（当前剩余 {remaining:F1} 分钟）。");
+    }
+
     // --- helpers ---
 
     private static ContextDecisionResult MakeDecision(string requestId)
@@ -424,9 +587,10 @@ public sealed class R29H_LearningEventAcceptanceTests
             {
                 if (!_records.TryGetValue(eventId, out var r)
                     || r.State != LearningEventOutboxStates.Processing
-                    || r.LeaseToken != leaseToken)
+                    || r.LeaseToken != leaseToken
+                    || (r.LeaseExpiresAt is { } leaseExpiresAt && leaseExpiresAt <= now))
                 {
-                    // lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
+                    // lease_token 不匹配或 lease 已过期——lease 已被其他 worker 抢占或已 Ack/Nack。
                     return Task.FromResult(false);
                 }
 
@@ -460,9 +624,10 @@ public sealed class R29H_LearningEventAcceptanceTests
             {
                 if (!_records.TryGetValue(eventId, out var r)
                     || r.State != LearningEventOutboxStates.Processing
-                    || r.LeaseToken != leaseToken)
+                    || r.LeaseToken != leaseToken
+                    || (r.LeaseExpiresAt is { } leaseExpiresAt && leaseExpiresAt <= now))
                 {
-                    // lease_token 不匹配——lease 已被其他 worker 抢占或已 Ack/Nack。
+                    // lease_token 不匹配或 lease 已过期——lease 已被其他 worker 抢占或已 Ack/Nack。
                     return Task.FromResult(false);
                 }
 
@@ -498,9 +663,11 @@ public sealed class R29H_LearningEventAcceptanceTests
             lock (_lock)
             {
                 // 用 lease_token 替代 lease_owner 校验更严格（token 全局唯一）。
+                // 仅当 lease 未过期（lease_expires_at > now）时才允许续约——防止旧 Worker 续活过期 lease。
                 if (!_records.TryGetValue(eventId, out var r)
                     || r.State != LearningEventOutboxStates.Processing
-                    || r.LeaseToken != leaseToken)
+                    || r.LeaseToken != leaseToken
+                    || (r.LeaseExpiresAt is { } leaseExpiresAt && leaseExpiresAt <= now))
                 {
                     return Task.FromResult(false);
                 }
@@ -519,13 +686,13 @@ public sealed class R29H_LearningEventAcceptanceTests
             }
         }
 
-        public Task<IReadOnlySet<string>> RenewLeaseBatchAsync(
+        public Task<IReadOnlyDictionary<string, DateTimeOffset>> RenewLeaseBatchAsync(
             IReadOnlyList<(string EventId, string LeaseToken)> leases,
             TimeSpan leaseDuration,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var renewed = new HashSet<string>(StringComparer.Ordinal);
+            var renewed = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
             var now = DateTimeOffset.UtcNow;
             lock (_lock)
             {
@@ -533,7 +700,8 @@ public sealed class R29H_LearningEventAcceptanceTests
                 {
                     if (!_records.TryGetValue(eventId, out var r)
                         || r.State != LearningEventOutboxStates.Processing
-                        || r.LeaseToken != leaseToken)
+                        || r.LeaseToken != leaseToken
+                        || (r.LeaseExpiresAt is { } leaseExpiresAt && leaseExpiresAt <= now))
                     {
                         continue;
                     }
@@ -545,10 +713,10 @@ public sealed class R29H_LearningEventAcceptanceTests
                         processedAt: r.ProcessedAt,
                         lastError: r.LastError,
                         deadLetterReason: r.DeadLetterReason);
-                    renewed.Add(eventId);
+                    renewed[eventId] = now.Add(leaseDuration);
                 }
             }
-            return Task.FromResult<IReadOnlySet<string>>(renewed);
+            return Task.FromResult<IReadOnlyDictionary<string, DateTimeOffset>>(renewed);
         }
 
         public Task<IReadOnlyDictionary<string, int>> CountByStateAsync(CancellationToken cancellationToken = default)

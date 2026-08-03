@@ -119,8 +119,9 @@ public abstract class InvalidatingStoreDecoratorBase
 /// 同时透传 <see cref="IContextStoreBatchLookup"/> / <see cref="IContextStoreMetadataLookup"/> 能力接口，
 /// 确保 Retrieval 通道能走批量查询 / 元数据投影路径。
 /// 透传 <see cref="ITransactionalContextStore"/> 能力接口，让事务路径在 Decorator 包装下仍可被检测到。
+/// 透传 <see cref="IContextQueryPageStore"/> 能力接口，让分页查询在 Decorator 包装下仍可被检测到。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup), typeof(IContextStoreMetadataLookup), typeof(ITransactionalContextStore))]
+[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup), typeof(IContextStoreMetadataLookup), typeof(ITransactionalContextStore), typeof(IContextQueryPageStore))]
 public sealed partial class InvalidatingContextStoreDecorator;
 
 public sealed partial class InvalidatingContextStoreDecorator

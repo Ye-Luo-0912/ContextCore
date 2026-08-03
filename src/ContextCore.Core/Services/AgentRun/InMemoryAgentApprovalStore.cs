@@ -38,6 +38,21 @@ public sealed class InMemoryAgentApprovalStore : IAgentApprovalStore
     }
 
     /// <inheritdoc />
+    public ValueTask CreateResolvedApprovalAsync(AgentApproval approval, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+        if (approval.Status == AgentApprovalStatus.Pending)
+        {
+            throw new ArgumentException(
+                $"CreateResolvedApprovalAsync 要求 Status 为 Approved/Rejected，实际为 Pending。", nameof(approval));
+        }
+        var key = Key(approval.WorkspaceId, approval.ApprovalId);
+        // 原子创建并裁决：单次 TryAdd（最终状态已写入）；同主键已存在时不覆盖（幂等）。
+        _approvals.TryAdd(key, approval);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public ValueTask<AgentApproval?> GetAsync(string workspaceId, string approvalId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
@@ -69,7 +84,9 @@ public sealed class InMemoryAgentApprovalStore : IAgentApprovalStore
         AgentApprovalStatus decision,
         string? approverId,
         string? rejectionReason,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null,
+        AgentRunState? targetRunState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(approvalId);
@@ -90,6 +107,19 @@ public sealed class InMemoryAgentApprovalStore : IAgentApprovalStore
 
             if (existing.Status != AgentApprovalStatus.Pending)
             {
+                // 幂等重试：相同 decisionRequestId 时，决策一致 → 幂等成功（不重复裁决）；
+                // 决策相反 → 冲突。无幂等键或键不匹配 → 冲突（旧行为）。
+                if (!string.IsNullOrEmpty(decisionRequestId)
+                    && string.Equals(existing.DecisionRequestId, decisionRequestId, StringComparison.Ordinal))
+                {
+                    if (existing.Status == decision)
+                    {
+                        return ValueTask.CompletedTask; // 幂等成功：决策已生效
+                    }
+                    throw new InvalidOperationException(
+                        $"审批幂等键冲突：approval_id={approvalId}，decisionRequestId={decisionRequestId}。" +
+                        $"已存决策={existing.Status}，与本次决策={decision} 相反（拒绝覆盖已生效决策）。");
+                }
                 throw new InvalidOperationException(
                     $"审批 CAS 失败：approval_id={approvalId}，期望当前状态=Pending，实际={existing.Status}。" +
                     $"审批已被裁决，不可重复裁决。");
@@ -100,6 +130,8 @@ public sealed class InMemoryAgentApprovalStore : IAgentApprovalStore
                 Status = decision,
                 ApproverId = approverId,
                 RejectionReason = decision == AgentApprovalStatus.Rejected ? rejectionReason : null,
+                DecisionRequestId = decisionRequestId ?? existing.DecisionRequestId,
+                TargetRunState = targetRunState ?? existing.TargetRunState,
                 ResolvedAt = DateTimeOffset.UtcNow
             };
 

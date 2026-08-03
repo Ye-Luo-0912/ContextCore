@@ -8,7 +8,7 @@ namespace ContextCore.Storage.InMemory.Stores;
 /// 基于内存的 <see cref="IContextStore"/> 与 <see cref="IContextCollectionStore"/> 实现，
 /// 适用于测试和短生命周期场景。
 /// </summary>
-public sealed class InMemoryContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup
+public sealed class InMemoryContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextQueryPageStore
 {
     private readonly ConcurrentDictionary<string, ContextCollection> _collections = new();
     private readonly ConcurrentDictionary<string, ContextItem> _items = new();
@@ -94,6 +94,46 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextItem>>(results);
+    }
+
+    /// <inheritdoc />
+    public Task<ContextQueryPageResult> QueryPageAsync(
+        ContextQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // 取 Take + 1 条判定 HasMore；返回前 Take 条，下一页游标取自末条排序键。
+        var take = query.Take > 0 ? query.Take : 50;
+        var fetchQuery = query.CloneWith(take: take + 1);
+        var items = QueryAsync(fetchQuery, cancellationToken).GetAwaiter().GetResult().ToList();
+
+        var hasMore = items.Count > take;
+        var pageItems = hasMore ? items.Take(take).ToList() : items;
+
+        if (pageItems.Count == 0)
+        {
+            return Task.FromResult(new ContextQueryPageResult { Items = pageItems, HasMore = false, NextCursor = null });
+        }
+
+        // 内存存储按 (updated_at, id) 排序——等价于 ID 命中源（SourceOrder=1，无 ts_rank）。
+        var last = pageItems[^1];
+        var nextCursor = new ContextQueryCursor
+        {
+            SourceOrder = 1,
+            TsRank = 0,
+            Importance = last.Importance,
+            UpdatedAt = last.UpdatedAt,
+            Id = last.Id
+        };
+
+        return Task.FromResult(new ContextQueryPageResult
+        {
+            Items = pageItems,
+            HasMore = hasMore,
+            NextCursor = hasMore ? nextCursor : null
+        });
     }
 
     /// <summary>

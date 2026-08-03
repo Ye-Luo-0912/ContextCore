@@ -37,17 +37,14 @@ public sealed partial class ContextCoreClient
         return await GetRequiredAsync<ContextItem>($"api/context/{Escape(id)}{qs}", cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<ContextQueryResponse> QueryContextAsync(
+    public async Task<ContextQueryPage> QueryContextAsync(
         ContextQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-        var items = await PostRequiredAsync<ContextQuery, IReadOnlyList<ContextItem>>(
+        // 端点返回 ContextQueryPage（Items + 不透明 NextCursor + HasMore + QueryRevision）。
+        // 调用方分页时透传上一页的 NextCursor，无需自行构造 keyset 游标。
+        return await PostRequiredAsync<ContextQuery, ContextQueryPage>(
             "api/context/query", query, cancellationToken).ConfigureAwait(false);
-        return new ContextQueryResponse
-        {
-            Items = items,
-            Count = items.Count
-        };
     }
 }
