@@ -267,6 +267,11 @@ F:ContextCore.Abstractions.MemoryState.Fresh
 F:ContextCore.Abstractions.MemoryState.Rejected
 F:ContextCore.Abstractions.MemoryState.Replaced
 F:ContextCore.Abstractions.MemoryState.Superseded
+F:ContextCore.Abstractions.MigrationCoordinatorPhase.AcquiringLock
+F:ContextCore.Abstractions.MigrationCoordinatorPhase.Failed
+F:ContextCore.Abstractions.MigrationCoordinatorPhase.Idle
+F:ContextCore.Abstractions.MigrationCoordinatorPhase.Migrating
+F:ContextCore.Abstractions.MigrationCoordinatorPhase.UpToDate
 F:ContextCore.Abstractions.ModelActivationOperation.Activate
 F:ContextCore.Abstractions.ModelActivationOperation.Register
 F:ContextCore.Abstractions.ModelActivationOperation.Retire
@@ -2370,6 +2375,8 @@ M:ContextCore.Abstractions.IMemoryStoreMetadataLookup.BatchGetMetadataAsync(Syst
 M:ContextCore.Abstractions.IMemoryUtilityStatsStore.GetAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IMemoryUtilityStatsStore.GetSelectedCountByExpertAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IMemoryUtilityStatsStore.QueryAsync(ContextCore.Abstractions.MemoryUtilityStatsQuery, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IMigrationCoordinator.EnsureSchemaAsync(System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IMigrationCoordinator.GetStatusAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelActivationAuditStore.AppendAsync(ContextCore.Abstractions.ModelActivationAuditEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelActivationAuditStore.ListAllAsync(System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IModelActivationAuditStore.ListByModelAsync(System.String, System.Threading.CancellationToken)
@@ -2744,6 +2751,11 @@ M:ContextCore.Abstractions.MemoryUtilityStatsQuery.Equals(System.Object)
 M:ContextCore.Abstractions.MemoryUtilityStatsQuery.GetHashCode()
 M:ContextCore.Abstractions.MemoryUtilityStatsQuery.GetType()
 M:ContextCore.Abstractions.MemoryUtilityStatsQuery.ToString()
+M:ContextCore.Abstractions.MigrationCoordinatorStatus.#ctor()
+M:ContextCore.Abstractions.MigrationCoordinatorStatus.Equals(System.Object)
+M:ContextCore.Abstractions.MigrationCoordinatorStatus.GetHashCode()
+M:ContextCore.Abstractions.MigrationCoordinatorStatus.GetType()
+M:ContextCore.Abstractions.MigrationCoordinatorStatus.ToString()
 M:ContextCore.Abstractions.ModelActivationAuditEntry.#ctor()
 M:ContextCore.Abstractions.ModelActivationAuditEntry.<Clone>$()
 M:ContextCore.Abstractions.ModelActivationAuditEntry.Equals(ContextCore.Abstractions.ModelActivationAuditEntry)
@@ -6737,6 +6749,18 @@ P:ContextCore.Abstractions.MemoryUtilityStatsQuery.MinSelectedCount (get|init)
 P:ContextCore.Abstractions.MemoryUtilityStatsQuery.SourceItemId (get|init)
 P:ContextCore.Abstractions.MemoryUtilityStatsQuery.Take (get|init)
 P:ContextCore.Abstractions.MemoryUtilityStatsQuery.WorkspaceId (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.AppliedVersion (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.CodeVersion (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.Enabled (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.InstanceId (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.LastRunAtUtc (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.LastRunDurationMs (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.LastRunMessage (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.LastRunSucceeded (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.LockKey (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.Note (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.Phase (get|init)
+P:ContextCore.Abstractions.MigrationCoordinatorStatus.UpToDate (get|init)
 P:ContextCore.Abstractions.ModelActivationAuditEntry.AuditId (get|init)
 P:ContextCore.Abstractions.ModelActivationAuditEntry.ErrorMessage (get|init)
 P:ContextCore.Abstractions.ModelActivationAuditEntry.ModelArtifactId (get|init)
@@ -11489,6 +11513,7 @@ T:ContextCore.Abstractions.IMemoryStore (Interface)
 T:ContextCore.Abstractions.IMemoryStoreBatchLookup (Interface)
 T:ContextCore.Abstractions.IMemoryStoreMetadataLookup (Interface)
 T:ContextCore.Abstractions.IMemoryUtilityStatsStore (Interface)
+T:ContextCore.Abstractions.IMigrationCoordinator (Interface)
 T:ContextCore.Abstractions.IModelActivationAuditStore (Interface)
 T:ContextCore.Abstractions.IModelArtifactRegistry (Interface)
 T:ContextCore.Abstractions.IModelNodeAppliedStateStore (Interface)
@@ -11597,6 +11622,8 @@ T:ContextCore.Abstractions.MemoryStateEventRecord
 T:ContextCore.Abstractions.MemoryStateExtensions
 T:ContextCore.Abstractions.MemoryUtilityStats
 T:ContextCore.Abstractions.MemoryUtilityStatsQuery
+T:ContextCore.Abstractions.MigrationCoordinatorPhase (Enum)
+T:ContextCore.Abstractions.MigrationCoordinatorStatus
 T:ContextCore.Abstractions.ModelActivationAuditEntry
 T:ContextCore.Abstractions.ModelActivationOperation (Enum)
 T:ContextCore.Abstractions.ModelArtifact

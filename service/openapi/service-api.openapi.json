@@ -1706,6 +1706,27 @@
         }
       }
     },
+    "/api/runtime/migrations/coordinator/status": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "获取 HA 迁移协调器状态（阶段 / 实例 / 锁键 / 已应用版本 / 最近运行结果）",
+        "operationId": "GetMigrationCoordinatorStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationCoordinatorStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -16092,6 +16113,84 @@
           },
           "apiLatency": {
             "$ref": "#/components/schemas/LatencyStats"
+          }
+        }
+      },
+      "MigrationCoordinatorPhase": {
+        "type": "integer"
+      },
+      "MigrationCoordinatorStatus": {
+        "required": [
+          "phase",
+          "enabled",
+          "instanceId",
+          "lockKey",
+          "upToDate",
+          "lastRunSucceeded"
+        ],
+        "type": "object",
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/MigrationCoordinatorPhase"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "lockKey": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "appliedVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codeVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "upToDate": {
+            "type": "boolean"
+          },
+          "lastRunAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastRunSucceeded": {
+            "type": "boolean"
+          },
+          "lastRunDurationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "lastRunMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "note": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

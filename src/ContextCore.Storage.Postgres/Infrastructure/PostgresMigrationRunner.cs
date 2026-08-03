@@ -2595,7 +2595,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
         await using var command = connection.CreateCommand();
         command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
         command.CommandText = "SELECT pg_advisory_lock(@lock_key);";
-        command.Parameters.AddWithValue("lock_key", ComputeMigrationLockKey());
+        command.Parameters.AddWithValue("lock_key", ComputeMigrationLockKey(_connectionFactory.Options));
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         stopwatch.Stop();
         PostgresMigrationMetrics.LockWaitDuration.Record(stopwatch.Elapsed.TotalMilliseconds);
@@ -2607,7 +2607,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
         await using var command = connection.CreateCommand();
         command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
         command.CommandText = "SELECT pg_advisory_unlock(@lock_key);";
-        command.Parameters.AddWithValue("lock_key", ComputeMigrationLockKey());
+        command.Parameters.AddWithValue("lock_key", ComputeMigrationLockKey(_connectionFactory.Options));
         await command.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
@@ -2710,10 +2710,11 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
     /// <summary>
     /// 计算迁移互斥锁键：FNV-1a 64 位哈希（schema 名称 + 表名前缀），掩掉最高位得到正 long。
     /// 同一部署的多个实例必须收敛到同一键，因此只使用确定性输入，不依赖实例随机状态。
+    /// internal static：迁移协调器（PostgresMigrationCoordinator）复用同一键展示状态。
     /// </summary>
-    private long ComputeMigrationLockKey()
+    internal static long ComputeMigrationLockKey(PostgresOptions options)
     {
-        var seed = $"{_connectionFactory.Options.SchemaName}|{_connectionFactory.Options.TablePrefix}";
+        var seed = $"{options.SchemaName}|{options.TablePrefix}";
         const ulong offsetBasis = 14695981039346656037UL;
         const ulong prime = 1099511628211UL;
         var hash = offsetBasis;

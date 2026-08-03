@@ -5,7 +5,10 @@ using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
+using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Extensions;
+using ContextCore.Storage.Postgres.Infrastructure;
+using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -186,6 +189,30 @@ internal static class ProductionRuntimeExtensions
                 sp.GetRequiredService<ProductionAdmissionOptions>(),
                 sp.GetService<ILogger<ProductionAdmissionController>>()
                     ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ProductionAdmissionController>.Instance));
+
+        // 注册 HA 迁移协调器（Postgres 专属）：多实例并发启动时 schema 迁移只由一个
+        // 实例执行（pg_advisory_lock），其余实例在锁上等待后复查版本短路通过。
+        // MigrationCoordinatorOptions 从 "MigrationCoordinator" 配置节绑定
+        // （StartupRunEnabled / StartupTimeoutSeconds / InstanceId）。
+        // 仅 Postgres provider 注册；非 Postgres 时状态端点返回 Enabled=false。
+        if (storageIsPostgres)
+        {
+            var coordinatorOptions = new MigrationCoordinatorOptions();
+            configuration.GetSection("MigrationCoordinator").Bind(coordinatorOptions);
+            services.AddSingleton(coordinatorOptions);
+
+            services.TryAddSingleton<PostgresMigrationCoordinator>(sp =>
+                new PostgresMigrationCoordinator(
+                    sp.GetRequiredService<PostgresMigrationRunner>(),
+                    sp.GetRequiredService<PostgresOptions>(),
+                    sp.GetRequiredService<MigrationCoordinatorOptions>(),
+                    sp.GetService<ILogger<PostgresMigrationCoordinator>>()
+                        ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgresMigrationCoordinator>.Instance));
+            services.TryAddSingleton<IMigrationCoordinator>(sp => sp.GetRequiredService<PostgresMigrationCoordinator>());
+
+            // 启动协调：服务启动时主动执行一次 schema 迁移（单执行者 + 失败快速退出）。
+            services.AddHostedService<MigrationCoordinatorStartupService>();
+        }
     }
 
     // ── Development profile ─────────────────────────────────────────────

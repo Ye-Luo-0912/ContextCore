@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ContextCore.Service.Endpoints;
 
@@ -9,6 +10,7 @@ namespace ContextCore.Service.Endpoints;
 /// <list type="bullet">
 ///   <item><c>/health/ready</c>：Production Runtime 就绪探针，检查 Worker 启动 / Postgres / Model Activation。</item>
 ///   <item><c>/api/runtime/status</c>：当前激活组件报告（Profile / Worker 列表 / Model / Transport / Canary）。</item>
+///   <item><c>/api/runtime/migrations/coordinator/status</c>：HA 迁移协调器状态（阶段 / 实例 / 锁键 / 版本）。</item>
 /// </list>
 /// </summary>
 internal static class ProductionRuntimeEndpoints
@@ -90,6 +92,37 @@ internal static class ProductionRuntimeEndpoints
         .RequireWorkspaceRole(WorkspaceRole.Operator)
         .WithSummary("获取生产准入状态报告（实时探针 + TTL 缓存；force=true 强制刷新）")
         .Produces<ProductionAdmissionStatusResponse>(StatusCodes.Status200OK);
+
+        // ── /api/runtime/migrations/coordinator/status：HA 迁移协调器状态 ──
+        // 返回协调器当前阶段（Idle/AcquiringLock/Migrating/UpToDate/Failed）、实例 ID、
+        // 迁移互斥锁键、已应用版本 vs 代码版本、最近一次协调运行结果。
+        // 非 Postgres provider 未注册协调器 → 返回 Enabled=false（200，不报错）。
+        app.MapGet("/api/runtime/migrations/coordinator/status", async Task<IResult> (
+            [FromServices] IMigrationCoordinator? coordinator,
+            CancellationToken ct = default) =>
+        {
+            if (coordinator is null)
+            {
+                return Results.Ok(new MigrationCoordinatorStatus
+                {
+                    Phase = MigrationCoordinatorPhase.Idle,
+                    Enabled = false,
+                    InstanceId = string.Empty,
+                    LockKey = 0,
+                    UpToDate = false,
+                    LastRunSucceeded = false,
+                    Note = "迁移协调器仅 Postgres provider 注册（HA 多实例单执行者）。"
+                });
+            }
+
+            var status = await coordinator.GetStatusAsync(ct).ConfigureAwait(false);
+            return Results.Ok(status);
+        })
+        .WithTags("Status")
+        .WithName("GetMigrationCoordinatorStatus")
+        .RequireWorkspaceRole(WorkspaceRole.Operator)
+        .WithSummary("获取 HA 迁移协调器状态（阶段 / 实例 / 锁键 / 已应用版本 / 最近运行结果）")
+        .Produces<MigrationCoordinatorStatus>(StatusCodes.Status200OK);
 
         return app;
     }
