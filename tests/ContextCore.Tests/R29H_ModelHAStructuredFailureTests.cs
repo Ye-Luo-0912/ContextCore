@@ -128,6 +128,47 @@ public sealed class R29H_ModelHAStructuredFailureTests
         }
     }
 
+    /// <summary>
+    /// 验证：本地引擎代次（LocalEngineGeneration）不得作为集群槽位 Revision 的下界——
+    /// 节点已本地激活模型（ActiveGeneration ≥ 集群 Revision）时，仍必须应用集群期望状态
+    /// （两套计数空间独立，混用会导致期望模型从未被加载）。
+    /// </summary>
+    [TestMethod]
+    public async Task Reconciler_ExistingLocalActivation_DoesNotBlockLowerSlotRevision()
+    {
+        const string modelA = "s4-champion-v1";
+        const string modelB = "s4-champion-v2";
+        const string hashA = "sha256:s4-champion-v1";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        // 集群期望 Revision = 1（DesiredStatus=Active，目标模型 A）
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, hashA, "Active", "control-plane");
+
+        var (manager, factory) = BuildActivationManager(modelA, modelB);
+        // 节点先本地激活模型 B（ActiveGeneration=1，本地引擎代次 ≥ 集群 Revision）
+        var local = await manager.ActivateAsync(modelB, new OnnxInferenceEngineOptions
+        {
+            InputTensorName = "input",
+            ScoreOutputName = "score"
+        });
+        Assert.IsTrue(local.Success, $"本地激活应成功：{local.Error}");
+
+        using var worker = CreateWorker(slotStore, manager);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            // 关键断言：本地代次不高于集群期望 → 节点必须切换到集群期望的模型 A
+            var descriptor = await WaitForActiveAsync(manager, modelA, "本地已有激活也不应跳过集群期望状态。");
+            Assert.AreEqual(modelA, descriptor.ModelArtifactId);
+            Assert.AreEqual(2, factory.CreateCallCount,
+                "本地激活（B）+ 集群期望切换（A）应各创建一个 session。");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
     // ===========================================================================
     // Engine Lease 释放：DisposeAsync 幂等 + 停用释放 native session
     // ===========================================================================

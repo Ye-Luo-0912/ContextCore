@@ -35,8 +35,11 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private readonly ILogger<ModelStateReconcilerWorker> _logger;
     private readonly string _instanceId;
 
-    // 本地已知的最新 Revision（单 slot "primary"）
-    private long _lastKnownRevision = -1;
+    // 本地已应用的最新集群槽位 Revision（AppliedClusterSlotRevision）。
+    // 与本地引擎代次（ActiveGeneration，LocalEngineGeneration）是独立计数空间——
+    // 本地代次跟踪"本地激活次数"，集群 Revision 跟踪"槽位期望变更"，两者不可混用，
+    // 否则本地代次较高时会错误跳过集群期望状态（期望模型从未被加载）。
+    private long _appliedClusterSlotRevision = -1;
     private int _initialSyncDone;
 
     public ModelStateReconcilerWorker(
@@ -94,26 +97,21 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         // 首次启动立即应用期望状态：不在此提前 return，而是继续走下方 apply 逻辑。
         // 全新节点（无本地激活）会立即激活 slot 中的 Champion 模型；
         // 同进程内已激活同一模型（ContentHash 匹配）由下方检查跳过，不会重复激活。
+        // 注意：不用本地 ActiveGeneration 初始化 AppliedClusterSlotRevision——
+        // 本地引擎代次与集群槽位 Revision 是独立计数空间，混用会导致
+        // "本地代次高 → 跳过集群期望"的错误跳过（期望模型从未被加载）。
         if (Interlocked.Exchange(ref _initialSyncDone, 1) == 0)
         {
-            // 用本地 ActiveGeneration 初始化已知 Revision 的下界，
-            // 同进程内相同 Revision 不重复应用（乐观并发控制下界）。
-            if (_activationManager.ActiveDescriptor is not null
-                && _activationManager.ActiveGeneration is { } localGen)
-            {
-                _lastKnownRevision = Math.Max(_lastKnownRevision, localGen);
-            }
-
             _logger.LogInformation(
                 "ModelStateReconcilerWorker 初始同步，当前 slot Revision={Revision}，DesiredStatus={DesiredStatus}，立即应用。",
                 slot.Revision, slot.DesiredStatus);
         }
 
-        // 乐观并发控制：仅当远端 Revision > 本地 Revision 时才应用变更
-        if (slot.Revision <= _lastKnownRevision)
+        // 乐观并发控制：仅当远端 Revision > 本地已应用 Revision 时才应用变更
+        if (slot.Revision <= _appliedClusterSlotRevision)
         {
             // Revision 相同但 ContentHash 不匹配 → 记录漂移告警
-            if (slot.Revision == _lastKnownRevision
+            if (slot.Revision == _appliedClusterSlotRevision
                 && string.Equals(slot.DesiredStatus, "Active", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrEmpty(slot.ContentHash)
                 && !string.IsNullOrEmpty(slot.ActiveModelArtifactId)
@@ -154,7 +152,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                         _logger.LogError(
                             "激活模型 {ModelId} 失败：{Error}（Revision {Revision}）",
                             modelId, result.Error, slot.Revision);
-                        // 不更新 _lastKnownRevision，下次轮询重试
+                        // 不更新 AppliedClusterSlotRevision，下次轮询重试
                         return;
                     }
                 }
@@ -175,7 +173,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                 }
             }
 
-            _lastKnownRevision = slot.Revision;
+            _appliedClusterSlotRevision = slot.Revision;
         }
         catch (Exception ex)
         {
