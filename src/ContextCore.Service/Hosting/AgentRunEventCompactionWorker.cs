@@ -23,6 +23,10 @@ namespace ContextCore.Service.Hosting;
 ///
 /// 非 Postgres provider（<see cref="IAgentRunEventCompactor"/> 未注册）或
 /// <see cref="AgentRunEventCompactionOptions.Enabled"/>=false 时自退出。
+///
+/// <b>注入方式</b>：compactor 以可选参数（默认 null）注入——MS DI 的可空注解
+/// 不构成可选注入，未注册的服务在 ValidateOnBuild 下会导致宿主构建失败，
+/// 故沿用 <see cref="ModelStateReconcilerWorker"/> 的默认值参数模式。
 /// </remarks>
 internal sealed class AgentRunEventCompactionWorker : BackgroundService
 {
@@ -31,9 +35,9 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
     private readonly ILogger<AgentRunEventCompactionWorker> _logger;
 
     public AgentRunEventCompactionWorker(
-        IAgentRunEventCompactor? compactor,
         IOptionsMonitor<AgentRunEventCompactionOptions> options,
-        ILogger<AgentRunEventCompactionWorker> logger)
+        ILogger<AgentRunEventCompactionWorker> logger,
+        IAgentRunEventCompactor? compactor = null)
     {
         _compactor = compactor;
         _options = options;

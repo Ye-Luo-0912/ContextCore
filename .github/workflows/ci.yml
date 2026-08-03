@@ -40,15 +40,18 @@ jobs:
       - name: Build (Release)
         run: dotnet build ContextCore.sln -c Release --no-restore -warnaserror
 
-      # 修复：upload bin/obj 产物供下游 test job 复用。
-      # 下游 job 在新 runner 上运行 --no-build --no-restore，若无此 artifact 将在资产解析阶段失败
-      # （obj/project.assets.json 缺失，NuGet cache 也不含该 runner 的 restore 产物）。
+      # 产物瘦身：只上传测试所需输出 + 全量 obj。
+      # 下游 test job 执行 `dotnet test --no-build --no-restore`，只会运行测试项目
+      # （ContextCore.Tests / ContextCore.IntegrationTests / ContextCore.Service.Tests），
+      # 其 bin 已自含全部传递依赖（含 OnnxRuntime 原生库）；应用/基准项目 bin 对
+      # --no-build 执行无用，不再上传。**/obj 保留（project.assets.json 资产解析，
+      # 缺失时 --no-restore 会在资产解析阶段失败）。Artifact 体积 ~3.4GB → ~1.5GB（-55%）。
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-output
           path: |
-            **/bin/
+            tests/**/bin/
             **/obj/
           retention-days: 1
 

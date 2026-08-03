@@ -222,8 +222,8 @@ public sealed class R30S_EventCompactionWorkerTests
     [TestMethod]
     public async Task CompactionWorker_NullCompactor_ExitsImmediately()
     {
+        // 可选注入：compactor 未注册时以默认 null 注入（MS DI 可空注解不构成可选）。
         using var worker = new AgentRunEventCompactionWorker(
-            null,
             new TestOptionsMonitor<AgentRunEventCompactionOptions>(new AgentRunEventCompactionOptions()),
             NullLogger<AgentRunEventCompactionWorker>.Instance);
 
@@ -238,9 +238,9 @@ public sealed class R30S_EventCompactionWorkerTests
         var compactor = new RecordingCompactor();
         var options = new AgentRunEventCompactionOptions { Enabled = false };
         using var worker = new AgentRunEventCompactionWorker(
-            compactor,
             new TestOptionsMonitor<AgentRunEventCompactionOptions>(options),
-            NullLogger<AgentRunEventCompactionWorker>.Instance);
+            NullLogger<AgentRunEventCompactionWorker>.Instance,
+            compactor);
 
         await worker.StartAsync(CancellationToken.None);
         await Task.Delay(80);
@@ -265,9 +265,9 @@ public sealed class R30S_EventCompactionWorkerTests
             MaxRetryCount = 8
         };
         return new AgentRunEventCompactionWorker(
-            compactor,
             new TestOptionsMonitor<AgentRunEventCompactionOptions>(options),
-            NullLogger<AgentRunEventCompactionWorker>.Instance);
+            NullLogger<AgentRunEventCompactionWorker>.Instance,
+            compactor);
     }
 
     private static async Task WaitForAsync(Func<bool> condition, string message, int timeoutMs = 5000)

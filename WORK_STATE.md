@@ -10,14 +10,14 @@
 - **性能优化优先级**（三组，实施前先核对现状，部分已有基础）：
   - **第一组 正确性+性能**：Agent 调度（队列满快速返回、DB claim 替代反复 Recovery 扫描、Workspace 公平队列、批量领取 Run、queue wait histogram）；Tool Effect（Prepare+Intent 单事务、Result 按 RequestId 点查、Reconciliation 批量扫描、Descriptor Frozen Cache、恢复避免重复模型调用）；Retrieval（正式 Keyset Cursor、Selected-only Content/Relation Hydration、Graph per-seed 配额、投影 DTO 避免 JSONB、Exact token 只对 Selected 执行）；Event Recovery（从 Checkpoint Cursor 起、Event page、Snapshot compaction、终态 SSE 全量 drain、Raw events 分页）。
   - **第二组 推理热路径**（Inference Scheduler 生命周期问题已基本关闭）：MaxConcurrency 按 CPU/CUDA/DirectML profile 配置（单 GPU 默认不用 ProcessorCount）；记录 batch fill ratio / queue wait / cancellation waste / session contention / shard count；避免每请求额外小数组与 continuation 分配。
-  - **第三组 CI 性能**：当前 CI 多 Job 上传下载整个 `**/bin`、`**/obj`；先实测 Artifact 大小，再选方案（每 Job restore/build、只上传测试所需输出、分项目 Artifact、或 reusable build cache）。
+  - **第三组 CI 性能（已完成）**：CI 产物瘦身——build-output 由全量 `**/bin`+`**/obj`（实测 ~3.4GB）改为 `tests/**/bin`+`**/obj`（实测 ~1.5GB，-55%）；应用/基准项目 bin 对 `--no-build` 测试执行无用，全量 obj 保留供资产解析；已验证移除 src/benchmarks bin 后解决方案级 `dotnet test --no-build --no-restore` 正常执行。
   - 注：批量领取 Run（R29 P1 LeaseBatch）、Checkpoint Cursor（R29 P4 Cursor>Delta>Full）已有基础。
 
 ## 当前状态
 
-- **基线**：main @ `544479e5`（工作树干净）。
-- **进行中**：性能优化 WP-P5（CI Artifact 瘦身/分项目）。
-- **最近完成**：WP-P4 Event 快照自动压缩后台 worker（简单阈值策略）。
+- **基线**：main @ `a0c8bd0d`（工作树仅剩 WP-P5 与 WORK_STATE 待提交）。
+- **进行中**：无（性能优化 P1~P5 全部完成，最终全量验证通过）。
+- **最近完成**：WP-P5 CI Artifact 瘦身（-55%）+ 修复 P4 引入的 DI 校验回归。
 
 ### 性能优化工作包进度
 
@@ -25,7 +25,7 @@
 - **WP-P2 已完成**：检索 Selected-only 正文水合 + Exact token 只对 Selected。keyword/mandatory 通道保留 IncludeContent=true（评分依赖正文，不改基线）；向量通道改为元数据投影召回（探测 `IContextStoreMetadataLookup`/`IMemoryStoreMetadataLookup`，缺失则回退批量/单条）；Postgres context/memory 元数据投影补齐存储元数据字典（`data->'Metadata'`，修正 metadata 路径下 deprecated 过滤）；pack 阶段 token 估算回退摄取持久化的 `__content_token_cost`；新增 `SelectedCandidateContentHydrator`，Pack 后仅对 Selected 候选批量水合正文并重算 token；`HybridContextRetriever` 可选接入 tokenizer。验证：build 0 错误（无新增警告）；全量 ContextCore.Tests 3379 总数 / 11 既有失败不变（+4 新测试通过）；Service.Tests 0 失败 64 通过；集成测试本地跳过（CI 覆盖）。
 - **WP-P3 已完成**：推理热路径。MaxConcurrency 按 profile 配置（CPU=ProcessorCount，CUDA/TensorRT/DirectML 单 GPU 默认 1）；新增 `OnnxExecutionProvider.DirectML`（`AppendExecutionProvider_DML(deviceId)`）；`InferencePhaseTimingCallback` 接线到 `DefaultComponentHealthRegistry.RecordInferencePhaseTime`（scopeKey "default"，两处生产配置构造点）；新增 `InferenceMetrics`（Meter "ContextCore.Inference.Onnx"：session_contention / shards_executed / queue_wait / batch_fill_ratio / cancellation_waste 五项）；减少每请求分配（stackalloc int[2]、rowOffsets 走 ArrayPool；NamedOnnxValue[] 因 ORT 无 span 重载保留）。验证：build 0 错误（仅既有 CS8625 警告）；R30 新测试 6/6；既有推理测试 39 通过 1 跳过；Service.Tests 0 失败 64 通过（1 跳过）。
 - **WP-P4 已完成**：Event 快照自动压缩后台 worker。`IAgentRunEventCompactor` 新增 `FindCandidatesAsync`（热表按 Run 分组统计事件数，HAVING 阈值 + 限量降序）；新增 `AgentRunCompactionCandidate`（含 LastSequence，worker 以之为折叠上界全量折叠——避免 -1 哨兵只锚定首事件）；新增 `AgentRunEventCompactionWorker`（profile-agnostic，非 Postgres 自退出；简单阈值策略：每轮扫描 ≥MinEventCount(默认 1000) 的 Run，按事件数降序最多压缩 MaxRunsPerPass(20) 个；单 Run 失败不影响本轮其他 Run，连续失败指数退避）；新增 `AgentRunEventCompactionOptions`（"EventCompaction" 配置节）；抽取 `WorkerBackoff` 共享退避，`ModelStateReconcilerWorker.ComputeBackoffDelay` 委托复用；三 profile 统一注册 + workerRegistry。验证：build 0 错误（无新增警告）；R30S 新测试 10/10；PublicApi baseline 通过；R29S/R29H 注册与对账相关定向测试通过（唯一失败为 11 个既有项之一）。
-- **WP-P5（CI Artifact）** 待做。
+- **WP-P5 已完成**：CI Artifact 瘦身。实测全量 `**/bin`+`**/obj` ≈ 3.4GB（大头：benchmarks bin 560MB、IntegrationTests/Tests/Service.Tests bin 460-490MB、Service/Evaluation/ControlRoom bin 418-424MB，均为 OnnxRuntime 原生库传递复制）；改为上传 `tests/**/bin`+`**/obj` ≈ 1.5GB（-55%）——下游 test job 仅执行 3 个测试项目，其 bin 自含全部传递依赖；`**/obj` 全量保留（project.assets.json 资产解析）。验证：YAML 结构完整（7 job 不变）；移除 src/benchmarks 全部 17 个 bin 后解决方案级 `dotnet test ContextCore.sln --no-build --no-restore` 定向测试 10/10 通过；evidence/TRX 门禁不变。附带修复 WP-P4 引入的回归：`AgentRunEventCompactionWorker` 的 `IAgentRunEventCompactor` 改为可选参数（默认 null）注入（MS DI 可空注解不构成可选注入，未注册时 ValidateOnBuild 导致宿主构建失败，Service.Tests 42 失败）。最终全量验证：ContextCore.Tests 3395 总数 / **恰好 11 个既有失败**（3370 通过，14 跳过）；Service.Tests **0 失败 / 64 通过** / 1 跳过。
 
 ## 必要元信息
 
