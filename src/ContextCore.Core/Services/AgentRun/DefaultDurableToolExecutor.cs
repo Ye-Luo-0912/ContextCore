@@ -41,7 +41,12 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   - ExternalOperationId 由本执行器从稳定 RequestId 派生（"cc:" + requestId），
 //     Prepare 时随 journal 条目持久化；Handler 返回真实外部系统 ID 时在 MarkDispatchedAsync 覆盖。
 //   - Journal / Outbox / ResultStore 为可选依赖（null 时降级为直接 dispatch，无 durable 保证）。
-//   - 不处理审批（审批由 Actor 在调用本执行器前通过 IAgentApprovalGate 完成）。
+//   - 审批：Actor 在调用本执行器前通过 IAgentApprovalGate 完成审批，并经
+//     ExecuteAsync 的 approvalGranted=true 显式告知策略层；直连调用（approvalGranted=false）时
+//     策略层对 RequiresApproval 的写副作用 fail-safe（禁止自动提交），防止绕过 Actor 门。
+//   - 失败重试：由策略引擎决定（副作用重试安全 + 未达 MaxRetries 上限），
+//     退避等待后以同一 RequestId/幂等键/ExternalOperationId 重试，外部 Provider 幂等记录可命中。
+//   - 投递模式：AsyncDurable 时 Commit 后显式推进 ResultDelivered（结果已送达事件流）。
 //   - 异常时返回 Succeeded=false 的结果（不抛异常，让 Actor 决定如何处理）。
 // ===========================================================================
 
@@ -99,7 +104,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         int modelTurn,
         CancellationToken cancellationToken = default,
         AgentLeaseFence? leaseFence = null,
-        DateTimeOffset? deadlineAt = null)
+        DateTimeOffset? deadlineAt = null,
+        bool approvalGranted = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
@@ -201,7 +207,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 // 4a. Journal = Committed/ResultDelivered 且缓存结果可用 → 直接返回缓存，禁止重新 Dispatch
                 case ToolDispatchRecoveryDecision.UseCachedResult when prepareResult.CachedResult is not null:
                     stopwatch.Stop();
-                    return BuildCachedResult(prepareResult.CachedResult, stopwatch.Elapsed);
+                    return BuildCachedResult(prepareResult.CachedResult, stopwatch.Elapsed,
+                        journalState: prepareResult.CurrentState);
 
                 // 4c. Journal = Committed/ResultDelivered 但 journal 不缓存结果（Postgres 路径）
                 //     查询 IDurableToolResultStore；无 resultStore 或缓存未命中 → 返回对账结果
@@ -220,7 +227,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         if (cached is not null)
                         {
                             stopwatch.Stop();
-                            return BuildCachedResult(cached, stopwatch.Elapsed);
+                            return BuildCachedResult(cached, stopwatch.Elapsed,
+                                journalState: prepareResult.CurrentState);
                         }
                     }
 
@@ -260,60 +268,141 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         // 5. Dispatch（携带 RequestId + 执行上下文：WorkspaceId/RunId/IdempotencyKey/ExternalOperationId）
         // Intent 已在 PrepareWithIntentAsync 中前置落库（DispatchingIntent = durable 边界），
         // 此处无需再单独标记；若进程在此之后崩溃，恢复时知道外部调用可能已开始，需对账而非盲目重放。
-        ToolDispatchResult dispatchResult;
-        try
+        //
+        // 失败重试（策略驱动）：Dispatch 失败且副作用重试安全、未达 Descriptor.MaxRetries 上限时，
+        // 按策略 Retry.Delay 退避后重试——同一 RequestId/幂等键/ExternalOperationId
+        // （journal 条目与外部 Provider 幂等记录保持一致，重放安全）。
+        var maxDispatchAttempts = descriptor is { RetryBackoffPolicy: not ToolRetryBackoffPolicy.None }
+            ? 1 + Math.Max(0, descriptor.MaxRetries)
+            : 1;
+        // 失败重试决策用副作用：以声明为准（失败时运行时结果不可信/不可得），
+        // 未声明（null）→ Unknown（保守：不自动重试、不自动提交）。
+        var declaredSideEffect = descriptor is { DeclaredSideEffect: not ToolSideEffect.Unknown }
+            ? descriptor.DeclaredSideEffect
+            : ToolSideEffect.Unknown;
+
+        ToolDispatchResult? dispatchResult = null;
+        Exception? dispatchException = null;
+        var retryAttemptsPerformed = 0;
+        var finalAttempt = 0;
+
+        for (var attempt = 0; attempt < maxDispatchAttempts; attempt++)
         {
-            // 对写副作用 Tool 做 lease fence 校验——lease 已失效时 fail-closed，
-            // 阻止旧 Owner 在租约过期后执行外部写操作。
-            // ReadOnly/None 可跳过校验（无副作用，重放安全）。
-            // NonIdempotentWrite 在 ProductionHA 下无外部幂等或 fencing 支持时必须 fail-closed。
-            if (leaseFence is not null && DateTimeOffset.UtcNow >= leaseFence.ExpiresAt)
+            dispatchException = null;
+            try
             {
-                return BuildFailedResult(
-                    requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
-                    error: $"Lease 已过期（ExpiresAt={leaseFence.ExpiresAt:O}），Tool 执行被 fence 阻止。",
-                    journalState: ToolDispatchState.Prepared,
-                    duration: stopwatch.Elapsed);
+                // 对写副作用 Tool 做 lease fence 校验——lease 已失效时 fail-closed，
+                // 阻止旧 Owner 在租约过期后执行外部写操作。
+                // ReadOnly/None 可跳过校验（无副作用，重放安全）。
+                // NonIdempotentWrite 在 ProductionHA 下无外部幂等或 fencing 支持时必须 fail-closed。
+                if (leaseFence is not null && DateTimeOffset.UtcNow >= leaseFence.ExpiresAt)
+                {
+                    return BuildFailedResult(
+                        requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
+                        error: $"Lease 已过期（ExpiresAt={leaseFence.ExpiresAt:O}），Tool 执行被 fence 阻止。",
+                        journalState: ToolDispatchState.Prepared,
+                        duration: stopwatch.Elapsed);
+                }
+
+                // 声明要求 lease fence 但调用方未提供 → fail-closed（副作用 Tool 无 fencing 保护时禁止执行）
+                if (descriptor is { RequiresLeaseFence: true } && leaseFence is null)
+                {
+                    return BuildFailedResult(
+                        requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
+                        error: $"Tool '{toolCall.ToolName}' 声明 RequiresLeaseFence，但调用未携带 LeaseFence，执行被拒绝（fail-closed）。",
+                        journalState: ToolDispatchState.Prepared,
+                        duration: stopwatch.Elapsed);
+                }
+
+                dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
+                {
+                    ToolName = toolCall.ToolName,
+                    Payload = toolCall.Arguments,
+                    RequestId = requestId,
+                    IdempotencyKey = effectiveIdempotencyKey,
+                    ExternalOperationId = externalOperationId,
+                    WorkspaceId = workspaceId,
+                    RunId = runId,
+                    // 透传 leaseFence + deadlineAt 到 ToolDispatchRequest，
+                    // 让 Tool Handler 在执行外部写操作前校验租约有效性。
+                    LeaseFence = leaseFence,
+                    DeadlineAt = deadlineAt
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Dispatch 异常（Dispatcher 级故障）→ 记录后按策略决定是否重试。
+                dispatchException = ex;
+                dispatchResult = null;
             }
 
-            // 声明要求 lease fence 但调用方未提供 → fail-closed（副作用 Tool 无 fencing 保护时禁止执行）
-            if (descriptor is { RequiresLeaseFence: true } && leaseFence is null)
+            finalAttempt = attempt;
+
+            // 成功 → 退出重试循环。
+            if (dispatchException is null && dispatchResult is { Succeeded: true })
             {
-                return BuildFailedResult(
-                    requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
-                    error: $"Tool '{toolCall.ToolName}' 声明 RequiresLeaseFence，但调用未携带 LeaseFence，执行被拒绝（fail-closed）。",
-                    journalState: ToolDispatchState.Prepared,
-                    duration: stopwatch.Elapsed);
+                break;
             }
 
-            dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
+            // 失败 → 策略决定是否重试（副作用重试安全 + 未达上限）。
+            var failureResult = new ToolExecutionResult
             {
-                ToolName = toolCall.ToolName,
-                Payload = toolCall.Arguments,
                 RequestId = requestId,
                 IdempotencyKey = effectiveIdempotencyKey,
+                SideEffect = declaredSideEffect,
                 ExternalOperationId = externalOperationId,
-                WorkspaceId = workspaceId,
-                RunId = runId,
-                // 透传 leaseFence + deadlineAt 到 ToolDispatchRequest，
-                // 让 Tool Handler 在执行外部写操作前校验租约有效性。
-                LeaseFence = leaseFence,
-                DeadlineAt = deadlineAt
-            }, cancellationToken).ConfigureAwait(false);
+                JournalState = ToolDispatchState.DispatchingIntent,
+                Succeeded = false,
+                Error = dispatchException?.Message ?? dispatchResult?.Error ?? "Tool dispatch 失败",
+                Duration = stopwatch.Elapsed
+            };
+            var retryPolicy = _effectPolicy.Resolve(
+                descriptor ?? new ToolDescriptor
+                {
+                    // Dispatcher 未提供前置声明（如 EchoToolDispatcher）→ 以 Unknown 合成描述符，
+                    // 策略按观测值保守处置（Unknown → 不自动提交、不自动重试）。
+                    Name = toolCall.ToolName,
+                    DeclaredSideEffect = declaredSideEffect
+                },
+                prepareResult, failureResult, attempt);
+
+            if (!retryPolicy.Retry.ShouldRetry)
+            {
+                break;
+            }
+
+            // 退避等待后重试（同一调用身份；幂等键/ExternalOperationId 不变）。
+            retryAttemptsPerformed = attempt + 1;
+            await Task.Delay(retryPolicy.Retry.Delay, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+
+        // 重试耗尽仍为异常 → 返回失败（journal 停留在 Prepared；重试过则记录重试次数）。
+        if (dispatchException is not null)
         {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // Dispatch 异常 → 返回失败（journal 仍停留在 Prepared 状态）
+            var error = retryAttemptsPerformed > 0
+                ? $"Dispatch 重试 {retryAttemptsPerformed} 次后仍异常：{dispatchException.Message}"
+                : $"Dispatch 异常：{dispatchException.Message}";
             return BuildFailedResult(
                 requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
-                error: $"Dispatch 异常：{ex.Message}",
+                error: error,
                 journalState: ToolDispatchState.Prepared,
                 duration: stopwatch.Elapsed);
         }
+
+        // 非异常路径 → DispatchAsync 已成功返回（结果可能 Succeeded=false），dispatchResult 必非空。
+        if (dispatchResult is null)
+        {
+            return BuildFailedResult(
+                requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
+                error: "Tool dispatch 未返回结果（内部不一致）。",
+                journalState: ToolDispatchState.Prepared,
+                duration: stopwatch.Elapsed);
+        }
+
 
         // 6. Journal.MarkDispatchedAsync（若注入 journal）
         //    外部操作 ID：Handler 返回真实外部系统 ID 时优先，否则保留框架生成值。
@@ -360,7 +449,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 Name = toolCall.ToolName,
                 DeclaredSideEffect = effectiveSideEffect
             },
-            prepareResult, policyResult);
+            prepareResult, policyResult, finalAttempt, approvalGranted);
 
         ToolDispatchState finalJournalState;
         switch (policy.Disposition)
@@ -424,6 +513,23 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         // 结果缓存写入失败不阻断主流程（journal 已 Committed，结果已持久化在 dispatchResult 中）
                     }
                 }
+
+                // 投递模式决策：AsyncDurable → Commit 后显式推进 ResultDelivered（结果已送达事件流）。
+                // Synchronous → journal 停留在 Committed，由调用方完成后续投递语义。
+                if (policy.DeliveryMode == ToolDeliveryMode.AsyncDurable && _dispatchJournal is not null)
+                {
+                    try
+                    {
+                        await _dispatchJournal.MarkResultDeliveredAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        finalJournalState = ToolDispatchState.ResultDelivered;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // MarkResultDelivered 失败（如状态已被并发推进）→ 查询实际状态
+                        var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        finalJournalState = entry?.State ?? ToolDispatchState.Committed;
+                    }
+                }
                 break;
 
             case ToolExecutionDisposition.HoldForReconciliation:
@@ -466,8 +572,13 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
     /// <summary>
     /// 从缓存结果构建 ToolExecutionResult（Journal 已 Committed/ResultDelivered 时使用）。
+    /// JournalState 保真：缓存来源为 ResultDelivered 时回传 ResultDelivered（结果已送达），
+    /// 避免下游将已送达的结果误判为需对账。
     /// </summary>
-    private static ToolExecutionResult BuildCachedResult(DurableToolResult cached, TimeSpan elapsed)
+    private static ToolExecutionResult BuildCachedResult(
+        DurableToolResult cached,
+        TimeSpan elapsed,
+        ToolDispatchState journalState = ToolDispatchState.Committed)
     {
         return new ToolExecutionResult
         {
@@ -475,7 +586,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             IdempotencyKey = cached.IdempotencyKey,
             SideEffect = cached.SideEffect,
             ExternalOperationId = cached.ExternalOperationId,
-            JournalState = ToolDispatchState.Committed,
+            JournalState = journalState,
             Result = cached.Result,
             Succeeded = cached.Succeeded,
             Error = cached.Error,

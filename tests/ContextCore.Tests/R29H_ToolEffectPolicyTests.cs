@@ -244,17 +244,355 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 
+    // ── 审批门扩展（Actor 门 → 策略层）──────────────────────────────────────
+
+    /// <summary>
+    /// 验证：RequiresApproval 声明 + 写副作用 + 未确认审批 → 禁止自动提交（fail-safe）。
+    /// 防止绕过 Actor 审批门的直连调用自动执行外部写副作用。
+    /// </summary>
+    [TestMethod]
+    public void Policy_ApprovalGate_UnapprovedWrite_Holds()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var unapproved = Resolve(policy, ToolSideEffect.Write, success: true, requiresApproval: true, approvalGranted: false);
+        Assert.AreEqual(ToolExecutionDisposition.HoldForReconciliation, unapproved.Disposition,
+            "RequiresApproval 写副作用未经审批 → 禁止自动提交。");
+        Assert.IsTrue(unapproved.RequiresApprovalBeforeCommit, "未确认审批必须标记 RequiresApprovalBeforeCommit。");
+    }
+
+    /// <summary>
+    /// 验证：审批已由 Actor 门确认（approvalGranted=true）→ 保持既有提交流程。
+    /// </summary>
+    [TestMethod]
+    public void Policy_ApprovalGate_ApprovedWrite_Commits()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var approved = Resolve(policy, ToolSideEffect.Write, success: true, requiresApproval: true, approvalGranted: true);
+        Assert.AreEqual(ToolExecutionDisposition.Commit, approved.Disposition,
+            "审批已确认 → 提交（不破坏 Actor 审批后的正常提交流程）。");
+        Assert.IsFalse(approved.RequiresApprovalBeforeCommit);
+    }
+
+    /// <summary>
+    /// 验证：只读/无副作用不设策略层审批门（无外部副作用，审批仅由 Actor 门负责）。
+    /// </summary>
+    [TestMethod]
+    public void Policy_ApprovalGate_ReadOnly_NotGated()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var read = Resolve(policy, ToolSideEffect.ReadOnly, success: true, requiresApproval: true, approvalGranted: false);
+        Assert.AreEqual(ToolExecutionDisposition.Commit, read.Disposition,
+            "只读副作用无外部副作用，策略层不拦截。");
+    }
+
+    // ── 重试决策矩阵（Dispatch 失败时）──────────────────────────────────────
+
+    /// <summary>
+    /// 验证：未配置重试策略（MaxRetries=0 / RetryBackoffPolicy=None）→ 不自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_DefaultNone_Aborts()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Write, success: false, maxRetries: 0, backoff: ToolRetryBackoffPolicy.None);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "未配置重试策略 → 不自动重试。");
+    }
+
+    /// <summary>
+    /// 验证：显式配置 MaxRetries&gt;0 的普通写 → 允许自动重试（Linear = 固定 RetryDelay）。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_WriteWithMaxRetries_RetriesWithDelay()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var retry = Resolve(policy, ToolSideEffect.Write, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear, retryDelay: TimeSpan.FromSeconds(2));
+        Assert.IsTrue(retry.Retry.ShouldRetry, "显式配置 MaxRetries>0 的普通写 → 允许自动重试。");
+        Assert.AreEqual(TimeSpan.FromSeconds(2), retry.Retry.Delay, "Linear 退避 → 固定 RetryDelay。");
+        Assert.AreEqual(2, retry.Retry.AttemptsRemaining, "MaxRetries=3、attempt=0 → 剩余 2 次。");
+    }
+
+    /// <summary>
+    /// 验证：Exponential 退避 → 第 n 次重试前等待 RetryDelay * 2^(n-1)。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_ExponentialBackoff_DelayDoublesPerAttempt()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var first = Resolve(policy, ToolSideEffect.ReadOnly, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Exponential, retryDelay: TimeSpan.FromSeconds(1), attempt: 0);
+        Assert.AreEqual(TimeSpan.FromSeconds(1), first.Retry.Delay, "第 1 次重试 → RetryDelay * 2^0。");
+
+        var third = Resolve(policy, ToolSideEffect.ReadOnly, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Exponential, retryDelay: TimeSpan.FromSeconds(1), attempt: 2);
+        Assert.AreEqual(TimeSpan.FromSeconds(4), third.Retry.Delay, "第 3 次重试 → RetryDelay * 2^2。");
+    }
+
+    /// <summary>
+    /// 验证：attempt 达 MaxRetries 上限 → 终止重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_ExceedsMaxAttempts_Aborts()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Write, success: false,
+            maxRetries: 2, backoff: ToolRetryBackoffPolicy.Linear, attempt: 2);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "attempt >= MaxRetries → 终止重试。");
+    }
+
+    /// <summary>
+    /// 验证：非幂等写外部副作用不可重放 → 永不自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_NonIdempotentWrite_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.NonIdempotentWrite, success: false,
+            maxRetries: 5, backoff: ToolRetryBackoffPolicy.Linear);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "非幂等写不可重放 → 永不自动重试。");
+    }
+
+    /// <summary>
+    /// 验证：副作用未知 → 保守，不自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_UnknownSideEffect_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Unknown, success: false,
+            maxRetries: 5, backoff: ToolRetryBackoffPolicy.Linear);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "副作用未知 → 不自动重试。");
+    }
+
+    /// <summary>
+    /// 验证：幂等写无稳定幂等键 → 重试不安全，不自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_IdempotentWrite_WithoutKey_NeverRetries()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.IdempotentWrite, success: false,
+            idempotencyKey: null, maxRetries: 5, backoff: ToolRetryBackoffPolicy.Linear);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "幂等写无稳定幂等键 → 重试不安全。");
+    }
+
+    /// <summary>
+    /// 验证：只读副作用重放安全 → 允许自动重试。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_ReadOnly_SafeRetry()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var retry = Resolve(policy, ToolSideEffect.ReadOnly, success: false,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear);
+        Assert.IsTrue(retry.Retry.ShouldRetry, "只读副作用重放安全 → 允许自动重试。");
+    }
+
+    /// <summary>
+    /// 验证：执行成功 → 无需重试（恒 Abort）。
+    /// </summary>
+    [TestMethod]
+    public void Policy_Retry_Success_Aborts()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var aborted = Resolve(policy, ToolSideEffect.Write, success: true,
+            maxRetries: 3, backoff: ToolRetryBackoffPolicy.Linear);
+        Assert.IsFalse(aborted.Retry.ShouldRetry, "执行成功 → 无需重试。");
+    }
+
+    // ── 投递模式决策 ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 验证：投递模式决策回传 Descriptor 声明（Synchronous 默认 / AsyncDurable 透传）。
+    /// </summary>
+    [TestMethod]
+    public void Policy_DeliveryMode_Passthrough()
+    {
+        var policy = new DefaultToolEffectPolicy();
+
+        var sync = Resolve(policy, ToolSideEffect.Write, success: true);
+        Assert.AreEqual(ToolDeliveryMode.Synchronous, sync.DeliveryMode, "默认 Synchronous。");
+
+        var durable = Resolve(policy, ToolSideEffect.Write, success: true, deliveryMode: ToolDeliveryMode.AsyncDurable);
+        Assert.AreEqual(ToolDeliveryMode.AsyncDurable, durable.DeliveryMode, "AsyncDurable 声明回传。");
+    }
+
+    // ── 执行器集成：重试循环 / 投递模式 / 审批门 ─────────────────────────────
+
+    /// <summary>
+    /// 验证：Dispatch 失败 2 次后成功 → 自动重试（MaxRetries=2）→ 提交。
+    /// 重试使用同一 RequestId/幂等键/ExternalOperationId（外部 Provider 幂等记录可命中）。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_RetryLoop_RetriesThenSucceeds()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write,
+            failTimes: 2, descriptor: RetryDescriptor("charge", maxRetries: 2));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-R1"), 0, cts.Token);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Committed, result.JournalState, "重试后成功 → 自动提交。");
+        Assert.AreEqual(3, handler.InvocationCount, "1 次初始 + 2 次重试 = 3 次分派。");
+        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
+    }
+
+    /// <summary>
+    /// 验证：重试耗尽仍失败 → 副作用是否发生未知，禁止自动提交（Hold，journal 保持 Dispatched）。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_RetryLoop_ExhaustedThenHolds()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write,
+            succeed: false, descriptor: RetryDescriptor("charge", maxRetries: 2));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-R2"), 0, cts.Token);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
+            "重试耗尽仍失败 → 禁止自动提交（副作用是否发生未知）。");
+        Assert.AreEqual(3, handler.InvocationCount, "1 次初始 + 2 次重试后放弃。");
+        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
+    }
+
+    /// <summary>
+    /// 验证：Dispatch 异常（Dispatcher 级故障）→ 按策略重试后成功。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_RetryLoop_ExceptionThenSucceeds()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write,
+            throwTimes: 1, descriptor: RetryDescriptor("charge", maxRetries: 2));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-R3"), 0, cts.Token);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Committed, result.JournalState);
+        Assert.AreEqual(2, handler.InvocationCount, "异常后重试一次成功。");
+    }
+
+    /// <summary>
+    /// 验证：AsyncDurable 投递 → Commit 后显式推进 ResultDelivered（结果已送达事件流）。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_AsyncDurableDelivery_MarksResultDelivered()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write,
+            descriptor: RetryDescriptor("charge", maxRetries: 0, deliveryMode: ToolDeliveryMode.AsyncDurable));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-D1"), 0, cts.Token);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(ToolDispatchState.ResultDelivered, result.JournalState,
+            "AsyncDurable → Commit 后显式推进 ResultDelivered。");
+        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.ResultDelivered, entry!.State);
+    }
+
+    /// <summary>
+    /// 验证：默认 Synchronous 投递 → journal 停留在 Committed（由调用方完成后续投递语义）。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_SynchronousDelivery_StaysCommitted()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-D2"), 0, cts.Token);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Committed, result.JournalState, "默认 Synchronous → 停留在 Committed。");
+        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
+    }
+
+    /// <summary>
+    /// 验证：直连调用（approvalGranted=false）+ RequiresApproval 写副作用 → 策略层禁止自动提交。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_ApprovalGate_UnapprovedWrite_Holds()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write,
+            descriptor: RetryDescriptor("charge", maxRetries: 0, requiresApproval: true));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-A1"), 0, cts.Token);
+
+        Assert.IsTrue(result.Succeeded, "外部调用本身成功。");
+        Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
+            "RequiresApproval 写副作用未确认审批 → 禁止自动提交（fail-safe）。");
+        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
+    }
+
+    /// <summary>
+    /// 验证：审批已确认（approvalGranted=true）→ 保持既有提交流程（提交）。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_ApprovalGate_ApprovedWrite_Commits()
+    {
+        var handler = CreateHandler("charge", ToolSideEffect.Write,
+            descriptor: RetryDescriptor("charge", maxRetries: 0, requiresApproval: true));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-A2"), 0, cts.Token,
+            approvalGranted: true);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(ToolDispatchState.Committed, result.JournalState,
+            "审批已确认 → 提交（不破坏 Actor 审批后的正常提交流程）。");
+        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
+    }
+
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
     private static ToolExecutionPolicy Resolve(
         DefaultToolEffectPolicy policy,
         ToolSideEffect sideEffect,
         bool success,
-        string? idempotencyKey = "idem-policy") => policy.Resolve(
+        string? idempotencyKey = "idem-policy",
+        int maxRetries = 0,
+        ToolRetryBackoffPolicy backoff = ToolRetryBackoffPolicy.None,
+        TimeSpan? retryDelay = null,
+        ToolDeliveryMode deliveryMode = ToolDeliveryMode.Synchronous,
+        bool requiresApproval = false,
+        int attempt = 0,
+        bool approvalGranted = false) => policy.Resolve(
         new ToolDescriptor
         {
             Name = "t",
-            DeclaredSideEffect = sideEffect
+            DeclaredSideEffect = sideEffect,
+            MaxRetries = maxRetries,
+            RetryBackoffPolicy = backoff,
+            RetryDelay = retryDelay ?? TimeSpan.FromSeconds(5),
+            DeliveryMode = deliveryMode,
+            RequiresApproval = requiresApproval
         },
         journal: null,
         result: new ToolExecutionResult
@@ -265,13 +603,38 @@ public sealed class R29H_ToolEffectPolicyTests
             JournalState = ToolDispatchState.Dispatched,
             Succeeded = success,
             Duration = TimeSpan.Zero
-        });
+        },
+        attempt,
+        approvalGranted);
 
     private static PolicyTestHandler CreateHandler(
         string toolName,
         ToolSideEffect sideEffect,
         bool succeed = true,
-        ToolSideEffect? runtimeSideEffect = null) => new(toolName, sideEffect, succeed, runtimeSideEffect ?? sideEffect);
+        ToolSideEffect? runtimeSideEffect = null,
+        int failTimes = 0,
+        int throwTimes = 0,
+        ToolDescriptor? descriptor = null) => new(
+            toolName, sideEffect, succeed, runtimeSideEffect ?? sideEffect, failTimes, throwTimes, descriptor);
+
+    /// <summary>构建带重试/投递/审批配置的 ToolDescriptor 测试描述符。</summary>
+    private static ToolDescriptor RetryDescriptor(
+        string name,
+        int maxRetries,
+        ToolRetryBackoffPolicy backoff = ToolRetryBackoffPolicy.Linear,
+        TimeSpan? retryDelay = null,
+        ToolSideEffect sideEffect = ToolSideEffect.Write,
+        ToolDeliveryMode deliveryMode = ToolDeliveryMode.Synchronous,
+        bool requiresApproval = false) => new()
+    {
+        Name = name,
+        DeclaredSideEffect = sideEffect,
+        MaxRetries = maxRetries,
+        RetryBackoffPolicy = backoff,
+        RetryDelay = retryDelay ?? TimeSpan.FromMilliseconds(1),
+        DeliveryMode = deliveryMode,
+        RequiresApproval = requiresApproval
+    };
 
     private static (RealToolDispatcher Dispatcher, DefaultDurableToolExecutor Executor, InMemoryToolDispatchJournal Journal, InMemoryDurableToolResultStore ResultStore) CreateExecutor(
         PolicyTestHandler handler)
@@ -291,17 +654,34 @@ public sealed class R29H_ToolEffectPolicyTests
         ToolCallId = $"toolcall-{toolName}-0"
     };
 
-    /// <summary>可配置的 Tool Handler：可声明副作用、失败或返回外部操作 ID。</summary>
+    /// <summary>可配置的 Tool Handler：可声明副作用、失败/抛异常次数、重试/投递/审批描述符。</summary>
     private sealed class PolicyTestHandler : IToolHandler
     {
         private int _invocationCount;
+        private readonly int _failTimes;
+        private readonly int _throwTimes;
+        private readonly ToolDescriptor _descriptor;
 
-        public PolicyTestHandler(string toolName, ToolSideEffect sideEffect, bool succeed, ToolSideEffect runtimeSideEffect)
+        public PolicyTestHandler(
+            string toolName,
+            ToolSideEffect sideEffect,
+            bool succeed,
+            ToolSideEffect runtimeSideEffect,
+            int failTimes = 0,
+            int throwTimes = 0,
+            ToolDescriptor? descriptor = null)
         {
             ToolName = toolName;
             DeclaredSideEffect = sideEffect;
             Succeed = succeed;
             RuntimeSideEffect = runtimeSideEffect;
+            _failTimes = failTimes;
+            _throwTimes = throwTimes;
+            _descriptor = descriptor ?? new ToolDescriptor
+            {
+                Name = toolName,
+                DeclaredSideEffect = sideEffect
+            };
         }
 
         public string ToolName { get; }
@@ -310,21 +690,25 @@ public sealed class R29H_ToolEffectPolicyTests
         public ToolSideEffect RuntimeSideEffect { get; }
         public string? Description => $"Test tool: {ToolName}";
         public string? ParametersJsonSchema => "{}";
-        public ToolDescriptor Descriptor => new()
-        {
-            Name = ToolName,
-            DeclaredSideEffect = DeclaredSideEffect
-        };
+        public ToolDescriptor Descriptor => _descriptor;
         public int InvocationCount => Volatile.Read(ref _invocationCount);
 
         public ValueTask<ToolHandlerResult> HandleAsync(
             ToolExecutionContext context,
             CancellationToken cancellationToken = default)
         {
-            Interlocked.Increment(ref _invocationCount);
-            return ValueTask.FromResult(Succeed
-                ? new ToolHandlerResult { Succeeded = true, Result = "ok", SideEffect = RuntimeSideEffect }
-                : new ToolHandlerResult { Succeeded = false, Error = "simulated-failure", SideEffect = RuntimeSideEffect });
+            var n = Interlocked.Increment(ref _invocationCount);
+            // 前 throwTimes 次抛异常（Dispatcher 转为 Succeeded=false + RequiresReconciliation），
+            // 随后 failTimes 次返回失败，之后成功。
+            if (n <= _throwTimes)
+            {
+                throw new InvalidOperationException("simulated-dispatch-exception");
+            }
+            if (!Succeed || n <= _throwTimes + _failTimes)
+            {
+                return ValueTask.FromResult(new ToolHandlerResult { Succeeded = false, Error = "simulated-failure", SideEffect = RuntimeSideEffect });
+            }
+            return ValueTask.FromResult(new ToolHandlerResult { Succeeded = true, Result = "ok", SideEffect = RuntimeSideEffect });
         }
     }
 }

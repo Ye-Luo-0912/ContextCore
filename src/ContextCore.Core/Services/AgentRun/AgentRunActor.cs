@@ -1247,7 +1247,8 @@ public sealed class AgentRunActor
                     : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
                     state.Run.RunId, state.Run.WorkspaceId, toolCall, pendingCommand.ModelTurnRevision,
-                    cancellationToken, leaseFence1, state.Run.DeadlineAt).ConfigureAwait(false);
+                    cancellationToken, leaseFence1, state.Run.DeadlineAt,
+                    approvalGranted: true).ConfigureAwait(false);
             }
             else
             {
@@ -1933,7 +1934,8 @@ public sealed class AgentRunActor
                     : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
                     state.Run.RunId, state.Run.WorkspaceId, toolCall, _executionModelTurn,
-                    cancellationToken, leaseFence2, state.Run.DeadlineAt).ConfigureAwait(false);
+                    cancellationToken, leaseFence2, state.Run.DeadlineAt,
+                    approvalGranted: true).ConfigureAwait(false);
             }
             else
             {

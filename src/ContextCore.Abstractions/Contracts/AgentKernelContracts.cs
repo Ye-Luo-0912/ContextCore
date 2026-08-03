@@ -248,6 +248,62 @@ public sealed record ToolDescriptor
     public TimeSpan ReconciliationDeadline { get; init; } = TimeSpan.FromHours(24);
     /// <summary>Maximum execution time. Tool calls exceeding this are treated as timed out (RequiresReconciliation).</summary>
     public TimeSpan MaximumExecutionTime { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// 最大自动重试次数（Dispatch 失败时；默认 0 = 不自动重试）。
+    /// 仅对重试安全的副作用生效（None/ReadOnly/带稳定幂等键的 IdempotentWrite/显式配置的 Write）。
+    /// 非幂等写 / 需对账 / Fence 写 / 副作用未知永不自动重试。
+    /// </summary>
+    public int MaxRetries { get; init; } = 0;
+
+    /// <summary>重试基础延迟（配合 <see cref="RetryBackoffPolicy"/> 计算每次重试前等待）。</summary>
+    public TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// 重试退避策略（None = 不自动重试；Linear = 固定延迟；Exponential = 指数退避，
+    /// 第 n 次重试前等待 RetryDelay * 2^(n-1)）。
+    /// </summary>
+    public ToolRetryBackoffPolicy RetryBackoffPolicy { get; init; } = ToolRetryBackoffPolicy.None;
+
+    /// <summary>
+    /// 结果投递模式（Synchronous = 执行器返回即视为送达，journal 停留在 Committed；
+    /// AsyncDurable = Commit 后执行器显式调用
+    /// <see cref="IToolDispatchJournal.MarkResultDeliveredAsync"/> 推进到 ResultDelivered 再返回）。
+    /// </summary>
+    public ToolDeliveryMode DeliveryMode { get; init; } = ToolDeliveryMode.Synchronous;
+}
+
+/// <summary>Tool 重试退避策略。</summary>
+public enum ToolRetryBackoffPolicy : byte
+{
+    /// <summary>不自动重试（默认）。</summary>
+    None = 0,
+
+    /// <summary>线性退避：每次重试前固定等待 <see cref="ToolDescriptor.RetryDelay"/>。</summary>
+    Linear = 1,
+
+    /// <summary>
+    /// 指数退避：第 n 次重试（0 起）前等待 RetryDelay * 2^(n-1)。
+    /// 快速失败场景下避免对下游系统的重试风暴。
+    /// </summary>
+    Exponential = 2
+}
+
+/// <summary>Tool 结果投递模式。</summary>
+public enum ToolDeliveryMode : byte
+{
+    /// <summary>
+    /// 同步返回（默认）：执行器返回结果即视为送达，journal 停留在
+    /// <see cref="ToolDispatchState.Committed"/>，由调用方完成后续投递语义。
+    /// </summary>
+    Synchronous = 0,
+
+    /// <summary>
+    /// 异步 durable 投递：Commit 后执行器显式调用
+    /// <see cref="IToolDispatchJournal.MarkResultDeliveredAsync"/> 推进到
+    /// <see cref="ToolDispatchState.ResultDelivered"/> 再返回，结果已送达事件流。
+    /// </summary>
+    AsyncDurable = 1
 }
 
 /// <summary>
@@ -285,6 +341,46 @@ public sealed record ToolExecutionPolicy
     /// true 时即使结果成功也不自动提交，必须经对账确认外部副作用真相后提交。
     /// </summary>
     public bool RequiresReconciliationBeforeCommit { get; init; }
+
+    /// <summary>
+    /// 重试决策（Dispatch 失败且副作用重试安全、未达上限时 ShouldRetry=true + Delay）。
+    /// 执行器在每次失败后按此决策退避重试（同一 RequestId / 幂等键 / ExternalOperationId），
+    /// 重试耗尽后按 <see cref="Disposition"/> 处置。
+    /// </summary>
+    public ToolRetryDecision Retry { get; init; } = ToolRetryDecision.Abort("默认不重试");
+
+    /// <summary>
+    /// 结果投递模式决策（回传 <see cref="ToolDescriptor.DeliveryMode"/>；策略层可未来覆盖）。
+    /// AsyncDurable → Commit 后执行器显式推进 <see cref="ToolDispatchState.ResultDelivered"/> 再返回。
+    /// </summary>
+    public ToolDeliveryMode DeliveryMode { get; init; } = ToolDeliveryMode.Synchronous;
+
+    /// <summary>
+    /// 是否要求提交前审批确认（Descriptor.RequiresApproval=true + 写副作用 + 未确认审批 → true）。
+    /// true 时执行器不得自动提交（Hold），须经 IAgentApprovalGate 确认后由调用方重新执行或对账。
+    /// </summary>
+    public bool RequiresApprovalBeforeCommit { get; init; }
+}
+
+/// <summary>
+/// Tool 重试决策（Dispatch 失败且副作用重试安全、未达上限时 Retry）。
+/// </summary>
+public sealed record ToolRetryDecision
+{
+    /// <summary>是否应自动重试（false = 终止重试，按处置结果处理）。</summary>
+    public required bool ShouldRetry { get; init; }
+
+    /// <summary>下次重试前等待时长（退避计算结果）。</summary>
+    public TimeSpan Delay { get; init; } = TimeSpan.Zero;
+
+    /// <summary>本次决策时剩余可重试次数。</summary>
+    public int AttemptsRemaining { get; init; }
+
+    /// <summary>决策原因（审计/诊断）。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>构造终止重试决策。</summary>
+    public static ToolRetryDecision Abort(string? reason = null) => new() { ShouldRetry = false, Reason = reason };
 }
 
 /// <summary>
@@ -308,14 +404,24 @@ public interface IToolEffectPolicy
     /// <summary>
     /// 解析 Tool 执行策略。
     /// </summary>
-    /// <param name="descriptor">Tool 前置声明（副作用 / 审批 / 幂等 / fence / 恢复策略）。</param>
+    /// <param name="descriptor">Tool 前置声明（副作用 / 审批 / 幂等 / fence / 恢复策略 / 重试 / 投递模式）。</param>
     /// <param name="journal">PrepareWithIntentAsync 返回的 journal 状态与身份；无 journal（降级直连）时为 null。</param>
     /// <param name="result">Dispatch 后的执行结果；未分派（前置校验失败）时为 null。</param>
-    /// <returns>执行策略处置。</returns>
+    /// <param name="attempt">
+    /// 当前已失败的 Dispatch 次数（0 起；成功分派为 0）。
+    /// 用于重试上限判定与退避计算（Linear = 固定延迟；Exponential = RetryDelay * 2^(attempt-1)）。
+    /// </param>
+    /// <param name="approvalGranted">
+    /// 审批是否已由调用方门确认（<see cref="IAgentApprovalGate"/> 放行后传 true；
+    /// 直连调用默认 false——写副作用 + <see cref="ToolDescriptor.RequiresApproval"/> 未确认 → 禁止自动提交）。
+    /// </param>
+    /// <returns>执行策略处置（含重试决策与投递模式决策）。</returns>
     ToolExecutionPolicy Resolve(
         ToolDescriptor descriptor,
         ToolDispatchPrepareResult? journal,
-        ToolExecutionResult? result);
+        ToolExecutionResult? result,
+        int attempt = 0,
+        bool approvalGranted = false);
 }
 
 /// <summary>

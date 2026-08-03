@@ -980,6 +980,8 @@ F:ContextCore.Abstractions.StorageProviderKind.Postgres
 F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
+F:ContextCore.Abstractions.ToolDeliveryMode.AsyncDurable
+F:ContextCore.Abstractions.ToolDeliveryMode.Synchronous
 F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.Dispatch
 F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.FailClosed
 F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.Reconcile
@@ -1003,6 +1005,9 @@ F:ContextCore.Abstractions.ToolRecoveryStrategy.NeverReplay
 F:ContextCore.Abstractions.ToolRecoveryStrategy.RequireReconciliation
 F:ContextCore.Abstractions.ToolRecoveryStrategy.SafeReplay
 F:ContextCore.Abstractions.ToolRecoveryStrategy.UseCachedResult
+F:ContextCore.Abstractions.ToolRetryBackoffPolicy.Exponential
+F:ContextCore.Abstractions.ToolRetryBackoffPolicy.Linear
+F:ContextCore.Abstractions.ToolRetryBackoffPolicy.None
 F:ContextCore.Abstractions.ToolSideEffect.FencedWrite
 F:ContextCore.Abstractions.ToolSideEffect.IdempotentWrite
 F:ContextCore.Abstractions.ToolSideEffect.NonIdempotentWrite
@@ -2258,7 +2263,7 @@ M:ContextCore.Abstractions.IDecisionTraceStore.SaveAsync(ContextCore.Abstraction
 M:ContextCore.Abstractions.IDesiredModelStateStore.GetAllAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDesiredModelStateStore.GetAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDesiredModelStateStore.SetAsync(ContextCore.Abstractions.DesiredModelState, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableToolExecutor.ExecuteAsync(System.String, System.String, ContextCore.Abstractions.AgentToolCallRequest, System.Int32, System.Threading.CancellationToken, ContextCore.Abstractions.AgentLeaseFence, System.Nullable<System.DateTimeOffset>)
+M:ContextCore.Abstractions.IDurableToolExecutor.ExecuteAsync(System.String, System.String, ContextCore.Abstractions.AgentToolCallRequest, System.Int32, System.Threading.CancellationToken, ContextCore.Abstractions.AgentLeaseFence, System.Nullable<System.DateTimeOffset>, System.Boolean)
 M:ContextCore.Abstractions.IDurableToolResultStore.GetAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDurableToolResultStore.GetByRequestIdAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDurableToolResultStore.SaveAsync(System.String, ContextCore.Abstractions.DurableToolResult, System.Threading.CancellationToken)
@@ -2472,7 +2477,7 @@ M:ContextCore.Abstractions.IToolDispatchJournal.PrepareAsync(ContextCore.Abstrac
 M:ContextCore.Abstractions.IToolDispatchJournal.PrepareWithIntentAsync(ContextCore.Abstractions.ToolDispatchJournalEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.DispatchAsync(ContextCore.Abstractions.ToolDispatchRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.GetDescriptor(System.String)
-M:ContextCore.Abstractions.IToolEffectPolicy.Resolve(ContextCore.Abstractions.ToolDescriptor, ContextCore.Abstractions.ToolDispatchPrepareResult, ContextCore.Abstractions.ToolExecutionResult)
+M:ContextCore.Abstractions.IToolEffectPolicy.Resolve(ContextCore.Abstractions.ToolDescriptor, ContextCore.Abstractions.ToolDispatchPrepareResult, ContextCore.Abstractions.ToolExecutionResult, System.Int32, System.Boolean)
 M:ContextCore.Abstractions.IToolReconciliationHandler.ReconcileAsync(ContextCore.Abstractions.ToolReconciliationRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.CreateAsync(ContextCore.Abstractions.ToolReconciliationRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.GetAsync(System.String, System.Threading.CancellationToken)
@@ -5348,6 +5353,14 @@ M:ContextCore.Abstractions.ToolReconciliationRecord.Equals(System.Object)
 M:ContextCore.Abstractions.ToolReconciliationRecord.GetHashCode()
 M:ContextCore.Abstractions.ToolReconciliationRecord.GetType()
 M:ContextCore.Abstractions.ToolReconciliationRecord.ToString()
+M:ContextCore.Abstractions.ToolRetryDecision.#ctor()
+M:ContextCore.Abstractions.ToolRetryDecision.<Clone>$()
+M:ContextCore.Abstractions.ToolRetryDecision.Equals(ContextCore.Abstractions.ToolRetryDecision)
+M:ContextCore.Abstractions.ToolRetryDecision.Equals(System.Object)
+M:ContextCore.Abstractions.ToolRetryDecision.GetHashCode()
+M:ContextCore.Abstractions.ToolRetryDecision.GetType()
+M:ContextCore.Abstractions.ToolRetryDecision.ToString()
+M:ContextCore.Abstractions.ToolRetryDecision.static Abort(System.String)
 M:ContextCore.Abstractions.TrainingCalibrationSplitOptions.#ctor()
 M:ContextCore.Abstractions.TrainingCalibrationSplitOptions.Equals(System.Object)
 M:ContextCore.Abstractions.TrainingCalibrationSplitOptions.GetHashCode()
@@ -10866,6 +10879,8 @@ P:ContextCore.Abstractions.ToolAuthorizationResult.IsAuthorized (get|init)
 P:ContextCore.Abstractions.ToolAuthorizationResult.RequiredPermission (get|init)
 P:ContextCore.Abstractions.ToolAuthorizationResult.RequiredRole (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.DeclaredSideEffect (get|init)
+P:ContextCore.Abstractions.ToolDescriptor.DeliveryMode (get|init)
+P:ContextCore.Abstractions.ToolDescriptor.MaxRetries (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.MaximumExecutionTime (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.Name (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.ReconciliationDeadline (get|init)
@@ -10874,6 +10889,8 @@ P:ContextCore.Abstractions.ToolDescriptor.RecoveryStrategy (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.RequiresApproval (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.RequiresIdempotencyKey (get|init)
 P:ContextCore.Abstractions.ToolDescriptor.RequiresLeaseFence (get|init)
+P:ContextCore.Abstractions.ToolDescriptor.RetryBackoffPolicy (get|init)
+P:ContextCore.Abstractions.ToolDescriptor.RetryDelay (get|init)
 P:ContextCore.Abstractions.ToolDispatchJournalEntry.DiagnosticNote (get|init)
 P:ContextCore.Abstractions.ToolDispatchJournalEntry.ExternalOperationId (get|init)
 P:ContextCore.Abstractions.ToolDispatchJournalEntry.IdempotencyKey (get|init)
@@ -10915,9 +10932,12 @@ P:ContextCore.Abstractions.ToolExecutionContext.Payload (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.RequestId (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.RunId (get|init)
 P:ContextCore.Abstractions.ToolExecutionContext.WorkspaceId (get|init)
+P:ContextCore.Abstractions.ToolExecutionPolicy.DeliveryMode (get|init)
 P:ContextCore.Abstractions.ToolExecutionPolicy.Disposition (get|init)
 P:ContextCore.Abstractions.ToolExecutionPolicy.Reason (get|init)
+P:ContextCore.Abstractions.ToolExecutionPolicy.RequiresApprovalBeforeCommit (get|init)
 P:ContextCore.Abstractions.ToolExecutionPolicy.RequiresReconciliationBeforeCommit (get|init)
+P:ContextCore.Abstractions.ToolExecutionPolicy.Retry (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.Duration (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.Error (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.ExternalOperationId (get|init)
@@ -10952,6 +10972,10 @@ P:ContextCore.Abstractions.ToolReconciliationRecord.Status (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.ToolName (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.UpdatedAt (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.WorkspaceId (get|init)
+P:ContextCore.Abstractions.ToolRetryDecision.AttemptsRemaining (get|init)
+P:ContextCore.Abstractions.ToolRetryDecision.Delay (get|init)
+P:ContextCore.Abstractions.ToolRetryDecision.Reason (get|init)
+P:ContextCore.Abstractions.ToolRetryDecision.ShouldRetry (get|init)
 P:ContextCore.Abstractions.TrainingCalibrationSplitOptions.CalibrationRatio (get|set)
 P:ContextCore.Abstractions.TrainingCalibrationSplitOptions.GroupKeyed (get|set)
 P:ContextCore.Abstractions.TrainingCalibrationSplitOptions.Seed (get|set)
@@ -12047,6 +12071,7 @@ T:ContextCore.Abstractions.StoreVersionVector
 T:ContextCore.Abstractions.TokenTruncationResult
 T:ContextCore.Abstractions.TokenizationMetadata
 T:ContextCore.Abstractions.ToolAuthorizationResult
+T:ContextCore.Abstractions.ToolDeliveryMode (Enum)
 T:ContextCore.Abstractions.ToolDescriptor
 T:ContextCore.Abstractions.ToolDispatchJournalEntry
 T:ContextCore.Abstractions.ToolDispatchPrepareResult
@@ -12064,6 +12089,8 @@ T:ContextCore.Abstractions.ToolReconciliationOutcome
 T:ContextCore.Abstractions.ToolReconciliationRecord
 T:ContextCore.Abstractions.ToolReconciliationStatus (Enum)
 T:ContextCore.Abstractions.ToolRecoveryStrategy (Enum)
+T:ContextCore.Abstractions.ToolRetryBackoffPolicy (Enum)
+T:ContextCore.Abstractions.ToolRetryDecision
 T:ContextCore.Abstractions.ToolSideEffect (Enum)
 T:ContextCore.Abstractions.TrainingCalibrationSplitOptions
 T:ContextCore.Abstractions.TrainingDataExportManifest

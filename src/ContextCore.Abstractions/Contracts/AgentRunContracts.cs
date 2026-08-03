@@ -1718,6 +1718,13 @@ public interface IDurableToolExecutor
     /// 让 Journal 能正确去重以保证 exactly-once。审批恢复路径应传入 <see cref="PendingToolCommand.ModelTurnRevision"/>。
     /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="leaseFence">租约 fence（可选；写副作用 Tool 需要 fencing 保护时由调用方注入）。</param>
+    /// <param name="deadlineAt">Run 截止时间（可选；透传给 Tool Handler）。</param>
+    /// <param name="approvalGranted">
+    /// 审批是否已由调用方门确认（<see cref="IAgentApprovalGate"/> 放行后传 true）。
+    /// false（默认）时：声明 <see cref="ToolDescriptor.RequiresApproval"/> 的写副作用 Tool
+    /// 会被策略层禁止自动提交（fail-safe，防止直连调用绕过 Actor 审批门）。
+    /// </param>
     /// <returns>Tool 执行结果（含 RequestId / SideEffect / JournalState / 结果本体）。</returns>
     ValueTask<ToolExecutionResult> ExecuteAsync(
         string runId,
@@ -1726,7 +1733,8 @@ public interface IDurableToolExecutor
         int modelTurn,
         CancellationToken cancellationToken = default,
         AgentLeaseFence? leaseFence = null,
-        DateTimeOffset? deadlineAt = null);
+        DateTimeOffset? deadlineAt = null,
+        bool approvalGranted = false);
 }
 
 /// <summary>
