@@ -200,6 +200,7 @@ app
 	.MapCompressionEndpoints()
 	.MapJobEndpoints()
 	.MapRelationEndpoints()
+	.MapRelationHydrationEndpoints()
 	.MapConstraintEndpoints()
 	.MapLearningEndpoints()
 	.MapProvenanceEndpoints()

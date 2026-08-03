@@ -295,7 +295,11 @@ public sealed class UnicodeAwareContextTokenizer : IContextTokenizer
         return IsCjkOrEastAsianRune(rune) ? 1 : 1;
     }
 
-    private static bool IsCjkOrEastAsianRune(Rune rune)
+    /// <summary>
+    /// 中日韩统一表意文字 / 假名 / 谚文 rune 判定。
+    /// internal 供 TokenizerProfile 解析器（CJK 画像）复用同一份脚本判定。
+    /// </summary>
+    internal static bool IsCjkOrEastAsianRune(Rune rune)
     {
         var value = rune.Value;
         return value is >= 0x3400 and <= 0x4DBF

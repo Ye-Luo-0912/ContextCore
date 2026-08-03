@@ -444,9 +444,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var rebuildAllocationDecisions = engineResult.AllocationDecisions.Count > 0
             ? engineResult.AllocationDecisions
             : BuildAllocationDecisions(engineResult.SelectedEnvelopes, engineResult.DroppedEnvelopes);
-        var rebuildSelectedCount = engineResult.Outcome.SelectedCount;
         var rebuildEstimatedTokens = engineResult.Outcome.EstimatedTokens;
-        var rebuildSections = engineResult.Outcome.Sections;
         var rebuildBudgetExceededCount = engineResult.Outcome.BudgetExceededCount;
         // 被 Hydration 或预算修复移出的候选（repair.HydrationDropped → DroppedEnvelopes）。
         IReadOnlyList<ContextCandidateEnvelope> hydrationDroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>();
@@ -489,7 +487,6 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                     }
                 }
                 rebuildSelected = retained;
-                rebuildSelectedCount = retained.Count;
             }
 
             // Replace AllocationDecisions with Repair's UpdatedAllocationDecisions
@@ -498,9 +495,6 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
             // Update EstimatedTokens with ExactTokenCount (recomputed from real content, not estimate)
             rebuildEstimatedTokens = repair.ExactTokenCount;
-
-            // Sections 重建：以修复后实际保留的 Selected 候选为准（水化前结果可能过时或为空）。
-            rebuildSections = RebuildSections(rebuildSelected);
 
             // 被 Hydration 或预算修复移出的候选必须进入最终 DroppedEnvelopes——否则 DroppedCount 偏小、
             // Utility Ledger 不记录真实淘汰项、ConflictSet 缺样本。
@@ -599,20 +593,23 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             // Use actual retained SelectedEnvelopes after hydration (dropped removed)
             SelectedEnvelopes = rebuildSelected,
             DroppedEnvelopes = finalDropped,
-            Outcome = new ContextDecisionOutcomeSummary
-            {
-                // Use actual selected count and exact token total after hydration
-                SelectedCount = rebuildSelectedCount,
-                DroppedCount = finalDropped.Count,
-                EstimatedTokens = rebuildEstimatedTokens,
-                TokenBudget = engineResult.Outcome.TokenBudget,
-                Sections = rebuildSections,
-                SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,
-                BudgetExceededCount = rebuildBudgetExceededCount,
-                // + 保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
-                // 并补充 Runtime 级 diagnostics（earlyAdmission.rejectedCount）
-                Diagnostics = mergedDiagnostics
-            },
+            // Outcome 重算（WP-E "结果真相"）：摘要必须是最终候选分区的纯函数——
+            // SelectedCount / DroppedCount / Sections（repair 后）/ Diagnostics 全部从
+            // 实际保留的 Selected/Dropped 分区派生，避免 Late Hydration 移出候选后仍沿用
+            // Engine 旧计数。
+            // 精确 token 总数以 Allocator 为准（V2.1 部分截断后 IncludedTokens 为真实
+            // 纳入量；hydrate 后为 ExactTokenCount），作为覆盖值传入；Recompute 默认
+            // 路径（无覆盖）供 replay / 审计等外部调用方从分区直接汇总。
+            // Sections 仅在无 repair 时沿用 Engine 计算值（与旧行为一致），repair 后按分区重算。
+            Outcome = DecisionOutcomeRecomputer.Recompute(
+                rebuildSelected,
+                finalDropped,
+                tokenBudget: engineResult.Outcome.TokenBudget,
+                safetyGateBlockedCount: engineResult.Outcome.SafetyGateBlockedCount,
+                budgetExceededCount: rebuildBudgetExceededCount,
+                diagnostics: mergedDiagnostics,
+                exactEffectiveTokens: rebuildEstimatedTokens,
+                sectionsOverride: repair is null ? engineResult.Outcome.Sections : null),
             PolicyVersion = engineResult.PolicyVersion,
             ModelVersion = engineResult.ModelVersion,
             DecidedAt = engineResult.DecidedAt,
@@ -1085,19 +1082,6 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
-    /// 以修复后实际保留的 Selected 候选重建 Outcome.Sections（去重 + 确定序）。
-    /// </summary>
-    private static IReadOnlyList<string> RebuildSections(IReadOnlyList<ContextCandidateEnvelope> selectedEnvelopes)
-    {
-        var sections = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var envelope in selectedEnvelopes)
-        {
-            sections.Add(ResolveSectionForAllocation(envelope));
-        }
-        return sections.OrderBy(s => s, StringComparer.Ordinal).ToArray();
-    }
-
-    /// <summary>
     /// 合并 Engine.DroppedEnvelopes + EarlyRejected 到最终 DroppedEnvelopes。
     /// EarlyRejected 候选携带 EarlyAdmissionRejected reason code（在 Safety.BlockReasonCode 字段）。
     /// </summary>
@@ -1366,18 +1350,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         return decisions;
     }
 
+    // section 解析统一委托 DecisionOutcomeRecomputer.ResolveSection（WP-E 单一真相源）。
     private static string ResolveSectionForAllocation(ContextCandidateEnvelope envelope)
-    {
-        return envelope.Source switch
-        {
-            ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "mandatory",
-            ContextCandidateSource.WorkingMemory or ContextCandidateSource.StableMemory => "memory",
-            ContextCandidateSource.Graph => "relations",
-            ContextCandidateSource.GlobalContext => "global",
-            ContextCandidateSource.RelatedContext => "related",
-            _ => "default"
-        };
-    }
+        => DecisionOutcomeRecomputer.ResolveSection(envelope);
 
     private static RetrievalExpert MapExpertKindToRetrievalExpert(ExpertKind kind) => kind switch
     {
@@ -4386,11 +4361,10 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
     /// <remarks>
     /// 这是 Allocator 的权威 token 输入：中文/代码/JSON 场景下 EstimatedTokens 严重低估，
     /// 必须使用基于 tokenizer 的精确 TokenCost 才能避免预算超支。
+    /// 实现统一委托 DecisionOutcomeRecomputer.GetEffectiveTokens（WP-E 单一真相源）。
     /// </remarks>
     private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
-    {
-        return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
-    }
+        => DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
 }
 
 // ---------------------------------------------------------------------------

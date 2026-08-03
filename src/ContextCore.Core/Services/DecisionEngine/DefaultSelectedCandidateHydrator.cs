@@ -339,7 +339,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         {
             var key = envelope.CanonicalKey;
             var cid = envelope.CandidateId;
-            var section = ResolveSectionForAllocation(envelope);
+            var section = DecisionOutcomeRecomputer.ResolveSection(envelope);
 
             // 判断候选是否被 dropped：
             //   1. 被预算修复裁剪（key 在 droppedKeys 中）
@@ -401,22 +401,8 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         };
     }
 
-    /// <summary>
-    /// 解析候选所属 section（与 UnifiedRuntimeDefaults.ResolveSectionForAllocation 对齐）。
-    /// 用于在 BuildRepairDecision 中生成 CandidateAllocationDecision.Section。
-    /// </summary>
-    private static string ResolveSectionForAllocation(ContextCandidateEnvelope envelope)
-    {
-        return envelope.Source switch
-        {
-            ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "mandatory",
-            ContextCandidateSource.WorkingMemory or ContextCandidateSource.StableMemory => "memory",
-            ContextCandidateSource.Graph => "relations",
-            ContextCandidateSource.GlobalContext => "global",
-            ContextCandidateSource.RelatedContext => "related",
-            _ => "default"
-        };
-    }
+    // section 解析统一委托 DecisionOutcomeRecomputer.ResolveSection（WP-E 单一真相源，
+    // 与 UnifiedRuntimeDefaults 共享同一份实现，消除三处重复 switch）。
 
     /// <summary>
     /// 最终预算修复。hydrate 后正文的真实 TokenCost 总和可能超出 Engine 基于召回估算值

@@ -263,6 +263,8 @@ internal static class CoreExtensions
 			sp.GetRequiredService<RelationTypeRegistry>(),
 			backfillPolicy: null));
 		services.AddSingleton<IContextTokenizerResolver, DefaultContextTokenizerResolver>();
+		// Tokenizer 画像解析器（WP-E：CJK 画像按内容脚本分类选择 tokenizer）。
+		services.TryAddSingleton<ITokenizerProfileResolver, DefaultTokenizerProfileResolver>();
 		services.AddSingleton<IContextCompressor>(sp =>
 		{
 			var options = sp.GetRequiredService<CompressionProviderOptions>();
@@ -373,6 +375,8 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPolicyValidator);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationTraversalEngine);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPreviewService);
+		// Selected 关系批量水合服务（WP-E：探测 IRelationHydrationStore，未实现时回退逐条查询）。
+		services.TryAddSingleton<ISelectedRelationHydrationService, DefaultSelectedRelationHydrationService>();
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton<IMemoryPromotionService>(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		// Legacy 具体类型仍注册为 concrete type（供 Authoritative Runtime 注入）
