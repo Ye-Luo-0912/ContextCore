@@ -301,7 +301,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
                         error: $"Lease 已过期（ExpiresAt={leaseFence.ExpiresAt:O}），Tool 执行被 fence 阻止。",
                         journalState: ToolDispatchState.Prepared,
-                        duration: stopwatch.Elapsed);
+                        duration: stopwatch.Elapsed,
+                        errorKind: DispatchErrorKind.LeaseFenceViolation);
                 }
 
                 // 声明要求 lease fence 但调用方未提供 → fail-closed（副作用 Tool 无 fencing 保护时禁止执行）
@@ -311,7 +312,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
                         error: $"Tool '{toolCall.ToolName}' 声明 RequiresLeaseFence，但调用未携带 LeaseFence，执行被拒绝（fail-closed）。",
                         journalState: ToolDispatchState.Prepared,
-                        duration: stopwatch.Elapsed);
+                        duration: stopwatch.Elapsed,
+                        errorKind: DispatchErrorKind.LeaseFenceViolation);
                 }
 
                 dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
@@ -358,6 +360,9 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 JournalState = ToolDispatchState.DispatchingIntent,
                 Succeeded = false,
                 Error = dispatchException?.Message ?? dispatchResult?.Error ?? "Tool dispatch 失败",
+                ErrorKind = dispatchException is not null
+                    ? DispatchErrorKind.HandlerException
+                    : dispatchResult?.ErrorKind ?? DispatchErrorKind.Unknown,
                 Duration = stopwatch.Elapsed
             };
             var retryPolicy = _effectPolicy.Resolve(
@@ -439,6 +444,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             Result = dispatchResult.Result,
             Succeeded = dispatchResult.Succeeded,
             Error = dispatchResult.Error,
+            ErrorKind = dispatchResult.ErrorKind,
             Duration = stopwatch.Elapsed
         };
         var policy = _effectPolicy.Resolve(
@@ -549,7 +555,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     journalState: ToolDispatchState.Dispatched,
                     duration: stopwatch.Elapsed,
                     reconciliationHandler: descriptor?.ReconciliationHandler,
-                    reconciliationDeadline: descriptor?.ReconciliationDeadline);
+                    reconciliationDeadline: descriptor?.ReconciliationDeadline,
+                    errorKind: DispatchErrorKind.PolicyRejected);
         }
 
         stopwatch.Stop();
@@ -566,6 +573,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             Result = dispatchResult.Result,
             Succeeded = dispatchResult.Succeeded,
             Error = dispatchResult.Error,
+            ErrorKind = dispatchResult.ErrorKind,
             Duration = stopwatch.Elapsed
         };
     }
@@ -651,7 +659,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         ToolDispatchState journalState,
         TimeSpan duration,
         string? reconciliationHandler = null,
-        TimeSpan? reconciliationDeadline = null)
+        TimeSpan? reconciliationDeadline = null,
+        DispatchErrorKind errorKind = DispatchErrorKind.Unknown)
     {
         return new ToolExecutionResult
         {
@@ -665,6 +674,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             Result = null,
             Succeeded = false,
             Error = error,
+            ErrorKind = errorKind,
             Duration = duration
         };
     }

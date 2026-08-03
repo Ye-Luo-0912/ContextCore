@@ -613,6 +613,58 @@ public interface IToolReconciliationStore
 }
 
 /// <summary>
+/// Tool 分派错误类别（Dispatcher 错误修正：结构化错误分类，替代纯字符串语义传播）。
+/// </summary>
+/// <remarks>
+/// <see cref="ToolDispatchResult.ErrorKind"/> 与 <see cref="ToolExecutionResult.ErrorKind"/>
+/// 提供类型化原因码，供策略层 / 对账 / 审计按类别处理，而不是解析错误字符串。
+/// </remarks>
+public enum DispatchErrorKind : byte
+{
+    /// <summary>无错误（成功路径）。</summary>
+    None = 0,
+
+    /// <summary>Tool 未注册到 Dispatcher（调用方应按无声明 / RequiresReconciliation 保守处置）。</summary>
+    UnregisteredTool = 1,
+
+    /// <summary>Handler 抛出异常（外部副作用状态未知 → 默认 RequiresReconciliation）。</summary>
+    HandlerException = 2,
+
+    /// <summary>Handler 超时（DeadlineAt 已过或执行超时，副作用状态未知）。</summary>
+    HandlerTimeout = 3,
+
+    /// <summary>租约 fence 校验失败（lease 过期或缺少必需 fence → fail-closed 拒绝执行）。</summary>
+    LeaseFenceViolation = 4,
+
+    /// <summary>策略拒绝（IToolEffectPolicy 解析为 FailClosed / 前置校验不满足）。</summary>
+    PolicyRejected = 5,
+
+    /// <summary>Dispatch 被取消（调用方取消令牌）。</summary>
+    Cancelled = 6,
+
+    /// <summary>其他未分类错误。</summary>
+    Unknown = 7
+}
+
+/// <summary>
+/// 结构化 Tool 分派错误（Dispatcher Error 修正）。
+/// </summary>
+public sealed record DispatchError
+{
+    /// <summary>错误类别。</summary>
+    public required DispatchErrorKind Kind { get; init; }
+
+    /// <summary>错误信息（人类可读，用于日志 / 审计）。</summary>
+    public string? Message { get; init; }
+
+    /// <summary>出错 Tool 名称（便于按 Tool 聚合失败）。</summary>
+    public string? ToolName { get; init; }
+
+    /// <summary>构造"无错误"实例。</summary>
+    public static DispatchError None() => new() { Kind = DispatchErrorKind.None };
+}
+
+/// <summary>
 /// Tool 分派结果。
 /// </summary>
 public sealed record ToolDispatchResult
@@ -641,6 +693,9 @@ public sealed record ToolDispatchResult
     /// 由 <see cref="IDurableToolExecutor"/> 透传到 journal 与 <see cref="ToolExecutionResult"/>。
     /// </summary>
     public string? ExternalOperationId { get; init; }
+
+    /// <summary>结构化错误类别（失败时；成功时为 <see cref="DispatchErrorKind.None"/>）。</summary>
+    public DispatchErrorKind ErrorKind { get; init; } = DispatchErrorKind.None;
 }
 
 /// <summary>

@@ -1871,6 +1871,9 @@ public sealed record ToolExecutionResult
     /// <summary>错误信息（失败时）。</summary>
     public string? Error { get; init; }
 
+    /// <summary>结构化错误类别（失败时；成功时为 <see cref="DispatchErrorKind.None"/>）。</summary>
+    public DispatchErrorKind ErrorKind { get; init; } = DispatchErrorKind.None;
+
     /// <summary>执行耗时。</summary>
     public required TimeSpan Duration { get; init; }
 }

@@ -262,7 +262,8 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
                 Result = $"[Error] Tool '{request.ToolName}' 未注册。已注册: {string.Join(", ", _handlers.Keys)}",
                 Duration = TimeSpan.Zero,
                 // 未注册 tool 是错误——默认按 RequiresReconciliation 处理。
-                SideEffect = ToolSideEffect.RequiresReconciliation
+                SideEffect = ToolSideEffect.RequiresReconciliation,
+                ErrorKind = DispatchErrorKind.UnregisteredTool
             };
         }
 
@@ -313,7 +314,8 @@ public sealed class RealToolDispatcher : IToolDispatcher, IToolCatalog
                 Result = $"[Exception] Tool '{request.ToolName}' 处理异常：{ex.Message}",
                 Duration = sw.Elapsed,
                 // 异常意味着外部副作用状态未知——默认按 RequiresReconciliation 处理。
-                SideEffect = ToolSideEffect.RequiresReconciliation
+                SideEffect = ToolSideEffect.RequiresReconciliation,
+                ErrorKind = DispatchErrorKind.HandlerException
             };
         }
     }
