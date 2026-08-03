@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Inference.Onnx;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -34,6 +35,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private readonly IOptionsMonitor<ModelStateReconcilerOptions> _options;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModelStateReconcilerWorker> _logger;
+    private readonly DefaultComponentHealthRegistry? _healthRegistry;
     private readonly string _instanceId;
 
     // 节点标识：机器名是跨进程重启保持稳定的节点身份，用于 model_node_applied_state 的 node_id；
@@ -53,7 +55,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         IOptionsMonitor<ModelStateReconcilerOptions> options,
         IConfiguration configuration,
         ILogger<ModelStateReconcilerWorker> logger,
-        IModelNodeAppliedStateStore? appliedStateStore = null)
+        IModelNodeAppliedStateStore? appliedStateStore = null,
+        DefaultComponentHealthRegistry? healthRegistry = null)
     {
         _clusterSlotStore = clusterSlotStore;
         _activationManager = activationManager;
@@ -61,6 +64,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         _options = options;
         _configuration = configuration;
         _logger = logger;
+        _healthRegistry = healthRegistry;
         _instanceId = Environment.MachineName + "-" + Guid.NewGuid().ToString("N")[..8];
         _nodeId = Environment.MachineName;
     }
@@ -353,8 +357,24 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         {
             InputTensorName = inputTensorName,
             ScoreOutputName = scoreOutputName,
-            EnableWarmup = enableWarmup
+            EnableWarmup = enableWarmup,
+            InferencePhaseTimingCallback = _healthRegistry is null
+                ? null
+                : BuildPhaseTimingCallback(_healthRegistry)
         };
+    }
+
+    /// <summary>
+    /// 把引擎阶段耗时回调接到组件健康注册表（queue/copy/run/parse 精确归因）。
+    /// 回调在推理热路径同步执行，RecordInferencePhaseTime 内部仅做 DDSketch.Add（O(1)）。
+    /// </summary>
+    private static Action<InferencePhase, TimeSpan> BuildPhaseTimingCallback(
+        DefaultComponentHealthRegistry healthRegistry)
+    {
+        return (phase, elapsed) => healthRegistry.RecordInferencePhaseTime(
+            (InferencePhaseKind)phase,
+            elapsed.TotalMilliseconds,
+            scopeKey: "default");
     }
 }
 

@@ -275,13 +275,16 @@ public sealed class OnnxInferenceEngineOptions
     /// - <see cref="OnnxExecutionProvider.TensorRT"/>：NVIDIA TensorRT 优化推理。
     /// 首次推理有较长（数十秒）的 plan 缓存构建延迟，但稳态吞吐显著高于 CUDA。
     /// 需要 TensorRT native 库与 CUDA 同时可用。
+    /// - <see cref="OnnxExecutionProvider.DirectML"/>：Windows 上任意 DirectX 12
+    /// 兼容 GPU 的推理（AMD / Intel / NVIDIA）。需要安装
+    /// <c>Microsoft.ML.OnnxRuntime.DirectML</c> NuGet 包（含 DML native 库）。
     /// </remarks>
     public OnnxExecutionProvider ExecutionProvider { get; init; } = OnnxExecutionProvider.CPU;
 
     /// <summary>
     /// GPU 设备 ID（默认 0）。仅在 <see cref="ExecutionProvider"/> 为
-    /// <see cref="OnnxExecutionProvider.CUDA"/> 或 <see cref="OnnxExecutionProvider.TensorRT"/>
-    /// 时生效。多 GPU 环境下指定使用哪块卡。
+    /// <see cref="OnnxExecutionProvider.CUDA"/>、<see cref="OnnxExecutionProvider.TensorRT"/>
+    /// 或 <see cref="OnnxExecutionProvider.DirectML"/> 时生效。多 GPU 环境下指定使用哪块卡。
     /// </summary>
     public int ExecutionProviderDeviceId { get; init; } = 0;
 
@@ -323,5 +326,14 @@ public enum OnnxExecutionProvider : byte
     /// 通过 <c>SessionOptions.AppendExecutionProvider_Tensorrt(deviceId)</c> 应用。
     /// 首次推理有较长 plan 缓存构建延迟。
     /// </summary>
-    TensorRT = 2
+    TensorRT = 2,
+
+    /// <summary>
+    /// DirectML EP。Windows 上任意 DirectX 12 兼容 GPU（AMD / Intel / NVIDIA）推理。
+    /// 通过 <c>SessionOptions.AppendExecutionProvider_DML(deviceId)</c> 应用。
+    /// 需要安装 <c>Microsoft.ML.OnnxRuntime.DirectML</c> NuGet 包（含 DML native 库）。
+    /// 未安装 DML 包时 session 创建会抛 <c>OnnxRuntimeException</c>，已被
+    /// <see cref="ModelActivationManager"/> 捕获并转为激活失败（fail-safe）。
+    /// </summary>
+    DirectML = 3
 }

@@ -217,6 +217,20 @@ public sealed class OnnxRuntimeInferenceSessionFactory : IOnnxInferenceSessionFa
                 }
                 return;
 
+            case OnnxExecutionProvider.DirectML:
+                try
+                {
+                    sessionOptions.AppendExecutionProvider_DML(options.ExecutionProviderDeviceId);
+                }
+                catch (Microsoft.ML.OnnxRuntime.OnnxRuntimeException ex)
+                {
+                    throw new InvalidOperationException(
+                        $"AppendExecutionProvider_DML(deviceId={options.ExecutionProviderDeviceId}) 失败：" +
+                        $"{ex.Message}。请确认已安装 Microsoft.ML.OnnxRuntime.DirectML NuGet 包，" +
+                        "且目标机器具备 DirectX 12 兼容 GPU 与驱动。", ex);
+                }
+                return;
+
             default:
                 // 防御性：未知 EP 回退到 CPU（与默认行为一致）。
                 return;
@@ -398,7 +412,10 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
     private IReadOnlyList<NamedOnnxValue> CreateInputs(FeatureBatch batch, out float[]? rentedBuffer)
     {
         rentedBuffer = null;
-        var dimensions = new[] { batch.RowCount, batch.FeatureCount };
+        // stackalloc 替代每次调用分配 int[2]：维度 span 在 DenseTensor 构造时被拷贝，可安全复用栈内存。
+        Span<int> dimensions = stackalloc int[2];
+        dimensions[0] = batch.RowCount;
+        dimensions[1] = batch.FeatureCount;
         var requiredLength = batch.RowCount * batch.FeatureCount;
 
         // 零拷贝路径 — 尝试获取 batch.Values 的底层 array。

@@ -104,10 +104,12 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             ? "default-v1"
             : calibrationVersion;
 
-        // 子问题4：初始化并发槽位。MaxConcurrentInferences <= 0 时使用 ProcessorCount。
+        // 初始化并发槽位。MaxConcurrentInferences <= 0 时按 Execution Provider profile 取默认：
+        // CPU 用 ProcessorCount；单 GPU（CUDA/TensorRT/DirectML）会话内 session.Run 串行执行，
+        // 默认 1 即可，避免按核数配置导致过度订阅（详见 InferenceConcurrencyProfiles）。
         var slotCount = options.MaxConcurrentInferences > 0
             ? options.MaxConcurrentInferences
-            : Environment.ProcessorCount;
+            : InferenceConcurrencyProfiles.ResolveDefaultConcurrency(options.ExecutionProvider);
 
         // CPU 过度订阅保护。
         // 当 ASP.NET 请求并发 × IntraOpNumThreads 超过 ProcessorCount 时，ORT 线程池与
@@ -125,6 +127,9 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
         }
 
         _inferenceSlots = new SemaphoreSlim(Math.Max(1, slotCount), Math.Max(1, slotCount));
+
+        // 实际生效的并发槽位容量（诊断/测试用；SemaphoreSlim 不暴露容量）。
+        MaxConcurrency = Math.Max(1, slotCount);
 
         // BatchQueueCapacity<=0 表示不限制（向后兼容）。
         _batchQueueCapacity = options.BatchQueueCapacity > 0 ? options.BatchQueueCapacity : -1;
@@ -146,6 +151,12 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
 
     /// <inheritdoc />
     public string CalibrationVersion => _calibrationVersion;
+
+    /// <summary>
+    /// 实际生效的并发槽位容量（构造时解析：显式配置或按 EP profile 默认，经 CPU 过度订阅保护收缩）。
+    /// internal 供诊断与单元测试断言。
+    /// </summary>
+    internal int MaxConcurrency { get; }
 
     /// <summary>
     /// 模型主输入张量是否接受 float 数据类型（委托给 <see cref="IOnnxInferenceSession.SupportsFloatInput"/>）。
@@ -321,6 +332,13 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
 
         try
         {
+            // 会话竞争计数：到达时所有槽位均被占用则本次请求需排队等待（诊断指标）。
+            // 与 Queue 阶段耗时（InferencePhaseTimingCallback）配合归因并发压力来源。
+            if (_inferenceSlots.CurrentCount == 0)
+            {
+                InferenceMetrics.SessionContention.Add(1);
+            }
+
             await _inferenceSlots.WaitAsync(ct).ConfigureAwait(false);
         }
         finally
@@ -610,6 +628,10 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
         var allOutputs = new List<InferenceOutput>(totalRows);
         var totalDuration = TimeSpan.Zero;
         var startedAt = Stopwatch.GetTimestamp();
+
+        // 分片计数：一次 Add 汇总本次大 batch 产生的 shard 总数（诊断指标）。
+        var shardCount = (totalRows + maxBatchSize - 1) / maxBatchSize;
+        InferenceMetrics.ShardsExecuted.Add(shardCount);
 
         for (var rowOffset = 0; rowOffset < totalRows; rowOffset += maxBatchSize)
         {

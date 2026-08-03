@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Inference.Onnx;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
@@ -261,6 +262,7 @@ internal static class ModelControlPlaneEndpoints
             [FromServices] IModelActivationManager? activationManager,
             IConfiguration configuration,
             IModelActivationAuditStore auditStore,
+            [FromServices] DefaultComponentHealthRegistry? healthRegistry,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -283,7 +285,7 @@ internal static class ModelControlPlaneEndpoints
             // LoadAndWarmupAsync 加载模型并执行 Golden Probe warmup，但不发布为 active；
             // 返回 Staged Handle 供后续 /activate 端点（接受 stagedHandleId）原子发布。
             // tensor 名从配置读取，避免硬编码 "input" / "score"。
-            var options = CreateDefaultOnnxOptions(configuration, enableWarmup: true);
+            var options = CreateDefaultOnnxOptions(configuration, enableWarmup: true, healthRegistry);
             var staged = await activationManager.LoadAndWarmupAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Warmup,
                 staged.Success, activationManager.ActiveDescriptor?.ModelArtifactId,
@@ -322,6 +324,7 @@ internal static class ModelControlPlaneEndpoints
             [FromServices] ShadowModelManager? shadowManager,
             IConfiguration configuration,
             IModelActivationAuditStore auditStore,
+            [FromServices] DefaultComponentHealthRegistry? healthRegistry,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -341,7 +344,7 @@ internal static class ModelControlPlaneEndpoints
             }
 
             // request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
-            var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
+            var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true, healthRegistry);
             var result = await shadowManager.ActivateShadowAsync(descriptor, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Shadow,
                 result.Success, previousModelArtifactId: null,
@@ -379,6 +382,7 @@ internal static class ModelControlPlaneEndpoints
             IConfiguration configuration,
             [FromServices] IClusterModelSlotStore? clusterSlotStore,
             IModelActivationAuditStore auditStore,
+            [FromServices] DefaultComponentHealthRegistry? healthRegistry,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -427,7 +431,7 @@ internal static class ModelControlPlaneEndpoints
             else
             {
                 // request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
-                var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
+                var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true, healthRegistry);
                 result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
             }
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Activate,
@@ -473,6 +477,7 @@ internal static class ModelControlPlaneEndpoints
             IConfiguration configuration,
             [FromServices] IClusterModelSlotStore? clusterSlotStore,
             IModelActivationAuditStore auditStore,
+            [FromServices] DefaultComponentHealthRegistry? healthRegistry,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -512,7 +517,7 @@ internal static class ModelControlPlaneEndpoints
 
             // 本地激活（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
             // request.Options 为 null 时从配置读取默认 tensor 名，避免硬编码 "input" / "score"。
-            var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true);
+            var options = request.Options ?? CreateDefaultOnnxOptions(configuration, enableWarmup: true, healthRegistry);
             var result = await activationManager.ActivateAsync(id, options, ct).ConfigureAwait(false);
             await AppendAuditAsync(auditStore, descriptor, ModelActivationOperation.Rollback,
                 result.Success, previousActiveId,
@@ -908,7 +913,10 @@ internal static class ModelControlPlaneEndpoints
     /// <param name="configuration">IConfiguration 实例。</param>
     /// <param name="enableWarmup">是否在加载后执行 warmup。</param>
     /// <returns>填充了配置默认 tensor 名的 OnnxInferenceEngineOptions。</returns>
-    private static OnnxInferenceEngineOptions CreateDefaultOnnxOptions(IConfiguration configuration, bool enableWarmup)
+    private static OnnxInferenceEngineOptions CreateDefaultOnnxOptions(
+        IConfiguration configuration,
+        bool enableWarmup,
+        DefaultComponentHealthRegistry? healthRegistry = null)
     {
         var inputTensorName = configuration["ModelArtifact:DefaultInputTensorName"];
         if (string.IsNullOrWhiteSpace(inputTensorName))
@@ -926,8 +934,24 @@ internal static class ModelControlPlaneEndpoints
         {
             InputTensorName = inputTensorName,
             ScoreOutputName = scoreOutputName,
-            EnableWarmup = enableWarmup
+            EnableWarmup = enableWarmup,
+            InferencePhaseTimingCallback = healthRegistry is null
+                ? null
+                : BuildPhaseTimingCallback(healthRegistry)
         };
+    }
+
+    /// <summary>
+    /// 把引擎阶段耗时回调接到组件健康注册表（queue/copy/run/parse 精确归因）。
+    /// 回调在推理热路径同步执行，RecordInferencePhaseTime 内部仅做 DDSketch.Add（O(1)）。
+    /// </summary>
+    private static Action<InferencePhase, TimeSpan> BuildPhaseTimingCallback(
+        DefaultComponentHealthRegistry healthRegistry)
+    {
+        return (phase, elapsed) => healthRegistry.RecordInferencePhaseTime(
+            (InferencePhaseKind)phase,
+            elapsed.TotalMilliseconds,
+            scopeKey: "default");
     }
 
     /// <summary>

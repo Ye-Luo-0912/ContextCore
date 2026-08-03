@@ -68,11 +68,20 @@ public sealed class InferenceSchedulerOptions
     public bool EnableDynamicBatching { get; set; } = false;
 
     /// <summary>
-    /// 最大并发微批数（默认 0 = 使用 Environment.ProcessorCount）。
+    /// 最大并发微批数（默认 0 = 按 Execution Provider profile 解析）。
     /// 通过 SemaphoreSlim 限制同时调用内部引擎 InferBatchAsync 的批次数。
     /// 超过此数的批次在 Semaphore 上等待，不消耗引擎槽位。
+    /// profile 解析规则见 <see cref="InferenceConcurrencyProfiles"/>：
+    /// CPU 默认 ProcessorCount；单 GPU（CUDA/TensorRT/DirectML）默认 1。
     /// </summary>
     public int MaxConcurrency { get; set; } = 0;
+
+    /// <summary>
+    /// 内部引擎的 Execution Provider（默认 CPU）。
+    /// 仅用于 <see cref="MaxConcurrency"/> 未显式配置时解析 profile 默认并发；
+    /// 应与 <see cref="OnnxInferenceEngineOptions.ExecutionProvider"/> 保持一致。
+    /// </summary>
+    public OnnxExecutionProvider ExecutionProvider { get; set; } = OnnxExecutionProvider.CPU;
 
     /// <summary>
     /// 微批处理的最大大小（按 row 数，默认 32）。
@@ -160,6 +169,12 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     /// <summary>DropWrite 策略下被丢弃的请求总数（供监控/告警使用）。</summary>
     public long DroppedCount => Interlocked.Read(ref _droppedCount);
 
+    /// <summary>
+    /// 实际生效的最大并发微批数（构造时解析：显式配置或按 EP profile 默认）。
+    /// internal 供诊断与单元测试断言。
+    /// </summary>
+    internal int MaxConcurrency { get; }
+
     // 并发治理：限制同时执行的微批数（真正生效——Coordinator 派发后不 await 执行）。
     private readonly SemaphoreSlim _concurrencyLimiter;
 
@@ -212,10 +227,13 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             });
         }
 
+        // 并发上限：显式配置优先，否则按 Execution Provider profile 取默认
+        // （CPU=ProcessorCount，单 GPU=1，见 InferenceConcurrencyProfiles）。
         var concurrency = options.MaxConcurrency > 0
             ? options.MaxConcurrency
-            : Environment.ProcessorCount;
-        _concurrencyLimiter = new SemaphoreSlim(Math.Max(1, concurrency), Math.Max(1, concurrency));
+            : InferenceConcurrencyProfiles.ResolveDefaultConcurrency(options.ExecutionProvider);
+        MaxConcurrency = Math.Max(1, concurrency);
+        _concurrencyLimiter = new SemaphoreSlim(MaxConcurrency, MaxConcurrency);
 
         // EnableDynamicBatching=false 时不启动 Coordinator，直接转发到内部引擎。
         if (options.EnableDynamicBatching)
@@ -304,6 +322,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         {
             Batch = batch,
             DeadlineTimestamp = deadlineTimestamp,
+            EnqueueTimestamp = nowTimestamp,
             Deadline = deadline,
             CancellationToken = ct,
             Completion = new TaskCompletionSource<BatchInferenceResult>(
@@ -486,8 +505,10 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     {
         // 已被外部 ct 取消（CallerCancelled）或已失败：跳过攒批。
         // 外部取消时 lease 尚未释放（由内部执行管理），此处 FinalizeRequest 释放 lease + 取消注册。
+        // 已入队但未进入批次即被取消 → 浪费的队列容量（诊断指标）。
         if (req.Completion.Task.IsCompleted)
         {
+            InferenceMetrics.CancellationWaste.Add(1);
             FinalizeRequest(req);
             return;
         }
@@ -651,6 +672,15 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     {
         var featureCount = group[0].Batch.FeatureCount;
 
+        // 排队等待统计：从入队到派发执行的等待时长（诊断指标）。
+        // 此时已获得并发槽位，度量的是 channel + 攒批阶段的等待。
+        var dispatchAt = Stopwatch.GetTimestamp();
+        for (var i = 0; i < group.Count; i++)
+        {
+            InferenceMetrics.QueueWaitDuration.Record(
+                Stopwatch.GetElapsedTime(group[i].EnqueueTimestamp, dispatchAt).TotalMilliseconds);
+        }
+
         // 二次检查 deadline：在等待并发槽位期间可能已有请求过期；同时丢弃已被外部 ct 取消的请求。
         // 使用 Stopwatch 单调时钟判断过期。
         var nowTimestamp = Stopwatch.GetTimestamp();
@@ -665,7 +695,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             }
             else if (req.Completion.Task.IsCompleted)
             {
-                // 已被外部 ct 取消（CallerCancelled）—— 释放 lease，不参与合并，不调用引擎。
+                // 已被外部 ct 取消（CallerCancelled）—— 已攒入批次但未执行，浪费了批次容量。
+                // 释放 lease，不参与合并，不调用引擎。
+                InferenceMetrics.CancellationWaste.Add(1);
                 FinalizeRequest(req);
             }
             else
@@ -687,9 +719,16 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             totalRows += active[i].Batch.RowCount;
         }
 
+        // 微批填充率：实际行数 / MaxBatchSize（诊断指标，评估动态批处理收益）。
+        if (_options.MaxBatchSize > 0)
+        {
+            InferenceMetrics.BatchFillRatio.Record(totalRows / (double)_options.MaxBatchSize);
+        }
+
         var requiredLength = totalRows * featureCount;
         var buffer = ArrayPool<float>.Shared.Rent(requiredLength);
-        var rowOffsets = new int[active.Count + 1];
+        // rowOffsets 用 ArrayPool 租借替代每次微批分配 int[]（数组长度 = active.Count + 1）。
+        var rowOffsets = ArrayPool<int>.Shared.Rent(active.Count + 1);
         try
         {
             // ArrayPool 安全 —— 后续 CopyTo 会完整覆盖 [0, requiredLength) 区域，
@@ -834,6 +873,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         finally
         {
             ArrayPool<float>.Shared.Return(buffer);
+            ArrayPool<int>.Shared.Return(rowOffsets);
         }
     }
 
@@ -857,6 +897,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         var maxBatchSize = _options.MaxBatchSize;
         var allOutputs = new List<InferenceOutput>(totalRows);
         var totalDuration = TimeSpan.Zero;
+
+        // 分片计数：一次 Add 汇总本次微批产生的 shard 总数（诊断指标）。
+        InferenceMetrics.ShardsExecuted.Add((totalRows + maxBatchSize - 1) / maxBatchSize);
 
         for (var rowStart = 0; rowStart < totalRows; rowStart += maxBatchSize)
         {
@@ -1220,6 +1263,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         public required FeatureBatch Batch { get; init; }
         /// <summary>请求截止时间（Stopwatch 时间戳，单调时钟）。Stopwatch.GetTimestamp() ≥ 此值即过期。</summary>
         public required long DeadlineTimestamp { get; init; }
+        /// <summary>入队时间（Stopwatch 时间戳，单调时钟），用于统计排队等待时长。</summary>
+        public required long EnqueueTimestamp { get; init; }
         /// <summary>请求截止时间（wall clock，仅用于错误消息显示，不参与判断）。</summary>
         public required DateTimeOffset Deadline { get; init; }
         public required CancellationToken CancellationToken { get; init; }
