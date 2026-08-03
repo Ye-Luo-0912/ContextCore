@@ -3,27 +3,27 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Feature Schema Validator 契约
 //
-// 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
-//   在推理前严格校验输入特征与 FeatureSchema 一致性，防止 schema drift
-//   导致模型读到错误列序 / 缺失必填特征 / 类型不兼容的值。
+// 目标（对齐 Production Intelligence 规格）：
+// 在推理前严格校验输入特征与 FeatureSchema 一致性，防止 schema drift
+// 导致模型读到错误列序 / 缺失必填特征 / 类型不兼容的值。
 //
 // 与 IInferenceResultValidator 的边界：
-//   - IFeatureSchemaValidator 验证"输入特征 vs schema 定义"（推理前），
-//     关心名称 / 必填 / 默认值 / 类型可转换性。
-//   - IInferenceResultValidator 验证"推理输出 vs 输入约束"（推理后），
-//     关心 NaN / Infinity / Count / Range。
-//   两者互补，分别在推理前后把守质量门。
+// - IFeatureSchemaValidator 验证"输入特征 vs schema 定义"（推理前），
+// 关心名称 / 必填 / 默认值 / 类型可转换性。
+// - IInferenceResultValidator 验证"推理输出 vs 输入约束"（推理后），
+// 关心 NaN / Infinity / Count / Range。
+// 两者互补，分别在推理前后把守质量门。
 //
 // 与 ICalibrationValidator 的边界：
-//   - ICalibrationValidator 验证"校准参数本身"（加载时，与单次输入无关）。
-//   - IFeatureSchemaValidator 验证"输入数据 vs schema"（每次推理前）。
+// - ICalibrationValidator 验证"校准参数本身"（加载时，与单次输入无关）。
+// - IFeatureSchemaValidator 验证"输入数据 vs schema"（每次推理前）。
 //
 // 设计原则：
-//   1. 不抛异常：返回结构化 FeatureSchemaValidationResult，由调用方决定降级
-//      （拒绝推理 / 应用默认值后继续 / 标记 warning 继续）。
-//   2. 完整违规清单：聚合所有违规（Error + Warning），便于诊断。
-//   3. 严重程度分级：Error 阻止推理；Warning 表示统计可疑但可继续。
-//   4. 不依赖外部库：所有检验（名称匹配 / 类型可转换性）用纯 .NET 实现。
+// 1. 不抛异常：返回结构化 FeatureSchemaValidationResult，由调用方决定降级
+// （拒绝推理 / 应用默认值后继续 / 标记 warning 继续）。
+// 2. 完整违规清单：聚合所有违规（Error + Warning），便于诊断。
+// 3. 严重程度分级：Error 阻止推理；Warning 表示统计可疑但可继续。
+// 4. 不依赖外部库：所有检验（名称匹配 / 类型可转换性）用纯 .NET 实现。
 // ===========================================================================
 
 /// <summary>
@@ -38,7 +38,7 @@ namespace ContextCore.Abstractions;
 /// var result = validator.Validate(schema!, inputVector);
 /// if (!result.IsValid)
 /// {
-///     // 拒绝推理或应用默认值后重试
+/// // 拒绝推理或应用默认值后重试
 /// }
 /// </code>
 /// <para>

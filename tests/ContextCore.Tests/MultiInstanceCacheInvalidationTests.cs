@@ -14,7 +14,7 @@ namespace ContextCore.Tests;
 /// - 验证 FileSystem/InMemory provider 仍用 InMemoryContextStateVersionStore（单机默认）
 /// - 验证 Postgres provider 用 PostgresContextStateVersionStore（覆盖默认，跨实例可见）
 /// - 模拟多实例：两个独立 cache 共享同一 versionStore（模拟 Postgres 跨实例共享），
-///   Instance A 通过 Decorator bump 后，Instance B 的 GetAsync 返回 miss
+/// Instance A 通过 Decorator bump 后，Instance B 的 GetAsync 返回 miss
 /// </summary>
 [TestClass]
 [TestCategory("Storage")]
@@ -25,7 +25,7 @@ public sealed class MultiInstanceCacheInvalidationTests
     /// FileSystem provider 是 Local/Single-host runtime，storage-only 注册不应引入
     /// IContextStateVersionStore。生产路径由 AddContextCore 注册 InMemoryContextStateVersionStore，
     /// 此处仅验证 storage-only 隔离场景：Decorator 应解析到 null 并跳过 bump。
-    /// 与 R14-PG-6 的 AddContextStorage_Postgres_OverridesInMemoryVersionStoreRegistration 互补，
+    /// 与 的 AddContextStorage_Postgres_OverridesInMemoryVersionStoreRegistration 互补，
     /// 共同覆盖 FileSystem（未注册）+ Postgres（注册 PostgresContextStateVersionStore）两条路径。
     /// </summary>
     [TestMethod]

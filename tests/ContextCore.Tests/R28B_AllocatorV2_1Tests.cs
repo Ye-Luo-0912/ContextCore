@@ -12,17 +12,17 @@ namespace ContextCore.Tests;
 // Allocator V2.1 验收测试（section rollover + MMR diversity）
 //
 // 覆盖：
-//   1. 空候选 / mandatory 优先 / 预算截断 / section 顺序
-//   2. MMR diversity 重排序（lambda=0.5 / 1.0 / 0.0）
-//   3. Section rollover 启用 / 禁用 / RolloverRatio 缩放
-//   4. 确定性验证（相同输入 → 相同输出）
-//   5. 基接口委托（IGlobalAllocator.Allocate 委托给 base allocator）
-//   6. 诊断信息（Outcome.Diagnostics 含 V2.1 特有字段）
-//   7. DI 注册验证（IAllocatorV2_1 可从 ServiceCollection 解析）
+// 1. 空候选 / mandatory 优先 / 预算截断 / section 顺序
+// 2. MMR diversity 重排序（lambda=0.5 / 1.0 / 0.0）
+// 3. Section rollover 启用 / 禁用 / RolloverRatio 缩放
+// 4. 确定性验证（相同输入 → 相同输出）
+// 5. 基接口委托（IGlobalAllocator.Allocate 委托给 base allocator）
+// 6. 诊断信息（Outcome.Diagnostics 含 V2.1 特有字段）
+// 7. DI 注册验证（IAllocatorV2_1 可从 ServiceCollection 解析）
 //
 // 设计原则：
-//   - 复用 R28BTestHelpers.MakeEnvelope 构建候选（保持与其他 R28B 测试一致）
-//   - 所有代码注释使用中文
+// - 复用共享 TestHelpers 的 MakeEnvelope 构建候选（保持与同类测试一致）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>

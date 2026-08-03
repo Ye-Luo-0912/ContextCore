@@ -11,21 +11,21 @@ namespace ContextCore.Tests;
 //
 // 验证 AgentRunActor 的完整生命周期（ContextBuilding → ModelCalling →
 // ToolDispatching → Observing → Checkpointing → Completed），覆盖：
-//   1. FullLoop_CompleteExecution_ProducesFinalAnswer — 完整循环产出最终答案
-//   2. FullLoop_StateTransitions_FollowStateMachine — 状态转换遵循状态机
-//   3. FullLoop_EventChain_HashChainIntact — 事件哈希链完整无断裂
-//   4. FullLoop_TurnBudget_ConsumedCorrectly — Turn 预算正确消耗
-//   5. FullLoop_CostBudget_AccumulatedFromModelResponses — Cost 预算从模型响应累加
-//   6. FullLoop_WithToolDispatch_ObservesAndCompletes — 含 Tool 调用的循环观察后完成
-//   7. FullLoop_FinalAnswer_PersistedToRunStore — 最终答案持久化到 Run Store
+// 1. FullLoop_CompleteExecution_ProducesFinalAnswer — 完整循环产出最终答案
+// 2. FullLoop_StateTransitions_FollowStateMachine — 状态转换遵循状态机
+// 3. FullLoop_EventChain_HashChainIntact — 事件哈希链完整无断裂
+// 4. FullLoop_TurnBudget_ConsumedCorrectly — Turn 预算正确消耗
+// 5. FullLoop_CostBudget_AccumulatedFromModelResponses — Cost 预算从模型响应累加
+// 6. FullLoop_WithToolDispatch_ObservesAndCompletes — 含 Tool 调用的循环观察后完成
+// 7. FullLoop_FinalAnswer_PersistedToRunStore — 最终答案持久化到 Run Store
 //
 // 设计原则：
-//   - 优先使用真实 InMemory 实现（非 mock）：InMemoryAgentRunStore /
-//     InMemoryAgentRunEventStore / InMemoryAgentCheckpointStore / EchoToolDispatcher /
-//     DeterministicAgentModelTransport
-//   - 自定义 RecordingModelTransport 捕获模型调用以断言上下文与预算
-//   - 所有异步测试使用超时 CancellationTokenSource 防止挂起
-//   - 中文注释
+// - 优先使用真实 InMemory 实现（非 mock）：InMemoryAgentRunStore /
+// InMemoryAgentRunEventStore / InMemoryAgentCheckpointStore / EchoToolDispatcher /
+// DeterministicAgentModelTransport
+// - 自定义 RecordingModelTransport 捕获模型调用以断言上下文与预算
+// - 所有异步测试使用超时 CancellationTokenSource 防止挂起
+// - 中文注释
 // ===========================================================================
 
 [TestClass]

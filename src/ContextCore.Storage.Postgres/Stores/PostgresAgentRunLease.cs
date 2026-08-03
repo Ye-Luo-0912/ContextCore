@@ -11,15 +11,15 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <b>租约模型</b>（每个 run_id 至多一条行），复用 <see cref="PostgresCanaryLeaderLease"/> 模式：
 /// <code>
 /// TryAcquireAsync:
-///   INSERT INTO agent_run_leases (run_id, owner, lease_token, acquired_at, lease_expires_at)
-///   VALUES (...)
-///   ON CONFLICT (run_id) DO UPDATE
-///     SET owner = EXCLUDED.owner, lease_token = EXCLUDED.lease_token, ...
-///     WHERE agent_run_leases.lease_expires_at &lt; now
-///   RETURNING lease_token;
-///   - 无现有行 → INSERT 成功，返回 token
-///   - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
-///   - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
+/// INSERT INTO agent_run_leases (run_id, owner, lease_token, acquired_at, lease_expires_at)
+/// VALUES (...)
+/// ON CONFLICT (run_id) DO UPDATE
+/// SET owner = EXCLUDED.owner, lease_token = EXCLUDED.lease_token, ...
+/// WHERE agent_run_leases.lease_expires_at &lt; now
+/// RETURNING lease_token;
+/// - 无现有行 → INSERT 成功，返回 token
+/// - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
+/// - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
 /// </code>
 ///
 /// <b>RenewAsync</b>：UPDATE WHERE lease_token = @token，延长 lease_expires_at。

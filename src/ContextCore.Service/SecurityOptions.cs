@@ -281,7 +281,7 @@ public sealed class WorkspaceQuotaLimit
     /// <summary>周期内最大费用 USD（0 = 无限制）。</summary>
     public double MaxCostUsd { get; init; } = 0;
 
-    /// <summary>配额周期长度（ TimeSpan 字符串格式，如 "01:00:00" 表示 1 小时）。</summary>
+    /// <summary>配额周期长度（TimeSpan 字符串格式，如 "01:00:00" 表示 1 小时）。</summary>
     public string Period { get; init; } = "01:00:00";
 
     /// <summary>解析 Period 字符串为 TimeSpan。</summary>

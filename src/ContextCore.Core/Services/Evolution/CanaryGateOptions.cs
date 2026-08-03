@@ -3,24 +3,24 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 // Production Canary Gate — 渐进推进配置
 //
-// 目标（对齐 R28-B.8 规格）：
-//   1. 替代单一 ScopedCanary 阶段为渐进百分比阶梯（1→5→10→25→50→100）。
-//   2. 每个阶段最小观察时长 + parity/error/latency 三类自动回滚阈值。
-//   3. 配置可通过环境变量覆盖（CC_CANARY_*）以便不同环境调整策略。
+// 目标（对齐规格）：
+// 1. 替代单一 ScopedCanary 阶段为渐进百分比阶梯（1→5→10→25→50→100）。
+// 2. 每个阶段最小观察时长 + parity/error/latency 三类自动回滚阈值。
+// 3. 配置可通过环境变量覆盖（CC_CANARY_*）以便不同环境调整策略。
 //
 // 设计边界：
-//   - 本类仅承载配置；推进/回滚决策逻辑由 CanaryProgressionService 实现。
-//   - 阈值语义：
-//     * MaxDivergenceRate：V2 vs Legacy 输出差异率（Jaccard 距离），超过则回滚。
-//     * MaxErrorRateDelta：V2 错误率 - Legacy 错误率，超过则回滚。
-//     * MaxLatencyMultiplier：V2 p95 / Legacy p95，超过则回滚。
+// - 本类仅承载配置；推进/回滚决策逻辑由 CanaryProgressionService 实现。
+// - 阈值语义：
+// * MaxDivergenceRate：V2 vs Legacy 输出差异率（Jaccard 距离），超过则回滚。
+// * MaxErrorRateDelta：V2 错误率 - Legacy 错误率，超过则回滚。
+// * MaxLatencyMultiplier：V2 p95 / Legacy p95，超过则回滚。
 // ===========================================================================
 
 /// <summary>
 /// Canary Gate 渐进推进配置。
 /// </summary>
 /// <remarks>
-/// 默认值符合 R28-B.8 规格：
+/// 默认值符合 规格：
 /// <list type="bullet">
 /// <item>百分比阶梯：1 → 5 → 10 → 25 → 50 → 100。</item>
 /// <item>每阶段最小观察时长：10 分钟。</item>

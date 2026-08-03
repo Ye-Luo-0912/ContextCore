@@ -264,7 +264,7 @@ public sealed class ContextPackageBuildResult
     public RetrievalPlan? Plan { get; init; }
 
     /// <summary>
-    /// #4：本次构建的读路径查询计划，记录各 store 调用次数与去重命中。
+    /// 本次构建的读路径查询计划，记录各 store 调用次数与去重命中。
     /// null 表示构建未走 PackageInputLoader 路径（如缓存命中或测试桩）。
     /// </summary>
     public PackageReadPlan? ReadPlan { get; init; }

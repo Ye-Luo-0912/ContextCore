@@ -19,16 +19,16 @@ namespace ContextCore.Service.Hosting;
 /// <b>运行模式</b>：
 /// <list type="bullet">
 /// <item><see cref="CanaryLeaderOptions.Enabled"/> = false：立即退出（单节点模式，
-///   由 <see cref="CanaryProgressionHostedService"/> 处理）。</item>
+/// 由 <see cref="CanaryProgressionHostedService"/> 处理）。</item>
 /// <item><see cref="CanaryLeaderOptions.Enabled"/> = true：周期性轮询所有 ScopedCanary run，
-///   每个实例都记录本地指标样本到共享表；仅 leader 实例聚合跨实例指标并驱动推进/回滚。</item>
+/// 每个实例都记录本地指标样本到共享表；仅 leader 实例聚合跨实例指标并驱动推进/回滚。</item>
 /// </list>
 ///
 /// <b>Leader 选举流程</b>（per run）：
 /// <code>
 /// TryAcquire(runId, leaseDuration, owner)
-///   ├─ 成功 → leader：记录样本 → 聚合 → 评估 → 推进/回滚 → 续租
-///   └─ 失败 → 非 leader：仅记录本地样本（供 leader 聚合）
+/// ├─ 成功 → leader：记录样本 → 聚合 → 评估 → 推进/回滚 → 续租
+/// └─ 失败 → 非 leader：仅记录本地样本（供 leader 聚合）
 /// Renew(runId, token, extension) → 续租；失败则放弃 leader 身份
 /// Release(runId, token) → run 终态时主动释放
 /// </code>
@@ -235,7 +235,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         var options = _options.CurrentValue;
 
         // 0. 检测 stage epoch 变化：若 DB 中的 current_epoch 已推进（Leader 推进了百分比档），
-        //    Reset 本地 Collector 从 0 开始新 epoch 累计，避免旧累计值污染新阶段聚合。
+        // Reset 本地 Collector 从 0 开始新 epoch 累计，避免旧累计值污染新阶段聚合。
         var dbEpoch = await _metricsAggregator.GetCurrentEpochAsync(runId, cancellationToken).ConfigureAwait(false);
         if (_lastKnownEpoch.TryGetValue(runId, out var localEpoch) && localEpoch != dbEpoch && dbEpoch > 0)
         {

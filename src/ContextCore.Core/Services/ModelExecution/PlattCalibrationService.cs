@@ -7,26 +7,26 @@ namespace ContextCore.Core.Services.ModelExecution;
 // / Platt Calibration Service
 //
 // 目标：
-//   提供 ICalibrationService 的默认 Platt scaling 实现，把任意 raw score
-//   映射为 [0, 1] 概率：calibrated = 1 / (1 + exp(-(A * raw + B)))。
+// 提供 ICalibrationService 的默认 Platt scaling 实现，把任意 raw score
+// 映射为 [0, 1] 概率：calibrated = 1 / (1 + exp(-(A * raw + B)))。
 //
 // 重构：
-//   - 旧版默认 A=1, B=0 被称为 "identity-like"，但实际执行 sigmoid，导致 raw=0 → 0.5 而非 0。
-//   - 现在默认参数 Kind=Identity，Calibrate 直接返回 raw（真正恒等）。
-//   - 调用 RegisterPlattParameters / RegisterTemperatureParameters / RegisterIsotonicParameters
-//     可切换到对应策略。
-//   - CalibrationParameters 完整暴露 A / B / T / IsotonicPoints；旧 Parameter 字段同步 A。
+// - 旧版默认 A=1, B=0 被称为 "identity-like"，但实际执行 sigmoid，导致 raw=0 → 0.5 而非 0。
+// - 现在默认参数 Kind=Identity，Calibrate 直接返回 raw（真正恒等）。
+// - 调用 RegisterPlattParameters / RegisterTemperatureParameters / RegisterIsotonicParameters
+// 可切换到对应策略。
+// - CalibrationParameters 完整暴露 A / B / T / IsotonicPoints；旧 Parameter 字段同步 A。
 //
 // 设计原则：
-//   1. 默认 Identity：未配置参数时 calibrated = raw（不调用 Math.Exp）。
-//   2. 每模型独立参数：通过 RegisterXxxParameters 注册 (modelName, parameters)。
-//      null modelName 表示全局默认参数。
-//   3. 查找策略：先按 modelName 精确查找，未命中时回退到全局默认。
-//   4. 线程安全：ConcurrentDictionary 保护参数注册与读取。
-//   5. 数值稳定：sigmoid 通过 Math.Exp 计算，对极值（raw > 35）饱和到 1.0
-//      或 0.0，不抛 OverflowException。
-//   6. 向后兼容：RegisterParameters(a, b, modelName, fittedAt) 保留，等价 RegisterPlattParameters。
-//      Calibrate/CalibrateBatch 旧调用方无需修改；默认行为从 sigmoid(raw) 改为 raw。
+// 1. 默认 Identity：未配置参数时 calibrated = raw（不调用 Math.Exp）。
+// 2. 每模型独立参数：通过 RegisterXxxParameters 注册 (modelName, parameters)。
+// null modelName 表示全局默认参数。
+// 3. 查找策略：先按 modelName 精确查找，未命中时回退到全局默认。
+// 4. 线程安全：ConcurrentDictionary 保护参数注册与读取。
+// 5. 数值稳定：sigmoid 通过 Math.Exp 计算，对极值（raw > 35）饱和到 1.0
+// 或 0.0，不抛 OverflowException。
+// 6. 向后兼容：RegisterParameters(a, b, modelName, fittedAt) 保留，等价 RegisterPlattParameters。
+// Calibrate/CalibrateBatch 旧调用方无需修改；默认行为从 sigmoid(raw) 改为 raw。
 // ===========================================================================
 
 /// <summary>

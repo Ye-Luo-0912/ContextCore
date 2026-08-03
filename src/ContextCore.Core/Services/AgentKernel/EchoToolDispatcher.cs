@@ -6,9 +6,9 @@ namespace ContextCore.Core.Services.AgentKernel;
 // EchoToolDispatcher — Echo Tool Dispatcher（测试用）
 //
 // 目标：
-//   1. 实现 IToolDispatcher 的最简版本。
-//   2. 仅支持 "echo" tool：原样返回 request.Payload。
-//   3. 用于测试和单机部署验证 Kernel 循环。
+// 1. 实现 IToolDispatcher 的最简版本。
+// 2. 仅支持 "echo" tool：原样返回 request.Payload。
+// 3. 用于测试和单机部署验证 Kernel 循环。
 // ===========================================================================
 
 /// <summary>

@@ -8,19 +8,19 @@ namespace ContextCore.Tests;
 // 模型执行链增强验收测试
 //
 // 覆盖范围：
-//   FeatureBatch              —— 连续 float 内存批量推理契约
-//   DeterministicBatchInferenceEngine.InferBatchAsync —— 优化 hash 路径
-//   CalibrationStrategies      —— Identity / Platt / Temperature / Isotonic
-//   PlattCalibrationService    —— 扩展注册方法（Temperature / Isotonic / Identity）
-//   ModelExecutionSnapshot     —— 精确模型执行快照
-//   DefaultInferenceResultValidator —— 推理输出严格验证
+// FeatureBatch —— 连续 float 内存批量推理契约
+// DeterministicBatchInferenceEngine.InferBatchAsync —— 优化 hash 路径
+// CalibrationStrategies —— Identity / Platt / Temperature / Isotonic
+// PlattCalibrationService —— 扩展注册方法（Temperature / Isotonic / Identity）
+// ModelExecutionSnapshot —— 精确模型执行快照
+// DefaultInferenceResultValidator —— 推理输出严格验证
 //
-// 验收点（对应 R28-F 任务描述）：
-//   FeatureSchemaVersion 与 ModelVersion 解耦 → ModelExecutionSnapshot
-//   推理输出严格验证（NaN / Infinity / Confidence 范围 / Count / timeout）
-//   Calibration 默认 Identity，显式 Platt / Temperature / Isotonic 策略
-//   FeatureBatch 连续内存推理
-//   Deterministic Hash 消除 StringBuilder / string[] / 排序分配
+// 验收点（对应 任务描述）：
+// FeatureSchemaVersion 与 ModelVersion 解耦 → ModelExecutionSnapshot
+// 推理输出严格验证（NaN / Infinity / Confidence 范围 / Count / timeout）
+// Calibration 默认 Identity，显式 Platt / Temperature / Isotonic 策略
+// FeatureBatch 连续内存推理
+// Deterministic Hash 消除 StringBuilder / string[] / 排序分配
 // ===========================================================================
 
 // ===========================================================================

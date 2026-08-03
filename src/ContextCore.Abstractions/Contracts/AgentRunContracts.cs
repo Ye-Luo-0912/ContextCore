@@ -4,24 +4,24 @@ namespace ContextCore.Abstractions;
 // Agent Run 契约层 — 模型驱动的 Agent 执行循环
 //
 // 目标（补齐四、Agent 下一步核心功能）：
-//   1. 定义 Agent Run 状态机：Created → ContextBuilding → ModelCalling →
-//      AwaitingApproval → ToolDispatching → Observing → Checkpointing →
-//      Completed / Failed / Cancelled。
-//   2. 定义 6 个核心接口：
-//      - IAgentModelTransport：模型流式调用抽象（替代直接 IContextDecisionRuntime）
-//      - IAgentLoopPolicy：循环策略（决定下一步：CallModel / DispatchTool / Checkpoint / Complete）
-//      - IAgentRunStore：Agent Run 元数据持久化（三层模式：基础 + IPersistent 标记）
-//      - IAgentApprovalGate：人工/自动审批门（高风险操作需审批后执行）
-//      - IAgentToolCallValidator：Tool 调用校验器（参数合法性 + 安全检查）
-//      - IAgentRunEventStore：Run 事件流持久化（复用 Checkpoint 哈希链模式）
-//   3. 定义数据契约：AgentRun / AgentRunEvent / AgentModelResponse /
-//      AgentToolCallRequest / AgentLoopDecision / AgentTurnBudget / AgentCostBudget。
+// 1. 定义 Agent Run 状态机：Created → ContextBuilding → ModelCalling →
+// AwaitingApproval → ToolDispatching → Observing → Checkpointing →
+// Completed / Failed / Cancelled。
+// 2. 定义 6 个核心接口：
+// - IAgentModelTransport：模型流式调用抽象（替代直接 IContextDecisionRuntime）
+// - IAgentLoopPolicy：循环策略（决定下一步：CallModel / DispatchTool / Checkpoint / Complete）
+// - IAgentRunStore：Agent Run 元数据持久化（三层模式：基础 + IPersistent 标记）
+// - IAgentApprovalGate：人工/自动审批门（高风险操作需审批后执行）
+// - IAgentToolCallValidator：Tool 调用校验器（参数合法性 + 安全检查）
+// - IAgentRunEventStore：Run 事件流持久化（复用 Checkpoint 哈希链模式）
+// 3. 定义数据契约：AgentRun / AgentRunEvent / AgentModelResponse /
+// AgentToolCallRequest / AgentLoopDecision / AgentTurnBudget / AgentCostBudget。
 //
 // 设计原则：
-//   1. 状态机复用 ToolDispatchState 的 expected-state CAS + 不可逆前向推进模式。
-//   2. 事件流复用 Checkpoint 哈希链（ContentHash / PrevChainHash）防篡改。
-//   3. 契约层不引入存储 I/O；持久化由 IPersistent 标记接口区分。
-//   4. AgentKernelHost / AgentRunActor 消费这些契约实现多 Session 隔离。
+// 1. 状态机复用 ToolDispatchState 的 expected-state CAS + 不可逆前向推进模式。
+// 2. 事件流复用 Checkpoint 哈希链（ContentHash / PrevChainHash）防篡改。
+// 3. 契约层不引入存储 I/O；持久化由 IPersistent 标记接口区分。
+// 4. AgentKernelHost / AgentRunActor 消费这些契约实现多 Session 隔离。
 // ===========================================================================
 
 // ── 状态机 ─────────────────────────────────────────────────────────────────
@@ -33,16 +33,16 @@ namespace ContextCore.Abstractions;
 /// 合法状态流转（不可逆前向推进）：
 /// <code>
 /// Created → ContextBuilding → ModelCalling → AwaitingApproval
-///    ↓           ↓                ↓               ↓
-///    └───────────┴────────────────┴───────────────┘
-///                        ↓
-///               ToolDispatching → Observing → Checkpointing
-///                        ↓            ↓            ↓
-///                        └────────────┴────────────┘
-///                                     ↓
-///                          ┌────── Completed
-///                          ├────── Failed
-///                          └──── Cancelled (仅由外部取消触发)
+/// ↓ ↓ ↓ ↓
+/// └───────────┴────────────────┴───────────────┘
+/// ↓
+/// ToolDispatching → Observing → Checkpointing
+/// ↓ ↓ ↓
+/// └────────────┴────────────┘
+/// ↓
+/// ┌────── Completed
+/// ├────── Failed
+/// └──── Cancelled (仅由外部取消触发)
 /// </code>
 /// 任意状态可跳转到 Failed（异常）或 Cancelled（用户取消）。
 /// Checkpointing 后回到 ContextBuilding 开启下一轮循环。
@@ -324,9 +324,9 @@ public sealed record AgentRun
 /// </summary>
 /// <remarks>
 /// 哈希链：
-///   - ContentHash = SHA-256(序列化 payload，ContentHash=null)
-///   - PrevChainHash = 前一个事件的 ContentHash（链头为 null）
-///   - Sequence = 单调递增序列号（从 0 开始）
+/// - ContentHash = SHA-256(序列化 payload，ContentHash=null)
+/// - PrevChainHash = 前一个事件的 ContentHash（链头为 null）
+/// - Sequence = 单调递增序列号（从 0 开始）
 /// 校验：读取时重算 ContentHash 比对；PrevChainHash 与前一事件 ContentHash 比对。
 /// </remarks>
 public sealed record AgentRunEvent
@@ -850,22 +850,22 @@ public sealed record MemoryReference
 /// 进一步引入结构化分层，让 ContextCore 的 TokenBudget / Compression / Snapshot
 /// 能力可介入：
 /// <list type="bullet">
-///   <item><see cref="SystemPrompt"/> / <see cref="Constraints"/>：高优先级，总是保留。</item>
-///   <item><see cref="CurrentTask"/>：用户任务（投影为 User 消息），总是保留。</item>
-///   <item><see cref="Messages"/>：短期工作集（Assistant 响应、检索上下文等），按预算截断旧消息。</item>
-///   <item><see cref="ToolObservations"/>：Tool 观察结果（投影为 Tool 消息），按预算截断旧观察。</item>
-///   <item><see cref="StableMemoryReferences"/>：稳定记忆引用（投影为 System 消息）。</item>
-///   <item><see cref="LastModelTurn"/>：最近一次模型响应（元数据，不直接投影；用于循环策略与审计）。</item>
+/// <item><see cref="SystemPrompt"/> / <see cref="Constraints"/>：高优先级，总是保留。</item>
+/// <item><see cref="CurrentTask"/>：用户任务（投影为 User 消息），总是保留。</item>
+/// <item><see cref="Messages"/>：短期工作集（Assistant 响应、检索上下文等），按预算截断旧消息。</item>
+/// <item><see cref="ToolObservations"/>：Tool 观察结果（投影为 Tool 消息），按预算截断旧观察。</item>
+/// <item><see cref="StableMemoryReferences"/>：稳定记忆引用（投影为 System 消息）。</item>
+/// <item><see cref="LastModelTurn"/>：最近一次模型响应（元数据，不直接投影；用于循环策略与审计）。</item>
 /// </list>
 ///
 /// <b>与 ContextCore 已有能力的关系</b>：
 /// - Token 预算：<see cref="ProjectForModel"/> 内部使用字符估算（与
-///   <c>LegacyCharacterTokenizer</c> 对齐）；生产环境可由调用方传入精确预算并
-///   在此方法外用 <c>IContextTokenizerResolver</c> 重算。
+/// <c>LegacyCharacterTokenizer</c> 对齐）；生产环境可由调用方传入精确预算并
+/// 在此方法外用 <c>IContextTokenizerResolver</c> 重算。
 /// - Compression：当预算不足时优先截断旧 <see cref="Messages"/> / 旧
-///   <see cref="ToolObservations"/>；未来可接入 <c>IContextCompressor</c> 做语义压缩。
+/// <see cref="ToolObservations"/>；未来可接入 <c>IContextCompressor</c> 做语义压缩。
 /// - Snapshot/Delta：本状态为不可变 record，可直接作为 Snapshot；Delta 由
-///   <see cref="Messages"/> / <see cref="ToolObservations"/> 的追加差异构成。
+/// <see cref="Messages"/> / <see cref="ToolObservations"/> 的追加差异构成。
 /// </remarks>
 public sealed record AgentContextState
 {
@@ -1122,7 +1122,7 @@ public sealed record AgentApprovalResult
     /// <summary>
     /// 是否为"等待审批"结果（Pending）。
     /// true = 审批已持久化为 Pending 状态，等待外部 ResolveAsync；
-    ///        Actor 应转入 AwaitingApproval 状态并退出执行槽（释放 Worker/Semaphore）。
+    /// Actor 应转入 AwaitingApproval 状态并退出执行槽（释放 Worker/Semaphore）。
     /// false = 已有决策（Approved=true 或 Approved=false 的拒绝）。
     /// 默认 false（兼容旧路径：自动审批直接返回决策）。
     /// </summary>
@@ -1209,13 +1209,13 @@ public sealed record AgentCostBudget
 ///
 /// <b>投影顺序</b>（高优先级在前，截断从最旧开始）：
 /// <list type="number">
-///   <item>System Prompt</item>
-///   <item>Hard Constraints</item>
-///   <item>Current Task</item>
-///   <item>Working Memory（短期工作集）</item>
-///   <item>Retrieved Materials（从 WorkingSet.Materials 取正文）</item>
-///   <item>Tool Observations</item>
-///   <item>Recent Assistant Turns</item>
+/// <item>System Prompt</item>
+/// <item>Hard Constraints</item>
+/// <item>Current Task</item>
+/// <item>Working Memory（短期工作集）</item>
+/// <item>Retrieved Materials（从 WorkingSet.Materials 取正文）</item>
+/// <item>Tool Observations</item>
+/// <item>Recent Assistant Turns</item>
 /// </list>
 /// </remarks>
 public interface IAgentModelContextProjector
@@ -1310,10 +1310,10 @@ public interface IAgentModelTransport
     /// 仅传 messages，无法向模型声明 Tool（function calling）也无法选择特定模型工件。
     /// 本重载让真实 LLM transport（如 <c>ModelGatewayAgentModelTransport</c>）能：
     /// <list type="bullet">
-    ///   <item>将 <paramref name="request"/>.Tools 转换为 IModelGateway 的 Tool JSON Schema 传入。</item>
-    ///   <item>按 <paramref name="request"/>.ModelArtifactId 选择模型（非 null 时），否则用 Gateway Fallback。</item>
-    ///   <item>在 <paramref name="request"/>.DeadlineAt 前完成调用，超时则取消。</item>
-    ///   <item>解析模型返回的结构化 Tool Call（ToolCallId / ToolName / Arguments JSON）。</item>
+    /// <item>将 <paramref name="request"/>.Tools 转换为 IModelGateway 的 Tool JSON Schema 传入。</item>
+    /// <item>按 <paramref name="request"/>.ModelArtifactId 选择模型（非 null 时），否则用 Gateway Fallback。</item>
+    /// <item>在 <paramref name="request"/>.DeadlineAt 前完成调用，超时则取消。</item>
+    /// <item>解析模型返回的结构化 Tool Call（ToolCallId / ToolName / Arguments JSON）。</item>
     /// </list>
     /// 确性 fallback 实现可委托到 <see cref="CallAsync(string, IReadOnlyList{AgentMessage}, CancellationToken)"/>。
     /// </remarks>
@@ -1458,14 +1458,14 @@ public interface IPersistentAgentRunStore : IAgentRunStore
     /// <summary>
     /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置。
     /// 单条 SQL 事务内完成：
-    ///   - Created（state=0）且退避门通过（next_retry_at 为 null 或已到期）→ 直接领取，状态不变
-    ///     （Actor 以 state=Created 判定全新启动，因此领取不改状态列）；
-    ///   - Failed（state=8）且 max_retries &gt; 0 且 retry_count &lt; max_retries 且退避门通过
-    ///     → 重置为 Created + retry_count+1 + next_retry_at=退避时间（事件流同步清空，
-    ///     作为全新启动重试）；
-    ///   - 排序 (Priority DESC, CreatedAt ASC, RunId ASC)，LIMIT take；
-    ///   - 每 workspace 最多领取 <paramref name="perWorkspace"/> 个（ROW_NUMBER PARTITION BY，
-    ///     公平轮转防止单 workspace 独占批次）。
+    /// - Created（state=0）且退避门通过（next_retry_at 为 null 或已到期）→ 直接领取，状态不变
+    /// （Actor 以 state=Created 判定全新启动，因此领取不改状态列）；
+    /// - Failed（state=8）且 max_retries &gt; 0 且 retry_count &lt; max_retries 且退避门通过
+    /// → 重置为 Created + retry_count+1 + next_retry_at=退避时间（事件流同步清空，
+    /// 作为全新启动重试）；
+    /// - 排序 (Priority DESC, CreatedAt ASC, RunId ASC)，LIMIT take；
+    /// - 每 workspace 最多领取 <paramref name="perWorkspace"/> 个（ROW_NUMBER PARTITION BY，
+    /// 公平轮转防止单 workspace 独占批次）。
     /// 领取行由 FOR UPDATE SKIP LOCKED 加锁，多实例并发安全（被锁行跳过，下轮再取）。
     /// </summary>
     /// <param name="take">本批次最多领取数（全局上限）。</param>
@@ -1736,10 +1736,10 @@ public interface IPersistentAgentRunEventStore : IAgentRunEventStore
 ///
 /// <b>语义</b>：
 /// <list type="bullet">
-///   <item><see cref="Notify"/>：事件批量提交事务 COMMIT 后由 Event Store 调用，写入最新 sequence。</item>
-///   <item><see cref="SubscribeAsync"/>：返回从 <paramref name="fromSequence"/> 起的 sequence 流；
-///     调用方每次迭代后应回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 拉取实际事件。
-///     若 500ms 内无新事件，迭代结束（yield）让调用方回退轮询。</item>
+/// <item><see cref="Notify"/>：事件批量提交事务 COMMIT 后由 Event Store 调用，写入最新 sequence。</item>
+/// <item><see cref="SubscribeAsync"/>：返回从 <paramref name="fromSequence"/> 起的 sequence 流；
+/// 调用方每次迭代后应回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 拉取实际事件。
+/// 若 500ms 内无新事件，迭代结束（yield）让调用方回退轮询。</item>
 /// </list>
 /// 实现应幂等且线程安全；多订阅者共享同一 (workspaceId, runId) 通道。
 /// </remarks>
@@ -2346,11 +2346,11 @@ public interface IPersistentAgentApprovalStore : IAgentApprovalStore
     /// 任一步骤失败都会留下不一致状态（如审批已裁决但 Run 仍处 AwaitingApproval）。
     /// 本方法在单个 PostgreSQL 事务内完成：
     /// <list type="number">
-    ///   <item>校验 approval.RunId == runId（防跨 Run 误裁决）。</item>
-    ///   <item>CAS 裁决审批（UPDATE WHERE status=Pending）。</item>
-    ///   <item>INSERT 审批事件到 agent_run_events（哈希链续接）。</item>
-    ///   <item>CAS 推进 Run 状态（UPDATE agent_runs WHERE state=expected）。</item>
-    ///   <item>COMMIT 或 ROLLBACK。</item>
+    /// <item>校验 approval.RunId == runId（防跨 Run 误裁决）。</item>
+    /// <item>CAS 裁决审批（UPDATE WHERE status=Pending）。</item>
+    /// <item>INSERT 审批事件到 agent_run_events（哈希链续接）。</item>
+    /// <item>CAS 推进 Run 状态（UPDATE agent_runs WHERE state=expected）。</item>
+    /// <item>COMMIT 或 ROLLBACK。</item>
     /// </list>
     /// 任一步骤失败则整事务回滚，保证审批裁决与 Run 状态推进的一致性。
     /// </remarks>

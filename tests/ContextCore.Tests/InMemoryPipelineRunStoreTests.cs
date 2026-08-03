@@ -7,10 +7,10 @@ namespace ContextCore.Tests;
 /// InMemoryPipelineRunStore 实现测试。
 ///
 /// 覆盖：
-///   1. SaveRunAsync null / GetRunAsync null / ListRunsByProposalAsync null 抛异常
-///   2. Run + Canary + Rollback + Baseline 4 类记录的 Save/Get/List/Delete 往返
-///   3. Count 属性
-///   4. 默认构造（无参）创建实例可用
+/// 1. SaveRunAsync null / GetRunAsync null / ListRunsByProposalAsync null 抛异常
+/// 2. Run + Canary + Rollback + Baseline 4 类记录的 Save/Get/List/Delete 往返
+/// 3. Count 属性
+/// 4. 默认构造（无参）创建实例可用
 /// </summary>
 [TestClass]
 [TestCategory("R27")]

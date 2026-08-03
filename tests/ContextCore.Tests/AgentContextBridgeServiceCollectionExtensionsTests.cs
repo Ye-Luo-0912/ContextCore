@@ -10,12 +10,12 @@ namespace ContextCore.Tests;
 /// DI 扩展方法测试。
 ///
 /// 覆盖：
-///   1. AddAgentContextBridge 注册 IAgentContextBridge
-///   2. AddAgentContextBridge 未注册 IContextPackageBuilder 抛异常
-///   3. AddInMemoryAgentTaskStateStore 注册 IAgentTaskStateStore
-///   4. AddAgentRuntimeAndBridgeDefaults 一键注册全部
-///   5. null services 抛异常
-///   6. AddAgentContextBridge 端到端可调用（注入 stub IContextPackageBuilder）
+/// 1. AddAgentContextBridge 注册 IAgentContextBridge
+/// 2. AddAgentContextBridge 未注册 IContextPackageBuilder 抛异常
+/// 3. AddInMemoryAgentTaskStateStore 注册 IAgentTaskStateStore
+/// 4. AddAgentRuntimeAndBridgeDefaults 一键注册全部
+/// 5. null services 抛异常
+/// 6. AddAgentContextBridge 端到端可调用（注入 stub IContextPackageBuilder）
 /// </summary>
 [TestClass]
 [TestCategory("R24")]

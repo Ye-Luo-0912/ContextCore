@@ -3,16 +3,16 @@
 // ===========================================================================
 // 角色：将控制面期望状态（IClusterModelSlotStore）与各节点已应用状态
 // （IModelNodeAppliedStateStore 的逐节点记录）聚合为集群级收敛视图：
-//   1. 集群是否已收敛到期望 Revision（所有节点 AppliedRevision == DesiredRevision）；
-//   2. 落后节点（AppliedRevision < DesiredRevision）计数；
-//   3. 内容哈希冲突（不同节点加载了不同内容的模型）检测。
+// 1. 集群是否已收敛到期望 Revision（所有节点 AppliedRevision == DesiredRevision）；
+// 2. 落后节点（AppliedRevision < DesiredRevision）计数；
+// 3. 内容哈希冲突（不同节点加载了不同内容的模型）检测。
 //
 // 设计决策：
-//   - 注册表是只读聚合（read model）：不写入任何持久化状态，
-//     数据源即节点已应用状态表（model_node_applied_state）与控制面槽位表。
-//   - 收敛以 Revision 为准（Reconciler 仅在远端 Revision > 本地时应用，
-//     Revision 相等即表示节点已看到并应用该期望状态）；
-//     内容哈希冲突作为独立的告警信号（同一 Revision 下不同内容 = 漂移）。
+// - 注册表是只读聚合（read model）：不写入任何持久化状态，
+// 数据源即节点已应用状态表（model_node_applied_state）与控制面槽位表。
+// - 收敛以 Revision 为准（Reconciler 仅在远端 Revision > 本地时应用，
+// Revision 相等即表示节点已看到并应用该期望状态）；
+// 内容哈希冲突作为独立的告警信号（同一 Revision 下不同内容 = 漂移）。
 // ===========================================================================
 
 namespace ContextCore.Abstractions;

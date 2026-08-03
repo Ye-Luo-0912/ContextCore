@@ -86,7 +86,7 @@ public sealed class HybridContextRetriever : IContextRetriever
                 cancellationToken);
         }
 
-        // Memory Channel 独立判断：不依赖 IncludeKeywordRecall（P0 4.1）。
+        // Memory Channel 独立判断：不依赖 IncludeKeywordRecall。
         // MemoryRecallChannelExecutor 内部会按 IncludeWorkingMemory || IncludeStableMemory 守卫实际召回。
         Dictionary<string, string>? memoryMetadata = null;
         Task<RetrievalChannelResult>? memoryChannelTask = null;
@@ -173,7 +173,7 @@ public sealed class HybridContextRetriever : IContextRetriever
             stages.Add(CreateStageTrace(relationResult));
         }
 
-        // #8: 合并主通道与关系扩展通道——BuildRankedCandidates 做去重 + cap 噪声过滤，
+        // 合并主通道与关系扩展通道——BuildRankedCandidates 做去重 + cap 噪声过滤，
         // Pack 阶段为 relation-only 候选显式预留 TopK 名额（传入选中的 relation-only ID 集合）。
         var relationOnlyCandidatesView = relOnlyCandidates.ToCandidates(request.IncludeContent);
         var relationOnlyIds = relationOnlyCandidatesView

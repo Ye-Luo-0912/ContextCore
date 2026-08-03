@@ -16,23 +16,23 @@ namespace ContextCore.IntegrationTests;
 //
 // 目标：证明系统端到端可用——真实 PostgreSQL + 真实 Agent Tool Loop + 持久化 Journal。
 // 不使用 mock stub 和 in-memory stores，而是：
-//   1. 真实 PostgreSQL（Testcontainers）
-//   2. 模拟但真实的 IAgentModelTransport（产生 Tool 调用，不是真实 LLM）
-//   3. 真实 Tool 执行（IToolHandler → RealToolDispatcher）
-//   4. 完整 AgentRunActor 循环 + 持久化 Journal
+// 1. 真实 PostgreSQL（Testcontainers）
+// 2. 模拟但真实的 IAgentModelTransport（产生 Tool 调用，不是真实 LLM）
+// 3. 真实 Tool 执行（IToolHandler → RealToolDispatcher）
+// 4. 完整 AgentRunActor 循环 + 持久化 Journal
 //
 // 四个测试：
-//   1. E2E_RealPostgres_FullToolLoop_ModelCallToFinalAnswer — 完整循环
-//   2. E2E_RealPostgres_ApprovalSuspendResume — 审批挂起与恢复
-//   3. E2E_RealPostgres_CrashRecovery_MidToolExecution — 崩溃恢复与 exactly-once
-//   4. E2E_RealPostgres_LearningEventOutbox_Durability — 学习事件 Outbox 持久性
+// 1. E2E_RealPostgres_FullToolLoop_ModelCallToFinalAnswer — 完整循环
+// 2. E2E_RealPostgres_ApprovalSuspendResume — 审批挂起与恢复
+// 3. E2E_RealPostgres_CrashRecovery_MidToolExecution — 崩溃恢复与 exactly-once
+// 4. E2E_RealPostgres_LearningEventOutbox_Durability — 学习事件 Outbox 持久性
 //
 // 设计原则：
-//   - 使用真实 Postgres stores（PostgresAgentRunStore / PostgresAgentRunEventStore /
-//     PostgresToolDispatchJournal / PostgresAgentApprovalStore / PostgresLearningEventOutboxStore）。
-//   - Docker/Postgres 不可用时用 Assert.Inconclusive 跳过；不修改测试逻辑。
-//   - 每个测试使用独立的 tablePrefix 避免数据交叉污染。
-//   - 所有异步测试使用 CancellationTokenSource 超时防止挂起。
+// - 使用真实 Postgres stores（PostgresAgentRunStore / PostgresAgentRunEventStore /
+// PostgresToolDispatchJournal / PostgresAgentApprovalStore / PostgresLearningEventOutboxStore）。
+// - Docker/Postgres 不可用时用 Assert.Inconclusive 跳过；不修改测试逻辑。
+// - 每个测试使用独立的 tablePrefix 避免数据交叉污染。
+// - 所有异步测试使用 CancellationTokenSource 超时防止挂起。
 // ===========================================================================
 
 [TestClass]
@@ -53,7 +53,7 @@ public sealed class R29H_ProductionEvidenceE2ETests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // 直接尝试启动容器（与 R29H_DurableKernelCrashRecoveryTests 一致），
+        // 直接尝试启动容器（与崩溃恢复类 E2E 测试一致），
         // 避免 IsDockerAvailableAsync 在 Windows named-pipe Docker Desktop 上误判。
         try
         {

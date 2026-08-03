@@ -33,104 +33,104 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// v25 → v26，新增 vw_utility_ledger_calibration_data 视图（校准数据导出 SQL 接口，predicted / observed / weight 三段式）。
     /// v26 → v27，新增 user_feedback_entries 表与索引（用户显式反馈接入 ledger：thumbs up/down + 评分修正 + 文本反馈）。
     /// v27 → v28，tool_dispatch_journal_entries.idempotency_key 索引由普通 index 升级为 UNIQUE partial index，
-    ///       防止不同 request_id 使用相同幂等键分别执行（外部副作用 exactly-once 的数据库层兜底）。
+    /// 防止不同 request_id 使用相同幂等键分别执行（外部副作用 exactly-once 的数据库层兜底）。
     /// v30 → v31，新增 agent_runs + agent_run_events 表与索引（Agent Run 状态机 + 事件流哈希链持久化）。
     /// v31 → v32，新增 canary_metrics_samples + canary_leader_leases 表与索引
-    ///       （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
+    /// （Canary HA 聚合：跨实例指标样本表 + Leader 租约表，支持多节点部署时全局聚合 + 单 leader 推进）。
     /// v32 → v33，tool_dispatch_journal_entries 追加 payload_digest / workspace_id / run_id 列，
-    ///       支持 PrepareAsync 语义等价校验，防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
+    /// 支持 PrepareAsync 语义等价校验，防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
     /// Learning Loop Durable Outbox：v33 → v34，新增 learning_event_outbox 表与索引。
-    ///       将 Utility Ledger 物化从 fire-and-forget Task.Run 改为 Durable Outbox 模式：
-    ///       Decision committed → learning_event_outbox (持久化) → bounded batch worker → MaterializeAsync → Ack/Retry/DeadLetter。
-    ///       消除进程崩溃时静默丢训练数据、DB 瞬时失败不重试、无死信/可观测性等问题。
+    /// 将 Utility Ledger 物化从 fire-and-forget Task.Run 改为 Durable Outbox 模式：
+    /// Decision committed → learning_event_outbox (持久化) → bounded batch worker → MaterializeAsync → Ack/Retry/DeadLetter。
+    /// 消除进程崩溃时静默丢训练数据、DB 瞬时失败不重试、无死信/可观测性等问题。
     /// Canary HA 聚合修复：v35 → v36，canary_metrics_samples 表改为最新快照模型：
-    ///       - 新增 stage_epoch 列，PK 由 (sample_id) 改为 (run_id, stage_epoch, instance_id)
-    ///       - 新增 canary_run_epochs 表（per-run 单调递增 epoch，Leader 推进时递增）
-    ///       - 每次 UPSERT 覆盖该实例最新累计值（不再追加行），聚合时只汇总当前 epoch 的最新快照
-    ///       - 修复 SUM(total_observations) 重复累计、InstanceCount=COUNT(*) 误算样本行数、
-    ///         旧 Canary 阶段数据污染新阶段、表无限增长等问题。
+    /// - 新增 stage_epoch 列，PK 由 (sample_id) 改为 (run_id, stage_epoch, instance_id)
+    /// - 新增 canary_run_epochs 表（per-run 单调递增 epoch，Leader 推进时递增）
+    /// - 每次 UPSERT 覆盖该实例最新累计值（不再追加行），聚合时只汇总当前 epoch 的最新快照
+    /// - 修复 SUM(total_observations) 重复累计、InstanceCount=COUNT(*) 误算样本行数、
+    /// 旧 Canary 阶段数据污染新阶段、表无限增长等问题。
     /// v37 → v38，新增 model_activation_audit 表与索引（Model Control Plane 激活审计持久化，
-    ///   记录 Activate/Rollback/Retire/Shadow/Warmup 等模型生命周期事件，含 previous_model_id /
-    ///   operator / reason / node_id 等业务字段，支持 HA 多节点对账与 Champion/Challenger 推进追溯）。
+    /// 记录 Activate/Rollback/Retire/Shadow/Warmup 等模型生命周期事件，含 previous_model_id /
+    /// operator / reason / node_id 等业务字段，支持 HA 多节点对账与 Champion/Challenger 推进追溯）。
     /// 运行时能力补齐：v38 → v39，新增 agent_run_approvals + agent_run_leases 表与索引：
-    ///   - agent_run_approvals：durable approval 持久化（Pending/Approved/Rejected 状态机 + CAS 裁决），
-    ///     让进程崩溃恢复后可重新加载未决审批，外部审批系统通过 approval_id 提交决策。
-    ///   - agent_run_leases：HA Run Owner Lease（PostgreSQL-backed CAS 租约），
-    ///     确保同一时刻仅一个 Host 实例处理同一 Run，复用 canary_leader_leases 模式。
+    /// - agent_run_approvals：durable approval 持久化（Pending/Approved/Rejected 状态机 + CAS 裁决），
+    /// 让进程崩溃恢复后可重新加载未决审批，外部审批系统通过 approval_id 提交决策。
+    /// - agent_run_leases：HA Run Owner Lease（PostgreSQL-backed CAS 租约），
+    /// 确保同一时刻仅一个 Host 实例处理同一 Run，复用 canary_leader_leases 模式。
     /// v39 → v40，learning_event_outbox 追加 lease_token 列。AcquirePendingAsync 生成唯一 token
-    ///   并写入数据库；MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 lease_token CAS 校验
-    ///   仅持有者可 Ack/Nack/Renew——修复旧 Worker lease 过期被抢占后越权 Ack 新 Worker lease 的问题。
+    /// 并写入数据库；MarkAckedAsync / MarkFailedAsync / RenewLeaseAsync 通过 lease_token CAS 校验
+    /// 仅持有者可 Ack/Nack/Renew——修复旧 Worker lease 过期被抢占后越权 Ack 新 Worker lease 的问题。
     /// v40 → v41，agent_run_leases 追加 fencing_token bigint 列（单调递增），用于 Agent Run
-    ///   副作用操作（状态转换 / 事件追加 / Tool dispatch）的 lease fencing 校验，修复 HA Lease 无法
-    ///   防止双执行的问题（旧 lease 被抢占后，过期持有者的 UPDATE 因 fencing_token 不匹配而影响 0 行）。
+    /// 副作用操作（状态转换 / 事件追加 / Tool dispatch）的 lease fencing 校验，修复 HA Lease 无法
+    /// 防止双执行的问题（旧 lease 被抢占后，过期持有者的 UPDATE 因 fencing_token 不匹配而影响 0 行）。
     /// v41 → v42，context_items 追加 search_vector tsvector 生成列 + GIN 索引，
-    ///   Lexical 检索由 (data->>'Content') ILIKE '%query%' 全表扫描改为
-    ///   websearch_to_tsquery + ts_rank_cd 走 GIN 索引。
+    /// Lexical 检索由 (data->>'Content') ILIKE '%query%' 全表扫描改为
+    /// websearch_to_tsquery + ts_rank_cd 走 GIN 索引。
     /// v41 → v42，context_items 追加 content_hash / content_token_cost 列，
-    ///   摄取阶段持久化 SHA-256 与精确 token cost，Provider 直接读取不再在线重复计算。
+    /// 摄取阶段持久化 SHA-256 与精确 token cost，Provider 直接读取不再在线重复计算。
     /// v42 → v43，Canary 与性能真相三项修复：
-    ///   - canary_metrics_samples 追加 v2_latency_sketch / legacy_latency_sketch bytea 列，
-    ///     各实例持久化 DDSketch 字节，Leader 聚合时 MergeFrom 合并后查询总体 P95，
-    ///     替代对单实例 P95 加权平均（加权平均会低估尾延迟）。
-    ///   - canary_metrics_samples 追加 task_success_sum / task_success_count /
-    ///     tool_success_sum / tool_success_count 列，聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)，
-    ///     避免 10 样本实例与 10000 样本实例权重相同。
-    ///   - canary_leader_leases 追加 fencing_token bigint 列（单调递增），
-    ///     每次 TryAcquireAsync 成功获取（含抢占过期）时递增；AdvanceEpochAsync 的 UPDATE
-    ///     校验 WHERE fencing_token <= @fencingToken，旧 Leader（fencing token 较小）推进失败。
+    /// - canary_metrics_samples 追加 v2_latency_sketch / legacy_latency_sketch bytea 列，
+    /// 各实例持久化 DDSketch 字节，Leader 聚合时 MergeFrom 合并后查询总体 P95，
+    /// 替代对单实例 P95 加权平均（加权平均会低估尾延迟）。
+    /// - canary_metrics_samples 追加 task_success_sum / task_success_count /
+    /// tool_success_sum / tool_success_count 列，聚合时 SUM(分子)/SUM(分母) 替代 AVG(rate)，
+    /// 避免 10 样本实例与 10000 样本实例权重相同。
+    /// - canary_leader_leases 追加 fencing_token bigint 列（单调递增），
+    /// 每次 TryAcquireAsync 成功获取（含抢占过期）时递增；AdvanceEpochAsync 的 UPDATE
+    /// 校验 WHERE fencing_token <= @fencingToken，旧 Leader（fencing token 较小）推进失败。
     /// v43 → v44，agent_runs 追加 idempotency_key text 列与 partial UNIQUE 索引
-    ///   (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL，
-    ///   让 POST /api/agents/runs 在提供 IdempotencyKey 时返回已有 Run（200 OK）而非创建重复 Run，
-    ///   防止客户端重试/网络抖动导致同一业务意图被多次执行。
+    /// (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL，
+    /// 让 POST /api/agents/runs 在提供 IdempotencyKey 时返回已有 Run（200 OK）而非创建重复 Run，
+    /// 防止客户端重试/网络抖动导致同一业务意图被多次执行。
     /// v44 → v45，新增 canary_pipelines + canary_transition_audit 表与索引：
-    ///   - canary_pipelines：per-run pipeline 状态表（percentage + status + revision），
-    ///     ApplyCanaryDecisionAsync 在单一事务内通过 revision CAS 原子更新，替代旧路径
-    ///     AdvanceAsync（修改 in-memory）+ AdvanceEpochAsync（fencing 校验）的两步模式。
-    ///   - canary_transition_audit：append-only 审计表，记录每次决策的 from/to/decision/
-    ///     fencing_token/new_epoch，与 canary_pipelines UPDATE 同事务写入，确保审计与状态强一致。
-    ///   修复 HA 正确性：旧 Leader 在 lease 失效后无法再修改 rollout（fencing 校验在事务内首先执行）；
-    ///   Rollback 路径也经过 fencing 校验（旧路径完全无校验）。
+    /// - canary_pipelines：per-run pipeline 状态表（percentage + status + revision），
+    /// ApplyCanaryDecisionAsync 在单一事务内通过 revision CAS 原子更新，替代旧路径
+    /// AdvanceAsync（修改 in-memory）+ AdvanceEpochAsync（fencing 校验）的两步模式。
+    /// - canary_transition_audit：append-only 审计表，记录每次决策的 from/to/decision/
+    /// fencing_token/new_epoch，与 canary_pipelines UPDATE 同事务写入，确保审计与状态强一致。
+    /// 修复 HA 正确性：旧 Leader 在 lease 失效后无法再修改 rollout（fencing 校验在事务内首先执行）；
+    /// Rollback 路径也经过 fencing 校验（旧路径完全无校验）。
     /// v45 → v46，memory_items / constraints 追加 content_hash / content_length /
-    ///   tokenizer_id / tokenizer_version / token_count / counted_at 列，Memory/Constraint
-    ///   摄取阶段持久化完整 tokenization metadata，Provider 读取后跳过在线 SHA-256 + tokenize。
+    /// tokenizer_id / tokenizer_version / token_count / counted_at 列，Memory/Constraint
+    /// 摄取阶段持久化完整 tokenization metadata，Provider 读取后跳过在线 SHA-256 + tokenize。
     /// v45 → v46，context_items 启用 pg_trgm 扩展；search_vector 改为 CJK 预分词
-    ///   （regexp_replace 在每个 CJK 字符后插入空格，simple 配置即可按字符切分）；
-    ///   新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
+    /// （regexp_replace 在每个 CJK 字符后插入空格，simple 配置即可按字符切分）；
+    /// 新增 id / title 表达式的 gin_trgm_ops 索引，支持 ILIKE 中文/前缀检索。
     /// v46 → v47，新增 tool_dispatch_results 表与索引（Durable Tool Result 缓存持久化，
-    ///   让 HA 崩溃恢复时已 Committed/ResultDelivered 的 tool 结果可跨进程读取，防止外部副作用结果丢失）。
+    /// 让 HA 崩溃恢复时已 Committed/ResultDelivered 的 tool 结果可跨进程读取，防止外部副作用结果丢失）。
     /// v48 → v49，修复 Durable Tool Result 主键结构：tool_dispatch_results 主键由 tool_call_id
-    ///   （模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复）改为 request_id（稳定调用身份哈希），
-    ///   追加 workspace_id / run_id / invocation_id 列与 UNIQUE(workspace_id, run_id, invocation_id) partial 约束，
-    ///   防止另一 Run 覆盖已有 Tool Result；tool_call_id / idempotency_key 改为 partial index。
+    /// （模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复）改为 request_id（稳定调用身份哈希），
+    /// 追加 workspace_id / run_id / invocation_id 列与 UNIQUE(workspace_id, run_id, invocation_id) partial 约束，
+    /// 防止另一 Run 覆盖已有 Tool Result；tool_call_id / idempotency_key 改为 partial index。
     /// v50 → v51，utility_ledger_entries 追加 (decision_id, candidate_item_id, expert) UNIQUE 索引，
-    ///   防御性兜底 Learning Lease 过期后旧/新 Worker 重复物化产生重复 ledger 条目（entry_id 幂等之外的数据库层约束）。
+    /// 防御性兜底 Learning Lease 过期后旧/新 Worker 重复物化产生重复 ledger 条目（entry_id 幂等之外的数据库层约束）。
     /// v51 → v52，新增 tool_reconciliation_entries 表与索引（Tool Reconciliation Control Plane 持久化）：
-    ///   - 对账记录跨进程持久化，HA 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一真相源
-    ///     （替代 InMemoryToolReconciliationStore，杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失）。
-    ///   - (run_id, request_id) UNIQUE 约束：按 RunId+RequestId 幂等创建（重复创建返回既有记录）。
-    ///   - external_operation_id partial 索引：支持按 journal externalOperationId 反查（ControlRoom 运维）。
-    ///   - deadline_utc 列 + (status, created_at) 索引：过期未决高亮（ControlRoom）与 Worker 轮询。
+    /// - 对账记录跨进程持久化，HA 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一真相源
+    /// （替代 InMemoryToolReconciliationStore，杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失）。
+    /// - (run_id, request_id) UNIQUE 约束：按 RunId+RequestId 幂等创建（重复创建返回既有记录）。
+    /// - external_operation_id partial 索引：支持按 journal externalOperationId 反查（ControlRoom 运维）。
+    /// - deadline_utc 列 + (status, created_at) 索引：过期未决高亮（ControlRoom）与 Worker 轮询。
     /// v53 → v54，新增 agent_run_event_snapshots + agent_run_events_archive 表
-    ///   （Agent Run 事件流快照与压缩：折叠前缀事件归档 + 锚点事件保留 + 快照 upsert）。
-    ///   - agent_run_events_archive：被折叠的 [0, upToSequence] 前缀事件归档表（幂等迁移，重复压缩不产生重复行）。
-    ///   - agent_run_event_snapshots：per-run 单行快照（锚点 sequence + chain_head_hash + state_json + 折叠计数），
-    ///     压缩后事件流从锚点续读，哈希链完整性不受影响。
+    /// （Agent Run 事件流快照与压缩：折叠前缀事件归档 + 锚点事件保留 + 快照 upsert）。
+    /// - agent_run_events_archive：被折叠的 [0, upToSequence] 前缀事件归档表（幂等迁移，重复压缩不产生重复行）。
+    /// - agent_run_event_snapshots：per-run 单行快照（锚点 sequence + chain_head_hash + state_json + 折叠计数），
+    /// 压缩后事件流从锚点续读，哈希链完整性不受影响。
     /// v54 → v55，新增 retrieval_plan_feedback 表（自适应检索规划器反馈持久化）：
-    ///   记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），跨进程重启保留，
-    ///   供规划器按计划签名聚合自适应策略（预算收敛 / 召回增强），
-    ///   支持按签名或全量清除以重置自适应状态。
+    /// 记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），跨进程重启保留，
+    /// 供规划器按计划签名聚合自适应策略（预算收敛 / 召回增强），
+    /// 支持按签名或全量清除以重置自适应状态。
     /// v55 → v56，model_node_applied_state 追加 engine_generation / is_isolated /
-    ///   drift_reported_at / isolation_reason 列：
-    ///   - engine_generation：应用时刻本地引擎代次，与集群槽位 Revision 分离
-    ///     （杜绝"Slot=A、Engine=B"错位被伪装为收敛——两套计数空间独立可审计）。
-    ///   - is_isolated / drift_reported_at / isolation_reason：漂移自动隔离事实持久化，
-    ///     集群注册表据此计算 DriftedNodeCount 与 IsRolloutReady（上线就绪门禁）。
+    /// drift_reported_at / isolation_reason 列：
+    /// - engine_generation：应用时刻本地引擎代次，与集群槽位 Revision 分离
+    /// （杜绝"Slot=A、Engine=B"错位被伪装为收敛——两套计数空间独立可审计）。
+    /// - is_isolated / drift_reported_at / isolation_reason：漂移自动隔离事实持久化，
+    /// 集群注册表据此计算 DriftedNodeCount 与 IsRolloutReady（上线就绪门禁）。
     /// v56 → v57，Recovery、Canary 与 Learning Durability：
-    ///   - pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列：
-    ///     Canary 状态并入 PipelineRunSnapshot（单一真相源，UpdateCanaryStateAsync CAS 维护），
-    ///     重启后可从 run snapshot 直接恢复，不再依赖 canary_pipelines 表恢复。
-    ///   - 新建 learning_leases 表：Learning Materialization worker 池级租约
-    ///     （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
+    /// - pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列：
+    /// Canary 状态并入 PipelineRunSnapshot（单一真相源，UpdateCanaryStateAsync CAS 维护），
+    /// 重启后可从 run snapshot 直接恢复，不再依赖 canary_pipelines 表恢复。
+    /// - 新建 learning_leases 表：Learning Materialization worker 池级租约
+    /// （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
     /// </summary>
     public const string SchemaVersion = "cc-schema-v57";
 
@@ -1785,10 +1785,10 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflic
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "status")} ON {conflictSets} (resolution_status);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "candidate")} ON {conflictSets} USING gin ((data->'Entries'));
 
--- R29 WP-B-1：Tool Dispatch Journal 持久化表（HA 崩溃恢复 exactly-once）
+-- Tool Dispatch Journal 持久化表（HA 崩溃恢复 exactly-once）
 -- tool_dispatch_journal_entries: request_id 主键 — 每个 tool 调用一条 journal 条目
 -- state 为 smallint（ToolDispatchState byte 枚举：0=Prepared, 1=Dispatched, 2=Committed, 3=ResultDelivered）
--- P0-3 CAS-1：前向推进由 UPDATE ... WHERE state = :expected_state 保证原子性（精确前驱匹配，禁止跨级跳跃）
+-- 前向推进由 UPDATE ... WHERE state = :expected_state 保证原子性（精确前驱匹配，禁止跨级跳跃）
 CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
     request_id text NOT NULL,
     tool_name text NOT NULL DEFAULT '',
@@ -1811,9 +1811,9 @@ ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS run_id text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
 -- idempotency_key 升级为 UNIQUE partial index。
---   旧版本（v21）创建的是普通 index；此处先 DROP 旧 index（若存在）再创建 UNIQUE index，
---   保证已有数据库升级后幂等键全局唯一，防止不同 request_id 复用同一幂等键分别执行。
---   partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
+-- 旧版本（v21）创建的是普通 index；此处先 DROP 旧 index（若存在）再创建 UNIQUE index，
+-- 保证已有数据库升级后幂等键全局唯一，防止不同 request_id 复用同一幂等键分别执行。
+-- partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
 DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")};
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
@@ -1844,7 +1844,7 @@ ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS run_id text;
 ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS invocation_id text;
 
 -- 2. 反向填充：request_id 为 SHA256 hash 无法反解 workspace_id/run_id，对已有数据设为空字符串
---    （新数据由应用层 DefaultDurableToolExecutor 填充）；invocation_id 设为空字符串使其不参与 UNIQUE 约束
+-- （新数据由应用层 DefaultDurableToolExecutor 填充）；invocation_id 设为空字符串使其不参与 UNIQUE 约束
 UPDATE {toolDispatchResults} SET workspace_id = COALESCE(workspace_id, '') WHERE workspace_id IS NULL;
 UPDATE {toolDispatchResults} SET run_id = COALESCE(run_id, '') WHERE run_id IS NULL;
 UPDATE {toolDispatchResults} SET invocation_id = COALESCE(invocation_id, '') WHERE invocation_id IS NULL;
@@ -1857,14 +1857,14 @@ DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch
 ALTER TABLE {toolDispatchResults} ADD PRIMARY KEY (request_id);
 
 -- 5. UNIQUE 约束：(workspace_id, run_id, invocation_id) — Workspace 隔离键，防止另一 Run 覆盖已有 Tool Result
---    partial index：仅 invocation_id != '' 时参与唯一约束（兼容旧数据空字符串 + 未提供 invocation 的调用）
+-- partial index：仅 invocation_id != '' 时参与唯一约束（兼容旧数据空字符串 + 未提供 invocation 的调用）
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "ws_run_invocation")} ON {toolDispatchResults} (workspace_id, run_id, invocation_id) WHERE invocation_id != '';
 
 -- 6. 辅助索引：tool_call_id（兼容旧 GetAsync 查询路径）+ idempotency_key（外部系统对账）
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "tool_call_id")} ON {toolDispatchResults} (tool_call_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "idempotency_key")} ON {toolDispatchResults} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
--- R29 WP-A-1：Model Artifact Registry 持久化表
+-- Model Artifact Registry 持久化表
 -- model_artifacts: model_artifact_id 主键 — 每个已注册模型工件描述符一行
 -- 反规范化 model_name / model_version / feature_schema_version / calibration_version / engine_kind /
 -- content_hash / registered_at 字段以便索引查询；完整 ModelArtifactDescriptor 保存在 data jsonb。
@@ -1887,7 +1887,7 @@ CREATE TABLE IF NOT EXISTS {modelArtifacts} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_artifacts", "model_name")} ON {modelArtifacts} (model_name, registered_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "model_artifacts", "registered")} ON {modelArtifacts} (registered_at ASC);
 
--- R29 WP-E-3：训练数据导出视图。
+-- 训练数据导出视图。
 -- 供 ad-hoc SQL 查询与 BI 工具直接消费，字段对齐 TrainingDataRecord（feature / label / metadata 三段式）。
 -- 视图是只读的；导出工具（TrainingDataExporter）通过 IUtilityLedgerStore.QueryAsync 走应用层路径，
 -- 此视图作为 SQL 接口供 DBA / 数据分析师 / BI 工具直接查询，无需经过应用层。
@@ -1910,7 +1910,7 @@ SELECT
     policy_version AS policy_version
 FROM {utilityLedgerEntries};
 
--- R29 WP-E-4：校准数据导出视图。
+-- 校准数据导出视图。
 -- 供 ad-hoc SQL 查询与 BI 工具直接消费，字段对齐 CalibrationDataRecord（predicted / observed / weight / metadata 四段式）。
 -- 仅包含 model_score 非 null 的条目（校准必须有模型预测分数）；
 -- 视图是只读的；导出工具（CalibrationDataExporter）通过 IUtilityLedgerStore.QueryAsync 走应用层路径，
@@ -1937,14 +1937,14 @@ SELECT
 FROM {utilityLedgerEntries}
 WHERE model_score IS NOT NULL;
 
--- R29 WP-E-5：User Feedback Ledger 持久化表（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）。
+-- User Feedback Ledger 持久化表（用户显式反馈接入：thumbs up/down + 评分修正 + 文本反馈）。
 -- user_feedback_entries：与 utility_ledger_entries 通过 (workspace_id, collection_id, decision_id, candidate_item_id) 关联。
 -- 反规范化 workspace_id / collection_id / decision_id / candidate_item_id / kind / given_by / given_at 字段以便索引查询；
 -- 完整 UserFeedbackEntry 对象保存在 data jsonb，由 store 反序列化。
 -- 写入路径由 IUserFeedbackLedger.AppendFeedbackAsync 调用（来自 Service API 端点 POST /api/utility-ledger/feedback）。
 -- 幂等：idempotency_key 重复写入由 ON CONFLICT DO UPDATE 覆盖（保留最新反馈）。
 -- 关联校验：写入时通过 EXISTS 子查询验证 (decision_id, candidate_item_id, workspace_id, collection_id)
---          在 utility_ledger_entries 中存在；否则抛出 ForeignKeyViolation（强一致性保证）。
+-- 在 utility_ledger_entries 中存在；否则抛出 ForeignKeyViolation（强一致性保证）。
 CREATE TABLE IF NOT EXISTS {userFeedbackEntries} (
     feedback_entry_id text NOT NULL,
     workspace_id text NOT NULL,
@@ -1968,7 +1968,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_fe
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "given_at")} ON {userFeedbackEntries} (given_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "user_feedback_entries", "idempotency")} ON {userFeedbackEntries} (idempotency_key);
 
--- R29 WP-E-5：Utility Ledger + User Feedback JOIN 视图。
+-- Utility Ledger + User Feedback JOIN 视图。
 -- 供 ad-hoc SQL 查询与 BI 工具直接消费，将每次决策的 candidate 与其最新用户反馈关联起来。
 -- 反馈关联策略：取每个 (workspace_id, collection_id, decision_id, candidate_item_id) 的最新反馈条目（given_at DESC LIMIT 1）。
 -- 无反馈的 candidate 仍会出现在结果中（LEFT JOIN），user_feedback_kind / user_feedback_value 为 null — 与 P8 硬边界一致：
@@ -2085,8 +2085,8 @@ CREATE TABLE IF NOT EXISTS {agentRunEvents} (
 
 -- v54 → v54：Agent Run 事件流快照与压缩持久化表
 -- agent_run_events_archive：被折叠的 [0, upToSequence] 前缀事件归档表。
---   PK = (workspace_id, run_id, sequence)：幂等迁移——重复压缩同一前缀不会产生重复行（ON CONFLICT DO NOTHING）。
---   结构复制自 agent_run_events（不含 prev_chain_hash 链接，归档事件不再参与链校验）。
+-- PK = (workspace_id, run_id, sequence)：幂等迁移——重复压缩同一前缀不会产生重复行（ON CONFLICT DO NOTHING）。
+-- 结构复制自 agent_run_events（不含 prev_chain_hash 链接，归档事件不再参与链校验）。
 CREATE TABLE IF NOT EXISTS {agentRunEventsArchive} (
     event_id text NOT NULL,
     workspace_id text NOT NULL,
@@ -2102,13 +2102,13 @@ CREATE TABLE IF NOT EXISTS {agentRunEventsArchive} (
 );
 
 -- agent_run_event_snapshots：per-run 单行压缩快照。
---   PK = (workspace_id, run_id)：每个 Run 最多一行，压缩时 UPSERT 覆盖。
---   anchor_sequence：锚点事件 sequence（压缩后事件流链头），折叠前缀为 [0, anchor_sequence)。
---   chain_head_hash：锚点事件 content_hash，后续 AppendAsync 从锚点续链。
---   state_json：锚点事件完整 AgentRunEvent JSON（含序列化后的 State），供 GetSnapshotAsync 直接返回。
---   folded_event_count：本次压缩折叠的事件数（累计，供运维观测）。
---   archived_row_count：本次压缩归档到 archive 表的行数。
---   compacted_at：最近一次压缩时间。
+-- PK = (workspace_id, run_id)：每个 Run 最多一行，压缩时 UPSERT 覆盖。
+-- anchor_sequence：锚点事件 sequence（压缩后事件流链头），折叠前缀为 [0, anchor_sequence)。
+-- chain_head_hash：锚点事件 content_hash，后续 AppendAsync 从锚点续链。
+-- state_json：锚点事件完整 AgentRunEvent JSON（含序列化后的 State），供 GetSnapshotAsync 直接返回。
+-- folded_event_count：本次压缩折叠的事件数（累计，供运维观测）。
+-- archived_row_count：本次压缩归档到 archive 表的行数。
+-- compacted_at：最近一次压缩时间。
 CREATE TABLE IF NOT EXISTS {agentRunEventSnapshots} (
     workspace_id text NOT NULL,
     run_id text NOT NULL,
@@ -2123,9 +2123,9 @@ CREATE TABLE IF NOT EXISTS {agentRunEventSnapshots} (
 
 -- Canary HA 聚合表（跨实例指标样本 + Leader 租约 + stage epoch 跟踪）
 -- canary_metrics_samples：各实例定期 UPSERT 本地 CanaryObservationMetrics 快照（含外部指标）。
---   v36 最新快照模型：PK = (run_id, stage_epoch, instance_id)，每次 UPSERT 覆盖该实例最新累计值，
---   不再追加行。聚合时只汇总 WHERE stage_epoch = current_epoch 的行，避免重复累计。
---   反规范化 recorded_at 字段以便索引查询；外部指标 nullable（未采集时为 NULL，聚合用 AVG 跳过 NULL）。
+-- v36 最新快照模型：PK = (run_id, stage_epoch, instance_id)，每次 UPSERT 覆盖该实例最新累计值，
+-- 不再追加行。聚合时只汇总 WHERE stage_epoch = current_epoch 的行，避免重复累计。
+-- 反规范化 recorded_at 字段以便索引查询；外部指标 nullable（未采集时为 NULL，聚合用 AVG 跳过 NULL）。
 CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
     sample_id text NOT NULL DEFAULT '',
     run_id text NOT NULL,
@@ -2163,7 +2163,7 @@ CREATE TABLE IF NOT EXISTS {canaryMetricsSamples} (
     PRIMARY KEY (run_id, stage_epoch, instance_id)
 );
 
--- P10/P11 迁移：为已有数据库（v32-v42 创建的旧表）补加 sketch 与 success sum/count 列（幂等）。
+-- 迁移：为已有数据库（v32-v42 创建的旧表）补加 sketch 与 success sum/count 列（幂等）。
 ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS v2_latency_sketch bytea;
 ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS legacy_latency_sketch bytea;
 ALTER TABLE {canaryMetricsSamples} ADD COLUMN IF NOT EXISTS task_success_sum double precision;
@@ -2213,11 +2213,11 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_
 
 -- canary_leader_leases：Leader 租约表（每个 run_id 至多一条行）。
 -- TryAcquireAsync 使用 INSERT ... ON CONFLICT (run_id) DO UPDATE WHERE lease_expires_at < now
---   原子获取租约：无现有行 → INSERT 成功；现有行过期 → ON CONFLICT 更新；现有行未过期 → 0 行返回 null。
+-- 原子获取租约：无现有行 → INSERT 成功；现有行过期 → ON CONFLICT 更新；现有行未过期 → 0 行返回 null。
 -- RenewAsync / ReleaseAsync 通过 lease_token CAS 保证只有持有者能操作。
 -- ReapExpiredAsync 删除 lease_expires_at < now 的行（崩溃 leader 持有的过期租约最终释放）。
--- P12 修复：新增 fencing_token bigint 列（单调递增），用于 AdvanceEpochAsync 等 Progression
---   更新的 lease 校验。每次 TryAcquireAsync 成功获取（含抢占过期）时递增；RenewAsync 不递增。
+-- 修复：新增 fencing_token bigint 列（单调递增），用于 AdvanceEpochAsync 等 Progression
+-- 更新的 lease 校验。每次 TryAcquireAsync 成功获取（含抢占过期）时递增；RenewAsync 不递增。
 CREATE TABLE IF NOT EXISTS {canaryLeaderLeases} (
     run_id text NOT NULL,
     owner text NOT NULL,
@@ -2246,13 +2246,13 @@ CREATE TABLE IF NOT EXISTS {canaryRunEpochs} (
 
 -- Canary 严格 HA 单事务接口持久化表（v45 新增）。
 -- canary_pipelines：per-run pipeline 状态表，revision 列用于 CAS 原子更新。
---   ApplyCanaryDecisionAsync 在单一事务内：
---     1. SELECT fencing_token FROM canary_leader_leases WHERE ...（lease 校验）
---     2. UPDATE canary_pipelines SET percentage=@new WHERE run_id=@runId AND revision=@expected（CAS）
---     3. INSERT canary_transition_audit ...（审计，同事务）
---     4. UPSERT canary_run_epochs ...（epoch 递增，同事务）
---   任一步骤失败则整个事务 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
---   首次初始化时通过 ON CONFLICT DO UPDATE WHERE revision = 0 完成 INSERT。
+-- ApplyCanaryDecisionAsync 在单一事务内：
+-- 1. SELECT fencing_token FROM canary_leader_leases WHERE ...（lease 校验）
+-- 2. UPDATE canary_pipelines SET percentage=@new WHERE run_id=@runId AND revision=@expected（CAS）
+-- 3. INSERT canary_transition_audit ...（审计，同事务）
+-- 4. UPSERT canary_run_epochs ...（epoch 递增，同事务）
+-- 任一步骤失败则整个事务 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
+-- 首次初始化时通过 ON CONFLICT DO UPDATE WHERE revision = 0 完成 INSERT。
 CREATE TABLE IF NOT EXISTS {canaryPipelines} (
     run_id text NOT NULL,
     percentage integer NOT NULL DEFAULT 0,
@@ -2287,11 +2287,11 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_
 
 -- 集群级 Canary Kill Switch 持久化表。
 -- canary_emergency_overrides：运维手动触发的紧急覆盖（Kill Switch），每 run 至多一行。
---   活跃语义：cleared_at IS NULL。路由层在 canary 命中 V2 时先检查本表，存在活跃覆盖则强制回退 V1；
---   CanaryProgressionService 恢复时同样优先本表（活跃覆盖期间不进入 Consistent）。
---   TrySetOverrideAsync 通过 ON CONFLICT (run_id) DO UPDATE WHERE cleared_at IS NOT NULL 保证
---   不覆盖已有活跃覆盖；部分唯一索引 (run_id) WHERE cleared_at IS NULL 在数据库层兜底保证
---   同一 run 至多一条活跃覆盖。
+-- 活跃语义：cleared_at IS NULL。路由层在 canary 命中 V2 时先检查本表，存在活跃覆盖则强制回退 V1；
+-- CanaryProgressionService 恢复时同样优先本表（活跃覆盖期间不进入 Consistent）。
+-- TrySetOverrideAsync 通过 ON CONFLICT (run_id) DO UPDATE WHERE cleared_at IS NOT NULL 保证
+-- 不覆盖已有活跃覆盖；部分唯一索引 (run_id) WHERE cleared_at IS NULL 在数据库层兜底保证
+-- 同一 run 至多一条活跃覆盖。
 CREATE TABLE IF NOT EXISTS {canaryEmergencyOverrides} (
     run_id text NOT NULL,
     reason text NOT NULL,
@@ -2307,8 +2307,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "
 
 -- 自适应检索规划器反馈持久化表。
 -- retrieval_plan_feedback：记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），
---   按计划签名聚合自适应策略（预算收敛 / 召回增强），跨进程重启保留；
---   ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持按签名或全量重置。
+-- 按计划签名聚合自适应策略（预算收敛 / 召回增强），跨进程重启保留；
+-- ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持按签名或全量重置。
 CREATE TABLE IF NOT EXISTS {retrievalPlanFeedback} (
     plan_signature text NOT NULL,
     query_text text NOT NULL DEFAULT '',
@@ -2368,7 +2368,7 @@ CREATE TABLE IF NOT EXISTS {learningLeases} (
 
 -- Model Control Plane 激活审计持久化表
 -- model_activation_audit: append-only 审计表，记录 Activate / Rollback / Retire / Shadow / Warmup /
---   Validate / Register 等模型生命周期事件，含 previous_model_id / operator / reason / node_id 业务字段。
+-- Validate / Register 等模型生命周期事件，含 previous_model_id / operator / reason / node_id 业务字段。
 -- 反规范化 model_artifact_id / model_name / operation / timestamp 字段以便索引查询；
 -- 完整 ModelActivationAuditEntry 对象保存在 data jsonb，由 store 反序列化。
 -- 不可变语义：审计记录一旦写入不可修改（无 ON CONFLICT 子句，重复写入由调用方保证幂等）。
@@ -2426,7 +2426,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_r
 -- 复用 canary_leader_leases 模式：每个 run_id 至多一条行，
 -- TryAcquireAsync 使用 INSERT ... ON CONFLICT DO UPDATE WHERE lease_expires_at < now（CAS 抢占过期租约）。
 -- RenewAsync / ReleaseAsync / ReapExpiredAsync 基于 lease_token 匹配。
--- P0-4 修复双执行：新增 fencing_token bigint 列（单调递增），用于副作用 UPDATE 的 lease 校验。
+-- 修复双执行：新增 fencing_token bigint 列（单调递增），用于副作用 UPDATE 的 lease 校验。
 -- 每次 TryAcquireAsync 成功获取（含抢占过期）时 fencing_token = 旧值 + 1；RenewAsync 不递增。
 CREATE TABLE IF NOT EXISTS {agentRunLeases} (
     run_id text NOT NULL,

@@ -39,9 +39,9 @@ public sealed class RetrievalFanoutOptions
     /// 根据 store 实际类型推断合适的 fanout 上限。
     /// 优先消费 <see cref="IStoreRuntimeCapabilities"/>，将字符串/namespace 推断降级为回退路径。
     /// <list type="bullet">
-    ///   <item>当 store 实现 IStoreRuntimeCapabilities 时：使用 Profile.RecommendedReadFanout；
-    ///         若 SupportsParallelReads 为 false，强制为 1（串行）。</item>
-    ///   <item>否则回退到 namespace 字符串匹配（FileSystem=2 / InMemory=16 / Postgres=8 / 其他=4）。</item>
+    /// <item>当 store 实现 IStoreRuntimeCapabilities 时：使用 Profile.RecommendedReadFanout；
+    /// 若 SupportsParallelReads 为 false，强制为 1（串行）。</item>
+    /// <item>否则回退到 namespace 字符串匹配（FileSystem=2 / InMemory=16 / Postgres=8 / 其他=4）。</item>
     /// </list>
     /// 不同 store 类型混合时取 min，保证最弱的一方不被压垮。
     /// 任一 store 为 null 时按另一方推断；两者都为 null 时回退到 Default。

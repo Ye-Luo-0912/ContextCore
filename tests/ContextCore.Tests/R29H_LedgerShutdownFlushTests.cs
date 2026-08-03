@@ -15,25 +15,25 @@ namespace ContextCore.Tests;
 //
 // 目标：验证 AgentRunActor 在以下"关机"场景下，缓冲事件被正确刷盘到
 // IAgentRunEventStore（Ledger）且哈希链完整无断裂：
-//   1. 外部 CancellationToken 取消 → TryTransitionToCancelledAsync → FlushPendingEventsAsync
-//      （Cancelled 终态 + RunCancelled 事件 + 全部缓冲事件持久化）
-//   2. 执行中抛异常 → FailAsync → FlushPendingEventsAsync
-//      （Failed 终态 + RunFailed 事件 + 全部缓冲事件持久化）
-//   3. 正常完成 → CompleteAsync → FlushPendingEventsAsync
-//      （Completed 终态 + RunCompleted 事件 + 全部缓冲事件持久化）
-//   4. mid-turn 缓冲超过阈值（32）→ 强制 flush
-//      （长 Turn 内事件分批持久化，最终哈希链仍连续）
-//   5. 哈希链完整性：取消/异常/完成 flush 后，PrevChainHash 链接无断裂
-//   6. 多次 flush（mid-turn + 终态）后 Sequence 单调递增、PrevChainHash 链接正确
-//   7. Postgres 持久化场景：进程A flush 后进程B 可读取完整事件流（Docker 不可用时 Inconclusive）
-//   8. AppendBatchAsync 原子性：单事务内事件 + 状态 CAS + checkpoint 游标同时提交
+// 1. 外部 CancellationToken 取消 → TryTransitionToCancelledAsync → FlushPendingEventsAsync
+// （Cancelled 终态 + RunCancelled 事件 + 全部缓冲事件持久化）
+// 2. 执行中抛异常 → FailAsync → FlushPendingEventsAsync
+// （Failed 终态 + RunFailed 事件 + 全部缓冲事件持久化）
+// 3. 正常完成 → CompleteAsync → FlushPendingEventsAsync
+// （Completed 终态 + RunCompleted 事件 + 全部缓冲事件持久化）
+// 4. mid-turn 缓冲超过阈值（32）→ 强制 flush
+// （长 Turn 内事件分批持久化，最终哈希链仍连续）
+// 5. 哈希链完整性：取消/异常/完成 flush 后，PrevChainHash 链接无断裂
+// 6. 多次 flush（mid-turn + 终态）后 Sequence 单调递增、PrevChainHash 链接正确
+// 7. Postgres 持久化场景：进程A flush 后进程B 可读取完整事件流（Docker 不可用时 Inconclusive）
+// 8. AppendBatchAsync 原子性：单事务内事件 + 状态 CAS + checkpoint 游标同时提交
 //
 // 设计原则：
-//   - 使用真实 InMemoryAgentRunEventStore（非 mock）验证刷盘语义；
-//     Postgres 场景使用真实 Testcontainers（Docker 不可用时 Assert.Inconclusive）。
-//   - 自定义 ThrowingModelTransport / CancellingModelTransport 触发异常/取消路径。
-//   - 所有异步测试使用 CancellationTokenSource 超时防止挂起。
-//   - 中文注释。
+// - 使用真实 InMemoryAgentRunEventStore（非 mock）验证刷盘语义；
+// Postgres 场景使用真实 Testcontainers（Docker 不可用时 Assert.Inconclusive）。
+// - 自定义 ThrowingModelTransport / CancellingModelTransport 触发异常/取消路径。
+// - 所有异步测试使用 CancellationTokenSource 超时防止挂起。
+// - 中文注释。
 // ===========================================================================
 
 [TestClass]
@@ -43,7 +43,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 {
     // =======================================================================
     // 测试 1：外部 CancellationToken 取消触发的刷盘
-    //         验证 Cancelled 终态 + 缓冲事件全部持久化 + 哈希链完整
+    // 验证 Cancelled 终态 + 缓冲事件全部持久化 + 哈希链完整
     // =======================================================================
 
     /// <summary>
@@ -105,7 +105,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 2：执行中抛异常触发的刷盘
-    //         验证 Failed 终态 + 缓冲事件持久化 + RunFailed 事件
+    // 验证 Failed 终态 + 缓冲事件持久化 + RunFailed 事件
     // =======================================================================
 
     /// <summary>
@@ -167,7 +167,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 3：正常完成触发的刷盘
-    //         验证 Completed 终态 + 全部事件持久化 + RunCompleted 事件
+    // 验证 Completed 终态 + 全部事件持久化 + RunCompleted 事件
     // =======================================================================
 
     /// <summary>
@@ -225,7 +225,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 4：mid-turn 缓冲超过阈值（32）触发的强制 flush
-    //         验证长 Turn 内事件分批持久化，最终哈希链仍连续
+    // 验证长 Turn 内事件分批持久化，最终哈希链仍连续
     // =======================================================================
 
     /// <summary>
@@ -324,7 +324,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 5：取消刷盘后哈希链完整性验证
-    //         （独立断言 VerifyChain，确保取消路径不破坏哈希链）
+    // （独立断言 VerifyChain，确保取消路径不破坏哈希链）
     // =======================================================================
 
     /// <summary>
@@ -414,7 +414,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 7：多次 flush（mid-turn + 终态）后 Sequence 单调递增
-    //         验证 _pendingTurnEvents.Clear() 后下一次 flush 不重置 Sequence
+    // 验证 _pendingTurnEvents.Clear() 后下一次 flush 不重置 Sequence
     // =======================================================================
 
     /// <summary>
@@ -487,8 +487,8 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 8：AppendBatchAsync 原子性 — 单事务提交事件 + 状态 CAS
-    //         验证 InMemoryAgentRunEventStore.AppendBatchAsync 在委托 runStore 时
-    //         事件追加与状态 CAS 一并完成（无中间状态可见）
+    // 验证 InMemoryAgentRunEventStore.AppendBatchAsync 在委托 runStore 时
+    // 事件追加与状态 CAS 一并完成（无中间状态可见）
     // =======================================================================
 
     /// <summary>
@@ -561,7 +561,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 9：AppendBatchAsync CAS 失败抛异常，事件不被持久化
-    //         验证 expected-state CAS 失败时的回滚语义
+    // 验证 expected-state CAS 失败时的回滚语义
     // =======================================================================
 
     /// <summary>
@@ -616,7 +616,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 10：Postgres 持久化刷盘 — 进程A flush 后进程B 可读取完整事件流
-    //          Docker 不可用时 Assert.Inconclusive
+    // Docker 不可用时 Assert.Inconclusive
     // =======================================================================
 
     /// <summary>
@@ -691,7 +691,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 11：Postgres AppendBatchAsync CAS 失败时事务回滚 — 事件不被持久化
-    //          验证 Postgres 单事务原子性（与 InMemory 非原子对比）
+    // 验证 Postgres 单事务原子性（与 InMemory 非原子对比）
     // =======================================================================
 
     /// <summary>
@@ -772,7 +772,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 12：Postgres AppendBatchAsync 含状态 CAS + checkpoint 游标 — 单事务提交
-    //          验证三件套（事件 + 状态 CAS + checkpoint 游标）原子提交
+    // 验证三件套（事件 + 状态 CAS + checkpoint 游标）原子提交
     // =======================================================================
 
     /// <summary>
@@ -878,7 +878,7 @@ public sealed class R29H_LedgerShutdownFlushTests
 
     // =======================================================================
     // 测试 13：空批 + 无状态更新 → AppendBatchAsync 直接返回（no-op）
-    //         验证刷盘边界条件：无事件时不抛异常、不写 DB
+    // 验证刷盘边界条件：无事件时不抛异常、不写 DB
     // =======================================================================
 
     /// <summary>
@@ -990,7 +990,7 @@ public sealed class R29H_LedgerShutdownFlushTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        // 直接尝试启动容器（与 R29H_DurableKernelCrashRecoveryTests 一致），
+        // 直接尝试启动容器（与崩溃恢复类 E2E 测试一致），
         // 避免 IsDockerAvailableAsync 在 Windows named-pipe Docker Desktop 上误判。
         try
         {

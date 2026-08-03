@@ -3,7 +3,7 @@ using ContextCore.Storage.FileSystem;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// #6：验证 FileSystemInstanceGuard 的单实例检测与多进程 advisory 边界。
+/// 验证 FileSystemInstanceGuard 的单实例检测与多进程 advisory 边界。
 /// </summary>
 [TestClass]
 [TestCategory("FileSystem")]
@@ -68,7 +68,7 @@ public sealed class FileSystemInstanceGuardTests
     [TestMethod]
     public void ResetCacheForTests_ReleasesSentinelHandle_AllowsRootDeletion()
     {
-        // #6：sentinel 以 FileShare.Read 共享（他进程不可写/独占），
+        // sentinel 以 FileShare.Read 共享（他进程不可写/独占），
         // 持有期间 Directory.Delete(recursive) 会被锁文件阻塞。
         // ResetCacheForTests 释放句柄后目录才可递归删除——验证清理契约。
         var guard = FileSystemInstanceGuard.GetOrCreate(_root);

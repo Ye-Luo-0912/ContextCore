@@ -6,29 +6,29 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // / MMR（Maximal Marginal Relevance）diversity scorer
 //
 // MMR 重排序算法：
-//   MMR = argmax_{d ∈ R\D} [λ · sim(d, q) - (1-λ) · max_{d' ∈ D} sim(d, d')]
-//   其中 R=候选集，D=已选集，q=query，sim=相似度。
+// MMR = argmax_{d ∈ R\D} [λ · sim(d, q) - (1-λ) · max_{d' ∈ D} sim(d, d')]
+// 其中 R=候选集，D=已选集，q=query，sim=相似度。
 //
-// 相似度定义（R28-G P1-3 保持原契约，未来可扩展为 embedding cosine）：
-//   sim(d, q) = candidate.Utility.FinalScore（归一化到 [0,1]）
-//   sim(d, d') = 基于 Type + Source 的简单相似度
-//     相同 Type:  +0.8    不同 Type:  +0.2
-//     相同 Source: +0.6
-//     最终 cap 到 [0, 1.0]
+// 相似度定义（保持原契约，未来可扩展为 embedding cosine）：
+// sim(d, q) = candidate.Utility.FinalScore（归一化到 [0,1]）
+// sim(d, d') = 基于 Type + Source 的简单相似度
+// 相同 Type: +0.8 不同 Type: +0.2
+// 相同 Source: +0.6
+// 最终 cap 到 [0, 1.0]
 //
 // 性能优化：
-//   1. 增量更新 maxSimilarityToSelected 数组：每轮选出 best 后，只对 best 做一次
-//      max_sim 增量更新（O(n)），避免每轮对每个候选扫描整个 selected 集合。
-//      复杂度从 O(n³) 降至 O(n²)。
-//   2. pre-rank TopN 预选：候选数 > preRankTopN 时先按 FinalScore 排序保留前 N。
-//      控制 MMR 输入规模，避免大候选集下的 O(n²) 平方级膨胀。
-//   3. 候选移除用 swap-pop 替代 List.Remove（O(1) 而非 O(n)）。
-//   4. 每轮选 best 用单次线性扫描 + 跟踪 max（不再 OrderBy+First）。
+// 1. 增量更新 maxSimilarityToSelected 数组：每轮选出 best 后，只对 best 做一次
+// max_sim 增量更新（O(n)），避免每轮对每个候选扫描整个 selected 集合。
+// 复杂度从 O(n³) 降至 O(n²)。
+// 2. pre-rank TopN 预选：候选数 > preRankTopN 时先按 FinalScore 排序保留前 N。
+// 控制 MMR 输入规模，避免大候选集下的 O(n²) 平方级膨胀。
+// 3. 候选移除用 swap-pop 替代 List.Remove（O(1) 而非 O(n)）。
+// 4. 每轮选 best 用单次线性扫描 + 跟踪 max（不再 OrderBy+First）。
 //
 // 设计原则：
-//   1. 纯内存、无副作用：输入候选集不被修改，返回新列表。
-//   2. 确定性：相同输入 + 相同 lambda 产生相同输出（tie-break 按 CandidateId 升序）。
-//   3. 不处理 mandatory 候选：由调用方在 MMR 前分离 mandatory / non-mandatory。
+// 1. 纯内存、无副作用：输入候选集不被修改，返回新列表。
+// 2. 确定性：相同输入 + 相同 lambda 产生相同输出（tie-break 按 CandidateId 升序）。
+// 3. 不处理 mandatory 候选：由调用方在 MMR 前分离 mandatory / non-mandatory。
 // ===========================================================================
 
 /// <summary>MMR（Maximal Marginal Relevance）diversity scorer。</summary>

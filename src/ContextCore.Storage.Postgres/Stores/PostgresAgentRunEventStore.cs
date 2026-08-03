@@ -13,17 +13,17 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点（参考 <see cref="PostgresToolDispatchJournal"/> 的 expected-state CAS）：
-///   1. 表 <c>agent_run_events</c> 主键 (workspace_id, run_id, sequence)：
-///      UNIQUE 约束防重序列号，保证事件流单调递增。
-///   2. <see cref="AppendAsync"/> 使用事务 + SELECT MAX(sequence) 校验连续性：
-///      - sequence 必须 = 当前 MAX + 1（链头为 0）；
-///      - prev_chain_hash 必须 = 前一事件 content_hash（链头为 null）；
-///      - 校验失败抛 <see cref="InvalidOperationException"/>。
-///   3. <see cref="ReadAsync"/> 按 sequence 升序读取（fromSequence + take + LIMIT）。
-///   4. <see cref="GetLastSequenceAsync"/> 通过 SELECT MAX(sequence) 实现；无事件返回 -1。
-///   5. 完整 <see cref="AgentRunEvent"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   6. <see cref="AppendBatchAsync"/> 单事务批量插入事件 + Run 状态 CAS + checkpoint 游标，
-///      将 Turn 内 8-15 次网络往返降为 1 次。
+/// 1. 表 <c>agent_run_events</c> 主键 (workspace_id, run_id, sequence)：
+/// UNIQUE 约束防重序列号，保证事件流单调递增。
+/// 2. <see cref="AppendAsync"/> 使用事务 + SELECT MAX(sequence) 校验连续性：
+/// - sequence 必须 = 当前 MAX + 1（链头为 0）；
+/// - prev_chain_hash 必须 = 前一事件 content_hash（链头为 null）；
+/// - 校验失败抛 <see cref="InvalidOperationException"/>。
+/// 3. <see cref="ReadAsync"/> 按 sequence 升序读取（fromSequence + take + LIMIT）。
+/// 4. <see cref="GetLastSequenceAsync"/> 通过 SELECT MAX(sequence) 实现；无事件返回 -1。
+/// 5. 完整 <see cref="AgentRunEvent"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
+/// 6. <see cref="AppendBatchAsync"/> 单事务批量插入事件 + Run 状态 CAS + checkpoint 游标，
+/// 将 Turn 内 8-15 次网络往返降为 1 次。
 /// </remarks>
 public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEventStore, IPersistentAgentRunEventStore
 {
@@ -319,8 +319,8 @@ LIMIT 1;
                 }
 
                 // 2. 批量插入事件（unnest 单 SQL；UNIQUE 约束兜底防并发重序列号）
-                //    相比旧版 foreach 逐条 INSERT（N 次往返），unnest 将整批事件在单条 SQL 内展开，
-                //    一次往返完成全部插入。ON CONFLICT DO NOTHING 兜底；RETURNING 计数检测冲突。
+                // 相比旧版 foreach 逐条 INSERT（N 次往返），unnest 将整批事件在单条 SQL 内展开，
+                // 一次往返完成全部插入。ON CONFLICT DO NOTHING 兜底；RETURNING 计数检测冲突。
                 cancellationToken.ThrowIfCancellationRequested();
                 var eventCount = events.Count;
                 var eventIds = new string[eventCount];
@@ -404,7 +404,7 @@ RETURNING sequence;
             }
 
             // 3. Run 状态 CAS + 可变字段更新（若提供）
-            //    提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 lease 仍由当前实例持有。
+            // 提供 leaseToken + fencingToken 时，WHERE 追加 EXISTS 子查询校验 lease 仍由当前实例持有。
             if (runStateUpdate is not null)
             {
                 var snapshot = runStateUpdate.RunSnapshot;
@@ -519,7 +519,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
             }
 
             // 5. Checkpoint 本体持久化（若提供）— 与事件 + 状态 CAS + 游标更新同事务原子提交。
-            //    幂等 upsert（ON CONFLICT DO UPDATE），SQL 与 PostgresAgentCheckpointStore.SaveAsync 对齐。
+            // 幂等 upsert（ON CONFLICT DO UPDATE），SQL 与 PostgresAgentCheckpointStore.SaveAsync 对齐。
             if (checkpointBody is not null)
             {
                 await using var checkpointCommand = connection.CreateCommand();

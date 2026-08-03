@@ -12,22 +12,22 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Recovery 扫描防饥饿（Keyset 游标 + 每状态预算 + Round-Robin）生产验收测试
 //
-// 验证 P1-7 的恢复扫描防饥饿设计：
-//   1. ListByState_KeysetCursor_WalksAllRunsOnce — keyset 游标分页遍历全部 Run
-//      （无重复、无遗漏，按 (UpdatedAt, RunId) 升序）。
-//   2. ListByState_KeysetCursor_TieBreakByRunId — 同 UpdatedAt 时按 RunId 决胜，
-//      游标续取不丢页、不重复。
-//   3. RecoveryWorker_KeysetScan_VisitsAllRunsInAllStates — Worker 跨轮次推进游标，
-//      在每状态 60 个 Run（> 每状态预算 50）下最终访问所有状态的全部 Run，
-//      证明早期富状态无法独占扫描预算（修复扫描饥饿）。
+// 验证 的恢复扫描防饥饿设计：
+// 1. ListByState_KeysetCursor_WalksAllRunsOnce — keyset 游标分页遍历全部 Run
+// （无重复、无遗漏，按 (UpdatedAt, RunId) 升序）。
+// 2. ListByState_KeysetCursor_TieBreakByRunId — 同 UpdatedAt 时按 RunId 决胜，
+// 游标续取不丢页、不重复。
+// 3. RecoveryWorker_KeysetScan_VisitsAllRunsInAllStates — Worker 跨轮次推进游标，
+// 在每状态 60 个 Run（> 每状态预算 50）下最终访问所有状态的全部 Run，
+// 证明早期富状态无法独占扫描预算（修复扫描饥饿）。
 //
 // 设计原则：
-//   - 优先使用真实 InMemory 实现（非 mock）：InMemoryAgentRunStore /
-//     InMemoryAgentRunEventStore
-//   - RecordingPersistentRunStore 包装器实现 IPersistentAgentRunStore 标记并录制
-//     ListByStateAsync 返回的 (状态, RunId)，用于断言 Worker 的实际扫描覆盖
-//   - 所有异步测试使用超时 CancellationTokenSource 防止挂起
-//   - 中文注释
+// - 优先使用真实 InMemory 实现（非 mock）：InMemoryAgentRunStore /
+// InMemoryAgentRunEventStore
+// - RecordingPersistentRunStore 包装器实现 IPersistentAgentRunStore 标记并录制
+// ListByStateAsync 返回的 (状态, RunId)，用于断言 Worker 的实际扫描覆盖
+// - 所有异步测试使用超时 CancellationTokenSource 防止挂起
+// - 中文注释
 // ===========================================================================
 
 [TestClass]
@@ -174,7 +174,7 @@ public sealed class R29L_AgentRunRecoveryScanTests
         }
         Assert.AreEqual(states.Length * runsPerState, expected.Count, "应创建 420 个唯一 Run。");
 
-        // 构建 ServiceProvider（与 R29H 恢复 Worker 测试相同的依赖图）
+        // 构建 ServiceProvider（与恢复 Worker 测试相同的依赖图）
         var services = new ServiceCollection();
         services.AddSingleton<IAgentRunStore>(recordingStore);
         services.AddSingleton<IPersistentAgentRunStore>(recordingStore);

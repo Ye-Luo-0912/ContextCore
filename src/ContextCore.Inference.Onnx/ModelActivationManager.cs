@@ -8,43 +8,43 @@ namespace ContextCore.Inference.Onnx;
 // Model Activation Manager 实现
 //
 // 目标：
-//   1. 权威编排模型激活流程：IModelArtifactRegistry 读取 descriptor
-//      → ICalibrationValidator 验证校准参数（P0-8）
-//      → IFeatureSchemaValidator 验证 schema 存在性（P0-8）
-//      → IOnnxInferenceSessionFactory 创建 session
-//      → OnnxInferenceEngine 激活。
-//   2. 作为 IBatchInferenceEngine 代理：激活前委托给 fallback（Deterministic），
-//      激活后委托给 OnnxInferenceEngine，让消费方无需感知激活切换。
-//   3. 线程安全：ActivateAsync 可在运行时调用，通过原子 ActiveModelHandle 切换引擎。
+// 1. 权威编排模型激活流程：IModelArtifactRegistry 读取 descriptor
+// → ICalibrationValidator 验证校准参数
+// → IFeatureSchemaValidator 验证 schema 存在性
+// → IOnnxInferenceSessionFactory 创建 session
+// → OnnxInferenceEngine 激活。
+// 2. 作为 IBatchInferenceEngine 代理：激活前委托给 fallback（Deterministic），
+// 激活后委托给 OnnxInferenceEngine，让消费方无需感知激活切换。
+// 3. 线程安全：ActivateAsync 可在运行时调用，通过原子 ActiveModelHandle 切换引擎。
 //
 // 设计原则：
-//   1. fail-safe：激活失败不影响现有推理（继续使用 fallback）。
-//   2. 校准验证不通过时拒绝激活（Error 级违规）；Warning 级违规允许激活。
-//   3. schema 不存在时拒绝激活（防止推理时 schema drift）。
-//   4. 不捕获 OperationCanceledException（与项目约束一致）。
+// 1. fail-safe：激活失败不影响现有推理（继续使用 fallback）。
+// 2. 校准验证不通过时拒绝激活（Error 级违规）；Warning 级违规允许激活。
+// 3. schema 不存在时拒绝激活（防止推理时 schema drift）。
+// 4. 不捕获 OperationCanceledException（与项目约束一致）。
 //
 // 原子 Active Handle
-//   - 用单个 volatile ActiveModelHandle 替换分开的 _activeEngine / _activeCounter，
-//     推理时只读取一次 handle（Volatile.Read），确保 engine 与 counter 来自同一世代，
-//     避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter。
-//   - 激活时创建新 handle（Generation+1），旧 handle 注册到延迟清理队列；
-//     不在激活时立即 Dispose 旧引擎。
+// - 用单个 volatile ActiveModelHandle 替换分开的 _activeEngine / _activeCounter，
+// 推理时只读取一次 handle（Volatile.Read），确保 engine 与 counter 来自同一世代，
+// 避免热切换发生在两次读取之间导致旧引擎请求被计入新 counter。
+// - 激活时创建新 handle（Generation+1），旧 handle 注册到延迟清理队列；
+// 不在激活时立即 Dispose 旧引擎。
 //
 // LoadAndWarmupAsync
-//   - 加载并 warmup 模型但不发布为 active；返回 StagedModelHandle。
-//   - 用于 /warmup 端点：预热不应替换当前 active 模型。
-//   - PromoteStagedAsync 将 Staged Handle 原子发布为 active。
+// - 加载并 warmup 模型但不发布为 active；返回 StagedModelHandle。
+// - 用于 /warmup 端点：预热不应替换当前 active 模型。
+// - PromoteStagedAsync 将 Staged Handle 原子发布为 active。
 // ===========================================================================
 
 /// <summary>
 /// 模型槽状态机。
 /// Loading → Staged → Active → Retired → Draining → Disposed
-///   - Loading：session 创建中（瞬时，构造完成即离开）
-///   - Staged：已 warmup 但未发布为 Active（由 LoadAndWarmupAsync 产生）
-///   - Active：已发布为当前推理引擎，新请求可 Increment counter
-///   - Retired：已被新 Active 替换，counter 仍可能有 in-flight 请求递减
-///   - Draining：等待 counter 归零的过渡态（延迟 Dispose 任务进入）
-///   - Disposed：引擎已 Dispose，不可再使用
+/// - Loading：session 创建中（瞬时，构造完成即离开）
+/// - Staged：已 warmup 但未发布为 Active（由 LoadAndWarmupAsync 产生）
+/// - Active：已发布为当前推理引擎，新请求可 Increment counter
+/// - Retired：已被新 Active 替换，counter 仍可能有 in-flight 请求递减
+/// - Draining：等待 counter 归零的过渡态（延迟 Dispose 任务进入）
+/// - Disposed：引擎已 Dispose，不可再使用
 /// </summary>
 internal enum ModelSlotState : byte
 {
@@ -205,8 +205,8 @@ public sealed class ModelActivationManager : IModelActivationManager
     private int _disposed;
 
     // Staged Handle 配置。
-    //   - MaxStagedHandles：暂存表容量上限（防止 warmup 端点被滥用导致 OOM）。
-    //   - StagedHandleTtl：Staged Handle 生存时间；超过后自动从暂存表移除并 Dispose。
+    // - MaxStagedHandles：暂存表容量上限（防止 warmup 端点被滥用导致 OOM）。
+    // - StagedHandleTtl：Staged Handle 生存时间；超过后自动从暂存表移除并 Dispose。
     private const int MaxStagedHandles = 2;
     private static readonly TimeSpan StagedHandleTtl = TimeSpan.FromMinutes(5);
 
@@ -591,8 +591,8 @@ public sealed class ModelActivationManager : IModelActivationManager
     {
         // Step 1：校准验证
         // 精确 CalibrationVersion 绑定 + fail-closed。
-        //   - descriptor.CalibrationVersion == "default-v1"：保留兼容路径（calibrationService 缺失或参数未注册时跳过严格校验）
-        //   - 非 default-v1：必须找到 Version 精确匹配的参数；未命中即拒绝激活（fail-closed）
+        // - descriptor.CalibrationVersion == "default-v1"：保留兼容路径（calibrationService 缺失或参数未注册时跳过严格校验）
+        // - 非 default-v1：必须找到 Version 精确匹配的参数；未命中即拒绝激活（fail-closed）
         var calValidation = ValidateCalibrationForDescriptor(descriptor);
         if (calValidation is { IsFailed: true } failed)
         {
@@ -1191,7 +1191,7 @@ public sealed class ModelActivationManager : IModelActivationManager
         }
 
         // 3. 逐一等待 counter 归零（带超时）后 Dispose。
-        //    Active handle 上的 in-flight 请求需要先完成；Retired handles 同理。
+        // Active handle 上的 in-flight 请求需要先完成；Retired handles 同理。
         var allHandles = new List<ActiveModelHandle>(retiredSnapshot.Count + 1);
         if (activeSnapshot is not null && !ReferenceEquals(activeSnapshot.Engine, _fallbackEngine))
         {

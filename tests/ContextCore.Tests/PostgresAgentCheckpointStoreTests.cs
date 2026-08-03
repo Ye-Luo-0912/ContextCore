@@ -11,12 +11,12 @@ namespace ContextCore.Tests;
 /// PostgresAgentCheckpointStore 单元测试。
 ///
 /// 不连接真实 PostgreSQL 数据库；仅验证：
-///   1. 构造函数与服务注册
-///   2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
-///   3. 接口实现契约（IAgentCheckpointStore）
-///   4. DI 注册路径（PostgresServiceCollectionExtensions）
-///   5. <see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
-///      workspaceId 与 checkpointId 的 null / empty / whitespace 校验独立
+/// 1. 构造函数与服务注册
+/// 2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
+/// 3. 接口实现契约（IAgentCheckpointStore）
+/// 4. DI 注册路径（PostgresServiceCollectionExtensions）
+/// 5. <see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
+/// workspaceId 与 checkpointId 的 null / empty / whitespace 校验独立
 ///
 /// 端到端持久化语义由 ContextCore.IntegrationTests 覆盖（需 Testcontainers）。
 /// </summary>

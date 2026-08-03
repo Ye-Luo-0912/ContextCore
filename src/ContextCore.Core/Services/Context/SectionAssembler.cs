@@ -11,7 +11,7 @@ namespace ContextCore.Core;
 internal sealed class SectionAssembler
 {
     /// <summary>
-    /// #4: section 内 block/segment 之间的固定分隔符。
+    /// section 内 block/segment 之间的固定分隔符。
     /// 必须与 <see cref="_estimateTokens"/> 调用使用的字符串完全一致，
     /// 否则 <c>separatorTokens</c> 估算与实际追加的字符数不匹配，
     /// 导致 Windows 上 <c>AppendLine()</c> 追加 "\r\n\r\n"（4 字符）而估算仍按 "\n\n"（2 字符），

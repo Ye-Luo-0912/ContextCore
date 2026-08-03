@@ -9,39 +9,39 @@ namespace ContextCore.Inference.Onnx;
 // InferenceScheduler：ONNX 推理并发治理 + 动态批处理
 //
 // 目标：
-//   1. bounded inference queue：使用 Channel<InferenceRequest> 作为有界队列，
-//      队列满时执行 backpressure（立即拒绝），避免过载场景下请求无限堆积。
-//   2. 最大并发数（真正生效）：Batch Coordinator 从 channel 读取并按 BatchKey 攒批，
-//      每个 Ready 批次以 fire-and-forget 方式派发到 Execution Worker；
-//      由 SemaphoreSlim(MaxConcurrency) 限制同时执行的批次数。
-//      Coordinator 派发后不 await 执行，因此 MaxConcurrency>1 时会形成多个并发微批。
-//   3. micro-batching：在 BatchWaitWindow 内攒多个单条请求，达到 MaxBatchSize（按 row 数）
-//      或窗口到期后合并为一次 session.Run 调用，提升吞吐。
-//   4. 按模型分组（BatchKey）：(ModelGeneration, SchemaVersion, FeatureNamesHash, FeatureCount,
-//      ExecutionProvider) 不同的请求不能合并到同一批，避免特征列错位。
-//      FeatureNamesHash 为顺序敏感哈希，并通过 NamesEqual 二次校验防止哈希碰撞误合并。
-//   5. ArrayPool 安全：租借的数组在写入前清零，且只把有效长度（recompute 后的 totalRows）
-//      送入模型，避免池化数组尾部脏数据污染推理输入。
-//   6. deadline 贯穿：攒批时跳过已过期请求；执行推理前再次检查；推理中以最早 deadline
-//      构造 CancellationTokenSource 并传入内部引擎，到期即取消推理。
-//   7. 过期请求清理：移除过期请求后重新计算 totalRows（避免脏数据送入模型），
-//      并通过 TrySetResult 返回超时错误通知等待方。
-//   8. worker 崩溃恢复：Coordinator 循环与 Execution 均用 try-catch 包裹；
-//      异常时将批次中所有未完成请求标记为失败；Coordinator 崩溃后自动重启。
+// 1. bounded inference queue：使用 Channel<InferenceRequest> 作为有界队列，
+// 队列满时执行 backpressure（立即拒绝），避免过载场景下请求无限堆积。
+// 2. 最大并发数（真正生效）：Batch Coordinator 从 channel 读取并按 BatchKey 攒批，
+// 每个 Ready 批次以 fire-and-forget 方式派发到 Execution Worker；
+// 由 SemaphoreSlim(MaxConcurrency) 限制同时执行的批次数。
+// Coordinator 派发后不 await 执行，因此 MaxConcurrency>1 时会形成多个并发微批。
+// 3. micro-batching：在 BatchWaitWindow 内攒多个单条请求，达到 MaxBatchSize（按 row 数）
+// 或窗口到期后合并为一次 session.Run 调用，提升吞吐。
+// 4. 按模型分组（BatchKey）：(ModelGeneration, SchemaVersion, FeatureNamesHash, FeatureCount,
+// ExecutionProvider) 不同的请求不能合并到同一批，避免特征列错位。
+// FeatureNamesHash 为顺序敏感哈希，并通过 NamesEqual 二次校验防止哈希碰撞误合并。
+// 5. ArrayPool 安全：租借的数组在写入前清零，且只把有效长度（recompute 后的 totalRows）
+// 送入模型，避免池化数组尾部脏数据污染推理输入。
+// 6. deadline 贯穿：攒批时跳过已过期请求；执行推理前再次检查；推理中以最早 deadline
+// 构造 CancellationTokenSource 并传入内部引擎，到期即取消推理。
+// 7. 过期请求清理：移除过期请求后重新计算 totalRows（避免脏数据送入模型），
+// 并通过 TrySetResult 返回超时错误通知等待方。
+// 8. worker 崩溃恢复：Coordinator 循环与 Execution 均用 try-catch 包裹；
+// 异常时将批次中所有未完成请求标记为失败；Coordinator 崩溃后自动重启。
 //
 // 设计原则：
-//   1. 透明代理：InferenceScheduler 实现 IBatchInferenceEngine，可包裹任何
-//      IBatchInferenceEngine（如 ModelActivationManager / OnnxInferenceEngine），
-//      对消费方完全透明。
-//   2. 默认关闭动态批处理：EnableDynamicBatching=false 时直接转发到内部引擎，
-//      行为与未引入本类完全一致。仅在显式启用时才走 channel + 微批路径。
-//      这是为了响应"先通过真实 profile 决定 dynamic batching 是否值得"的约束：
-//      在低 QPS 单条请求场景下，micro-batching 只增加延迟不增加吞吐，
-//      默认关闭让运维在通过 profile 验证收益后再显式开启。
-//   3. fail-safe：调度器异常不应导致请求永久挂起；所有错误路径都通过
-//      TaskCompletionSource.TrySetResult 返回失败结果。
-//   4. 不破坏现有 OnnxInferenceEngine 的 InferBatchAsync 接口：本类位于
-//      OnnxInferenceEngine 之上，作为可选的中间层。
+// 1. 透明代理：InferenceScheduler 实现 IBatchInferenceEngine，可包裹任何
+// IBatchInferenceEngine（如 ModelActivationManager / OnnxInferenceEngine），
+// 对消费方完全透明。
+// 2. 默认关闭动态批处理：EnableDynamicBatching=false 时直接转发到内部引擎，
+// 行为与未引入本类完全一致。仅在显式启用时才走 channel + 微批路径。
+// 这是为了响应"先通过真实 profile 决定 dynamic batching 是否值得"的约束：
+// 在低 QPS 单条请求场景下，micro-batching 只增加延迟不增加吞吐，
+// 默认关闭让运维在通过 profile 验证收益后再显式开启。
+// 3. fail-safe：调度器异常不应导致请求永久挂起；所有错误路径都通过
+// TaskCompletionSource.TrySetResult 返回失败结果。
+// 4. 不破坏现有 OnnxInferenceEngine 的 InferBatchAsync 接口：本类位于
+// OnnxInferenceEngine 之上，作为可选的中间层。
 // ===========================================================================
 
 /// <summary>
@@ -128,10 +128,10 @@ public sealed class InferenceSchedulerOptions
 /// <code>
 /// var scheduler = new InferenceScheduler(innerEngine, new InferenceSchedulerOptions
 /// {
-///     EnableDynamicBatching = true,
-///     MaxConcurrency = 4,
-///     MaxBatchSize = 32,
-///     BatchWaitWindow = TimeSpan.FromMilliseconds(5)
+/// EnableDynamicBatching = true,
+/// MaxConcurrency = 4,
+/// MaxBatchSize = 32,
+/// BatchWaitWindow = TimeSpan.FromMilliseconds(5)
 /// });
 /// var result = await scheduler.InferBatchAsync(batch, ct);
 /// </code>
@@ -347,9 +347,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         // Engine Lease 生命周期与调用方 Task 解耦 ——
         // 不再通过 ContinueWith 在 CallerCompletion 时释放 lease。
         // lease 由内部执行出口释放（InternalExecutionCompletion）：
-        //   - 正常执行完成（成功/失败/异常）后 FinalizeRequest 释放；
-        //   - caller 已取消时，内部执行跳过引擎调用并 FinalizeRequest 释放；
-        //   - 过期/shutdown 路径同样 FinalizeRequest 释放。
+        // - 正常执行完成（成功/失败/异常）后 FinalizeRequest 释放；
+        // - caller 已取消时，内部执行跳过引擎调用并 FinalizeRequest 释放；
+        // - 过期/shutdown 路径同样 FinalizeRequest 释放。
         // 这避免外部取消立即释放 lease 导致请求已进入微批时旧引擎被 drain/dispose。
         // CancellationRegistration 也由 FinalizeRequest 统一 Dispose（避免回调内 Dispose 自身）。
         return new ValueTask<BatchInferenceResult>(request.Completion.Task);
@@ -929,10 +929,10 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     /// FeatureNamesHash 为顺序敏感哈希；NamesEqual 在加入分组时二次校验防止碰撞误合并。
     /// ModelGeneration 使用入队时捕获的 CapturedLease.Generation（而非当前 ActiveGeneration），
     /// 避免热切换后请求被错误分组：
-    ///   - CapturedLease 非 null：使用 lease.Generation（请求实际执行的引擎世代）；
-    ///     _inner 为 IModelActivationManager 时 CapturedLease 永远非 null
-    ///     （激活=真实世代，未激活=fallback lease Generation=0）；
-    ///   - CapturedLease 为 null（_inner 非 IModelActivationManager）：用 0L（无世代概念，行为不变）。
+    /// - CapturedLease 非 null：使用 lease.Generation（请求实际执行的引擎世代）；
+    /// _inner 为 IModelActivationManager 时 CapturedLease 永远非 null
+    /// （激活=真实世代，未激活=fallback lease Generation=0）；
+    /// - CapturedLease 为 null（_inner 非 IModelActivationManager）：用 0L（无世代概念，行为不变）。
     /// 关键：BatchKey 必须与执行时使用的引擎世代一致（ExecuteGroupAsync 用 active[0].CapturedLease.Engine），
     /// 否则同组请求会执行在首个请求的引擎上而与其他请求的捕获引擎不同，导致跨世代合并。
     /// </summary>
@@ -1232,8 +1232,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         /// <summary>
         /// 入队时捕获的引擎租约。
         /// _inner 为 IModelActivationManager 时永远非 null：
-        ///   - 已激活：Active Engine 租约（引用计数，Dispose 递减）；
-        ///   - 未激活：fallback 永久租约（Generation=0，Dispose 为 no-op）。
+        /// - 已激活：Active Engine 租约（引用计数，Dispose 递减）；
+        /// - 未激活：fallback 永久租约（Generation=0，Dispose 为 no-op）。
         /// _inner 非 IModelActivationManager 时为 null（执行时回退到 _inner）。
         /// 执行时使用 lease.Engine 而非 _inner，确保请求在入队时的世代上执行。
         /// lease 由内部执行出口（FinalizeRequest）释放，与调用方 Task 生命周期解耦。

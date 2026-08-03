@@ -10,13 +10,13 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Tool Catalog 解耦 Truth 测试
 //
-// 验证 P0-4：AgentRunActor 不再向下转型到具体 RealToolDispatcher 读取 Tool 定义，
+// 验证 ：AgentRunActor 不再向下转型到具体 RealToolDispatcher 读取 Tool 定义，
 // 而是显式注入 IToolCatalog（与分派器解耦，装饰器 / MCP 适配器可独立暴露定义）：
-//   1. DI：RealDispatch 模式下 IToolDispatcher 与 IToolCatalog 解析到同一 RealToolDispatcher
-//      实例（同实例注册，避免两套 Tool 注册表漂移）；
-//   2. DI：默认 Echo 模式下 IToolCatalog 可解析（EchoToolDispatcher 空定义）；
-//   3. Actor：注入自定义 IToolCatalog 时，模型调用携带 Catalog 的定义（而非 Dispatcher 的）；
-//   4. Actor：未注入 Catalog 时回退到 Dispatcher 的 IToolCatalog 实现（兼容旧构造方式）。
+// 1. DI：RealDispatch 模式下 IToolDispatcher 与 IToolCatalog 解析到同一 RealToolDispatcher
+// 实例（同实例注册，避免两套 Tool 注册表漂移）；
+// 2. DI：默认 Echo 模式下 IToolCatalog 可解析（EchoToolDispatcher 空定义）；
+// 3. Actor：注入自定义 IToolCatalog 时，模型调用携带 Catalog 的定义（而非 Dispatcher 的）；
+// 4. Actor：未注入 Catalog 时回退到 Dispatcher 的 IToolCatalog 实现（兼容旧构造方式）。
 // ===========================================================================
 
 [TestClass]

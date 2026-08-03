@@ -5,20 +5,20 @@ namespace ContextCore.Abstractions;
 // Per-tenant Quota / Audit Retention / API Key Rotation
 //
 // 目标（为 Agent 与模型激活阶段提供安全基础框架）：
-//   1. 定义 WorkspaceContext：从请求中解析出的 workspace 隔离上下文。
-//   2. 定义 RBAC 抽象：4 角色 + 5 权限位。
-//   3. 定义 IApiKeyStore：支持 API Key 轮换（新 key + 旧 key 共存过渡期）。
-//   4. 定义 IToolAuthorizer：在 Tool 执行前校验当前 workspace 是否有权限。
-//   5. 定义 IWorkspaceQuotaService：按 workspace 配额（token / cost）。
-//   6. 定义 IAuditRetentionService：审计日志超期清理。
+// 1. 定义 WorkspaceContext：从请求中解析出的 workspace 隔离上下文。
+// 2. 定义 RBAC 抽象：4 角色 + 5 权限位。
+// 3. 定义 IApiKeyStore：支持 API Key 轮换（新 key + 旧 key 共存过渡期）。
+// 4. 定义 IToolAuthorizer：在 Tool 执行前校验当前 workspace 是否有权限。
+// 5. 定义 IWorkspaceQuotaService：按 workspace 配额（token / cost）。
+// 6. 定义 IAuditRetentionService：审计日志超期清理。
 //
 // 设计原则：
-//   1. 契约层不引入任何 I/O 实现。
-//   2. WorkspaceContext 仅在请求生命周期内有效（Scoped）。
-//   3. 与现有 IAgentApprovalGate / IAgentToolCallValidator 协同：
-//      - IAgentToolCallValidator 校验参数合法性与危险 Tool 标记。
-//      - IToolAuthorizer 校验当前 workspace 是否有调用该 Tool 的 RBAC 权限。
-//      - IAgentApprovalGate 决定高风险操作是否需要人工审批。
+// 1. 契约层不引入任何 I/O 实现。
+// 2. WorkspaceContext 仅在请求生命周期内有效（Scoped）。
+// 3. 与现有 IAgentApprovalGate / IAgentToolCallValidator 协同：
+// - IAgentToolCallValidator 校验参数合法性与危险 Tool 标记。
+// - IToolAuthorizer 校验当前 workspace 是否有调用该 Tool 的 RBAC 权限。
+// - IAgentApprovalGate 决定高风险操作是否需要人工审批。
 // ===========================================================================
 
 // ── 角色 / 权限枚举 ───────────────────────────────────────────────────────

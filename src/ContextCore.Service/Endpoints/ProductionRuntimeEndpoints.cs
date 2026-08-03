@@ -8,9 +8,9 @@ namespace ContextCore.Service.Endpoints;
 /// <summary>
 /// Production Runtime Profile 端点：就绪检查与运行时状态报告。
 /// <list type="bullet">
-///   <item><c>/health/ready</c>：Production Runtime 就绪探针，检查 Worker 启动 / Postgres / Model Activation。</item>
-///   <item><c>/api/runtime/status</c>：当前激活组件报告（Profile / Worker 列表 / Model / Transport / Canary）。</item>
-///   <item><c>/api/runtime/migrations/coordinator/status</c>：HA 迁移协调器状态（阶段 / 实例 / 锁键 / 版本）。</item>
+/// <item><c>/health/ready</c>：Production Runtime 就绪探针，检查 Worker 启动 / Postgres / Model Activation。</item>
+/// <item><c>/api/runtime/status</c>：当前激活组件报告（Profile / Worker 列表 / Model / Transport / Canary）。</item>
+/// <item><c>/api/runtime/migrations/coordinator/status</c>：HA 迁移协调器状态（阶段 / 实例 / 锁键 / 版本）。</item>
 /// </list>
 /// </summary>
 internal static class ProductionRuntimeEndpoints

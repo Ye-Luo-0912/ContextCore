@@ -21,22 +21,22 @@ namespace ContextCore.IntegrationTests;
 // 的完整 Agent 循环（User → Assistant tool_call → Tool result → Assistant final），
 // 不使用 ScriptedModelTransport 或 DeterministicAgentModelTransport。
 //
-// 与 R29H_ProductionEvidenceE2ETests 的区别：
-//   - 现有测试使用 ScriptedModelTransport（直接返回预设 AgentModelResponse，绕过 HTTP 层）。
-//   - 本测试使用真实 ModelGatewayAgentModelTransport → ConfigurableModelGateway →
-//     OpenAiCompatibleModelAdapter → HttpClient(StubHttpMessageHandler) 完整链路，
-//     验证：HTTP 请求构造（tools 参数 + messages + Authorization）→ HTTP 响应解析
-//     （tool_calls + finish_reason + usage + cost）→ AgentRunActor 循环 → Tool 分派 →
-//     第二轮 HTTP 调用 → 最终答案。
+// 与既有 Production Evidence E2E 测试的区别：
+// - 现有测试使用 ScriptedModelTransport（直接返回预设 AgentModelResponse，绕过 HTTP 层）。
+// - 本测试使用真实 ModelGatewayAgentModelTransport → ConfigurableModelGateway →
+// OpenAiCompatibleModelAdapter → HttpClient(StubHttpMessageHandler) 完整链路，
+// 验证：HTTP 请求构造（tools 参数 + messages + Authorization）→ HTTP 响应解析
+// （tool_calls + finish_reason + usage + cost）→ AgentRunActor 循环 → Tool 分派 →
+// 第二轮 HTTP 调用 → 最终答案。
 //
 // 设计原则：
-//   - 使用 PostgresE2EFixture 共享 PG 容器（真实持久化 Run/Event/Journal）。
-//   - 使用 StubHttpMessageHandler（队列模式）模拟 LLM HTTP 响应：第一次返回 tool_calls，
-//     第二次返回 stop。
-//   - 使用真实 RealToolDispatcher + RecordingToolHandler（真实 Tool 执行）。
-//   - 使用真实 ConfigurableModelGateway + OpenAiCompatibleModelAdapter（真实 HTTP 请求构造与响应解析）。
-//   - 配置 InputTokenPricePerMillionUsd / OutputTokenPricePerMillionUsd 验证成本计算。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过（不证明生产证据通过）。
+// - 使用 PostgresE2EFixture 共享 PG 容器（真实持久化 Run/Event/Journal）。
+// - 使用 StubHttpMessageHandler（队列模式）模拟 LLM HTTP 响应：第一次返回 tool_calls，
+// 第二次返回 stop。
+// - 使用真实 RealToolDispatcher + RecordingToolHandler（真实 Tool 执行）。
+// - 使用真实 ConfigurableModelGateway + OpenAiCompatibleModelAdapter（真实 HTTP 请求构造与响应解析）。
+// - 配置 InputTokenPricePerMillionUsd / OutputTokenPricePerMillionUsd 验证成本计算。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过（不证明生产证据通过）。
 // ===========================================================================
 
 [TestClass]
@@ -66,7 +66,7 @@ public sealed class R29H_ProductionEvidenceRealHttpE2ETests : IAsyncDisposable
 
     // =======================================================================
     // 测试：真实 HTTP Adapter 完整 Agent 循环
-    //   User → Assistant tool_call → Tool result → Assistant final
+    // User → Assistant tool_call → Tool result → Assistant final
     // =======================================================================
 
     [TestMethod]

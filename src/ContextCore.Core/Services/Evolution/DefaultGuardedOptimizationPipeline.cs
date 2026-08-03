@@ -15,7 +15,7 @@ namespace ContextCore.Core.Services.Evolution;
 /// <item>仅暴露 <see cref="StartAsync"/> / <see cref="AdvanceAsync"/> / <see cref="GetStatusAsync"/>；不暴露 Policy 修改 / 配置修改 / 模型启用接口。</item>
 /// </list>
 ///
-/// <b>State storage</b>（R27-3 起）：本实现通过注入 <see cref="IPipelineRunStore"/> 持久化 run state + 3 类审计记录。
+/// <b>State storage</b>：本实现通过注入 <see cref="IPipelineRunStore"/> 持久化 run state + 3 类审计记录。
 /// 默认使用 <see cref="InMemoryPipelineRunStore"/>（in-memory）；生产部署应注入 PostgresPipelineRunStore 以支持 HA 场景跨进程恢复。
 ///
 /// <b>Metrics 注入</b>：本实现提供 <see cref="AdvanceWithMetricsAsync"/> 扩展方法（非接口方法），
@@ -56,7 +56,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         ArgumentNullException.ThrowIfNull(proposal);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 硬边界：仅接受 ExperimentReady 状态的 proposal（来自 R16 Agent 上限）
+        // 硬边界：仅接受 ExperimentReady 状态的 proposal（来自 Agent 上限）
         if (proposal.Status != OptimizationProposalStatus.ExperimentReady)
         {
             throw new InvalidOperationException(
@@ -205,10 +205,10 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
 
         // Canary Gate 渐进推进集成
         // 当 run 处于 ScopedCanary 阶段且注入了 CanaryProgressionService 时：
-        //   1. 委托 CanaryProgressionService 评估 metrics（parity/error/latency 三类阈值）。
-        //   2. 根据评估结果决定推进百分比档 / 回滚 / 保持 / 已晋升。
-        //   3. 仅当 canary 已晋升到 100%（V2 only）才允许 judge 继续 Promote 决策；
-        //      未达 100% 时强制 Hold（阻止跳过百分比阶梯直接 Promote）。
+        // 1. 委托 CanaryProgressionService 评估 metrics（parity/error/latency 三类阈值）。
+        // 2. 根据评估结果决定推进百分比档 / 回滚 / 保持 / 已晋升。
+        // 3. 仅当 canary 已晋升到 100%（V2 only）才允许 judge 继续 Promote 决策；
+        // 未达 100% 时强制 Hold（阻止跳过百分比阶梯直接 Promote）。
         // 未注入 canaryProgression 时（默认）跳过本块，沿用原 judge 决策（向后兼容）。
         if (snapshot.CurrentStage == OptimizationStage.ScopedCanary && _canaryProgression is not null)
         {

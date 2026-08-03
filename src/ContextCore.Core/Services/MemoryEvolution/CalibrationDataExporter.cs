@@ -9,15 +9,15 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// 校准数据导出器默认实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R29 §9.1 校准数据导出目标 + 澄清 #4）：
-///   1. 导出器是只读边界：通过 <see cref="IUtilityLedgerStore.QueryAsync"/> 查询 ledger 条目，
-///      转换为 <see cref="CalibrationDataRecord"/>（predicted / observed / weight / metadata）后写入 JSONL。
-///   2. 输出格式对齐 <see cref="TrainingDataExporter"/>：JSONL，每行一条样本，camelCase。
-///   3. 默认仅导出 <see cref="UtilityLedgerEntry.ModelScore"/> 非 null 的条目（校准必须有模型预测）；
-///      可通过 <see cref="CalibrationDataExportRequest.RequireModelScore"/>=false 关闭（仅诊断用途）。
-///   4. 生成 sidecar manifest（含 SHA-256 + 正负样本统计 + model artifact 追溯），供下游校验。
-///   5. 导出过程幂等：重复执行覆盖输出文件，不修改 ledger 状态。
-///   6. 生产路径注入 Postgres-backed IUtilityLedgerStore；开发 / 测试路径注入 InMemory 实现 — 无需修改导出器代码。
+/// 设计原则（对齐校准数据导出目标）：
+/// 1. 导出器是只读边界：通过 <see cref="IUtilityLedgerStore.QueryAsync"/> 查询 ledger 条目，
+/// 转换为 <see cref="CalibrationDataRecord"/>（predicted / observed / weight / metadata）后写入 JSONL。
+/// 2. 输出格式对齐 <see cref="TrainingDataExporter"/>：JSONL，每行一条样本，camelCase。
+/// 3. 默认仅导出 <see cref="UtilityLedgerEntry.ModelScore"/> 非 null 的条目（校准必须有模型预测）；
+/// 可通过 <see cref="CalibrationDataExportRequest.RequireModelScore"/>=false 关闭（仅诊断用途）。
+/// 4. 生成 sidecar manifest（含 SHA-256 + 正负样本统计 + model artifact 追溯），供下游校验。
+/// 5. 导出过程幂等：重复执行覆盖输出文件，不修改 ledger 状态。
+/// 6. 生产路径注入 Postgres-backed IUtilityLedgerStore；开发 / 测试路径注入 InMemory 实现 — 无需修改导出器代码。
 /// </remarks>
 public sealed class CalibrationDataExporter : ICalibrationDataExporter
 {

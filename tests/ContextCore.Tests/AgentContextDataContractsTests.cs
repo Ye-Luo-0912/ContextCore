@@ -7,14 +7,14 @@ namespace ContextCore.Tests;
 /// Agent Context 数据契约测试。
 ///
 /// 验证目标：
-///   1. AgentContextSnapshot record 必填字段 + 默认值 + with 表达式
-///   2. AgentContextSection record 必填字段 + 默认值
-///   3. AgentTaskState record 必填字段 + 默认值 + with 表达式
-///   4. AgentContextDelta record 必填字段 + 默认值 + with 表达式
-///   5. AgentContextSchemaVersions 常量定义
-///   6. sealed record 反射验证
-///   7. 默认集合字段为空（非 null）
-///   8. 不可变性：with 表达式产生新实例
+/// 1. AgentContextSnapshot record 必填字段 + 默认值 + with 表达式
+/// 2. AgentContextSection record 必填字段 + 默认值
+/// 3. AgentTaskState record 必填字段 + 默认值 + with 表达式
+/// 4. AgentContextDelta record 必填字段 + 默认值 + with 表达式
+/// 5. AgentContextSchemaVersions 常量定义
+/// 6. sealed record 反射验证
+/// 7. 默认集合字段为空（非 null）
+/// 8. 不可变性：with 表达式产生新实例
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

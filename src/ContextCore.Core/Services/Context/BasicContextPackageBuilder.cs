@@ -27,7 +27,7 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
     private readonly AsyncLocal<string?> _currentOperationId = new();
     private readonly AsyncLocal<string?> _currentRequestId = new();
     // 构建流水线四阶段（从原 BuildWithPolicyAsync 单体方法提取，保持字节级确定性输出不变）：
-    //   PackageInputLoader -> CandidateSelector(使用 SectionAssembler) -> ResultProjector
+    // PackageInputLoader -> CandidateSelector(使用 SectionAssembler) -> ResultProjector
     private readonly PackageInputLoader _inputLoader;
     private readonly SectionAssembler _sectionAssembler;
     private readonly CandidateSelector _candidateSelector;

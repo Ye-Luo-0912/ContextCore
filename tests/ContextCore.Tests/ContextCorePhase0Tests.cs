@@ -198,7 +198,7 @@ public sealed class ContextCorePhase0Tests
     }
 
     /// <summary>
-    /// #6: Ack/Nack 原子化（CAS）— 仅当 job 处于 Running 时才转换状态。
+    /// Ack/Nack 原子化（CAS）— 仅当 job 处于 Running 时才转换状态。
     /// 验证过期的 Ack/Nack 不会还原终态或干扰进行中的执行。
     /// </summary>
     [TestMethod]
@@ -249,7 +249,7 @@ public sealed class ContextCorePhase0Tests
     }
 
     /// <summary>
-    /// #6: Double-Ack 幂等 — 第二次 Ack 不改变状态（job 已不是 Running）。
+    /// Double-Ack 幂等 — 第二次 Ack 不改变状态（job 已不是 Running）。
     /// </summary>
     [TestMethod]
     public async Task JobQueue_DoubleAck_IsNoOp()
@@ -280,7 +280,7 @@ public sealed class ContextCorePhase0Tests
     }
 
     /// <summary>
-    /// #6: Double-Nack（未重新 dequeue）— 第二次 Nack 不改变状态（job 已不是 Running）。
+    /// Double-Nack（未重新 dequeue）— 第二次 Nack 不改变状态（job 已不是 Running）。
     /// </summary>
     [TestMethod]
     public async Task JobQueue_DoubleNack_WithoutRedequeue_IsNoOp()

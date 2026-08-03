@@ -101,10 +101,10 @@ public sealed class PostgresPitrRunner : IAsyncDisposable
     /// <summary>
     /// 编排 PITR 恢复：
     /// <list type="number">
-    ///   <item>解压/复制 base backup 到目标实例 data 目录（调用方负责）—— 本方法接收已就绪的 base.tar.gz 路径</item>
-    ///   <item>在 data 目录中创建 <c>recovery.signal</c></item>
-    ///   <item>向 <c>postgresql.auto.conf</c> 追加 <c>restore_command</c> 与 <c>recovery_target_time</c></item>
-    ///   <item>由调用方启动 PostgreSQL；本方法等待 promotion 完成</item>
+    /// <item>解压/复制 base backup 到目标实例 data 目录（调用方负责）—— 本方法接收已就绪的 base.tar.gz 路径</item>
+    /// <item>在 data 目录中创建 <c>recovery.signal</c></item>
+    /// <item>向 <c>postgresql.auto.conf</c> 追加 <c>restore_command</c> 与 <c>recovery_target_time</c></item>
+    /// <item>由调用方启动 PostgreSQL；本方法等待 promotion 完成</item>
     /// </list>
     /// </summary>
     /// <remarks>

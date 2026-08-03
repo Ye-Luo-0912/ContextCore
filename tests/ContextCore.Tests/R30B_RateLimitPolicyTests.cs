@@ -5,16 +5,16 @@ using Microsoft.AspNetCore.Http;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-B RateLimit 策略消费验收测试
+// RateLimit 策略消费验收测试
 //
 // 目标：RateLimitOptions.WorkspacePolicies / EndpointPolicies 真正生效
 // （此前 CreatePartitionedLimiter 仅消费 DefaultPolicy）。
 //
 // 覆盖：
-//   1. ResolveEffectivePolicy 优先级：endpoint（最长前缀）> workspace > default；
-//   2. 未解析 workspace（"global"）跳过 workspace 策略；
-//   3. 分区行为：PerWorkspace=true 各 workspace 独立配额；false 共享全局配额；
-//   4. Endpoint 策略（TokenLimit=1）实际生效（限流拒绝第二个请求）。
+// 1. ResolveEffectivePolicy 优先级：endpoint（最长前缀）> workspace > default；
+// 2. 未解析 workspace（"global"）跳过 workspace 策略；
+// 3. 分区行为：PerWorkspace=true 各 workspace 独立配额；false 共享全局配额；
+// 4. Endpoint 策略（TokenLimit=1）实际生效（限流拒绝第二个请求）。
 // ===========================================================================
 
 [TestClass]

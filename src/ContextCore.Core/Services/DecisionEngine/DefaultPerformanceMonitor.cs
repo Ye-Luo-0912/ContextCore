@@ -7,18 +7,18 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // DefaultPerformanceMonitor — 默认性能监控实现
 //
 // 目标（对齐 Workstream F 规格）：
-//   1. 实现 IPerformanceMonitor 接口，提供 per-scope ring buffer 样本存储。
-//   2. 当最近样本 P95（或最坏样本）超过阈值时，标记该 scope 需要 V2.0 回退。
-//   3. 触发回退后，连续 RecoverySamples 个低于阈值的样本累积后自动解除回退状态。
-//   4. 线程安全：使用 ConcurrentDictionary + lock-free ring buffer（每个 scope 一个）。
+// 1. 实现 IPerformanceMonitor 接口，提供 per-scope ring buffer 样本存储。
+// 2. 当最近样本 P95（或最坏样本）超过阈值时，标记该 scope 需要 V2.0 回退。
+// 3. 触发回退后，连续 RecoverySamples 个低于阈值的样本累积后自动解除回退状态。
+// 4. 线程安全：使用 ConcurrentDictionary + lock-free ring buffer（每个 scope 一个）。
 //
 // 设计原则：
-//   1. 极薄：仅依赖 PerformanceFallbackOptions；不依赖 DDSketch / 外部 metric store。
-//      生产可替换为 Prometheus / OpenTelemetry 实现。
-//   2. 冷启动保护：MinSamplesBeforeFallback 个样本之前不触发回退（避免单次抖动误判）。
-//   3. P95 估算：对窗口内样本排序取 95 分位（窗口容量小，O(n log n) 可接受）。
-//   4. 诊断输出：GetDiagnostics 返回 fallback_triggered / threshold_ms / recent_p95_ms /
-//      sample_count / consecutive_low_samples 等字段供 Engine 写入 Result.Diagnostics。
+// 1. 极薄：仅依赖 PerformanceFallbackOptions；不依赖 DDSketch / 外部 metric store。
+// 生产可替换为 Prometheus / OpenTelemetry 实现。
+// 2. 冷启动保护：MinSamplesBeforeFallback 个样本之前不触发回退（避免单次抖动误判）。
+// 3. P95 估算：对窗口内样本排序取 95 分位（窗口容量小，O(n log n) 可接受）。
+// 4. 诊断输出：GetDiagnostics 返回 fallback_triggered / threshold_ms / recent_p95_ms /
+// sample_count / consecutive_low_samples 等字段供 Engine 写入 Result.Diagnostics。
 // ===========================================================================
 
 /// <summary>

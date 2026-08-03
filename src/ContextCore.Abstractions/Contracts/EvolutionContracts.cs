@@ -7,7 +7,7 @@ namespace ContextCore.Abstractions;
 //
 // 硬边界（来自 project memory）：
 // - Agent 只负责离线控制面：Observe / Cluster failures / Diagnose / Form hypothesis /
-//   Generate experiment / Run benchmark or eval / Compare baseline / Generate proposal
+// Generate experiment / Run benchmark or eval / Compare baseline / Generate proposal
 // - 明确禁止：自动改正式 Policy、自动提交生产配置、自动启用模型、绕过 shadow/canary
 // - Agent 输出必须是版本化 OptimizationProposal，含证据、预期收益、风险、实验结果、回滚条件
 //
@@ -18,7 +18,7 @@ namespace ContextCore.Abstractions;
 /// <summary>
 /// OptimizationProposal 的状态生命周期。
 /// Agent 只能将状态推进到 <see cref="Validated"/>/<see cref="ExperimentReady"/>，
-/// 后续状态（Shadow/Canary/Promoted/RolledBack）由 R17 Guarded Optimization Pipeline 决定。
+/// 后续状态（Shadow/Canary/Promoted/RolledBack）由 Guarded Optimization Pipeline 决定。
 /// </summary>
 public enum OptimizationProposalStatus
 {
@@ -28,19 +28,19 @@ public enum OptimizationProposalStatus
     /// <summary>已验证：证据/实验结果齐全，假设与基线对比已记录。</summary>
     Validated,
 
-    /// <summary>实验就绪：可提交到 R17 pipeline 执行 shadow/canary。</summary>
+    /// <summary>实验就绪：可提交到 pipeline 执行 shadow/canary。</summary>
     ExperimentReady,
 
-    /// <summary>影子模式：在 R17 pipeline 中以 shadow 运行（不影响生产）。</summary>
+    /// <summary>影子模式：在 pipeline 中以 shadow 运行（不影响生产）。</summary>
     Shadow,
 
-    /// <summary>范围受控 canary：在 R17 pipeline 中以小范围 canary 运行。</summary>
+    /// <summary>范围受控 canary：在 pipeline 中以小范围 canary 运行。</summary>
     ScopedCanary,
 
-    /// <summary>已晋升：R17 pipeline 自动或人工晋升到默认路径。</summary>
+    /// <summary>已晋升：pipeline 自动或人工晋升到默认路径。</summary>
     Promoted,
 
-    /// <summary>已回滚：R17 pipeline 命中风险条件后自动回滚。</summary>
+    /// <summary>已回滚：pipeline 命中风险条件后自动回滚。</summary>
     RolledBack,
 
     /// <summary>已拒绝：Agent 自审或人工拒绝（证据不足/风险过高/假设被驳斥）。</summary>
@@ -318,7 +318,7 @@ public enum OptimizationTargetComponent
 /// </summary>
 /// <remarks>
 /// 不可变 record；每次 Agent 修订生成新版本号。
-/// Agent 不能直接修改生产 Policy 或运行时配置；它只能生成 proposal，由 R17 pipeline 决定是否晋升。
+/// Agent 不能直接修改生产 Policy 或运行时配置；它只能生成 proposal，由 pipeline 决定是否晋升。
 /// </remarks>
 public sealed record OptimizationProposal
 {
@@ -337,7 +337,7 @@ public sealed record OptimizationProposal
     /// <summary>目标组件（约束 Agent 作用范围）。</summary>
     public required OptimizationTargetComponent TargetComponent { get; init; }
 
-    /// <summary>状态（Agent 推进到 Validated/ExperimentReady，后续由 R17 pipeline 推进）。</summary>
+    /// <summary>状态（Agent 推进到 Validated/ExperimentReady，后续由 pipeline 推进）。</summary>
     public OptimizationProposalStatus Status { get; init; } = OptimizationProposalStatus.Draft;
 
     /// <summary>证据列表（不可为空，Validated 状态至少 1 条）。</summary>
@@ -352,7 +352,7 @@ public sealed record OptimizationProposal
     /// <summary>回滚条件列表（不可为空，ExperimentReady 状态至少 1 条）。</summary>
     public IReadOnlyList<RollbackCondition> RollbackConditions { get; init; } = Array.Empty<RollbackCondition>();
 
-    /// <summary>实验配置 JSON（Agent 提供给 R17 pipeline 的实验参数）。</summary>
+    /// <summary>实验配置 JSON（Agent 提供给 pipeline 的实验参数）。</summary>
     public string? ExperimentConfigJson { get; init; }
 
     /// <summary>Agent 生成的回滚预案（人类可读描述）。</summary>
@@ -455,7 +455,7 @@ public sealed class AgentDiagnosticResult
 /// <item>Agent 只能调用 <see cref="DiagnoseAsync"/> 与 <see cref="RefineProposalAsync"/>。</item>
 /// <item>Agent 不能直接调用任何修改生产 Policy 或运行时配置的接口。</item>
 /// <item>Agent 不能调用 <see cref="IContextPackageBuilder.BuildAsync"/> 等正式构建路径</item>
-/// <item>Agent 输出的 <see cref="OptimizationProposal"/> 必须通过 R17 pipeline 才能进入生产。</item>
+/// <item>Agent 输出的 <see cref="OptimizationProposal"/> 必须通过 pipeline 才能进入生产。</item>
 /// </list>
 /// 实现层（DefaultContextEvolutionAgent）将在后续阶段提供。
 /// </remarks>
@@ -488,11 +488,11 @@ public interface IContextEvolutionAgent
 //
 // 硬边界（来自 project memory）：
 // - Pipeline 阶段严格按 Offline Experiment → Shadow → Scoped Canary →
-//   Automatic Rollback → Manual/default Promotion 顺序推进。
+// Automatic Rollback → Manual/default Promotion 顺序推进。
 // - 任何阶段命中 <see cref="RollbackCondition"/> 自动回滚到基线路径。
 // - 第一项端到端学习闭环建议先用 <see cref="IPromotionJudge"/> 验证基础设施。
 // - 第一项真正作用于核心运行时的 learned component 建议：
-//   Cost-aware Retrieval Router 或 Candidate Utility Reranker（二选一）。
+// Cost-aware Retrieval Router 或 Candidate Utility Reranker（二选一）。
 //
 // 本文件仅含 Abstractions 层契约；实现层将在后续阶段提供。
 // ========================================================================================

@@ -7,17 +7,17 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 // Canary Metrics 采集器（工作包 C）
 //
-// 目标（对齐 R28-B.8 规格）：
-//   1. 从 shadow/parity 报告聚合 CanaryProgressionService.EvaluateAsync 消费的三个指标：
-//      divergence_rate、error_rate、p95_latency_ms。
-//   2. 按 runId 维度聚合，每个 run 拥有独立的观察窗口样本列表。
-//   3. 推进到下一档百分比后调用 Reset 清空样本，开始新的观察窗口。
-//   4. 线程安全：每个 runId 的样本列表用 lock 保护。
+// 目标：
+// 1. 从 shadow/parity 报告聚合 CanaryProgressionService.EvaluateAsync 消费的三个指标：
+// divergence_rate、error_rate、p95_latency_ms。
+// 2. 按 runId 维度聚合，每个 run 拥有独立的观察窗口样本列表。
+// 3. 推进到下一档百分比后调用 Reset 清空样本，开始新的观察窗口。
+// 4. 线程安全：每个 runId 的样本列表用 lock 保护。
 //
 // 设计边界：
-//   - 本采集器仅负责聚合；不负责采集（采集由 AuthoritativeRuntime 的 shadow 路径调用 RecordObservation）。
-//   - P95 计算：将 durations 排序，取第 95 百分位（durations[(int)(count * 0.95)]）。
-//   - Divergent 定义：ParityLevel < Hard（含 Divergent 与 Diagnostic）。
+// - 本采集器仅负责聚合；不负责采集（采集由 AuthoritativeRuntime 的 shadow 路径调用 RecordObservation）。
+// - P95 计算：将 durations 排序，取第 95 百分位（durations[(int)(count * 0.95)]）。
+// - Divergent 定义：ParityLevel < Hard（含 Divergent 与 Diagnostic）。
 // ===========================================================================
 
 /// <summary>
@@ -222,11 +222,11 @@ public interface ICanaryMetricsCollector
 /// </summary>
 /// <remarks>
 /// 优化：
-///   - 固定容量 ring buffer 替代无界 List（默认 1000 样本/runId）。
-///   - 滚动计数器（DivergentCount / V2ErrorCount / LegacyErrorCount）随 Add 更新，
-///     GetAggregatedMetrics 无需 O(n) 扫描。
-///   - DDSketch 替代全量排序：P95 查询复杂度 O(b log b)，b 通常 < 100（相对误差 1%）。
-///   - WindowStart/WindowEnd 在 Add 路径更新；GetAggregatedMetrics 无需复制样本列表。
+/// - 固定容量 ring buffer 替代无界 List（默认 1000 样本/runId）。
+/// - 滚动计数器（DivergentCount / V2ErrorCount / LegacyErrorCount）随 Add 更新，
+/// GetAggregatedMetrics 无需 O(n) 扫描。
+/// - DDSketch 替代全量排序：P95 查询复杂度 O(b log b)，b 通常 < 100（相对误差 1%）。
+/// - WindowStart/WindowEnd 在 Add 路径更新；GetAggregatedMetrics 无需复制样本列表。
 /// </remarks>
 public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
 {

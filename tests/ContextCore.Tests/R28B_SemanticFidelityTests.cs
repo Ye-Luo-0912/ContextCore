@@ -10,21 +10,21 @@ namespace ContextCore.Tests;
 // 语义保真硬验收测试（25 项）
 //
 // 覆盖范围（7 个测试类）：
-//   A. RequestSemanticsAcceptanceTests — RetrievalInput Include 开关 + 必需字段传播（8 项）
-//   B. ArtifactAndAgentAcceptanceTests — Material sidecar 恢复 + Agent Material 保留（3 项）
-//   C. AllocationAcceptanceTests — Purpose 驱动的 MandatoryOverflowPolicy 解析（2 项）
-//   D. TokenPipelineAcceptanceTests — Token 计数 / 截断 / section 分隔符（4 项）
-//   E. ReplayAcceptanceTests — DecisionReplay / ExpertReplay 分层重放（2 项）
-//   F. ExperimentQueueAcceptanceTests — bounded 队列 + dead-letter + flush 计数（3 项）
-//   G. OtherAcceptanceTests — Cutover / Cancellation / Policy 稳定性（3 项）
+// A. RequestSemanticsAcceptanceTests — RetrievalInput Include 开关 + 必需字段传播（8 项）
+// B. ArtifactAndAgentAcceptanceTests — Material sidecar 恢复 + Agent Material 保留（3 项）
+// C. AllocationAcceptanceTests — Purpose 驱动的 MandatoryOverflowPolicy 解析（2 项）
+// D. TokenPipelineAcceptanceTests — Token 计数 / 截断 / section 分隔符（4 项）
+// E. ReplayAcceptanceTests — DecisionReplay / ExpertReplay 分层重放（2 项）
+// F. ExperimentQueueAcceptanceTests — bounded 队列 + dead-letter + flush 计数（3 项）
+// G. OtherAcceptanceTests — Cutover / Cancellation / Policy 稳定性（3 项）
 //
 // 设计原则：
-//   - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
-//   - Stub 仅用于隔离 I/O（Provider/Store/Recorder），不替换决策内核
-//   - 复用 R28BTestHelpers（MakeEnvelope / MakeResult / MakeMaterial / MakeAllocation）
-//   - 复用 R28B_ClosureGateAcceptanceTests 中的 internal Stub
-//     （CountingCandidateProvider / RecordingDecisionRuntime / ThrowingDecisionRuntime / CallTrackingContextStore）
-//   - 所有代码注释使用中文
+// - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
+// - Stub 仅用于隔离 I/O（Provider/Store/Recorder），不替换决策内核
+// - 复用共享 TestHelpers（MakeEnvelope / MakeResult / MakeMaterial / MakeAllocation）
+// - 复用 ClosureGate 验收测试中的 internal Stub
+// （CountingCandidateProvider / RecordingDecisionRuntime / ThrowingDecisionRuntime / CallTrackingContextStore）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================

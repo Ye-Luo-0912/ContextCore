@@ -720,13 +720,13 @@ static void PrintHelp()
       context room --workspace default --collection test package-preview --policy default-context
 
     选项：
-      --workspace <id>       工作区 id。默认：default
-      --collection <id>      集合 id。默认：test
-      --root <path>          FileSystem 根目录。默认：项目根目录下的 ./context-core-data
-      --refresh <seconds>    自动刷新间隔。默认：2
-      --storage <kind>       filesystem 或 memory。默认：filesystem
-      --service <baseUrl>    启用 Service 模式并连接到指定 ContextCore.Service
-      --api-key-env <VAR>    从环境变量读取 Service API Key（推荐，避免命令行历史泄露）
+      --workspace <id> 工作区 id。默认：default
+      --collection <id> 集合 id。默认：test
+      --root <path> FileSystem 根目录。默认：项目根目录下的 ./context-core-data
+      --refresh <seconds> 自动刷新间隔。默认：2
+      --storage <kind> filesystem 或 memory。默认：filesystem
+      --service <baseUrl> 启用 Service 模式并连接到指定 ContextCore.Service
+      --api-key-env <VAR> 从环境变量读取 Service API Key（推荐，避免命令行历史泄露）
     """);
 }
 

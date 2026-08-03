@@ -10,19 +10,19 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Tool 对账（Reconciliation）Truth 测试
 //
-// 验证 P0-3：Journal 处于模糊状态（DispatchingIntent/Dispatched/Reconciling）的
+// 验证 ：Journal 处于模糊状态（DispatchingIntent/Dispatched/Reconciling）的
 // Tool 调用必须经对账确认外部副作用真相后才能收尾，Run 不得在存在未裁决记录时
 // 进入 Completed：
-//   1. 存储：InMemoryToolReconciliationStore 的幂等创建 / 未裁决查询 / CAS 推进 /
-//      终态裁决语义；
-//   2. 协调器：ToolReconciliationCoordinator 裁决唯一入口——journal 显式进入
-//      Reconciling 再提交真相结果（occurred → Committed + result；未发生 → Committed +
-//      void 失败结果），记录原子落终态（Resolved/Rejected）；重放返回提交的真相，
-//      绝不重复执行外部调用；
-//   3. Worker：轮询 Pending 记录 → 按 Handler 名称匹配对账 → 无 Handler 保持 Pending
-//      等待人工裁决；
-//   4. Actor 集成：未裁决 Tool 阻止 Completed（Run 停车在 AwaitingReconciliation），
-//      全部裁决后恢复执行 → Completed，外部调用全程只执行一次。
+// 1. 存储：InMemoryToolReconciliationStore 的幂等创建 / 未裁决查询 / CAS 推进 /
+// 终态裁决语义；
+// 2. 协调器：ToolReconciliationCoordinator 裁决唯一入口——journal 显式进入
+// Reconciling 再提交真相结果（occurred → Committed + result；未发生 → Committed +
+// void 失败结果），记录原子落终态（Resolved/Rejected）；重放返回提交的真相，
+// 绝不重复执行外部调用；
+// 3. Worker：轮询 Pending 记录 → 按 Handler 名称匹配对账 → 无 Handler 保持 Pending
+// 等待人工裁决；
+// 4. Actor 集成：未裁决 Tool 阻止 Completed（Run 停车在 AwaitingReconciliation），
+// 全部裁决后恢复执行 → Completed，外部调用全程只执行一次。
 // ===========================================================================
 
 [TestClass]
@@ -176,7 +176,7 @@ public sealed class R29H_ToolReconciliationTests
     }
 
     /// <summary>
-    /// 验证（P2-B1 Control Plane）：按 ExternalOperationId 跨 Run 反查（InMemory 实现与 Postgres 同语义）。
+    /// 验证（-B1 Control Plane）：按 ExternalOperationId 跨 Run 反查（InMemory 实现与 Postgres 同语义）。
     /// </summary>
     [TestMethod]
     public async Task Store_QueryByExternalOperationId_AcrossRuns()
@@ -198,7 +198,7 @@ public sealed class R29H_ToolReconciliationTests
     }
 
     /// <summary>
-    /// 验证（P2-B1 Control Plane）：ControlRoom 分页列表 —— 过期高亮（DeadlineUtc &lt; now 且未裁决）
+    /// 验证（-B1 Control Plane）：ControlRoom 分页列表 —— 过期高亮（DeadlineUtc &lt; now 且未裁决）
     /// + 告警计数（OverdueCount）+ OverdueOnly 过滤（InMemory 实现与 Postgres 同语义）。
     /// </summary>
     [TestMethod]
@@ -481,7 +481,7 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State);
     }
 
-    // ── 4. Actor 集成测试（P0-3 核心验收）──────────────────────────────────
+    // ── 4. Actor 集成测试（核心验收）──────────────────────────────────
 
     /// <summary>
     /// 验证：存在未裁决对账记录时，模型产出最终答案也不会进入 Completed——

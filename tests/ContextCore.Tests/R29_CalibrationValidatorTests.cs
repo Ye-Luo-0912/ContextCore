@@ -9,30 +9,30 @@ namespace ContextCore.Tests;
 // DefaultCalibrationValidator 单元测试
 //
 // 覆盖范围：
-//   Identity 恒通过（Info 级违规）
-//   Platt(A, B) 参数验证
-//        - A/B 有限
-//        - A != 0
-//        - |A| 过大 → Warning
-//        - |B| 过大 → Warning
-//   Temperature(T) 参数验证
-//        - T 有限
-//        - T > 0
-//        - T 极小 → Warning（饱和）
-//        - T 极大 → Warning（近似 identity）
-//   Isotonic(points) 参数验证
-//        - points != null
-//        - Count >= 2
-//        - Input / Output 有限
-//        - Input 升序
-//        - Output 单调非递减
-//        - Output 在 [0, 1] 范围
-//        - 覆盖率不足 → Warning
-//        - 重复 Input → Warning
-//   一致性校验（Method 与 Kind 对齐；Parameter 与 ParameterA 同步）
-//   null parameters / 未知 Kind
-//   ValidateBatch 聚合
-//   DI 注册扩展
+// Identity 恒通过（Info 级违规）
+// Platt(A, B) 参数验证
+// - A/B 有限
+// - A != 0
+// - |A| 过大 → Warning
+// - |B| 过大 → Warning
+// Temperature(T) 参数验证
+// - T 有限
+// - T > 0
+// - T 极小 → Warning（饱和）
+// - T 极大 → Warning（近似 identity）
+// Isotonic(points) 参数验证
+// - points != null
+// - Count >= 2
+// - Input / Output 有限
+// - Input 升序
+// - Output 单调非递减
+// - Output 在 [0, 1] 范围
+// - 覆盖率不足 → Warning
+// - 重复 Input → Warning
+// 一致性校验（Method 与 Kind 对齐；Parameter 与 ParameterA 同步）
+// null parameters / 未知 Kind
+// ValidateBatch 聚合
+// DI 注册扩展
 // ===========================================================================
 
 [TestClass]

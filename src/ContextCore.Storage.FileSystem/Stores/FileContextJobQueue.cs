@@ -10,7 +10,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// Dequeue 在跨进程文件锁内完成读-找-改-写的原子状态转换，避免 TOCTOU 竞态。
 /// </summary>
 /// <remarks>
-/// #5：维护进程内 JobId → jobs.jsonl 路径索引（<see cref="_jobPathIndex"/>），
+/// 维护进程内 JobId → jobs.jsonl 路径索引（<see cref="_jobPathIndex"/>），
 /// 让 Ack/Nack 在 Enqueue 已记录路径时跳过全量扫描。索引为纯优化：
 /// 未命中时回退到目录扫描，扫描命中后再回填缓存。jobs 不在文件间移动、不删除，
 /// 故映射在 job 生命周期内稳定；缓存指向已删除文件时由 <see cref="File.Exists"/> 守卫回退到扫描。
@@ -23,7 +23,7 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     private readonly FileJsonLineStore _jsonLines;
     private readonly FileSystemWriter _writer;
     private readonly FileFormatSerializer _serializer;
-    // #5：JobId → jobs.jsonl 路径的进程内索引，Ack/Nack 定位用。ConcurrentDictionary 保证无锁读写在 _gate 之外也安全。
+    // JobId → jobs.jsonl 路径的进程内索引，Ack/Nack 定位用。ConcurrentDictionary 保证无锁读写在 _gate 之外也安全。
     private readonly ConcurrentDictionary<string, string> _jobPathIndex = new(StringComparer.OrdinalIgnoreCase);
 
     public FileContextJobQueue(FileStorageOptions options)
@@ -56,7 +56,7 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
         await _jsonLines.UpsertAsync(path, normalized, item => item.JobId, cancellationToken)
             .ConfigureAwait(false);
 
-        // #5：Enqueue 已知 job 落地的文件，记录到索引，后续 Ack/Nack 直接 O(1) 定位无需扫描。
+        // Enqueue 已知 job 落地的文件，记录到索引，后续 Ack/Nack 直接 O(1) 定位无需扫描。
         _jobPathIndex[normalized.JobId] = path;
     }
 
@@ -93,7 +93,7 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     {
         await UpdateAsync(jobId, job =>
         {
-            // #6: CAS — 仅当 job 处于 Running 时才转换为 Succeeded。
+            // CAS — 仅当 job 处于 Running 时才转换为 Succeeded。
             // 过期的 Ack（job 已被前一次执行 Nack 为 WaitingRetry/Failed，或已被 Ack 为 Succeeded）是 no-op，
             // 防止终态被还原或进行中的执行被干扰。
             if (job.State != ContextJobState.Running)
@@ -115,7 +115,7 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     {
         await UpdateAsync(jobId, job =>
         {
-            // #6: CAS — 仅当 job 处于 Running 时才转换为 WaitingRetry/Failed。
+            // CAS — 仅当 job 处于 Running 时才转换为 WaitingRetry/Failed。
             // 过期的 Nack（job 已被 Ack 为 Succeeded，或已被 Nack 为 WaitingRetry/Failed）是 no-op，
             // 防止已成功的作业被还原为重试/失败状态。
             if (job.State != ContextJobState.Running)
@@ -246,13 +246,13 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
 
     /// <summary>
     /// 定位包含指定 jobId 的 jobs.jsonl 文件路径。
-    /// #5：优先查进程内 JobId→路径索引（O(1)）；未命中或缓存指向已删除文件时
+    /// 优先查进程内 JobId→路径索引（O(1)）；未命中或缓存指向已删除文件时
     /// 回退到全量扫描，扫描命中后回填索引。仅用于定位，不持锁；
     /// 后续的原子更新由 _jsonLines.UpdateAsync 在单文件锁内完成。
     /// </summary>
     private async Task<string?> LocateJobFileAsync(string jobId, CancellationToken cancellationToken)
     {
-        // #5：索引命中且文件仍存在时直接返回，跳过全量扫描。
+        // 索引命中且文件仍存在时直接返回，跳过全量扫描。
         if (_jobPathIndex.TryGetValue(jobId, out var cached) && File.Exists(cached))
         {
             return cached;

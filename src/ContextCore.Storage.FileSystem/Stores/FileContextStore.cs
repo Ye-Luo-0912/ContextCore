@@ -525,7 +525,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
         _metadataCache.TryRemove(path, out _);
     }
 
-    /// <summary>P0-fix: 防止缓存无限增长；超过上限时清空（本地开发场景，简单策略）。</summary>
+    /// <summary>防止缓存无限增长；超过上限时清空（本地开发场景，简单策略）。</summary>
     private void EnforceCacheBound()
     {
         if (_metadataCache.Count >= MaxCacheEntries)

@@ -8,13 +8,13 @@ namespace ContextCore.Abstractions;
 // dataset split / offline replay gate / 统一 learning pipeline event）。
 //
 // 设计原则：
-//   1. 仅定义 Abstractions 层契约，不含存储 I/O；实现层在 Core/Services/MemoryEvolution。
-//   2. 复用已有 IUtilityLedgerStore / IUserFeedbackLedger / ITrainingDataExporter 数据源。
-//   3. 算法为"基础实现"——不做完整 ML 流水线，仅提供 contract 与可工作的最简实现，
-//      便于后续替换为更复杂算法（接口稳定）。
-//   4. 与 LearningEventOutboxRecord 区别：outbox 是 per-decision 持久化记录；
-//      本契约定义统一的 LearningPipelineEvent（含 lineage）用于在 pipeline 内传递
-//      user feedback / tool outcome / task completion 等非 decision 事件。
+// 1. 仅定义 Abstractions 层契约，不含存储 I/O；实现层在 Core/Services/MemoryEvolution。
+// 2. 复用已有 IUtilityLedgerStore / IUserFeedbackLedger / ITrainingDataExporter 数据源。
+// 3. 算法为"基础实现"——不做完整 ML 流水线，仅提供 contract 与可工作的最简实现，
+// 便于后续替换为更复杂算法（接口稳定）。
+// 4. 与 LearningEventOutboxRecord 区别：outbox 是 per-decision 持久化记录；
+// 本契约定义统一的 LearningPipelineEvent（含 lineage）用于在 pipeline 内传递
+// user feedback / tool outcome / task completion 等非 decision 事件。
 // ===========================================================================
 
 /// <summary>
@@ -41,11 +41,11 @@ public enum LearningPipelineEventType : byte
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Lineage 完整性：每条事件可追溯到原始 decision、run、session 与触发的 tool calls。
-///   2. Payload 透明：调用方序列化任意 DTO 为 JSON；消费者按 <see cref="EventType"/> 反序列化。
-///   3. 幂等：IdempotencyKey 由调用方提供，重复入队由 sink 保证覆盖或忽略。
-///   4. 与 LearningEventOutboxRecord 解耦：decision 路径仍走 outbox；
-///      非 decision 事件通过本契约的 sink 入队，由下游消费者异步处理。
+/// 1. Lineage 完整性：每条事件可追溯到原始 decision、run、session 与触发的 tool calls。
+/// 2. Payload 透明：调用方序列化任意 DTO 为 JSON；消费者按 <see cref="EventType"/> 反序列化。
+/// 3. 幂等：IdempotencyKey 由调用方提供，重复入队由 sink 保证覆盖或忽略。
+/// 4. 与 LearningEventOutboxRecord 解耦：decision 路径仍走 outbox；
+/// 非 decision 事件通过本契约的 sink 入队，由下游消费者异步处理。
 /// </remarks>
 public sealed record LearningPipelineEvent
 {
@@ -89,9 +89,9 @@ public sealed record LearningPipelineEvent
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Decision 路径已由 LearningMaterializationDispatcher 处理；本 sink 主要服务非 decision 事件。
-///   2. 实现可选用 in-memory Channel（非持久）或扩展 outbox（持久）——契约层不强制。
-///   3. 入队不阻塞调用方；失败由 sink 内部降级（log + metric），不抛异常到调用方。
+/// 1. Decision 路径已由 LearningMaterializationDispatcher 处理；本 sink 主要服务非 decision 事件。
+/// 2. 实现可选用 in-memory Channel（非持久）或扩展 outbox（持久）——契约层不强制。
+/// 3. 入队不阻塞调用方；失败由 sink 内部降级（log + metric），不抛异常到调用方。
 /// </remarks>
 public interface ILearningPipelineSink
 {
@@ -392,10 +392,10 @@ public sealed record ReplayGateResult
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 组合而非替代：复用 <see cref="ILabelQualityScorer"/> / <see cref="ILeakageDetector"/> /
-///      <see cref="ILearningDatasetSplitter"/>，gate 仅做聚合判定。
-///   2. 失败不抛异常：返回 <see cref="ReplayGateResult"/>，由调用方决定是否阻断。
-///   3. 可配置阈值：通过 <see cref="ReplayGateOptions"/> 调整门控严格度。
+/// 1. 组合而非替代：复用 <see cref="ILabelQualityScorer"/> / <see cref="ILeakageDetector"/> /
+/// <see cref="ILearningDatasetSplitter"/>，gate 仅做聚合判定。
+/// 2. 失败不抛异常：返回 <see cref="ReplayGateResult"/>，由调用方决定是否阻断。
+/// 3. 可配置阈值：通过 <see cref="ReplayGateOptions"/> 调整门控严格度。
 /// </remarks>
 public interface IOfflineReplayGate
 {
@@ -423,9 +423,9 @@ public interface IOfflineReplayGate
 /// </summary>
 /// <remarks>
 /// 与 <see cref="UserFeedbackSubmitRequest"/> 区别：
-///   1. 关联到 AgentRun（RunId 必填）+ 原始 DecisionId（lineage 锚点）。
-///   2. 提交后除写入 IUserFeedbackLedger 外，同时作为 delayed learning event 入队 pipeline。
-///   3. 用于用户在 run 完成后异步提供评分 / 修正，作为校准标签信号。
+/// 1. 关联到 AgentRun（RunId 必填）+ 原始 DecisionId（lineage 锚点）。
+/// 2. 提交后除写入 IUserFeedbackLedger 外，同时作为 delayed learning event 入队 pipeline。
+/// 3. 用于用户在 run 完成后异步提供评分 / 修正，作为校准标签信号。
 /// </remarks>
 public sealed class DelayedUserFeedbackRequest
 {
@@ -449,10 +449,10 @@ public sealed class DelayedUserFeedbackRequest
 
     /// <summary>
     /// 反馈数值（可选；不填时由 Kind 推导）。
-    ///   - ThumbsUp / Report：忽略，自动设为 +1.0 / -1.0
-    ///   - ThumbsDown：忽略，自动设为 -1.0
-    ///   - ScoreCorrection：必填，范围 [0.0, 1.0]
-    ///   - TextFeedback：忽略，自动设为 0.0
+    /// - ThumbsUp / Report：忽略，自动设为 +1.0 / -1.0
+    /// - ThumbsDown：忽略，自动设为 -1.0
+    /// - ScoreCorrection：必填，范围 [0.0, 1.0]
+    /// - TextFeedback：忽略，自动设为 0.0
     /// </summary>
     public double? FeedbackValue { get; init; }
 

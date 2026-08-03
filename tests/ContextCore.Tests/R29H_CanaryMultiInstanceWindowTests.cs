@@ -10,25 +10,25 @@ namespace ContextCore.Tests;
 // Canary 多实例窗口聚合生产验收测试
 //
 // 验证 CanaryMetricsAggregator 在多实例部署时的窗口聚合正确性，覆盖：
-//   1. MultiInstance_SampleRecording_AggregatesCorrectly — 多实例样本记录后聚合正确
-//   2. MultiInstance_TotalObservations_SumsAcrossInstances — TotalObservations 跨实例求和
-//   3. MultiInstance_InstanceCount_CountsDistinctInstances — InstanceCount 计算不同实例数
-//   4. MultiInstance_StageEpoch_FiltersCurrentEpochOnly — 仅聚合当前 stage epoch 的数据
-//   5. MultiInstance_AdvanceEpoch_ResetsAggregationWindow — AdvanceEpoch 重置聚合窗口
-//   6. MultiInstance_ExternalMetrics_AggregatedFromSamples — 外部指标从样本聚合
-//   7. MultiInstance_PruneOldEpochs_CleansOldSamples — PruneOldEpochs 清理旧 epoch 数据
-//   8. MultiInstance_Postgres_PersistentAggregation — Postgres 持久化聚合（不可用时 Inconclusive）
+// 1. MultiInstance_SampleRecording_AggregatesCorrectly — 多实例样本记录后聚合正确
+// 2. MultiInstance_TotalObservations_SumsAcrossInstances — TotalObservations 跨实例求和
+// 3. MultiInstance_InstanceCount_CountsDistinctInstances — InstanceCount 计算不同实例数
+// 4. MultiInstance_StageEpoch_FiltersCurrentEpochOnly — 仅聚合当前 stage epoch 的数据
+// 5. MultiInstance_AdvanceEpoch_ResetsAggregationWindow — AdvanceEpoch 重置聚合窗口
+// 6. MultiInstance_ExternalMetrics_AggregatedFromSamples — 外部指标从样本聚合
+// 7. MultiInstance_PruneOldEpochs_CleansOldSamples — PruneOldEpochs 清理旧 epoch 数据
+// 8. MultiInstance_Postgres_PersistentAggregation — Postgres 持久化聚合（不可用时 Inconclusive）
 //
 // 设计原则：
-//   - 优先使用真实组件：InMemoryCanaryMetricsAggregator（本文件内实现，镜像 Postgres 语义）；
-//     DefaultCanaryExternalMetricsSource 为真实实现。
-//   - InMemoryCanaryMetricsAggregator 复刻 PostgresCanaryMetricsAggregator 的核心语义：
-//     * RecordSample UPSERT by (runId, stageEpoch, instanceId) — 最新快照覆盖旧值
-//     * Aggregate SUM/COUNT DISTINCT/加权平均 — 与 SQL 聚合一致
-//     * AdvanceEpoch 原子递增 — 跨实例 epoch 推进
-//     * PruneOldEpochs 按 keepEpochCount 保留 — 控制表增长
-//   - Postgres 不可用时用 InMemory + Assert.Inconclusive。
-//   - 所有代码注释使用中文。
+// - 优先使用真实组件：InMemoryCanaryMetricsAggregator（本文件内实现，镜像 Postgres 语义）；
+// DefaultCanaryExternalMetricsSource 为真实实现。
+// - InMemoryCanaryMetricsAggregator 复刻 PostgresCanaryMetricsAggregator 的核心语义：
+// * RecordSample UPSERT by (runId, stageEpoch, instanceId) — 最新快照覆盖旧值
+// * Aggregate SUM/COUNT DISTINCT/加权平均 — 与 SQL 聚合一致
+// * AdvanceEpoch 原子递增 — 跨实例 epoch 推进
+// * PruneOldEpochs 按 keepEpochCount 保留 — 控制表增长
+// - Postgres 不可用时用 InMemory + Assert.Inconclusive。
+// - 所有代码注释使用中文。
 // ===========================================================================
 
 [TestClass]
@@ -447,7 +447,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
     /// <list type="bullet">
     /// <item>RecordSample: UPSERT by (runId, stageEpoch, instanceId) — 最新快照覆盖旧值。</item>
     /// <item>Aggregate: SUM(total_observations) / COUNT(DISTINCT instance_id) /
-    ///   加权平均(divergent_count / total_observations) 等。</item>
+    /// 加权平均(divergent_count / total_observations) 等。</item>
     /// <item>AdvanceEpoch: 原子递增 current_epoch。</item>
     /// <item>PruneOldEpochs: 删除 stage_epoch &lt; (current - keep + 1) 的行。</item>
     /// </list>
@@ -546,7 +546,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
 
             // 外部指标：AVG 跳过 NULL
             // TaskSuccessRate / ToolSuccessRate 改为 SUM(分子)/SUM(分母) 替代 AVG(rate)；
-            //   sum/count 为 null 时回退到 AVG(rate)（向后兼容未填充 sum/count 的旧样本）
+            // sum/count 为 null 时回退到 AVG(rate)（向后兼容未填充 sum/count 的旧样本）
             var taskSuccess = SumDivSum(epochSamples, s => s.TaskSuccessSum, s => s.TaskSuccessCount)
                 ?? AvgNullable(epochSamples, s => s.TaskSuccessRate);
             var toolSuccess = SumDivSum(epochSamples, s => s.ToolSuccessSum, s => s.ToolSuccessCount)

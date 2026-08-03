@@ -8,16 +8,16 @@ namespace ContextCore.Service.Infrastructure;
 // 请求阶段生产准入门中间件
 //
 // 目标：
-//   ProductionHA 下，每个请求（除豁免路径外）在执行前检查当前生产准入报告；
-//   未通过时返回 503，防止启动后运行时降级（Postgres 断连 / Model Slot 停用 /
-//   应用重启窗口）仍静默放行业务流量。
+// ProductionHA 下，每个请求（除豁免路径外）在执行前检查当前生产准入报告；
+// 未通过时返回 503，防止启动后运行时降级（Postgres 断连 / Model Slot 停用 /
+// 应用重启窗口）仍静默放行业务流量。
 //
 // 设计决策：
-//   - 仅 ProductionHA 生效；其他 Profile 直接透传（validator 返回 Skipped + AllPassed=true）。
-//   - 位于 AuditLogMiddleware 之后：被拒绝的请求仍经过认证与审计（安全可追踪）。
-//   - 豁免路径（探活 / 运维诊断，不被准入门阻断）：
-//       /health*、/api/health*、/api/runtime/status、/api/admission/status、/openapi*、/scalar*。
-//   - 复用 ProductionAdmissionController 的 TTL 缓存，大部分请求零额外 IO。
+// - 仅 ProductionHA 生效；其他 Profile 直接透传（validator 返回 Skipped + AllPassed=true）。
+// - 位于 AuditLogMiddleware 之后：被拒绝的请求仍经过认证与审计（安全可追踪）。
+// - 豁免路径（探活 / 运维诊断，不被准入门阻断）：
+// /health*、/api/health*、/api/runtime/status、/api/admission/status、/openapi*、/scalar*。
+// - 复用 ProductionAdmissionController 的 TTL 缓存，大部分请求零额外 IO。
 // ===========================================================================
 
 /// <summary>

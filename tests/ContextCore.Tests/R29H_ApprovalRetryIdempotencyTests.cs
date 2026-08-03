@@ -5,14 +5,14 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// Approval 重试幂等（P1-1）
+// Approval 重试幂等
 //
 // 覆盖范围：
-//   ResolveAsync 幂等重试：相同 decisionRequestId + 相同决策 → 幂等成功（不抛异常）；
-//   相同 decisionRequestId + 相反决策 → 冲突（拒绝覆盖已生效决策）；
-//   无幂等键或键不匹配 + 已裁决 → 冲突（旧语义保持）；
-//   CreateResolvedApprovalAsync：原子创建并裁决（单次写入最终状态，不留 Pending 中间态）；
-//   自动审批路径：Gate 走 CreateResolvedApprovalAsync（审计记录带 auto: 幂等键）。
+// ResolveAsync 幂等重试：相同 decisionRequestId + 相同决策 → 幂等成功（不抛异常）；
+// 相同 decisionRequestId + 相反决策 → 冲突（拒绝覆盖已生效决策）；
+// 无幂等键或键不匹配 + 已裁决 → 冲突（旧语义保持）；
+// CreateResolvedApprovalAsync：原子创建并裁决（单次写入最终状态，不留 Pending 中间态）；
+// 自动审批路径：Gate 走 CreateResolvedApprovalAsync（审计记录带 auto: 幂等键）。
 // ===========================================================================
 
 [TestClass]

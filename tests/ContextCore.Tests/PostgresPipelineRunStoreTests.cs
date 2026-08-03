@@ -12,11 +12,11 @@ namespace ContextCore.Tests;
 /// PostgresPipelineRunStore 单元测试。
 ///
 /// 不连接真实 PostgreSQL 数据库；仅验证：
-///   1. 构造函数与服务注册
-///   2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
-///   3. 接口实现契约（IPipelineRunStore）
-///   4. DI 注册路径（PostgresServiceCollectionExtensions）
-///   5. TryTransitionAsync 参数校验 + cancellation 透传（CAS 推进路径）
+/// 1. 构造函数与服务注册
+/// 2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
+/// 3. 接口实现契约（IPipelineRunStore）
+/// 4. DI 注册路径（PostgresServiceCollectionExtensions）
+/// 5. TryTransitionAsync 参数校验 + cancellation 透传（CAS 推进路径）
 ///
 /// 端到端持久化语义（CAS 成功 / 失败 / 幂等 / 并发）由 ContextCore.IntegrationTests 覆盖
 /// （需 Testcontainers）— 与 InMemoryPipelineRunStoreTests 中对应的 10 个 TryTransitionAsync
@@ -217,7 +217,7 @@ public sealed class PostgresPipelineRunStoreTests
     }
 
     // =========================================================================
-    // 10. TryTransitionAsync 参数校验（P0-7）
+    // 10. TryTransitionAsync 参数校验
     // =========================================================================
 
     [TestMethod]

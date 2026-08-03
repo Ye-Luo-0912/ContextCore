@@ -58,7 +58,7 @@ public sealed class StorageExecutionProfile
     };
 
     /// <summary>
-    /// FileSystem 能力：单进程一致，跨进程仅"advisory"（参见 R13.1 #6 FileSystemInstanceGuard）。
+    /// FileSystem 能力：单进程一致，跨进程仅"advisory"。
     /// </summary>
     public static StorageExecutionProfile FileSystem { get; } = new()
     {
@@ -111,12 +111,12 @@ public sealed class StorageExecutionProfile
     /// <summary>
     /// 是否支持跨进程安全——true 表示跨进程并发写入有强一致性保证；
     /// false 表示仅进程内一致，跨进程写入需调用方自行协调（如 advisory lock + 单实例）。
-    /// 参见 R13.1 #6 FileSystemInstanceGuard。
+    /// 参见 FileSystemInstanceGuard。
     /// </summary>
     public bool SupportsCrossProcessSafety { get; init; }
 
     /// <summary>
-    /// 是否支持应用层快照复用（如 R13.2 #2 FileConstraintStore 的 last-write-time 快照）。
+    /// 是否支持应用层快照复用（如 FileConstraintStore 的 last-write-time 快照）。
     /// 数据库 Provider 通常为 false（已有自身缓存，应用层快照易 stale）。
     /// </summary>
     public bool SupportsSnapshotReuse { get; init; }

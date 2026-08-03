@@ -8,23 +8,23 @@ namespace ContextCore.Core.Services.Agent;
 // DefaultAgentContextBridge — 默认 Agent Context 桥接器实现。
 //
 // 实现 IAgentContextBridge 契约：
-//   1. 将 AgentContextBridgeRequest 转换为 ContextPackageRequest；
-//   2. 调用 IContextPackageBuilder.BuildDetailedAsync；
-//   3. 将 ContextPackageBuildResult 映射为 AgentContextSnapshot：
-//      - Sections：ContextPackageSection → AgentContextSection
-//        (Name → SectionName, Content → Content, SourceRefs[0] → Source,
-//         Priority → SortOrder, EstimatedTokens → ActualTokens/TokenBudget)
-//      - DecisionRequestIds：SelectedItems.Select(i => i.ItemId)
-//      - SnapshotId：ContextPackage.PackageId
-//      - ActualTokens：ContextPackage.EstimatedTokens
-//   4. 失败语义：ContextCore 构建异常直接抛出（fail-closed）；
-//      调用方决定是否回退到 base provider 的纯 injection-based snapshot。
+// 1. 将 AgentContextBridgeRequest 转换为 ContextPackageRequest；
+// 2. 调用 IContextPackageBuilder.BuildDetailedAsync；
+// 3. 将 ContextPackageBuildResult 映射为 AgentContextSnapshot：
+// - Sections：ContextPackageSection → AgentContextSection
+// (Name → SectionName, Content → Content, SourceRefs[0] → Source,
+// Priority → SortOrder, EstimatedTokens → ActualTokens/TokenBudget)
+// - DecisionRequestIds：SelectedItems.Select(i => i.ItemId)
+// - SnapshotId：ContextPackage.PackageId
+// - ActualTokens：ContextPackage.EstimatedTokens
+// 4. 失败语义：ContextCore 构建异常直接抛出（fail-closed）；
+// 调用方决定是否回退到 base provider 的纯 injection-based snapshot。
 //
 // 设计边界：
-//   - Bridge 无状态；线程安全；
-//   - 不缓存；每次调用都重新构建；
-//   - 不修改 IContextPackageBuilder 的输入/输出；
-//   - ToolCallRefs / ConstraintIds 留空（由 base provider 在合并阶段填充）。
+// - Bridge 无状态；线程安全；
+// - 不缓存；每次调用都重新构建；
+// - 不修改 IContextPackageBuilder 的输入/输出；
+// - ToolCallRefs / ConstraintIds 留空（由 base provider 在合并阶段填充）。
 // ===========================================================================
 
 /// <summary>

@@ -10,18 +10,18 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// Agent Run Recovery Integrity State（P2-4）—— 退避重试 + 人工介入告警钩子
+// Agent Run Recovery Integrity State—— 退避重试 + 人工介入告警钩子
 //
 // 覆盖范围：
-//   退避重试：
-//     RecoveryDependencyUnavailable（17）不再是终态——Actor 每次进入时递增 RecoveryAttempt，
-//     按指数退避（base × 2^(attempt-1)，封顶 cap）计算 NextRetryAtUtc，由恢复 Worker 在
-//     退避门通过后重新入队；fail-closed 下进入 17 后主循环不得继续执行 Agent 逻辑。
-//   人工介入告警钩子：
-//     RecoveryBlocked / RecoveryCorrupted：每次进入均告警（数据损坏级，需运维介入）；
-//     RecoveryDependencyUnavailable：仅首次（attempt==1）告警，避免告警风暴；
-//     DeadLetterExhausted：Durable Scheduler 死信后告警（重试预算耗尽）；
-//     best-effort：告警接收器抛异常不阻断恢复状态持久化。
+// 退避重试：
+// RecoveryDependencyUnavailable（17）不再是终态——Actor 每次进入时递增 RecoveryAttempt，
+// 按指数退避（base × 2^(attempt-1)，封顶 cap）计算 NextRetryAtUtc，由恢复 Worker 在
+// 退避门通过后重新入队；fail-closed 下进入 17 后主循环不得继续执行 Agent 逻辑。
+// 人工介入告警钩子：
+// RecoveryBlocked / RecoveryCorrupted：每次进入均告警（数据损坏级，需运维介入）；
+// RecoveryDependencyUnavailable：仅首次（attempt==1）告警，避免告警风暴；
+// DeadLetterExhausted：Durable Scheduler 死信后告警（重试预算耗尽）；
+// best-effort：告警接收器抛异常不阻断恢复状态持久化。
 // ===========================================================================
 
 [TestClass]

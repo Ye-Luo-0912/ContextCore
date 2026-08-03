@@ -10,23 +10,23 @@ namespace ContextCore.Tests;
 /// DefaultRetrievalRouter 测试。
 ///
 /// 验证目标：
-///   1. 默认路由（mask=AllEnabled，无 bundle）→ 8 个 Expert 全部启用
-///   2. Mandatory / Constraint 永远 Enabled=true（即使 mask=MandatoryOnly）
-///   3. Budget 兜底（request.TokenBudget=0 时使用 bundle.Budget.DefaultTokenBudget）
-///   4. Request 显式值覆盖 bundle 默认
-///   5. Budget-Aware TopK 平均分配（V1 简化版）
-///   6. PolicyBundle.Routing.EnabledExperts 过滤 mask
-///   7. PolicyOverride.RoutingOverride 仅合并 EnableModelScoring（不替换 EnabledExperts）
-///   8. PolicyOverride.BudgetOverride 仅合并 TokenBudget/TopK（不替换 ProfileId）
-///   9. DisabledExpert 的 TopK/TokenBudget=0
-///  10. ReasonCode 区分 mandatory / default / ablation-disabled / policy-disabled
-///  11. RouterId / RouterVersion 默认值
-///  12. TotalTokenBudget 反映解析后的总预算
-///  13. Metadata 包含 budget 分配明细
-///  14. 无 bundle 时使用 hardcoded defaults
-///  15. 幂等性：相同输入产生相同输出
-///  16. null request 抛出 ArgumentNullException
-///  17. 契约无存储 I/O（反射验证）
+/// 1. 默认路由（mask=AllEnabled，无 bundle）→ 8 个 Expert 全部启用
+/// 2. Mandatory / Constraint 永远 Enabled=true（即使 mask=MandatoryOnly）
+/// 3. Budget 兜底（request.TokenBudget=0 时使用 bundle.Budget.DefaultTokenBudget）
+/// 4. Request 显式值覆盖 bundle 默认
+/// 5. Budget-Aware TopK 平均分配（V1 简化版）
+/// 6. PolicyBundle.Routing.EnabledExperts 过滤 mask
+/// 7. PolicyOverride.RoutingOverride 仅合并 EnableModelScoring（不替换 EnabledExperts）
+/// 8. PolicyOverride.BudgetOverride 仅合并 TokenBudget/TopK（不替换 ProfileId）
+/// 9. DisabledExpert 的 TopK/TokenBudget=0
+/// 10. ReasonCode 区分 mandatory / default / ablation-disabled / policy-disabled
+/// 11. RouterId / RouterVersion 默认值
+/// 12. TotalTokenBudget 反映解析后的总预算
+/// 13. Metadata 包含 budget 分配明细
+/// 14. 无 bundle 时使用 hardcoded defaults
+/// 15. 幂等性：相同输入产生相同输出
+/// 16. null request 抛出 ArgumentNullException
+/// 17. 契约无存储 I/O（反射验证）
 /// </summary>
 [TestClass]
 [TestCategory("R20")]

@@ -6,12 +6,12 @@ namespace ContextCore.Tests;
 // PostgreSQL 迁移 Runner 拆分生产验收测试
 //
 // 验证 Migration Runner 拆分设计：
-//   1. MigrationStepRegistry_ContainsVersionOrderedSteps — 步骤注册表非空、
-//      按版本升序排列，每个步骤声明 MigrationId / From / To / Stages。
-//   2. ToolDispatchResultsResultKeyStep_DeclaresV48ToV49WithThreeStages —
-//      v48→v49 步骤的阶段顺序为 Online → Backfill → ConstraintValidate。
-//   3. MigrationMetrics_RecordWithoutThrowing — 迁移指标（DDL / 锁等待 /
-//      失败版本 / 已应用步骤）在无监听器时记录不抛异常。
+// 1. MigrationStepRegistry_ContainsVersionOrderedSteps — 步骤注册表非空、
+// 按版本升序排列，每个步骤声明 MigrationId / From / To / Stages。
+// 2. ToolDispatchResultsResultKeyStep_DeclaresV48ToV49WithThreeStages —
+// v48→v49 步骤的阶段顺序为 Online → Backfill → ConstraintValidate。
+// 3. MigrationMetrics_RecordWithoutThrowing — 迁移指标（DDL / 锁等待 /
+// 失败版本 / 已应用步骤）在无监听器时记录不抛异常。
 //
 // 说明：步骤的 PreCheck / ExecuteStage 需要真实 NpgsqlConnection（pg catalog
 // 查询），不在无 Postgres 的单元测试中执行；此处验证注册表接线与指标基础设施。

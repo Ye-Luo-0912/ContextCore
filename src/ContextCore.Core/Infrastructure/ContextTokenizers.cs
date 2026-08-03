@@ -175,7 +175,7 @@ public sealed class UnicodeAwareContextTokenizer : IContextTokenizer
                     goto done;
                 }
                 latinRunLength = 0;
-                // #3: latin run 已成功 flush 并计入 count，safeLength 必须推进到 latin run 末尾。
+                // latin run 已成功 flush 并计入 count，safeLength 必须推进到 latin run 末尾。
                 // 否则若后续非 ASCII rune 超预算 goto done，truncated 内容会遗漏已计 token 的 latin run，
                 // 导致本应保留的 Latin 文本被系统性丢弃（如 "abc世" budget=1 应保留 "abc" 而非返回空串）。
                 safeLength = charIndex;

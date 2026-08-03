@@ -379,9 +379,9 @@ public interface IModelGateway
     ///
     /// <b>降级策略</b>：实现若底层适配器不支持 function calling，可在响应中：
     /// <list type="bullet">
-    ///   <item>将 Tools 拼接到 SystemPrompt 中作为提示。</item>
-    ///   <item>尝试从 <see cref="ModelChatResponse.Content"/> 解析 JSON 格式的 Tool 调用。</item>
-    ///   <item>解析失败时返回 <see cref="ModelChatFinishReason.Stop"/> + 原始文本。</item>
+    /// <item>将 Tools 拼接到 SystemPrompt 中作为提示。</item>
+    /// <item>尝试从 <see cref="ModelChatResponse.Content"/> 解析 JSON 格式的 Tool 调用。</item>
+    /// <item>解析失败时返回 <see cref="ModelChatFinishReason.Stop"/> + 原始文本。</item>
     /// </list>
     /// </remarks>
     Task<ModelChatResponse> ChatWithToolsAsync(

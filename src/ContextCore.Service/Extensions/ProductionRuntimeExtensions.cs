@@ -20,22 +20,22 @@ namespace ContextCore.Service.Extensions;
 // 生产 Composition Root — 统一所有生产服务的注册入口
 //
 // 目标：
-//   1. 提供 AddContextCoreRuntime 扩展方法（P0-1 新入口），作为生产服务的唯一显式入口。
-//      该方法一次性决定 ModelMode / AgentModelMode / ToolMode / Store / Transport /
-//      Canary / HostedServices，避免 AddContextCore() 无参数重载强制 Deterministic
-//      导致的 Profile 与真实运行模式分裂。
-//   2. 根据 RuntimeProfile（Development / SingleNode / ProductionHA）完成所有生产服务
-//      注册（Run Recovery worker、Canary Progression / Leader 模式切换等）。
-//   3. 启动时验证配置组合，不允许出现静默半配置状态。
+// 1. 提供 AddContextCoreRuntime 扩展方法（新入口），作为生产服务的唯一显式入口。
+// 该方法一次性决定 ModelMode / AgentModelMode / ToolMode / Store / Transport /
+// Canary / HostedServices，避免 AddContextCore() 无参数重载强制 Deterministic
+// 导致的 Profile 与真实运行模式分裂。
+// 2. 根据 RuntimeProfile（Development / SingleNode / ProductionHA）完成所有生产服务
+// 注册（Run Recovery worker、Canary Progression / Leader 模式切换等）。
+// 3. 启动时验证配置组合，不允许出现静默半配置状态。
 //
 // 调用顺序（Program.cs）：
-//   AddContextStorage → AddContextModelGateway → AddEmbeddingProviders
-//   → AddContextCoreRuntime（唯一入口，按 Profile + ModelMode 分发）
+// AddContextStorage → AddContextModelGateway → AddEmbeddingProviders
+// → AddContextCoreRuntime（唯一入口，按 Profile + ModelMode 分发）
 //
 // 修复：
-//   CanarySchedulerOptions / CanaryLeaderOptions 统一通过 IOptionsMonitor<T> 消费。
-//   ProductionHA 模式通过 PostConfigure 覆盖 Enabled 标志，而非 RemoveService + AddSingleton
-//   （后者不进入 Options Pipeline，IOptionsMonitor 读不到覆盖值）。
+// CanarySchedulerOptions / CanaryLeaderOptions 统一通过 IOptionsMonitor<T> 消费。
+// ProductionHA 模式通过 PostConfigure 覆盖 Enabled 标志，而非 RemoveService + AddSingleton
+// （后者不进入 Options Pipeline，IOptionsMonitor 读不到覆盖值）。
 // ===========================================================================
 
 /// <summary>
@@ -59,7 +59,7 @@ internal static class ProductionRuntimeExtensions
     /// <list type="bullet">
     /// <item>绑定 <see cref="ContextCoreRuntimeOptions"/>（Profile / ModelMode / AgentModelMode / ToolMode）。</item>
     /// <item>按 <see cref="ContextCoreRuntimeOptions.ModelMode"/> 选择 <see cref="ModelExecutionOptions"/>，
-    ///   调用 <c>AddContextCore(services, modelExecutionOptions)</c> 注册 Core 服务。</item>
+    /// 调用 <c>AddContextCore(services, modelExecutionOptions)</c> 注册 Core 服务。</item>
     /// <item>按 <see cref="RuntimeProfile"/> 注册 Profile 专属 HostedService / Transport / Canary 模式。</item>
     /// <item>验证配置组合合法性（fail-fast）。</item>
     /// </list>
@@ -298,9 +298,9 @@ internal static class ProductionRuntimeExtensions
         // AgentRunStore → AgentKernelHost → AgentRunActor，无独立 Durable Transport）。
         // 1. 启用 Run Recovery + Agent Run Lease（多实例竞争租约）。
         // 2. Canary 切换到 HA 模式：
-        //    通过 PostConfigure 覆盖 Enabled 标志（进入 Options Pipeline），
-        //    让 IOptionsMonitor<CanarySchedulerOptions> / IOptionsMonitor<CanaryLeaderOptions>
-        //    消费者能读到覆盖值。原 RemoveService + AddSingleton 不进入 Options Pipeline。
+        // 通过 PostConfigure 覆盖 Enabled 标志（进入 Options Pipeline），
+        // 让 IOptionsMonitor<CanarySchedulerOptions> / IOptionsMonitor<CanaryLeaderOptions>
+        // 消费者能读到覆盖值。原 RemoveService + AddSingleton 不进入 Options Pipeline。
         // 3. 注册 CanaryLeaderHostedService（HA 模式），不注册 CanaryProgressionHostedService。
 
         // 1. 覆盖 AgentHostOptions：启用 Run Lease
@@ -350,7 +350,7 @@ internal static class ProductionRuntimeExtensions
         workerRegistry.Add<LearningMaterializationWorker>();
     }
 
-    // ── P0-1 辅助方法 ──────────────────────────────────────────────────
+    // ── 辅助方法 ──────────────────────────────────────────────────
 
     /// <summary>
     /// 绑定 <see cref="ContextCoreRuntimeOptions"/>，从 <paramref name="sectionName"/> 节读取。

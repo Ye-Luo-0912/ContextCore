@@ -16,24 +16,24 @@ namespace ContextCore.Tests;
 // Service Composition E2E 验收测试
 //
 // 目标：验证 AddContextCoreRuntime 在三种 RuntimeProfile
-//   （Development / SingleNode / ProductionHA）下的服务注册组合正确性
-//   （执行平面已收敛到 AgentRunStore → AgentKernelHost → AgentRunActor，
-//   无独立 Durable Transport hosted services）：
-//   1. Development：InMemory/FileSystem 存储；注册 Run Recovery + 单节点
-//      Canary Progression；不强制 Run Lease。
-//   2. SingleNode：要求 Postgres 存储；注册 Run Recovery + 单节点 Canary；
-//      Run Lease 默认 false。
-//   3. ProductionHA：要求 Postgres 存储；注册 Run Recovery + HA Canary Leader
-//      + ModelStateReconciler；强制 Run Lease；Canary 切换到 HA 模式。
+// （Development / SingleNode / ProductionHA）下的服务注册组合正确性
+// （执行平面已收敛到 AgentRunStore → AgentKernelHost → AgentRunActor，
+// 无独立 Durable Transport hosted services）：
+// 1. Development：InMemory/FileSystem 存储；注册 Run Recovery + 单节点
+// Canary Progression；不强制 Run Lease。
+// 2. SingleNode：要求 Postgres 存储；注册 Run Recovery + 单节点 Canary；
+// Run Lease 默认 false。
+// 3. ProductionHA：要求 Postgres 存储；注册 Run Recovery + HA Canary Leader
+// + ModelStateReconciler；强制 Run Lease；Canary 切换到 HA 模式。
 //
 // 设计原则：
-//   - 使用真实组件（非 mock）验证 DI 容器内容；Postgres 不可用时仅跳过
-//     需要真实 DB 连接的测试（Assert.Inconclusive）。
-//   - 服务注册组合测试不需要真实 DB 连接——AddContextCorePostgresStorage 仅注册
-//     服务描述符，连接在服务实例被解析/调用时才发生。本测试只验证类型绑定。
-//   - 配置组合验证（fail-fast）通过构造无效配置触发 InvalidOperationException。
-//   - 全部使用 ServiceCollection + ConfigurationManager 直接构建，无 WebApplicationFactory。
-//   - 中文注释。
+// - 使用真实组件（非 mock）验证 DI 容器内容；Postgres 不可用时仅跳过
+// 需要真实 DB 连接的测试（Assert.Inconclusive）。
+// - 服务注册组合测试不需要真实 DB 连接——AddContextCorePostgresStorage 仅注册
+// 服务描述符，连接在服务实例被解析/调用时才发生。本测试只验证类型绑定。
+// - 配置组合验证（fail-fast）通过构造无效配置触发 InvalidOperationException。
+// - 全部使用 ServiceCollection + ConfigurationManager 直接构建，无 WebApplicationFactory。
+// - 中文注释。
 // ===========================================================================
 
 [TestClass]
@@ -45,9 +45,9 @@ public sealed class R29H_ServiceCompositionE2ETests
 
     /// <summary>
     /// Development profile 在 filesystem 存储下应成功注册：
-    ///   - 注册 AgentRunRecoveryWorker + CanaryProgressionHostedService + LearningMaterializationWorker
-    ///   - 不注册 CanaryLeaderHostedService / ModelStateReconcilerWorker（Postgres-only / HA-only）
-    ///   - 不注册任何旧平面 Durable Transport hosted services（双执行平面已收敛）
+    /// - 注册 AgentRunRecoveryWorker + CanaryProgressionHostedService + LearningMaterializationWorker
+    /// - 不注册 CanaryLeaderHostedService / ModelStateReconcilerWorker（Postgres-only / HA-only）
+    /// - 不注册任何旧平面 Durable Transport hosted services（双执行平面已收敛）
     /// </summary>
     [TestMethod]
     public void Development_Profile_RegistersRunRecoveryAndCanaryHostedServices()
@@ -133,10 +133,10 @@ public sealed class R29H_ServiceCompositionE2ETests
 
     /// <summary>
     /// SingleNode profile 在 Postgres 存储下应成功注册：
-    ///   - IAgentRunStore 解析为持久化实现（Postgres）
-    ///   - AgentHostOptions.LeaseEnabled = false（单实例无需租约竞争）
-    ///   - 注册 AgentRunRecoveryWorker + CanaryProgressionHostedService + LearningMaterializationWorker
-    ///   - 不注册旧平面 Durable Transport hosted services
+    /// - IAgentRunStore 解析为持久化实现（Postgres）
+    /// - AgentHostOptions.LeaseEnabled = false（单实例无需租约竞争）
+    /// - 注册 AgentRunRecoveryWorker + CanaryProgressionHostedService + LearningMaterializationWorker
+    /// - 不注册旧平面 Durable Transport hosted services
     /// </summary>
     /// <remarks>
     /// 本测试不连接真实 Postgres；仅验证 DI 容器中的服务描述符绑定。
@@ -206,11 +206,11 @@ public sealed class R29H_ServiceCompositionE2ETests
 
     /// <summary>
     /// ProductionHA profile 在 Postgres 存储下应成功注册：
-    ///   - 注册 Run Recovery + HA Canary Leader + ModelStateReconciler + Learning 等 hosted services
-    ///   - 不注册任何旧平面 Durable Transport hosted services（双执行平面已收敛）
-    ///   - AgentHostOptions.LeaseEnabled = true（强制启用 HA 租约竞争）
-    ///   - CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
-    ///   - IOptions&lt;CanaryLeaderOptions&gt;.Enabled = true（启用 HA Canary Leader）
+    /// - 注册 Run Recovery + HA Canary Leader + ModelStateReconciler + Learning 等 hosted services
+    /// - 不注册任何旧平面 Durable Transport hosted services（双执行平面已收敛）
+    /// - AgentHostOptions.LeaseEnabled = true（强制启用 HA 租约竞争）
+    /// - CanarySchedulerOptions.Enabled = false（禁用单节点 progression）
+    /// - IOptions&lt;CanaryLeaderOptions&gt;.Enabled = true（启用 HA Canary Leader）
     /// </summary>
     /// <remarks>
     /// 本测试不连接真实 Postgres；仅验证 DI 容器中的服务描述符绑定。

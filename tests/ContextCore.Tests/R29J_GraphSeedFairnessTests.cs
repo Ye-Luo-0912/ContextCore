@@ -7,7 +7,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// Graph 全局预算 Seed 公平性契约测试（P1-5）：
+/// Graph 全局预算 Seed 公平性契约测试：
 /// 1) 每种子最低配额：早期富种子不能耗尽全部预算，后续种子始终有结果；
 /// 2) SkippedByGlobalBudget：仅当 GlobalEdgeLimit &lt; 种子数 时出现；
 /// 3) 诊断字段：SeedOrdinal 升序、ScannedCount、CandidateCountBeforeGlobalLimit；

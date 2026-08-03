@@ -10,19 +10,19 @@ namespace ContextCore.Tests;
 // Agent Actor 生产化验收测试（6 项）
 //
 // 验证任务C 修复后的 AgentRunActor 生产化行为：
-//   1. FirstModelCall_ContainsTaskAndBuiltContext — 第一次模型调用包含 Task + 上下文
-//   2. EveryModelCall_ConsumesTurnBudget — 每次模型调用消耗 Turn 预算
-//   3. ModelOnlyLoop_CannotRunIndefinitely — 无 Tool 的模型循环不能无限运行
-//   4. CheckpointSaved_Event_Requires_PersistedCheckpoint — CheckpointSaved 事件需先持久化
-//   5. AgentActor_Uses_DurableToolExecutor — Actor 使用 IDurableToolExecutor
-//   6. ToolEvent_Preserves_RequestId_IdempotencyAndSideEffect — Tool 事件保留身份信息
+// 1. FirstModelCall_ContainsTaskAndBuiltContext — 第一次模型调用包含 Task + 上下文
+// 2. EveryModelCall_ConsumesTurnBudget — 每次模型调用消耗 Turn 预算
+// 3. ModelOnlyLoop_CannotRunIndefinitely — 无 Tool 的模型循环不能无限运行
+// 4. CheckpointSaved_Event_Requires_PersistedCheckpoint — CheckpointSaved 事件需先持久化
+// 5. AgentActor_Uses_DurableToolExecutor — Actor 使用 IDurableToolExecutor
+// 6. ToolEvent_Preserves_RequestId_IdempotencyAndSideEffect — Tool 事件保留身份信息
 //
 // 设计原则：
-//   - 优先使用真实 InMemory 实现（InMemoryAgentRunStore / InMemoryAgentRunEventStore /
-//     InMemoryAgentCheckpointStore / InMemoryToolDispatchJournal / EchoToolDispatcher）
-//   - 自定义 RecordingModelTransport 捕获模型调用入参以断言上下文内容
-//   - 所有异步测试使用超时 CancellationTokenSource 防止挂起
-//   - 中文注释
+// - 优先使用真实 InMemory 实现（InMemoryAgentRunStore / InMemoryAgentRunEventStore /
+// InMemoryAgentCheckpointStore / InMemoryToolDispatchJournal / EchoToolDispatcher）
+// - 自定义 RecordingModelTransport 捕获模型调用入参以断言上下文内容
+// - 所有异步测试使用超时 CancellationTokenSource 防止挂起
+// - 中文注释
 // ===========================================================================
 
 [TestClass]
@@ -214,11 +214,11 @@ public sealed class R29H_AgentActorAcceptanceTests
     /// </summary>
     /// <remarks>
     /// 场景 1：注入正常 InMemoryAgentCheckpointStore，执行到 checkpoint 点后
-    ///   - event store 中有 CheckpointSaved 事件
-    ///   - checkpoint store 中确实有对应的 checkpoint 数据
+    /// - event store 中有 CheckpointSaved 事件
+    /// - checkpoint store 中确实有对应的 checkpoint 数据
     /// 场景 2：注入会失败的 checkpoint store，验证失败时不发出 CheckpointSaved 事件
-    ///   （Actor.ExecuteCheckpointAsync 中 SaveAsync 抛异常 → 异常向上传播，
-    ///    被 ExecuteAsync 的 catch 块捕获转 Failed，CheckpointSaved 事件不会写入）
+    /// （Actor.ExecuteCheckpointAsync 中 SaveAsync 抛异常 → 异常向上传播，
+    /// 被 ExecuteAsync 的 catch 块捕获转 Failed，CheckpointSaved 事件不会写入）
     /// </remarks>
     [TestMethod]
     public async Task CheckpointSaved_Event_Requires_PersistedCheckpoint()

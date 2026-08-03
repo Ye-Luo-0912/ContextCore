@@ -5,16 +5,16 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Agent Runtime Registry 契约
 //
-// 目标（对齐 R23 规格）：
-//   1. 支持同一 process 内注册多个 AgentRuntime（GenericTool / Codex / Claude），
-//      按 RuntimeKind 解析对应 adapter。
-//   2. Registry 仅负责查找；不持有 session 状态（状态由各 IAgentRuntime 自身管理）。
-//   3. Registry 写操作（Register/Unregister）线程安全；读操作（Resolve/GetAll）非阻塞。
+// 目标：
+// 1. 支持同一 process 内注册多个 AgentRuntime（GenericTool / Codex / Claude），
+// 按 RuntimeKind 解析对应 adapter。
+// 2. Registry 仅负责查找；不持有 session 状态（状态由各 IAgentRuntime 自身管理）。
+// 3. Registry 写操作（Register/Unregister）线程安全；读操作（Resolve/GetAll）非阻塞。
 //
 // 设计边界：
-//   - 不引入 session 路由逻辑（由 CompositeAgentWorkspaceContextProvider 完成，R23-7）；
-//   - 不依赖 DI 容器（可在任意 host 中使用；DI 扩展由 R23-7 提供）；
-//   - 默认实现使用 ConcurrentDictionary；同名 RuntimeKind 后注册覆盖先注册。
+// - 不引入 session 路由逻辑（由 CompositeAgentWorkspaceContextProvider 完成）；
+// - 不依赖 DI 容器（可在任意 host 中使用；DI 扩展由外部扩展提供）；
+// - 默认实现使用 ConcurrentDictionary；同名 RuntimeKind 后注册覆盖先注册。
 // ===========================================================================
 
 /// <summary>

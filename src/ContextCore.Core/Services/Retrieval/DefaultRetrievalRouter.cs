@@ -7,32 +7,32 @@ namespace ContextCore.Core.Services.Retrieval;
 // DefaultRetrievalRouter 实现。
 //
 // 目标：
-//   实现 IRetrievalRouter 接口，将 (Request, Mask, PolicyBundle) 三元组
-//   解析为 per-Expert 的 ExpertRoutingDecisionSet。
+// 实现 IRetrievalRouter 接口，将 (Request, Mask, PolicyBundle) 三元组
+// 解析为 per-Expert 的 ExpertRoutingDecisionSet。
 //
 // 算法（V1 简化版）：
-//   1. 解析 Routing/Budget profile（PolicyOverride > bundle）
-//   2. 解析 totalTokenBudget / totalTopK（request > bundle default > hardcoded）
-//   3. 应用 bundle.Routing.EnabledExperts 过滤 mask（空 = 全部启用）
-//   4. 获取非 Mandatory 启用 Expert 数量 N
-//   5. Budget-Aware 平均分配（V1）：
-//      - Mandatory/Constraint: 不参与分配（TokenBudget=totalTokenBudget, TopK=totalTopK）
-//      - 其他启用 Expert: perExpertTokenBudget = totalTokenBudget / N
-//                        perExpertTopK = max(1, totalTopK / N)
-//      - 禁用 Expert: TokenBudget=0, TopK=0, Enabled=false
-//   6. 为所有 8 个 Expert 生成 ExpertRoutingDecision，按枚举顺序输出
+// 1. 解析 Routing/Budget profile（PolicyOverride > bundle）
+// 2. 解析 totalTokenBudget / totalTopK（request > bundle default > hardcoded）
+// 3. 应用 bundle.Routing.EnabledExperts 过滤 mask（空 = 全部启用）
+// 4. 获取非 Mandatory 启用 Expert 数量 N
+// 5. Budget-Aware 平均分配（V1）：
+// - Mandatory/Constraint: 不参与分配（TokenBudget=totalTokenBudget, TopK=totalTopK）
+// - 其他启用 Expert: perExpertTokenBudget = totalTokenBudget / N
+// perExpertTopK = max(1, totalTopK / N)
+// - 禁用 Expert: TokenBudget=0, TopK=0, Enabled=false
+// 6. 为所有 8 个 Expert 生成 ExpertRoutingDecision，按枚举顺序输出
 //
 // 设计原则：
-//   1. 纯内存计算，无存储 I/O；幂等（相同输入相同输出）。
-//   2. Mandatory / Constraint 永远 Enabled=true，不参与 budget 分配。
-//   3. bundle.Routing.EnabledExperts 非空时：仅列出的 Expert + Mandatory/Constraint 启用。
-//   4. PolicyOverride.RoutingOverride 完整替换 bundle.Routing。
-//   5. V1 简化：平均分配；V2+ 可加入 per-Expert 质量—成本曲线模型。
+// 1. 纯内存计算，无存储 I/O；幂等（相同输入相同输出）。
+// 2. Mandatory / Constraint 永远 Enabled=true，不参与 budget 分配。
+// 3. bundle.Routing.EnabledExperts 非空时：仅列出的 Expert + Mandatory/Constraint 启用。
+// 4. PolicyOverride.RoutingOverride 完整替换 bundle.Routing。
+// 5. V1 简化：平均分配；V2+ 可加入 per-Expert 质量—成本曲线模型。
 //
 // 与 Engine 集成：
-//   阶段不强制 Engine 调用 Router；Router 可独立使用。
-//   Engine 可在 DecideAsync 前调用 Router，按 ExpertRoutingDecisionSet
-//   对 envelope 分组应用 TopK / TokenBudget 上限（留待 R20-3+）。
+// 阶段不强制 Engine 调用 Router；Router 可独立使用。
+// Engine 可在 DecideAsync 前调用 Router，按 ExpertRoutingDecisionSet
+// 对 envelope 分组应用 TopK / TokenBudget 上限（留待 +）。
 // ===========================================================================
 
 /// <summary>
@@ -69,10 +69,10 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
         cancellationToken.ThrowIfCancellationRequested();
 
         // 1. 解析 routing / budget profile
-        //    修复：原 `request.PolicyOverride?.RoutingOverride ?? bundle?.Routing` 会
-        //    完整替换 RoutingProfile，允许 Request 修改 ModelArtifactId / 模型权重 / confidence
-        //    threshold / EnabledExperts。现改为 ApplyRoutingOverride 仅合并 EnableModelScoring 字段，
-        //    其余字段保留 bundle 默认（与 DefaultContextDecisionEngine.ApplyRoutingOverride 对齐）。
+        // 修复：原 `request.PolicyOverride?.RoutingOverride ?? bundle?.Routing` 会
+        // 完整替换 RoutingProfile，允许 Request 修改 ModelArtifactId / 模型权重 / confidence
+        // threshold / EnabledExperts。现改为 ApplyRoutingOverride 仅合并 EnableModelScoring 字段，
+        // 其余字段保留 bundle 默认（与 DefaultContextDecisionEngine.ApplyRoutingOverride 对齐）。
         var routing = ApplyRoutingOverride(bundle?.Routing, request.PolicyOverride?.RoutingOverride);
         var budget = ApplyBudgetOverride(bundle?.Budget, request.PolicyOverride?.BudgetOverride);
 
@@ -81,8 +81,8 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
         var totalTopK = ResolveTotalTopK(request, budget);
 
         // 3. 应用 bundle.Routing.EnabledExperts 过滤 mask
-        //    空列表 = 全部启用（mask 保持原样）
-        //    非空列表 = 仅列出的 Expert + Mandatory/Constraint 启用
+        // 空列表 = 全部启用（mask 保持原样）
+        // 非空列表 = 仅列出的 Expert + Mandatory/Constraint 启用
         var effectiveMask = ApplyEnabledExpertsFilter(mask, routing);
 
         // 4. 获取非 Mandatory 启用 Expert 数量 N（用于 budget 平均分配）
@@ -91,8 +91,8 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
             e => e != RetrievalExpert.Mandatory && e != RetrievalExpert.Constraint);
 
         // 5. Budget-Aware 平均分配（V1 简化版）
-        //    Mandatory/Constraint 不参与分配（独立占用 totalTokenBudget / totalTopK）
-        //    其他启用 Expert 平均分配
+        // Mandatory/Constraint 不参与分配（独立占用 totalTokenBudget / totalTopK）
+        // 其他启用 Expert 平均分配
         var perExpertTokenBudget = nonMandatoryEnabledCount > 0
             ? totalTokenBudget / nonMandatoryEnabledCount
             : 0;

@@ -8,20 +8,20 @@ namespace ContextCore.Tests;
 /// Multi-Expert Retrieval Routing 契约测试。
 ///
 /// 验证目标：
-///   1. RetrievalExpert 枚举 8 值（Unknown + 8 Expert）与 ContextCandidateSource 对齐
-///   2. Mandatory / Constraint 永远启用（Mask 无法关闭）
-///   3. RetrievalExpertMask 位运算正确（With / IsEnabled）
-///   4. AllEnabled / MandatoryOnly 默认值合理
-///   5. GetEnabledExperts 按枚举顺序返回
-///   6. ExpertRoutingDecision 必填字段 + 默认值
-///   7. ExpertRoutingDecisionSet.IsExpertEnabled 强制 Mandatory/Constraint=true
-///   8. ExpertRoutingDecisionSet.GetDecision 未找到返回 null
-///   9. 5 channel 对齐：ChannelToExperts 映射 5 channel 到 Expert
-///  10. ExpertToChannels 映射 Expert 到 channel
-///  11. ShouldExecuteChannel 在所有 Expert 禁用时返回 false
-///  12. ShouldExecuteChannel MandatoryRecallChannel 永远 true
-///  13. HasDedicatedChannel Recency/Constraint 返回 false
-///  14. 契约无存储 I/O（反射验证）
+/// 1. RetrievalExpert 枚举 8 值（Unknown + 8 Expert）与 ContextCandidateSource 对齐
+/// 2. Mandatory / Constraint 永远启用（Mask 无法关闭）
+/// 3. RetrievalExpertMask 位运算正确（With / IsEnabled）
+/// 4. AllEnabled / MandatoryOnly 默认值合理
+/// 5. GetEnabledExperts 按枚举顺序返回
+/// 6. ExpertRoutingDecision 必填字段 + 默认值
+/// 7. ExpertRoutingDecisionSet.IsExpertEnabled 强制 Mandatory/Constraint=true
+/// 8. ExpertRoutingDecisionSet.GetDecision 未找到返回 null
+/// 9. 5 channel 对齐：ChannelToExperts 映射 5 channel 到 Expert
+/// 10. ExpertToChannels 映射 Expert 到 channel
+/// 11. ShouldExecuteChannel 在所有 Expert 禁用时返回 false
+/// 12. ShouldExecuteChannel MandatoryRecallChannel 永远 true
+/// 13. HasDedicatedChannel Recency/Constraint 返回 false
+/// 14. 契约无存储 I/O（反射验证）
 /// </summary>
 [TestClass]
 [TestCategory("R20")]

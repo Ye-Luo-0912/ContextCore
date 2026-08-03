@@ -9,18 +9,18 @@ namespace ContextCore.Tests;
 // ModelActivationManager 单元测试
 //
 // 覆盖范围：
-//   代理行为：未激活时委托给 fallback，激活后委托给 OnnxInferenceEngine
-//   激活成功路径：descriptor → 校准验证 → schema 验证 → session 创建 → 引擎切换
-//   激活失败：descriptor 未找到
-//   激活失败：校准验证不通过（P0-8）
-//   激活失败：schema 未注册（P0-8）
-//   激活失败：ONNX session 创建失败
-//   ActivateLatestAsync：通过 GetLatestAsync 解析
-//   DI 注册：AddModelActivationManager 正确注册所有接口
+// 代理行为：未激活时委托给 fallback，激活后委托给 OnnxInferenceEngine
+// 激活成功路径：descriptor → 校准验证 → schema 验证 → session 创建 → 引擎切换
+// 激活失败：descriptor 未找到
+// 激活失败：校准验证不通过
+// 激活失败：schema 未注册
+// 激活失败：ONNX session 创建失败
+// ActivateLatestAsync：通过 GetLatestAsync 解析
+// DI 注册：AddModelActivationManager 正确注册所有接口
 //
 // 设计：
-//   使用 InMemoryModelArtifactRegistry（测试辅助）+ MockOnnxInferenceSession 隔离真实 ONNX 加载。
-//   真实 ONNX 文件 E2E 测试由 P0_6_RealOnnxFileE2ETests 承担。
+// 使用 InMemoryModelArtifactRegistry（测试辅助）+ MockOnnxInferenceSession 隔离真实 ONNX 加载。
+// 真实 ONNX 文件 E2E 测试由 P0_6_RealOnnxFileE2ETests 承担。
 // ===========================================================================
 
 [TestClass]
@@ -167,7 +167,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // 激活失败：校准验证不通过（P0-8）
+    // 激活失败：校准验证不通过
     // ===========================================================================
 
     [TestMethod]
@@ -194,7 +194,7 @@ public sealed class P0_7_ModelActivationManagerTests
     }
 
     // ===========================================================================
-    // 激活失败：schema 未注册（P0-8）
+    // 激活失败：schema 未注册
     // ===========================================================================
 
     [TestMethod]
@@ -276,7 +276,7 @@ public sealed class P0_7_ModelActivationManagerTests
         var calValidator = new DefaultCalibrationValidator();
 
         // fail-closed：注册与 ModelName 匹配的校准参数（descriptor 用 MakeDescriptor，
-        // 其 ModelArtifactId 各不相同但 ModelName 统一为 p0-7-test-model）
+        // 其 ModelArtifactId 各不相同但 ModelName 统一为同一测试模型）
         var manager = new ModelActivationManager(registry, calValidator, featureRegistry, factory, fallback, BuildValidCalibration(modelName: ModelName));
         var options = BuildOptions();
 

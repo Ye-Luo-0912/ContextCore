@@ -218,9 +218,9 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         // FTS 与 ID 匹配合并为单条 CTE 查询（一次数据库往返）。
         // - websearch_to_tsquery 支持 "phrase search" / OR / AND 等语法，且不包含前导通配符（可命中 GIN）。
         // - ts_rank_cd 返回 [0, +∞) 的相关度分数；乘以 100 后写入 Metadata["__ts_rank"]，
-        //   LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
+        // LexicalCandidateProvider 读取后作为 Provider score（替代固定 10/60 分）。
         // - fts_hits 走 GIN、id_hits 走 B-tree / trigram，DISTINCT ON (workspace_id, collection_id, id) 去重（FTS 命中优先），
-        //   避免 OR 条件退化为全表扫描，同时消除第二次往返与应用层合并去重。
+        // 避免 OR 条件退化为全表扫描，同时消除第二次往返与应用层合并去重。
         // 查询侧与写入侧对称：search_vector 生成时已应用 cjk_pre_tokenize（拆分 CJK 单字），
         // 查询侧同样对 @query_text 应用 cjk_pre_tokenize，否则中文查询（如"测试"）被当作单一
         // token，无法命中已拆分的 search_vector。cjk_pre_tokenize 只对 CJK 字符插入空格，
@@ -261,9 +261,9 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
 
         // Keyset 续取谓词按来源拆分（ts_rank 在 id_hits 中为 NULL，无法共用同一谓词）：
         // - fts_hits：游标位于 FTS 命中（SourceOrder=0）时按 (ts_rank, importance, updated_at, id) 续取；
-        //   游标已越过全部 FTS 命中（SourceOrder=1）时不再产出任何行。
+        // 游标已越过全部 FTS 命中（SourceOrder=1）时不再产出任何行。
         // - id_hits：游标位于 ID 命中（SourceOrder=1）时按 (importance, updated_at, id) 续取；
-        //   游标位于 FTS 命中（SourceOrder=0）时全部 ID 命中都排在其后，无需过滤。
+        // 游标位于 FTS 命中（SourceOrder=0）时全部 ID 命中都排在其后，无需过滤。
         // - 无 QueryText 路径：与 id_hits 相同的 (importance, updated_at, id) 续取。
         var ftsAfterSql = string.Empty;
         var idAfterSql = string.Empty;
@@ -298,8 +298,8 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         {
             // ts_rank 列仅在 hasQueryText 时追加（与排序条件一致）。
             // 列顺序固定为：workspace_id(0), collection_id(1), id(2), type(3), title(4),
-            //   importance(5), version(6), updated_at(7), created_at(8), content_hash(9),
-            //   content_token_cost(10), tags(11), refs(12), source_refs(13), ts_rank?(14)
+            // importance(5), version(6), updated_at(7), created_at(8), content_hash(9),
+            // content_token_cost(10), tags(11), refs(12), source_refs(13), ts_rank?(14)
             if (hasQueryText && rankExpression is not null)
             {
                 command.CommandText = $"""

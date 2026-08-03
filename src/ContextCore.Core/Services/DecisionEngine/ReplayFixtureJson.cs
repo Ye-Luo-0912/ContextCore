@@ -8,20 +8,20 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Replay fixture JSON 序列化辅助
 //
 // 目标：
-//   1. 让 ReplayFixture（含 WorkingSet + V2Result）可往返 JSON 序列化。
-//   2. 处理 CanonicalCandidateKey（readonly record struct）：
-//      - 作为 CandidateMaterial.Key 属性值时，序列化为字符串。
-//      - 作为 Dictionary<CanonicalCandidateKey, CandidateMaterial> 键时，
-//        通过 WriteAsPropertyName/ReadAsPropertyName 写为 JSON 属性名。
-//   3. 统一 FileSystemExperimentRecorder 与 PostgresExperimentRecorder 的序列化约定，
-//      保证两端落盘数据可互读（FileSystem 存 raw fixture JSON，PostgreSQL 存 jsonb）。
+// 1. 让 ReplayFixture（含 WorkingSet + V2Result）可往返 JSON 序列化。
+// 2. 处理 CanonicalCandidateKey（readonly record struct）：
+// - 作为 CandidateMaterial.Key 属性值时，序列化为字符串。
+// - 作为 Dictionary<CanonicalCandidateKey, CandidateMaterial> 键时，
+// 通过 WriteAsPropertyName/ReadAsPropertyName 写为 JSON 属性名。
+// 3. 统一 FileSystemExperimentRecorder 与 PostgresExperimentRecorder 的序列化约定，
+// 保证两端落盘数据可互读（FileSystem 存 raw fixture JSON，PostgreSQL 存 jsonb）。
 //
 // 设计原则：
-//   1. CanonicalCandidateKey 五个字段均为字符串，使用 0x1F（ASCII Unit Separator）作分隔符，
-//      正常业务 ID 不会出现该字符。读侧按分隔符拆分，字段为空时直接返回 default struct
-//      （由调用方 IsValid 判断；不抛异常以兼容历史 fixture）。
-//   2. 枚举使用 JsonStringEnumConverter，与 PostgresJsonSerializer 保持一致。
-//   3. DefaultIgnoreCondition = WhenWritingNull，与 PostgresJsonSerializer 保持一致。
+// 1. CanonicalCandidateKey 五个字段均为字符串，使用 0x1F（ASCII Unit Separator）作分隔符，
+// 正常业务 ID 不会出现该字符。读侧按分隔符拆分，字段为空时直接返回 default struct
+// （由调用方 IsValid 判断；不抛异常以兼容历史 fixture）。
+// 2. 枚举使用 JsonStringEnumConverter，与 PostgresJsonSerializer 保持一致。
+// 3. DefaultIgnoreCondition = WhenWritingNull，与 PostgresJsonSerializer 保持一致。
 // ===========================================================================
 
 /// <summary>

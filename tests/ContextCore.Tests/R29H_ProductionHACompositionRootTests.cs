@@ -72,7 +72,7 @@ public sealed class R29H_ProductionHACompositionRootTests
                 "ProductionHA 组合根必须解析持久化 IAgentRunEventStore。");
 
             // ── 对账存储与协调器可解析（执行平面完整）──
-            // P2-B1：IToolReconciliationStore 必须是 Postgres 实现（跨进程持久化真相源），
+            // -B1：IToolReconciliationStore 必须是 Postgres 实现（跨进程持久化真相源），
             // 不允许回退到 InMemory（对账记录只在创建它的实例内存中 → 裁决丢失）。
             var reconciliationStore = provider.GetRequiredService<IToolReconciliationStore>();
             Assert.IsNotNull(reconciliationStore, "ProductionHA 组合根必须解析 IToolReconciliationStore。");

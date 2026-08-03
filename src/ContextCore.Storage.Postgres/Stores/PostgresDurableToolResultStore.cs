@@ -10,14 +10,14 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点（参考 <see cref="PostgresToolDispatchJournal"/> 的连接/迁移模式）：
-///   1. 表 <c>tool_dispatch_results</c> 以 <c>tool_call_id</c> 为主键，按 toolCallId 幂等覆盖。
-///   2. <see cref="GetAsync"/> 通过主键读取 <c>result</c> jsonb 列并反序列化为 <see cref="DurableToolResult"/>。
-///   3. <see cref="SaveAsync"/> 使用 <c>INSERT ... ON CONFLICT (tool_call_id) DO UPDATE</c> 幂等 upsert，
-///      同时写入 <c>result</c> jsonb（完整对象，供读取反序列化）与若干反规范化列（request_id / side_effect /
-///      succeeded 等，供 SQL 查询/对账）。
-///   4. 与 <see cref="IToolDispatchJournal.MarkCommittedWithResultAsync"/> 的关系：
-///      写入路径优先走 Journal 同事务持久化 state + result；本接口的 <see cref="SaveAsync"/>
-///      用于无 journal 路径或独立缓存场景（接口注释所述）。
+/// 1. 表 <c>tool_dispatch_results</c> 以 <c>tool_call_id</c> 为主键，按 toolCallId 幂等覆盖。
+/// 2. <see cref="GetAsync"/> 通过主键读取 <c>result</c> jsonb 列并反序列化为 <see cref="DurableToolResult"/>。
+/// 3. <see cref="SaveAsync"/> 使用 <c>INSERT ... ON CONFLICT (tool_call_id) DO UPDATE</c> 幂等 upsert，
+/// 同时写入 <c>result</c> jsonb（完整对象，供读取反序列化）与若干反规范化列（request_id / side_effect /
+/// succeeded 等，供 SQL 查询/对账）。
+/// 4. 与 <see cref="IToolDispatchJournal.MarkCommittedWithResultAsync"/> 的关系：
+/// 写入路径优先走 Journal 同事务持久化 state + result；本接口的 <see cref="SaveAsync"/>
+/// 用于无 journal 路径或独立缓存场景（接口注释所述）。
 /// </remarks>
 public sealed class PostgresDurableToolResultStore : PostgresStoreBase, IDurableToolResultStore
 {

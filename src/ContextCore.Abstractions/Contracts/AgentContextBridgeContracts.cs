@@ -6,29 +6,29 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Agent Context Bridge 契约
 //
-// 目标（对齐 R24 规格）：
-//   1. 桥接 Agent Runtime 与 ContextCore 检索/打包管线：
-//      将 Agent session 的查询请求转换为 ContextPackageRequest，
-//      调用 IContextPackageBuilder.BuildDetailedAsync，
-//      将 ContextPackageBuildResult 映射为 AgentContextSnapshot。
-//   2. 解耦：Bridge 不持有 session 状态；仅负责一次性的 request→snapshot 转换。
-//   3. 失败语义：ContextCore 构建失败时抛异常（fail-closed）；
-//      调用方决定是否回退到 base provider 的纯 injection-based snapshot。
+// 目标：
+// 1. 桥接 Agent Runtime 与 ContextCore 检索/打包管线：
+// 将 Agent session 的查询请求转换为 ContextPackageRequest，
+// 调用 IContextPackageBuilder.BuildDetailedAsync，
+// 将 ContextPackageBuildResult 映射为 AgentContextSnapshot。
+// 2. 解耦：Bridge 不持有 session 状态；仅负责一次性的 request→snapshot 转换。
+// 3. 失败语义：ContextCore 构建失败时抛异常（fail-closed）；
+// 调用方决定是否回退到 base provider 的纯 injection-based snapshot。
 //
 // 设计边界：
-//   - Bridge 不修改 IContextPackageBuilder 的输入/输出；
-//   - Bridge 不缓存（每次调用都重新构建）；
-//   - Section 映射：ContextPackageSection.Name → AgentContextSection.SectionName，
-//     Content → Content，SourceRefs[0] → Source，EstimatedTokens → ActualTokens；
-//   - DecisionRequestIds 从 SelectedItems 提取（ItemId 字段）；
-//   - SnapshotId = ContextPackage.PackageId（保证可追溯）。
+// - Bridge 不修改 IContextPackageBuilder 的输入/输出；
+// - Bridge 不缓存（每次调用都重新构建）；
+// - Section 映射：ContextPackageSection.Name → AgentContextSection.SectionName，
+// Content → Content，SourceRefs[0] → Source，EstimatedTokens → ActualTokens；
+// - DecisionRequestIds 从 SelectedItems 提取（ItemId 字段）；
+// - SnapshotId = ContextPackage.PackageId（保证可追溯）。
 // ===========================================================================
 
 /// <summary>
 /// Agent Context 桥接器。将 ContextCore 检索/打包结果转换为 <see cref="AgentContextSnapshot"/>。
 /// </summary>
 /// <remarks>
-/// 桥接 Agent Runtime（R23）与 ContextCore 上下文构建管线。
+/// 桥接 Agent Runtime 与 ContextCore 上下文构建管线。
 /// Bridge 无状态；每次调用都重新构建。
 /// </remarks>
 public interface IAgentContextBridge

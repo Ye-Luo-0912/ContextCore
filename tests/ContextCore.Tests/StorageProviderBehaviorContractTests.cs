@@ -93,7 +93,7 @@ public sealed class StorageProviderBehaviorContractTests
         typeof(IContextJobQueryStore),
     };
 
-    // Postgres 原生注册的接口（R14-PG-5 完成后无 Unsupported 占位）
+    // Postgres 原生注册的接口（完成后无 Unsupported 占位）
     // 新增 ILearningFeedbackStore / ILearningFeedbackReviewStore
     // 新增 IDecisionTraceStore
     // 新增 IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore
@@ -232,7 +232,7 @@ public sealed class StorageProviderBehaviorContractTests
     /// <summary>
     /// 垂直闭环完成 sanity check。
     /// 替代已删除的 Postgres_UnsupportedStore_ThrowsNotSupportedExceptionOnUse 与 Postgres_All5UnsupportedStores_ThrowNotSupportedException，
-    /// 断言 R14-PG-5 新绑定的 5 个接口在 Postgres provider 下均为原生实现，不再是 Unsupported 占位。
+    /// 断言 新绑定的 5 个接口在 Postgres provider 下均为原生实现，不再是 Unsupported 占位。
     /// </summary>
     [TestMethod]
     public async Task Postgres_NoUnsupportedStoresRemain()

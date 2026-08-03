@@ -389,7 +389,7 @@ WHERE job_id = @job_id;
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var tbl1 = Table("context_jobs");
-        // #6: CAS — 仅当 state = 'Running' 时才转换为 Succeeded。
+        // CAS — 仅当 state = 'Running' 时才转换为 Succeeded。
         // 过期的 Ack（job 已被 Nack 为 WaitingRetry/Failed，或已被 Ack 为 Succeeded）匹配 0 行，为 no-op。
         command.CommandText = $@"UPDATE {tbl1}
 SET state = 'Succeeded',
@@ -415,7 +415,7 @@ WHERE job_id = @job_id
 
         // 读当前 retry_count，超过 max_retry_count 则 Failed，否则 WaitingRetry
         var tbl2 = Table("context_jobs");
-        // #6: CAS — 仅当 state = 'Running' 时才转换为 WaitingRetry/Failed。
+        // CAS — 仅当 state = 'Running' 时才转换为 WaitingRetry/Failed。
         // 过期的 Nack（job 已被 Ack 为 Succeeded，或已被 Nack 为 WaitingRetry/Failed）匹配 0 行，为 no-op。
         command.CommandText = $@"UPDATE {tbl2}
 SET retry_count = retry_count + 1,

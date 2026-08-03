@@ -6,31 +6,31 @@ namespace ContextCore.Abstractions;
 // 策略包契约（Context Policy Bundle Contracts）
 //
 // 目标：
-//   把分散在 ContextDecisionPolicyVersions（5 个版本常量）+ 各处
-//   profile 隐式约定（BasicContextPackageBuilder 的默认 section ratios、
-//   HybridContextRetriever 的 TopK、Engine 的 ModelConfidenceThreshold）
-//   升级为显式策略包：ContextPolicyBundle 全局不可变 + PolicyActivation
-//   按 workspace/collection 激活 + 3 个 Profile（Safety/Budget/Routing）。
+// 把分散在 ContextDecisionPolicyVersions（5 个版本常量）+ 各处
+// profile 隐式约定（BasicContextPackageBuilder 的默认 section ratios、
+// HybridContextRetriever 的 TopK、Engine 的 ModelConfidenceThreshold）
+// 升级为显式策略包：ContextPolicyBundle 全局不可变 + PolicyActivation
+// 按 workspace/collection 激活 + 3 个 Profile（Safety/Budget/Routing）。
 //
-// 设计原则（用户澄清 #2 / #3）：
-//   1. Bundle 全局不可变：版本号一旦发布不可修改，supersede 通过新建 bundle 实现。
-//   2. Activation 按 workspace/collection：暂不引入 tenant。
-//      同一 workspace+collection 同一时刻只有一个 active bundle。
-//   3. Request Policy 是受限 override：不允许替换安全边界（SafetyProfile /
-//      RequiredTags）和正式模型（ModelArtifactReference）。仅允许调整
-//      非安全相关参数（TopK、TokenBudget、SectionRatios、EnableModel）。
-//   4. RolloutPolicy 复用 R16 EvolutionContracts.RollbackCondition：
-//      bundle rollout 阶段（Shadow → ScopedCanary → Promoted）任一
-//      condition 命中 → 自动回滚到上一稳定 bundle。
-//   5. 不引入存储 I/O：契约是内存中的不可变 record/class。
-//      PolicyRegistry 接口允许实现层注入 Postgres / InMemory store。
+// 设计原则（用户澄清）：
+// 1. Bundle 全局不可变：版本号一旦发布不可修改，supersede 通过新建 bundle 实现。
+// 2. Activation 按 workspace/collection：暂不引入 tenant。
+// 同一 workspace+collection 同一时刻只有一个 active bundle。
+// 3. Request Policy 是受限 override：不允许替换安全边界（SafetyProfile /
+// RequiredTags）和正式模型（ModelArtifactReference）。仅允许调整
+// 非安全相关参数（TopK、TokenBudget、SectionRatios、EnableModel）。
+// 4. RolloutPolicy 复用 EvolutionContracts.RollbackCondition：
+// bundle rollout 阶段（Shadow → ScopedCanary → Promoted）任一
+// condition 命中 → 自动回滚到上一稳定 bundle。
+// 5. 不引入存储 I/O：契约是内存中的不可变 record/class。
+// PolicyRegistry 接口允许实现层注入 Postgres / InMemory store。
 //
 // 子阶段进度：
-//   （当前）：契约定义 + 单元测试验证可实施性。
-//   PolicyBundle Provider 适配（从 ContextDecisionPolicyVersions
-//          静态常量 + 现有 hardcoded profile 迁移到 ContextPolicyBundle）。
-//   Pipeline 集成（Engine.DecideAsync 读取 PolicyBundleId →
-//          通过 IPolicyRegistry 解析 → 应用 Safety/Budget/Routing profile）。
+// （当前）：契约定义 + 单元测试验证可实施性。
+// PolicyBundle Provider 适配（从 ContextDecisionPolicyVersions
+// 静态常量 + 现有 hardcoded profile 迁移到 ContextPolicyBundle）。
+// Pipeline 集成（Engine.DecideAsync 读取 PolicyBundleId →
+// 通过 IPolicyRegistry 解析 → 应用 Safety/Budget/Routing profile）。
 // ===========================================================================
 
 /// <summary>
@@ -38,7 +38,7 @@ namespace ContextCore.Abstractions;
 /// 把"能力作用域的版本字符串集合"显式提升为 bundle 内部字段。
 /// </summary>
 /// <remarks>
-/// 这 5 个版本字段均不可被 per-request override（用户澄清 #3）：
+/// 这 5 个版本字段均不可被 per-request override（用户澄清）：
 /// 安全边界（DecisionSchema + QualityContract）与正式模型
 /// （PackagePolicy + RetrievalPolicy + RelationProfile）由 bundle 全局决定。
 /// </remarks>
@@ -67,7 +67,7 @@ public sealed record ContextPolicySet
 /// <remarks>
 /// 模型 artifact 不直接驱动运行时决策；Engine 通过 RoutingProfile.ModelArtifactId
 /// 间接引用。Model failure 时（ModelConfidence=0），Engine 精确回退到
-/// DeterministicScore（验收标准 #6）。
+/// DeterministicScore（验收标准）。
 /// </remarks>
 public sealed record ModelArtifactReference
 {
@@ -100,7 +100,7 @@ public sealed record ModelArtifactReference
 
 /// <summary>
 /// 安全策略 profile。承载 safety gate 判定所需参数。
-/// 此 profile 由 bundle 全局决定，**不允许 per-request override**（用户澄清 #3）。
+/// 此 profile 由 bundle 全局决定，**不允许 per-request override**（用户澄清）。
 /// </summary>
 public sealed record SafetyProfile
 {
@@ -126,7 +126,7 @@ public sealed record SafetyProfile
 
 /// <summary>
 /// 预算策略 profile。承载 token budget + TopK + section 比例分配。
-/// 此 profile 由 bundle 决定，但 **允许 per-request override**（用户澄清 #3）。
+/// 此 profile 由 bundle 决定，但 **允许 per-request override**（用户澄清）。
 /// </summary>
 public sealed record BudgetProfile
 {
@@ -150,7 +150,7 @@ public sealed record BudgetProfile
 
 /// <summary>
 /// 路由策略 profile。控制模型启用 + 专家开关 + 置信度阈值。
-/// 此 profile 由 bundle 决定，但 **允许 per-request 部分字段 override**（用户澄清 #3）。
+/// 此 profile 由 bundle 决定，但 **允许 per-request 部分字段 override**（用户澄清）。
 /// </summary>
 /// <remarks>
 /// 可 override 字段：EnableModel（Request.EnableModel）。
@@ -177,7 +177,7 @@ public sealed record RoutingProfile
     /// <summary>模型置信度阈值；ModelConfidence 低于此值时回退到 DeterministicScore。</summary>
     public double ModelConfidenceThreshold { get; init; } = 0.70;
 
-    /// <summary>启用的专家列表（R20 Multi-Expert；空 = 全部启用）。</summary>
+    /// <summary>启用的专家列表（Multi-Expert；空 = 全部启用）。</summary>
     public IReadOnlyList<string> EnabledExperts { get; init; } = Array.Empty<string>();
 }
 
@@ -189,8 +189,8 @@ public sealed record RoutingProfile
 /// 策略包 rollout 策略。控制 bundle 从 shadow → canary → promoted 的生命周期。
 /// </summary>
 /// <remarks>
-/// 复用 R16 EvolutionContracts.RollbackCondition；任一 condition 命中 →
-/// 自动回滚到上一稳定 bundle（用户澄清 #2）。
+/// 复用 EvolutionContracts.RollbackCondition；任一 condition 命中 →
+/// 自动回滚到上一稳定 bundle（用户澄清）。
 /// </remarks>
 public sealed record RolloutPolicy
 {
@@ -218,7 +218,7 @@ public sealed record RolloutPolicy
 }
 
 /// <summary>
-/// 策略包 rollout 阶段。对齐 R17 OptimizationStage 但作用域限制在 bundle。
+/// 策略包 rollout 阶段。对齐 OptimizationStage 但作用域限制在 bundle。
 /// </summary>
 public enum PolicyRolloutStrategy : byte
 {
@@ -243,11 +243,11 @@ public enum PolicyRolloutStrategy : byte
 /// 全局不可变，包含 PolicySet + 3 个 Profile + ModelArtifacts + RolloutPolicy。
 /// </summary>
 /// <remarks>
-/// 设计原则（用户澄清 #2）：
-///   - Bundle 全局不可变：版本号一旦发布不可修改。
-///   - Supersede 通过新建 bundle 实现（SupersededByBundleId 字段）。
-///   - Activation 按 workspace/collection：同一时刻只有一个 active bundle。
-///   - 暂不引入 tenant：tenant 字段保留为 future extension。
+/// 设计原则（用户澄清）：
+/// - Bundle 全局不可变：版本号一旦发布不可修改。
+/// - Supersede 通过新建 bundle 实现（SupersededByBundleId 字段）。
+/// - Activation 按 workspace/collection：同一时刻只有一个 active bundle。
+/// - 暂不引入 tenant：tenant 字段保留为 future extension。
 /// </remarks>
 public sealed record ContextPolicyBundle
 {
@@ -297,16 +297,16 @@ public sealed record ContextPolicyBundle
 /// 策略激活记录。表示某 workspace/collection 当前激活的 bundle + 可选 profile override。
 /// </summary>
 /// <remarks>
-/// 设计原则（用户澄清 #2）：
-///   - Activation 按 workspace/collection 隔离；同一 workspace+collection 同一时刻只有一个 active bundle。
-///   - Profile override 受限：不允许替换 SafetyProfile；BudgetProfile / RoutingProfile 仅允许
-///     部分字段 override（用户澄清 #3）。
+/// 设计原则（用户澄清）：
+/// - Activation 按 workspace/collection 隔离；同一 workspace+collection 同一时刻只有一个 active bundle。
+/// - Profile override 受限：不允许替换 SafetyProfile；BudgetProfile / RoutingProfile 仅允许
+/// 部分字段 override（用户澄清）。
 /// 修复：新增 <see cref="Epoch"/> 单调递增版本号，支持 compare-and-swap 原子激活。
 /// 修复：新增 <see cref="BundleVersion"/> + <see cref="BundleContentHash"/> required 字段，
-///   GetActiveBundleAsync 必须精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
+/// GetActiveBundleAsync 必须精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
 /// 修复：BudgetOverride / RoutingOverride 改用受限类型
-///   (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
-///   从类型系统上禁止控制面注入 ModelArtifactId / 模型权重 / confidence threshold / EnabledExperts。
+/// (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
+/// 从类型系统上禁止控制面注入 ModelArtifactId / 模型权重 / confidence threshold / EnabledExperts。
 /// </remarks>
 public sealed record PolicyActivation
 {
@@ -365,13 +365,13 @@ public sealed record PolicyActivation
 /// </summary>
 /// <remarks>
 /// 接口契约：
-///   - GetActiveBundleAsync：返回当前激活的 bundle（未找到时返回全局默认 bundle）。
-///   - GetBundleAsync（P0-2 新增）：按 bundleId + version 精确加载；未找到返回 null（fail-closed）。
-///   - GetActivationAsync：返回激活记录（含 profile override + epoch）。
-///   - ListBundlesAsync：列出所有 bundle（可选包含 superseded）。
-///   - RegisterBundleAsync：注册新 bundle（insert-if-absent；P0-4 修复：相同 BundleId+Version 已存在则抛异常）。
-///   - TryActivateAsync：compare-and-swap 原子激活；expectedEpoch 匹配时才激活并返回 true。
-///     （原 ActivateAsync 无条件覆盖入口已彻底删除，仅保留 CAS 路径，防止绕过 epoch 检查。）
+/// - GetActiveBundleAsync：返回当前激活的 bundle（未找到时返回全局默认 bundle）。
+/// - GetBundleAsync（新增）：按 bundleId + version 精确加载；未找到返回 null（fail-closed）。
+/// - GetActivationAsync：返回激活记录（含 profile override + epoch）。
+/// - ListBundlesAsync：列出所有 bundle（可选包含 superseded）。
+/// - RegisterBundleAsync：注册新 bundle（insert-if-absent；修复：相同 BundleId+Version 已存在则抛异常）。
+/// - TryActivateAsync：compare-and-swap 原子激活；expectedEpoch 匹配时才激活并返回 true。
+/// （原 ActivateAsync 无条件覆盖入口已彻底删除，仅保留 CAS 路径，防止绕过 epoch 检查。）
 ///
 /// 实现层可注入 Postgres / InMemory store；契约本身不依赖存储。
 /// </remarks>
@@ -500,15 +500,15 @@ public sealed record RequestBudgetOverride
 /// 调整非安全相关参数。
 /// </summary>
 /// <remarks>
-/// 设计原则（用户澄清 #3）：
-///   - 不允许替换 SafetyProfile（安全边界由 bundle 全局决定）。
-///   - 不允许替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
-///   - 仅允许调整：TokenBudget / TopK / SectionRatios / EnableModelScoring。
-///   - 字段全为可选：null = 使用 bundle 中的默认 profile。
+/// 设计原则（用户澄清）：
+/// - 不允许替换 SafetyProfile（安全边界由 bundle 全局决定）。
+/// - 不允许替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
+/// - 仅允许调整：TokenBudget / TopK / SectionRatios / EnableModelScoring。
+/// - 字段全为可选：null = 使用 bundle 中的默认 profile。
 /// 修复：BudgetOverride / RoutingOverride 改用受限类型
-///   (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
-///   从类型系统上禁止 Request 修改 ModelArtifactId / 模型权重 / confidence threshold /
-///   EnabledExperts / SafetyProfile。
+/// (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
+/// 从类型系统上禁止 Request 修改 ModelArtifactId / 模型权重 / confidence threshold /
+/// EnabledExperts / SafetyProfile。
 /// </remarks>
 public sealed record ContextPolicyOverride
 {

@@ -7,19 +7,19 @@ namespace ContextCore.Tests;
 /// DefaultAgentContextDeltaCalculator 实现测试。
 ///
 /// 覆盖：
-///   1. null 输入抛异常
-///   2. Session mismatch 抛异常
-///   3. 相同 snapshot → 空 delta（TokenDelta=0）
-///   4. Added sections
-///   5. Removed sections
-///   6. Modified sections（Content 变化）
-///   7. Added/Removed DecisionIds
-///   8. Added/Removed ConstraintIds
-///   9. AddedToolCallRefs
-///  10. TokenDelta 正/负/零
-///  11. 自定义 deltaId + source
-///  12. 自动生成 deltaId
-///  13. FromSnapshotId / ToSnapshotId 映射正确
+/// 1. null 输入抛异常
+/// 2. Session mismatch 抛异常
+/// 3. 相同 snapshot → 空 delta（TokenDelta=0）
+/// 4. Added sections
+/// 5. Removed sections
+/// 6. Modified sections（Content 变化）
+/// 7. Added/Removed DecisionIds
+/// 8. Added/Removed ConstraintIds
+/// 9. AddedToolCallRefs
+/// 10. TokenDelta 正/负/零
+/// 11. 自定义 deltaId + source
+/// 12. 自动生成 deltaId
+/// 13. FromSnapshotId / ToSnapshotId 映射正确
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

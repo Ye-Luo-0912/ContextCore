@@ -10,14 +10,14 @@ namespace ContextCore.Tests;
 // 边界条件测试 — TokenBudget=0 / 全部候选被 SafetyGate 拦截 / 取消令牌
 //
 // 覆盖范围（3 个测试类）：
-//   1. TokenBudgetZeroEdgeCaseTests — TokenBudget=0 边界条件
-//   2. AllCandidatesBlockedEdgeCaseTests — 全部候选被 SafetyGate 拦截
-//   3. CancellationEdgeCaseTests — 取消令牌传播
+// 1. TokenBudgetZeroEdgeCaseTests — TokenBudget=0 边界条件
+// 2. AllCandidatesBlockedEdgeCaseTests — 全部候选被 SafetyGate 拦截
+// 3. CancellationEdgeCaseTests — 取消令牌传播
 //
 // 设计原则：
-//   - 使用真实 DefaultContextDecisionEngine（V2 路径）测试边界条件
-//   - PolicySnapshot 通过 DefaultPolicyBundleFactory 构建，按需 override budget
-//   - 所有代码注释使用中文
+// - 使用真实 DefaultContextDecisionEngine（V2 路径）测试边界条件
+// - PolicySnapshot 通过 DefaultPolicyBundleFactory 构建，按需 override budget
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================

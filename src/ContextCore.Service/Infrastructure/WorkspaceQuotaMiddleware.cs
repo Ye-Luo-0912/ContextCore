@@ -9,19 +9,19 @@ namespace ContextCore.Service.Infrastructure;
 // WorkspaceQuotaMiddleware — workspace 级配额强制（请求阶段快路径）
 //
 // 目标：请求阶段强制 workspace 配额（Security:Quota:Enabled=true 时生效）。
-//   - 快路径：POST /api/agents/runs 前检查 workspace 配额是否已耗尽；
-//     已耗尽 → 429（不进入处理管道，节省下游资源）；
-//   - 权威扣减：在 AgentExecutionEndpoints.CreateAgentRunHandlerAsync 中通过
-//     IWorkspaceQuotaService.TryConsumeAsync 预留 Run 预算（配额实际扣减点，
-//     与 Run 创建绑定，避免中间件与业务双重扣减）；
-//   - 中间件只做"已耗尽"门禁，不做扣减。
+// - 快路径：POST /api/agents/runs 前检查 workspace 配额是否已耗尽；
+// 已耗尽 → 429（不进入处理管道，节省下游资源）；
+// - 权威扣减：在 AgentExecutionEndpoints.CreateAgentRunHandlerAsync 中通过
+// IWorkspaceQuotaService.TryConsumeAsync 预留 Run 预算（配额实际扣减点，
+// 与 Run 创建绑定，避免中间件与业务双重扣减）；
+// - 中间件只做"已耗尽"门禁，不做扣减。
 //
 // 设计决策：
-//   - 仅配额启用（SecurityOptions.Quota.Enabled）且命中配额边界路径时拦截；
-//   - workspaceId 从 HttpContext.Items 读取（由 WorkspaceContextMiddleware 填充），
-//     未解析到 workspace 时放行（由端点按 RBAC / fallback 逻辑处理）；
-//   - 配额服务未注册时放行（未配置配额即无强制；启用配额但服务缺失属配置错误，
-//     由 ProductionAdmission / Readiness 探针暴露为 error）。
+// - 仅配额启用（SecurityOptions.Quota.Enabled）且命中配额边界路径时拦截；
+// - workspaceId 从 HttpContext.Items 读取（由 WorkspaceContextMiddleware 填充），
+// 未解析到 workspace 时放行（由端点按 RBAC / fallback 逻辑处理）；
+// - 配额服务未注册时放行（未配置配额即无强制；启用配额但服务缺失属配置错误，
+// 由 ProductionAdmission / Readiness 探针暴露为 error）。
 // ===========================================================================
 
 /// <summary>

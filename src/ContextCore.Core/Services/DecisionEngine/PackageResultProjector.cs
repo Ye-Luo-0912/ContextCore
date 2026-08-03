@@ -8,16 +8,16 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Package 结果投影器
 //
 // 将 ContextDecisionResult 投影为 ContextPackageBuildResult，作为 Engine 输出
-// 与现有 Package 主链出口 DTO 之间的桥梁。R18-2 阶段仅做格式投影，
+// 与现有 Package 主链出口 DTO 之间的桥梁。 阶段仅做格式投影，
 // 不改变决策结果（envelope 集合不变）。
 //
 // 设计原则：
-//   1. Projector 仅做格式投影，不调用 Engine 或 Storage；纯内存转换。
-//   2. Projector 是幂等的：相同 Result 产生相同 DTO。
-//   3. envelope.CandidateId → ContextPackageDecision.ItemId
-//      envelope.Utility.FinalScore → ContextPackageDecision.Score
-//      envelope.Safety.BlockReasonCode → DroppedContextItem.Reason（自由文本兼容）
-//      envelope.Source → ContextPackageDecision.Kind（字符串映射）
+// 1. Projector 仅做格式投影，不调用 Engine 或 Storage；纯内存转换。
+// 2. Projector 是幂等的：相同 Result 产生相同 DTO。
+// 3. envelope.CandidateId → ContextPackageDecision.ItemId
+// envelope.Utility.FinalScore → ContextPackageDecision.Score
+// envelope.Safety.BlockReasonCode → DroppedContextItem.Reason（自由文本兼容）
+// envelope.Source → ContextPackageDecision.Kind（字符串映射）
 // ===========================================================================
 
 /// <summary>
@@ -145,11 +145,11 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// </summary>
     /// <remarks>
     /// PackageInput 语义消费：
-    ///   1. <see cref="PackageInput.IncludeRecent"/>=false 时，过滤掉 recent_context section
-    ///      （与 Legacy BasicContextPackageBuilder 中 IncludeRecentRawContext=false 行为对齐）。
-    ///   2. <see cref="PackageInput.Mode"/> ≠ None 时，写入 package.Metadata["mode"] 供下游消费。
-    ///   3. <see cref="PackageInput.IsAuditMode"/> 解析为 true 时，写入 metadata["isAuditMode"]="true"。
-    ///   4. <see cref="PackageInput.Policy"/> 非 null 时，写入 metadata["packagePolicyId"] 供 trace。
+    /// 1. <see cref="PackageInput.IncludeRecent"/>=false 时，过滤掉 recent_context section
+    /// （与 Legacy BasicContextPackageBuilder 中 IncludeRecentRawContext=false 行为对齐）。
+    /// 2. <see cref="PackageInput.Mode"/> ≠ None 时，写入 package.Metadata["mode"] 供下游消费。
+    /// 3. <see cref="PackageInput.IsAuditMode"/> 解析为 true 时，写入 metadata["isAuditMode"]="true"。
+    /// 4. <see cref="PackageInput.Policy"/> 非 null 时，写入 metadata["packagePolicyId"] 供 trace。
     /// 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非从候选反推
     /// （候选为空时反推会丢失 Scope）。
     /// </remarks>
@@ -437,10 +437,10 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// </summary>
     /// <remarks>
     /// 写入的键：
-    ///   - "mode"：当 Mode ≠ None 时（值为枚举名，如 "Chat"/"Novel"/"Automation"/"Coding"）。
-    ///   - "isAuditMode"：当解析后为 true 时（值为 "true"；false 或 null 不写入，避免噪音）。
-    ///   - "packagePolicyId"：当 Policy 非 null 且 Id 非空时（用于 trace 关联显式策略）。
-    ///   - "includeRecent"：当为 false 时（值为 "false"；true 是默认值，不写入）。
+    /// - "mode"：当 Mode ≠ None 时（值为枚举名，如 "Chat"/"Novel"/"Automation"/"Coding"）。
+    /// - "isAuditMode"：当解析后为 true 时（值为 "true"；false 或 null 不写入，避免噪音）。
+    /// - "packagePolicyId"：当 Policy 非 null 且 Id 非空时（用于 trace 关联显式策略）。
+    /// - "includeRecent"：当为 false 时（值为 "false"；true 是默认值，不写入）。
     /// </remarks>
     private static void ApplyPackageInputMetadata(Dictionary<string, string> metadata, PackageInput? packageInput)
     {

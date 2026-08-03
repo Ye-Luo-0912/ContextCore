@@ -5,11 +5,11 @@ namespace ContextCore.Abstractions;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 导出器是只读边界：从 <see cref="IUtilityLedgerStore"/> 查询 ledger 条目，
-///      按 model artifact 版本聚合为训练集（feature / label / metadata）。
-///   2. 输出格式为 JSONL（与 LearningFeatureDatasetService 一致），每行一条样本。
-///   3. 导出过程不修改 ledger 状态；可重复执行（幂等）。
-///   4. 生产路径注入 Postgres-backed IUtilityLedgerStore；开发 / 测试路径注入 InMemory 实现。
+/// 1. 导出器是只读边界：从 <see cref="IUtilityLedgerStore"/> 查询 ledger 条目，
+/// 按 model artifact 版本聚合为训练集（feature / label / metadata）。
+/// 2. 输出格式为 JSONL（与 LearningFeatureDatasetService 一致），每行一条样本。
+/// 3. 导出过程不修改 ledger 状态；可重复执行（幂等）。
+/// 4. 生产路径注入 Postgres-backed IUtilityLedgerStore；开发 / 测试路径注入 InMemory 实现。
 /// </remarks>
 public interface ITrainingDataExporter
 {
@@ -110,9 +110,9 @@ public sealed record TrainingDataExportResult
 /// </summary>
 /// <remarks>
 /// 字段分类对齐 ML 训练流水线：
-///   - feature: 模型推理输入特征（DeterministicScore / ModelScore / UtilityContribution / Expert）
-///   - label: 训练标签（IsSelected 二分类 + DropReasonCode 拒绝原因）
-///   - metadata: 追溯与分组信息（DecisionId / CandidateItemId / 作用域 / 时间戳 / PolicyVersion）
+/// - feature: 模型推理输入特征（DeterministicScore / ModelScore / UtilityContribution / Expert）
+/// - label: 训练标签（IsSelected 二分类 + DropReasonCode 拒绝原因）
+/// - metadata: 追溯与分组信息（DecisionId / CandidateItemId / 作用域 / 时间戳 / PolicyVersion）
 /// </remarks>
 public sealed record TrainingDataRecord
 {

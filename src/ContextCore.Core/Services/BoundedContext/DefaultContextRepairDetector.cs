@@ -8,7 +8,7 @@ namespace ContextCore.Core.Services.BoundedContext;
 /// 基于 <see cref="PackageQualityReport"/> 8 个指标检测 7 类确定性异常。
 /// </summary>
 /// <remarks>
-/// <b>设计原则</b>（对齐用户规格与 R22-1 契约）：
+/// <b>设计原则</b>（对齐用户规格与 契约）：
 /// <list type="bullet">
 /// <item>纯函数式评估：输入 <see cref="ContextDecisionResult"/> + <see cref="PackageQualityReport"/>，
 /// 输出 <see cref="ContextRepairDiagnosis"/> 列表；不调用任何 store，不修改状态。</item>

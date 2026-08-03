@@ -12,7 +12,7 @@ using Microsoft.Extensions.Hosting;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// P1-6：管理员 raw 事件游标分页 + SSE 终态补读。
+/// 管理员 raw 事件游标分页 + SSE 终态补读。
 /// 验证 /api/agents/runs/{id}/events/raw 的分页契约
 /// （Items / NextSequence / HasMore、服务端页大小上限 clamp，替代旧 take=int.MaxValue 无界读取），
 /// 以及 SSE 事件流在 Run 进入终态后补读全部尾部事件再关闭连接（不丢最终事件）。
@@ -26,7 +26,7 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
 
     // ===========================================================================
     // 1. RawEvents_FirstPage_HasMore_NextSequence
-    //    验证：limit 分页逐页游标续取（after=NextSequence），末页 HasMore=false。
+    // 验证：limit 分页逐页游标续取（after=NextSequence），末页 HasMore=false。
     // ===========================================================================
     [TestMethod]
     public async Task RawEvents_FirstPage_HasMore_NextSequence()
@@ -76,7 +76,7 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
 
     // ===========================================================================
     // 2. RawEvents_Limit_ClampedToServerMax
-    //    验证：服务端把用户 limit clamp 到页大小上限（500），不做无界读取。
+    // 验证：服务端把用户 limit clamp 到页大小上限（500），不做无界读取。
     // ===========================================================================
     [TestMethod]
     public async Task RawEvents_Limit_ClampedToServerMax()
@@ -112,7 +112,7 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
 
     // ===========================================================================
     // 3. RawEvents_NoParams_DefaultsFromStart
-    //    验证：不带 after/limit 时从头读取，返回全部（少于默认页大小 200）。
+    // 验证：不带 after/limit 时从头读取，返回全部（少于默认页大小 200）。
     // ===========================================================================
     [TestMethod]
     public async Task RawEvents_NoParams_DefaultsFromStart()
@@ -140,7 +140,7 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
 
     // ===========================================================================
     // 4. RawEvents_AfterNegative_TreatedAsStart
-    //    验证：after < -1 视为从头读取（防御非法游标）。
+    // 验证：after < -1 视为从头读取（防御非法游标）。
     // ===========================================================================
     [TestMethod]
     public async Task RawEvents_AfterNegative_TreatedAsStart()
@@ -166,7 +166,7 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
 
     // ===========================================================================
     // 5. RawEvents_NotFound_Returns404
-    //    验证：不存在的 Run 返回 404。
+    // 验证：不存在的 Run 返回 404。
     // ===========================================================================
     [TestMethod]
     public async Task RawEvents_NotFound_Returns404()
@@ -189,8 +189,8 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
 
     // ===========================================================================
     // 6. Sse_TerminalRun_DrainsAllTrailingEventsBeforeClose
-    //    验证：Run 已进入终态时，SSE 补读循环把全部尾部事件
-    //    （超过单轮 100 条上限的部分）送达后再推送 run.terminal 并关闭连接。
+    // 验证：Run 已进入终态时，SSE 补读循环把全部尾部事件
+    // （超过单轮 100 条上限的部分）送达后再推送 run.terminal 并关闭连接。
     // ===========================================================================
     [TestMethod]
     public async Task Sse_TerminalRun_DrainsAllTrailingEventsBeforeClose()
@@ -330,7 +330,7 @@ public sealed class R29K_AgentRunRawEventsPaginationTests
         }
     }
 
-    /// <summary>Development profile + filesystem 的 Web 工厂（与 R29H_ProductionRuntimeProfileTests 一致）。</summary>
+    /// <summary>Development profile + filesystem 的 Web 工厂（与 ProductionRuntimeProfile 测试一致）。</summary>
     private sealed class R29KServiceFactory : WebApplicationFactory<Program>
     {
         private readonly string _rootPath;

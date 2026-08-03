@@ -9,28 +9,28 @@ namespace ContextCore.Core.Services.ModelExecution;
 // / Deterministic Batch Inference Engine
 //
 // 目标：
-//   提供 IBatchInferenceEngine 的 fallback 实现，不调用真实模型，
-//   仅基于 feature hash 产出确定性分数，用于：
-//     1. 真实模型不可用时的降级路径（fail-safe）
-//     2. 基础设施测试与本地预览（无需 GPU / 远程服务）
-//     3. 单元测试中验证调用契约（输入顺序、超时、取消）
+// 提供 IBatchInferenceEngine 的 fallback 实现，不调用真实模型，
+// 仅基于 feature hash 产出确定性分数，用于：
+// 1. 真实模型不可用时的降级路径（fail-safe）
+// 2. 基础设施测试与本地预览（无需 GPU / 远程服务）
+// 3. 单元测试中验证调用契约（输入顺序、超时、取消）
 //
 // 优化：
-//   - 新增 InferBatchAsync(FeatureBatch, ct)：直接消费连续 float 内存，避免装箱。
-//   - 新增 ContentHash / CalibrationVersion 属性（接口要求）。
-//   - ComputeFeatureHash 优化：消除 StringBuilder + string[] + 排序 + UTF-8 byte[] 分配，
-//     直接对 SchemaVersion UTF-8 字节 + float 缓冲字节做 FNV-1a 64-bit。
-//     - FeatureBatch 路径：bytes 已是连续内存，0 分配 hash。
-//     - FeatureVector 路径（向后兼容）：仍需排序 key，但不再构建中间字符串。
-//   - 字典遍历顺序无关性由排序保证（FeatureVector 路径）或固定列顺序保证（FeatureBatch 路径）。
+// - 新增 InferBatchAsync(FeatureBatch, ct)：直接消费连续 float 内存，避免装箱。
+// - 新增 ContentHash / CalibrationVersion 属性（接口要求）。
+// - ComputeFeatureHash 优化：消除 StringBuilder + string[] + 排序 + UTF-8 byte[] 分配，
+// 直接对 SchemaVersion UTF-8 字节 + float 缓冲字节做 FNV-1a 64-bit。
+// - FeatureBatch 路径：bytes 已是连续内存，0 分配 hash。
+// - FeatureVector 路径（向后兼容）：仍需排序 key，但不再构建中间字符串。
+// - 字典遍历顺序无关性由排序保证（FeatureVector 路径）或固定列顺序保证（FeatureBatch 路径）。
 //
 // 设计原则：
-//   1. 确定性：相同输入（schema version + values 字典或 batch bytes）必须产出相同分数；
-//      不依赖时间戳、随机数、环境变量等不稳定因素。
-//   2. Fallback 友好：单条输入解析失败时返回该条 fallback 输出，不抛异常；
-//      整批失败（如 ct 取消）时返回 Succeeded=false 的结果。
-//   3. Score 范围 [-1, 1]，Confidence 范围 [0, 1] —— 由 Calibrate 之后映射到 [0, 1]。
-//   4. 不引入 I/O：纯内存计算，适合 Singleton 生命周期。
+// 1. 确定性：相同输入（schema version + values 字典或 batch bytes）必须产出相同分数；
+// 不依赖时间戳、随机数、环境变量等不稳定因素。
+// 2. Fallback 友好：单条输入解析失败时返回该条 fallback 输出，不抛异常；
+// 整批失败（如 ct 取消）时返回 Succeeded=false 的结果。
+// 3. Score 范围 [-1, 1]，Confidence 范围 [0, 1] —— 由 Calibrate 之后映射到 [0, 1]。
+// 4. 不引入 I/O：纯内存计算，适合 Singleton 生命周期。
 // ===========================================================================
 
 /// <summary>

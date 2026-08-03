@@ -10,21 +10,21 @@ namespace ContextCore.Service.Endpoints;
 // Adaptive Retrieval Planner API —— 自适应检索规划器运维面
 //
 // 目标：
-//   为运维提供自适应检索规划器的状态观测与控制接口：
-//     - 查询当前自适应策略（按计划签名或按规划输入派生签名）；
-//     - 查询 / 记录检索结果反馈（自适应学习信号）；
-//     - 清除反馈并重置自适应状态。
+// 为运维提供自适应检索规划器的状态观测与控制接口：
+// - 查询当前自适应策略（按计划签名或按规划输入派生签名）；
+// - 查询 / 记录检索结果反馈（自适应学习信号）；
+// - 清除反馈并重置自适应状态。
 //
 // 端点：
-//   GET  /api/retrieval/adaptive/policy    当前自适应策略（signature 或输入字段）
-//   GET  /api/retrieval/adaptive/feedback  近期反馈（按签名）
-//   POST /api/retrieval/adaptive/feedback  记录一条检索结果反馈
-//   POST /api/retrieval/adaptive/reset     清除反馈 / 重置自适应状态
+// GET /api/retrieval/adaptive/policy 当前自适应策略（signature 或输入字段）
+// GET /api/retrieval/adaptive/feedback 近期反馈（按签名）
+// POST /api/retrieval/adaptive/feedback 记录一条检索结果反馈
+// POST /api/retrieval/adaptive/reset 清除反馈 / 重置自适应状态
 //
 // 设计原则：
-//   1. 全部端点要求 Operator 角色（自适应状态属系统内部诊断面）。
-//   2. 处理器提取为 internal static 方法，可直接单元测试（DefaultHttpContext 执行 IResult）。
-//   3. IAdaptiveRetrievalPlanner 未注册时返回 503（不静默降级）。
+// 1. 全部端点要求 Operator 角色（自适应状态属系统内部诊断面）。
+// 2. 处理器提取为 internal static 方法，可直接单元测试（DefaultHttpContext 执行 IResult）。
+// 3. IAdaptiveRetrievalPlanner 未注册时返回 503（不静默降级）。
 // ===========================================================================
 
 /// <summary>

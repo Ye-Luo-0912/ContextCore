@@ -8,17 +8,17 @@ namespace ContextCore.Tests;
 /// Bounded Context Orchestrator 契约测试。
 ///
 /// 验证目标：
-///   1. ContextRepairReason 枚举 8 值（byte 底层 + Unknown=0 + 7 类确定性异常）
-///   2. ContextRepairBudget 4 字段 + 默认值 + with 表达式
-///   3. ContextRepairDiagnosis 必填字段 + 默认值 + with 表达式
-///   4. ContextRepairRequest 必填字段 + 默认值
-///   5. ContextRepairResponse 必填字段 + 默认值 + 计算属性
-///   6. IContextRepairDetector 接口最小化（1 方法 + 返回 Task）
-///   7. IContextRepairExecutor 接口最小化（1 方法 + 返回 Task）
-///   8. IBoundedContextOrchestrator 接口最小化（1 方法 + 返回 Task）
-///   9. BoundedContextOrchestrationResult 必填字段 + WasRepaired / IsSuccess / Duration 计算属性
-///  10. sealed record / interface / no async void 反射验证
-///  11. 7 类确定性异常与 PackageQualityReport 指标的语义映射文档化
+/// 1. ContextRepairReason 枚举 8 值（byte 底层 + Unknown=0 + 7 类确定性异常）
+/// 2. ContextRepairBudget 4 字段 + 默认值 + with 表达式
+/// 3. ContextRepairDiagnosis 必填字段 + 默认值 + with 表达式
+/// 4. ContextRepairRequest 必填字段 + 默认值
+/// 5. ContextRepairResponse 必填字段 + 默认值 + 计算属性
+/// 6. IContextRepairDetector 接口最小化（1 方法 + 返回 Task）
+/// 7. IContextRepairExecutor 接口最小化（1 方法 + 返回 Task）
+/// 8. IBoundedContextOrchestrator 接口最小化（1 方法 + 返回 Task）
+/// 9. BoundedContextOrchestrationResult 必填字段 + WasRepaired / IsSuccess / Duration 计算属性
+/// 10. sealed record / interface / no async void 反射验证
+/// 11. 7 类确定性异常与 PackageQualityReport 指标的语义映射文档化
 /// </summary>
 [TestClass]
 [TestCategory("R22")]
@@ -265,7 +265,7 @@ public sealed class BoundedContextOrchestratorContractsTests
     [TestMethod]
     public void ContextRepairRequest_BudgetExplicitlySpecified()
     {
-        // 设计原则 #2：预算必须显式（不提供默认值 → 调用方必须传入）
+        // 设计原则 ：预算必须显式（不提供默认值 → 调用方必须传入）
         var request = MakeRepairRequest(budget: new ContextRepairBudget
         {
             MaxAdditionalStoreCalls = 2,
@@ -578,7 +578,7 @@ public sealed class BoundedContextOrchestratorContractsTests
     public void SevenAnomalyReasons_CorrespondToPackageQualityMetrics()
     {
         // 文档化映射：每个异常 Reason 对应 PackageQualityReport 的一个指标
-        // 这是 R22-2 DefaultContextRepairDetector 实现的契约基础
+        // 这是 DefaultContextRepairDetector 实现的契约基础
         var mapping = new Dictionary<ContextRepairReason, string>
         {
             [ContextRepairReason.PrimaryAnchorUncovered] = nameof(PackageQualityReport.AnchorCoverage),

@@ -13,16 +13,16 @@ namespace ContextCore.Tests;
 // Allocator 主链接入验收测试
 //
 // 覆盖：
-//   1. Engine 路径选择：V2.1 AllocateWithDiversity vs V2.0 Allocate fallback
-//   2. EffectivePolicySnapshot.DiversityOptions 默认值填充
-//   3. Runtime 从 Policy 读取 DiversityOptions 传给 Engine
-//   4. V2.1 路径 budget override 合并到 AllocationContext
-//   5. DI 注册：IAllocatorV2_1 可注入 Engine
+// 1. Engine 路径选择：V2.1 AllocateWithDiversity vs V2.0 Allocate fallback
+// 2. EffectivePolicySnapshot.DiversityOptions 默认值填充
+// 3. Runtime 从 Policy 读取 DiversityOptions 传给 Engine
+// 4. V2.1 路径 budget override 合并到 AllocationContext
+// 5. DI 注册：IAllocatorV2_1 可注入 Engine
 //
 // 设计原则：
-//   - 使用 SpyAllocatorV2_1 记录 AllocateWithDiversity 调用，精确验证路径选择
-//   - 复用 R28BTestHelpers.MakeEnvelope 与 DefaultPolicyBundleFactory 构建测试数据
-//   - 所有代码注释使用中文
+// - 使用 SpyAllocatorV2_1 记录 AllocateWithDiversity 调用，精确验证路径选择
+// - 复用共享 TestHelpers 的 MakeEnvelope 与 DefaultPolicyBundleFactory 构建测试数据
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>
@@ -367,15 +367,15 @@ public sealed class R29D_AllocatorV2_1MainChainTests
 // MandatoryOverflowPolicy 接入 V2.1 Allocator 验收测试
 //
 // 覆盖：
-//   1. FailClosed + mandatory 超预算 → 抛 MandatoryContextWindowExceededException
-//   2. RejectLowestAuthorityMandatory + mandatory 超预算 → 最低优先级被拒绝
-//   3. AllowOverflowWithDiagnostic + mandatory 超预算 → 全部选入（回归）
-//   4. 诊断字段验证（MandatoryOverflowTokens / HardWindowViolated / Policy）
+// 1. FailClosed + mandatory 超预算 → 抛 MandatoryContextWindowExceededException
+// 2. RejectLowestAuthorityMandatory + mandatory 超预算 → 最低优先级被拒绝
+// 3. AllowOverflowWithDiagnostic + mandatory 超预算 → 全部选入（回归）
+// 4. 诊断字段验证（MandatoryOverflowTokens / HardWindowViolated / Policy）
 //
 // 设计原则：
-//   - 直接测试 DefaultAllocatorV2_1.AllocateWithDiversity（单元级，不经 Engine）
-//   - 复用 MakeMandatoryEnvelope / MakeNonMandatoryEnvelope helper
-//   - 所有代码注释使用中文
+// - 直接测试 DefaultAllocatorV2_1.AllocateWithDiversity（单元级，不经 Engine）
+// - 复用 MakeMandatoryEnvelope / MakeNonMandatoryEnvelope helper
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>
@@ -557,14 +557,14 @@ public sealed class R29D_MandatoryOverflowPolicyTests
 // TokenCost 权威化验收测试
 //
 // 覆盖：
-//   1. Engine Legacy 路径使用 TokenCost.ContentTokens（而非 EstimatedTokens）
-//   2. ContextDecisionOutcomeSummary.EffectiveTokens 为权威字段
-//   3. EstimatedTokens 别名向后兼容（委托到 EffectiveTokens）
+// 1. Engine Legacy 路径使用 TokenCost.ContentTokens（而非 EstimatedTokens）
+// 2. ContextDecisionOutcomeSummary.EffectiveTokens 为权威字段
+// 3. EstimatedTokens 别名向后兼容（委托到 EffectiveTokens）
 //
 // 设计原则：
-//   - 测试 Legacy 路径（无 PolicySnapshot → 走静态内联分配）
-//   - 构造带 TokenCost 的 envelope，验证 Engine 用精确 token 做预算检查
-//   - 所有代码注释使用中文
+// - 测试 Legacy 路径（无 PolicySnapshot → 走静态内联分配）
+// - 构造带 TokenCost 的 envelope，验证 Engine 用精确 token 做预算检查
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>
@@ -699,15 +699,15 @@ public sealed class R29D_TokenCostAuthorityTests
 // Provider EnrichTokenCost fail-fast 验收测试
 //
 // 覆盖：
-//   1. Provider 未注入 tokenizer + 非空内容 → 抛 InvalidOperationException
-//   2. Provider 注入 tokenizer + 非空内容 → 正常产出 envelope（TokenCost 已填充）
-//   3. Provider 未注入 tokenizer + IncludeContent=false（空内容）→ 正常产出（无需 tokenize）
-//   4. 多 Provider 类型覆盖（Mandatory / Lexical）
+// 1. Provider 未注入 tokenizer + 非空内容 → 抛 InvalidOperationException
+// 2. Provider 注入 tokenizer + 非空内容 → 正常产出 envelope（TokenCost 已填充）
+// 3. Provider 未注入 tokenizer + IncludeContent=false（空内容）→ 正常产出（无需 tokenize）
+// 4. 多 Provider 类型覆盖（Mandatory / Lexical）
 //
 // 设计原则：
-//   - 复用 FixedItemContextStore 作为 mock store，控制 item.Content
-//   - 使用 DefaultContextTokenizerResolver 作为可用 tokenizer
-//   - 所有代码注释使用中文
+// - 复用 FixedItemContextStore 作为 mock store，控制 item.Content
+// - 使用 DefaultContextTokenizerResolver 作为可用 tokenizer
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>

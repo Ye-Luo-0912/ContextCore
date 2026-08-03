@@ -66,7 +66,7 @@ public sealed class InMemoryJobQueue : IContextJobQueue, IContextJobQueryStore
         {
             if (_jobs.TryGetValue(jobId, out var job))
             {
-                // #6: CAS — 仅当 job 处于 Running 时才转换为 Succeeded。
+                // CAS — 仅当 job 处于 Running 时才转换为 Succeeded。
                 // 过期的 Ack（job 已被前一次执行 Nack 为 WaitingRetry/Failed，或已被 Ack 为 Succeeded）是 no-op。
                 if (job.State != ContextJobState.Running)
                 {
@@ -93,7 +93,7 @@ public sealed class InMemoryJobQueue : IContextJobQueue, IContextJobQueryStore
         lock (_gate)
         {
             if (!_jobs.TryGetValue(jobId, out var job)) return Task.CompletedTask;
-            // #6: CAS — 仅当 job 处于 Running 时才转换为 WaitingRetry/Failed。
+            // CAS — 仅当 job 处于 Running 时才转换为 WaitingRetry/Failed。
             // 过期的 Nack（job 已被 Ack 为 Succeeded，或已被 Nack 为 WaitingRetry/Failed）是 no-op。
             if (job.State != ContextJobState.Running)
             {

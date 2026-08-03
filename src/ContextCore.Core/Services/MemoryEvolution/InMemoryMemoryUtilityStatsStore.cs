@@ -7,12 +7,12 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// IMemoryUtilityStatsStore 的 in-memory 实现（read-only 公共 API）。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4）：
-///   1. 公共 API 是 read-only（QueryAsync / GetAsync / GetSelectedCountByExpertAsync）。
-///   2. 写入由 internal UpsertSnapshot 方法暴露，仅供 MemoryUtilityStatsMaterializer 调用。
-///   3. Stats 按 (WorkspaceId, CollectionId, SourceItemId) 唯一索引；
-///      UpsertSnapshot 替换现有记录（stats 是当前快照，不是历史事件流）。
-///   4. 生产部署应替换为 PostgresMemoryUtilityStatsStore。
+/// 设计原则（对齐澄清）：
+/// 1. 公共 API 是 read-only（QueryAsync / GetAsync / GetSelectedCountByExpertAsync）。
+/// 2. 写入由 internal UpsertSnapshot 方法暴露，仅供 MemoryUtilityStatsMaterializer 调用。
+/// 3. Stats 按 (WorkspaceId, CollectionId, SourceItemId) 唯一索引；
+/// UpsertSnapshot 替换现有记录（stats 是当前快照，不是历史事件流）。
+/// 4. 生产部署应替换为 PostgresMemoryUtilityStatsStore。
 /// </remarks>
 public sealed class InMemoryMemoryUtilityStatsStore : IMemoryUtilityStatsStore
 {

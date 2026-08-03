@@ -3,10 +3,10 @@ namespace ContextCore.Inference.Onnx;
 /// <summary>
 /// 推理阶段枚举（用于阶段级耗时记录）。
 /// 对应 OnnxInferenceEngine.ExecuteWithSlotAndTimeoutAsync 内的各阶段：
-///   - <see cref="Queue"/>：等待推理槽位（SemaphoreSlim）的排队时间。
-///   - <see cref="Copy"/>：输入数据准备（FeatureBatch 已是连续内存，copy 阶段通常极短）。
-///   - <see cref="Run"/>：session.InferBatchAsync 实际执行时间（含 native session.Run）。
-///   - <see cref="Parse"/>：输出结果反序列化与 BatchInferenceResult 构造时间。
+/// - <see cref="Queue"/>：等待推理槽位（SemaphoreSlim）的排队时间。
+/// - <see cref="Copy"/>：输入数据准备（FeatureBatch 已是连续内存，copy 阶段通常极短）。
+/// - <see cref="Run"/>：session.InferBatchAsync 实际执行时间（含 native session.Run）。
+/// - <see cref="Parse"/>：输出结果反序列化与 BatchInferenceResult 构造时间。
 /// </summary>
 public enum InferencePhase : byte
 {
@@ -29,14 +29,14 @@ public enum InferencePhase : byte
 /// </summary>
 /// <remarks>
 /// ONNX 模型的输入/输出张量名因模型而异，必须由调用方根据具体模型 schema 提供：
-///   - <see cref="InputTensorName"/>：输入张量名（通常为 "input" / "features" / "input_features"）
-///   - <see cref="ScoreOutputName"/>：输出张量名（含主分数，通常为 "logits" / "score" / "output"）
-///   - <see cref="ConfidenceOutputName"/>：可选的 confidence 输出张量名（与 Score 同张量时为 null）
+/// - <see cref="InputTensorName"/>：输入张量名（通常为 "input" / "features" / "input_features"）
+/// - <see cref="ScoreOutputName"/>：输出张量名（含主分数，通常为 "logits" / "score" / "output"）
+/// - <see cref="ConfidenceOutputName"/>：可选的 confidence 输出张量名（与 Score 同张量时为 null）
 /// <para>
 /// 默认行为：
-///   - <see cref="ApplySigmoid"/> = true：把 logits 映射到 [0,1] 概率（二分类场景）
-///   - <see cref="ScoreOutputIndex"/> = 0：从输出张量取第 0 列作为正类分数
-///   - <see cref="ConfidenceOutputIndex"/> = 1：若 ConfidenceOutputName=null，从 Score 张量取第 1 列
+/// - <see cref="ApplySigmoid"/> = true：把 logits 映射到 [0,1] 概率（二分类场景）
+/// - <see cref="ScoreOutputIndex"/> = 0：从输出张量取第 0 列作为正类分数
+/// - <see cref="ConfidenceOutputIndex"/> = 1：若 ConfidenceOutputName=null，从 Score 张量取第 1 列
 /// </para>
 /// </remarks>
 public sealed class OnnxInferenceEngineOptions
@@ -266,15 +266,15 @@ public sealed class OnnxInferenceEngineOptions
     /// </summary>
     /// <remarks>
     /// 选择指南：
-    ///   - <see cref="OnnxExecutionProvider.CPU"/>：默认值，纯 CPU 推理。无外部依赖，
-    ///     适合容器化部署与开发环境。
-    ///   - <see cref="OnnxExecutionProvider.CUDA"/>：NVIDIA GPU 推理。需要安装
-    ///     <c>Microsoft.ML.OnnxRuntime.Gpu</c> NuGet 包（含 CUDA native 库）。
-    ///     未安装 GPU 包时 session 创建会抛 <c>OnnxRuntimeException</c>，已被
-    ///     <see cref="ModelActivationManager"/> 捕获并转为激活失败（fail-safe）。
-    ///   - <see cref="OnnxExecutionProvider.TensorRT"/>：NVIDIA TensorRT 优化推理。
-    ///     首次推理有较长（数十秒）的 plan 缓存构建延迟，但稳态吞吐显著高于 CUDA。
-    ///     需要 TensorRT native 库与 CUDA 同时可用。
+    /// - <see cref="OnnxExecutionProvider.CPU"/>：默认值，纯 CPU 推理。无外部依赖，
+    /// 适合容器化部署与开发环境。
+    /// - <see cref="OnnxExecutionProvider.CUDA"/>：NVIDIA GPU 推理。需要安装
+    /// <c>Microsoft.ML.OnnxRuntime.Gpu</c> NuGet 包（含 CUDA native 库）。
+    /// 未安装 GPU 包时 session 创建会抛 <c>OnnxRuntimeException</c>，已被
+    /// <see cref="ModelActivationManager"/> 捕获并转为激活失败（fail-safe）。
+    /// - <see cref="OnnxExecutionProvider.TensorRT"/>：NVIDIA TensorRT 优化推理。
+    /// 首次推理有较长（数十秒）的 plan 缓存构建延迟，但稳态吞吐显著高于 CUDA。
+    /// 需要 TensorRT native 库与 CUDA 同时可用。
     /// </remarks>
     public OnnxExecutionProvider ExecutionProvider { get; init; } = OnnxExecutionProvider.CPU;
 

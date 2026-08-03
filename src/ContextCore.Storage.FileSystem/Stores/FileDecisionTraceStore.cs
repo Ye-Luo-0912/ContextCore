@@ -44,7 +44,7 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
 
         await _jsonLines.AppendAsync(path, record, cancellationToken).ConfigureAwait(false);
 
-        // #4：retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
+        // retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
         _pendingPurge = _janitor.MaybePurge(_paths.GetDecisionTraceDirectory(record.WorkspaceId, record.CollectionId));
     }
 

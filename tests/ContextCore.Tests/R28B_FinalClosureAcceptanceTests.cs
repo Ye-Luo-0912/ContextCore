@@ -16,18 +16,18 @@ namespace ContextCore.Tests;
 // Final Closure — 22 项硬验收测试
 //
 // 覆盖六个工作包：
-//   A. Artifact 真实化（3 项）
-//   B. Purpose 语义完整化（7 项）
-//   C. Token Ledger（3 项）
-//   D. 强安全结果（2 项）
-//   E. Production Replay Capture（3 项）
-//   F. Experiment Plane 可靠性（4 项）
+// A. Artifact 真实化（3 项）
+// B. Purpose 语义完整化（7 项）
+// C. Token Ledger（3 项）
+// D. 强安全结果（2 项）
+// E. Production Replay Capture（3 项）
+// F. Experiment Plane 可靠性（4 项）
 //
 // 设计原则：
-//   - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
-//   - 复用 R28BTestHelpers + R28B_ClosureGateAcceptanceTests 中的 internal Stub
-//   - TokenCostHelper 为 internal，通过反射访问（与现有 ResolveMandatoryOverflowPolicy 测试一致）
-//   - 所有代码注释使用中文
+// - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
+// - 复用共享 TestHelpers + ClosureGate 验收测试中的 internal Stub
+// - TokenCostHelper 为 internal，通过反射访问（与现有 ResolveMandatoryOverflowPolicy 测试一致）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================
@@ -74,9 +74,9 @@ public sealed class ArtifactTruthAcceptanceTests
     public void ExecutionArtifactIsCompleteOnSuccessEmptyAndAllRejected()
     {
         // 验证三种场景下 Execution Artifact 的所有字段都被完整填充：
-        //   1. 成功路径（有选中候选）
-        //   2. 空结果路径（无候选进入 Engine）
-        //   3. 全部拒绝路径（EarlyGate 拒绝所有候选）
+        // 1. 成功路径（有选中候选）
+        // 2. 空结果路径（无候选进入 Engine）
+        // 3. 全部拒绝路径（EarlyGate 拒绝所有候选）
         var factory = DefaultExecutionArtifactFactory.Instance;
         var snapshot = MakeSnapshot();
         var routing = new ExpertRoutingDecisionSet { Decisions = Array.Empty<ExpertRoutingDecision>() };
@@ -178,8 +178,8 @@ public sealed class ArtifactTruthAcceptanceTests
     public void RequestSemanticHashIsCultureAndCollectionOrderInvariant()
     {
         // 请求语义哈希必须跨 culture 和集合顺序不变：
-        //   1. 改变 CurrentCulture 不影响哈希值（使用 invariant culture 格式化数值）
-        //   2. 改变 SeedCandidates 顺序不影响哈希值（SeedCandidates 不参与哈希）
+        // 1. 改变 CurrentCulture 不影响哈希值（使用 invariant culture 格式化数值）
+        // 2. 改变 SeedCandidates 顺序不影响哈希值（SeedCandidates 不参与哈希）
         var hasher = DefaultRequestSemanticHasher.Instance;
         var request = new ContextDecisionRuntimeRequest
         {
@@ -242,7 +242,7 @@ public sealed class ArtifactTruthAcceptanceTests
     {
         // Graph Provider（Phase 2）必须接收 Phase 1 merged 候选 + 原始 SeedCandidates 作为其 SeedCandidates。
         // 验证 MergeSeedCandidates(mergedFromProviders, seedCandidates) 的语义：
-        //   Provider 输出优先，原始 Seed 补充新 key（去重 by CanonicalKey）。
+        // Provider 输出优先，原始 Seed 补充新 key（去重 by CanonicalKey）。
         var phase1Envelope = R28BTestHelpers.MakeEnvelope("phase1-c1", ContextCandidateSource.Lexical, 0.7, 100);
         var originalSeedEnvelope = R28BTestHelpers.MakeEnvelope("seed-original", ContextCandidateSource.Semantic, 0.9, 200);
 
@@ -530,7 +530,7 @@ public sealed class PurposeSemanticAcceptanceTests
         Assert.AreEqual("hydrated content for cand-a", materialA.Content,
             "WorkingSet.Materials 必须使用 hydrator 修复后的真实正文。");
 
-        // P1-3：被 Hydration/预算修复移出的候选必须进入最终 DroppedEnvelopes——
+        // 被 Hydration/预算修复移出的候选必须进入最终 DroppedEnvelopes——
         // 否则 DroppedCount 偏小、Utility Ledger 不记录真实淘汰项、ConflictSet 缺样本。
         Assert.AreEqual(1, decision.Outcome.DroppedCount,
             "DroppedCount 必须包含被预算修复移出的候选（真实淘汰项）。");
@@ -547,7 +547,7 @@ public sealed class PurposeSemanticAcceptanceTests
         Assert.IsTrue(decision.Outcome.Sections.Contains("mandatory"),
             "Outcome.Sections 必须按修复后保留的 Selected 候选重建（水化前结果可能为空/过时）。");
 
-        // Learning Ledger 输入：所有 candidate（selected/dropped）都写入 ledger（P8 硬边界）——
+        // Learning Ledger 输入：所有 candidate（selected/dropped）都写入 ledger（硬边界）——
         // DroppedEnvelopes 修复后，ledger 才能记录真实淘汰项。
         var ledgerStore = new InMemoryUtilityLedgerStore();
         var conflictStore = new InMemoryConflictSetStore();
@@ -565,7 +565,7 @@ public sealed class PurposeSemanticAcceptanceTests
     [TestMethod]
     public async Task LateHydrationFailureDroppedCandidate_ClassifiedAsEvidenceMissing()
     {
-        // P1-3：hydration 失败（缺正文/证据）的候选必须进入 DroppedEnvelopes，
+        // hydration 失败（缺正文/证据）的候选必须进入 DroppedEnvelopes，
         // 分类为 EvidenceMissing（而非 TokenBudgetExceeded），且不计入 BudgetExceededCount。
         var store = new TwoItemContextStore(new[]
         {
@@ -897,7 +897,7 @@ public sealed class TokenLedgerAcceptanceTests
     {
         // CandidateTokenCost 必须使用配置的 IContextTokenizerResolver 计算 token 数。
         // 验证：传入 resolver 时 TokenizerId 为 resolver 解析的 tokenizer 名；
-        //       不传 resolver 时 TokenizerId 为 "length-div-4"（估算回退）。
+        // 不传 resolver 时 TokenizerId 为 "length-div-4"（估算回退）。
         var resolver = new DefaultContextTokenizerResolver();
         var content = "这是一段中文内容，用于测试 tokenizer 的精确计数能力。This is English content for testing.";
 
@@ -1041,7 +1041,7 @@ public sealed class StrongSafetyAcceptanceTests
     {
         // AgentContextSnapshot 的 AgentSession 必须来自 AgentInput.Session，而非伪造。
         // 验证：当 AgentInput.Session 非空时，Projector 使用真实 session；
-        //       当 AgentInput.Session 为 null 时，Projector 回退到 session-{RequestId}。
+        // 当 AgentInput.Session 为 null 时，Projector 回退到 session-{RequestId}。
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Semantic, 0.8, 100);
         var result = R28BTestHelpers.MakeResult("op-agent-session",
             selected: new[] { envelope }, estimatedTokens: 100, tokenBudget: 1000,
@@ -1161,10 +1161,10 @@ public sealed class ProductionReplayAcceptanceTests
     public void ProductionShadowFixtureContainsPolicyWorkingSetAndProviderSnapshots()
     {
         // ReplayFixture.FromExecution 必须从 Execution 中提取完整的重放数据：
-        //   StoredPolicySnapshot, StoredWorkingSet, StoredProviderOutputs,
-        //   StoredNormalizedRequest, StoredRequestSemanticHash,
-        //   StoredFeatureSchemaVersion, StoredAllocatorVersion, StoredTokenizerVersion,
-        //   StoredFinalTokenCost
+        // StoredPolicySnapshot, StoredWorkingSet, StoredProviderOutputs,
+        // StoredNormalizedRequest, StoredRequestSemanticHash,
+        // StoredFeatureSchemaVersion, StoredAllocatorVersion, StoredTokenizerVersion,
+        // StoredFinalTokenCost
         var envelope = R28BTestHelpers.MakeEnvelope("c1", ContextCandidateSource.Semantic, 0.8, 100);
         var key = envelope.CanonicalKey;
         var decision = R28BTestHelpers.MakeResult("op-shadow",

@@ -6,30 +6,30 @@ namespace ContextCore.Abstractions;
 // 统一决策引擎接口契约（Context Decision Engine Interface Contracts）
 //
 // 目标：
-//   在 R18-1 envelope 契约之上定义 Engine 接口，让 Retrieval 与 Package
-//   两条主链可以通过统一入口（IContextDecisionEngine.DecideAsync）消费
-//   envelope 集合，并通过不同 Projector 输出最终 DTO。
+// 在 envelope 契约之上定义 Engine 接口，让 Retrieval 与 Package
+// 两条主链可以通过统一入口（IContextDecisionEngine.DecideAsync）消费
+// envelope 集合，并通过不同 Projector 输出最终 DTO。
 //
 // 设计原则：
-//   1. Engine 接口仅定义"编排契约"，不强制替换 HybridContextRetriever /
-//      BasicContextPackageBuilder 两条主链。R18-2 阶段只在 ContextDecisionProjector
-//      内部增加 envelope-to-decision 投影路径，保留现有 ProjectPackage /
-//      ProjectRetrieval 入口不变（向后兼容）。
-//   2. Planner 是编排核心：编排 candidate collectors → feature pipeline →
-//      safety gate → utility scorer → budget allocator 五个阶段。
-//      但 R18-2 阶段仅定义编排接口和默认实现骨架，不实现具体阶段
-//      （R18 V2 才真正统一执行链）。
-//   3. Projector 接口让 Retrieval 与 Package 两条路径可以独立投影 envelope
-//      集合到现有 ContextRetrievalResult / ContextPackageBuildResult，
-//      保持输出格式分离（避免 God Object）。
-//   4. Request/Result 不耦合具体存储或调用方；Engine 是纯内存编排。
-//   5. 复用 ContextDecisionSource 枚举区分 Package/Retrieval 输出方向。
+// 1. Engine 接口仅定义"编排契约"，不强制替换 HybridContextRetriever /
+// BasicContextPackageBuilder 两条主链。 阶段只在 ContextDecisionProjector
+// 内部增加 envelope-to-decision 投影路径，保留现有 ProjectPackage /
+// ProjectRetrieval 入口不变（向后兼容）。
+// 2. Planner 是编排核心：编排 candidate collectors → feature pipeline →
+// safety gate → utility scorer → budget allocator 五个阶段。
+// 但 阶段仅定义编排接口和默认实现骨架，不实现具体阶段
+// （V2 才真正统一执行链）。
+// 3. Projector 接口让 Retrieval 与 Package 两条路径可以独立投影 envelope
+// 集合到现有 ContextRetrievalResult / ContextPackageBuildResult，
+// 保持输出格式分离（避免 God Object）。
+// 4. Request/Result 不耦合具体存储或调用方；Engine 是纯内存编排。
+// 5. 复用 ContextDecisionSource 枚举区分 Package/Retrieval 输出方向。
 //
 // 子阶段进度：
-//   （当前）：Engine 接口 + Planner 骨架 + Projector 投影路径。
-//                  不替换两条主链，只新增 envelope-to-decision 投影。
-//   Retrieval adapter（ContextRetrievalCandidate → Envelope）。
-//   Package adapter（PackageTraceCandidate → Envelope）。
+// （当前）：Engine 接口 + Planner 骨架 + Projector 投影路径。
+// 不替换两条主链，只新增 envelope-to-decision 投影。
+// Retrieval adapter（ContextRetrievalCandidate → Envelope）。
+// Package adapter（PackageTraceCandidate → Envelope）。
 // ===========================================================================
 
 /// <summary>
@@ -37,7 +37,7 @@ namespace ContextCore.Abstractions;
 /// 携带 envelope 集合 + 可选的 PolicyBundle 引用 + workspace/collection 作用域。
 /// </summary>
 /// <remarks>
-/// 设计澄清（用户澄清 #3）：Request Policy 是受限 override，不允许替换安全边界和正式模型。
+/// 设计澄清（用户澄清）：Request Policy 是受限 override，不允许替换安全边界和正式模型。
 /// 即 Request.PolicyOverride 只能调整非安全相关参数（如 TopK、token budget、section ratios），
 /// 不能替换 SafetyPolicyProfile / ModelArtifactReference。
 /// </remarks>
@@ -76,7 +76,7 @@ public sealed class ContextDecisionRequest
 
     /// <summary>PolicyBundle 引用（可选；null 时使用全局默认 bundle）。</summary>
     /// <remarks>
-    /// 设计澄清（用户澄清 #3）：此处仅为引用 ID，不允许直接传入完整 bundle 替换安全边界。
+    /// 设计澄清（用户澄清）：此处仅为引用 ID，不允许直接传入完整 bundle 替换安全边界。
     /// 安全边界（SafetyPolicyProfile）始终由全局 bundle 决定，不允许 per-request override。
     /// </remarks>
     public string? PolicyBundleId { get; init; }
@@ -89,7 +89,7 @@ public sealed class ContextDecisionRequest
 
     /// <summary>请求级 model enable 标志（false = 强制 deterministic-only）。</summary>
     /// <remarks>
-    /// 设计澄清（用户澄清 #3）：即使 PolicyBundle 引用模型，
+    /// 设计澄清（用户澄清）：即使 PolicyBundle 引用模型，
     /// Request 可强制关闭模型（用于 golden baseline 验证 / 故障回退测试）。
     /// 此字段不影响安全边界，仅影响 utility scorer 是否调用模型。
     /// </remarks>
@@ -99,11 +99,11 @@ public sealed class ContextDecisionRequest
     /// per-request 受限策略 override。
     /// </summary>
     /// <remarks>
-    /// 设计澄清（用户澄清 #3）：
-    ///   - 仅允许调整 BudgetProfile 部分字段（DefaultTokenBudget / DefaultTopK / SectionRatios）。
-    ///   - 仅允许调整 RoutingProfile.EnableModelScoring（不能替换 ModelArtifactId / weights）。
-    ///   - <b>不允许</b> 替换 SafetyProfile（安全边界由 bundle 全局决定）。
-    ///   - <b>不允许</b> 替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
+    /// 设计澄清（用户澄清）：
+    /// - 仅允许调整 BudgetProfile 部分字段（DefaultTokenBudget / DefaultTopK / SectionRatios）。
+    /// - 仅允许调整 RoutingProfile.EnableModelScoring（不能替换 ModelArtifactId / weights）。
+    /// - <b>不允许</b> 替换 SafetyProfile（安全边界由 bundle 全局决定）。
+    /// - <b>不允许</b> 替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
     /// null = 使用当前激活 bundle 的 profile（无 override）。
     /// </remarks>
     public ContextPolicyOverride? PolicyOverride { get; init; }
@@ -114,7 +114,7 @@ public sealed class ContextDecisionRequest
     /// <remarks>
     /// 由 DefaultContextDecisionRuntime 在委托 Engine 前设置。
     /// Engine 注入 IGlobalAllocator 时，将此 snapshot 传给 Allocator.Execute。
-    /// null = Legacy 路径（Engine 使用静态内联分配，向后兼容 R18-2 测试）。
+    /// null = Legacy 路径（Engine 使用静态内联分配，向后兼容 测试）。
     /// </remarks>
     public EffectivePolicySnapshot? PolicySnapshot { get; init; }
 
@@ -134,9 +134,9 @@ public sealed class ContextDecisionRequest
     /// <remarks>
     /// 由 DefaultContextDecisionRuntime 从 EffectivePolicySnapshot.DiversityOptions 读取并设置。
     /// Engine 在 V2 路径根据此字段决定走 V2.1 AllocateWithDiversity 还是 V2.0 Allocate：
-    ///   - 非空 + IAllocatorV2_1 注入 → AllocateWithDiversity（section rollover + MMR）
-    ///   - null 或 IAllocatorV2_1 未注入 → Allocate（V2.0 fallback）
-    /// null = 使用 V2.0 Allocator（向后兼容 R28-G 之前的行为）。
+    /// - 非空 + IAllocatorV2_1 注入 → AllocateWithDiversity（section rollover + MMR）
+    /// - null 或 IAllocatorV2_1 未注入 → Allocate（V2.0 fallback）
+    /// null = 使用 V2.0 Allocator（向后兼容 之前的行为）。
     /// </remarks>
     public DiversityOptions? DiversityOptions { get; init; }
 }
@@ -247,12 +247,12 @@ public sealed class ContextDecisionOutcomeSummary
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Engine 不感知输出格式（RetrievalResult / PackageBuildResult），
-///      由调用方通过 IResultProjector 投影。
-///   2. Engine 不依赖具体存储；候选 envelope 由调用方通过 Request.Candidates 传入。
-///   3. Engine 失败时（如 PolicyBundle 加载失败）必须能回退到 deterministic policy
-///      （验收标准 #6）。
-///   4. Engine 是幂等的：相同 Request 应产生相同 Result（确定性 tie-break）。
+/// 1. Engine 不感知输出格式（RetrievalResult / PackageBuildResult），
+/// 由调用方通过 IResultProjector 投影。
+/// 2. Engine 不依赖具体存储；候选 envelope 由调用方通过 Request.Candidates 传入。
+/// 3. Engine 失败时（如 PolicyBundle 加载失败）必须能回退到 deterministic policy
+/// （验收标准）。
+/// 4. Engine 是幂等的：相同 Request 应产生相同 Result（确定性 tie-break）。
 /// </remarks>
 public interface IContextDecisionEngine
 {
@@ -277,9 +277,9 @@ public interface IContextDecisionEngine
 /// <typeparam name="TResult">目标 DTO 类型（ContextRetrievalResult / ContextPackageBuildResult）。</typeparam>
 /// <remarks>
 /// 设计原则：
-///   1. Projector 仅做"格式投影"，不改变决策结果（envelope 集合不变）。
-///   2. Projector 是幂等的：相同 Result 应产生相同 DTO。
-///   3. Projector 不调用 Engine 或 Storage；纯内存转换。
+/// 1. Projector 仅做"格式投影"，不改变决策结果（envelope 集合不变）。
+/// 2. Projector 是幂等的：相同 Result 应产生相同 DTO。
+/// 3. Projector 不调用 Engine 或 Storage；纯内存转换。
 /// </remarks>
 public interface IResultProjector<TResult>
 {
@@ -305,20 +305,20 @@ public interface IResultProjector<TResult>
 // 性能监控 + 自动回退阈值契约
 //
 // 目标：
-//   1. 提供 IPerformanceMonitor 抽象，让 DefaultContextDecisionEngine 在 V2 路径
-//      执行前后埋点：执行前查询是否应回退到 V2.0 Allocator；执行后记录本次耗时。
-//   2. 当 V2 路径（含 V2.1 AllocateWithDiversity）执行时间超过阈值（可配置，默认 500ms）
-//      时，标记该 scope（workspaceId+collectionId）需要回退；下次请求 Engine 跳过 V2.1
-//      直接走 V2.0 Allocate，避免性能回退拖累主链。
-//   3. 接口仅定义"观察 + 查询"契约；具体实现（ring buffer / DDSketch / 持久化 metric store）
-//      由 ContextCore.Core 提供，可被生产实现替换。
+// 1. 提供 IPerformanceMonitor 抽象，让 DefaultContextDecisionEngine 在 V2 路径
+// 执行前后埋点：执行前查询是否应回退到 V2.0 Allocator；执行后记录本次耗时。
+// 2. 当 V2 路径（含 V2.1 AllocateWithDiversity）执行时间超过阈值（可配置，默认 500ms）
+// 时，标记该 scope（workspaceId+collectionId）需要回退；下次请求 Engine 跳过 V2.1
+// 直接走 V2.0 Allocate，避免性能回退拖累主链。
+// 3. 接口仅定义"观察 + 查询"契约；具体实现（ring buffer / DDSketch / 持久化 metric store）
+// 由 ContextCore.Core 提供，可被生产实现替换。
 //
 // 设计原则：
-//   1. 接口极薄：仅 3 个方法（RecordExecutionTime / ShouldFallbackToV20 / RecordFallback）。
-//   2. 接口可选注入：DefaultContextDecisionEngine 在 IPerformanceMonitor 为 null 时
-//      保持旧行为（不监控、不回退），向后兼容 R28-G 之前的测试。
-//   3. 接口无副作用：调用方负责实际路径切换；Monitor 仅返回布尔值并提供诊断信息。
-//   4. 线程安全：实现应线程安全；多个 Engine 实例可能并发调用同一 Monitor。
+// 1. 接口极薄：仅 3 个方法（RecordExecutionTime / ShouldFallbackToV20 / RecordFallback）。
+// 2. 接口可选注入：DefaultContextDecisionEngine 在 IPerformanceMonitor 为 null 时
+// 保持旧行为（不监控、不回退），向后兼容 之前的测试。
+// 3. 接口无副作用：调用方负责实际路径切换；Monitor 仅返回布尔值并提供诊断信息。
+// 4. 线程安全：实现应线程安全；多个 Engine 实例可能并发调用同一 Monitor。
 // ===========================================================================
 
 /// <summary>
@@ -377,10 +377,10 @@ public sealed record PerformanceFallbackOptions
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 接口线程安全；实现应支持多 Engine 实例并发调用。
-///   2. scope（workspaceId + collectionId）是隔离单元：一个 scope 触发回退不影响其他 scope。
-///   3. 回退状态可恢复：低于阈值的连续样本累积到 <see cref="PerformanceFallbackOptions.RecoverySamples"/>
-///      后，<see cref="ShouldFallbackToV20"/> 返回 false（自愈）。
+/// 1. 接口线程安全；实现应支持多 Engine 实例并发调用。
+/// 2. scope（workspaceId + collectionId）是隔离单元：一个 scope 触发回退不影响其他 scope。
+/// 3. 回退状态可恢复：低于阈值的连续样本累积到 <see cref="PerformanceFallbackOptions.RecoverySamples"/>
+/// 后，<see cref="ShouldFallbackToV20"/> 返回 false（自愈）。
 /// </remarks>
 public interface IPerformanceMonitor
 {

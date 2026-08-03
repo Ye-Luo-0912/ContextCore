@@ -451,7 +451,7 @@ public sealed class ContextStateCacheTests
             cache.InvalidateAsync(scope, cts.Token));
     }
 
-    /// <summary>P1-3 StateCacheKey 非空约束：default 与空字符串在缓存边界被拒绝。</summary>
+    /// <summary>StateCacheKey 非空约束：default 与空字符串在缓存边界被拒绝。</summary>
     [TestMethod]
     public async Task Boundary_DefaultOrEmptyKey_RejectedAtCacheBoundary()
     {
@@ -464,7 +464,7 @@ public sealed class ContextStateCacheTests
         await Assert.ThrowsExceptionAsync<ArgumentException>(() => cache.GetAsync<string>(new StateCacheKey("   ")));
     }
 
-    /// <summary>P1-3 Accessor 边界同样拒绝 default/空 key。</summary>
+    /// <summary>Accessor 边界同样拒绝 default/空 key。</summary>
     [TestMethod]
     public async Task Accessor_DefaultKey_Rejected()
     {
@@ -538,7 +538,7 @@ public sealed class ContextStateCacheTests
         Assert.IsTrue(results.All(r => Equals(r, "v")));
     }
 
-    // ── P0-5.1 poisoned key 修复：factory 抛异常后 key 不应永久驻留 ─────────
+    // ── poisoned key 修复：factory 抛异常后 key 不应永久驻留 ─────────
 
     /// <summary>
     /// factory 抛异常后，in-flight entry 必须被移除（ContinueWith 清理），
@@ -628,7 +628,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual(1, retryAttempt, "重试时应执行新的 factory");
     }
 
-    // ── P0-5.2 调用方取消隔离：取消只放弃等待，不取消共享计算 ───────────────
+    // ── 调用方取消隔离：取消只放弃等待，不取消共享计算 ───────────────
 
     /// <summary>
     /// 第一个调用方取消后，共享 factory 计算应继续执行（使用 CancellationToken.None），
@@ -709,7 +709,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual(1L, cache.VersionMismatches);
     }
 
-    /// <summary>P2-3 Clear() 与并发 SetAsync 不导致结构不一致（不死锁不崩溃）。</summary>
+    /// <summary>Clear() 与并发 SetAsync 不导致结构不一致（不死锁不崩溃）。</summary>
     [TestMethod]
     public async Task Clear_ConcurrentWithSet_NoInconsistency()
     {
@@ -908,10 +908,10 @@ public sealed class ContextStateCacheTests
         }
     }
 
-    // ──  semantic metadata fingerprint 测试 ──────────────────────────
+    // ── semantic metadata fingerprint 测试 ──────────────────────────
 
     /// <summary>
-    /// #7: 操作性 metadata key（requestId/traceId/operationId/correlationId/spanId 等）
+    /// 操作性 metadata key（requestId/traceId/operationId/correlationId/spanId 等）
     /// 必须从指纹中排除。两个语义相同但携带不同 per-call 标识的请求必须产生相同指纹，
     /// 避免相同语义请求因不同 requestId/traceId 导致缓存 miss。
     /// </summary>
@@ -1001,7 +1001,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #7: 语义 metadata key（mode/taskKind/intent/project/desiredOutputFormat/timeRange
+    /// 语义 metadata key（mode/taskKind/intent/project/desiredOutputFormat/timeRange
     /// 及未在 denylist 中的自定义业务字段）必须纳入指纹。
     /// 不同语义 metadata 值必须产生不同指纹，确保 package 模板内容差异被缓存感知。
     /// </summary>
@@ -1079,7 +1079,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #7: 全部为操作性 key 的 metadata 应等同于空 metadata（语义字段数为 0）。
+    /// 全部为操作性 key 的 metadata 应等同于空 metadata（语义字段数为 0）。
     /// 验证 denylist 过滤后写入 "-|" 占位，与 null/empty metadata 行为一致。
     /// </summary>
     [TestMethod]
@@ -1131,7 +1131,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #7: BuildHashed 在 metadata 混合（语义 + 操作性）时仍输出 64 字符 SHA-256，
+    /// BuildHashed 在 metadata 混合（语义 + 操作性）时仍输出 64 字符 SHA-256，
     /// 且相同语义请求即使携带不同操作性值也产生相同哈希（哈希层面稳定性）。
     /// </summary>
     [TestMethod]
@@ -1386,10 +1386,10 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("src-1", sourceRefs[0]);
     }
 
-    // ──  mutable result isolation tests ──────────────────────────
+    // ── mutable result isolation tests ──────────────────────────
 
     /// <summary>
-    /// #8: 缓存层 GetAsync 不做防御性拷贝——返回存储的同一引用。
+    /// 缓存层 GetAsync 不做防御性拷贝——返回存储的同一引用。
     /// 此测试文档化缓存边界行为：隔离责任由类型不可变性（PackageTemplate ImmutableArray）
     /// 与消费方防御性拷贝（ResultProjector.ToArray）承担，缓存本身不隔离可变对象。
     /// 若缓存可变对象，调用方修改会直接影响缓存——这正是 PackageTemplate 必须不可变的根因。
@@ -1421,7 +1421,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #8: ResultProjector.ProjectResult 每次调用都为所有数组字段产生全新实例。
+    /// ResultProjector.ProjectResult 每次调用都为所有数组字段产生全新实例。
     /// 验证防御性拷贝真正创建新数组（不仅值不污染，引用也不同），
     /// 覆盖 6 个数组字段：SelectedItems / ItemReferences / DroppedItems / Uncertainties / Package.Sections / Package.SourceRefs。
     /// </summary>
@@ -1455,7 +1455,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #8: PackageTemplate 的集合字段为 ImmutableArray{T}（值类型 struct），
+    /// PackageTemplate 的集合字段为 ImmutableArray{T}（值类型 struct），
     /// 不暴露内部可变数组——ToArray 返回独立拷贝，修改拷贝不影响模板原始数据。
     /// 这是运行期不可变性保障：即使调用方拿到模板引用，通过任何公开 API（ToArray/索引器）
     /// 获得的数组都是拷贝，无法回写污染缓存的 ImmutableArray。
@@ -1512,7 +1512,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #8: ContextStateCacheAccessor.GetOrAddAsync 缓存命中时返回同一模板引用。
+    /// ContextStateCacheAccessor.GetOrAddAsync 缓存命中时返回同一模板引用。
     /// 验证 single-flight + 缓存命中路径共享模板实例（缓存模板复用的前提），
     /// 同时验证后续投影仍产生独立数组（完整隔离链路）。
     /// </summary>
@@ -1556,7 +1556,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #8: 端到端隔离链路——缓存命中复用模板 → 投影产生结果 → 调用方误改结果数组 →
+    /// 端到端隔离链路——缓存命中复用模板 → 投影产生结果 → 调用方误改结果数组 →
     /// 再次从缓存取模板并投影，新结果不受污染。验证 PackageTemplate 不可变 + ProjectResult 防御性拷贝
     /// 共同保证缓存模板在跨请求复用时的隔离正确性。
     /// </summary>
@@ -1604,10 +1604,10 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("item-1", result2.ItemReferences[0].ItemId, "ItemReferences 未被污染");
     }
 
-    // ──  write-during-build race tests ───────────────────────────
+    // ── write-during-build race tests ───────────────────────────
 
     /// <summary>
-    /// #9: 构建期间无并发写入（版本稳定）——factory 仅执行一次，结果缓存。
+    /// 构建期间无并发写入（版本稳定）——factory 仅执行一次，结果缓存。
     /// 第二次 GetOrAddAsync 命中缓存，factory 不再调用。
     /// 这是版本感知的基线行为：版本向量前后一致 → 不触发重试 → 缓存写入。
     /// </summary>
@@ -1640,7 +1640,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #9: 构建期间发生并发写入（版本变化）——版本向量前后不一致 → 触发单次重试。
+    /// 构建期间发生并发写入（版本变化）——版本向量前后不一致 → 触发单次重试。
     /// factory 首次调用期间 bump 版本（模拟并发 Store 写入），重试时不再 bump → 版本稳定 → 缓存。
     /// 验证：(1) factory 执行两次（重试）；(2) 返回值为重试结果（fresh，非首次 stale 结果）；
     /// (3) 重试后版本稳定 → 结果缓存；(4) 第二次 GetOrAdd 命中缓存不再调用 factory。
@@ -1680,7 +1680,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #9: 持续并发写入（每次 factory 调用都 bump 版本）——重试后版本仍变化 → 放弃缓存。
+    /// 持续并发写入（每次 factory 调用都 bump 版本）——重试后版本仍变化 → 放弃缓存。
     /// 验证：(1) factory 最多执行两次（单次重试，无无限循环）；(2) 仍返回结果（不抛异常，fail-open）；
     /// (3) 结果未写入缓存——第二次 GetOrAdd 再次触发 factory（证明未缓存）。
     /// 这确保高并发写入场景下不会缓存 stale 结果，同时避免重试风暴。
@@ -1717,7 +1717,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #9: 无版本存储时（versionStore=null）跳过版本比较——factory 仅执行一次，结果缓存。
+    /// 无版本存储时（versionStore=null）跳过版本比较——factory 仅执行一次，结果缓存。
     /// 验证 CaptureVersionsAsync 返回 null 时 VersionsChanged 恒为 false，保持原有行为，
     /// 不因引入版本感知而破坏无版本存储的部署场景。
     /// </summary>
@@ -1747,10 +1747,10 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("v1", v2);
     }
 
-    // ──  factory shutdown token 与 timeout ──────────────────────
+    // ── factory shutdown token 与 timeout ──────────────────────
 
     /// <summary>
-    /// #4: Shutdown() 取消正在执行的 factory——factory 通过 token 收到取消信号。
+    /// Shutdown() 取消正在执行的 factory——factory 通过 token 收到取消信号。
     /// factory 内部应观测到 token.IsCancellationRequested 变为 true。
     /// </summary>
     [TestMethod]
@@ -1812,7 +1812,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #4: factory timeout 取消长时间运行的 factory——超过 timeout 后 token 取消。
+    /// factory timeout 取消长时间运行的 factory——超过 timeout 后 token 取消。
     /// 验证 factoryTimeout 参数生效，且与 shutdown token 通过 linked CTS 组合。
     /// </summary>
     [TestMethod]
@@ -1852,7 +1852,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #4: 无 timeout 时 factory token 仍可取消（通过 shutdown），
+    /// 无 timeout 时 factory token 仍可取消（通过 shutdown），
     /// 且不分配 per-call linked CTS——直接使用 _shutdownCts.Token。
     /// 验证无 timeout 路径功能正确。
     /// </summary>
@@ -1900,7 +1900,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #4: Shutdown() 幂等——多次调用安全，不抛异常。
+    /// Shutdown() 幂等——多次调用安全，不抛异常。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -1918,7 +1918,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #4: DisposeAsync 触发 shutdown——后续 factory 调用收到已取消 token。
+    /// DisposeAsync 触发 shutdown——后续 factory 调用收到已取消 token。
     /// 验证 IAsyncDisposable 生命周期管理正确。
     /// </summary>
     [TestMethod]
@@ -1962,7 +1962,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #4: factoryTimeout 非正数抛 ArgumentOutOfRangeException。
+    /// factoryTimeout 非正数抛 ArgumentOutOfRangeException。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -1977,7 +1977,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #4: shutdown 后新 GetOrAddAsync 调用的 factory 阶段会抛 OperationCanceledException，
+    /// shutdown 后新 GetOrAddAsync 调用的 factory 阶段会抛 OperationCanceledException，
     /// 但 cache 命中路径（GetAsync）不受影响——shutdown 只影响 factory 执行。
     /// </summary>
     [TestMethod]
@@ -1999,10 +1999,10 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("pre-shutdown-value", hit, "shutdown 后缓存命中应不受影响");
     }
 
-    // ──  version bump 先于 physical eviction ────────────────────
+    // ── version bump 先于 physical eviction ────────────────────
 
     /// <summary>
-    /// #5: AfterCommitAsync 中 BumpVersionAsync 必须先于 InvalidateAsync 执行。
+    /// AfterCommitAsync 中 BumpVersionAsync 必须先于 InvalidateAsync 执行。
     /// 验证调用顺序——版本先递增，确保并发版本感知读取即使命中未物理移除的条目也会因版本失配返回 null。
     /// </summary>
     [TestMethod]
@@ -2024,7 +2024,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #5: 无 versionStore 时 AfterCommitAsync 仅调用 InvalidateAsync，不抛异常。
+    /// 无 versionStore 时 AfterCommitAsync 仅调用 InvalidateAsync，不抛异常。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -2043,10 +2043,10 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("Invalidate", callOrder[0]);
     }
 
-    // ──  Cache TTL ──────────────────────────────────────────────
+    // ── Cache TTL ──────────────────────────────────────────────
 
     /// <summary>
-    /// #6: 条目在 TTL 内可命中，超过 TTL 后 lazy 淘汰并返回 null。
+    /// 条目在 TTL 内可命中，超过 TTL 后 lazy 淘汰并返回 null。
     /// 使用短 TTL（200ms）验证过期行为：写入后立即读取命中；等待超过 TTL 后读取返回 null。
     /// </summary>
     [TestMethod]
@@ -2077,7 +2077,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #6: 无 TTL 时条目不会因时间过期（仅由 scope 失效或 CLOCK 淘汰移除）。
+    /// 无 TTL 时条目不会因时间过期（仅由 scope 失效或 CLOCK 淘汰移除）。
     /// 验证 TTL=null 保持原有行为。
     /// </summary>
     [TestMethod]
@@ -2099,7 +2099,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #6: TTL 过期检查先于版本检查——TTL 过期时不调用版本存储。
+    /// TTL 过期检查先于版本检查——TTL 过期时不调用版本存储。
     /// 验证 TTL 过期路径走 TTL 计数（TtlExpirations）而非版本失配计数（VersionMismatches），
     /// 证明版本 RPC 未被触发（分布式场景下节省一次网络调用）。
     /// </summary>
@@ -2129,7 +2129,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #6: TTL 过期后条目从缓存移除——后续 Count 减少，再次读取为 miss。
+    /// TTL 过期后条目从缓存移除——后续 Count 减少，再次读取为 miss。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -2152,7 +2152,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #6: TTL 非正数抛 ArgumentOutOfRangeException。
+    /// TTL 非正数抛 ArgumentOutOfRangeException。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -2167,7 +2167,7 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// #6: TTL 与 scope 失效协同工作——scope 失效仍能立即移除条目，
+    /// TTL 与 scope 失效协同工作——scope 失效仍能立即移除条目，
     /// TTL 只是在 scope 未触发时提供时间兜底。
     /// </summary>
     [TestMethod]
@@ -2188,7 +2188,7 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual(0L, cache.TtlExpirations, "scope 失效不应计 TTL 过期");
     }
 
-    // ──  Cache 默认生产关闭 / Cache Canary 可选启用 ─────────
+    // ── Cache 默认生产关闭 / Cache Canary 可选启用 ─────────
     //
     // 生产默认行为：PackageTemplateCacheOptions.Enabled=false → CacheAccessor=null
     // → BasicContextPackageBuilder._cacheAccessor 为 null → 每个 Build 走全量流水线。
@@ -2243,12 +2243,12 @@ public sealed class ContextStateCacheTests
         Assert.AreSame(accessor, value, "非 null CacheAccessor 必须传播到 builder._cacheAccessor");
     }
 
-    // ──  Cache Canary Gate 测试 ─────────────────────────────────────
+    // ── Cache Canary Gate 测试 ─────────────────────────────────────
     //
     // 验证 ContextStateCacheAccessor.canaryGate 谓词按工作空间粒度控制缓存路径：
     // - gate 返回 true → 走缓存路径（命中/未命中/写入缓存）
     // - gate 返回 false → 绕过缓存路径（直接调用 factory，不查询缓存也不写入缓存）
-    // - gate 为 null → 所有请求都走缓存路径（R13.0 之前的原有行为）
+    // - gate 为 null → 所有请求都走缓存路径（原有行为）
 
     /// <summary>
     /// canary gate 返回 true 时走缓存路径——重复请求只调用一次 factory（命中缓存）。
@@ -2312,8 +2312,8 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
-    /// canary gate 为 null（R13.0 之前的原有行为）时所有请求都走缓存路径。
-    /// 验证 canaryGate=null 时行为不变——保证 R13.0 测试与 R13-F canary 关闭场景语义一致。
+    /// canary gate 为 null（原有行为）时所有请求都走缓存路径。
+    /// 验证 canaryGate=null 时行为不变——保证 canary 关闭场景语义一致。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -2426,7 +2426,7 @@ public sealed class ContextStateCacheTests
         };
     }
 
-    // ── R13.0 #8 isolation test 共享构造辅助 ─────────────────────────────
+    // ── isolation test 共享构造辅助 ─────────────────────────────
 
     /// <summary>
     /// 构造用于隔离测试的 PackageTemplate：所有集合字段为非空 ImmutableArray，
@@ -2508,7 +2508,7 @@ public sealed class ContextStateCacheTests
 
     /// <summary>
     /// 记录 BumpVersionAsync 调用的版本存储包装。委托给 InMemoryContextStateVersionStore 保持语义，
-    /// 同时通过 OnBumped 回调通知调用顺序（用于 R13.0 #5 顺序断言）。
+    /// 同时通过 OnBumped 回调通知调用顺序（用于顺序断言）。
     /// </summary>
     private sealed class RecordingVersionStore : IContextStateVersionStore
     {

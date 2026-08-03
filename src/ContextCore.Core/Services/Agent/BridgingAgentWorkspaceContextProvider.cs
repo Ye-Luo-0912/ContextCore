@@ -6,18 +6,18 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 // BridgingAgentWorkspaceContextProvider — 装饰器，合并 Bridge snapshot + base provider injection。
 //
-// 设计目标（对齐 R23/R24 规格）：
-//   1. 装饰任意 IAgentWorkspaceContextProvider（如 DefaultAgentWorkspaceContextProvider）；
-//   2. 通过 IAgentContextBridge 调用 ContextCore 检索/打包管线，获取 ContextCore-derived snapshot；
-//   3. 同时调用 inner provider，获取 session-level injection/tool-result snapshot；
-//   4. 合并两个 snapshot 的 Sections（ContextCore 在前，injection/tool 在后）；
-//   5. Token 预算分配（默认 70% 给 ContextCore 检索，30% 给 injection/tool）；
-//   6. 失败语义：Bridge 失败时 fail-open（仅用 inner provider，写入 Metadata 标记 bridgeFailed）。
+// 设计目标（对齐规格）：
+// 1. 装饰任意 IAgentWorkspaceContextProvider（如 DefaultAgentWorkspaceContextProvider）；
+// 2. 通过 IAgentContextBridge 调用 ContextCore 检索/打包管线，获取 ContextCore-derived snapshot；
+// 3. 同时调用 inner provider，获取 session-level injection/tool-result snapshot；
+// 4. 合并两个 snapshot 的 Sections（ContextCore 在前，injection/tool 在后）；
+// 5. Token 预算分配（默认 70% 给 ContextCore 检索，30% 给 injection/tool）；
+// 6. 失败语义：Bridge 失败时 fail-open（仅用 inner provider，写入 Metadata 标记 bridgeFailed）。
 //
 // 设计边界：
-//   - 不修改 inner provider 的状态；
-//   - 不调用 IContextPackageBuilder（通过 IAgentContextBridge 间接调用）；
-//   - 合并后的 snapshot 不持久化（由调用方决定持久化）。
+// - 不修改 inner provider 的状态；
+// - 不调用 IContextPackageBuilder（通过 IAgentContextBridge 间接调用）；
+// - 合并后的 snapshot 不持久化（由调用方决定持久化）。
 // ===========================================================================
 
 /// <summary>

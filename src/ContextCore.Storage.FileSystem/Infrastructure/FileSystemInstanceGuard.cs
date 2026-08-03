@@ -3,10 +3,10 @@ using System.Collections.Concurrent;
 namespace ContextCore.Storage.FileSystem;
 
 /// <summary>
-/// #6：FileSystem 单实例与多进程支持边界守护（advisory，不阻断）。
+/// FileSystem 单实例与多进程支持边界守护（advisory，不阻断）。
 /// </summary>
 /// <remarks>
-/// FileSystem 后端的并发边界（R13.1 #1–#5 后）：
+/// FileSystem 后端的并发边界（多进程下）：
 /// <list type="bullet">
 /// <item><b>跨进程安全（单文件）</b>：所有写入经 <see cref="FileLockProvider"/> 获取
 /// <c>&lt;file&gt;.lock</c> 独占句柄（Enqueue / Dequeue / Ack / Nack / Append / Upsert / Update），
@@ -14,7 +14,7 @@ namespace ContextCore.Storage.FileSystem;
 /// <item><b>进程内（每进程独立，多进程下退化）</b>：
 /// <see cref="Stores.FileContextJobQueue"/> 的 JobId→路径索引（<c>_jobPathIndex</c>，未命中回退扫描）、
 /// <see cref="FileTraceJanitor"/> 的清理节流（<c>_lastPurgeTicks</c>，每进程各自 fire-and-forget）、
-/// 以及 <c>ContextStateCache</c>（生产已关闭，见 R13.0）。这些在多进程下命中率下降但正确性不变。</item>
+/// 以及 <c>ContextStateCache</c>（生产已关闭）。这些在多进程下命中率下降但正确性不变。</item>
 /// <item><b>无跨进程保证</b>：跨文件一致性（raw content + metadata 双文件）无事务原子性；
 /// 进程崩溃可能留下 orphan raw 或指向不存在 raw 的 metadata。</item>
 /// </list>

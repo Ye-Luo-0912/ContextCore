@@ -6,18 +6,18 @@ namespace ContextCore.Abstractions;
 // Memory Decay Evaluator 契约
 //
 // 对齐用户规格中的 6 种降权因素：
-//   1. 长期未命中 → Active → Cooling → Dormant → Archived
-//   2. 已有新版本 → Active → Superseded
-//   3. evidence 失效 → Active → Rejected
-//   4. 任务已完成 → Active → Archived
-//   5. 与当前状态冲突 → Active → Rejected
-//   6. 多次被选择但未产生有效贡献 → Active → Cooling
+// 1. 长期未命中 → Active → Cooling → Dormant → Archived
+// 2. 已有新版本 → Active → Superseded
+// 3. evidence 失效 → Active → Rejected
+// 4. 任务已完成 → Active → Archived
+// 5. 与当前状态冲突 → Active → Rejected
+// 6. 多次被选择但未产生有效贡献 → Active → Cooling
 //
 // 设计原则：
-//   - DecayEvaluator 只输出评估结果（MemoryDecayAssessment），
-//     不直接写入 IMemoryStateStore。调用方决定是否落库。
-//   - 评估结果包含目标状态 + 触发的降权因素 + 理由详情。
-//   - 多个降权因素同时触发时，取优先级最高（Rejected > Superseded > Archived > Dormant > Cooling）。
+// - DecayEvaluator 只输出评估结果（MemoryDecayAssessment），
+// 不直接写入 IMemoryStateStore。调用方决定是否落库。
+// - 评估结果包含目标状态 + 触发的降权因素 + 理由详情。
+// - 多个降权因素同时触发时，取优先级最高（Rejected > Superseded > Archived > Dormant > Cooling）。
 // ===========================================================================
 
 /// <summary>
@@ -95,10 +95,10 @@ public sealed record MemoryDecayAssessment
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   - 只读评估，不写入 store。调用方决定是否落库。
-///   - 评估输入：当前状态 + MemoryUtilityStats（R21-5a 提供）+ 显式触发因素。
-///   - 评估输出：MemoryDecayAssessment（含目标状态 + 降权因素 + 理由）。
-///   - 多个因素同时触发时，取优先级最高（Rejected > Superseded > Archived > Dormant > Cooling）。
+/// - 只读评估，不写入 store。调用方决定是否落库。
+/// - 评估输入：当前状态 + MemoryUtilityStats（提供）+ 显式触发因素。
+/// - 评估输出：MemoryDecayAssessment（含目标状态 + 降权因素 + 理由）。
+/// - 多个因素同时触发时，取优先级最高（Rejected > Superseded > Archived > Dormant > Cooling）。
 /// </remarks>
 public interface IMemoryDecayEvaluator
 {

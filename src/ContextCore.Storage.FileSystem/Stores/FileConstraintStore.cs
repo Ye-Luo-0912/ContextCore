@@ -20,10 +20,10 @@ public sealed class FileConstraintStore : IConstraintStore
     /// </summary>
     private readonly ConcurrentDictionary<string, ConstraintFileSnapshot> _snapshots = new();
 
-    /// <summary>测试可观察：snapshot cache 命中次数。仅用于验证 R13.2 #2 行为。</summary>
+    /// <summary>测试可观察：snapshot cache 命中次数。仅用于验证 行为。</summary>
     internal int SnapshotHits;
 
-    /// <summary>测试可观察：snapshot cache 未命中次数（触发实际文件读取）。仅用于验证 R13.2 #2 行为。</summary>
+    /// <summary>测试可观察：snapshot cache 未命中次数（触发实际文件读取）。仅用于验证 行为。</summary>
     internal int SnapshotMisses;
 
     public FileConstraintStore(FileStorageOptions options)

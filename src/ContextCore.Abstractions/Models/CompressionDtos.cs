@@ -106,7 +106,7 @@ public sealed class CompressionOptions
 }
 
 /// <summary>
-/// 单次 LLM 压缩调用的执行跟踪记录（§6.1 质量指标 + §6.2 来源证据绑定）。
+/// 单次 LLM 压缩调用的执行跟踪记录（质量指标 + 来源证据绑定）。
 /// 供调试、可观测性和人工复核使用，不影响主响应字段的语义。
 /// </summary>
 public sealed class CompressionTrace
@@ -126,7 +126,7 @@ public sealed class CompressionTrace
     /// <summary>压缩提示词版本（用于追踪 prompt 迭代）。</summary>
     public string PromptVersion { get; init; } = string.Empty;
 
-    /// <summary>本次压缩所依据的来源条目 ID 列表（§6.2 source chunk ids 证据绑定）。</summary>
+    /// <summary>本次压缩所依据的来源条目 ID 列表（source chunk ids 证据绑定）。</summary>
     public IReadOnlyList<string> SourceItemIds { get; init; } = Array.Empty<string>();
 
     /// <summary>模型是否返回了无效 JSON。</summary>
@@ -153,10 +153,10 @@ public sealed class CompressionTrace
     /// <summary>基于模型 token 价格估算的本次压缩成本（美元）。</summary>
     public double EstimatedCost { get; init; }
 
-    /// <summary>来源内容的 SHA-256 哈希（用于验证来源未被篡改，§6.2 证据绑定）。</summary>
+    /// <summary>来源内容的 SHA-256 哈希（用于验证来源未被篡改， 证据绑定）。</summary>
     public string SourceHash { get; init; } = string.Empty;
 
-    /// <summary>来源条目的最大版本号（可选，§6.2 证据绑定）。</summary>
+    /// <summary>来源条目的最大版本号（可选， 证据绑定）。</summary>
     public int? SourceVersion { get; init; }
 
     /// <summary>生成此压缩结果的模型与提示词版本组合（如 "gpt-4o/cc-compress-v1"）。</summary>
@@ -169,7 +169,7 @@ public sealed class CompressionTrace
     public DateTimeOffset CreatedAt { get; init; }
 }
 
-/// <summary>压缩输出与来源内容的绑定记录（§6.2 压缩输出证据绑定）。</summary>
+/// <summary>压缩输出与来源内容的绑定记录（压缩输出证据绑定）。</summary>
 public sealed class CompressionEvidenceBinding
 {
     /// <summary>来源条目 ID 列表。</summary>
@@ -227,7 +227,7 @@ public sealed class CompressionResponse
     /// <summary>本次 LLM 调用的执行跟踪记录（model profile、延迟、来源证据等）。</summary>
     public CompressionTrace? Trace { get; init; }
 
-    /// <summary>压缩输出与来源内容的证据绑定记录（§6.2）。</summary>
+    /// <summary>压缩输出与来源内容的证据绑定记录。</summary>
     public CompressionEvidenceBinding? EvidenceBinding { get; init; }
 
     /// <summary>响应创建时间。</summary>

@@ -11,19 +11,19 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// 并检测冲突候选生成 ConflictSet。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4 + R29 学习闭环）：
-///   1. Materializer 是写入边界：通过 <see cref="IUtilityLedger.AppendEntriesAsync"/> /
-///      <see cref="IConflictSetLedger.AppendConflictSetsAsync"/> 异步批量写入。
-///   2. Materializer 依赖 <see cref="IUtilityLedger"/> + <see cref="IConflictSetLedger"/> 抽象，
-///      生产路径注入 Postgres 实现，开发 / 测试路径注入 InMemory 实现 — 无需修改 materializer 代码。
-///   3. Store 的读 API 仍是 read-only；写入只通过 materializer 触发。
-///   4. P8 硬边界：所有 candidate（selected/dropped）都写入 ledger，
-///      避免"dropped 视为负样本"的简化。
-///   5. ConflictSet 检测规则（对齐澄清 #7）：
-///      - Duplicate：envelope.Safety.IsDuplicate = true 的候选
-///      - SectionConflict：envelope.Safety.BlockReasonCode = SectionQuotaExceeded
-///      - BudgetConflict：envelope.Safety.BlockReasonCode = TokenBudgetExceeded
-///      - 同 DecisionId 内若多个 envelope 命中同一 kind，组成一个 ConflictSet
+/// 设计原则（对齐澄清 + 学习闭环）：
+/// 1. Materializer 是写入边界：通过 <see cref="IUtilityLedger.AppendEntriesAsync"/> /
+/// <see cref="IConflictSetLedger.AppendConflictSetsAsync"/> 异步批量写入。
+/// 2. Materializer 依赖 <see cref="IUtilityLedger"/> + <see cref="IConflictSetLedger"/> 抽象，
+/// 生产路径注入 Postgres 实现，开发 / 测试路径注入 InMemory 实现 — 无需修改 materializer 代码。
+/// 3. Store 的读 API 仍是 read-only；写入只通过 materializer 触发。
+/// 4. 硬边界：所有 candidate（selected/dropped）都写入 ledger，
+/// 避免"dropped 视为负样本"的简化。
+/// 5. ConflictSet 检测规则（对齐澄清）：
+/// - Duplicate：envelope.Safety.IsDuplicate = true 的候选
+/// - SectionConflict：envelope.Safety.BlockReasonCode = SectionQuotaExceeded
+/// - BudgetConflict：envelope.Safety.BlockReasonCode = TokenBudgetExceeded
+/// - 同 DecisionId 内若多个 envelope 命中同一 kind，组成一个 ConflictSet
 /// </remarks>
 public sealed class UtilityLedgerMaterializer
 {

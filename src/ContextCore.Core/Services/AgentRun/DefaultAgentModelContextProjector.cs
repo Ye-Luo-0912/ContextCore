@@ -7,32 +7,32 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // / DefaultAgentModelContextProjector — Agent 模型上下文默认投影器
 //
 // 修复问题：
-//   旧路径中 Actor 调用 IContextDecisionRuntime 后仅将 CandidateId/Type/FinalScore
-//   摘要追加为 System 消息，模型拿不到材料正文。此外 ProjectForModel(tokenBudget: 0)
-//   等价于关闭预算控制。
+// 旧路径中 Actor 调用 IContextDecisionRuntime 后仅将 CandidateId/Type/FinalScore
+// 摘要追加为 System 消息，模型拿不到材料正文。此外 ProjectForModel(tokenBudget: 0)
+// 等价于关闭预算控制。
 //
 // 本投影器在投影阶段从 ContextDecisionExecutionResult.WorkingSet.Materials 取出候选
 // 正文内容，并按 Run.ModelContextTokenBudget 截断。
 //
 // 修复后的投影顺序（高优先级在前）：
-//   1. System Prompt（可信系统指令，System 角色）
-//   2. Hard Constraints（硬约束，System 角色）
-//   3. Current Task（当前任务，User 角色）
-//   4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记；best-fit 策略）
-//   5. Conversation（对话历史，按原子协议单元保序裁剪）
+// 1. System Prompt（可信系统指令，System 角色）
+// 2. Hard Constraints（硬约束，System 角色）
+// 3. Current Task（当前任务，User 角色）
+// 4. Retrieved Materials（检索材料，User 角色 + [untrusted_data] 标记；best-fit 策略）
+// 5. Conversation（对话历史，按原子协议单元保序裁剪）
 //
 // 修复要点：
-//   a. 引入 AgentContextState.Conversation 统一对话流，按时间顺序存储 Assistant + Tool 消息。
-//   b. AssistantToolCallTurn（含 ToolCalls）与对应 ToolResultTurn 作为不可拆分协议单元：
-//      预算不足时整体截断，不拆分 Assistant 与 Tool 消息——保持 "assistant tool_calls → tool result"
-//      因果顺序（OpenAI/Anthropic function calling 协议要求）。
-//   c. EstimateMessageTokens 扩展：包含 ToolCalls 的 Id/Name/Arguments 开销，
-//      不再仅算 Content.Length（Content 为空但 ToolCalls 非空的消息不再算作 0 token）。
-//   d. Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容）。
+// a. 引入 AgentContextState.Conversation 统一对话流，按时间顺序存储 Assistant + Tool 消息。
+// b. AssistantToolCallTurn（含 ToolCalls）与对应 ToolResultTurn 作为不可拆分协议单元：
+// 预算不足时整体截断，不拆分 Assistant 与 Tool 消息——保持 "assistant tool_calls → tool result"
+// 因果顺序（OpenAI/Anthropic function calling 协议要求）。
+// c. EstimateMessageTokens 扩展：包含 ToolCalls 的 Id/Name/Arguments 开销，
+// 不再仅算 Content.Length（Content 为空但 ToolCalls 非空的消息不再算作 0 token）。
+// d. Conversation 为空时回退到 Messages + ToolObservations 分离投影（向后兼容）。
 //
 // 保留要点：
-//   - Retrieved Materials 不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
-//   - Retrieved Materials 使用 best-fit 策略：按 FinalScore 排序后逐个尝试纳入。
+// - Retrieved Materials 不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
+// - Retrieved Materials 使用 best-fit 策略：按 FinalScore 排序后逐个尝试纳入。
 // ===========================================================================
 
 /// <summary>
@@ -93,7 +93,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         // 不破坏对话历史中 "assistant tool_calls → tool result" 的因果顺序。
         // 修复 a：不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
         // 修复 c：best-fit 策略——按 FinalScore 排序后逐个尝试纳入，
-        //   某个材料太大时跳过该材料继续尝试下一个（不直接 break），让更小的相关材料仍能进入上下文。
+        // 某个材料太大时跳过该材料继续尝试下一个（不直接 break），让更小的相关材料仍能进入上下文。
         if (decisionResult is not null)
         {
             var selected = decisionResult.Decision.SelectedEnvelopes;
@@ -133,7 +133,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                 };
 
                 // hydrated material 的 TokenCost 已由
-                // ISelectedCandidateHydrator 用 tokenizer 精确重算（P3 Fix-5），正文 token 直接复用精确值，
+                // ISelectedCandidateHydrator 用 tokenizer 精确重算，正文 token 直接复用精确值，
                 // 仅对固定包装开销（[untrusted_data]/[RetrievedContext:type]）做长度估算；
                 // 无精确值（测试 stub / 降级路径 / 正文缺失）时回退到整体长度估算（与旧行为一致）。
                 var tokens = TryGetExactMaterialTokens(env, materials, out var exactContentTokens)

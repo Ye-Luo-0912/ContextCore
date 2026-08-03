@@ -18,13 +18,13 @@ namespace ContextCore.Tests;
 // Model HA 与推理租约 —— 验收测试
 //
 // 覆盖范围：
-//   Model State Reconciler：Desired State 先写、节点后 reconcile；
-//      全新节点首次启动立即应用 Champion 模型（不等待 Revision 变更）；
-//      期望状态更新（Revision CAS）后节点自动切换模型。
-//   Engine Lease 释放：OnnxInferenceEngine 实现 IAsyncDisposable 且幂等；
-//      ModelActivationManager 停用时释放 native ONNX session（修复泄漏）。
-//   结构化失败：length / content_filter / empty_choices 不再落入瞬态
-//      Unavailable 分类——网关不重试、不触发回退，失败原因精确传播。
+// Model State Reconciler：Desired State 先写、节点后 reconcile；
+// 全新节点首次启动立即应用 Champion 模型（不等待 Revision 变更）；
+// 期望状态更新（Revision CAS）后节点自动切换模型。
+// Engine Lease 释放：OnnxInferenceEngine 实现 IAsyncDisposable 且幂等；
+// ModelActivationManager 停用时释放 native ONNX session（修复泄漏）。
+// 结构化失败：length / content_filter / empty_choices 不再落入瞬态
+// Unavailable 分类——网关不重试、不触发回退，失败原因精确传播。
 // ===========================================================================
 
 [TestClass]
@@ -206,7 +206,7 @@ public sealed class R29H_ModelHAStructuredFailureTests
     /// <summary>
     /// 验证：节点已应用状态不得成为冷启动跳过集群期望的依据——
     /// 进程重启后本地引擎为空，即使已应用状态声称"本节点已应用过该 Revision"，
-    /// 也必须重新应用当前期望状态（与 P0-7 的计数空间隔离原则一致）。
+    /// 也必须重新应用当前期望状态（与 的计数空间隔离原则一致）。
     /// </summary>
     [TestMethod]
     public async Task Reconciler_ColdEngine_AppliesDesiredDespiteAppliedState()

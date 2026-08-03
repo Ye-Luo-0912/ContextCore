@@ -8,21 +8,21 @@ namespace ContextCore.Tests;
 /// DefaultAgentContextBridge 实现测试。
 ///
 /// 覆盖：
-///   1. 构造函数 null packageBuilder 抛异常
-///   2. BuildSnapshotAsync null request 抛异常
-///   3. BuildSnapshotAsync TokenBudget <= 0 抛异常
-///   4. BuildSnapshotAsync 调用 IContextPackageBuilder.BuildDetailedAsync
-///   5. BuildSnapshotAsync 映射 Sections（Name/Content/Source/SortOrder）
-///   6. BuildSnapshotAsync 映射 DecisionRequestIds（从 SelectedItems.ItemId）
-///   7. BuildSnapshotAsync 映射 SnapshotId（agent-bridge-{packageId}）
-///   8. BuildSnapshotAsync 映射 ActualTokens（package.EstimatedTokens）
-///   9. BuildSnapshotAsync 映射 Metadata（buildId/packageId/counts）
-///  10. BuildSnapshotAsync 返回 BuildResult（供审计）
-///  11. BuildSnapshotAsync 返回 Duration（> 0）
-///  12. CancellationToken 传递
-///  13. ContextCore 构建失败 → 异常直接抛出（fail-closed）
-///  14. 空 Sections → 空 snapshot.Sections
-///  15. 空 SelectedItems → 空 DecisionRequestIds
+/// 1. 构造函数 null packageBuilder 抛异常
+/// 2. BuildSnapshotAsync null request 抛异常
+/// 3. BuildSnapshotAsync TokenBudget <= 0 抛异常
+/// 4. BuildSnapshotAsync 调用 IContextPackageBuilder.BuildDetailedAsync
+/// 5. BuildSnapshotAsync 映射 Sections（Name/Content/Source/SortOrder）
+/// 6. BuildSnapshotAsync 映射 DecisionRequestIds（从 SelectedItems.ItemId）
+/// 7. BuildSnapshotAsync 映射 SnapshotId（agent-bridge-{packageId}）
+/// 8. BuildSnapshotAsync 映射 ActualTokens（package.EstimatedTokens）
+/// 9. BuildSnapshotAsync 映射 Metadata（buildId/packageId/counts）
+/// 10. BuildSnapshotAsync 返回 BuildResult（供审计）
+/// 11. BuildSnapshotAsync 返回 Duration（> 0）
+/// 12. CancellationToken 传递
+/// 13. ContextCore 构建失败 → 异常直接抛出（fail-closed）
+/// 14. 空 Sections → 空 snapshot.Sections
+/// 15. 空 SelectedItems → 空 DecisionRequestIds
 /// </summary>
 [TestClass]
 [TestCategory("R24")]

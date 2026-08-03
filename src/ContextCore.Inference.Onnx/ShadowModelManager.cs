@@ -6,22 +6,22 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 // Shadow Model Manager — Champion / Challenger 影子模式支持
 //
-// 目标（对齐 P0-6 Model Control Plane API §4 Champion/Challenger）：
-//   1. 维护一个独立于 ActiveEngine 的影子推理引擎（Challenger），
-//      让控制平面能在不替换当前 active 模型（Champion）的前提下加载并验证候选模型。
-//   2. Challenger 的推理结果不返回给用户，仅记录用于 Champion vs Challenger 对比。
-//   3. 复用 IOnnxInferenceSessionFactory / IFeatureRegistry / ICalibrationValidator，
-//      与 ModelActivationManager 共享 schema 验证 / 校准验证 / ONNX session 创建路径。
+// 目标（对齐 Model Control Plane API Champion/Challenger 设计）：
+// 1. 维护一个独立于 ActiveEngine 的影子推理引擎（Challenger），
+// 让控制平面能在不替换当前 active 模型（Champion）的前提下加载并验证候选模型。
+// 2. Challenger 的推理结果不返回给用户，仅记录用于 Champion vs Challenger 对比。
+// 3. 复用 IOnnxInferenceSessionFactory / IFeatureRegistry / ICalibrationValidator，
+// 与 ModelActivationManager 共享 schema 验证 / 校准验证 / ONNX session 创建路径。
 //
 // 与 IModelActivationManager 的边界：
-//   - IModelActivationManager.ActivateAsync 把引擎切换为 ActiveEngine（替换 Champion）。
-//   - ShadowModelManager.ActivateShadowAsync 加载引擎到 ShadowEngine（不替换 Champion）。
-//   - 控制平面通过对比 ShadowEngine 与 ActiveEngine 的推理结果决定是否提升 Challenger。
+// - IModelActivationManager.ActivateAsync 把引擎切换为 ActiveEngine（替换 Champion）。
+// - ShadowModelManager.ActivateShadowAsync 加载引擎到 ShadowEngine（不替换 Champion）。
+// - 控制平面通过对比 ShadowEngine 与 ActiveEngine 的推理结果决定是否提升 Challenger。
 //
 // 设计原则：
-//   1. 线程安全：通过 lock 保护 ShadowEngine 切换，与 ModelActivationManager 一致。
-//   2. fail-safe：影子激活失败不影响现有推理（ShadowEngine 保持 null，RunShadowAsync 返回失败结果）。
-//   3. 不抛异常：RunShadowAsync 失败时返回 Succeeded=false 的结果，由调用方决定降级。
+// 1. 线程安全：通过 lock 保护 ShadowEngine 切换，与 ModelActivationManager 一致。
+// 2. fail-safe：影子激活失败不影响现有推理（ShadowEngine 保持 null，RunShadowAsync 返回失败结果）。
+// 3. 不抛异常：RunShadowAsync 失败时返回 Succeeded=false 的结果，由调用方决定降级。
 // ===========================================================================
 
 /// <summary>

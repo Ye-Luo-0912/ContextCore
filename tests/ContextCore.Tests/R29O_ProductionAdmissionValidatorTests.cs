@@ -14,18 +14,18 @@ namespace ContextCore.Tests;
 // Production Admission Validator 单元测试
 //
 // 覆盖：
-//   1. AdmissionRequired_IsTrueOnlyForProductionHA — 仅 ProductionHA profile
-//      需要准入校验，Development / SingleNode 不要求。
-//   2. NonProductionProfile_SkipsChecksAndAlwaysPasses — 非 ProductionHA
-//      返回单条 Skipped 检查且 AllPassed=true。
-//   3. ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured — 完整
-//      生产配置下 9 项强制项全部 Pass，且检查名称与顺序符合预期。
-//   4. 逐项失败 — 每项强制项单独破坏时对应检查 Fail 且报告 AllPassed=false。
+// 1. AdmissionRequired_IsTrueOnlyForProductionHA — 仅 ProductionHA profile
+// 需要准入校验，Development / SingleNode 不要求。
+// 2. NonProductionProfile_SkipsChecksAndAlwaysPasses — 非 ProductionHA
+// 返回单条 Skipped 检查且 AllPassed=true。
+// 3. ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured — 完整
+// 生产配置下 9 项强制项全部 Pass，且检查名称与顺序符合预期。
+// 4. 逐项失败 — 每项强制项单独破坏时对应检查 Fail 且报告 AllPassed=false。
 //
 // 说明：所有依赖（IToolDispatcher / IToolCatalog / IModelGateway /
-//   IAgentModelTransport / IClusterModelSlotStore / hydrator / batch lookup）
-//   均为内存假实现，不触发真实分派 / 推理 / 存储 IO；Worker 注册表直接
-//   注册真实 Hosting 类型名（与 ProductionRuntimeExtensions 的注册一致）。
+// IAgentModelTransport / IClusterModelSlotStore / hydrator / batch lookup）
+// 均为内存假实现，不触发真实分派 / 推理 / 存储 IO；Worker 注册表直接
+// 注册真实 Hosting 类型名（与 ProductionRuntimeExtensions 的注册一致）。
 // ===========================================================================
 
 [TestClass]

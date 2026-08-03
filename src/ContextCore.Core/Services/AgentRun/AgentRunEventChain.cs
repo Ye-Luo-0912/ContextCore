@@ -9,13 +9,13 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // AgentRunEventChain — Agent Run 事件哈希链工具
 //
 // 复用 DefaultAgentCheckpointFactory 的 ComputeContentHash / VerifyContentHash 模式：
-//   - ContentHash = SHA-256(序列化 payload，ContentHash=null)
-//   - PrevChainHash = 前一个事件的 ContentHash（链头为 null）
-//   - Sequence = 单调递增序列号（从 0 开始）
+// - ContentHash = SHA-256(序列化 payload，ContentHash=null)
+// - PrevChainHash = 前一个事件的 ContentHash（链头为 null）
+// - Sequence = 单调递增序列号（从 0 开始）
 // 校验：
-//   - 读取时重算 ContentHash 比对；
-//   - PrevChainHash 与前一事件 ContentHash 比对；
-//   - Sequence 连续性校验（0,1,2,...）。
+// - 读取时重算 ContentHash 比对；
+// - PrevChainHash 与前一事件 ContentHash 比对；
+// - Sequence 连续性校验（0,1,2,...）。
 // ===========================================================================
 
 /// <summary>
@@ -130,9 +130,9 @@ public static class AgentRunEventChain
     /// <summary>
     /// 校验整条事件链的完整性：
     /// <list type="bullet">
-    ///   <item>Sequence 连续性（从 0 开始，无间断）。</item>
-    ///   <item>PrevChainHash 链接（链头为 null；其余指向前一事件 ContentHash）。</item>
-    ///   <item>ContentHash 完整性（重算与存储值一致）。</item>
+    /// <item>Sequence 连续性（从 0 开始，无间断）。</item>
+    /// <item>PrevChainHash 链接（链头为 null；其余指向前一事件 ContentHash）。</item>
+    /// <item>ContentHash 完整性（重算与存储值一致）。</item>
     /// </list>
     /// </summary>
     /// <param name="events">按 Sequence 升序排列的事件列表。</param>

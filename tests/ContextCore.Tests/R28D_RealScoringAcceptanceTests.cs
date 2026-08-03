@@ -11,23 +11,23 @@ namespace ContextCore.Tests;
 // 真实评分能力验收测试
 //
 // 覆盖范围（DefaultFeaturePipeline + DefaultUtilityScorer 端到端）：
-//   DefaultFeaturePipeline —— ScoreBreakdown 提升为强类型特征字段
-//   DefaultUtilityScorer   —— rule-only / model-weighted / fallback 三模式
-//   端到端集成              —— Enrich → Score 产出模型加权分数
+// DefaultFeaturePipeline —— ScoreBreakdown 提升为强类型特征字段
+// DefaultUtilityScorer —— rule-only / model-weighted / fallback 三模式
+// 端到端集成 —— Enrich → Score 产出模型加权分数
 //
-// 验收点（对应 R28-D 任务描述）：
-//   1. DefaultFeaturePipeline 是真实特征提升（不再是 identity transform）
-//   2. DefaultUtilityScorer 是真实评分（不再是 no-op）
-//   3. rule-only 模式等价性：FinalScore = DeterministicScore，输入不变
-//   4. model-weighted 模式：FinalScore = w_d*Det + w_m*Model，ReasonCode="model-weighted"
-//   5. 模型失败降级：推理异常 / Succeeded=false / 缺 schema / 缺依赖 → 回退 deterministic
-//   6. 低置信度降级：confidence < threshold → FinalScore=Det，ReasonCode="fallback-to-deterministic"
-//   7. 校准应用：calibration service 非空时使用校准后分数
+// 验收点（对应 任务描述）：
+// 1. DefaultFeaturePipeline 是真实特征提升（不再是 identity transform）
+// 2. DefaultUtilityScorer 是真实评分（不再是 no-op）
+// 3. rule-only 模式等价性：FinalScore = DeterministicScore，输入不变
+// 4. model-weighted 模式：FinalScore = w_d*Det + w_m*Model，ReasonCode="model-weighted"
+// 5. 模型失败降级：推理异常 / Succeeded=false / 缺 schema / 缺依赖 → 回退 deterministic
+// 6. 低置信度降级：confidence < threshold → FinalScore=Det，ReasonCode="fallback-to-deterministic"
+// 7. 校准应用：calibration service 非空时使用校准后分数
 //
 // 设计原则：
-//   - 优先使用真实默认实现（DeterministicBatchInferenceEngine / DefaultFeatureRegistry / PlattCalibrationService）
-//   - 仅在需要控制推理输出 / 注入异常时使用手写 Stub
-//   - 所有异步测试使用超时 CancellationTokenSource 防止挂起
+// - 优先使用真实默认实现（DeterministicBatchInferenceEngine / DefaultFeatureRegistry / PlattCalibrationService）
+// - 仅在需要控制推理输出 / 注入异常时使用手写 Stub
+// - 所有异步测试使用超时 CancellationTokenSource 防止挂起
 // ===========================================================================
 
 // ===========================================================================

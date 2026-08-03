@@ -10,13 +10,13 @@ namespace ContextCore.Service.Extensions;
 //
 // 提供 AddAgentRuntime / AddGenericToolAgentRuntime / AddCodexAgentRuntime /
 // AddClaudeAgentRuntime / AddAgentContextDeltaCalculator / AddAgentCheckpointStore
-// 等扩展，将 R23-1~R23-6 的实现注册到 DI 容器。
+// 等扩展，将 ~ 的实现注册到 DI 容器。
 //
 // 设计边界：
-//   - 扩展方法为 public，允许外部 host 项目调用；
-//   - 不强制注册所有组件；调用方按需选择；
-//   - 默认实现均为 Singleton（Agent session 状态需跨请求共享）；
-//   - 不与 AddContextCore 强耦合；可独立调用。
+// - 扩展方法为 public，允许外部 host 项目调用；
+// - 不强制注册所有组件；调用方按需选择；
+// - 默认实现均为 Singleton（Agent session 状态需跨请求共享）；
+// - 不与 AddContextCore 强耦合；可独立调用。
 // ===========================================================================
 
 /// <summary>
@@ -148,18 +148,18 @@ public static class AgentRuntimeServiceCollectionExtensions
     }
 
     /// <summary>
-    /// 一键注册全部 R23 默认实现（GenericTool runtime + provider + delta calculator + checkpoint store）。
+    /// 一键注册全部 默认实现（GenericTool runtime + provider + delta calculator + checkpoint store）。
     /// </summary>
     /// <param name="services">DI 容器。</param>
     /// <param name="timeProvider">可选时间提供者。</param>
     /// <returns>当前容器（链式调用）。</returns>
     /// <remarks>
     /// 包含：
-    ///   - <see cref="AddAgentRuntimeRegistry"/>
-    ///   - <see cref="AddGenericToolAgentRuntime"/>
-    ///   - <see cref="AddAgentWorkspaceContextProvider"/>
-    ///   - <see cref="AddAgentContextDeltaCalculator"/>
-    ///   - <see cref="AddInMemoryAgentCheckpointStore"/>
+    /// - <see cref="AddAgentRuntimeRegistry"/>
+    /// - <see cref="AddGenericToolAgentRuntime"/>
+    /// - <see cref="AddAgentWorkspaceContextProvider"/>
+    /// - <see cref="AddAgentContextDeltaCalculator"/>
+    /// - <see cref="AddInMemoryAgentCheckpointStore"/>
     /// </remarks>
     public static IServiceCollection AddAgentRuntimeDefaults(
         this IServiceCollection services,
@@ -174,7 +174,7 @@ public static class AgentRuntimeServiceCollectionExtensions
             .AddInMemoryAgentCheckpointStore();
     }
 
-    // ===== R24 扩展 =====
+    // ===== 扩展 =====
 
     /// <summary>
     /// 注册 <see cref="DefaultAgentContextBridge"/> 作为 <see cref="IAgentContextBridge"/> 单例。
@@ -220,7 +220,7 @@ public static class AgentRuntimeServiceCollectionExtensions
     }
 
     /// <summary>
-    /// 一键注册全部 R23 + R24 默认实现（在 AddAgentRuntimeDefaults 基础上追加 bridge + task state store）。
+    /// 一键注册全部 + 默认实现（在 AddAgentRuntimeDefaults 基础上追加 bridge + task state store）。
     /// </summary>
     /// <param name="services">DI 容器。</param>
     /// <param name="timeProvider">可选时间提供者。</param>
@@ -240,7 +240,7 @@ public static class AgentRuntimeServiceCollectionExtensions
             .AddInMemoryAgentTaskStateStore();
     }
 
-    // ===== R27 扩展 =====
+    // ===== 扩展 =====
 
     /// <summary>
     /// 注册 <see cref="InMemoryPipelineRunStore"/> 作为

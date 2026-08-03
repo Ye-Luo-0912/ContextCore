@@ -7,10 +7,10 @@ namespace ContextCore.Core.Services.Agent;
 // DefaultAgentRuntimeRegistry — Agent Runtime 注册表默认实现。
 //
 // 实现 IAgentRuntimeRegistry 契约：
-//   - ConcurrentDictionary<AgentRuntimeKind, IAgentRuntime> 后端存储
-//   - Register 后注册覆盖先注册（TryUpdate 语义）
-//   - Resolve / GetAll 非阻塞读取
-//   - 不持有 session 状态
+// - ConcurrentDictionary<AgentRuntimeKind, IAgentRuntime> 后端存储
+// - Register 后注册覆盖先注册（TryUpdate 语义）
+// - Resolve / GetAll 非阻塞读取
+// - 不持有 session 状态
 // ===========================================================================
 
 /// <summary>

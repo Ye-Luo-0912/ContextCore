@@ -4,27 +4,27 @@ namespace ContextCore.Abstractions;
 // Agent Runtime Integration 契约
 //
 // 目标（对齐用户规格第六节）：
-//   当 Context Decision Runtime 稳定后，ContextCore 作为 Codex / Claude Code /
-//   其他 Agent 的统一上下文层。
+// 当 Context Decision Runtime 稳定后，ContextCore 作为 Codex / Claude Code /
+// 其他 Agent 的统一上下文层。
 //
 // 设计原则：
-//   1. 定义自己的稳定协议（IAgentRuntime / IAgentSession / IAgentEventStream /
-//      IAgentWorkspaceContextProvider / IAgentCheckpointStore）。
-//   2. Provider Adapter 在 Core/Adapter 层实现，将 Agent SDK 对象模型转换为
-//      ContextCore 内部模型。
-//   3. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型
-//      保留在 Adapter 实现内部，不进入 Abstractions。
-//   4. ContextCore 提供的能力：session context snapshot / task state /
-//      relevant project context / decision+constraint injection /
-//      tool result ingestion / checkpoint+resume / context delta /
-//      token-budget-aware package。
+// 1. 定义自己的稳定协议（IAgentRuntime / IAgentSession / IAgentEventStream /
+// IAgentWorkspaceContextProvider / IAgentCheckpointStore）。
+// 2. Provider Adapter 在 Core/Adapter 层实现，将 Agent SDK 对象模型转换为
+// ContextCore 内部模型。
+// 3. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型
+// 保留在 Adapter 实现内部，不进入 Abstractions。
+// 4. ContextCore 提供的能力：session context snapshot / task state /
+// relevant project context / decision+constraint injection /
+// tool result ingestion / checkpoint+resume / context delta /
+// token-budget-aware package。
 //
 // 子阶段进度：
-//   （当前）：5 个核心接口契约 + AgentRuntimeKind 枚举 + AgentSessionId +
-//                  AgentEvent 类型（最小可实施集）。
-//   AgentContextSnapshot / AgentTaskState / AgentContextDelta 数据契约。
-//   GenericToolAgentAdapter + DefaultAgentWorkspaceContextProvider 实现。
-//   CodexAgentRuntimeAdapter / ClaudeAgentRuntimeAdapter + 全量测试。
+// （当前）：5 个核心接口契约 + AgentRuntimeKind 枚举 + AgentSessionId +
+// AgentEvent 类型（最小可实施集）。
+// AgentContextSnapshot / AgentTaskState / AgentContextDelta 数据契约。
+// GenericToolAgentAdapter + DefaultAgentWorkspaceContextProvider 实现。
+// CodexAgentRuntimeAdapter / ClaudeAgentRuntimeAdapter + 全量测试。
 // ===========================================================================
 
 /// <summary>
@@ -57,10 +57,10 @@ public enum AgentRuntimeKind : byte
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. SessionId 由 IAgentRuntime.CreateSessionAsync 分配，全局唯一。
-///   2. SessionId 不依赖具体 SDK 的 session/conversation id 语义；
-///      Adapter 负责将 SDK session id 映射到本类型。
-///   3. SessionId 用于 checkpoint、event stream 订阅、workspace context 绑定。
+/// 1. SessionId 由 IAgentRuntime.CreateSessionAsync 分配，全局唯一。
+/// 2. SessionId 不依赖具体 SDK 的 session/conversation id 语义；
+/// Adapter 负责将 SDK session id 映射到本类型。
+/// 3. SessionId 用于 checkpoint、event stream 订阅、workspace context 绑定。
 /// </remarks>
 public sealed record AgentSessionId
 {
@@ -156,10 +156,10 @@ public enum AgentEventLevel : byte
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 事件为不可变 record；写入后不可修改。
-///   2. Payload 为自由 JSON 字符串（由 adapter 负责序列化）；
-///      ContextCore 不解析 Payload 内部结构。
-///   3. CorrelationId 用于跨事件链路追踪（如同一 turn 内的多个 tool call）。
+/// 1. 事件为不可变 record；写入后不可修改。
+/// 2. Payload 为自由 JSON 字符串（由 adapter 负责序列化）；
+/// ContextCore 不解析 Payload 内部结构。
+/// 3. CorrelationId 用于跨事件链路追踪（如同一 turn 内的多个 tool call）。
 /// </remarks>
 public sealed record AgentEvent
 {
@@ -197,12 +197,12 @@ public sealed record AgentEvent
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐用户规格）：
-///   1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；
-///      Adapter 实现负责 SDK 对象 → ContextCore 模型转换。
-///   2. Runtime 是 session 的工厂；session 创建后由 IAgentSession 管理。
-///   3. Runtime 不暴露 SDK 特定配置（如 model name / temperature）；
-///      这些由 Adapter 内部管理。
-///   4. Runtime 是幂等的：相同输入应产生相同 session id（确定性）。
+/// 1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；
+/// Adapter 实现负责 SDK 对象 → ContextCore 模型转换。
+/// 2. Runtime 是 session 的工厂；session 创建后由 IAgentSession 管理。
+/// 3. Runtime 不暴露 SDK 特定配置（如 model name / temperature）；
+/// 这些由 Adapter 内部管理。
+/// 4. Runtime 是幂等的：相同输入应产生相同 session id（确定性）。
 /// </remarks>
 public interface IAgentRuntime
 {
@@ -264,10 +264,10 @@ public sealed record AgentSessionRequest
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Session 是有状态的；同一 session 内的多次 turn 共享 context。
-///   2. Session 不直接调用 ContextCore 内部接口；通过 IAgentWorkspaceContextProvider
-///      间接访问 context snapshot / task state / decision injection。
-///   3. Session 关闭后所有方法抛 InvalidOperationException。
+/// 1. Session 是有状态的；同一 session 内的多次 turn 共享 context。
+/// 2. Session 不直接调用 ContextCore 内部接口；通过 IAgentWorkspaceContextProvider
+/// 间接访问 context snapshot / task state / decision injection。
+/// 3. Session 关闭后所有方法抛 InvalidOperationException。
 /// </remarks>
 public interface IAgentSession
 {
@@ -308,9 +308,9 @@ public interface IAgentSession
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Event stream 是只读的；事件由 runtime/session 写入。
-///   2. 支持按 Kind / 时间范围过滤。
-///   3. 订阅是 push 模型（IAsyncEnumerable）+ pull 模型（QueryAsync）。
+/// 1. Event stream 是只读的；事件由 runtime/session 写入。
+/// 2. 支持按 Kind / 时间范围过滤。
+/// 3. 订阅是 push 模型（IAsyncEnumerable）+ pull 模型（QueryAsync）。
 /// </remarks>
 public interface IAgentEventStream
 {
@@ -369,18 +369,18 @@ public sealed record AgentEventQuery
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐用户规格）：
-///   1. Provider 是 Agent 访问 ContextCore 的唯一入口；
-///      Agent 不直接调用 ContextCore 内部接口。
-///   2. Provider 提供的能力：
-///      - session context snapshot（按 token 预算打包）
-///      - task state（agent 当前任务状态）
-///      - relevant project context（按相关性过滤的 context）
-///      - decision/constraint injection（注入决策与约束到 context）
-///      - tool result ingestion（摄入 tool 输出到 context）
-///      - checkpoint/resume（session 状态保存与恢复）
-///      - context delta（增量 context 变更）
-///      - token-budget-aware package（按预算打包）
-///   3. R23-1 阶段仅定义接口；具体实现由 R23-2/R23-3 完成。
+/// 1. Provider 是 Agent 访问 ContextCore 的唯一入口；
+/// Agent 不直接调用 ContextCore 内部接口。
+/// 2. Provider 提供的能力：
+/// - session context snapshot（按 token 预算打包）
+/// - task state（agent 当前任务状态）
+/// - relevant project context（按相关性过滤的 context）
+/// - decision/constraint injection（注入决策与约束到 context）
+/// - tool result ingestion（摄入 tool 输出到 context）
+/// - checkpoint/resume（session 状态保存与恢复）
+/// - context delta（增量 context 变更）
+/// - token-budget-aware package（按预算打包）
+/// 3. 阶段仅定义接口；具体实现由实现方完成。
 /// </remarks>
 public interface IAgentWorkspaceContextProvider
 {
@@ -388,7 +388,7 @@ public interface IAgentWorkspaceContextProvider
     /// <param name="sessionId">Session 标识。</param>
     /// <param name="tokenBudget">Token 预算上限（必填，>0）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>打包后的 context snapshot（具体类型在 R23-2 定义）。</returns>
+    /// <returns>打包后的 context snapshot（具体类型在 定义）。</returns>
     [StoreOperation(StoreOperationKind.Read)]
     Task<AgentContextSnapshotRef> GetContextSnapshotAsync(
         AgentSessionId sessionId,
@@ -422,13 +422,13 @@ public interface IAgentWorkspaceContextProvider
 
 /// <summary>
 /// Agent Context Snapshot 引用。
-/// 阶段仅定义引用类型；具体 snapshot 内容由 R23-2 定义。
+/// 阶段仅定义引用类型；具体 snapshot 内容由实现方定义。
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. SnapshotRef 是轻量引用；实际 snapshot 内容可能很大（按 token 预算打包）。
-///   2. SnapshotId 用于 checkpoint/resume；同一 session 多次 snapshot 有不同 ID。
-///   3. ContentJson 由 provider 序列化；ContextCore 不解析其内部结构。
+/// 1. SnapshotRef 是轻量引用；实际 snapshot 内容可能很大（按 token 预算打包）。
+/// 2. SnapshotId 用于 checkpoint/resume；同一 session 多次 snapshot 有不同 ID。
+/// 3. ContentJson 由 provider 序列化；ContextCore 不解析其内部结构。
 /// </remarks>
 public sealed record AgentContextSnapshotRef
 {
@@ -447,7 +447,7 @@ public sealed record AgentContextSnapshotRef
     /// <summary>请求的 token 预算上限。</summary>
     public int TokenBudget { get; init; }
 
-    /// <summary>Snapshot 内容（JSON 字符串；具体结构由 R23-2 定义）。</summary>
+    /// <summary>Snapshot 内容（JSON 字符串；具体结构由实现方定义）。</summary>
     public required string ContentJson { get; init; }
 
     /// <summary>Snapshot 元数据（如 section 计数、source 计数等摘要）。</summary>
@@ -457,7 +457,7 @@ public sealed record AgentContextSnapshotRef
 
 /// <summary>
 /// Agent Context Injection。向 context 注入决策与约束。
-/// 阶段仅定义注入载体；具体注入内容由 R23-2 定义。
+/// 阶段仅定义注入载体；具体注入内容由实现方定义。
 /// </summary>
 public sealed record AgentContextInjection
 {
@@ -488,14 +488,14 @@ public sealed record AgentContextInjection
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Checkpoint 是 session 级别的；不同 session 的 checkpoint 隔离。
-///   2. Checkpoint 内容由 IAgentSession 实现 + provider 协作产生；
-///      Store 仅负责持久化与查询。
-///   3. Resume 时恢复 session 状态（包括 context snapshot / task state / event 顺序）。
-///   4. Store 是 read-write 接口；写入通过 SaveAsync，读取通过 GetAsync / ListAsync。
-///   5. P0-6 修复：GetAsync / DeleteAsync 必须传 workspaceId 以保证跨 workspace 隔离。
-///      主键为 (workspace_id, checkpoint_id)；调用方必须显式传入 workspaceId，
-///      不允许只按 checkpointId 查询（避免跨 workspace 误读 / 误删）。
+/// 1. Checkpoint 是 session 级别的；不同 session 的 checkpoint 隔离。
+/// 2. Checkpoint 内容由 IAgentSession 实现 + provider 协作产生；
+/// Store 仅负责持久化与查询。
+/// 3. Resume 时恢复 session 状态（包括 context snapshot / task state / event 顺序）。
+/// 4. Store 是 read-write 接口；写入通过 SaveAsync，读取通过 GetAsync / ListAsync。
+/// 5. 修复：GetAsync / DeleteAsync 必须传 workspaceId 以保证跨 workspace 隔离。
+/// 主键为 (workspace_id, checkpoint_id)；调用方必须显式传入 workspaceId，
+/// 不允许只按 checkpointId 查询（避免跨 workspace 误读 / 误删）。
 /// </remarks>
 public interface IAgentCheckpointStore
 {
@@ -508,7 +508,7 @@ public interface IAgentCheckpointStore
     /// <summary>
     /// 获取指定 checkpoint。
     /// </summary>
-    /// <param name="workspaceId">workspace 作用域（与 checkpoint 主键组合；P0-6 修复）。</param>
+    /// <param name="workspaceId">workspace 作用域（与 checkpoint 主键组合；修复）。</param>
     /// <param name="checkpointId">Checkpoint ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>Checkpoint 数据（null = 不存在或跨 workspace 不可见）。</returns>
@@ -532,7 +532,7 @@ public interface IAgentCheckpointStore
     /// <summary>
     /// 删除 checkpoint。
     /// </summary>
-    /// <param name="workspaceId">workspace 作用域（与 checkpoint 主键组合；P0-6 修复）。</param>
+    /// <param name="workspaceId">workspace 作用域（与 checkpoint 主键组合；修复）。</param>
     /// <param name="checkpointId">Checkpoint ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>true = 删除成功；false = 不存在或跨 workspace 不可见。</returns>
@@ -548,10 +548,10 @@ public interface IAgentCheckpointStore
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Checkpoint 是不可变 record；保存后不可修改。
-///   2. StateJson 由 IAgentSession 实现 + provider 协作序列化；
-///      ContextCore 不解析其内部结构。
-///   3. CheckpointId 全局唯一（如 "ckpt-{guid}"）。
+/// 1. Checkpoint 是不可变 record；保存后不可修改。
+/// 2. StateJson 由 IAgentSession 实现 + provider 协作序列化；
+/// ContextCore 不解析其内部结构。
+/// 3. CheckpointId 全局唯一（如 "ckpt-{guid}"）。
 /// </remarks>
 public sealed record AgentCheckpoint
 {

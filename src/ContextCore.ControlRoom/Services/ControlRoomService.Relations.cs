@@ -298,7 +298,7 @@ public sealed partial class ControlRoomService
         return stats;
     }
 
-    /// <summary>P3.1-d：按 collection 批量加载 MemoryStore/ContextStore 构建 itemId -> NodeKind 查找表。</summary>
+    /// <summary>-d：按 collection 批量加载 MemoryStore/ContextStore 构建 itemId -> NodeKind 查找表。</summary>
     private async Task<Dictionary<string, Dictionary<string, string>>> BuildNodeKindLookupsAsync(
         IReadOnlyList<ContextRelation> relations,
         CancellationToken cancellationToken)
@@ -348,7 +348,7 @@ public sealed partial class ControlRoomService
         return lookups;
     }
 
-    /// <summary>P3.1-d：从批量查找表推断单个条目的 NodeKind。</summary>
+    /// <summary>-d：从批量查找表推断单个条目的 NodeKind。</summary>
     private static string InferNodeKind(string itemId, Dictionary<string, string> lookup)
     {
         if (string.IsNullOrWhiteSpace(itemId))
@@ -359,7 +359,7 @@ public sealed partial class ControlRoomService
         return lookup.TryGetValue(itemId, out var kind) ? kind : string.Empty;
     }
 
-    /// <summary>P3.1-d：根据记忆层与类型分类 NodeKind（原 InferNodeKindAsync 的分类逻辑）。</summary>
+    /// <summary>-d：根据记忆层与类型分类 NodeKind（原 InferNodeKindAsync 的分类逻辑）。</summary>
     private static string ClassifyNodeKind(ContextMemoryItem memory)
     {
         if (memory.Layer == ContextMemoryLayer.Global)

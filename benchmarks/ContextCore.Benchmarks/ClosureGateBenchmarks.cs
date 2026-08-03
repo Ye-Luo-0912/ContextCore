@@ -21,20 +21,20 @@ namespace ContextCore.Benchmarks;
 // ===========================================================================
 // Closure Gate 性能基准
 //
-// 测量目标（对应任务 §1~§5）：
-//   Provider/Store-call 计数：通过计数包装 store/router/provider，在每次 op
-//      结束时拍快照写入静态字典，再由自定义 IColumn 展示到 summary。
-//   p50/p95 latency：BenchmarkDotNet 默认统计已提供 Percentile 列，无需额外配置。
-//   allocated bytes/op + Gen0/Gen1 GC：[MemoryDiagnoser] 自动收集。
-//   100% V2 vs Legacy 差分：LegacyRetrieval / LegacyPackageBuild（基线）
-//      对比 V2Retrieval_100Percent / V2PackageBuild_100Percent。
-//   sampled shadow 额外开销门：V2Retrieval_100Percent（无 shadow）
-//      对比 SampledShadowRetrieval_Rate0 / SampledShadowRetrieval_Rate100。
+// 测量目标（对应任务 ~）：
+// Provider/Store-call 计数：通过计数包装 store/router/provider，在每次 op
+// 结束时拍快照写入静态字典，再由自定义 IColumn 展示到 summary。
+// p50/p95 latency：BenchmarkDotNet 默认统计已提供 Percentile 列，无需额外配置。
+// allocated bytes/op + Gen0/Gen1 GC：[MemoryDiagnoser] 自动收集。
+// 100% V2 vs Legacy 差分：LegacyRetrieval / LegacyPackageBuild（基线）
+// 对比 V2Retrieval_100Percent / V2PackageBuild_100Percent。
+// sampled shadow 额外开销门：V2Retrieval_100Percent（无 shadow）
+// 对比 SampledShadowRetrieval_Rate0 / SampledShadowRetrieval_Rate100。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
 // 文件计数快照存储 — 跨进程传递计数（BenchmarkDotNet 在子进程中运行 benchmark，
-//    静态字典不回传宿主进程，故用文件中转）
+// 静态字典不回传宿主进程，故用文件中转）
 // ---------------------------------------------------------------------------
 
 internal static class ClosureGateCounters
@@ -203,8 +203,8 @@ internal sealed class CountingCandidateProvider : ICandidateProvider
 
 // ---------------------------------------------------------------------------
 // 自定义 IColumn — 从计数文件读取快照展示到 summary
-//    BenchmarkDotNet 在子进程中执行 benchmark 方法，IColumn 在宿主进程中渲染 summary，
-//    故通过文件中转计数（见 ClosureGateCounters）。
+// BenchmarkDotNet 在子进程中执行 benchmark 方法，IColumn 在宿主进程中渲染 summary，
+// 故通过文件中转计数（见 ClosureGateCounters）。
 // ---------------------------------------------------------------------------
 
 internal sealed class CounterColumn : IColumn
@@ -260,20 +260,20 @@ internal sealed class CounterColumn : IColumn
 
 // ---------------------------------------------------------------------------
 // Benchmark 配置 — 继承 BenchmarkOutputConfig（含 Job[MinIterationCount=15]
-//    + JSON/Markdown/CSV 导出器 + ConsoleLogger + DefaultColumnProviders），
-//    仅追加自定义计数列。确保配置链路：
-//    Program.Main → BenchmarkSwitcher → BenchmarkOutputConfig → MinIterationCount=15
-//    对本类同样生效，避免 [Config] 覆盖 switcher 配置后丢失迭代次数下限。
+// + JSON/Markdown/CSV 导出器 + ConsoleLogger + DefaultColumnProviders），
+// 仅追加自定义计数列。确保配置链路：
+// Program.Main → BenchmarkSwitcher → BenchmarkOutputConfig → MinIterationCount=15
+// 对本类同样生效，避免 [Config] 覆盖 switcher 配置后丢失迭代次数下限。
 // ---------------------------------------------------------------------------
 
 public sealed class ClosureGateBenchmarksConfig : BenchmarkOutputConfig
 {
     public ClosureGateBenchmarksConfig()
     {
-        // 初始化计数文件目录并通过环境变量传递给子进程（§0 跨进程计数）
+        // 初始化计数文件目录并通过环境变量传递给子进程（跨进程计数）
         ClosureGateCounters.PrepareCountersDir();
 
-        // 追加自定义计数列（§1 Provider/Store-call 计数）
+        // 追加自定义计数列（Provider/Store-call 计数）
         // 其余配置（ArtifactsPath / Job[MinIterationCount=15, MaxIterationCount=25] /
         // MinWarmupCount=3 / MaxWarmupCount=10 / JSON+Markdown+CSV 导出器 /
         // ConsoleLogger / DefaultColumnProviders）均继承自 BenchmarkOutputConfig。

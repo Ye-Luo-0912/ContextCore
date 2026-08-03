@@ -3,20 +3,20 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Model Activation Audit 契约
 //
-// 目标（对齐 P0-6 Model Control Plane API §3 Activation Audit）：
-//   把 ModelActivationManager.ActivateAsync / Rollback / Retire 等模型生命周期事件
-//   显式契约化为可持久化的审计记录，让 HA 场景下激活历史可跨进程查询与对账，
-//   让 Champion/Challenger 推进决策可追溯。
+// 目标（对齐 Model Control Plane API Activation Audit）：
+// 把 ModelActivationManager.ActivateAsync / Rollback / Retire 等模型生命周期事件
+// 显式契约化为可持久化的审计记录，让 HA 场景下激活历史可跨进程查询与对账，
+// 让 Champion/Challenger 推进决策可追溯。
 //
 // 与 AuditLogMiddleware 的边界：
-//   - AuditLogMiddleware 记录请求级元数据（method/path/status/duration），不感知业务语义。
-//   - IModelActivationAuditStore 记录模型生命周期业务事件（activate/rollback/retire/shadow），
-//     包含 previous_model_id / operator / reason 等业务字段。
+// - AuditLogMiddleware 记录请求级元数据（method/path/status/duration），不感知业务语义。
+// - IModelActivationAuditStore 记录模型生命周期业务事件（activate/rollback/retire/shadow），
+// 包含 previous_model_id / operator / reason 等业务字段。
 //
 // 设计原则：
-//   1. 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
-//   2. 不可变语义：审计记录一旦写入不可修改（append-only）。
-//   3. 不抛异常：失败由调用方记录到日志，不影响激活主流程。
+// 1. 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+// 2. 不可变语义：审计记录一旦写入不可修改（append-only）。
+// 3. 不抛异常：失败由调用方记录到日志，不影响激活主流程。
 // ===========================================================================
 
 /// <summary>

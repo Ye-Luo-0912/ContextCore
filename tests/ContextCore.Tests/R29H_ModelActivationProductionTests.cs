@@ -11,22 +11,22 @@ namespace ContextCore.Tests;
 // Model Activation 生产级可靠性验收测试
 //
 // 验证 ModelActivationManager 在生产场景下的端到端可靠性，覆盖：
-//   1. Production_RealOnnxFile_ActivatesWithValidHash — 真实 ONNX 文件激活并校验 SHA-256
-//   2. Production_SchemaValidation_RejectsUnknownSchema — Schema 未注册时拒绝激活（防 schema drift）
-//   3. Production_EngineSwitch_FromDeterministicToReal — 激活后引擎从 Deterministic 切换到 RealModel
-//   4. Production_ActivateLatest_ResolvesLatestVersion — ActivateLatestAsync 解析最新版本
-//   5. Production_FailedActivation_KeepsFallbackEngine — 激活失败时保留 fallback 引擎（fail-safe）
-//   6. Production_ConcurrentActivation_SwitchesAtomically — 并发激活请求原子切换引擎
-//   7. Production_InferenceDelegation_FallbackBeforeActivation — 激活前委托 fallback，激活后委托 RealModel
-//   8. Production_Postgres_PersistentActivation — Postgres 持久化激活路径（不可用时 Inconclusive）
+// 1. Production_RealOnnxFile_ActivatesWithValidHash — 真实 ONNX 文件激活并校验 SHA-256
+// 2. Production_SchemaValidation_RejectsUnknownSchema — Schema 未注册时拒绝激活（防 schema drift）
+// 3. Production_EngineSwitch_FromDeterministicToReal — 激活后引擎从 Deterministic 切换到 RealModel
+// 4. Production_ActivateLatest_ResolvesLatestVersion — ActivateLatestAsync 解析最新版本
+// 5. Production_FailedActivation_KeepsFallbackEngine — 激活失败时保留 fallback 引擎（fail-safe）
+// 6. Production_ConcurrentActivation_SwitchesAtomically — 并发激活请求原子切换引擎
+// 7. Production_InferenceDelegation_FallbackBeforeActivation — 激活前委托 fallback，激活后委托 RealModel
+// 8. Production_Postgres_PersistentActivation — Postgres 持久化激活路径（不可用时 Inconclusive）
 //
 // 设计原则：
-//   - 优先使用真实组件（非 mock）：OnnxRuntimeInferenceSessionFactory 加载真实 ONNX 文件；
-//     InMemoryModelArtifactRegistry / DefaultFeatureRegistry / DefaultCalibrationValidator 为真实实现。
-//   - 当真实 ONNX 模型文件不存在（CI 未下载模型）时，Assert.Inconclusive 跳过。
-//   - 复用同 assembly 的 internal 测试辅助：InMemoryModelArtifactRegistry /
-//     MockOnnxInferenceSession / MockSessionFactory / FailingSessionFactory。
-//   - 所有代码注释使用中文。
+// - 优先使用真实组件（非 mock）：OnnxRuntimeInferenceSessionFactory 加载真实 ONNX 文件；
+// InMemoryModelArtifactRegistry / DefaultFeatureRegistry / DefaultCalibrationValidator 为真实实现。
+// - 当真实 ONNX 模型文件不存在（CI 未下载模型）时，Assert.Inconclusive 跳过。
+// - 复用同 assembly 的 internal 测试辅助：InMemoryModelArtifactRegistry /
+// MockOnnxInferenceSession / MockSessionFactory / FailingSessionFactory。
+// - 所有代码注释使用中文。
 // ===========================================================================
 
 [TestClass]

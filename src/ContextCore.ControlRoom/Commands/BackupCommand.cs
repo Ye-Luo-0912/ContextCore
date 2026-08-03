@@ -12,17 +12,17 @@ namespace ContextCore.ControlRoom.Commands;
 /// <summary>
 /// 备份与恢复命令（支持 filesystem 与 postgres 两种存储后端）。
 /// <list type="bullet">
-///   <item><c>backup create [--output &lt;dir&gt;]</c>：将数据根目录打包为 ZIP 快照，同时生成 SHA-256 清单。</item>
-///   <item><c>backup validate [--isolate]</c>：校验所有 JSONL 文件；<c>--isolate</c> 将损坏文件重命名并创建净版本。</item>
-///   <item><c>backup verify &lt;manifest&gt; [--archive &lt;zip&gt;]</c>：根据清单重新哈希归档，输出完整性报告。</item>
-///   <item><c>backup drill &lt;archive&gt; [--manifest &lt;path&gt;]</c>：将归档恢复到隔离 staging 目录并校验，完成后清理。</item>
-///   <item><c>backup restore &lt;file&gt; [--confirm]</c>：从 ZIP 快照恢复（需 --confirm 确认，破坏性操作）。</item>
-///   <item><c>backup pg-create [--connection-string &lt;cs&gt;] [--output &lt;dir&gt;]</c>：通过 pg_dump 创建 PostgreSQL 转储并生成清单。</item>
-///   <item><c>backup pg-restore &lt;dump&gt; [--manifest &lt;path&gt;] [--confirm]</c>：通过 pg_restore 恢复 PostgreSQL 转储（需 --confirm）。</item>
-///   <item><c>backup pg-verify &lt;manifest&gt;</c>：校验 PostgreSQL 转储文件哈希与表清单。</item>
-///   <item><c>backup pg-drill &lt;dump&gt; --staging-connection-string &lt;cs&gt; [--manifest &lt;path&gt;]</c>：在 staging 数据库恢复 PostgreSQL 转储并校验。</item>
-///   <item><c>backup pg-pitr-prepare --wal-archive-dir &lt;dir&gt; [--output &lt;dir&gt;]</c>：启用 WAL 归档并创建基础备份。</item>
-///   <item><c>backup pg-pitr-restore --base-backup &lt;path&gt; --wal-archive-dir &lt;dir&gt; --target-time &lt;ISO8601&gt; --target-connection-string &lt;cs&gt;</c>：执行 PITR 恢复。</item>
+/// <item><c>backup create [--output &lt;dir&gt;]</c>：将数据根目录打包为 ZIP 快照，同时生成 SHA-256 清单。</item>
+/// <item><c>backup validate [--isolate]</c>：校验所有 JSONL 文件；<c>--isolate</c> 将损坏文件重命名并创建净版本。</item>
+/// <item><c>backup verify &lt;manifest&gt; [--archive &lt;zip&gt;]</c>：根据清单重新哈希归档，输出完整性报告。</item>
+/// <item><c>backup drill &lt;archive&gt; [--manifest &lt;path&gt;]</c>：将归档恢复到隔离 staging 目录并校验，完成后清理。</item>
+/// <item><c>backup restore &lt;file&gt; [--confirm]</c>：从 ZIP 快照恢复（需 --confirm 确认，破坏性操作）。</item>
+/// <item><c>backup pg-create [--connection-string &lt;cs&gt;] [--output &lt;dir&gt;]</c>：通过 pg_dump 创建 PostgreSQL 转储并生成清单。</item>
+/// <item><c>backup pg-restore &lt;dump&gt; [--manifest &lt;path&gt;] [--confirm]</c>：通过 pg_restore 恢复 PostgreSQL 转储（需 --confirm）。</item>
+/// <item><c>backup pg-verify &lt;manifest&gt;</c>：校验 PostgreSQL 转储文件哈希与表清单。</item>
+/// <item><c>backup pg-drill &lt;dump&gt; --staging-connection-string &lt;cs&gt; [--manifest &lt;path&gt;]</c>：在 staging 数据库恢复 PostgreSQL 转储并校验。</item>
+/// <item><c>backup pg-pitr-prepare --wal-archive-dir &lt;dir&gt; [--output &lt;dir&gt;]</c>：启用 WAL 归档并创建基础备份。</item>
+/// <item><c>backup pg-pitr-restore --base-backup &lt;path&gt; --wal-archive-dir &lt;dir&gt; --target-time &lt;ISO8601&gt; --target-connection-string &lt;cs&gt;</c>：执行 PITR 恢复。</item>
 /// </list>
 /// </summary>
 public static class BackupCommand

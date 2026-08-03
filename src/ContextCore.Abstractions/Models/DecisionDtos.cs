@@ -36,7 +36,7 @@ public sealed class ContextDecisionRecord
     /// </summary>
     public PackageQualityReport? Quality { get; init; }
 
-    /// <summary>策略版本，用于 trace 兼容性识别（ DecisionSchemaV2_0 = "decision-schema/2.0"，按能力独立演进）。</summary>
+    /// <summary>策略版本，用于 trace 兼容性识别（DecisionSchemaV2_0 = "decision-schema/2.0"，按能力独立演进）。</summary>
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.DecisionSchemaV2_0;
 
     public Dictionary<string, string> Metadata { get; init; } = new();
@@ -188,7 +188,7 @@ public sealed class ContextDecisionRisk
 
 /// <summary>
 /// decision trace 策略版本常量。按能力（capability）独立演进，
-/// 不再绑定全项目阶段编号（如 R14/R17）。新增能力时在此追加常量，
+/// 不再绑定全项目阶段编号。新增能力时在此追加常量，
 /// 旧名 V17_0/V18_0 保留为 alias 供历史消费者平滑迁移。
 /// </summary>
 public static class ContextDecisionPolicyVersions

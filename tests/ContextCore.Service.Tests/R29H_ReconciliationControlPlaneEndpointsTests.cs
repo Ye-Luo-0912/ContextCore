@@ -9,11 +9,11 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ContextCore.Service.Tests;
 
 // ===========================================================================
-// Tool Reconciliation Control Plane 端点验收测试（P2-B1）
+// Tool Reconciliation Control Plane 端点验收测试（-B1）
 //
 // 验证 GET /api/agents/reconciliations 双模式：
-//   1. ?externalOperationId=… → 按 journal 外部操作 ID 反查（跨 Run 运维查询）；
-//   2. 无 externalOperationId  → ControlRoom 分页待决列表（过期高亮 + 告警计数 + OverdueOnly）。
+// 1. ?externalOperationId=… → 按 journal 外部操作 ID 反查（跨 Run 运维查询）；
+// 2. 无 externalOperationId → ControlRoom 分页待决列表（过期高亮 + 告警计数 + OverdueOnly）。
 //
 // 使用文件系统存储 + 默认 InMemoryToolReconciliationStore（端点逻辑与存储解耦）；
 // RBAC 未强制（RequireApiKey=false）→ 权限过滤器放行，专注验证端点契约。

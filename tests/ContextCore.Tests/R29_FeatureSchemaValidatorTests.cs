@@ -8,24 +8,24 @@ namespace ContextCore.Tests;
 // DefaultFeatureSchemaValidator 单元测试
 //
 // 覆盖范围：
-//   SchemaVersion 校验
-//        - 匹配 / 不匹配 / 空
-//   FeatureVector 必填特征
-//        - 全部提供 / 缺失必填 / 缺失可选
-//   未知特征检查（严格模式）
-//        - 开启：拒绝未知特征
-//        - 关闭：允许未知特征
-//   类型可转换性
-//        - Numeric / Categorical / Boolean / Text
-//        - 类型不匹配
-//   默认值回退
-//        - 必填缺失 + 有默认值 → Warning
-//        - 必填缺失 + 无默认值 → Error
-//        - 默认值无法解析 → Error
-//   FeatureBatch 校验
-//        - SchemaVersion / FeatureCount / FeatureNames 顺序 / Values 长度 / NaN 检测
-//   ValidateBatch 聚合
-//   DI 注册扩展
+// SchemaVersion 校验
+// - 匹配 / 不匹配 / 空
+// FeatureVector 必填特征
+// - 全部提供 / 缺失必填 / 缺失可选
+// 未知特征检查（严格模式）
+// - 开启：拒绝未知特征
+// - 关闭：允许未知特征
+// 类型可转换性
+// - Numeric / Categorical / Boolean / Text
+// - 类型不匹配
+// 默认值回退
+// - 必填缺失 + 有默认值 → Warning
+// - 必填缺失 + 无默认值 → Error
+// - 默认值无法解析 → Error
+// FeatureBatch 校验
+// - SchemaVersion / FeatureCount / FeatureNames 顺序 / Values 长度 / NaN 检测
+// ValidateBatch 聚合
+// DI 注册扩展
 // ===========================================================================
 
 [TestClass]

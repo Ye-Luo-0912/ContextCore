@@ -198,7 +198,7 @@ public sealed class ContextCoreTokenizerTests
         }
     }
 
-    // #3: Tokenizer 截断公式 — Latin run flush 后 safeLength 必须推进。
+    // Tokenizer 截断公式 — Latin run flush 后 safeLength 必须推进。
     // 旧 bug：非 ASCII rune 前的 latin run 成功 flush 并计入 count 后，若该 rune 超预算 goto done，
     // safeLength 未更新导致 latin run 被系统性丢弃（返回空串而非已 flush 的 latin 文本）。
 

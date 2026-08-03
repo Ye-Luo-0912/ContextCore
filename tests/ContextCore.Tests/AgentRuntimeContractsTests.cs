@@ -7,23 +7,23 @@ namespace ContextCore.Tests;
 /// Agent Runtime Integration 契约测试。
 ///
 /// 验证目标：
-///   1. AgentRuntimeKind 枚举（5 值，byte 底层，Unknown=0）
-///   2. AgentEventKind 枚举（14 值，byte 底层，Unknown=0）
-///   3. AgentEventLevel 枚举（4 值，byte 底层，Trace=0）
-///   4. AgentSessionId record 必填字段 + with 表达式
-///   5. AgentSessionRequest record 必填字段 + 默认值
-///   6. AgentEvent record 必填字段 + 默认值
-///   7. AgentEventQuery record 必填字段 + 默认值
-///   8. IAgentRuntime 接口最小化（3 方法 + StoreOperation 属性）
-///   9. IAgentSession 接口最小化（4 成员）
-///  10. IAgentEventStream 接口最小化（2 方法）
-///  11. IAgentWorkspaceContextProvider 接口最小化（3 方法）
-///  12. IAgentCheckpointStore 接口最小化（4 方法）
-///  13. AgentContextSnapshotRef record 必填字段 + 默认值
-///  14. AgentContextInjection record 必填字段 + 默认值
-///  15. AgentCheckpoint record 必填字段 + 默认值
-///  16. sealed record / interface / no async void 反射验证
-///  17. 不依赖具体 Agent SDK 对象模型（无 SDK 类型引用）
+/// 1. AgentRuntimeKind 枚举（5 值，byte 底层，Unknown=0）
+/// 2. AgentEventKind 枚举（14 值，byte 底层，Unknown=0）
+/// 3. AgentEventLevel 枚举（4 值，byte 底层，Trace=0）
+/// 4. AgentSessionId record 必填字段 + with 表达式
+/// 5. AgentSessionRequest record 必填字段 + 默认值
+/// 6. AgentEvent record 必填字段 + 默认值
+/// 7. AgentEventQuery record 必填字段 + 默认值
+/// 8. IAgentRuntime 接口最小化（3 方法 + StoreOperation 属性）
+/// 9. IAgentSession 接口最小化（4 成员）
+/// 10. IAgentEventStream 接口最小化（2 方法）
+/// 11. IAgentWorkspaceContextProvider 接口最小化（3 方法）
+/// 12. IAgentCheckpointStore 接口最小化（4 方法）
+/// 13. AgentContextSnapshotRef record 必填字段 + 默认值
+/// 14. AgentContextInjection record 必填字段 + 默认值
+/// 15. AgentCheckpoint record 必填字段 + 默认值
+/// 16. sealed record / interface / no async void 反射验证
+/// 17. 不依赖具体 Agent SDK 对象模型（无 SDK 类型引用）
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

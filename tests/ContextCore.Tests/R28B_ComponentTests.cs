@@ -10,16 +10,16 @@ namespace ContextCore.Tests;
 // 组件独立测试 — ShadowDecisionRuntime + ExperimentRecorder
 //
 // 覆盖范围（2 个测试类）：
-//   1. ShadowDecisionRuntimeComponentTests — Shadow 组件独立测试
-//      （Legacy 空/异常、V2 异常传播、TokenBudget=0、Package 路径）
-//   2. ExperimentRecorderComponentTests — Recorder 组件独立测试
-//      （幂等写入、并发写入、Replay 集成）
+// 1. ShadowDecisionRuntimeComponentTests — Shadow 组件独立测试
+// （Legacy 空/异常、V2 异常传播、TokenBudget=0、Package 路径）
+// 2. ExperimentRecorderComponentTests — Recorder 组件独立测试
+// （幂等写入、并发写入、Replay 集成）
 //
 // 设计原则：
-//   - 使用 Stub V2 Runtime（RecordingDecisionRuntime / ThrowingDecisionRuntime）隔离决策内核
-//   - 复用 R28BTestHelpers（MakeEnvelope / MakeResult / MakeMaterial / MakeExecutionResult）
-//   - 复用 R28B_ClosureGateAcceptanceTests 中的 internal Stub（RecordingDecisionRuntime / ThrowingDecisionRuntime / CallTrackingContextStore）
-//   - 所有代码注释使用中文
+// - 使用 Stub V2 Runtime（RecordingDecisionRuntime / ThrowingDecisionRuntime）隔离决策内核
+// - 复用共享 TestHelpers（MakeEnvelope / MakeResult / MakeMaterial / MakeExecutionResult）
+// - 复用 ClosureGate 验收测试中的 internal Stub（RecordingDecisionRuntime / ThrowingDecisionRuntime / CallTrackingContextStore）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================

@@ -10,18 +10,18 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 实现 <see cref="IUserFeedbackLedger"/>：读 API（QueryFeedbackAsync /
-///      GetLatestFeedbackForCandidateAsync）+ 异步写 API（<see cref="AppendFeedbackAsync"/>）。
-///   2. 写入由 Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 调用；
-///      与 <see cref="InMemoryUserFeedbackLedgerStore"/> 实现同一契约，调用方无需感知存储后端。
-///   3. 表 <c>user_feedback_entries</c> 反规范化 workspace_id / collection_id / decision_id /
-///      candidate_item_id / kind / given_by / given_at 等字段以便索引查询；完整 <see cref="UserFeedbackEntry"/>
-///      对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   4. 幂等：同 <see cref="UserFeedbackEntry.IdempotencyKey"/> 重复写入时由 ON CONFLICT DO UPDATE 覆盖（保留最新反馈）。
-///   5. 关联校验：写入时通过 EXISTS 子查询验证 (workspace_id, collection_id, decision_id, candidate_item_id)
-///      在 utility_ledger_entries 中存在；否则抛出 <see cref="InvalidOperationException"/>（强一致性保证，
-///      防止用户反馈对不存在的决策条目）。
-///   6. QueryFeedbackAsync 按 given_at DESC 排序（与 InMemory 实现语义一致）。
+/// 1. 实现 <see cref="IUserFeedbackLedger"/>：读 API（QueryFeedbackAsync /
+/// GetLatestFeedbackForCandidateAsync）+ 异步写 API（<see cref="AppendFeedbackAsync"/>）。
+/// 2. 写入由 Service API 端点 POST /api/utility-ledger/feedback 通过 IUserFeedbackLedger.AppendFeedbackAsync 调用；
+/// 与 <see cref="InMemoryUserFeedbackLedgerStore"/> 实现同一契约，调用方无需感知存储后端。
+/// 3. 表 <c>user_feedback_entries</c> 反规范化 workspace_id / collection_id / decision_id /
+/// candidate_item_id / kind / given_by / given_at 等字段以便索引查询；完整 <see cref="UserFeedbackEntry"/>
+/// 对象保存在 <c>data jsonb</c>，由 store 反序列化。
+/// 4. 幂等：同 <see cref="UserFeedbackEntry.IdempotencyKey"/> 重复写入时由 ON CONFLICT DO UPDATE 覆盖（保留最新反馈）。
+/// 5. 关联校验：写入时通过 EXISTS 子查询验证 (workspace_id, collection_id, decision_id, candidate_item_id)
+/// 在 utility_ledger_entries 中存在；否则抛出 <see cref="InvalidOperationException"/>（强一致性保证，
+/// 防止用户反馈对不存在的决策条目）。
+/// 6. QueryFeedbackAsync 按 given_at DESC 排序（与 InMemory 实现语义一致）。
 /// </remarks>
 public sealed class PostgresUserFeedbackLedgerStore : PostgresStoreBase, IUserFeedbackLedger
 {

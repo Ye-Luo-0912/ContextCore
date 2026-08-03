@@ -3,24 +3,24 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Model Artifact Registry 契约
 //
-// 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
-//   1. 把 ModelExecutionSnapshot 中的 ModelArtifactId / ModelVersion / FeatureSchemaVersion /
-//      CalibrationVersion / InferenceEngineKind / ContentHash 提升为可注册、可查询的工件元数据，
-//      让生产环境能从 PostgreSQL 加载权威模型描述符，而非依赖代码硬编码。
-//   2. IModelArtifactRegistry 抽象注册/查询能力；实现层可注入持久化 store
-//      （PostgresModelArtifactRegistry）或 in-memory（默认）。
-//   3. ModelArtifactDescriptor 为不可变 record；同一 ModelArtifactId 仅允许注册一次，
-//      新版本通过新 ModelArtifactId 注册实现（与 FeatureSchema 不可变语义一致）。
-//   4. IPersistentModelArtifactRegistry 标记接口（不添加成员），让消费方显式区分
-//      持久化能力与 in-memory 回退，与 IPersistentToolDispatchJournal /
-//      IPersistentAgentCheckpointStore 模式对齐。
+// 目标（对齐 Production Intelligence Spec Workstream A）：
+// 1. 把 ModelExecutionSnapshot 中的 ModelArtifactId / ModelVersion / FeatureSchemaVersion /
+// CalibrationVersion / InferenceEngineKind / ContentHash 提升为可注册、可查询的工件元数据，
+// 让生产环境能从 PostgreSQL 加载权威模型描述符，而非依赖代码硬编码。
+// 2. IModelArtifactRegistry 抽象注册/查询能力；实现层可注入持久化 store
+// （PostgresModelArtifactRegistry）或 in-memory（默认）。
+// 3. ModelArtifactDescriptor 为不可变 record；同一 ModelArtifactId 仅允许注册一次，
+// 新版本通过新 ModelArtifactId 注册实现（与 FeatureSchema 不可变语义一致）。
+// 4. IPersistentModelArtifactRegistry 标记接口（不添加成员），让消费方显式区分
+// 持久化能力与 in-memory 回退，与 IPersistentToolDispatchJournal /
+// IPersistentAgentCheckpointStore 模式对齐。
 //
 // 设计边界：
-//   - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
-//   - 不与 IBatchInferenceEngine 耦合：descriptor 描述"模型工件应是什么"，
-//     引擎实现（如 OnnxInferenceEngine）在构造时从 registry 读取 descriptor 并自我描述。
-//   - ContentHash 由调用方计算并传入（通常为模型文件的 SHA-256）；
-//     registry 不负责哈希计算，仅负责存储与查询。
+// - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+// - 不与 IBatchInferenceEngine 耦合：descriptor 描述"模型工件应是什么"，
+// 引擎实现（如 OnnxInferenceEngine）在构造时从 registry 读取 descriptor 并自我描述。
+// - ContentHash 由调用方计算并传入（通常为模型文件的 SHA-256）；
+// registry 不负责哈希计算，仅负责存储与查询。
 // ===========================================================================
 
 /// <summary>
@@ -106,13 +106,13 @@ public sealed record ModelArtifactDescriptor
 
     /// <summary>
     /// 特征 schema 版本号（对应 IFeatureRegistry 中已注册的 schema）。
-    /// 用于推理前验证输入特征与 schema 一致性（WP-A-4 FeatureSchemaValidator 消费）。
+    /// 用于推理前验证输入特征与 schema 一致性（FeatureSchemaValidator 消费）。
     /// </summary>
     public required string FeatureSchemaVersion { get; init; }
 
     /// <summary>
     /// 校准版本号（对应 ICalibrationService 中已注册的参数版本）。
-    /// 用于校准验证（WP-A-3 ICalibrationValidator 消费）。
+    /// 用于校准验证（ICalibrationValidator 消费）。
     /// </summary>
     public required string CalibrationVersion { get; init; }
 
@@ -155,16 +155,16 @@ public interface IPersistentModelArtifactRegistry : IModelArtifactRegistry
 // ===========================================================================
 // Desired Model State Store 契约（HA 多节点一致性）
 //
-// 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
-//   1. 在 HA 部署中，Model Control Plane 的 Activate/Deactivate 操作需跨节点同步。
-//   2. DesiredModelStateStore 存储"期望状态"（Active/Inactive），由各节点的
-//      ReconcilerWorker 定期拉取并应用到本地 ModelActivationManager。
-//   3. Generation 字段用于乐观并发控制：仅当本地 Generation < 远端 Generation 时才应用。
+// 目标（对齐 Production Intelligence Spec Workstream A）：
+// 1. 在 HA 部署中，Model Control Plane 的 Activate/Deactivate 操作需跨节点同步。
+// 2. DesiredModelStateStore 存储"期望状态"（Active/Inactive），由各节点的
+// ReconcilerWorker 定期拉取并应用到本地 ModelActivationManager。
+// 3. Generation 字段用于乐观并发控制：仅当本地 Generation < 远端 Generation 时才应用。
 //
 // 设计边界：
-//   - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
-//   - 不与 IModelActivationManager 耦合：store 仅负责存储/查询期望状态，
-//     ReconcilerWorker 负责读取并调用 IModelActivationManager 应用变更。
+// - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+// - 不与 IModelActivationManager 耦合：store 仅负责存储/查询期望状态，
+// ReconcilerWorker 负责读取并调用 IModelActivationManager 应用变更。
 // ===========================================================================
 
 /// <summary>
@@ -209,18 +209,18 @@ public sealed record DesiredModelState
 /// <code>
 /// // Model Control Plane 写入期望状态
 /// await store.SetAsync(new DesiredModelState {
-///     ModelId = "model-v1",
-///     DesiredState = "Active",
-///     Generation = 42,
-///     ContentHash = "sha256:abc...",
-///     UpdatedAt = DateTimeOffset.UtcNow,
-///     UpdatedBy = "node-1"
+/// ModelId = "model-v1",
+/// DesiredState = "Active",
+/// Generation = 42,
+/// ContentHash = "sha256:abc...",
+/// UpdatedAt = DateTimeOffset.UtcNow,
+/// UpdatedBy = "node-1"
 /// });
 ///
 /// // ReconcilerWorker 读取并应用
 /// var state = await store.GetAsync("model-v1");
 /// if (state != null && state.Generation > localGeneration) {
-///     await activationManager.ActivateAsync(state.ModelId);
+/// await activationManager.ActivateAsync(state.ModelId);
 /// }
 /// </code>
 /// </remarks>
@@ -243,18 +243,18 @@ public interface IDesiredModelStateStore
 // Cluster Model Slot 契约（单一 Champion 真相源）
 //
 // 目标：
-//   1. 替代按 ModelId 分别保存 Active/Inactive 的 DesiredModelState 模型——
-//      旧模型允许同一时刻多条 Active 记录并存，激活新模型时也没有同事务把旧模型改为 Inactive，
-//      导致 Reconciler 遍历多条 Active 后最终模型取决于查询顺序。
-//   2. 改为单行集群指针：每个 slot（如 "primary"）只有一行记录，由 CAS 原子切换 ActiveModelArtifactId。
-//      激活新模型 = 单次 CAS UPDATE，旧模型自然失效（不再有"旧 Active 记录"）。
-//   3. Revision 字段单调递增，作为 CAS token：TryUpdateAsync 仅当 expectedRevision 匹配当前 revision 时成功。
-//      消除"Get generation → +1 → SetAsync"非原子窗口。
+// 1. 替代按 ModelId 分别保存 Active/Inactive 的 DesiredModelState 模型——
+// 旧模型允许同一时刻多条 Active 记录并存，激活新模型时也没有同事务把旧模型改为 Inactive，
+// 导致 Reconciler 遍历多条 Active 后最终模型取决于查询顺序。
+// 2. 改为单行集群指针：每个 slot（如 "primary"）只有一行记录，由 CAS 原子切换 ActiveModelArtifactId。
+// 激活新模型 = 单次 CAS UPDATE，旧模型自然失效（不再有"旧 Active 记录"）。
+// 3. Revision 字段单调递增，作为 CAS token：TryUpdateAsync 仅当 expectedRevision 匹配当前 revision 时成功。
+// 消除"Get generation → +1 → SetAsync"非原子窗口。
 //
 // 设计边界：
-//   - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
-//   - 保留 IDesiredModelStateStore / PostgresDesiredModelStateStore 向后兼容（不再走生产路径）。
-//   - 单模型集群固定 slot_name="primary"；多 slot 留作未来扩展（不影响当前契约）。
+// - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+// - 保留 IDesiredModelStateStore / PostgresDesiredModelStateStore 向后兼容（不再走生产路径）。
+// - 单模型集群固定 slot_name="primary"；多 slot 留作未来扩展（不影响当前契约）。
 // ===========================================================================
 
 /// <summary>

@@ -10,22 +10,22 @@ namespace ContextCore.Service.Endpoints;
 // Canary Emergency Kill Switch API（集群级紧急覆盖操作面）
 //
 // 目标（对齐集群级 Canary Kill Switch 契约）：
-//   为运维提供触发 / 清除 / 查询集群级 Canary 紧急覆盖（Kill Switch）的 REST API。
-//   紧急覆盖由 ICanaryEmergencyOverrideStore 持久化承载（Postgres 实现为
-//   canary_emergency_overrides 表，每 run 至多一条活跃覆盖，跨进程重启仍生效）：
-//     - 存在活跃覆盖时，路由层（AuthoritativeRuntime）强制回退 V1；
-//     - CanaryProgressionService 在覆盖期间拒绝推进并标记非 Consistent，
-//       直到运维显式清除。
+// 为运维提供触发 / 清除 / 查询集群级 Canary 紧急覆盖（Kill Switch）的 REST API。
+// 紧急覆盖由 ICanaryEmergencyOverrideStore 持久化承载（Postgres 实现为
+// canary_emergency_overrides 表，每 run 至多一条活跃覆盖，跨进程重启仍生效）：
+// - 存在活跃覆盖时，路由层（AuthoritativeRuntime）强制回退 V1；
+// - CanaryProgressionService 在覆盖期间拒绝推进并标记非 Consistent，
+// 直到运维显式清除。
 //
 // 端点：
-//   POST /api/canary/emergency/{runId}/kill    触发紧急覆盖（Kill Switch）
-//   POST /api/canary/emergency/{runId}/clear   清除紧急覆盖（恢复推进）
-//   GET  /api/canary/emergency/overrides       查询全部活跃覆盖
+// POST /api/canary/emergency/{runId}/kill 触发紧急覆盖（Kill Switch）
+// POST /api/canary/emergency/{runId}/clear 清除紧急覆盖（恢复推进）
+// GET /api/canary/emergency/overrides 查询全部活跃覆盖
 //
 // 设计原则：
-//   1. 全部端点要求 Operator 角色（Kill Switch 属敏感运维操作）。
-//   2. 处理器提取为 internal static 方法，可直接单元测试（DefaultHttpContext 执行 IResult）。
-//   3. ICanaryEmergencyOverrideStore 未注册时返回 503（不静默降级）。
+// 1. 全部端点要求 Operator 角色（Kill Switch 属敏感运维操作）。
+// 2. 处理器提取为 internal static 方法，可直接单元测试（DefaultHttpContext 执行 IResult）。
+// 3. ICanaryEmergencyOverrideStore 未注册时返回 503（不静默降级）。
 // ===========================================================================
 
 /// <summary>

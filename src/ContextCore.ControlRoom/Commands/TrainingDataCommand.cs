@@ -9,19 +9,19 @@ namespace ContextCore.ControlRoom.Commands;
 /// </summary>
 /// <remarks>
 /// 用法：
-///   export-training-data --out &lt;directory&gt; [--collection &lt;id&gt;] [--since &lt;ISO8601&gt;] [--until &lt;ISO8601&gt;]
-///                          [--decision-id &lt;id&gt;] [--selected-only | --dropped-only]
-///                          [--model-artifact-id &lt;id&gt;] [--take &lt;N&gt;]
+/// export-training-data --out &lt;directory&gt; [--collection &lt;id&gt;] [--since &lt;ISO8601&gt;] [--until &lt;ISO8601&gt;]
+/// [--decision-id &lt;id&gt;] [--selected-only | --dropped-only]
+/// [--model-artifact-id &lt;id&gt;] [--take &lt;N&gt;]
 ///
 /// 输出：
-///   {OutputDirectory}/training-data.jsonl          — 训练样本（每行一条 JSONL）
-///   {OutputDirectory}/training-data.manifest.json   — 清单（含 SHA-256 与 model artifact 追溯）
+/// {OutputDirectory}/training-data.jsonl — 训练样本（每行一条 JSONL）
+/// {OutputDirectory}/training-data.manifest.json — 清单（含 SHA-256 与 model artifact 追溯）
 ///
 /// 说明：
-///   - Direct 模式（InMemory / FileSystem）下从本地 IUtilityLedgerStore 导出。
-///     本地 ledger 通常为空；生产 ledger 应由 Service 端 Postgres 维护，离线导出时
-///     可通过 --storage postgres 直连或通过 Service API 拉取（待 WP-E-5）。
-///   - 导出过程幂等：重复执行覆盖输出文件，不修改 ledger 状态。
+/// - Direct 模式（InMemory / FileSystem）下从本地 IUtilityLedgerStore 导出。
+/// 本地 ledger 通常为空；生产 ledger 应由 Service 端 Postgres 维护，离线导出时
+/// 可通过 --storage postgres 直连或通过 Service API 拉取。
+/// - 导出过程幂等：重复执行覆盖输出文件，不修改 ledger 状态。
 /// </remarks>
 public static class TrainingDataCommand
 {
@@ -157,16 +157,16 @@ public static class TrainingDataCommand
                                [--take <N>]
 
         选项：
-          --out <directory>        输出目录（必填；不存在时自动创建）
-          --workspace <id>         workspace 作用域（默认：当前 ControlRoom 选中工作区）
-          --collection <id>        collection 作用域（默认：当前选中集合；传空字符串表示跨集合）
-          --since <ISO8601>       仅导出 MaterializedAt >= Since 的条目
-          --until <ISO8601>       仅导出 MaterializedAt <= Until 的条目
-          --decision-id <id>       仅导出指定 DecisionId 的条目
-          --selected-only          仅导出被选中的样本（IsSelected=true）
-          --dropped-only           仅导出被拒绝的样本（IsSelected=false）
+          --out <directory> 输出目录（必填；不存在时自动创建）
+          --workspace <id> workspace 作用域（默认：当前 ControlRoom 选中工作区）
+          --collection <id> collection 作用域（默认：当前选中集合；传空字符串表示跨集合）
+          --since <ISO8601> 仅导出 MaterializedAt >= Since 的条目
+          --until <ISO8601> 仅导出 MaterializedAt <= Until 的条目
+          --decision-id <id> 仅导出指定 DecisionId 的条目
+          --selected-only 仅导出被选中的样本（IsSelected=true）
+          --dropped-only 仅导出被拒绝的样本（IsSelected=false）
           --model-artifact-id <id> 关联的 ModelArtifactId（写入 manifest 用于追溯）
-          --take <N>               最大导出条目数（0 = 不限制）
+          --take <N> 最大导出条目数（0 = 不限制）
 
         输出：
           {out}/training-data.jsonl          — 训练样本（每行一条 JSONL）

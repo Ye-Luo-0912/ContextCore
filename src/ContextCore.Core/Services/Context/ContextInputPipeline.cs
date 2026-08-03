@@ -172,7 +172,7 @@ public sealed class ContextInputIngestionService
         _shortTermPolicy = shortTermPolicy ?? new ShortTermMemoryPolicy();
         // 传入 relation 投影器/存储/写入器。生产 DI 注入后，摄取时同步生成 related_to 边。
         // 缺省（null）保持向后兼容——测试场景如不注入则跳过关系写入。
-        // 传入 IWriteTransactionScopeFactory。Postgres provider 注册后，摄取走 P0-3 事务路径——
+        // 传入 IWriteTransactionScopeFactory。Postgres provider 注册后，摄取走 事务路径——
         // ContextStore + RelationProjectionWriter + RelationStore 在同一事务内提交或全部回滚，
         // 消除"item 已写但关系投影失败"导致的孤儿边/陈旧边。InMemory/FileSystem 不注册工厂时仍走非事务路径。
         _ingestionService = new BasicContextIngestionService(

@@ -8,24 +8,24 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Candidate Capture + Pure Runtime + Tee Shadow 执行
 //
 // 目标（B-2 阶段：Shadow tee，单次候选捕获）：
-//   1. Tee 机制：在 Legacy 主链产出后，零侵入地捕获原始候选快照，
-//      转换为 V2 CandidateWorkingSet（Envelopes + Materials）。
-//   2. Pure Runtime：DefaultContextDecisionRuntime 升级为真实编排
-//      （EarlyGate → FeaturePipeline → Engine → Allocator），消费 WorkingSet。
-//   3. Shadow 执行：ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，
-//      产出 DecisionExperimentPlane 的对比结果。
+// 1. Tee 机制：在 Legacy 主链产出后，零侵入地捕获原始候选快照，
+// 转换为 V2 CandidateWorkingSet（Envelopes + Materials）。
+// 2. Pure Runtime：DefaultContextDecisionRuntime 升级为真实编排
+// （EarlyGate → FeaturePipeline → Engine → Allocator），消费 WorkingSet。
+// 3. Shadow 执行：ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，
+// 产出 DecisionExperimentPlane 的对比结果。
 //
 // 设计原则：
-//   1. Shadow tee：单次候选捕获，Legacy 与 V2 消费同一 raw candidate snapshot，
-//      避免双倍 I/O（设计文档 §7 Shadow 迁移方案）。
-//   2. 零侵入：Legacy 主链代码不改；tee 在调用方编排。
-//   3. B-2 仍是 Shadow（Diagnostic parity），不强制切换主链（B-4 才是 Authoritative）。
-//   4. Provider 网络不接入（B-4 才接入真实 ICandidateProvider）；B-2 消费 Legacy 产出的候选。
+// 1. Shadow tee：单次候选捕获，Legacy 与 V2 消费同一 raw candidate snapshot，
+// 避免双倍 I/O（设计文档 Shadow 迁移方案）。
+// 2. 零侵入：Legacy 主链代码不改；tee 在调用方编排。
+// 3. B-2 仍是 Shadow（Diagnostic parity），不强制切换主链（B-4 才是 Authoritative）。
+// 4. Provider 网络不接入（B-4 才接入真实 ICandidateProvider）；B-2 消费 Legacy 产出的候选。
 //
 // 替换策略：
-//   - B-3：接入 Shadow Gate 多维度验收（Hard/Diagnostic parity + replay fixtures）。
-//   - B-4：Authoritative cutover，Retriever/PackageBuilder 切换到 IContextDecisionRuntime。
-//   - B-5：Legacy 移除，DecisionExperimentPlane 保留。
+// - B-3：接入 Shadow Gate 多维度验收（Hard/Diagnostic parity + replay fixtures）。
+// - B-4：Authoritative cutover，Retriever/PackageBuilder 切换到 IContextDecisionRuntime。
+// - B-5：Legacy 移除，DecisionExperimentPlane 保留。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 /// <remarks>
 /// 零侵入设计：不修改 HybridContextRetriever / BasicContextPackageBuilder。
 /// 调用方在 Legacy 主链执行后，调用本类的 BuildRetrievalWorkingSet / BuildPackageWorkingSet。
-/// 内部复用 RetrievalCandidateAdapter / PackageCandidateAdapter（R18-3 已实现）。
+/// 内部复用 RetrievalCandidateAdapter / PackageCandidateAdapter（已实现）。
 /// </remarks>
 public static class WorkingSetTee
 {
@@ -53,7 +53,7 @@ public static class WorkingSetTee
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(context);
 
-        // 复用 R18-3 适配器：ToDecisionRequest 内部合并 SelectedItems + DroppedItems → Envelopes
+        // 复用 适配器：ToDecisionRequest 内部合并 SelectedItems + DroppedItems → Envelopes
         var decisionRequest = RetrievalCandidateAdapter.ToDecisionRequest(
             result,
             tokenBudget: result.EstimatedTokens > 0 ? result.EstimatedTokens : 4096,
@@ -110,7 +110,7 @@ public static class WorkingSetTee
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(context);
 
-        // 复用 R18-3 适配器
+        // 复用 适配器
         var decisionRequest = PackageCandidateAdapter.ToDecisionRequest(
             result,
             tokenBudget: result.TokenBudget > 0 ? result.TokenBudget : result.EstimatedTokens,

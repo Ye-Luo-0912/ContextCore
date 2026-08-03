@@ -9,9 +9,9 @@ namespace ContextCore.Core.Services.Evolution;
 // Canary 紧急回滚本地状态建模
 //
 // 背景：
-//   RollbackAsync 在 DB CAS 失败时仍无条件将本地流量切到 0%（安全优先），
-//   但旧实现没有把"本地已回滚 / DB 未持久化"这一不一致状态建模出来，
-//   后续 AdvanceAsync 会把本地与 DB 状态当作一致继续推进，可能掩盖 DB 真实状态。
+// RollbackAsync 在 DB CAS 失败时仍无条件将本地流量切到 0%（安全优先），
+// 但旧实现没有把"本地已回滚 / DB 未持久化"这一不一致状态建模出来，
+// 后续 AdvanceAsync 会把本地与 DB 状态当作一致继续推进，可能掩盖 DB 真实状态。
 //
 // 本枚举显式建模本地 vs DB 的一致性状态，让 Progression 流水线在 DB 持久化
 // 失败后能拒绝推进、要求 Operator 介入或重试持久化。
@@ -56,20 +56,20 @@ public enum CanaryLocalState : byte
 // ===========================================================================
 // Production Canary Gate — 渐进推进服务
 //
-// 目标（对齐 R28-B.8 规格）：
-//   1. 在 ScopedCanary 阶段内部按 CanaryGateOptions.PercentageLadder 渐进推进 CutoverController。
-//   2. 每次推进前评估 metrics（parity/error/latency）：超阈值自动回滚；未达最小观察时长 Hold。
-//   3. 100% 时不再执行 Legacy（CutoverController.CutoverPercentage=100 跳过 Legacy 路径）。
-//   4. 端到端幂等：相同 TransitionId 重复调用不产生重复推进（依赖 store 的 LastTransitionId）。
-//   5. 审计：每次推进记录到 stage_transitions 审计表（in-memory 实现；生产环境由
-//      PostgresPipelineRunStore 同事务写入持久化审计表）。
+// 目标：
+// 1. 在 ScopedCanary 阶段内部按 CanaryGateOptions.PercentageLadder 渐进推进 CutoverController。
+// 2. 每次推进前评估 metrics（parity/error/latency）：超阈值自动回滚；未达最小观察时长 Hold。
+// 3. 100% 时不再执行 Legacy（CutoverController.CutoverPercentage=100 跳过 Legacy 路径）。
+// 4. 端到端幂等：相同 TransitionId 重复调用不产生重复推进（依赖 store 的 LastTransitionId）。
+// 5. 审计：每次推进记录到 stage_transitions 审计表（in-memory 实现；生产环境由
+// PostgresPipelineRunStore 同事务写入持久化审计表）。
 //
 // 设计边界：
-//   - 本服务不替代 IPromotionJudge；仅在 ScopedCanary 阶段内部做渐进百分比推进。
-//   - 终态（RolledBack/Promoted）：调用方应先检查 run status，已终态的 run 推进为 no-op。
-//   - 与 CutoverController 的关系：本服务持有 CutoverController 引用，通过 SetCutoverPercentage
-//     调整 V2 流量比例。多个 run 共享同一 CutoverController 时，最新推进的 run 决定全局百分比
-//     （生产环境应为每个 run 隔离 CutoverController 实例，或使用 workspace 级别路由）。
+// - 本服务不替代 IPromotionJudge；仅在 ScopedCanary 阶段内部做渐进百分比推进。
+// - 终态（RolledBack/Promoted）：调用方应先检查 run status，已终态的 run 推进为 no-op。
+// - 与 CutoverController 的关系：本服务持有 CutoverController 引用，通过 SetCutoverPercentage
+// 调整 V2 流量比例。多个 run 共享同一 CutoverController 时，最新推进的 run 决定全局百分比
+// （生产环境应为每个 run 隔离 CutoverController 实例，或使用 workspace 级别路由）。
 // ===========================================================================
 
 /// <summary>
@@ -139,11 +139,11 @@ public sealed record CanaryProgressionResult
 /// var eval = await service.EvaluateAsync(runId, baselineMetrics, experimentMetrics, ct);
 /// if (eval.Decision == CanaryProgressionDecision.Advance)
 /// {
-///     await service.AdvanceAsync(runId, transitionId, idempotencyKey, baselineMetrics, experimentMetrics, ct);
+/// await service.AdvanceAsync(runId, transitionId, idempotencyKey, baselineMetrics, experimentMetrics, ct);
 /// }
 /// else if (eval.Decision == CanaryProgressionDecision.Rollback)
 /// {
-///     await service.RollbackAsync(runId, eval.RollbackReason!.Value, ct);
+/// await service.RollbackAsync(runId, eval.RollbackReason!.Value, ct);
 /// }
 /// </code>
 /// </remarks>
@@ -472,7 +472,7 @@ public sealed class CanaryProgressionService
                             UpdateInMemoryPercentage(runId, nextPercentage);
                             // DB CAS 成功 → 本地与 DB 一致，清除任何遗留的本地状态标记。
                             _localStates[runId] = CanaryLocalState.Consistent;
-                            // WP-D：单真相源写入 — canary 状态并入 pipeline run snapshot
+                            // 单真相源写入 — canary 状态并入 pipeline run snapshot
                             await PersistCanaryStateToRunAsync(
                                 runId, nextPercentage, dbResult.NewEpoch,
                                 _timeProvider.GetUtcNow(), cancellationToken).ConfigureAwait(false);
@@ -507,7 +507,7 @@ public sealed class CanaryProgressionService
                         Rationale = evaluation.Rationale
                     }, cancellationToken).ConfigureAwait(false);
 
-                    // WP-D：单真相源写入 — canary 状态并入 pipeline run snapshot（epoch 自增）
+                    // 单真相源写入 — canary 状态并入 pipeline run snapshot（epoch 自增）
                     await PersistCanaryStateToRunAsync(
                         runId, nextPercentage, newEpoch: null, now, cancellationToken).ConfigureAwait(false);
 
@@ -636,7 +636,7 @@ public sealed class CanaryProgressionService
             {
                 // DB CAS 成功 → 本地与 DB 一致
                 _localStates[runId] = CanaryLocalState.Consistent;
-                // WP-D：单真相源写入 — 回滚到 0%
+                // 单真相源写入 — 回滚到 0%
                 await PersistCanaryStateToRunAsync(
                     runId, 0, dbResult.NewEpoch, now, cancellationToken).ConfigureAwait(false);
             }
@@ -675,7 +675,7 @@ public sealed class CanaryProgressionService
                 Rationale = $"Canary 自动回滚：reason={reason}"
             }, cancellationToken).ConfigureAwait(false);
 
-            // WP-D：单真相源写入 — 回滚到 0%（epoch 自增）
+            // 单真相源写入 — 回滚到 0%（epoch 自增）
             await PersistCanaryStateToRunAsync(runId, 0, newEpoch: null, now, cancellationToken).ConfigureAwait(false);
         }
 
@@ -745,7 +745,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// 恢复 in-memory 状态（WP-D：单一真相源优先）。
+    /// 恢复 in-memory 状态（单一真相源优先）。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>恢复的活跃 pipeline 数量（0 = 无活跃 pipeline）。</returns>
@@ -756,10 +756,10 @@ public sealed class CanaryProgressionService
     /// <item><c>_runStates</c>（进程内 ConcurrentDictionary）。</item>
     /// <item><see cref="CutoverController"/> 的 <c>_cutoverPercentage</c>（进程内 int）。</item>
     /// </list>
-    /// 进程重启后 #2/#3 丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时重建
+    /// 进程重启后 / 丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时重建
     /// 进程内路由状态（CutoverController 百分比与 <c>_runStates</c> 字典）。
     /// <para>
-    /// <b>WP-D 合并方向</b>：canary 状态已并入 <see cref="PipelineRunSnapshot"/>
+    /// <b>合并方向</b>：canary 状态已并入 <see cref="PipelineRunSnapshot"/>
     /// （CanaryPercentage / CanaryRevision / CanaryEpoch，由 <see cref="PersistCanaryStateToRunAsync"/>
     /// 经 <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> 持久化）。因此本方法
     /// <b>优先从 <see cref="IPipelineRunStore"/> 的 ScopedCanary 阶段 run snapshot 恢复</b>
@@ -860,7 +860,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>获取指定 run 的所有 stage transition 审计记录（按时间升序）。</summary>
-    /// <remarks>R28-B.8 持久化：直接从 store 查询（权威来源），不再读取 in-memory 字典。</remarks>
+    /// <remarks>持久化：直接从 store 查询（权威来源），不再读取 in-memory 字典。</remarks>
     public async Task<IReadOnlyList<StageTransitionRecord>> ListStageTransitionsAsync(string runId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
@@ -1051,7 +1051,7 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// 单真相源写入（WP-D）：将 canary 推进状态并入 pipeline run snapshot。
+    /// 单真相源写入：将 canary 推进状态并入 pipeline run snapshot。
     /// </summary>
     /// <remarks>
     /// 合并方向：canary_pipelines 的 percentage/revision/epoch 并入

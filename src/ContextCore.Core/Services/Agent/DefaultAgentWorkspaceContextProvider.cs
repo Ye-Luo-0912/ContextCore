@@ -7,20 +7,20 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 // DefaultAgentWorkspaceContextProvider — 默认 Agent 工作空间上下文 provider。
 //
-// 目标（对齐 R23 规格）：
-//   1. 实现 IAgentWorkspaceContextProvider 的 3 个方法：
-//      - GetContextSnapshotAsync：从 session 注入 + tool 结果组装 token-budget-bounded snapshot
-//      - InjectAsync：保存决策/约束/free text 到 session 状态
-//      - IngestToolResultAsync：摄入 tool 调用结果到 session 状态
-//   2. 基础实现：不调用 ContextCore 内部接口（IContextPackageBuilder 等）；
-//      真正的 ContextCore 集成（按相关性检索 / 决策注入）由 R23-4 完成。
-//   3. Snapshot token 估算：粗略按 Content.Length / 4（≈ 1 token per 4 chars）；
-//      生产实现应替换为真实 tokenizer（参考 ContextTokenizers）。
+// 目标（对齐规格）：
+// 1. 实现 IAgentWorkspaceContextProvider 的 3 个方法：
+// - GetContextSnapshotAsync：从 session 注入 + tool 结果组装 token-budget-bounded snapshot
+// - InjectAsync：保存决策/约束/free text 到 session 状态
+// - IngestToolResultAsync：摄入 tool 调用结果到 session 状态
+// 2. 基础实现：不调用 ContextCore 内部接口（IContextPackageBuilder 等）；
+// 真正的 ContextCore 集成（按相关性检索 / 决策注入）由后续工作完成。
+// 3. Snapshot token 估算：粗略按 Content.Length / 4（≈ 1 token per 4 chars）；
+// 生产实现应替换为真实 tokenizer（参考 ContextTokenizers）。
 //
 // 设计边界：
-//   - Provider 持有 GenericToolAgentAdapter 引用（共享 session 状态），不重复存储；
-//   - Provider 线程安全：所有写操作通过 adapter 的 TryAppendEvent（内部锁）完成；
-//   - Snapshot 序列化使用 System.Text.Json（默认 camelCase + 不转义非 ASCII）。
+// - Provider 持有 GenericToolAgentAdapter 引用（共享 session 状态），不重复存储；
+// - Provider 线程安全：所有写操作通过 adapter 的 TryAppendEvent（内部锁）完成；
+// - Snapshot 序列化使用 System.Text.Json（默认 camelCase + 不转义非 ASCII）。
 // ===========================================================================
 
 /// <summary>

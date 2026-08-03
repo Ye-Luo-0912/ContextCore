@@ -13,22 +13,22 @@ namespace ContextCore.Tests;
 // Utility Ledger Materialization 验收测试
 //
 // 目标：
-//   验证 DefaultContextDecisionRuntime 在决策完成后异步触发 UtilityLedgerMaterializer，
-//   将 SelectedEnvelopes + DroppedEnvelopes 物化到 IUtilityLedger / IConflictSetLedger。
+// 验证 DefaultContextDecisionRuntime 在决策完成后异步触发 UtilityLedgerMaterializer，
+// 将 SelectedEnvelopes + DroppedEnvelopes 物化到 IUtilityLedger / IConflictSetLedger。
 //
-// 设计原则（对齐澄清 #4 + R29 学习闭环）：
-//   1. materializer 通过 nullable 参数注入；测试路径注入 InMemory 实现以验证写入正确性。
-//   2. fire-and-forget：Runtime 不等待物化完成，但物化完成后 ledger 应有对应 entry。
-//   3. P8 硬边界：所有 candidate（selected/dropped）都写入 ledger，避免"dropped 视为负样本"。
-//   4. 候选 CanonicalKey 的 WorkspaceId/CollectionId 必须与 request.Scope 一致，
-//      否则 DefaultEarlyAdmissionGate 会以 scope-mismatch 拒绝（不进入 Engine）。
-//   5. dropped 候选必须显式设置 PassesSafetyGate=false，否则 SafetyGate 放行后由 Allocator 决定。
+// 设计原则（对齐澄清 + 学习闭环）：
+// 1. materializer 通过 nullable 参数注入；测试路径注入 InMemory 实现以验证写入正确性。
+// 2. fire-and-forget：Runtime 不等待物化完成，但物化完成后 ledger 应有对应 entry。
+// 3. 硬边界：所有 candidate（selected/dropped）都写入 ledger，避免"dropped 视为负样本"。
+// 4. 候选 CanonicalKey 的 WorkspaceId/CollectionId 必须与 request.Scope 一致，
+// 否则 DefaultEarlyAdmissionGate 会以 scope-mismatch 拒绝（不进入 Engine）。
+// 5. dropped 候选必须显式设置 PassesSafetyGate=false，否则 SafetyGate 放行后由 Allocator 决定。
 //
 // 验收点：
-//   - Runtime 注入 materializer 后，决策执行完 ledger 出现 entry
-//   - selected envelope 写入 IsSelected=true 的 entry
-//   - dropped envelope 写入 IsSelected=false 的 entry
-//   - 未注入 materializer（null）时决策仍正常返回（向后兼容）
+// - Runtime 注入 materializer 后，决策执行完 ledger 出现 entry
+// - selected envelope 写入 IsSelected=true 的 entry
+// - dropped envelope 写入 IsSelected=false 的 entry
+// - 未注入 materializer（null）时决策仍正常返回（向后兼容）
 // ===========================================================================
 
 [TestClass]

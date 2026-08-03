@@ -15,17 +15,17 @@ namespace ContextCore.IntegrationTests.TestFixtures;
 // 完整 DI 容器验证真实服务链路。
 //
 // 设计要点：
-//   1. 通过 UseSetting 注入 Testcontainers PG 连接字符串，触发 Program.cs 的
-//      Postgres provider 注册 + 启动期 SELECT 1 + AutoBootstrap migration。
-//   2. 可选移除所有 IHostedService（默认移除），避免后台 Worker 与 HTTP 测试相互干扰。
-//      需要测试 HostedService 行为时通过 keepHostedServices:true 保留。
-//   3. 可选注入 StubHttpMessageHandler 到 HttpClient，用于 mock 外部 LLM/Provider。
-//   4. 支持 keepExistingState:true 复用同一 PG 的已持久化状态（进程重启恢复测试）。
+// 1. 通过 UseSetting 注入 Testcontainers PG 连接字符串，触发 Program.cs 的
+// Postgres provider 注册 + 启动期 SELECT 1 + AutoBootstrap migration。
+// 2. 可选移除所有 IHostedService（默认移除），避免后台 Worker 与 HTTP 测试相互干扰。
+// 需要测试 HostedService 行为时通过 keepHostedServices:true 保留。
+// 3. 可选注入 StubHttpMessageHandler 到 HttpClient，用于 mock 外部 LLM/Provider。
+// 4. 支持 keepExistingState:true 复用同一 PG 的已持久化状态（进程重启恢复测试）。
 //
-// 与现有 ProductionRuntimeFactory（R29H_ProductionRuntimeProfileTests.cs:707）的区别：
-//   - ProductionRuntimeFactory 使用 filesystem 存储（无 PG）+ 关闭 ValidateOnBuild，
-//     仅验证 HTTP 端点响应契约，不验证真实存储链路。
-//   - 本 Factory 使用真实 PG 存储 + 完整 DI 验证，证明端到端可用性。
+// 与现有 ProductionRuntimeFactory 的区别：
+// - ProductionRuntimeFactory 使用 filesystem 存储（无 PG）+ 关闭 ValidateOnBuild，
+// 仅验证 HTTP 端点响应契约，不验证真实存储链路。
+// - 本 Factory 使用真实 PG 存储 + 完整 DI 验证，证明端到端可用性。
 // ===========================================================================
 
 /// <summary>

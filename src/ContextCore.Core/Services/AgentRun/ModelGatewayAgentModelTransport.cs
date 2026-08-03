@@ -8,23 +8,23 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ===========================================================================
 // ModelGatewayAgentModelTransport — IAgentModelTransport 的真实 LLM 实现
 //
-// 目标（P0-1 修复）：
-//   替代 DeterministicAgentModelTransport 作为生产环境的 IAgentModelTransport 实现。
-//   通过 IModelGateway.ChatWithToolsAsync 调用真实 LLM，传入原生 messages + Tool JSON Schema，
-//   解析模型返回的结构化 Tool Call（ToolCallId / ToolName / Arguments JSON）。
+// 目标（修复）：
+// 替代 DeterministicAgentModelTransport 作为生产环境的 IAgentModelTransport 实现。
+// 通过 IModelGateway.ChatWithToolsAsync 调用真实 LLM，传入原生 messages + Tool JSON Schema，
+// 解析模型返回的结构化 Tool Call（ToolCallId / ToolName / Arguments JSON）。
 //
 // 设计原则：
-//   1. 真实调用：通过 IModelGateway.ChatWithToolsAsync 调用真实模型（function calling），
-//      不再硬编码 ToolCalls=[] IsFinalAnswer=true。
-//   2. 正确的 finish reason：
-//      - 模型返回 tool_calls → IsFinalAnswer=false, ToolCalls=解析结果（进入 Tool Validation → Approval → Dispatch → Observation 循环）。
-//      - 模型返回 stop → IsFinalAnswer=true, ToolCalls=[]（产出最终答案，循环终止）。
-//   3. 模型选择：使用 request.ModelArtifactId 选择模型（如果非 null），否则用 Gateway Fallback（ModelRole.Fallback）。
-//   4. 失败语义：IModelGateway 未注册或调用失败时抛出异常（不包装成最终文本），让 Agent Run 进入 Failed。
-//      这是 P0-1 关键修复点——旧实现将错误包装为 IsFinalAnswer=true 的文本响应，
-//      导致模型网关失败时 Run 错误地"成功完成"而非 Failed。
-//   5. Token / 费用核算：从 ModelChatResponse 读取 InputTokens / OutputTokens / CachedInputTokens /
-//      EstimatedCost / BilledCost，填充 AgentModelResponse 供 cost budget 校验使用。
+// 1. 真实调用：通过 IModelGateway.ChatWithToolsAsync 调用真实模型（function calling），
+// 不再硬编码 ToolCalls=[] IsFinalAnswer=true。
+// 2. 正确的 finish reason：
+// - 模型返回 tool_calls → IsFinalAnswer=false, ToolCalls=解析结果（进入 Tool Validation → Approval → Dispatch → Observation 循环）。
+// - 模型返回 stop → IsFinalAnswer=true, ToolCalls=[]（产出最终答案，循环终止）。
+// 3. 模型选择：使用 request.ModelArtifactId 选择模型（如果非 null），否则用 Gateway Fallback（ModelRole.Fallback）。
+// 4. 失败语义：IModelGateway 未注册或调用失败时抛出异常（不包装成最终文本），让 Agent Run 进入 Failed。
+// 这是 关键修复点——旧实现将错误包装为 IsFinalAnswer=true 的文本响应，
+// 导致模型网关失败时 Run 错误地"成功完成"而非 Failed。
+// 5. Token / 费用核算：从 ModelChatResponse 读取 InputTokens / OutputTokens / CachedInputTokens /
+// EstimatedCost / BilledCost，填充 AgentModelResponse 供 cost budget 校验使用。
 // ===========================================================================
 
 /// <summary>
@@ -221,9 +221,9 @@ public sealed class ModelGatewayAgentModelTransport : IAgentModelTransport
     /// <remarks>
     /// 按 finish reason 设置 IsFinalAnswer 与 ToolCalls：
     /// <list type="bullet">
-    ///   <item><see cref="ModelChatFinishReason.ToolCalls"/> → IsFinalAnswer=false, ToolCalls=解析结果。</item>
-    ///   <item><see cref="ModelChatFinishReason.Stop"/> → IsFinalAnswer=true, ToolCalls=[]。</item>
-    ///   <item>其他 finish reason（Length / ContentFilter / Error）→ IsFinalAnswer=true（保守终止循环）。</item>
+    /// <item><see cref="ModelChatFinishReason.ToolCalls"/> → IsFinalAnswer=false, ToolCalls=解析结果。</item>
+    /// <item><see cref="ModelChatFinishReason.Stop"/> → IsFinalAnswer=true, ToolCalls=[]。</item>
+    /// <item>其他 finish reason（Length / ContentFilter / Error）→ IsFinalAnswer=true（保守终止循环）。</item>
     /// </list>
     /// </remarks>
     private static AgentModelResponse BuildAgentResponse(ModelChatResponse chatResponse, TimeSpan duration)

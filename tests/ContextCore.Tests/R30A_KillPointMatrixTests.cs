@@ -5,17 +5,17 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R30A Kill Point 矩阵 —— Tool Effect Truth 补齐
+// Kill Point 矩阵 —— Tool Effect Truth 补齐
 //
 // 硬验收："在任意 Kill Point 后都不会重复执行，也不会伪装 Completed"。
-// 既有 R29H_KillPointExternalEffectTests 已覆盖 Prepared / DispatchingIntent /
+// 既有 Kill Point 外部效应测试已覆盖 Prepared / DispatchingIntent /
 // Dispatched / Committed / 对账流；本文件补齐矩阵缺口：
-//   - Prepare 前（journal 无任何记录 → 全新启动，恰好执行一次）；
-//   - 外部 Effect 前（Intent 已持久化、副作用未发起 → 不执行、不伪装完成）；
-//   - Dispatched 前（Dispatch 已返回、MarkDispatched 未持久化 → 不重跑）；
-//   - ResultDelivered 前（AsyncDurable：Committed 后、送达标记前 → 返回缓存、不重跑）；
-//   - 联合矩阵：所有模糊态（DispatchingIntent / Dispatched / Reconciling）
-//     恢复结果必须 Succeeded=false 且 JournalState != Committed（不伪装 Completed）。
+// - Prepare 前（journal 无任何记录 → 全新启动，恰好执行一次）；
+// - 外部 Effect 前（Intent 已持久化、副作用未发起 → 不执行、不伪装完成）；
+// - Dispatched 前（Dispatch 已返回、MarkDispatched 未持久化 → 不重跑）；
+// - ResultDelivered 前（AsyncDurable：Committed 后、送达标记前 → 返回缓存、不重跑）；
+// - 联合矩阵：所有模糊态（DispatchingIntent / Dispatched / Reconciling）
+// 恢复结果必须 Succeeded=false 且 JournalState != Committed（不伪装 Completed）。
 // ===========================================================================
 
 [TestClass]

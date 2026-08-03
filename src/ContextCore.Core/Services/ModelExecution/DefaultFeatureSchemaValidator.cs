@@ -6,20 +6,20 @@ namespace ContextCore.Core.Services.ModelExecution;
 // Default Feature Schema Validator
 //
 // 目标：
-//   在推理前对输入特征与 FeatureSchema 执行严格匹配验证：
-//     1. SchemaVersion 一致性：input.SchemaVersion == schema.Version
-//     2. 必填特征存在：IsRequired=true 时输入必须包含该特征
-//     3. 无未知特征（严格模式）：输入特征名必须全部出现在 schema.Features 中
-//     4. 类型可转换：输入值必须可转换为目标 FeatureType
-//     5. 默认值可解析：当必填特征缺失且 schema 提供 DefaultValue 时，
-//        默认值字符串必须可解析为目标类型（Warning，否则 Error）
+// 在推理前对输入特征与 FeatureSchema 执行严格匹配验证：
+// 1. SchemaVersion 一致性：input.SchemaVersion == schema.Version
+// 2. 必填特征存在：IsRequired=true 时输入必须包含该特征
+// 3. 无未知特征（严格模式）：输入特征名必须全部出现在 schema.Features 中
+// 4. 类型可转换：输入值必须可转换为目标 FeatureType
+// 5. 默认值可解析：当必填特征缺失且 schema 提供 DefaultValue 时，
+// 默认值字符串必须可解析为目标类型（Warning，否则 Error）
 //
 // 设计原则：
-//   1. 不抛异常：所有非法情形转为 Error 级 FeatureSchemaViolation。
-//   2. 完整违规清单：聚合所有违规（Error + Warning + Info），便于诊断。
-//   3. 严格模式默认开启：调用方可在 options 中关闭"未知特征"检查（向后兼容）。
-//   4. 与 IInferenceResultValidator 互补：前者关心"输入 vs schema"，
-//      后者关心"输出 vs 输入约束"。
+// 1. 不抛异常：所有非法情形转为 Error 级 FeatureSchemaViolation。
+// 2. 完整违规清单：聚合所有违规（Error + Warning + Info），便于诊断。
+// 3. 严格模式默认开启：调用方可在 options 中关闭"未知特征"检查（向后兼容）。
+// 4. 与 IInferenceResultValidator 互补：前者关心"输入 vs schema"，
+// 后者关心"输出 vs 输入约束"。
 // ===========================================================================
 
 /// <summary>
@@ -124,7 +124,7 @@ public sealed class DefaultFeatureSchemaValidator : IFeatureSchemaValidator
         }
 
         // 5. float 值本身校验：NaN / Infinity（防止上游脏数据）
-        //    仅在长度一致时校验，避免双重违规刷屏。
+        // 仅在长度一致时校验，避免双重违规刷屏。
         if (batch.Values.Length == batch.RowCount * batch.FeatureCount
             && batch.RowCount > 0
             && batch.FeatureCount > 0)

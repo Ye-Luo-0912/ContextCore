@@ -9,15 +9,15 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Approval / Lease 强事务测试
 //
-// 验证 WP-S3 的硬验收保证：
-//   1. 人工审批 fail-closed：需人工审批但未注入 IAgentApprovalStore 时抛异常，
-//      绝不产生 "Run AwaitingApproval 但无 Approval Row" 的半状态。
-//   2. ApprovalId 与 ToolCallId 分离：审批记录主键由 Gate 独立生成，
-//      ToolCallId 保留模型原始 ID 用于事件流关联。
-//   3. 审批裁决 CAS：并发裁决同一审批时恰好一个成功，其余必须失败。
-//   4. Tool 副作用 Lease Fence：过期 fence 阻止外部副作用；有效 fence 透传到 Handler。
-//   5. 实际 lease expiry 贯穿 Host → Actor → Tool：Tool 收到的 fence.ExpiresAt
-//      是数据库租约过期时间（获取时间 + LeaseDuration），而非 Run.DeadlineAt 推导值。
+// 验证硬验收保证：
+// 1. 人工审批 fail-closed：需人工审批但未注入 IAgentApprovalStore 时抛异常，
+// 绝不产生 "Run AwaitingApproval 但无 Approval Row" 的半状态。
+// 2. ApprovalId 与 ToolCallId 分离：审批记录主键由 Gate 独立生成，
+// ToolCallId 保留模型原始 ID 用于事件流关联。
+// 3. 审批裁决 CAS：并发裁决同一审批时恰好一个成功，其余必须失败。
+// 4. Tool 副作用 Lease Fence：过期 fence 阻止外部副作用；有效 fence 透传到 Handler。
+// 5. 实际 lease expiry 贯穿 Host → Actor → Tool：Tool 收到的 fence.ExpiresAt
+// 是数据库租约过期时间（获取时间 + LeaseDuration），而非 Run.DeadlineAt 推导值。
 // ===========================================================================
 
 [TestClass]

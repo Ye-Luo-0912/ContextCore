@@ -162,7 +162,7 @@ public sealed class RelationTraversalEngine
                     .OrderByDescending(r => ResolveWeight(r, profile))
                     .ThenByDescending(r => r.Confidence)
                     .ThenByDescending(r => r.CreatedAt)
-                    // #7: 确定性 tie-break — 同 Weight/Confidence/CreatedAt 的 relation 按 Id 升序，
+                    // 确定性 tie-break — 同 Weight/Confidence/CreatedAt 的 relation 按 Id 升序，
                     // 避免 maxFanout 截断时依赖 store 返回顺序导致遍历 frontier 不稳定。
                     .ThenBy(r => r.Id, StringComparer.OrdinalIgnoreCase)
                     .Take(maxFanout)
@@ -210,7 +210,7 @@ public sealed class RelationTraversalEngine
 
             currentFrontier = nextFrontier
                 .OrderByDescending(n => n.Score)
-                // #7: 确定性 tie-break — 同 Score 的 traversal node 按 ItemId 升序，
+                // 确定性 tie-break — 同 Score 的 traversal node 按 ItemId 升序，
                 // 避免 maxFanout 截断时依赖 nextFrontier 追加顺序导致 BFS frontier 不稳定。
                 .ThenBy(n => n.ItemId, StringComparer.OrdinalIgnoreCase)
                 .Take(maxFanout)
@@ -344,9 +344,9 @@ public sealed class RelationTraversalEngine
     /// <summary>
     /// 将 relation weight、confidence、路径衰减因子传播到 child score。
     /// 公式：childScore = parentScore * DecayFactor * weightFactor * confidenceFactor
-    ///   - DecayFactor：每跳衰减，默认 1.0（不衰减）
-    ///   - weightFactor = min(ResolveWeight(relation), 1.0)：cap 在 1.0 防止分数无界增长
-    ///   - confidenceFactor = clamp(relation.Confidence, 0, 1)
+    /// - DecayFactor：每跳衰减，默认 1.0（不衰减）
+    /// - weightFactor = min(ResolveWeight(relation), 1.0)：cap 在 1.0 防止分数无界增长
+    /// - confidenceFactor = clamp(relation.Confidence, 0, 1)
     /// 当 EnableScorePropagation=false 时仅应用 DecayFactor（保持旧版等价语义）。
     /// 默认参数（DecayFactor=1.0, weight=1.0, confidence=1.0）→ childScore = parentScore。
     /// </summary>

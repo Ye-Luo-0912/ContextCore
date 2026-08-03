@@ -15,16 +15,16 @@ namespace ContextCore.IntegrationTests;
 // HTTP 竞态场景集成测试
 //
 // 目标：
-//   1. E2E_Http_Sse_LastEventIdReplay_NoLostWakeup — SSE 在读取/订阅竞争窗口不丢最终事件：
-//      a. 连接前已提交的事件经 Last-Event-ID 补读送达（断线重连不丢历史）；
-//      b. 连接期间提交的事件经 notifier push 立即送达（无丢失唤醒窗口）。
-//   2. E2E_Http_ConcurrentIdempotencyKey_ExactlyOneRun — N 个并发 POST 携带相同
-//      IdempotencyKey：恰好创建 1 个 Run，所有请求返回同一 runId。
+// 1. E2E_Http_Sse_LastEventIdReplay_NoLostWakeup — SSE 在读取/订阅竞争窗口不丢最终事件：
+// a. 连接前已提交的事件经 Last-Event-ID 补读送达（断线重连不丢历史）；
+// b. 连接期间提交的事件经 notifier push 立即送达（无丢失唤醒窗口）。
+// 2. E2E_Http_ConcurrentIdempotencyKey_ExactlyOneRun — N 个并发 POST 携带相同
+// IdempotencyKey：恰好创建 1 个 Run，所有请求返回同一 runId。
 //
 // 设计原则：
-//   - 通过 ProductionEvidenceWebFactory 启动真实 Web 主机 + 真实 PostgreSQL。
-//   - SSE 事件由 factory.Services 解析出的进程内 store 追加（与端点同一 notifier 实例）。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
+// - 通过 ProductionEvidenceWebFactory 启动真实 Web 主机 + 真实 PostgreSQL。
+// - SSE 事件由 factory.Services 解析出的进程内 store 追加（与端点同一 notifier 实例）。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
 // ===========================================================================
 
 [TestClass]

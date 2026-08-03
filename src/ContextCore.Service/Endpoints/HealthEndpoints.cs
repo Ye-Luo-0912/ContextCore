@@ -7,8 +7,8 @@ namespace ContextCore.Service.Endpoints;
 /// <summary>
 /// 标准化健康检查端点。
 /// <list type="bullet">
-///   <item><c>/api/health/live</c>：存活探针，进程在线即返回 200，不检查依赖。</item>
-///   <item><c>/api/health/ready</c>：Service Alpha 运行时探针，检查核心存储链路和运行基线。</item>
+/// <item><c>/api/health/live</c>：存活探针，进程在线即返回 200，不检查依赖。</item>
+/// <item><c>/api/health/ready</c>：Service Alpha 运行时探针，检查核心存储链路和运行基线。</item>
 /// </list>
 /// </summary>
 internal static class HealthEndpoints

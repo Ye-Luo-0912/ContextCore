@@ -7,16 +7,16 @@ namespace ContextCore.Tests;
 /// Utility Ledger + ConflictSet 契约测试。
 ///
 /// 验证目标：
-///   1. UtilityLedgerEntry 必填字段 + 默认值
-///   2. UtilityLedgerQuery 默认值 + 全字段
-///   3. IUtilityLedgerStore 接口最小化（3 方法 read-only）
-///   4. ConflictSetKind 枚举 7 值（byte 底层）
-///   5. ConflictSetEntry 必填字段 + 可空字段默认
-///   6. ConflictSet 必填字段 + 默认值
-///   7. ConflictSetQuery 默认值 + 全字段
-///   8. IConflictSetStore 接口最小化（3 方法 read-only）
-///   9. read-only 反射验证（接口无 WriteAsync / AppendAsync / SaveAsync）
-///  10. sealed record / static / no async void 反射验证
+/// 1. UtilityLedgerEntry 必填字段 + 默认值
+/// 2. UtilityLedgerQuery 默认值 + 全字段
+/// 3. IUtilityLedgerStore 接口最小化（3 方法 read-only）
+/// 4. ConflictSetKind 枚举 7 值（byte 底层）
+/// 5. ConflictSetEntry 必填字段 + 可空字段默认
+/// 6. ConflictSet 必填字段 + 默认值
+/// 7. ConflictSetQuery 默认值 + 全字段
+/// 8. IConflictSetStore 接口最小化（3 方法 read-only）
+/// 9. read-only 反射验证（接口无 WriteAsync / AppendAsync / SaveAsync）
+/// 10. sealed record / static / no async void 反射验证
 /// </summary>
 [TestClass]
 [TestCategory("R21")]
@@ -172,7 +172,7 @@ public sealed class UtilityLedgerContractsTests
     [TestMethod]
     public void IUtilityLedgerStore_NoWriteMethods()
     {
-        // read-only 验证（澄清 #4）：不允许 WriteAsync / AppendAsync / SaveAsync / DeleteAsync
+        // read-only 验证（澄清）：不允许 WriteAsync / AppendAsync / SaveAsync / DeleteAsync
         var storeType = typeof(IUtilityLedgerStore);
         var forbiddenNames = new[] { "WriteAsync", "AppendAsync", "SaveAsync", "DeleteAsync", "BatchUpsertAsync", "RecordAsync" };
 
@@ -400,7 +400,7 @@ public sealed class UtilityLedgerContractsTests
     [TestMethod]
     public void IConflictSetStore_NoWriteMethods()
     {
-        // read-only 验证（澄清 #4）：不允许 WriteAsync / AppendAsync / SaveAsync / DeleteAsync
+        // read-only 验证（澄清）：不允许 WriteAsync / AppendAsync / SaveAsync / DeleteAsync
         var storeType = typeof(IConflictSetStore);
         var forbiddenNames = new[] { "WriteAsync", "AppendAsync", "SaveAsync", "DeleteAsync", "BatchUpsertAsync", "RecordAsync" };
 
@@ -419,7 +419,7 @@ public sealed class UtilityLedgerContractsTests
     [TestMethod]
     public void UtilityLedgerAndConflictSetStores_BothReadOnly()
     {
-        // 澄清 #4 硬边界：两个 store 都只能是 read-only
+        // 澄清 硬边界：两个 store 都只能是 read-only
         var ledgerStoreType = typeof(IUtilityLedgerStore);
         var conflictSetStoreType = typeof(IConflictSetStore);
 

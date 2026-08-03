@@ -14,19 +14,19 @@ namespace ContextCore.IntegrationTests;
 // 双 Host HA 集成测试
 //
 // 目标：证明 ProductionHA 部署下"同一时刻仅一个 Agent 执行平面"：
-//   1. E2E_TwoHosts_SameRun_ExactlyOneExecutionPlane — 两个 AgentKernelHost 实例
-//      共享同一 Postgres Run Lease，同一 Run 只被一个实例执行（租约 CAS 排斥），
-//      外部 Tool 不会因第二实例启动而重复执行。
-//   2. E2E_TwoHosts_LeaseHandover_AfterExpiry_FencingIncrements_OldTokenRejected —
-//      旧 owner 的租约真实过期后，新 owner 抢占（fencing token 递增），
-//      旧 token 的续约/释放全部失效——旧 owner 无法再执行副作用。
+// 1. E2E_TwoHosts_SameRun_ExactlyOneExecutionPlane — 两个 AgentKernelHost 实例
+// 共享同一 Postgres Run Lease，同一 Run 只被一个实例执行（租约 CAS 排斥），
+// 外部 Tool 不会因第二实例启动而重复执行。
+// 2. E2E_TwoHosts_LeaseHandover_AfterExpiry_FencingIncrements_OldTokenRejected —
+// 旧 owner 的租约真实过期后，新 owner 抢占（fencing token 递增），
+// 旧 token 的续约/释放全部失效——旧 owner 无法再执行副作用。
 //
 // 设计原则：
-//   - 使用真实 Postgres stores（PostgresAgentRunStore / PostgresAgentRunEventStore /
-//     PostgresToolDispatchJournal / PostgresAgentRunLease）。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
-//   - 每个测试使用独立 tablePrefix 避免数据交叉污染。
-//   - 所有异步测试使用 CancellationTokenSource 超时防止挂起。
+// - 使用真实 Postgres stores（PostgresAgentRunStore / PostgresAgentRunEventStore /
+// PostgresToolDispatchJournal / PostgresAgentRunLease）。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
+// - 每个测试使用独立 tablePrefix 避免数据交叉污染。
+// - 所有异步测试使用 CancellationTokenSource 超时防止挂起。
 // ===========================================================================
 
 [TestClass]

@@ -6,13 +6,13 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 // InMemoryPipelineRunStore — IPipelineRunStore 的 in-memory 实现。
 //
-// 目标（对齐 R27 规格）：
-//   1. 实现 IPipelineRunStore 的 10 个方法（runs / canary / rollback / baseline + TryTransitionAsync）。
-//   2. 仅 in-memory；进程重启后丢失；生产实现应替换为 PostgresPipelineRunStore。
-//   3. 线程安全：ConcurrentDictionary + 按 proposal/run 维度分组查询；
-//      TryTransitionAsync 使用 lock 保证 CAS 原子性（in-memory 场景无并发 CAS 真实意义，
-//      但行为与 Postgres 实现对齐以便测试复用）。
-//   4. 与 InMemoryAgentCheckpointStore 设计模式对齐（R23-3）。
+// 目标：
+// 1. 实现 IPipelineRunStore 的 10 个方法（runs / canary / rollback / baseline + TryTransitionAsync）。
+// 2. 仅 in-memory；进程重启后丢失；生产实现应替换为 PostgresPipelineRunStore。
+// 3. 线程安全：ConcurrentDictionary + 按 proposal/run 维度分组查询；
+// TryTransitionAsync 使用 lock 保证 CAS 原子性（in-memory 场景无并发 CAS 真实意义，
+// 但行为与 Postgres 实现对齐以便测试复用）。
+// 4. 与 InMemoryAgentCheckpointStore 设计模式对齐。
 // ===========================================================================
 
 /// <summary>
@@ -183,7 +183,7 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
 
     /// <inheritdoc />
     /// <remarks>
-    /// 单真相源写入 canary 状态（WP-D）。CAS 语义：仅当 run 的
+    /// 单真相源写入 canary 状态。CAS 语义：仅当 run 的
     /// <see cref="PipelineRunSnapshot.CanaryRevision"/> == <paramref name="expectedCanaryRevision"/>
     /// 时更新 canary_percentage / canary_revision / canary_epoch（CanaryRevision = 期望值 + 1）。
     /// </remarks>
@@ -296,7 +296,7 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
         return Task.FromResult<IReadOnlyList<BaselineComparison>>(list);
     }
 
-    // ---------- Stage transitions (R28-B.8) ----------
+    // ---------- Stage transitions ----------
 
     /// <inheritdoc />
     public Task SaveStageTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken = default)

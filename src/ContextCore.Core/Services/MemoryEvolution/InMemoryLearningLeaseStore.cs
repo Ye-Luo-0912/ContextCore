@@ -6,11 +6,11 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 // ===========================================================================
 // InMemoryLearningLeaseStore — ILearningLeaseStore 的进程内实现。
 //
-// 目标（WP-D：Learning Durability）：
-//   1. 实现 Learning Materialization worker 池级租约的进程内版本（开发/测试/单机）。
-//   2. 线程安全：ConcurrentDictionary + lease_token CAS（Renew/Release 校验持有者）。
-//   3. 语义与 PostgresLearningLeaseStore 对齐：获取（无行或过期可抢占）/ 续约 / 释放 /
-//      过期清理 / 活跃查询，便于测试复用。
+// 目标（：Learning Durability）：
+// 1. 实现 Learning Materialization worker 池级租约的进程内版本（开发/测试/单机）。
+// 2. 线程安全：ConcurrentDictionary + lease_token CAS（Renew/Release 校验持有者）。
+// 3. 语义与 PostgresLearningLeaseStore 对齐：获取（无行或过期可抢占）/ 续约 / 释放 /
+// 过期清理 / 活跃查询，便于测试复用。
 //
 // 与 InMemoryAgentRunLease 设计模式对齐（进程内默认实现；Postgres provider 覆盖）。
 // ===========================================================================

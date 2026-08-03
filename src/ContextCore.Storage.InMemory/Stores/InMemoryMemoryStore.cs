@@ -10,8 +10,8 @@ namespace ContextCore.Storage.InMemory;
 /// 适用于测试和短生命周期场景。
 /// </summary>
 /// <remarks>
-/// TODO-DEMO [P2-3]：内存存储仅用于测试，进程重启后数据全部丢失。
-/// ControlRoom 的 <c>--storage memory</c> 选项应向用户显示明确警告。参见：TODO.md → P2-3
+/// TODO：内存存储仅用于测试，进程重启后数据全部丢失。
+/// ControlRoom 的 <c>--storage memory</c> 选项应向用户显示明确警告。参见：TODO.md
 /// </remarks>
 public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, IPromotionRecordStore, IPromotionCandidateStore, IMemoryStoreBatchLookup
 {

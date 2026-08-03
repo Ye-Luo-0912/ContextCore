@@ -8,8 +8,8 @@ namespace ContextCore.ModelGateway;
 /// <see cref="IModelGateway"/> 的基础实现，按顺序选择第一个可用适配器处理请求。
 /// </summary>
 /// <remarks>
-/// TODO-DEMO [P1]：此实现无路由策略，不支持角色路由、回退与重试。
-/// 生产场景请使用 <see cref="ConfigurableModelGateway"/>。参见：TODO.md → P1
+/// TODO：此实现无路由策略，不支持角色路由、回退与重试。
+/// 生产场景请使用 <see cref="ConfigurableModelGateway"/>。参见：TODO.md → 
 /// </remarks>
 public sealed class BasicModelGateway : IModelGateway
 {

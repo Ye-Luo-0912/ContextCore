@@ -37,7 +37,7 @@ public sealed class PostgresMigrationToolDispatchResultsResultKey : IPostgresMig
         command.CommandTimeout = options.CommandTimeoutSeconds;
 
         // 目标表不存在时无需执行：新数据库由基线 DDL 直接以 request_id 为主键创建。
-        // ::text 将 regclass 转为文本，避免 Npgsql 无法以 object 读取 regclass 列。
+        // text 将 regclass 转为文本，避免 Npgsql 无法以 object 读取 regclass 列。
         command.CommandText = "SELECT to_regclass(@table_name)::text;";
         command.Parameters.AddWithValue("table_name", table);
         var tableExists = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);

@@ -7,15 +7,15 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 入口层服务：将 <see cref="UserFeedbackSubmitRequest"/> 映射为 <see cref="UserFeedbackEntry"/>，
-///      通过 <see cref="IUserFeedbackLedger.AppendFeedbackAsync"/> 写入 ledger。
-///   2. 自动生成字段：FeedbackEntryId / GivenAt / IdempotencyKey 由本服务生成（调用方无需提供）。
-///   3. FeedbackValue 推导：ThumbsUp=+1.0 / ThumbsDown=-1.0 / Report=-1.0 / TextFeedback=0.0；
-///      ScoreCorrection 时调用方必须显式提供 FeedbackValue（范围 [0.0, 1.0]）。
-///   4. TextFeedback 必填 FeedbackText；其他类型可选。
-///   5. 与 <see cref="LearningFeedbackService"/> 的关系：
-///      - LearningFeedbackService 面向运行时反馈审核流程（LearningFeedbackEvent → LearningFeedbackReviewRecord）；
-///      - UserFeedbackService 直接关联到 Utility Ledger 条目，作为校准/训练的标签信号源。
+/// 1. 入口层服务：将 <see cref="UserFeedbackSubmitRequest"/> 映射为 <see cref="UserFeedbackEntry"/>，
+/// 通过 <see cref="IUserFeedbackLedger.AppendFeedbackAsync"/> 写入 ledger。
+/// 2. 自动生成字段：FeedbackEntryId / GivenAt / IdempotencyKey 由本服务生成（调用方无需提供）。
+/// 3. FeedbackValue 推导：ThumbsUp=+1.0 / ThumbsDown=-1.0 / Report=-1.0 / TextFeedback=0.0；
+/// ScoreCorrection 时调用方必须显式提供 FeedbackValue（范围 [0.0, 1.0]）。
+/// 4. TextFeedback 必填 FeedbackText；其他类型可选。
+/// 5. 与 <see cref="LearningFeedbackService"/> 的关系：
+/// - LearningFeedbackService 面向运行时反馈审核流程（LearningFeedbackEvent → LearningFeedbackReviewRecord）；
+/// - UserFeedbackService 直接关联到 Utility Ledger 条目，作为校准/训练的标签信号源。
 /// </remarks>
 public sealed class UserFeedbackService
 {
@@ -38,10 +38,10 @@ public sealed class UserFeedbackService
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>提交结果（含写入后的完整快照与警告）。</returns>
     /// <exception cref="ArgumentException">
-    ///   - WorkspaceId / CollectionId / DecisionId / CandidateItemId 为空
-    ///   - Kind = Unknown
-    ///   - ScoreCorrection 时 FeedbackValue 为空或超出 [0.0, 1.0]
-    ///   - TextFeedback 时 FeedbackText 为空
+    /// - WorkspaceId / CollectionId / DecisionId / CandidateItemId 为空
+    /// - Kind = Unknown
+    /// - ScoreCorrection 时 FeedbackValue 为空或超出 [0.0, 1.0]
+    /// - TextFeedback 时 FeedbackText 为空
     /// </exception>
     public async Task<UserFeedbackSubmitResult> SubmitAsync(
         UserFeedbackSubmitRequest request,

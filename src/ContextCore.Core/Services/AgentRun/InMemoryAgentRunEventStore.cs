@@ -7,15 +7,15 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // InMemoryAgentRunEventStore — 进程内 Agent Run Event Store（开发/测试用）
 //
 // 实现 IAgentRunEventStore 的进程内默认实现，复用 Checkpoint 哈希链模式：
-//   - ConcurrentDictionary 维护 (workspaceId, runId) → List<AgentRunEvent> 映射；
-//   - AppendAsync 校验 sequence 连续性 + prev_chain_hash 匹配；
-//   - ReadAsync 按 sequence 升序读取（fromSequence + take）；
-//   - GetLastSequenceAsync 返回当前最大 sequence（空时返回 -1 表示无事件）。
+// - ConcurrentDictionary 维护 (workspaceId, runId) → List<AgentRunEvent> 映射；
+// - AppendAsync 校验 sequence 连续性 + prev_chain_hash 匹配；
+// - ReadAsync 按 sequence 升序读取（fromSequence + take）；
+// - GetLastSequenceAsync 返回当前最大 sequence（空时返回 -1 表示无事件）。
 //
 // 设计决策：
-//   - 不持久化到磁盘：进程崩溃后事件流丢失。生产部署应注入持久化实现。
-//   - 并发追加通过锁保护（保证 sequence 连续性校验原子性）。
-//   - 哈希链校验在 AppendAsync 入口执行，不匹配抛 InvalidOperationException。
+// - 不持久化到磁盘：进程崩溃后事件流丢失。生产部署应注入持久化实现。
+// - 并发追加通过锁保护（保证 sequence 连续性校验原子性）。
+// - 哈希链校验在 AppendAsync 入口执行，不匹配抛 InvalidOperationException。
 // ===========================================================================
 
 /// <summary>
@@ -125,9 +125,9 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
         }
 
         // 1. checkpointBody：委托注入的 IAgentCheckpointStore 持久化（若有）。
-        //    3c：必须在事件追加之前执行——若 SaveAsync 失败，抛异常且不追加任何事件，
-        //    维持"先持久化再发事件"语义（与 Postgres 单事务原子提交对齐）。
-        //    InMemory 路径下 checkpoint 保存与事件追加非原子（无共享事务）；仅供开发/测试。
+        // 3c：必须在事件追加之前执行——若 SaveAsync 失败，抛异常且不追加任何事件，
+        // 维持"先持久化再发事件"语义（与 Postgres 单事务原子提交对齐）。
+        // InMemory 路径下 checkpoint 保存与事件追加非原子（无共享事务）；仅供开发/测试。
         if (checkpointBody is not null && _checkpointStore is not null)
         {
             await _checkpointStore.SaveAsync(checkpointBody, cancellationToken).ConfigureAwait(false);
@@ -208,8 +208,8 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
         }
 
         // 3. 委托 Run 状态 CAS + 字段更新到 IAgentRunStore（若注入）
-        //    注意：InMemory 路径下事件追加与状态更新非原子（无共享事务）；仅供开发/测试。
-        //    透传 leaseToken/fencingToken（InMemory store 接受但不强制校验）。
+        // 注意：InMemory 路径下事件追加与状态更新非原子（无共享事务）；仅供开发/测试。
+        // 透传 leaseToken/fencingToken（InMemory store 接受但不强制校验）。
         if (runStateUpdate is not null && _runStore is not null)
         {
             await _runStore.TransitionStateAsync(
@@ -224,7 +224,7 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
             await _runStore.UpdateAsync(runStateUpdate.RunSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
-        // 4. checkpointCursor：P1-4 InMemory 实现跟踪游标到内存字典（镜像 agent_runs.last_checkpoint_id/sequence）
+        // 4. checkpointCursor： InMemory 实现跟踪游标到内存字典（镜像 agent_runs.last_checkpoint_id/sequence）
         if (checkpointCursor is not null)
         {
             _cursors[Key(checkpointCursor.WorkspaceId, checkpointCursor.RunId)] = checkpointCursor;

@@ -7,31 +7,31 @@ namespace ContextCore.Tests;
 // 用户反馈接入（API + ledger 写入）验收测试
 //
 // 目标：
-//   验证用户显式反馈（thumbs up/down / 评分修正 / 文本反馈 / 举报）通过 UserFeedbackService
-//   写入 IUserFeedbackLedger，并通过查询 API 验证条目可见。
+// 验证用户显式反馈（thumbs up/down / 评分修正 / 文本反馈 / 举报）通过 UserFeedbackService
+// 写入 IUserFeedbackLedger，并通过查询 API 验证条目可见。
 //
-// 设计原则（对齐 R29 §9.1 第 4 项：反馈接入）：
-//   1. 反馈与 Utility Ledger 条目通过 (workspace_id, collection_id, decision_id, candidate_item_id) 关联。
-//   2. 反馈不修改原始 ledger 条目（append-only 语义），独立写入 user_feedback_entries。
-//   3. InMemory 实现跳过关联校验以保持测试友好；Postgres 实现做 EXISTS 校验。
-//   4. 幂等键由调用方提供或自动生成；InMemory 不去重（append-only）。
-//   5. P8 硬边界：用户反馈是观察信号；导出器需保留"无反馈"样本以避免偏差。
+// 设计原则（对齐反馈接入澄清）：
+// 1. 反馈与 Utility Ledger 条目通过 (workspace_id, collection_id, decision_id, candidate_item_id) 关联。
+// 2. 反馈不修改原始 ledger 条目（append-only 语义），独立写入 user_feedback_entries。
+// 3. InMemory 实现跳过关联校验以保持测试友好；Postgres 实现做 EXISTS 校验。
+// 4. 幂等键由调用方提供或自动生成；InMemory 不去重（append-only）。
+// 5. 硬边界：用户反馈是观察信号；导出器需保留"无反馈"样本以避免偏差。
 //
 // 验收点：
-//   - ThumbsUp 提交后 FeedbackValue = +1.0
-//   - ThumbsDown 提交后 FeedbackValue = -1.0
-//   - Report 提交后 FeedbackValue = -1.0
-//   - TextFeedback 必须提供 FeedbackText，否则抛出 ArgumentException
-//   - ScoreCorrection 必须提供 FeedbackValue 在 [0.0, 1.0]，否则抛出 ArgumentException
-//   - Kind = Unknown 抛出 ArgumentException
-//   - WorkspaceId / CollectionId / DecisionId / CandidateItemId 为空时抛出 ArgumentException
-//   - 自动生成 FeedbackEntryId / GivenAt / IdempotencyKey
-//   - 重复提交同 IdempotencyKey 在 InMemory 中追加（append-only，不去重）
-//   - QueryFeedbackAsync 按 workspace/decision/candidate/kind/givenBy/since/until 过滤生效
-//   - QueryFeedbackAsync 按 GivenAt 降序返回
-//   - GetLatestFeedbackForCandidateAsync 返回最新反馈（按 GivenAt 降序取首条）
-//   - GetLatestFeedbackForCandidateAsync 候选无反馈时返回 null
-//   - DI 注册：UserFeedbackService 通过构造注入 IUserFeedbackLedger 可解析
+// - ThumbsUp 提交后 FeedbackValue = +1.0
+// - ThumbsDown 提交后 FeedbackValue = -1.0
+// - Report 提交后 FeedbackValue = -1.0
+// - TextFeedback 必须提供 FeedbackText，否则抛出 ArgumentException
+// - ScoreCorrection 必须提供 FeedbackValue 在 [0.0, 1.0]，否则抛出 ArgumentException
+// - Kind = Unknown 抛出 ArgumentException
+// - WorkspaceId / CollectionId / DecisionId / CandidateItemId 为空时抛出 ArgumentException
+// - 自动生成 FeedbackEntryId / GivenAt / IdempotencyKey
+// - 重复提交同 IdempotencyKey 在 InMemory 中追加（append-only，不去重）
+// - QueryFeedbackAsync 按 workspace/decision/candidate/kind/givenBy/since/until 过滤生效
+// - QueryFeedbackAsync 按 GivenAt 降序返回
+// - GetLatestFeedbackForCandidateAsync 返回最新反馈（按 GivenAt 降序取首条）
+// - GetLatestFeedbackForCandidateAsync 候选无反馈时返回 null
+// - DI 注册：UserFeedbackService 通过构造注入 IUserFeedbackLedger 可解析
 // ===========================================================================
 
 [TestClass]

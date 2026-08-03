@@ -8,12 +8,12 @@ namespace ContextCore.Tests;
 /// /Memory Evolution 实现测试。
 ///
 /// 覆盖：
-///   1. InMemoryMemoryStateStore：append-only / 查询 / 最新状态 / 最近事件 / EventId 唯一性 / NewState != Fresh
-///   2. DefaultConsolidationETL：DryRun / Superseded→Replaced→Archived / Dormant→Archived / 幂等 / ItemType 过滤 / BatchSize
-///   3. DefaultMemoryDecayEvaluator：NoEffectiveContribution / LongTermNoHit（Cooling/Dormant/Archived）/ 终态不评估 / 状态机非法转换
-///   4. InMemoryMemoryUtilityStatsStore：UpsertSnapshot / QueryAsync / GetAsync / 过滤条件
-///   5. InMemoryConflictSetStore + ConflictResolutionStatus 过滤
-///   6. UtilityLedgerMaterializer + ConflictSet ResolutionStatus 填充
+/// 1. InMemoryMemoryStateStore：append-only / 查询 / 最新状态 / 最近事件 / EventId 唯一性 / NewState != Fresh
+/// 2. DefaultConsolidationETL：DryRun / Superseded→Replaced→Archived / Dormant→Archived / 幂等 / ItemType 过滤 / BatchSize
+/// 3. DefaultMemoryDecayEvaluator：NoEffectiveContribution / LongTermNoHit（Cooling/Dormant/Archived）/ 终态不评估 / 状态机非法转换
+/// 4. InMemoryMemoryUtilityStatsStore：UpsertSnapshot / QueryAsync / GetAsync / 过滤条件
+/// 5. InMemoryConflictSetStore + ConflictResolutionStatus 过滤
+/// 6. UtilityLedgerMaterializer + ConflictSet ResolutionStatus 填充
 /// </summary>
 [TestClass]
 [TestCategory("R21")]
@@ -581,9 +581,9 @@ public sealed class MemoryEvolutionImplementationTests
     // Materializer 依赖抽象（IUtilityLedger / IConflictSetLedger）验证
     //
     // 目的：证明 UtilityLedgerMaterializer 不再硬绑定 InMemoryUtilityLedgerStore /
-    //   InMemoryConflictSetStore，而是通过 IUtilityLedger / IConflictSetLedger 抽象写入。
-    //   生产路径注入 Postgres 实现（同一契约），开发 / 测试路径注入 InMemory 实现 —
-    //   materializer 代码无需修改。
+    // InMemoryConflictSetStore，而是通过 IUtilityLedger / IConflictSetLedger 抽象写入。
+    // 生产路径注入 Postgres 实现（同一契约），开发 / 测试路径注入 InMemory 实现 —
+    // materializer 代码无需修改。
     // ===========================================================================
 
     [TestMethod]

@@ -7,14 +7,14 @@ namespace ContextCore.Tests;
 /// InMemoryAgentCheckpointStore 实现测试。
 ///
 /// 覆盖：
-///   1. SaveAsync null / GetAsync null / ListAsync null 抛异常
-///   2. Save + Get 往返
-///   3. GetAsync 不存在返回 null
-///   4. ListAsync 按 session 过滤 + 按 CreatedAt 倒序
-///   5. ListAsync take 限制 + take<0 抛异常
-///   6. DeleteAsync 存在/不存在
-///   7. Count 属性
-///   8. 跨 workspace 隔离（相同 checkpointId 在不同 workspace 互不可见）
+/// 1. SaveAsync null / GetAsync null / ListAsync null 抛异常
+/// 2. Save + Get 往返
+/// 3. GetAsync 不存在返回 null
+/// 4. ListAsync 按 session 过滤 + 按 CreatedAt 倒序
+/// 5. ListAsync take 限制 + take<0 抛异常
+/// 6. DeleteAsync 存在/不存在
+/// 7. Count 属性
+/// 8. 跨 workspace 隔离（相同 checkpointId 在不同 workspace 互不可见）
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

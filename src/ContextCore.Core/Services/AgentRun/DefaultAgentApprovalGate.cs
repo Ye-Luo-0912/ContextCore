@@ -8,23 +8,23 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // DefaultAgentApprovalGate — 默认审批门
 //
 // 实现 IAgentApprovalGate 的默认审批策略：
-//   1. 自动审批模式：低风险操作直接 Approved=true（默认行为）。
-//   2. 可配置需要审批的 Tool 列表（构造注入）。
-//   3. 默认全部自动批准（测试用；生产环境应替换为人工审批实现）。
+// 1. 自动审批模式：低风险操作直接 Approved=true（默认行为）。
+// 2. 可配置需要审批的 Tool 列表（构造注入）。
+// 3. 默认全部自动批准（测试用；生产环境应替换为人工审批实现）。
 //
 // 运行时能力补齐（durable approval）：
-//   - 构造可选注入 IAgentApprovalStore；注入后在 RequestApprovalAsync 中持久化审批记录。
-//   - 自动批准：先 CreateAsync(Pending) → ResolveAsync(Approved) 留下审计轨迹。
-//   - 需人工审批：CreateAsync(Pending) 后返回 Approved=false，等待外部 ResolveAsync。
-//   - 未注入 store 时保持原行为（无持久化，纯内存决策）。
+// - 构造可选注入 IAgentApprovalStore；注入后在 RequestApprovalAsync 中持久化审批记录。
+// - 自动批准：先 CreateAsync(Pending) → ResolveAsync(Approved) 留下审计轨迹。
+// - 需人工审批：CreateAsync(Pending) 后返回 Approved=false，等待外部 ResolveAsync。
+// - 未注入 store 时保持原行为（无持久化，纯内存决策）。
 //
 // 设计决策：
-//   - 默认行为是"全部自动批准"（兼容现有 Kernel 测试场景，不阻塞流程）；
-//   - 通过构造注入 approvalRequiredTools 可显式标记某些 Tool 需要人工审批；
-//   - 自动审批的 ApproverId 为 "auto-rule"，便于审计区分；
-//   - store=null 且无需人工审批时保持原行为（无持久化，纯内存决策）；
-//   - store=null 且 Tool 需要人工审批时 fail-closed 抛异常——不允许出现
-//     "Run AwaitingApproval 但无 Approval Row" 的半状态。
+// - 默认行为是"全部自动批准"（兼容现有 Kernel 测试场景，不阻塞流程）；
+// - 通过构造注入 approvalRequiredTools 可显式标记某些 Tool 需要人工审批；
+// - 自动审批的 ApproverId 为 "auto-rule"，便于审计区分；
+// - store=null 且无需人工审批时保持原行为（无持久化，纯内存决策）；
+// - store=null 且 Tool 需要人工审批时 fail-closed 抛异常——不允许出现
+// "Run AwaitingApproval 但无 Approval Row" 的半状态。
 // ===========================================================================
 
 /// <summary>
@@ -55,7 +55,7 @@ public sealed class DefaultAgentApprovalGate : IAgentApprovalGate
     /// null = 不记录日志（向后兼容测试场景）。
     /// </param>
     /// <param name="approvalPolicy">
-    /// WP-B：Approval Policy 配置（SecurityOptions.ApprovalPolicy）。非 null 且 Enabled=true 时，
+    /// Approval Policy 配置（SecurityOptions.ApprovalPolicy）。非 null 且 Enabled=true 时，
     /// 在需审批 Tool 列表之外，还按 CostThresholdUsd / TokenThreshold 触发审批——
     /// Tool 调用携带 <see cref="AgentToolCallRequest.EstimatedCostUsd"/> / 
     /// <see cref="AgentToolCallRequest.EstimatedTokens"/> 且超过阈值时需人工审批；

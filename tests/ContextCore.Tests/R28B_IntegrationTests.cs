@@ -12,16 +12,16 @@ namespace ContextCore.Tests;
 // 集成测试 — V2 端到端管线 + Cutover 切换
 //
 // 覆盖范围（3 个测试类）：
-//   1. V2RetrievalIntegrationTests — Retrieval 端到端管线（真实 Runtime + InMemory Store）
-//   2. V2PackageIntegrationTests — Package 端到端管线（真实 Runtime + InMemory Store）
-//   3. CutoverTransitionIntegrationTests — Cutover 流量切换（0% / 100% / 稳定哈希 / 动态更新 / 回退）
+// 1. V2RetrievalIntegrationTests — Retrieval 端到端管线（真实 Runtime + InMemory Store）
+// 2. V2PackageIntegrationTests — Package 端到端管线（真实 Runtime + InMemory Store）
+// 3. CutoverTransitionIntegrationTests — Cutover 流量切换（0% / 100% / 稳定哈希 / 动态更新 / 回退）
 //
 // 设计原则：
-//   - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
-//   - 使用 InMemoryContextStore 做数据隔离（满足 InMemory stores 隔离测试要求）
-//   - 复用 R28B_ClosureGateAcceptanceTests 中的 internal Stub
-//     （CallTrackingContextStore / CountingCandidateProvider / RecordingDecisionRuntime / ThrowingDecisionRuntime）
-//   - 所有代码注释使用中文
+// - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
+// - 使用 InMemoryContextStore 做数据隔离（满足 InMemory stores 隔离测试要求）
+// - 复用 ClosureGate 验收测试中的 internal Stub
+// （CallTrackingContextStore / CountingCandidateProvider / RecordingDecisionRuntime / ThrowingDecisionRuntime）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================

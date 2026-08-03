@@ -6,9 +6,9 @@ namespace ContextCore.ModelGateway;
 
 /// <summary>返回预置回复的 <see cref="IModelAdapter"/> 模拟实现，适用于测试和开发环境。</summary>
 /// <remarks>
-/// TODO-DEMO [P0-1]：此适配器不调用任何真实 API，仅返回固定字符串。
+/// TODO：此适配器不调用任何真实 API，仅返回固定字符串。
 /// 生产使用前请替换为 <see cref="OpenAiCompatibleModelAdapter"/> 或其他真实实现。
-/// 参见：TODO.md → P0-1
+/// 参见：TODO.md
 /// </remarks>
 public sealed class MockModelAdapter : IModelAdapter
 {

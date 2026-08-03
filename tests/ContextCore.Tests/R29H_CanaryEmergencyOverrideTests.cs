@@ -11,15 +11,15 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// 集群级 Canary Kill Switch（P0-9）—— 紧急覆盖存储 + 路由优先级 + 恢复语义
+// 集群级 Canary Kill Switch—— 紧急覆盖存储 + 路由优先级 + 恢复语义
 //
 // 覆盖范围：
-//   InMemoryCanaryEmergencyOverrideStore：set/get/clear + 活跃覆盖唯一性；
-//   Postgres 迁移 SQL：canary_emergency_overrides 表 + 活跃覆盖部分唯一索引；
-//   AuthoritativeRetrievalRuntime / AuthoritativePackageRuntime：活跃覆盖强制回退 V1
-//     （优先级：Emergency Override > canary DB 百分比 > Cutover 配置）；
-//   CanaryProgressionService.RecoverFromStoreAsync：覆盖期间强制 0% + 非 Consistent，
-//     AdvanceAsync 拒绝推进。
+// InMemoryCanaryEmergencyOverrideStore：set/get/clear + 活跃覆盖唯一性；
+// Postgres 迁移 SQL：canary_emergency_overrides 表 + 活跃覆盖部分唯一索引；
+// AuthoritativeRetrievalRuntime / AuthoritativePackageRuntime：活跃覆盖强制回退 V1
+// （优先级：Emergency Override > canary DB 百分比 > Cutover 配置）；
+// CanaryProgressionService.RecoverFromStoreAsync：覆盖期间强制 0% + 非 Consistent，
+// AdvanceAsync 拒绝推进。
 // ===========================================================================
 
 [TestClass]

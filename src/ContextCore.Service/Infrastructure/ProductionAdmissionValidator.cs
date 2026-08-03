@@ -36,15 +36,15 @@ public sealed record ProductionAdmissionReport(
 /// <see cref="ValidateAsync"/> 返回 AllPassed=false，由调用方（Program.cs）记录
 /// Critical 日志并中止进程，防止半配置生产环境静默上线。
 /// 强制项：
-///   1. API Key 已配置（RequireApiKey=true 且 ApiKey 非空）
-///   2. 显式 Workspace（RequireExplicitWorkspace=true）
-///   3. RBAC 强制校验（Enforce=true）
-///   4. Approval Policy 启用且覆盖全部声明 RequiresApproval 的高风险工具
-///   5. 全部已注册工具 Schema 合法（名称 + JSON Schema 可解析）
-///   6. 至少一条原生 Tool Calling 路由（真实 transport + 已配置模型的网关）
-///   7. Cluster Model Slot 'primary' 已应用模型（DesiredStatus=Active）
-///   8. Late Hydration 管道完整（hydrator + batch lookup 已注册）
-///   9. ProductionHA Worker 集群已注册（随应用启动）
+/// 1. API Key 已配置（RequireApiKey=true 且 ApiKey 非空）
+/// 2. 显式 Workspace（RequireExplicitWorkspace=true）
+/// 3. RBAC 强制校验（Enforce=true）
+/// 4. Approval Policy 启用且覆盖全部声明 RequiresApproval 的高风险工具
+/// 5. 全部已注册工具 Schema 合法（名称 + JSON Schema 可解析）
+/// 6. 至少一条原生 Tool Calling 路由（真实 transport + 已配置模型的网关）
+/// 7. Cluster Model Slot 'primary' 已应用模型（DesiredStatus=Active）
+/// 8. Late Hydration 管道完整（hydrator + batch lookup 已注册）
+/// 9. ProductionHA Worker 集群已注册（随应用启动）
 /// </summary>
 public sealed class ProductionAdmissionValidator
 {

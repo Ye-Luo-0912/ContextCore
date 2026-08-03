@@ -11,15 +11,15 @@ using Microsoft.Extensions.Options;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R30C Model HA Truth —— 集群期望、节点实际模型与 API 报告一致
+// Model HA Truth —— 集群期望、节点实际模型与 API 报告一致
 //
 // 验收：任意节点重启后加载唯一 Champion；不能出现 Slot=A、Engine=B。
 // 覆盖：
-//   - reconcile retry/backoff：失败按指数退避重试（Base×2^n，上限 MaxDelay/MaxRetryCount）；
-//   - drift 自动隔离：同 Revision 下 ContentHash 不一致 → 节点标记 Isolated（持久化）；
-//   - rollout readiness：至少一节点 + 全收敛 + 零漂移 → IsRolloutReady=true；
-//   - EngineGeneration 记录：已应用状态携带本地引擎代次（与 SlotRevision 分离）；
-//   - Staged Handle 身份校验（PromoteStaged fail-closed）由 R29H 覆盖，此处不重复。
+// - reconcile retry/backoff：失败按指数退避重试（Base×2^n，上限 MaxDelay/MaxRetryCount）；
+// - drift 自动隔离：同 Revision 下 ContentHash 不一致 → 节点标记 Isolated（持久化）；
+// - rollout readiness：至少一节点 + 全收敛 + 零漂移 → IsRolloutReady=true；
+// - EngineGeneration 记录：已应用状态携带本地引擎代次（与 SlotRevision 分离）；
+// - Staged Handle 身份校验（PromoteStaged fail-closed）由既有测试覆盖，此处不重复。
 // ===========================================================================
 
 [TestClass]

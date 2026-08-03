@@ -6,17 +6,17 @@ namespace ContextCore.Inference.Onnx;
 // Model Activation Manager 契约
 //
 // 目标（权威模型激活管理器）：
-//   1. 编排从 IModelArtifactRegistry 读取 descriptor → 校准验证（ICalibrationValidator）
-//      → schema 存在性验证（IFeatureRegistry.Get）→ ONNX session 创建（IOnnxInferenceSessionFactory）
-//      → OnnxInferenceEngine 激活的完整流程。
-//   2. 作为 IBatchInferenceEngine 的代理：激活前委托给 Deterministic fallback，
-//      激活后委托给 OnnxInferenceEngine，让消费方无需感知激活切换。
-//   3. 线程安全：ActivateAsync 可在运行时调用，无缝切换引擎。
+// 1. 编排从 IModelArtifactRegistry 读取 descriptor → 校准验证（ICalibrationValidator）
+// → schema 存在性验证（IFeatureRegistry.Get）→ ONNX session 创建（IOnnxInferenceSessionFactory）
+// → OnnxInferenceEngine 激活的完整流程。
+// 2. 作为 IBatchInferenceEngine 的代理：激活前委托给 Deterministic fallback，
+// 激活后委托给 OnnxInferenceEngine，让消费方无需感知激活切换。
+// 3. 线程安全：ActivateAsync 可在运行时调用，无缝切换引擎。
 //
 // 集成：
-//   ICalibrationValidator 在激活流程中被调用，确保校准参数在模型加载时通过统计有效性验证。
-//   IFeatureRegistry.Get 验证 descriptor.FeatureSchemaVersion 已注册，防止推理时 schema drift。
-//   IFeatureSchemaValidator 由上游消费方在推理前调用（生产推理路径），验证输入特征与 schema 一致性。
+// ICalibrationValidator 在激活流程中被调用，确保校准参数在模型加载时通过统计有效性验证。
+// IFeatureRegistry.Get 验证 descriptor.FeatureSchemaVersion 已注册，防止推理时 schema drift。
+// IFeatureSchemaValidator 由上游消费方在推理前调用（生产推理路径），验证输入特征与 schema 一致性。
 // ===========================================================================
 
 /// <summary>

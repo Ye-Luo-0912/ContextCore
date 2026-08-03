@@ -1,25 +1,25 @@
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// Learning Lease 契约（WP-D：Learning Durability）
+// Learning Lease 契约（：Learning Durability）
 //
 // 背景：
-//   Learning Loop Durable Outbox（learning_event_outbox）已具备记录级租约
-//   （ILearningEventOutboxStore.LeaseToken：AcquirePendingAsync 生成唯一 token，
-//   Ack/Nack/Renew 通过 token CAS 校验持有者），保证多 worker 不重复消费同一事件。
-//   但"哪个 worker 实例负责轮询/物化"本身没有池级协调——多实例部署中每个实例
-//   都会启动 LearningMaterializationWorker 各自轮询。记录级租约已保证不重复消费，
-//   池级租约进一步将物化调度收敛到单一持有者，减少跨实例的 SKIP LOCKED 争用与
-//   重复的指标上报。
+// Learning Loop Durable Outbox（learning_event_outbox）已具备记录级租约
+// （ILearningEventOutboxStore.LeaseToken：AcquirePendingAsync 生成唯一 token，
+// Ack/Nack/Renew 通过 token CAS 校验持有者），保证多 worker 不重复消费同一事件。
+// 但"哪个 worker 实例负责轮询/物化"本身没有池级协调——多实例部署中每个实例
+// 都会启动 LearningMaterializationWorker 各自轮询。记录级租约已保证不重复消费，
+// 池级租约进一步将物化调度收敛到单一持有者，减少跨实例的 SKIP LOCKED 争用与
+// 重复的指标上报。
 //
 // 本契约定义 worker 池级租约（per-pool 至多一行），与记录级租约互补：
-//   - 记录级租约：ILearningEventOutboxStore（per-event lease_token，SKIP LOCKED）。
-//   - 池级租约：ILearningLeaseStore（per-lease_id 至多一行，CAS 获取/续约/释放）。
+// - 记录级租约：ILearningEventOutboxStore（per-event lease_token，SKIP LOCKED）。
+// - 池级租约：ILearningLeaseStore（per-lease_id 至多一行，CAS 获取/续约/释放）。
 //
 // 实现层对齐 IAgentRunLease / ICanaryLeaderLease 模式：
-//   - Postgres 实现使用 INSERT ... ON CONFLICT DO UPDATE WHERE expires_at < now()
-//     原子抢占过期租约；Renew/Release 通过 lease_token CAS 校验持有者。
-//   - InMemory 实现（开发/测试）为 ConcurrentDictionary + token CAS。
+// - Postgres 实现使用 INSERT ... ON CONFLICT DO UPDATE WHERE expires_at < now()
+// 原子抢占过期租约；Renew/Release 通过 lease_token CAS 校验持有者。
+// - InMemory 实现（开发/测试）为 ConcurrentDictionary + token CAS。
 // ===========================================================================
 
 /// <summary>Learning Materialization worker 池级租约。</summary>

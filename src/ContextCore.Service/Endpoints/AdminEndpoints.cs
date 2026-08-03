@@ -16,10 +16,10 @@ namespace ContextCore.Service.Endpoints;
 /// <summary>
 /// 管理员专用端点（备份 / 校验 / Schema 版本），全部需要 API Key 认证。
 /// <list type="bullet">
-///   <item><c>GET  /api/admin/backup/status</c>：存储信息概览。</item>
-///   <item><c>POST /api/admin/backup/create</c>：创建 FileSystem 数据目录 ZIP 快照。</item>
-///   <item><c>GET  /api/admin/backup/validate</c>：校验所有 JSONL 文件完整性。</item>
-///   <item><c>GET  /api/admin/schema-version</c>：返回 Postgres schema 版本。</item>
+/// <item><c>GET /api/admin/backup/status</c>：存储信息概览。</item>
+/// <item><c>POST /api/admin/backup/create</c>：创建 FileSystem 数据目录 ZIP 快照。</item>
+/// <item><c>GET /api/admin/backup/validate</c>：校验所有 JSONL 文件完整性。</item>
+/// <item><c>GET /api/admin/schema-version</c>：返回 Postgres schema 版本。</item>
 /// </list>
 /// </summary>
 internal static class AdminEndpoints

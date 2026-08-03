@@ -16,21 +16,21 @@ namespace ContextCore.Tests;
 // Agent Run 进程重启恢复生产验收测试
 //
 // 验证 AgentRun 在进程重启后的恢复能力，覆盖：
-//   1. Restart_NonTerminalRun_CanBeResumedByNewActor — 非终态 Run 可由新 Actor 恢复执行
-//   2. Restart_TerminalRun_NotResumed — 终态 Run 不被恢复
-//   3. Restart_ModelCallsUsed_PreservedAcrossRestart — ModelCallsUsed 跨重启保留
-//   4. Restart_EventChain_PreservedAcrossRestart — 事件哈希链跨重启保留
-//   5. Restart_RunLease_PreventsConcurrentRecovery — 租约防止并发恢复
-//   6. Restart_RecoveryWorker_PicksUpNonTerminalRuns — 恢复 Worker 识别非终态 Run
-//   7. Restart_Postgres_PersistentRecovery — Postgres 持久化恢复（不可用时 Inconclusive）
+// 1. Restart_NonTerminalRun_CanBeResumedByNewActor — 非终态 Run 可由新 Actor 恢复执行
+// 2. Restart_TerminalRun_NotResumed — 终态 Run 不被恢复
+// 3. Restart_ModelCallsUsed_PreservedAcrossRestart — ModelCallsUsed 跨重启保留
+// 4. Restart_EventChain_PreservedAcrossRestart — 事件哈希链跨重启保留
+// 5. Restart_RunLease_PreventsConcurrentRecovery — 租约防止并发恢复
+// 6. Restart_RecoveryWorker_PicksUpNonTerminalRuns — 恢复 Worker 识别非终态 Run
+// 7. Restart_Postgres_PersistentRecovery — Postgres 持久化恢复（不可用时 Inconclusive）
 //
 // 设计原则：
-//   - 优先使用真实 InMemory 实现（非 mock）：InMemoryAgentRunStore /
-//     InMemoryAgentRunEventStore / InMemoryAgentRunLease
-//   - 通过 PersistentInMemoryAgentRunStore 包装器实现 IPersistentAgentRunStore 标记
-//     （模拟进程重启后数据持久化）
-//   - 所有异步测试使用超时 CancellationTokenSource 防止挂起
-//   - 中文注释
+// - 优先使用真实 InMemory 实现（非 mock）：InMemoryAgentRunStore /
+// InMemoryAgentRunEventStore / InMemoryAgentRunLease
+// - 通过 PersistentInMemoryAgentRunStore 包装器实现 IPersistentAgentRunStore 标记
+// （模拟进程重启后数据持久化）
+// - 所有异步测试使用超时 CancellationTokenSource 防止挂起
+// - 中文注释
 // ===========================================================================
 
 [TestClass]

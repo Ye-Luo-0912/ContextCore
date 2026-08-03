@@ -5,10 +5,10 @@ namespace ContextCore.Abstractions.Models;
 /// vs "lifecycle-allowed Section"（允许 deprecated/superseded/replaced 项出现的审计/冲突区域）。
 ///
 /// 普通 Section（normal sections）：
-///   currentTask / recentContext / workingState / stableBackground / relations / evidence
+/// currentTask / recentContext / workingState / stableBackground / relations / evidence
 ///
 /// Lifecycle-allowed Section（生命周期专属区）：
-///   historical_context / deprecated_evidence / conflict_evidence / uncertainties / diagnostics / excluded
+/// historical_context / deprecated_evidence / conflict_evidence / uncertainties / diagnostics / excluded
 /// </summary>
 public static class SectionLifecyclePolicy
 {

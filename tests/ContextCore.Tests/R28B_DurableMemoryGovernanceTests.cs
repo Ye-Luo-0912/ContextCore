@@ -12,17 +12,17 @@ namespace ContextCore.Tests;
 /// Durable Memory Governance Persistence 验收测试。
 ///
 /// 覆盖：
-///   1. InMemoryUtilityLedgerStore：写入 / 查询 / 过滤 / 排序 / Take / GetLatestEntry / GetExpertContributions / 参数校验
-///   2. InMemoryConflictSetStore：写入 / 查询 / 过滤 / GetAsync / GetConflictsForCandidate / 参数校验
-///   3. PostgresUtilityLedgerStore：构造 / 参数校验 / cancellation 透传 / DI 注册
-///   4. PostgresConflictSetStore：构造 / 参数校验 / cancellation 透传 / DI 注册
-///   5. Schema 迁移验证：v20 版本 + 新表/索引定义存在
+/// 1. InMemoryUtilityLedgerStore：写入 / 查询 / 过滤 / 排序 / Take / GetLatestEntry / GetExpertContributions / 参数校验
+/// 2. InMemoryConflictSetStore：写入 / 查询 / 过滤 / GetAsync / GetConflictsForCandidate / 参数校验
+/// 3. PostgresUtilityLedgerStore：构造 / 参数校验 / cancellation 透传 / DI 注册
+/// 4. PostgresConflictSetStore：构造 / 参数校验 / cancellation 透传 / DI 注册
+/// 5. Schema 迁移验证：v20 版本 + 新表/索引定义存在
 ///
 /// 不连接真实 PostgreSQL 数据库；仅验证：
-///   - InMemory store 的完整读写语义（含 internal AppendEntries / AppendConflictSets 写入路径）
-///   - Postgres store 的参数校验在 EnsureMigrated 之前抛出（无需连接）
-///   - DI 注册路径（PostgresServiceCollectionExtensions）
-///   - Schema 版本与表/索引定义完整性
+/// - InMemory store 的完整读写语义（含 internal AppendEntries / AppendConflictSets 写入路径）
+/// - Postgres store 的参数校验在 EnsureMigrated 之前抛出（无需连接）
+/// - DI 注册路径（PostgresServiceCollectionExtensions）
+/// - Schema 版本与表/索引定义完整性
 ///
 /// 端到端 Postgres 持久化语义（BulkInsert / Query / jsonb 包含查询）由
 /// ContextCore.IntegrationTests 覆盖（需 Testcontainers），与
@@ -826,9 +826,9 @@ public sealed class R28B_DurableMemoryGovernanceTests
         // 将 DequeueAsync 的 Dispatched 终态改为租约模型（Pending → Leased → Acked），
         // 避免 consumer 崩溃后 Dispatched 行永久滞留。
         // 历史：v28 → v29（kernel_transport_inbox/outbox 租约模型）；
-        //       v27 → v28（tool_dispatch_journal_entries.idempotency_key UNIQUE partial index）；
-        //       v26 → v27（user_feedback_entries 表）；
-        //       v25 → v26（vw_utility_ledger_calibration_data 视图）。
+        // v27 → v28（tool_dispatch_journal_entries.idempotency_key UNIQUE partial index）；
+        // v26 → v27（user_feedback_entries 表）；
+        // v25 → v26（vw_utility_ledger_calibration_data 视图）。
         Assert.AreEqual("cc-schema-v30", PostgresMigrationRunner.SchemaVersion);
     }
 

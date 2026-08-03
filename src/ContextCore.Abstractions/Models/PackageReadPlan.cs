@@ -1,9 +1,9 @@
 namespace ContextCore.Abstractions.Models;
 
 /// <summary>
-/// #4：包构建读路径的查询计划，记录各 store 的实际调用次数与去重命中。
-/// 用于验证 R13.2 #1（merged constraint 去重）与 #3（current_task 并行）的效果，
-/// 并为后续 R13.3 Store Capability Model 与 R13-F Cache Canary Freeze 验收提供可观察指标。
+/// 包构建读路径的查询计划，记录各 store 的实际调用次数与去重命中。
+/// 用于验证 merged constraint 去重与 current_task 并行的效果，
+/// 并为后续 Store Capability Model 与 Cache Canary Freeze 验收提供可观察指标。
 /// </summary>
 public sealed class PackageReadPlan
 {
@@ -14,7 +14,7 @@ public sealed class PackageReadPlan
     public IReadOnlyDictionary<string, int> StoreCallCounts { get; init; } = new Dictionary<string, int>(StringComparer.Ordinal);
 
     /// <summary>
-    /// 去重命中的查询数：因 R13.2 #1 合并 section 与 merged section 的 Hard/Soft 查询而跳过的冗余调用次数。
+    /// 去重命中的查询数：因合并 section 与 merged section 的 Hard/Soft 查询而跳过的冗余调用次数。
     /// </summary>
     public int DedupHits { get; init; }
 

@@ -7,10 +7,10 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // InMemoryToolReconciliationStore — Tool 对账记录存储（进程内默认实现）
 //
 // 支撑 Run 级"未裁决不完成"约束：
-//   - CreateAsync 按 RunId+RequestId 幂等（重复创建返回既有记录）；
-//   - HasUnresolvedForRunAsync 供 CompleteAsync 门禁查询（Pending/Running 存在 → 禁止 Completed）；
-//   - TryBeginAsync CAS Pending→Running 供 ToolReconciliationWorker 并发互斥；
-//   - MarkResolvedAsync / MarkRejectedAsync 供 Worker / 人工 resolve 端点裁决。
+// - CreateAsync 按 RunId+RequestId 幂等（重复创建返回既有记录）；
+// - HasUnresolvedForRunAsync 供 CompleteAsync 门禁查询（Pending/Running 存在 → 禁止 Completed）；
+// - TryBeginAsync CAS Pending→Running 供 ToolReconciliationWorker 并发互斥；
+// - MarkResolvedAsync / MarkRejectedAsync 供 Worker / 人工 resolve 端点裁决。
 // ===========================================================================
 
 /// <summary>

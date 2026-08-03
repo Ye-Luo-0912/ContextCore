@@ -14,26 +14,26 @@ namespace ContextCore.Service.Endpoints;
 // ===========================================================================
 // Model Control Plane API
 //
-// 目标（对齐 P0-6 Model Control Plane API 规范）：
-//   提供完整的模型生命周期管理 REST API：
-//     - 模型注册（upload artifact 或指定路径）
-//     - 模型验证（schema binding / calibration binding / ONNX 格式）
-//     - 模型预热（warmup）
-//     - 影子模式运行（Champion/Challenger，不替换 active）
-//     - 模型激活（热切换）
-//     - 模型回滚（回到上一个 active 模型）
-//     - 模型退役
-//     - 当前 active 模型查询 / 全量已注册模型列举 / 单模型详情
-//     - readiness 检查（模型是否已加载且可推理）
-//     - 节点一致性报告（HA 多节点 active model 对账）
-//     - 激活审计历史查询
+// 目标（对齐 Model Control Plane API 规范）：
+// 提供完整的模型生命周期管理 REST API：
+// - 模型注册（upload artifact 或指定路径）
+// - 模型验证（schema binding / calibration binding / ONNX 格式）
+// - 模型预热（warmup）
+// - 影子模式运行（Champion/Challenger，不替换 active）
+// - 模型激活（热切换）
+// - 模型回滚（回到上一个 active 模型）
+// - 模型退役
+// - 当前 active 模型查询 / 全量已注册模型列举 / 单模型详情
+// - readiness 检查（模型是否已加载且可推理）
+// - 节点一致性报告（HA 多节点 active model 对账）
+// - 激活审计历史查询
 //
 // 设计原则：
-//   1. 所有端点遵循 ContextCore Minimal API 模式（IEndpointRouteBuilder 扩展方法）。
-//   2. 非 RealModel 模式下，IModelActivationManager 未注册 → 激活/warmup/shadow/rollback 端点返回 503。
-//   3. 注册/列举/审计端点在所有模式下可用（依赖 IModelArtifactRegistry / IModelActivationAuditStore）。
-//   4. 失败返回 ContextCoreErrorResponse，与 AdminEndpoints / HealthEndpoints 一致。
-//   5. 不抛异常：激活失败由 ModelActivationResult.Error 携带，转 400/503。
+// 1. 所有端点遵循 ContextCore Minimal API 模式（IEndpointRouteBuilder 扩展方法）。
+// 2. 非 RealModel 模式下，IModelActivationManager 未注册 → 激活/warmup/shadow/rollback 端点返回 503。
+// 3. 注册/列举/审计端点在所有模式下可用（依赖 IModelArtifactRegistry / IModelActivationAuditStore）。
+// 4. 失败返回 ContextCoreErrorResponse，与 AdminEndpoints / HealthEndpoints 一致。
+// 5. 不抛异常：激活失败由 ModelActivationResult.Error 携带，转 400/503。
 // ===========================================================================
 
 /// <summary>
@@ -934,9 +934,9 @@ internal static class ModelControlPlaneEndpoints
     /// CAS 更新 ClusterModelSlot（单一 HA 真相源）。
     /// 仅当 store 非空时执行 CAS：GetOrCreate("primary") → TryUpdate(expectedRevision)。
     /// 返回 (Conflicted, UpdatedSlot)：
-    ///   - Conflicted=true 表示 CAS 失败（并发修改，Revision 不匹配），调用方应返回 409。
-    ///   - Conflicted=false 且 UpdatedSlot 非空表示 CAS 成功。
-    ///   - Conflicted=false 且 UpdatedSlot 为 null 表示 store 为 null（单节点模式），跳过 CAS。
+    /// - Conflicted=true 表示 CAS 失败（并发修改，Revision 不匹配），调用方应返回 409。
+    /// - Conflicted=false 且 UpdatedSlot 非空表示 CAS 成功。
+    /// - Conflicted=false 且 UpdatedSlot 为 null 表示 store 为 null（单节点模式），跳过 CAS。
     /// </summary>
     private static async Task<(bool Conflicted, ClusterModelSlot? UpdatedSlot)> TryUpdateClusterSlotAsync(
         IClusterModelSlotStore? clusterSlotStore,
@@ -960,12 +960,12 @@ internal static class ModelControlPlaneEndpoints
     /// <summary>
     /// 校验客户端提交的 ArtifactPath 是否合法。
     /// 合法路径需满足以下条件之一：
-    ///   1. 对象存储 URI（s3:// / gs:// / az:// / abfs:// / abfss:// / https:// / http://）
-    ///   2. 解析为完整路径后位于配置的 ArtifactRoot 目录内
+    /// 1. 对象存储 URI（s3:// / gs:// / az:// / abfs:// / abfss:// / https:// / http://）
+    /// 2. 解析为完整路径后位于配置的 ArtifactRoot 目录内
     /// 拒绝：
-    ///   - 包含 ".." 的路径（防止路径穿越）
-    ///   - 非配置根目录的绝对路径
-    ///   - 路径中存在 symlink 指向 ArtifactRoot 之外（防止 symlink 穿越攻击）
+    /// - 包含 ".." 的路径（防止路径穿越）
+    /// - 非配置根目录的绝对路径
+    /// - 路径中存在 symlink 指向 ArtifactRoot 之外（防止 symlink 穿越攻击）
     /// </summary>
     /// <param name="artifactPath">客户端提交的路径。</param>
     /// <param name="artifactRoot">配置的 ArtifactRoot（绝对路径）。</param>
@@ -1065,7 +1065,7 @@ internal static class ModelControlPlaneEndpoints
             current = ResolveLinkIfExists(current);
         }
 
-        // 最终再规范化一次（symlink 目标可能是相对路径或包含 .. ）
+        // 最终再规范化一次（symlink 目标可能是相对路径或包含 ..）
         try
         {
             return Path.GetFullPath(current);

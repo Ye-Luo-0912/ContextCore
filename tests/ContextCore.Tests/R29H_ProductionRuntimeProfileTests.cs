@@ -21,22 +21,22 @@ namespace ContextCore.Tests;
 // Production Runtime Profile 完整性测试
 //
 // 目标：验证 Production Runtime Profile 的完整功能：
-//   1. 统一 Worker 注册（ProductionRuntimeWorkerRegistry 在各 Profile 下正确捕获 Worker 类型名）
-//   2. Readiness Service 行为（CheckReadinessAsync / GetRegisteredWorkers / GetCanaryStatus /
-//      GetModelActivationStatus）
-//   3. Readiness Endpoint（/health/ready）— 通过 WebApplicationFactory<Program> 真实 HTTP 调用验证
-//   4. 当前激活组件报告 Endpoint（/api/runtime/status）— 同上
-//   5. 不合法组合 fail-fast 补充边界场景
+// 1. 统一 Worker 注册（ProductionRuntimeWorkerRegistry 在各 Profile 下正确捕获 Worker 类型名）
+// 2. Readiness Service 行为（CheckReadinessAsync / GetRegisteredWorkers / GetCanaryStatus /
+// GetModelActivationStatus）
+// 3. Readiness Endpoint（/health/ready）— 通过 WebApplicationFactory<Program> 真实 HTTP 调用验证
+// 4. 当前激活组件报告 Endpoint（/api/runtime/status）— 同上
+// 5. 不合法组合 fail-fast 补充边界场景
 //
-// 与 R29H_ServiceCompositionE2ETests 的区别：
-//   - R29H_ServiceCompositionE2ETests 验证 DI 容器中的服务描述符绑定（类型注册是否正确）。
-//   - 本测试验证 WorkerRegistry 内容、ReadinessService 运行时行为、以及 HTTP 端点的端到端响应。
+// 与 Service Composition E2E 测试的区别：
+// - Service Composition E2E 测试验证 DI 容器中的服务描述符绑定（类型注册是否正确）。
+// - 本测试验证 WorkerRegistry 内容、ReadinessService 运行时行为、以及 HTTP 端点的端到端响应。
 //
 // 设计原则：
-//   - Worker 注册与 ReadinessService 行为测试使用 ServiceCollection 直接构建（无需 Web 服务器）。
-//   - Endpoint E2E 测试使用 WebApplicationFactory<Program>（Development profile + filesystem，无需 Postgres）。
-//   - ProductionHA 的 ReadinessService 行为测试使用 stub 连接字符串（不连接真实 DB；仅验证服务解析）。
-//   - 中文注释。
+// - Worker 注册与 ReadinessService 行为测试使用 ServiceCollection 直接构建（无需 Web 服务器）。
+// - Endpoint E2E 测试使用 WebApplicationFactory<Program>（Development profile + filesystem，无需 Postgres）。
+// - ProductionHA 的 ReadinessService 行为测试使用 stub 连接字符串（不连接真实 DB；仅验证服务解析）。
+// - 中文注释。
 // ===========================================================================
 
 [TestClass]

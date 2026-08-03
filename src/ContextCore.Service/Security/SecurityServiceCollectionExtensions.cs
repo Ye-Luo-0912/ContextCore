@@ -12,11 +12,11 @@ namespace ContextCore.Service.Security;
 // SecurityServiceCollectionExtensions — 安全框架 DI 注册扩展
 //
 // 包含：
-//   1. AddContextCoreSecurity：注册所有安全服务（WorkspaceContext / RBAC / API Key Store /
-//      Tool Authorizer / Quota / Audit Retention）。
-//   2. AddContextCoreRateLimiter：注册 .NET 内置 RateLimiter 中间件（按 workspace + endpoint 维度）。
-//   3. AddContextCoreApiKeyPurgeWorker：注册后台清理过期 API Key 的 HostedService。
-//   4. RequireWorkspaceRole：端点扩展方法（在 Minimal API 上声明所需角色，由 RbacEnforcementFilter 强制校验）。
+// 1. AddContextCoreSecurity：注册所有安全服务（WorkspaceContext / RBAC / API Key Store /
+// Tool Authorizer / Quota / Audit Retention）。
+// 2. AddContextCoreRateLimiter：注册 .NET 内置 RateLimiter 中间件（按 workspace + endpoint 维度）。
+// 3. AddContextCoreApiKeyPurgeWorker：注册后台清理过期 API Key 的 HostedService。
+// 4. RequireWorkspaceRole：端点扩展方法（在 Minimal API 上声明所需角色，由 RbacEnforcementFilter 强制校验）。
 // ===========================================================================
 
 /// <summary>安全框架 DI 注册扩展。</summary>

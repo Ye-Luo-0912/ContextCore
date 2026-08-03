@@ -54,7 +54,7 @@ internal sealed class ResultProjector
         var budget = PackageBudgetProjector.BuildBudgetReport(tempPackage, tokenBudget, request);
         var output = PackageBudgetProjector.BuildStandardOutput(tempPackage, selection.DroppedItems, resolvedUncertainties, budget);
 
-        // #3: 所有集合字段转为 ImmutableArray，确保运行期不可变（无法 cast 回可变数组）。
+        // 所有集合字段转为 ImmutableArray，确保运行期不可变（无法 cast 回可变数组）。
         // 投影阶段读取时仍做防御性 ToArray 拷贝，保证返回结果对象的独立性。
         return new PackageTemplate(
             OrderedSections: orderedSections.ToImmutableArray(),

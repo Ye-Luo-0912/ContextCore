@@ -10,17 +10,17 @@ namespace ContextCore.Core.Services.AgentKernel;
 // 维护每个 RequestId 的状态机进度（Prepared → Dispatched → Committed → ResultDelivered）。
 //
 // 设计决策：
-//   - 使用 ConcurrentDictionary 支持多线程并发访问。
-//   - 状态推进使用精确前驱状态匹配（state == expected），
-//     禁止跨级跳跃（如 Prepared → Committed）；违反时抛 InvalidOperationException（InvalidTransition）。
-//     当前已到达/超过目标状态时幂等成功（AlreadyApplied/AlreadyAdvanced，不报错）。
-//   - PrepareAsync 对已存在的 request_id 验证语义等价
-//     （ToolName / IdempotencyKey / PayloadDigest / WorkspaceId / RunId），
-//     不等价时抛 InvalidOperationException（RequestIdReuseDetected）。
-//   - 缺失前驱记录时抛 InvalidOperationException（不再 auto-create stub），
-//     与 PostgresToolDispatchJournal 的精确状态 CAS 语义一致，保证审计链完整。
-//   - 进程内实现仅用于测试/单机部署；生产部署应替换为持久化实现（DB/WAL）。
-//   - 不持久化到磁盘：进程崩溃后状态丢失。生产部署需注入持久化实现。
+// - 使用 ConcurrentDictionary 支持多线程并发访问。
+// - 状态推进使用精确前驱状态匹配（state == expected），
+// 禁止跨级跳跃（如 Prepared → Committed）；违反时抛 InvalidOperationException（InvalidTransition）。
+// 当前已到达/超过目标状态时幂等成功（AlreadyApplied/AlreadyAdvanced，不报错）。
+// - PrepareAsync 对已存在的 request_id 验证语义等价
+// （ToolName / IdempotencyKey / PayloadDigest / WorkspaceId / RunId），
+// 不等价时抛 InvalidOperationException（RequestIdReuseDetected）。
+// - 缺失前驱记录时抛 InvalidOperationException（不再 auto-create stub），
+// 与 PostgresToolDispatchJournal 的精确状态 CAS 语义一致，保证审计链完整。
+// - 进程内实现仅用于测试/单机部署；生产部署应替换为持久化实现（DB/WAL）。
+// - 不持久化到磁盘：进程崩溃后状态丢失。生产部署需注入持久化实现。
 // ===========================================================================
 
 /// <summary>
@@ -69,8 +69,8 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         }
 
         // AddOrUpdate 原子语义：
-        //   - key 不存在 → 写入新条目（add factory）。
-        //   - key 已存在 → 验证语义等价后保留既有状态（update factory，不覆盖已推进的状态）。
+        // - key 不存在 → 写入新条目（add factory）。
+        // - key 已存在 → 验证语义等价后保留既有状态（update factory，不覆盖已推进的状态）。
         _entries.AddOrUpdate(
             entry.RequestId,
             _ => entry,
@@ -429,10 +429,10 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     /// <summary>
     /// 应用精确前驱状态转换。
     /// <list type="bullet">
-    ///   <item>current == expected → 正常前向推进（Applied），返回更新后的 entry。</item>
-    ///   <item>current == target → 幂等成功（AlreadyApplied），返回既有 entry 不修改。</item>
-    ///   <item>current &gt; target → 幂等成功（AlreadyAdvanced），返回既有 entry 不修改。</item>
-    ///   <item>current &lt; expected → 抛 <see cref="InvalidOperationException"/>（InvalidTransition，禁止跨级跳跃）。</item>
+    /// <item>current == expected → 正常前向推进（Applied），返回更新后的 entry。</item>
+    /// <item>current == target → 幂等成功（AlreadyApplied），返回既有 entry 不修改。</item>
+    /// <item>current &gt; target → 幂等成功（AlreadyAdvanced），返回既有 entry 不修改。</item>
+    /// <item>current &lt; expected → 抛 <see cref="InvalidOperationException"/>（InvalidTransition，禁止跨级跳跃）。</item>
     /// </list>
     /// </summary>
     private static ToolDispatchJournalEntry ApplyTransition(

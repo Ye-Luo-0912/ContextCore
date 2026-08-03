@@ -7,15 +7,15 @@ namespace ContextCore.Core.Services.ModelExecution;
 // Feature Registry 默认实现
 //
 // 目标：
-//   把 IFeatureRegistry 契约落到 Core 层，提供可立即注入 DI 的 in-memory 实现。
+// 把 IFeatureRegistry 契约落到 Core 层，提供可立即注入 DI 的 in-memory 实现。
 //
 // 设计原则：
-//   1. 线程安全：所有读写操作通过 ConcurrentDictionary 保护，key 为 schema 版本号。
-//   2. Schema 全局不可变：Register 对已存在的版本号抛 ArgumentException，
-//      新版本通过新版本号注册实现（不覆盖、不修改）。
-//   3. GetLatest 通过比较 CreatedAt 返回最新注册的 schema；
-//      并发注册时通过 snapshot 排序保证返回结果稳定。
-//   4. ListAll 返回按 CreatedAt 升序排列的快照（不暴露内部字典引用）。
+// 1. 线程安全：所有读写操作通过 ConcurrentDictionary 保护，key 为 schema 版本号。
+// 2. Schema 全局不可变：Register 对已存在的版本号抛 ArgumentException，
+// 新版本通过新版本号注册实现（不覆盖、不修改）。
+// 3. GetLatest 通过比较 CreatedAt 返回最新注册的 schema；
+// 并发注册时通过 snapshot 排序保证返回结果稳定。
+// 4. ListAll 返回按 CreatedAt 升序排列的快照（不暴露内部字典引用）。
 // ===========================================================================
 
 /// <summary>

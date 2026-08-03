@@ -57,7 +57,7 @@ public enum CandidateDecisionReasonCode
     /// <summary>候选已过时（deprecated 内容但被 active chain 引用，仍写入但标记）。</summary>
     DeprecatedUsedByActiveChain = 13,
 
-    /// <summary>候选为 partial accepted：因 token 截断仅部分保留（P0-6.3 引入的细分）。</summary>
+    /// <summary>候选为 partial accepted：因 token 截断仅部分保留（细分状态）。</summary>
     PartiallyAcceptedDueToTruncation = 14,
 
     /// <summary>候选因被其他 section 引用而作为 duplicate reference 跳过（不重复写入）。</summary>
@@ -196,6 +196,6 @@ public sealed class DecisionEvidenceV2Result
     /// <summary>证据解析时间。</summary>
     public DateTimeOffset ResolvedAt { get; init; }
 
-    /// <summary>策略版本，标识 V2 证据结构（ QualityContractV1_0 = "quality-contract/1.0"）。</summary>
+    /// <summary>策略版本，标识 V2 证据结构（QualityContractV1_0 = "quality-contract/1.0"）。</summary>
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.QualityContractV1_0;
 }

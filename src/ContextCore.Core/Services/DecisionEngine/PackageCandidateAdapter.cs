@@ -9,33 +9,33 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Package 候选适配器（PackageTraceCandidate → ContextCandidateEnvelope）
 //
 // 目标：
-//   让现有 BasicContextPackageBuilder 路径产出的 PackageTraceCandidate 集合
-//   可以转换为统一的 ContextCandidateEnvelope 集合，从而接入 R18-2 的
-//   IContextDecisionEngine 编排路径。
+// 让现有 BasicContextPackageBuilder 路径产出的 PackageTraceCandidate 集合
+// 可以转换为统一的 ContextCandidateEnvelope 集合，从而接入 的
+// IContextDecisionEngine 编排路径。
 //
 // 设计原则：
-//   1. 适配器是单向转换（PackageTraceCandidate → Envelope），不修改原候选。
-//   2. 适配器是幂等的：相同输入产生相同输出。
-//   3. 适配器不调用 Engine 或 Storage；纯内存转换。
-//   4. 适配器不破坏现有 BasicContextPackageBuilder.BuildDetailedAsync 主链。
-//   5. Kind 字符串（如 "working_memory" / "hard_constraint"）映射到
-//      ContextCandidateSource 枚举，统一两路径的候选来源表达。
-//   6. P0-5 修复：映射函数不再读取 DateTimeOffset.UtcNow。
-//      时间戳由 CandidateAdaptationContext.ObservedAt 统一传入；
-//      ToDecisionRequest 填充 WorkspaceId / CollectionId / QueryText，
-//      避免 PolicyRegistry 按空 workspace 解析默认 Bundle。
+// 1. 适配器是单向转换（PackageTraceCandidate → Envelope），不修改原候选。
+// 2. 适配器是幂等的：相同输入产生相同输出。
+// 3. 适配器不调用 Engine 或 Storage；纯内存转换。
+// 4. 适配器不破坏现有 BasicContextPackageBuilder.BuildDetailedAsync 主链。
+// 5. Kind 字符串（如 "working_memory" / "hard_constraint"）映射到
+// ContextCandidateSource 枚举，统一两路径的候选来源表达。
+// 6. 修复：映射函数不再读取 DateTimeOffset.UtcNow。
+// 时间戳由 CandidateAdaptationContext.ObservedAt 统一传入；
+// ToDecisionRequest 填充 WorkspaceId / CollectionId / QueryText，
+// 避免 PolicyRegistry 按空 workspace 解析默认 Bundle。
 //
 // 字段映射：
-//   PackageTraceCandidate.Id → envelope.CandidateId
-//   PackageTraceCandidate.Kind (string) → envelope.Source (enum)
-//   PackageTraceCandidate.Type → envelope.Type
-//   PackageTraceCandidate.Score → envelope.Utility.DeterministicScore + FinalScore
-//   PackageTraceCandidate.EstimatedTokens → envelope.EstimatedTokens
-//   PackageTraceCandidate.SourceRefs → envelope.ProvenanceRefs (封装为 EvidenceRef)
-//   PackageTraceCandidate.Metadata → 不直接复制，按字段映射到 Safety/Features
-//   PackageTraceCandidate.ScoreBreakdown → envelope.Features.ScoreBreakdown (转字典)
+// PackageTraceCandidate.Id → envelope.CandidateId
+// PackageTraceCandidate.Kind (string) → envelope.Source (enum)
+// PackageTraceCandidate.Type → envelope.Type
+// PackageTraceCandidate.Score → envelope.Utility.DeterministicScore + FinalScore
+// PackageTraceCandidate.EstimatedTokens → envelope.EstimatedTokens
+// PackageTraceCandidate.SourceRefs → envelope.ProvenanceRefs (封装为 EvidenceRef)
+// PackageTraceCandidate.Metadata → 不直接复制，按字段映射到 Safety/Features
+// PackageTraceCandidate.ScoreBreakdown → envelope.Features.ScoreBreakdown (转字典)
 //
-// 反向投影（envelope → ContextPackageDecision）由 PackageResultProjector 负责（R18-2）。
+// 反向投影（envelope → ContextPackageDecision）由 PackageResultProjector 负责。
 // ===========================================================================
 
 /// <summary>
@@ -198,10 +198,10 @@ public static class PackageCandidateAdapter
 
         // 与 PackageTraceRecorder.MapSourceType / ResultProjector 排序逻辑保持一致。
         // ContextCandidateSource 不区分 Raw / CurrentTask，按 channel 语义归并：
-        //   - raw/legacy 在 PackageTraceRecorder 中映射到 Keyword channel（lexical 路径）
-        //     → ContextCandidateSource.Lexical
-        //   - current_task 在枚举注释中明确归入 Recency（"Recency / Task-State"）
-        //     → ContextCandidateSource.Recency
+        // - raw/legacy 在 PackageTraceRecorder 中映射到 Keyword channel（lexical 路径）
+        // → ContextCandidateSource.Lexical
+        // - current_task 在枚举注释中明确归入 Recency（"Recency / Task-State"）
+        // → ContextCandidateSource.Recency
         return kind.ToLowerInvariant() switch
         {
             "raw" or "legacy" => ContextCandidateSource.Lexical,

@@ -9,16 +9,16 @@ namespace ContextCore.Tests;
 /// 默认策略包注册表 + 默认 bundle 工厂验证。
 ///
 /// 验证目标：
-///   1. DefaultPolicyBundleFactory.Create 返回非 null bundle 且各字段填充正确
-///   2. 默认 bundle 的 Policies 字段对齐 ContextDecisionPolicyVersions 5 个常量
-///   3. 默认 bundle 的 Safety/Budget/Routing profile 默认值合理
-///   4. 默认 bundle 的 SectionRatios 包含 5 个 section 且比例之和 = 1.0
-///   5. DefaultPolicyRegistry 未激活时返回默认 bundle
-///   6. DefaultPolicyRegistry Register + Activate + GetActiveBundleAsync 往返一致
-///   7. ListBundlesAsync 默认过滤 superseded bundle
-///   8. GetActivationAsync 未激活返回 null
-///   9. 线程安全（并发 Register 不报错）
-///  10. DefaultPolicyBundleFactory.Create 幂等：多次调用创建独立实例
+/// 1. DefaultPolicyBundleFactory.Create 返回非 null bundle 且各字段填充正确
+/// 2. 默认 bundle 的 Policies 字段对齐 ContextDecisionPolicyVersions 5 个常量
+/// 3. 默认 bundle 的 Safety/Budget/Routing profile 默认值合理
+/// 4. 默认 bundle 的 SectionRatios 包含 5 个 section 且比例之和 = 1.0
+/// 5. DefaultPolicyRegistry 未激活时返回默认 bundle
+/// 6. DefaultPolicyRegistry Register + Activate + GetActiveBundleAsync 往返一致
+/// 7. ListBundlesAsync 默认过滤 superseded bundle
+/// 8. GetActivationAsync 未激活返回 null
+/// 9. 线程安全（并发 Register 不报错）
+/// 10. DefaultPolicyBundleFactory.Create 幂等：多次调用创建独立实例
 /// </summary>
 [TestClass]
 [TestCategory("R19")]

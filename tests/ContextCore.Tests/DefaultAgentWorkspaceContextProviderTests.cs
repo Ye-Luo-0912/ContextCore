@@ -8,18 +8,18 @@ namespace ContextCore.Tests;
 /// DefaultAgentWorkspaceContextProvider 实现测试。
 ///
 /// 覆盖：
-///   1. 构造函数 null adapter 抛异常
-///   2. GetContextSnapshotAsync null session / tokenBudget <= 0 / 不存在 session 抛异常
-///   3. GetContextSnapshotAsync 空状态 → 空 snapshot（仍有序号 + SchemaVersion）
-///   4. GetContextSnapshotAsync 有 injection → snapshot 包含 injections section
-///   5. GetContextSnapshotAsync 有 tool result → snapshot 包含 tool-results section
-///   6. GetContextSnapshotAsync token 截断
-///   7. GetContextSnapshotAsync 返回 SnapshotRef（ContentJson 非空 + Metadata）
-///   8. GetContextSnapshotAsync 保存到 session state.Snapshots + GetLastSnapshot 缓存
-///   9. InjectAsync null / 不存在 / closed session 抛异常
-///  10. InjectAsync 保存到 Injections + 写入 ContextInjected event
-///  11. IngestToolResultAsync null / 不存在 / closed session 抛异常
-///  12. IngestToolResultAsync 保存到 ToolResults + 写入 ToolCallCompleted event
+/// 1. 构造函数 null adapter 抛异常
+/// 2. GetContextSnapshotAsync null session / tokenBudget <= 0 / 不存在 session 抛异常
+/// 3. GetContextSnapshotAsync 空状态 → 空 snapshot（仍有序号 + SchemaVersion）
+/// 4. GetContextSnapshotAsync 有 injection → snapshot 包含 injections section
+/// 5. GetContextSnapshotAsync 有 tool result → snapshot 包含 tool-results section
+/// 6. GetContextSnapshotAsync token 截断
+/// 7. GetContextSnapshotAsync 返回 SnapshotRef（ContentJson 非空 + Metadata）
+/// 8. GetContextSnapshotAsync 保存到 session state.Snapshots + GetLastSnapshot 缓存
+/// 9. InjectAsync null / 不存在 / closed session 抛异常
+/// 10. InjectAsync 保存到 Injections + 写入 ContextInjected event
+/// 11. IngestToolResultAsync null / 不存在 / closed session 抛异常
+/// 12. IngestToolResultAsync 保存到 ToolResults + 写入 ToolCallCompleted event
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

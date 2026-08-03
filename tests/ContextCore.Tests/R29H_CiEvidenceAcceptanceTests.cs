@@ -8,23 +8,23 @@ namespace ContextCore.Tests;
 // CI 生产证据固化验收测试
 //
 // 验证 CI 证据设施的硬门控（纯文件结构验证，不实际运行 CI）：
-//   1. ci.yml evidence job 结构完整（manifest 门禁 + HEAD 记录）：
-//      a. assert-required-jobs.py 硬断言所有必需上游 job 均为 success
-//         （堵住"上游失败、Evidence 单独绿"的假绿路径）；
-//      b. 下载必需测试结果工件（required-artifacts.json）不再 continue-on-error；
-//      c. gate-evidence.py 门禁：0 Failed / 0 Inconclusive / 0 未声明跳过 +
-//         每个必测类别至少 minExecuted 条真实执行；
-//      d. 记录当前 HEAD（commit sha + run id + 各 job 结果 + policy manifest 快照）。
-//   2. ci-manifests/*.json 存在且结构合法（required-jobs / required-artifacts /
-//      required-test-categories 与 ci.yml needs 一致）。
-//   3. scripts/gate-evidence.py 语义正确（Failed/Inconclusive/NotExecuted → exit 1；
-//      无 TRX → exit 2；白名单机制）。
-//   4. benchmark-main.yml 将基准结果与当前 HEAD 绑定（head-commit.json）。
-//   5. docs/WP-S6-Evidence.md 证据文档存在。
+// 1. ci.yml evidence job 结构完整（manifest 门禁 + HEAD 记录）：
+// a. assert-required-jobs.py 硬断言所有必需上游 job 均为 success
+// （堵住"上游失败、Evidence 单独绿"的假绿路径）；
+// b. 下载必需测试结果工件（required-artifacts.json）不再 continue-on-error；
+// c. gate-evidence.py 门禁：0 Failed / 0 Inconclusive / 0 未声明跳过 +
+// 每个必测类别至少 minExecuted 条真实执行；
+// d. 记录当前 HEAD（commit sha + run id + 各 job 结果 + policy manifest 快照）。
+// 2. ci-manifests/*.json 存在且结构合法（required-jobs / required-artifacts /
+// required-test-categories 与 ci.yml needs 一致）。
+// 3. scripts/gate-evidence.py 语义正确（Failed/Inconclusive/NotExecuted → exit 1；
+// 无 TRX → exit 2；白名单机制）。
+// 4. benchmark-main.yml 将基准结果与当前 HEAD 绑定（head-commit.json）。
+// 5. 证据文档存在。
 //
 // 设计原则：
-//   - 纯文件结构验证，不实际运行 benchmark / CI。
-//   - 复用 FindRepoRoot() 模式定位 repo root。
+// - 纯文件结构验证，不实际运行 benchmark / CI。
+// - 复用 FindRepoRoot() 模式定位 repo root。
 // ===========================================================================
 
 [TestClass]
@@ -251,7 +251,7 @@ public sealed class R29H_CiEvidenceAcceptanceTests
     }
 
     // =======================================================================
-    // 测试 4：WP-S6 证据文档存在
+    // 测试 4：证据文档存在
     // =======================================================================
     [TestMethod]
     public void Ci_EvidenceDocument_Exists()
@@ -274,7 +274,7 @@ public sealed class R29H_CiEvidenceAcceptanceTests
     }
 
     // =======================================================================
-    // 辅助：定位 repo root（参考 R29_FinalClosureAcceptanceTests.FindRepoRoot）
+    // 辅助：定位 repo root（参考既有 FindRepoRoot 模式）
     // =======================================================================
     private static string FindRepoRoot()
     {

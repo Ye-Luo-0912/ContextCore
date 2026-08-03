@@ -7,13 +7,13 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 运行时能力补齐：InMemoryAgentApprovalStore — 进程内审批持久化（开发/测试用）
 //
 // 实现 IAgentApprovalStore 的进程内默认实现，与 InMemoryAgentRunStore 模式对齐：
-//   - ConcurrentDictionary 维护 (workspaceId, approvalId) → AgentApproval 映射；
-//   - CreateAsync 幂等（同主键 TryAdd 不覆盖）；
-//   - ResolveAsync 使用 expected-state CAS（Status=Pending → Approved/Rejected）。
+// - ConcurrentDictionary 维护 (workspaceId, approvalId) → AgentApproval 映射；
+// - CreateAsync 幂等（同主键 TryAdd 不覆盖）；
+// - ResolveAsync 使用 expected-state CAS（Status=Pending → Approved/Rejected）。
 //
 // 设计决策：
-//   - 不持久化到磁盘：进程崩溃后状态丢失。生产部署应注入持久化实现。
-//   - 线程安全：所有读写通过 ConcurrentDictionary 原子操作。
+// - 不持久化到磁盘：进程崩溃后状态丢失。生产部署应注入持久化实现。
+// - 线程安全：所有读写通过 ConcurrentDictionary 原子操作。
 // ===========================================================================
 
 /// <summary>

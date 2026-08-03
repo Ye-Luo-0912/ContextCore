@@ -18,7 +18,7 @@ namespace ContextCore.Core;
 /// 淘汰第一个 accessed=false 的条目，扫描过的条目清除 accessed bit（给予第二次机会）。
 /// 全部采样 accessed=true 时强制淘汰首个采样，保证每次调用至少淘汰一个。O(1) 采样，非 O(N) 全量复制。
 /// 版本失配删除使用条件删除（RemoveConditionalAsync），避免删除并发写入的新条目。
-/// #6: 可选 TTL——条目写入后超过 TTL 即视为过期，读取时 lazy 淘汰并返回 null。
+/// 可选 TTL——条目写入后超过 TTL 即视为过期，读取时 lazy 淘汰并返回 null。
 /// TTL 检查先于版本检查（TTL 是硬过期，版本是数据一致性校验；TTL 过期无需版本 RPC）。
 /// </remarks>
 public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheInvalidator
@@ -46,7 +46,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
 
     /// <summary>使用默认容量创建缓存实例。</summary>
     /// <param name="versionStore">可选的版本存储，用于读取时验证缓存项版本是否仍有效。</param>
-    /// <param name="ttl">可选的条目生存期（R13.0 #6）。null 表示无 TTL（条目仅由 scope 失效或 CLOCK 淘汰移除）。</param>
+    /// <param name="ttl">可选的条目生存期。null 表示无 TTL（条目仅由 scope 失效或 CLOCK 淘汰移除）。</param>
     public InMemoryContextStateCache(IContextStateVersionStore? versionStore = null, TimeSpan? ttl = null)
         : this(DefaultMaxEntries, versionStore, ttl)
     {
@@ -55,7 +55,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     /// <summary>使用指定容量创建缓存实例。</summary>
     /// <param name="maxEntries">最大缓存项数，超过后按 CLOCK 策略淘汰。</param>
     /// <param name="versionStore">可选的版本存储。</param>
-    /// <param name="ttl">可选的条目生存期（R13.0 #6）。</param>
+    /// <param name="ttl">可选的条目生存期。</param>
     public InMemoryContextStateCache(int maxEntries, IContextStateVersionStore? versionStore = null, TimeSpan? ttl = null)
     {
         if (maxEntries <= 0)
@@ -102,7 +102,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
             return null;
         }
 
-        // #6: TTL 过期检查——先于版本检查（TTL 是硬过期，无需版本 RPC）。
+        // TTL 过期检查——先于版本检查（TTL 是硬过期，无需版本 RPC）。
         // 过期则条件删除并返回 miss，避免后续命中读到超期数据。
         if (_ttl is { } ttl && entry.CreatedAt + ttl < DateTimeOffset.UtcNow)
         {
@@ -449,7 +449,7 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
         public required Type ValueType { get; init; }
         public DependencyScopeSet? Scopes { get; init; }
         public IReadOnlyDictionary<VersionScope, long>? VersionSnapshots { get; init; }
-        // #6: 条目写入时间，用于 TTL 过期检查（lazy 淘汰）。
+        // 条目写入时间，用于 TTL 过期检查（lazy 淘汰）。
         public DateTimeOffset CreatedAt { get; init; }
         // CLOCK：accessed bit，命中时设为 1，淘汰扫描时清除（给予第二次机会）。
         public int Accessed;

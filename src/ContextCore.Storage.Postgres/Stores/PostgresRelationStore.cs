@@ -419,10 +419,10 @@ LIMIT @take OFFSET @skip;
         command.Parameters.AddWithValue("max_scan", maxScan);
 
         // 修复 3 个 SQL bug：
-        //   1) 旧：data ->> 'Confidence'::numeric（cast 优先级错误，运行时抛错）→ 改用真实列 confidence
-        //   2) 旧：ORDER BY data ->> 'Weight'（字符串排序，"10" 排在 "9" 之前）→ 改用真实列 weight（double precision）
-        //   3) 旧：内层 LIMIT @max_scan 无 ORDER BY（截断未排序集合，可能漏掉高权重边）
-        //      新：ORDER BY 移入内层，max_scan 作为"取 top N 后再分页"的扫描上限
+        // 1) 旧：data ->> 'Confidence'::numeric（cast 优先级错误，运行时抛错）→ 改用真实列 confidence
+        // 2) 旧：ORDER BY data ->> 'Weight'（字符串排序，"10" 排在 "9" 之前）→ 改用真实列 weight（double precision）
+        // 3) 旧：内层 LIMIT @max_scan 无 ORDER BY（截断未排序集合，可能漏掉高权重边）
+        // 新：ORDER BY 移入内层，max_scan 作为"取 top N 后再分页"的扫描上限
         command.CommandText = $"""
 SELECT data
 FROM (

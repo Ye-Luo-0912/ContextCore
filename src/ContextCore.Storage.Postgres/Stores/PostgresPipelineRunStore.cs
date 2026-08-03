@@ -10,19 +10,19 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. 4 张表反规范化查询字段（proposal_id / run_id / status 等）以便索引查询；
-///      完整对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   2. 主键：
-///      - pipeline_runs: run_id
-///      - pipeline_canary_assignments: assignment_id
-///      - pipeline_rollback_records: record_id
-///      - pipeline_baseline_comparisons: comparison_id
-///   3. <see cref="ListRunsByProposalAsync"/> 按 proposal_id 过滤 + updated_at DESC。
-///   4. <see cref="SaveRunAsync"/> 幂等（同主键覆盖）— 仅用于 StartAsync 创建新 run；
-///      后续推进必须走 <see cref="TryTransitionAsync"/>（P0-7 CAS 路径）。
-///   5. 与 PostgresAgentCheckpointStore 设计模式对齐（R26-2）。
-///   6. <see cref="TryTransitionAsync"/> 在单事务内完成 CAS UPDATE + audit 批量 INSERT，
-///      SELECT FOR UPDATE 锁定行，避免并发推进导致状态分裂。
+/// 1. 4 张表反规范化查询字段（proposal_id / run_id / status 等）以便索引查询；
+/// 完整对象保存在 <c>data jsonb</c>，由 store 反序列化。
+/// 2. 主键：
+/// - pipeline_runs: run_id
+/// - pipeline_canary_assignments: assignment_id
+/// - pipeline_rollback_records: record_id
+/// - pipeline_baseline_comparisons: comparison_id
+/// 3. <see cref="ListRunsByProposalAsync"/> 按 proposal_id 过滤 + updated_at DESC。
+/// 4. <see cref="SaveRunAsync"/> 幂等（同主键覆盖）— 仅用于 StartAsync 创建新 run；
+/// 后续推进必须走 <see cref="TryTransitionAsync"/>（CAS 路径）。
+/// 5. 与 PostgresAgentCheckpointStore 设计模式对齐。
+/// 6. <see cref="TryTransitionAsync"/> 在单事务内完成 CAS UPDATE + audit 批量 INSERT，
+/// SELECT FOR UPDATE 锁定行，避免并发推进导致状态分裂。
 /// </remarks>
 public sealed class PostgresPipelineRunStore : PostgresStoreBase, IPipelineRunStore
 {
@@ -241,7 +241,7 @@ WHERE run_id = @run_id;
     /// <item>读取当前 data，反序列化为 <see cref="PipelineRunSnapshot"/>。</item>
     /// <item>幂等检查：若 next.LastTransitionId 非 null 且等于 current.LastTransitionId，COMMIT 并返回 current。</item>
     /// <item>CAS UPDATE：WHERE revision = expectedRevision AND current_stage = expectedStage；
-    ///   SET revision = next.Revision, current_stage = next.CurrentStage, ... data = next。</item>
+    /// SET revision = next.Revision, current_stage = next.CurrentStage, ... data = next。</item>
     /// <item>若 RowsAffected == 1：INSERT audit 批量记录；COMMIT；返回 next。</item>
     /// <item>若 RowsAffected == 0：ROLLBACK；返回 null（CAS 失败）。</item>
     /// </list>
@@ -620,7 +620,7 @@ ORDER BY compared_at DESC, comparison_id DESC;
         return await ExecuteReaderJsonAsync<BaselineComparison>(command, cancellationToken).ConfigureAwait(false);
     }
 
-    // ---------- Stage transitions (R28-B.8) ----------
+    // ---------- Stage transitions () ----------
 
     /// <inheritdoc />
     /// <remarks>
@@ -683,16 +683,16 @@ ORDER BY transitioned_at ASC, transition_id ASC;
         return await ExecuteReaderJsonAsync<StageTransitionRecord>(command, cancellationToken).ConfigureAwait(false);
     }
 
-    // ---------- Canary 单一真相源（WP-D） ----------
+    // ---------- Canary 单一真相源 ----------
 
     /// <inheritdoc />
     /// <remarks>
-    /// 单真相源写入 canary 状态（WP-D）。在单事务内完成：
+    /// 单真相源写入 canary 状态。在单事务内完成：
     /// <list type="number">
     /// <item>SELECT data FOR UPDATE 锁定 run 行（防止并发推进状态分裂）。</item>
     /// <item>CAS 检查：current.CanaryRevision == expectedCanaryRevision；不匹配返回 null。</item>
     /// <item>修补快照（CanaryPercentage / CanaryRevision / CanaryEpoch / UpdatedAt），
-    ///   UPDATE 整行（WHERE run_id AND canary_revision = @expected 数据库层双保险）。</item>
+    /// UPDATE 整行（WHERE run_id AND canary_revision = @expected 数据库层双保险）。</item>
     /// <item>COMMIT 并返回修补后的快照。</item>
     /// </list>
     /// 与 <see cref="TryTransitionAsync"/> 的 lifecycle CAS（revision + stage）相互独立，

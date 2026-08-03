@@ -14,20 +14,20 @@ namespace ContextCore.Service.Infrastructure;
 // IExperimentRecorder 持久化实现
 //
 // 两个实现并存：
-//   1. FileSystemExperimentRecorder — JSON 文件存储（raw fixture）
-//      适用：单实例部署、本地调试、FileSystem provider 环境
-//   2. PostgresExperimentRecorder — PostgreSQL jsonb 存储（索引列 + 完整 fixture）
-//      适用：HA 多实例部署、Postgres provider 环境
+// 1. FileSystemExperimentRecorder — JSON 文件存储（raw fixture）
+// 适用：单实例部署、本地调试、FileSystem provider 环境
+// 2. PostgresExperimentRecorder — PostgreSQL jsonb 存储（索引列 + 完整 fixture）
+// 适用：HA 多实例部署、Postgres provider 环境
 //
 // 选择策略（StorageExtensions 注册时决定）：
-//   - Storage:Provider=postgres 且 CC_EXPERIMENT_RECORDER_BACKEND≠filesystem → Postgres
-//   - Storage:Provider=filesystem 且 CC_EXPERIMENT_RECORDER_BACKEND≠postgres → FileSystem
-//   - 显式 CC_EXPERIMENT_RECORDER_BACKEND=memory → 始终用 InMemoryExperimentRecorder
-//   - 未注入时 CoreExtensions 的 TryAddSingleton 回退到 InMemoryExperimentRecorder
+// - Storage:Provider=postgres 且 CC_EXPERIMENT_RECORDER_BACKEND≠filesystem → Postgres
+// - Storage:Provider=filesystem 且 CC_EXPERIMENT_RECORDER_BACKEND≠postgres → FileSystem
+// - 显式 CC_EXPERIMENT_RECORDER_BACKEND=memory → 始终用 InMemoryExperimentRecorder
+// - 未注入时 CoreExtensions 的 TryAddSingleton 回退到 InMemoryExperimentRecorder
 //
 // 数据一致性：
-//   两端共享 ReplayFixtureJsonSerializer（ContextCore.Core），
-//   CanonicalCandidateKey 转换为字符串形式，可互读。
+// 两端共享 ReplayFixtureJsonSerializer（ContextCore.Core），
+// CanonicalCandidateKey 转换为字符串形式，可互读。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -40,13 +40,13 @@ namespace ContextCore.Service.Infrastructure;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. FileSystem 存 raw fixture（完整 JSON，含 WorkingSet + V2Result）。
-///   2. 每条 fixture 一个文件：`{root}/experiment_fixtures/{YYYY-MM}/{timestamp}_{sanitizedId}.json`。
-///      时间戳前缀让文件名天然按时间排序，便于 GetHistoryAsync 顺序读取。
-///   3. RecordAsync 幂等：同 fixtureId 重复记录时覆盖写（保持最新快照）。
-///   4. GetHistoryAsync 按文件名时间戳升序返回；解析失败的文件跳过。
-///   5. ClearAsync 删除整个 experiment_fixtures 目录树。
-///   6. 与 PostgresExperimentRecorder 共享 ReplayFixtureJsonSerializer，保证两端数据格式一致。
+/// 1. FileSystem 存 raw fixture（完整 JSON，含 WorkingSet + V2Result）。
+/// 2. 每条 fixture 一个文件：`{root}/experiment_fixtures/{YYYY-MM}/{timestamp}_{sanitizedId}.json`。
+/// 时间戳前缀让文件名天然按时间排序，便于 GetHistoryAsync 顺序读取。
+/// 3. RecordAsync 幂等：同 fixtureId 重复记录时覆盖写（保持最新快照）。
+/// 4. GetHistoryAsync 按文件名时间戳升序返回；解析失败的文件跳过。
+/// 5. ClearAsync 删除整个 experiment_fixtures 目录树。
+/// 6. 与 PostgresExperimentRecorder 共享 ReplayFixtureJsonSerializer，保证两端数据格式一致。
 /// </remarks>
 public sealed class FileSystemExperimentRecorder : IExperimentRecorder
 {
@@ -176,14 +176,14 @@ public sealed class FileSystemExperimentRecorder : IExperimentRecorder
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. PostgreSQL 存索引和状态（标量列 + jsonb），与 FileSystem 存 raw fixture 形成分工。
-///   2. 索引列：fixture_id（PK）、recorded_at、purpose、jaccard_index、parity_level 等，
-///      支持 WHERE 过滤与 ORDER BY 排序，无需解析 jsonb。
-///   3. jsonb 列：完整 ReplayFixture（含 WorkingSet + V2Result），供离线 replay 使用。
-///   4. RecordAsync 幂等：ON CONFLICT (fixture_id) DO NOTHING（同 fixtureId 不覆盖，保留首次记录）。
-///   5. GetHistoryAsync：SELECT data ORDER BY recorded_at ASC（按时间升序）。
-///   6. ClearAsync：DELETE FROM experiment_replay_fixtures（清空表，不 DROP）。
-///   7. 共享 ReplayFixtureJsonSerializer，与 FileSystemExperimentRecorder 互读。
+/// 1. PostgreSQL 存索引和状态（标量列 + jsonb），与 FileSystem 存 raw fixture 形成分工。
+/// 2. 索引列：fixture_id（PK）、recorded_at、purpose、jaccard_index、parity_level 等，
+/// 支持 WHERE 过滤与 ORDER BY 排序，无需解析 jsonb。
+/// 3. jsonb 列：完整 ReplayFixture（含 WorkingSet + V2Result），供离线 replay 使用。
+/// 4. RecordAsync 幂等：ON CONFLICT (fixture_id) DO NOTHING（同 fixtureId 不覆盖，保留首次记录）。
+/// 5. GetHistoryAsync：SELECT data ORDER BY recorded_at ASC（按时间升序）。
+/// 6. ClearAsync：DELETE FROM experiment_replay_fixtures（清空表，不 DROP）。
+/// 7. 共享 ReplayFixtureJsonSerializer，与 FileSystemExperimentRecorder 互读。
 /// </remarks>
 public sealed class PostgresExperimentRecorder : PostgresStoreBase, IExperimentRecorder
 {

@@ -10,21 +10,21 @@ namespace ContextCore.Tests;
 // 真实模型端到端测试（feature → inference → calibration → score）
 //
 // 覆盖范围：
-//   端到端流水线：FeatureSchemaValidator → StubBatchInferenceEngine
-//        → DefaultInferenceResultValidator → PlattCalibrationService → DefaultUtilityScorer
-//   模型工件加载路径：ModelArtifactDescriptor + ICalibrationValidator
-//        在加载时验证校准参数（拒绝统计非法参数）
-//   Schema drift 防护：FeatureSchemaValidator 在推理前 fail-fast
-//        （SchemaVersion 不匹配 / 必填缺失 / 类型不兼容）
-//   推理输出验证：DefaultInferenceResultValidator 防止 NaN/Infinity 污染排序
-//   完整 DI 装配：ServiceCollection 注册所有组件，端到端解析并执行
-//   真实 ONNX 引擎路径：Mock session 验证 OnnxInferenceEngine + Validator + Scorer 串联
+// 端到端流水线：FeatureSchemaValidator → StubBatchInferenceEngine
+// → DefaultInferenceResultValidator → PlattCalibrationService → DefaultUtilityScorer
+// 模型工件加载路径：ModelArtifactDescriptor + ICalibrationValidator
+// 在加载时验证校准参数（拒绝统计非法参数）
+// Schema drift 防护：FeatureSchemaValidator 在推理前 fail-fast
+// （SchemaVersion 不匹配 / 必填缺失 / 类型不兼容）
+// 推理输出验证：DefaultInferenceResultValidator 防止 NaN/Infinity 污染排序
+// 完整 DI 装配：ServiceCollection 注册所有组件，端到端解析并执行
+// 真实 ONNX 引擎路径：Mock session 验证 OnnxInferenceEngine + Validator + Scorer 串联
 //
 // 设计原则：
-//   - 不依赖真实 ONNX 模型文件（使用 Stub / Mock 隔离），
-//     真实模型 Testcontainers 测试由集成测试层承担。
-//   - 使用 R28DTestHelpers 复用 envelope / snapshot / registry 构造逻辑。
-//   - 覆盖正常路径与降级路径（fail-safe 而非 fail-stop）。
+// - 不依赖真实 ONNX 模型文件（使用 Stub / Mock 隔离），
+// 真实模型 Testcontainers 测试由集成测试层承担。
+// - 使用共享 TestHelpers 复用 envelope / snapshot / registry 构造逻辑。
+// - 覆盖正常路径与降级路径（fail-safe 而非 fail-stop）。
 // ===========================================================================
 
 [TestClass]
@@ -415,7 +415,7 @@ public sealed class R29_RealModelE2ETests
     [TestMethod]
     public async Task E2E_DIServiceCollection_ResolvesAllValidatorsAndScorer()
     {
-        // 验证所有 R29 WP-A 组件可通过 DI 解析并协同工作
+        // 验证所有 组件可通过 DI 解析并协同工作
         var services = new ServiceCollection();
         services.AddSingleton<IFeatureRegistry>(BuildRegistryWithSchema(SchemaVersion));
         services.AddSingleton<ICalibrationValidator, DefaultCalibrationValidator>();

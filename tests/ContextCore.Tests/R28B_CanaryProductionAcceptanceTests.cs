@@ -10,16 +10,16 @@ namespace ContextCore.Tests;
 // Production Canary Plane — 生产验收测试（12 项）
 //
 // 覆盖范围（4 个测试类）：
-//   1. StageTransitionPersistenceAcceptanceTests（3 项）— Stage Transition 持久化
-//   2. CutoverControllerIsolationAcceptanceTests（3 项）— Per-Run 控制器隔离
-//   3. CanaryMetricsCollectorAcceptanceTests（3 项）— Canary Metrics 采集器
-//   4. CanaryEndToEndAcceptanceTests（3 项）— 端到端验收
+// 1. StageTransitionPersistenceAcceptanceTests（3 项）— Stage Transition 持久化
+// 2. CutoverControllerIsolationAcceptanceTests（3 项）— Per-Run 控制器隔离
+// 3. CanaryMetricsCollectorAcceptanceTests（3 项）— Canary Metrics 采集器
+// 4. CanaryEndToEndAcceptanceTests（3 项）— 端到端验收
 //
 // 设计原则：
-//   - 使用真实组件（InMemoryPipelineRunStore、CutoverController、CanaryProgressionService、
-//     DefaultCanaryMetricsCollector、CutoverControllerRegistry），不 stub 决策内核。
-//   - 使用可推进时间的 CanaryAcceptanceTimeProvider 控制观察时长（避免真实等待）。
-//   - 所有代码注释使用中文。
+// - 使用真实组件（InMemoryPipelineRunStore、CutoverController、CanaryProgressionService、
+// DefaultCanaryMetricsCollector、CutoverControllerRegistry），不 stub 决策内核。
+// - 使用可推进时间的 CanaryAcceptanceTimeProvider 控制观察时长（避免真实等待）。
+// - 所有代码注释使用中文。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -51,8 +51,8 @@ internal static class CanaryAcceptanceHelpers
     /// <summary>默认 Canary Gate 配置：1→5→10→25→50→100，最小观察 1 秒。</summary>
     /// <remarks>
     /// 显式设置 <see cref="CanaryGateOptions.MinQualityScore"/>=0.0 禁用质量分回滚阈值，
-    /// 因 R28B 验收测试不通过 RecordObservation 上报 quality_score（旧测试在 R29 WP-C-3 之前编写）。
-    /// C_QualityScoreTests 单独覆盖 quality_score 回滚行为。
+    /// 因验收测试不通过 RecordObservation 上报 quality_score（旧测试在更早版本编写）。
+    /// QualityScoreTests 单独覆盖 quality_score 回滚行为。
     /// </remarks>
     public static CanaryGateOptions DefaultOptions => new()
     {
@@ -162,8 +162,8 @@ public sealed class StageTransitionPersistenceAcceptanceTests
 {
     // ===========================================================================
     // 1. StageTransitionPersistedToStoreAfterAdvance
-    //    验证：推进一次后，通过 store.ListStageTransitionsByRunAsync 查询到审计记录；
-    //          TransitionId/FromPercentage/ToPercentage/Decision 字段正确。
+    // 验证：推进一次后，通过 store.ListStageTransitionsByRunAsync 查询到审计记录；
+    // TransitionId/FromPercentage/ToPercentage/Decision 字段正确。
     // ===========================================================================
     [TestMethod]
     public async Task StageTransitionPersistedToStoreAfterAdvance()
@@ -205,8 +205,8 @@ public sealed class StageTransitionPersistenceAcceptanceTests
 
     // ===========================================================================
     // 2. StageTransitionQueryFromStoreAfterRollback
-    //    验证：推进到 5% 后触发回滚；store 中有 Advance + Rollback 两条记录；
-    //          按 TransitionedAt 升序排列。
+    // 验证：推进到 5% 后触发回滚；store 中有 Advance + Rollback 两条记录；
+    // 按 TransitionedAt 升序排列。
     // ===========================================================================
     [TestMethod]
     public async Task StageTransitionQueryFromStoreAfterRollback()
@@ -266,7 +266,7 @@ public sealed class StageTransitionPersistenceAcceptanceTests
 
     // ===========================================================================
     // 3. IdempotentTransitionNotDuplicatedInStore
-    //    验证：同一 transitionId 重复调用 AdvanceAsync；store 中只有一条记录；无重复。
+    // 验证：同一 transitionId 重复调用 AdvanceAsync；store 中只有一条记录；无重复。
     // ===========================================================================
     [TestMethod]
     public async Task IdempotentTransitionNotDuplicatedInStore()
@@ -322,8 +322,8 @@ public sealed class CutoverControllerIsolationAcceptanceTests
 {
     // ===========================================================================
     // 4. PerRunControllerIsolatesPercentageChanges
-    //    验证：两个 run 各自独立的 CutoverController；run1 推进到 25% 不影响 run2（保持 1%）；
-    //          两个 controller 是不同实例。
+    // 验证：两个 run 各自独立的 CutoverController；run1 推进到 25% 不影响 run2（保持 1%）；
+    // 两个 controller 是不同实例。
     // ===========================================================================
     [TestMethod]
     public async Task PerRunControllerIsolatesPercentageChanges()
@@ -369,8 +369,8 @@ public sealed class CutoverControllerIsolationAcceptanceTests
 
     // ===========================================================================
     // 5. DefaultControllerUsedWhenNoRunRegistered
-    //    验证：默认控制器 CutoverPercentage=0；null/空 runId 返回默认控制器；
-    //          注册的 runId 返回专用控制器（不同于默认）。
+    // 验证：默认控制器 CutoverPercentage=0；null/空 runId 返回默认控制器；
+    // 注册的 runId 返回专用控制器（不同于默认）。
     // ===========================================================================
     [TestMethod]
     public void DefaultControllerUsedWhenNoRunRegistered()
@@ -404,7 +404,7 @@ public sealed class CutoverControllerIsolationAcceptanceTests
 
     // ===========================================================================
     // 6. UnregisterRemovesController
-    //    验证：注册 runId 后 Unregister；再次 GetOrCreate 返回新实例（而非之前的实例）。
+    // 验证：注册 runId 后 Unregister；再次 GetOrCreate 返回新实例（而非之前的实例）。
     // ===========================================================================
     [TestMethod]
     public void UnregisterRemovesController()
@@ -441,8 +441,8 @@ public sealed class CanaryMetricsCollectorAcceptanceTests
 {
     // ===========================================================================
     // 7. MetricsCollectorAggregatesDivergenceRate
-    //    验证：10 次观察（3 次 Divergent + 7 次 Hard）；
-    //          DivergenceRate == 0.3；TotalObservations == 10；DivergentCount == 3。
+    // 验证：10 次观察（3 次 Divergent + 7 次 Hard）；
+    // DivergenceRate == 0.3；TotalObservations == 10；DivergentCount == 3。
     // ===========================================================================
     [TestMethod]
     public void MetricsCollectorAggregatesDivergenceRate()
@@ -476,8 +476,8 @@ public sealed class CanaryMetricsCollectorAcceptanceTests
 
     // ===========================================================================
     // 8. MetricsCollectorComputesP95Latency
-    //    验证：20 次观察，V2 duration 从 10ms 到 200ms 递增；
-    //          V2P95LatencyMs 在预期范围（约 180-200ms）。
+    // 验证：20 次观察，V2 duration 从 10ms 到 200ms 递增；
+    // V2P95LatencyMs 在预期范围（约 180-200ms）。
     // ===========================================================================
     [TestMethod]
     public void MetricsCollectorComputesP95Latency()
@@ -506,8 +506,8 @@ public sealed class CanaryMetricsCollectorAcceptanceTests
 
     // ===========================================================================
     // 9. MetricsCollectorResetClearsWindow
-    //    验证：记录 5 次后 Reset → TotalObservations == 0；
-    //          再次记录 3 次 → TotalObservations == 3。
+    // 验证：记录 5 次后 Reset → TotalObservations == 0；
+    // 再次记录 3 次 → TotalObservations == 3。
     // ===========================================================================
     [TestMethod]
     public void MetricsCollectorResetClearsWindow()
@@ -555,9 +555,9 @@ public sealed class CanaryEndToEndAcceptanceTests
 {
     // ===========================================================================
     // 10. FullCanaryCycleWithMetricsAndPersistence
-    //     端到端：初始化 canary（1%）→ 记录健康指标 → 推进到 5% → 验证 store 有审计记录
-    //     → 记录更多健康指标 → 推进到 10% → 验证 metrics 窗口已 Reset
-    //     → 验证 CutoverController 百分比同步。
+    // 端到端：初始化 canary（1%）→ 记录健康指标 → 推进到 5% → 验证 store 有审计记录
+    // → 记录更多健康指标 → 推进到 10% → 验证 metrics 窗口已 Reset
+    // → 验证 CutoverController 百分比同步。
     // ===========================================================================
     [TestMethod]
     public async Task FullCanaryCycleWithMetricsAndPersistence()
@@ -636,10 +636,10 @@ public sealed class CanaryEndToEndAcceptanceTests
 
     // ===========================================================================
     // 11. RollbackResetsMetricsAndPersistsAudit
-    //     初始化 canary（1%）→ 推进到 5% → 记录高 divergence 指标 → 触发回滚
-    //     → 验证 store 有 Advance + Rollback 两条审计记录
-    //     → 验证 CutoverController 百分比回 0
-    //     → 验证 metrics collector 窗口已 Reset（TotalObservations == 0）。
+    // 初始化 canary（1%）→ 推进到 5% → 记录高 divergence 指标 → 触发回滚
+    // → 验证 store 有 Advance + Rollback 两条审计记录
+    // → 验证 CutoverController 百分比回 0
+    // → 验证 metrics collector 窗口已 Reset（TotalObservations == 0）。
     // ===========================================================================
     [TestMethod]
     public async Task RollbackResetsMetricsAndPersistsAudit()
@@ -711,8 +711,8 @@ public sealed class CanaryEndToEndAcceptanceTests
 
     // ===========================================================================
     // 12. PerRunIsolationDuringConcurrentCanaries
-    //     两个 run 并发 canary：run1 在 25%，run2 在 5%；
-    //     run1 的 metrics 不影响 run2 的评估；run1 回滚不影响 run2 的 CutoverController 百分比。
+    // 两个 run 并发 canary：run1 在 25%，run2 在 5%；
+    // run1 的 metrics 不影响 run2 的评估；run1 回滚不影响 run2 的 CutoverController 百分比。
     // ===========================================================================
     [TestMethod]
     public async Task PerRunIsolationDuringConcurrentCanaries()
@@ -802,9 +802,9 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 {
     // ===========================================================================
     // 13. RecordObservation_SeparateLegacyDuration_ComputesRealLegacyP95
-    //     验证：RecordObservation 接收独立的 legacyDuration 参数；
-    //     当 V2 耗时显著高于 Legacy 耗时时，LegacyP95LatencyMs != V2P95LatencyMs
-    //     （latency multiplier 可发现 V2 延迟回退）。
+    // 验证：RecordObservation 接收独立的 legacyDuration 参数；
+    // 当 V2 耗时显著高于 Legacy 耗时时，LegacyP95LatencyMs != V2P95LatencyMs
+    // （latency multiplier 可发现 V2 延迟回退）。
     // ===========================================================================
     [TestMethod]
     public void RecordObservation_SeparateLegacyDuration_ComputesRealLegacyP95()
@@ -835,7 +835,7 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
     // ===========================================================================
     // 14. RecordObservation_NullLegacyDuration_FallsBackToV2Duration
-    //     验证：legacyDuration=null 时回退到 v2Duration（向后兼容旧调用点）。
+    // 验证：legacyDuration=null 时回退到 v2Duration（向后兼容旧调用点）。
     // ===========================================================================
     [TestMethod]
     public void RecordObservation_NullLegacyDuration_FallsBackToV2Duration()
@@ -857,10 +857,10 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
     // ===========================================================================
     // 15. AuthoritativeRetrievalRuntime_MixedMode_RecordsCanaryObservation
-    //     验证：AuthoritativeRetrievalRuntime 在 Mixed mode（0 < cutover < 100）下，
-    //     当请求 metadata 携带 canaryRunId 时，调用 RecordObservation 上报样本。
-    //     修复前：RecordObservation 仅在测试代码中调用，生产路径永不调用 → Collector 永远没有样本。
-    //     注意：使用 cutoverPercentage=99（仍属 Mixed mode，因 < 100）确保绝大多数 OperationId 走 V2。
+    // 验证：AuthoritativeRetrievalRuntime 在 Mixed mode（0 < cutover < 100）下，
+    // 当请求 metadata 携带 canaryRunId 时，调用 RecordObservation 上报样本。
+    // 修复前：RecordObservation 仅在测试代码中调用，生产路径永不调用 → Collector 永远没有样本。
+    // 注意：使用 cutoverPercentage=99（仍属 Mixed mode，因 < 100）确保绝大多数 OperationId 走 V2。
     // ===========================================================================
     [TestMethod]
     public async Task AuthoritativeRetrievalRuntime_MixedMode_RecordsCanaryObservation()
@@ -900,8 +900,8 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
     // ===========================================================================
     // 16. AuthoritativeRetrievalRuntime_NoCanaryRunId_DoesNotRecordObservation
-    //     验证：请求 metadata 不携带 canaryRunId 时，不调用 RecordObservation
-    //     （无 runId 的请求不属于任何 canary run，不应污染 Collector）。
+    // 验证：请求 metadata 不携带 canaryRunId 时，不调用 RecordObservation
+    // （无 runId 的请求不属于任何 canary run，不应污染 Collector）。
     // ===========================================================================
     [TestMethod]
     public async Task AuthoritativeRetrievalRuntime_NoCanaryRunId_DoesNotRecordObservation()
@@ -938,7 +938,7 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
     // ===========================================================================
     // 17. AuthoritativeRetrievalRuntime_SampledShadow_RecordsCanaryObservation
-    //     验证：sampled shadow 路径（100% cutover + 启用 sampled shadow）也调用 RecordObservation。
+    // 验证：sampled shadow 路径（100% cutover + 启用 sampled shadow）也调用 RecordObservation。
     // ===========================================================================
     [TestMethod]
     public async Task AuthoritativeRetrievalRuntime_SampledShadow_RecordsCanaryObservation()
@@ -985,8 +985,8 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
     // ===========================================================================
     // 18. AuthoritativeRetrievalRuntime_V2Failure_RecordsObservationWithV2Error
-    //     验证：V2 路径抛异常时（fail-open 回退 Legacy），仍调用 RecordObservation
-    //     且 v2Succeeded=false（让 Canary error rate 能捕获 V2 失败率）。
+    // 验证：V2 路径抛异常时（fail-open 回退 Legacy），仍调用 RecordObservation
+    // 且 v2Succeeded=false（让 Canary error rate 能捕获 V2 失败率）。
     // ===========================================================================
     [TestMethod]
     public async Task AuthoritativeRetrievalRuntime_V2Failure_RecordsObservationWithV2Error()

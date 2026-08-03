@@ -10,17 +10,17 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. <c>policy_bundles</c> 表：(bundle_id, version) 复合主键 — bundle 全局不可变。
-///      <see cref="RegisterBundleAsync"/> 使用 INSERT ON CONFLICT DO NOTHING 实现 insert-if-absent；
-///      相同 (BundleId, Version) 已存在时抛 <see cref="InvalidOperationException"/>。
-///   2. <c>policy_activations</c> 表：(workspace_id, collection_id) 主键 — 每个作用域仅一条 activation。
-///      <see cref="TryActivateAsync"/> 使用 CAS 语义：
-///      expectedEpoch=0 时 INSERT ON CONFLICT DO NOTHING（首次激活）；
-///      expectedEpoch>0 时 UPDATE WHERE epoch = @expected_epoch（CAS 推进）。
-///   3. <see cref="GetActiveBundleAsync"/> 精确读取 (BundleId, BundleVersion)，
-///      不漂移到"最新版本"（P1-3 版本固定）；未激活时返回全局默认 bundle。
-///   4. 完整对象保存在 <c>data jsonb</c>，由 store 反序列化；反规范化字段用于索引查询。
-///   5. 与 PostgresPipelineRunStore / PostgresAgentCheckpointStore 设计模式对齐。
+/// 1. <c>policy_bundles</c> 表：(bundle_id, version) 复合主键 — bundle 全局不可变。
+/// <see cref="RegisterBundleAsync"/> 使用 INSERT ON CONFLICT DO NOTHING 实现 insert-if-absent；
+/// 相同 (BundleId, Version) 已存在时抛 <see cref="InvalidOperationException"/>。
+/// 2. <c>policy_activations</c> 表：(workspace_id, collection_id) 主键 — 每个作用域仅一条 activation。
+/// <see cref="TryActivateAsync"/> 使用 CAS 语义：
+/// expectedEpoch=0 时 INSERT ON CONFLICT DO NOTHING（首次激活）；
+/// expectedEpoch>0 时 UPDATE WHERE epoch = @expected_epoch（CAS 推进）。
+/// 3. <see cref="GetActiveBundleAsync"/> 精确读取 (BundleId, BundleVersion)，
+/// 不漂移到"最新版本"（版本固定）；未激活时返回全局默认 bundle。
+/// 4. 完整对象保存在 <c>data jsonb</c>，由 store 反序列化；反规范化字段用于索引查询。
+/// 5. 与 PostgresPipelineRunStore / PostgresAgentCheckpointStore 设计模式对齐。
 /// </remarks>
 public sealed class PostgresPolicyRegistry : PostgresStoreBase, IPolicyRegistry
 {
@@ -151,7 +151,7 @@ ORDER BY bundle_id, created_at DESC;
             return CreateDefaultBundle();
         }
 
-        // Step 2: P1-3 — 精确读取 (BundleId, BundleVersion)，不漂移到"最新版本"
+        // Step 2: — 精确读取 (BundleId, BundleVersion)，不漂移到"最新版本"
         var bundle = await GetBundleAsync(activation.BundleId, activation.BundleVersion, cancellationToken)
             .ConfigureAwait(false);
         if (bundle is not null)

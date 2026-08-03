@@ -8,12 +8,12 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 事件流不可变：AppendEventAsync 校验 EventId 唯一性，重复 EventId 抛 ArgumentException。
-///   2. NewState 校验：MemoryStateEventRecord.NewState 不允许为 Fresh
-///      （Fresh 是初始态，不是事件目标）。
-///   3. GetLatestStateAsync：按 SourceItemId 过滤，取 OccurredAt 最晚的事件 NewState；
-///      从未记录返回 null（视为 Fresh）。
-///   4. 生产部署应替换为 PostgresMemoryStateStore 持久化实现。
+/// 1. 事件流不可变：AppendEventAsync 校验 EventId 唯一性，重复 EventId 抛 ArgumentException。
+/// 2. NewState 校验：MemoryStateEventRecord.NewState 不允许为 Fresh
+/// （Fresh 是初始态，不是事件目标）。
+/// 3. GetLatestStateAsync：按 SourceItemId 过滤，取 OccurredAt 最晚的事件 NewState；
+/// 从未记录返回 null（视为 Fresh）。
+/// 4. 生产部署应替换为 PostgresMemoryStateStore 持久化实现。
 /// </remarks>
 public sealed class InMemoryMemoryStateStore : IMemoryStateStore
 {

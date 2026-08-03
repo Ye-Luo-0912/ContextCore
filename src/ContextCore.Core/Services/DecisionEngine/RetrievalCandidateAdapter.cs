@@ -9,37 +9,37 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Retrieval 候选适配器（ContextRetrievalCandidate → ContextCandidateEnvelope）
 //
 // 目标：
-//   让现有 HybridContextRetriever 路径产出的 ContextRetrievalCandidate 集合
-//   可以转换为统一的 ContextCandidateEnvelope 集合，从而接入 R18-2 的
-//   IContextDecisionEngine 编排路径。
+// 让现有 HybridContextRetriever 路径产出的 ContextRetrievalCandidate 集合
+// 可以转换为统一的 ContextCandidateEnvelope 集合，从而接入 的
+// IContextDecisionEngine 编排路径。
 //
 // 设计原则：
-//   1. 适配器是单向转换（ContextRetrievalCandidate → Envelope），不修改原候选。
-//   2. 适配器是幂等的：相同输入产生相同输出。
-//   3. 适配器不调用 Engine 或 Storage；纯内存转换。
-//   4. 适配器保留所有原字段信息（CandidateId/SourceId/Kind/Score/EstimatedTokens/
-//      Reasons/SourceRefs/Metadata），并通过 envelope 的 Features/Safety/Utility
-//      三个正交维度结构化表达。
-//   5. 适配器不破坏现有 HybridContextRetriever.RetrieveAsync 主链；它只是
-//      提供一个可选的 envelope 转换入口。
-//   6. P0-5 修复：映射函数不再读取 DateTimeOffset.UtcNow。
-//      时间戳由 CandidateAdaptationContext.ObservedAt 统一传入；
-//      ToDecisionRequest 填充 WorkspaceId / CollectionId / QueryText，
-//      避免 PolicyRegistry 按空 workspace 解析默认 Bundle。
+// 1. 适配器是单向转换（ContextRetrievalCandidate → Envelope），不修改原候选。
+// 2. 适配器是幂等的：相同输入产生相同输出。
+// 3. 适配器不调用 Engine 或 Storage；纯内存转换。
+// 4. 适配器保留所有原字段信息（CandidateId/SourceId/Kind/Score/EstimatedTokens/
+// Reasons/SourceRefs/Metadata），并通过 envelope 的 Features/Safety/Utility
+// 三个正交维度结构化表达。
+// 5. 适配器不破坏现有 HybridContextRetriever.RetrieveAsync 主链；它只是
+// 提供一个可选的 envelope 转换入口。
+// 6. 修复：映射函数不再读取 DateTimeOffset.UtcNow。
+// 时间戳由 CandidateAdaptationContext.ObservedAt 统一传入；
+// ToDecisionRequest 填充 WorkspaceId / CollectionId / QueryText，
+// 避免 PolicyRegistry 按空 workspace 解析默认 Bundle。
 //
 // 字段映射：
-//   ContextRetrievalCandidate.CandidateId → envelope.CandidateId（首选）
-//      备选：SourceId（CandidateId 为空时）
-//   ContextRetrievalCandidate.Kind → envelope.Source（枚举映射）
-//   ContextRetrievalCandidate.Type → envelope.Type（直传）
-//   ContextRetrievalCandidate.Score → envelope.Utility.FinalScore + DeterministicScore
-//   ContextRetrievalCandidate.EstimatedTokens → envelope.EstimatedTokens
-//   ContextRetrievalCandidate.Reasons → envelope.Utility.ReasonCode（拼接）
-//   ContextRetrievalCandidate.SourceRefs → envelope.ProvenanceRefs（封装为 EvidenceRef）
-//   ContextRetrievalCandidate.Metadata["mandatory"] → envelope.Safety.IsMandatory
-//   ContextRetrievalCandidate.Metadata["lifecycleStatus"] → envelope.Safety.LifecycleState
+// ContextRetrievalCandidate.CandidateId → envelope.CandidateId（首选）
+// 备选：SourceId（CandidateId 为空时）
+// ContextRetrievalCandidate.Kind → envelope.Source（枚举映射）
+// ContextRetrievalCandidate.Type → envelope.Type（直传）
+// ContextRetrievalCandidate.Score → envelope.Utility.FinalScore + DeterministicScore
+// ContextRetrievalCandidate.EstimatedTokens → envelope.EstimatedTokens
+// ContextRetrievalCandidate.Reasons → envelope.Utility.ReasonCode（拼接）
+// ContextRetrievalCandidate.SourceRefs → envelope.ProvenanceRefs（封装为 EvidenceRef）
+// ContextRetrievalCandidate.Metadata["mandatory"] → envelope.Safety.IsMandatory
+// ContextRetrievalCandidate.Metadata["lifecycleStatus"] → envelope.Safety.LifecycleState
 //
-// 反向投影（envelope → ContextRetrievalCandidate）由 RetrievalResultProjector 负责（R18-2）。
+// 反向投影（envelope → ContextRetrievalCandidate）由 RetrievalResultProjector 负责。
 // ===========================================================================
 
 /// <summary>

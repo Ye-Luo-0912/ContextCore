@@ -19,8 +19,8 @@ public sealed class InMemoryContextIndex : IContextIndex
         return Task.CompletedTask;
     }
 
-    // TODO-DEMO [P0-3]：当前仅支持关键词 Contains 匹配，不支持语义向量搜索。
-    // 生产使用前需接入 embedding 模型，存储向量并实现相似度检索。参见：TODO.md → P0-3
+    // TODO：当前仅支持关键词 Contains 匹配，不支持语义向量搜索。
+    // 生产使用前需接入 embedding 模型，存储向量并实现相似度检索。参见：TODO.md
     public Task<IReadOnlyList<ContextIndexEntry>> SearchAsync(
         IndexQuery query,
         CancellationToken cancellationToken = default)

@@ -3,29 +3,29 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Evolution Pipeline Run Store 契约
 //
-// 目标（对齐 R27 规格）：
-//   1. 持久化 Guarded Optimization Pipeline 的运行状态（PipelineRunSnapshot）+ 3 类审计记录
-//      （CanaryAssignment / RollbackRecord / BaselineComparison）。
-//   2. 让 HA 场景下 pipeline run state 可跨进程恢复（替代 DefaultGuardedOptimizationPipeline
-//      内的 ConcurrentDictionary in-memory 存储）。
-//   3. 失败语义：SaveRunAsync 幂等（同 RunId 覆盖）；GetRunAsync 不存在返回 null。
-//   4. TryTransitionAsync 原子 CAS 推进（revision + stage 双重检查 + 审计批量同事务），
-//      避免 HA 场景下两个实例同时推进同一 run 导致状态分裂。
-//   5. TryCreateRunAsync insert-if-absent（同 RunId 已存在返回 false，不覆盖），
-//      替代 SaveRunAsync 用于 StartAsync 创建新 run，避免秒精度 RunId 碰撞导致覆盖。
-//   6. PipelineTransitionRequest 让调用方提供 TransitionId 实现端到端幂等；
-//      Postgres 实现应在 transitions 审计表上建立 (run_id, transition_id) 唯一约束。
-//   7. CanaryAssignment 应作为进入 ScopedCanary 的 transition audit 一部分原子提交，
-//      不再通过独立的 SaveCanaryAssignmentAsync 写入。
+// 目标（对齐规格）：
+// 1. 持久化 Guarded Optimization Pipeline 的运行状态（PipelineRunSnapshot）+ 3 类审计记录
+// （CanaryAssignment / RollbackRecord / BaselineComparison）。
+// 2. 让 HA 场景下 pipeline run state 可跨进程恢复（替代 DefaultGuardedOptimizationPipeline
+// 内的 ConcurrentDictionary in-memory 存储）。
+// 3. 失败语义：SaveRunAsync 幂等（同 RunId 覆盖）；GetRunAsync 不存在返回 null。
+// 4. TryTransitionAsync 原子 CAS 推进（revision + stage 双重检查 + 审计批量同事务），
+// 避免 HA 场景下两个实例同时推进同一 run 导致状态分裂。
+// 5. TryCreateRunAsync insert-if-absent（同 RunId 已存在返回 false，不覆盖），
+// 替代 SaveRunAsync 用于 StartAsync 创建新 run，避免秒精度 RunId 碰撞导致覆盖。
+// 6. PipelineTransitionRequest 让调用方提供 TransitionId 实现端到端幂等；
+// Postgres 实现应在 transitions 审计表上建立 (run_id, transition_id) 唯一约束。
+// 7. CanaryAssignment 应作为进入 ScopedCanary 的 transition audit 一部分原子提交，
+// 不再通过独立的 SaveCanaryAssignmentAsync 写入。
 //
 // 设计边界：
-//   - Store 仅负责持久化；不负责状态机转换（如 OfflineExperiment → Shadow）
-//     或 RollbackCondition 触发判断；这些仍由 DefaultGuardedOptimizationPipeline 维护。
-//   - Store 不调用 IPromotionJudge；仅保存/读取。
-//   - 默认实现使用 ConcurrentDictionary（in-memory）；生产实现替换为 Postgres store。
-//   - 与 IAgentCheckpointStore 设计模式对齐（R26-2）。
-//   - TryTransitionAsync 是唯一允许并发推进 run state 的入口；
-//     TryCreateRunAsync 是唯一创建新 run 的入口（insert-if-absent 语义）。
+// - Store 仅负责持久化；不负责状态机转换（如 OfflineExperiment → Shadow）
+// 或 RollbackCondition 触发判断；这些仍由 DefaultGuardedOptimizationPipeline 维护。
+// - Store 不调用 IPromotionJudge；仅保存/读取。
+// - 默认实现使用 ConcurrentDictionary（in-memory）；生产实现替换为 Postgres store。
+// - 与 IAgentCheckpointStore 设计模式对齐。
+// - TryTransitionAsync 是唯一允许并发推进 run state 的入口；
+// TryCreateRunAsync 是唯一创建新 run 的入口（insert-if-absent 语义）。
 // ===========================================================================
 
 /// <summary>
@@ -35,14 +35,14 @@ namespace ContextCore.Abstractions;
 /// 由 <see cref="IGuardedOptimizationPipeline"/> 实现在每次状态变更后生成新快照写入 store。
 /// Store 不解析快照内部结构；仅保存/读取。
 ///
-/// <b>P0-7 HA 字段</b>：
+/// <b> HA 字段</b>：
 /// <list type="bullet">
 /// <item><see cref="Revision"/>：单调递增版本号，初值为 1（StartAsync 写入），
-///   每次 <c>TryTransitionAsync</c> 成功后 +1。CAS 推进的乐观锁基础。</item>
+/// 每次 <c>TryTransitionAsync</c> 成功后 +1。CAS 推进的乐观锁基础。</item>
 /// <item><see cref="LeaseOwner"/> / <see cref="LeaseExpiresAt"/>：可选的分布式租约字段，
-///   由调用方管理语义；store 不主动获取或续约租约，仅持久化以便跨进程协调。</item>
+/// 由调用方管理语义；store 不主动获取或续约租约，仅持久化以便跨进程协调。</item>
 /// <item><see cref="LastTransitionId"/>：上一次成功推进的逻辑 ID（调用方生成），
-///   用于审计与重试去重（响应丢失时，相同 transitionId 重试可见于快照）。</item>
+/// 用于审计与重试去重（响应丢失时，相同 transitionId 重试可见于快照）。</item>
 /// </list>
 /// </remarks>
 public sealed record PipelineRunSnapshot
@@ -107,13 +107,13 @@ public sealed record PipelineRunSnapshot
     /// </summary>
     public string? LastTransitionId { get; init; }
 
-    // ---------- Canary 状态（WP-D：单一真相源） ----------
+    // ---------- Canary 状态（：单一真相源） ----------
 
     /// <summary>
     /// Canary 当前百分比档（0-100）。由 <see cref="CanaryProgressionService"/> 维护。
     /// </summary>
     /// <remarks>
-    /// <b>WP-D 合并方向</b>：将 <c>canary_pipelines</c> 表的 percentage/revision/epoch
+    /// <b> 合并方向</b>：将 <c>canary_pipelines</c> 表的 percentage/revision/epoch
     /// 并入 <see cref="PipelineRunSnapshot"/>，让 <see cref="IPipelineRunStore"/> 成为
     /// pipeline run 状态的唯一真相源。重启后可直接从 snapshot 恢复 canary 状态，
     /// 不再依赖 <c>canary_pipelines</c>（legacy 兼容期内仍由
@@ -293,7 +293,7 @@ public interface IPipelineRunStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 单真相源写入 canary 推进状态（WP-D）。
+    /// 单真相源写入 canary 推进状态。
     /// </summary>
     /// <remarks>
     /// CAS 语义：仅当 store 内 run 的 <see cref="PipelineRunSnapshot.CanaryRevision"/>
@@ -374,7 +374,7 @@ public interface IPipelineRunStore
         string proposalId,
         CancellationToken cancellationToken = default);
 
-    // ---------- Stage transitions (R28-B.8) ----------
+    // ---------- Stage transitions () ----------
 
     /// <summary>
     /// 保存 canary 百分比推进审计记录（同 TransitionId 覆盖）。

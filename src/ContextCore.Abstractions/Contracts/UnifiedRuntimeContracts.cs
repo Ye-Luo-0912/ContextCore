@@ -6,27 +6,27 @@ namespace ContextCore.Abstractions;
 // Unified Context Decision Runtime 契约
 //
 // 目标：
-//   把当前双重决策链收敛为唯一 Context Decision Runtime。
-//   Runtime 负责 I/O 编排（Policy → Router → Providers → Merge → Early Gate →
-//   Feature Pipeline → 调用 Engine）；Engine 保持纯决策内核语义不变。
+// 把当前双重决策链收敛为唯一 Context Decision Runtime。
+// Runtime 负责 I/O 编排（Policy → Router → Providers → Merge → Early Gate →
+// Feature Pipeline → 调用 Engine）；Engine 保持纯决策内核语义不变。
 //
 // 设计原则：
-//   1. IContextDecisionRuntime 是唯一 I/O 入口；Agent Kernel 只依赖它。
-//   2. IContextDecisionEngine 保持现有语义（纯内存：Gate → Score → Allocate）。
-//   3. EffectivePolicySnapshot + ResolvedPolicyReference 不与既有
-//      ResolvedPolicySnapshot 冲突（后者保持轻量引用语义不变）。
-//   4. ContextDecisionPurpose + ContextDecisionRuntimeKind 双轴，不废弃
-//      Retrieval/Package 业务语义。
-//   5. CanonicalCandidateKey + Material sidecar 分离正文与决策。
-//   6. Envelope 不承载分配结果（CandidateAllocationDecision 独立）。
-//   7. Recency Expert 不注册 no-op，Router 基于 IExpertCatalog 显式 disable。
+// 1. IContextDecisionRuntime 是唯一 I/O 入口；Agent Kernel 只依赖它。
+// 2. IContextDecisionEngine 保持现有语义（纯内存：Gate → Score → Allocate）。
+// 3. EffectivePolicySnapshot + ResolvedPolicyReference 不与既有
+// ResolvedPolicySnapshot 冲突（后者保持轻量引用语义不变）。
+// 4. ContextDecisionPurpose + ContextDecisionRuntimeKind 双轴，不废弃
+// Retrieval/Package 业务语义。
+// 5. CanonicalCandidateKey + Material sidecar 分离正文与决策。
+// 6. Envelope 不承载分配结果（CandidateAllocationDecision 独立）。
+// 7. Recency Expert 不注册 no-op，Router 基于 IExpertCatalog 显式 disable。
 //
 // 子阶段进度：
-//   契约定义 + 默认实现骨架，不改生产行为。
-//   Candidate capture + pure Runtime + Tee 影子执行。
-//   Shadow Gate 多维度验收。
-//   Authoritative cutover（Retrieval → Package → AgentContext）。
-//   Legacy removal + DecisionExperimentPlane 保留。
+// 契约定义 + 默认实现骨架，不改生产行为。
+// Candidate capture + pure Runtime + Tee 影子执行。
+// Shadow Gate 多维度验收。
+// Authoritative cutover（Retrieval → Package → AgentContext）。
+// Legacy removal + DecisionExperimentPlane 保留。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -158,10 +158,10 @@ public sealed record ContextDecisionExecutionResult
     /// <summary>Provider 输出快照（每个 Provider 的 Envelopes+Materials 快照，用于 replay）。</summary>
     public IReadOnlyList<ProviderOutputSnapshot> ProviderOutputSnapshots { get; init; } = [];
 
-    /// <summary>R28-B.7-Final：最终序列化 token 成本（精确计算，含 section content + separator + header）。</summary>
+    /// <summary>最终序列化 token 成本（精确计算，含 section content + separator + header）。</summary>
     public FinalArtifactTokenCost? FinalTokenCost { get; init; }
 
-    /// <summary>R28-B.7-Final：是否有 Provider degraded（任一 ProviderExecutionReport.Succeeded=false 时为 true）。</summary>
+    /// <summary>是否有 Provider degraded（任一 ProviderExecutionReport.Succeeded=false 时为 true）。</summary>
     public bool IsDegraded { get; init; }
 
     /// <summary>
@@ -192,7 +192,7 @@ public sealed record CandidateTokenCost
     public required bool IsEstimated { get; init; }
 }
 
-/// <summary>R28-B.7-Final：Section token 成本。</summary>
+/// <summary>Section token 成本。</summary>
 public sealed record SectionTokenCost
 {
     /// <summary>section 名称。</summary>
@@ -211,7 +211,7 @@ public sealed record SectionTokenCost
     public int TotalTokens => ContentTokens + SeparatorTokens + HeaderTokens;
 }
 
-/// <summary>R28-B.7-Final：最终 Artifact token 成本。</summary>
+/// <summary>最终 Artifact token 成本。</summary>
 public sealed record FinalArtifactTokenCost
 {
     /// <summary>各 section 的 token 成本明细。</summary>
@@ -254,11 +254,11 @@ public sealed record ProviderOutputSnapshot
     /// <summary>Provider 执行耗时。</summary>
     public required TimeSpan Duration { get; init; }
 
-    /// <summary>R28-B.7-Final：Provider 错误码（失败时填入，如 "timeout" / "store-unavailable"；成功时为 null）。</summary>
+    /// <summary>Provider 错误码（失败时填入，如 "timeout" / "store-unavailable"；成功时为 null）。</summary>
     public string? ErrorCode { get; init; }
 }
 
-/// <summary>R28-B.7-Final：Runtime 请求标准化器。</summary>
+/// <summary>Runtime 请求标准化器。</summary>
 /// <remarks>
 /// 在 Runtime 编排入口对请求做标准化：填充缺失字段（TokenBudget / TopK 默认值）、
 /// 规范化 Scope（trim 空白、空值回退）、统一 Purpose 对应的专用 Input。
@@ -272,7 +272,7 @@ public interface IRuntimeRequestNormalizer
     ContextDecisionRuntimeRequest Normalize(ContextDecisionRuntimeRequest request);
 }
 
-/// <summary>R28-B.7-Final：请求语义哈希器。</summary>
+/// <summary>请求语义哈希器。</summary>
 /// <remarks>
 /// 基于请求的语义字段（RequestId / Scope / Purpose / QueryText / TokenBudget / TopK）
 /// 计算稳定哈希，用于 replay 匹配与请求去重。哈希应跨进程/跨平台稳定（invariant culture）。
@@ -285,7 +285,7 @@ public interface IRequestSemanticHasher
     string ComputeHash(ContextDecisionRuntimeRequest request);
 }
 
-/// <summary>R28-B.7-Final：Provider 执行 artifact（含 Envelopes + Materials + 执行报告）。</summary>
+/// <summary>Provider 执行 artifact（含 Envelopes + Materials + 执行报告）。</summary>
 /// <remarks>
 /// 由 Runtime 在 Provider 执行后构建，作为 <see cref="IExecutionArtifactFactory"/> 的输入。
 /// 合并了 <see cref="ExpertExecutionResult"/>（Envelopes + Materials）与
@@ -316,7 +316,7 @@ public sealed record ProviderExecutionArtifact
     public string? ErrorCode { get; init; }
 }
 
-/// <summary>R28-B.7-Final：Execution Artifact 工厂。</summary>
+/// <summary>Execution Artifact 工厂。</summary>
 /// <remarks>
 /// 统一 Runtime 所有返回点的结果构造，确保 <see cref="ContextDecisionExecutionResult"/>
 /// 的所有字段（Decision / WorkingSet / Policy / Routing / ProviderReports /
@@ -621,9 +621,9 @@ public sealed record EffectivePolicySnapshot
     /// 由 DefaultPolicyBundleFactory 在解析 bundle 时填充（默认 Lambda=0.5、SectionReserveRatio=0.1）。
     /// DefaultContextDecisionRuntime 读取此字段并写入 ContextDecisionRequest.DiversityOptions。
     /// Engine 在 V2 路径根据此字段决定走 V2.1 AllocateWithDiversity 还是 V2.0 Allocate：
-    ///   - 非空 + IAllocatorV2_1 注入 → AllocateWithDiversity（section rollover + MMR）
-    ///   - null 或 IAllocatorV2_1 未注入 → Allocate（V2.0 fallback）
-    /// null = 禁用 V2.1 路径（向后兼容 R28-G 之前的行为）。
+    /// - 非空 + IAllocatorV2_1 注入 → AllocateWithDiversity（section rollover + MMR）
+    /// - null 或 IAllocatorV2_1 未注入 → Allocate（V2.0 fallback）
+    /// null = 禁用 V2.1 路径（向后兼容旧行为）。
     /// </remarks>
     public DiversityOptions? DiversityOptions { get; init; }
 }

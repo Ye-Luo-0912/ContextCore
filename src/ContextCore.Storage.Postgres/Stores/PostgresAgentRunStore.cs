@@ -12,15 +12,15 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点（参考 <see cref="PostgresAgentCheckpointStore"/>）：
-///   1. 表 <c>agent_runs</c> 反规范化 workspace_id / run_id / session_id / state / turn 字段以便索引查询；
-///      完整 <see cref="AgentRun"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   2. 主键 (workspace_id, run_id)：跨 workspace 隔离 + 同 workspace 内 run_id 唯一。
-///   3. <see cref="CreateAsync"/> 使用 <c>INSERT ... ON CONFLICT DO NOTHING</c> 保证幂等。
-///   4. <see cref="TransitionStateAsync"/> 使用 expected-state CAS：
-///      <c>UPDATE ... SET state=@new WHERE workspace_id AND run_id AND state=@expected</c>；
-///      0 行受影响时抛 <see cref="InvalidOperationException"/>（状态已被其他实例推进或逆退）。
-///   5. <see cref="UpdateAsync"/> 更新可变字段（turn / final_answer / failure_reason / 预算 JSON）。
-///   6. <c>turn_budget_json</c> / <c>cost_budget_json</c> 存预算 JSON 列（与 checkpoint state_json 模式一致）。
+/// 1. 表 <c>agent_runs</c> 反规范化 workspace_id / run_id / session_id / state / turn 字段以便索引查询；
+/// 完整 <see cref="AgentRun"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
+/// 2. 主键 (workspace_id, run_id)：跨 workspace 隔离 + 同 workspace 内 run_id 唯一。
+/// 3. <see cref="CreateAsync"/> 使用 <c>INSERT ... ON CONFLICT DO NOTHING</c> 保证幂等。
+/// 4. <see cref="TransitionStateAsync"/> 使用 expected-state CAS：
+/// <c>UPDATE ... SET state=@new WHERE workspace_id AND run_id AND state=@expected</c>；
+/// 0 行受影响时抛 <see cref="InvalidOperationException"/>（状态已被其他实例推进或逆退）。
+/// 5. <see cref="UpdateAsync"/> 更新可变字段（turn / final_answer / failure_reason / 预算 JSON）。
+/// 6. <c>turn_budget_json</c> / <c>cost_budget_json</c> 存预算 JSON 列（与 checkpoint state_json 模式一致）。
 /// </remarks>
 public sealed class PostgresAgentRunStore : PostgresStoreBase, IAgentRunStore, IPersistentAgentRunStore
 {
@@ -426,21 +426,21 @@ LIMIT @take;
     /// <inheritdoc />
     /// <remarks>
     /// 单条 SQL 事务内完成"领取 Created + 重试重置 Failed + 恢复依赖重试"：
-    ///   1. 三层嵌套（Postgres 限制：FOR UPDATE 不能与窗口函数同层）：
-    ///      内层 SELECT ... FOR UPDATE SKIP LOCKED（锁定候选行，被锁行跳过下轮再取）；
-    ///      中层 ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY priority DESC, created_at ASC, run_id ASC)
-    ///      计算每 workspace 内排名（公平轮转上限）；
-    ///      外层 WHERE ws_rank &lt;= @per_workspace。
-    ///   2. UPDATE ... FROM eligible：state=8（Failed）且可重试的行重置为 Created + retry_count+1 +
-    ///      next_retry_at=指数退避（base × 2^(retry_count-1)，封顶 cap）；Created 行仅锁定领取、状态不变
-    ///      （Actor 以 state=Created 判定全新启动，领取不改状态列）。
-    ///      P2-4：state=17（RecoveryDependencyUnavailable）可重试且非终态——退避门
-    ///      （NextRetryAtUtc）通过后同样领取，但状态列与事件流均保持不变（Actor 恢复路径将本地
-    ///      状态规范化为 ContextBuilding 后重新执行，事件流按哈希链重放，不回退为全新启动）。
-    ///   3. 重试重置行同步清空事件流（DELETE FROM agent_run_events）与 checkpoint 指针——
-    ///      全新启动需事件链从 sequence 0 重新开始，残留的失败尝试事件会导致 AppendBatchAsync 链校验失败。
-    ///   4. data jsonb 同步打补丁（State/UpdatedAt/RetryCount/NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），
-    ///      保持"state 列 == data JSON.State"的单真源约束（与 TransitionStateAsync 同一模式）。
+    /// 1. 三层嵌套（Postgres 限制：FOR UPDATE 不能与窗口函数同层）：
+    /// 内层 SELECT ... FOR UPDATE SKIP LOCKED（锁定候选行，被锁行跳过下轮再取）；
+    /// 中层 ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY priority DESC, created_at ASC, run_id ASC)
+    /// 计算每 workspace 内排名（公平轮转上限）；
+    /// 外层 WHERE ws_rank &lt;= @per_workspace。
+    /// 2. UPDATE ... FROM eligible：state=8（Failed）且可重试的行重置为 Created + retry_count+1 +
+    /// next_retry_at=指数退避（base × 2^(retry_count-1)，封顶 cap）；Created 行仅锁定领取、状态不变
+    /// （Actor 以 state=Created 判定全新启动，领取不改状态列）。
+    /// state=17（RecoveryDependencyUnavailable）可重试且非终态——退避门
+    /// （NextRetryAtUtc）通过后同样领取，但状态列与事件流均保持不变（Actor 恢复路径将本地
+    /// 状态规范化为 ContextBuilding 后重新执行，事件流按哈希链重放，不回退为全新启动）。
+    /// 3. 重试重置行同步清空事件流（DELETE FROM agent_run_events）与 checkpoint 指针——
+    /// 全新启动需事件链从 sequence 0 重新开始，残留的失败尝试事件会导致 AppendBatchAsync 链校验失败。
+    /// 4. data jsonb 同步打补丁（State/UpdatedAt/RetryCount/NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），
+    /// 保持"state 列 == data JSON.State"的单真源约束（与 TransitionStateAsync 同一模式）。
     /// </remarks>
     public async ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
         int take,
@@ -493,7 +493,7 @@ WITH eligible AS (
                 (state = 8 AND max_retries > 0 AND retry_count < max_retries
                  AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
                 OR
-                -- P2-4 Recovery Integrity State：恢复依赖不可用（state = 17）为可重试状态（非终态），
+                -- Recovery Integrity State：恢复依赖不可用（state = 17）为可重试状态（非终态），
                 -- 退避门（NextRetryAtUtc）通过后由 Durable Scheduler 领取重新入队。
                 -- 领取不改状态列（CASE WHEN ar.state = 8 的 ELSE 分支仅打 UpdatedAt 补丁），
                 -- Actor 恢复路径将本地状态规范化为 ContextBuilding 后重新执行；事件流保留

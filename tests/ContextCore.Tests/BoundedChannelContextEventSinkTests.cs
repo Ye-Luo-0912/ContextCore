@@ -370,7 +370,7 @@ public sealed class BoundedChannelContextEventSinkTests
 
     /// <summary>
     /// 反向验证：当 Composite 仅含 BestEffort 子 sink 时，Composite.Kind = BestEffort，
-    /// 外层 BoundedChannelContextEventSink 走通道 + 后台批量消费路径（保留 R13.4 #1 的批量 I/O 优化）。
+    /// 外层 BoundedChannelContextEventSink 走通道 + 后台批量消费路径（保留批量 I/O 优化）。
     /// </summary>
     [TestMethod]
     public async Task BoundedChannel_WithOnlyBestEffortSinks_StillUsesChannelForBatching()

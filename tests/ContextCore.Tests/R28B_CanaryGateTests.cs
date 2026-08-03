@@ -8,20 +8,20 @@ namespace ContextCore.Tests;
 // Production Canary Gate — 验收测试（8 项）
 //
 // 覆盖范围：
-//   1. CanaryGate_AdvancesThroughPercentageLadder — 百分比阶梯渐进推进
-//   2. CanaryGate_RollbacksOnHighDivergence — parity 差异率超阈值回滚
-//   3. CanaryGate_RollbacksOnHighErrorRate — 错误率差超阈值回滚
-//   4. CanaryGate_RollbacksOnLatencyRegression — p95 延迟倍数超阈值回滚
-//   5. CanaryGate_RespectsMinObservationPeriod — 最小观察时长约束
-//   6. CanaryGate_IdempotentAdvance — transitionId 幂等去重
-//   7. CanaryGate_StageTransitionsRecordedToAuditTable — stage_transitions 审计记录
-//   8. CanaryGate_HundredPercentPromotesToV2Only — 100% 晋升为 V2 only
+// 1. CanaryGate_AdvancesThroughPercentageLadder — 百分比阶梯渐进推进
+// 2. CanaryGate_RollbacksOnHighDivergence — parity 差异率超阈值回滚
+// 3. CanaryGate_RollbacksOnHighErrorRate — 错误率差超阈值回滚
+// 4. CanaryGate_RollbacksOnLatencyRegression — p95 延迟倍数超阈值回滚
+// 5. CanaryGate_RespectsMinObservationPeriod — 最小观察时长约束
+// 6. CanaryGate_IdempotentAdvance — transitionId 幂等去重
+// 7. CanaryGate_StageTransitionsRecordedToAuditTable — stage_transitions 审计记录
+// 8. CanaryGate_HundredPercentPromotesToV2Only — 100% 晋升为 V2 only
 //
 // 设计原则：
-//   - 直接测试 CanaryProgressionService（覆盖渐进推进/回滚/幂等/审计核心逻辑）
-//   - 使用可推进时间的 FakeTimeProvider 控制观察时长（避免真实等待）
-//   - 使用真实 InMemoryPipelineRunStore + CutoverController 组件（不 stub 决策内核）
-//   - 所有代码注释使用中文
+// - 直接测试 CanaryProgressionService（覆盖渐进推进/回滚/幂等/审计核心逻辑）
+// - 使用可推进时间的 FakeTimeProvider 控制观察时长（避免真实等待）
+// - 使用真实 InMemoryPipelineRunStore + CutoverController 组件（不 stub 决策内核）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 [TestClass]
@@ -49,7 +49,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 1. CanaryGate_AdvancesThroughPercentageLadder
-    //    验证：健康指标 + 观察时长达标时，按 1→5→10→25→50→100 渐进推进
+    // 验证：健康指标 + 观察时长达标时，按 1→5→10→25→50→100 渐进推进
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_AdvancesThroughPercentageLadder()
@@ -95,7 +95,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 2. CanaryGate_RollbacksOnHighDivergence
-    //    验证：divergence_rate > MaxDivergenceRate 时触发自动回滚
+    // 验证：divergence_rate > MaxDivergenceRate 时触发自动回滚
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_RollbacksOnHighDivergence()
@@ -126,7 +126,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 3. CanaryGate_RollbacksOnHighErrorRate
-    //    验证：error_rate 差 > MaxErrorRateDelta 时触发自动回滚
+    // 验证：error_rate 差 > MaxErrorRateDelta 时触发自动回滚
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_RollbacksOnHighErrorRate()
@@ -157,7 +157,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 4. CanaryGate_RollbacksOnLatencyRegression
-    //    验证：p95 延迟倍数 > MaxLatencyMultiplier 时触发自动回滚
+    // 验证：p95 延迟倍数 > MaxLatencyMultiplier 时触发自动回滚
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_RollbacksOnLatencyRegression()
@@ -188,7 +188,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 5. CanaryGate_RespectsMinObservationPeriod
-    //    验证：观察时长不足时返回 Hold；达标后才允许 Advance
+    // 验证：观察时长不足时返回 Hold；达标后才允许 Advance
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_RespectsMinObservationPeriod()
@@ -234,7 +234,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 6. CanaryGate_IdempotentAdvance
-    //    验证：相同 transitionId 重复调用不产生重复推进（幂等去重）
+    // 验证：相同 transitionId 重复调用不产生重复推进（幂等去重）
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_IdempotentAdvance()
@@ -281,7 +281,7 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 7. CanaryGate_StageTransitionsRecordedToAuditTable
-    //    验证：每次推进/回滚都记录到 stage_transitions 审计表（in-memory 投影）
+    // 验证：每次推进/回滚都记录到 stage_transitions 审计表（in-memory 投影）
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_StageTransitionsRecordedToAuditTable()
@@ -329,8 +329,8 @@ public sealed class R28B_CanaryGateTests
 
     // ===========================================================================
     // 8. CanaryGate_HundredPercentPromotesToV2Only
-    //    验证：达 100% 后 EvaluateAsync 返回 Promoted；
-    //    CutoverController.CutoverPercentage=100 使所有请求走 V2 路径
+    // 验证：达 100% 后 EvaluateAsync 返回 Promoted；
+    // CutoverController.CutoverPercentage=100 使所有请求走 V2 路径
     // ===========================================================================
     [TestMethod]
     public async Task CanaryGate_HundredPercentPromotesToV2Only()

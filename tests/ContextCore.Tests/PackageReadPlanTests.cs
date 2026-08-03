@@ -204,7 +204,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_TracksContextStoreAndMemoryStoreCalls()
     {
-        // #4：验证 ReadPlan 记录 ContextStore / MemoryStore / GlobalContextStore 调用。
+        // 验证 ReadPlan 记录 ContextStore / MemoryStore / GlobalContextStore 调用。
         var now = DateTimeOffset.UtcNow;
         var contextStore = new InMemoryContextStore();
         var memoryStore = new InMemoryMemoryStore();
@@ -273,7 +273,7 @@ public sealed class PackageReadPlanTests
     [TestMethod]
     public async Task ReadPlan_TracksCurrentTaskServiceCall()
     {
-        // #3 + #4：current_task 解析应记录 WorkingMemoryService.GetCurrentTask 调用。
+        // + ：current_task 解析应记录 WorkingMemoryService.GetCurrentTask 调用。
         // InMemoryMemoryStore 同时实现 IMemoryStore + IWorkingMemoryService（共享存储）。
         var workingMemoryService = new InMemoryMemoryStore();
         var builder = new BasicContextPackageBuilder(

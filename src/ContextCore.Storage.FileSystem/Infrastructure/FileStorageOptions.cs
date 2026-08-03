@@ -5,7 +5,7 @@ namespace ContextCore.Storage.FileSystem;
 /// </summary>
 /// <remarks>
 /// FileSystem 后端定位为 Alpha / 本地开发后端。
-/// 并发边界（R13.1 #6）：单文件写入经 <see cref="FileLockProvider"/> 跨进程原子（Enqueue/Dequeue/Ack/Nack/Upsert/Update），
+/// 并发边界：单文件写入经 <see cref="FileLockProvider"/> 跨进程原子（Enqueue/Dequeue/Ack/Nack/Upsert/Update），
 /// 读取经 FileShare.ReadWrite；但跨文件一致性（raw content + metadata 双文件）无事务原子性，
 /// 进程崩溃可能留下 orphan raw 或 metadata 指向不存在的 raw。
 /// 进程内优化（JobId→路径索引、Janitor 节流、ContextStateCache）在多进程下命中率下降但正确性不变（回退扫描/文件锁）。

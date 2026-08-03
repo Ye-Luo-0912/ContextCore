@@ -6,35 +6,35 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // DefaultToolEffectPolicy — Tool 执行策略默认实现
 //
 // 严格提交矩阵（Descriptor.DeclaredSideEffect → 执行后处置）：
-//   None / ReadOnly        → 结果确定后 Commit（只读，重放安全）
-//   Write                  → 执行成功时 Commit；失败时 Hold（副作用是否发生未知）
-//   IdempotentWrite        → 稳定幂等键明确返回且执行成功时 Commit；否则 Hold
-//   FencedWrite            → 有效 Fence 确认（执行成功且 Fence 窗口内）时 Commit；否则 Hold
-//   NonIdempotentWrite     → 永不自动提交：Approval + 外部操作身份确认后经对账提交
-//   RequiresReconciliation → 永不自动提交：必须经 Reconciliation Handler 确认后提交
-//   Unknown                → 永不自动提交（保守策略）
+// None / ReadOnly → 结果确定后 Commit（只读，重放安全）
+// Write → 执行成功时 Commit；失败时 Hold（副作用是否发生未知）
+// IdempotentWrite → 稳定幂等键明确返回且执行成功时 Commit；否则 Hold
+// FencedWrite → 有效 Fence 确认（执行成功且 Fence 窗口内）时 Commit；否则 Hold
+// NonIdempotentWrite → 永不自动提交：Approval + 外部操作身份确认后经对账提交
+// RequiresReconciliation → 永不自动提交：必须经 Reconciliation Handler 确认后提交
+// Unknown → 永不自动提交（保守策略）
 //
 // 该矩阵替代执行器旧的"effectiveSideEffect != Unknown → MarkCommittedWithResultAsync"
 // 判定，杜绝以下危险状态被错误自动提交：
-//   - NonIdempotentWrite（外部副作用不可重放，必须对账）
-//   - RequiresReconciliation（声明要求对账，未经 Handler 确认不得提交）
-//   - 外部调用失败但副作用是否发生未知（Succeeded=false）
-//   - Handler 返回失败但 DeclaredSideEffect 为写（部分副作用可能已发生）
-//   - Fence 未得到外部系统确认的写操作
+// - NonIdempotentWrite（外部副作用不可重放，必须对账）
+// - RequiresReconciliation（声明要求对账，未经 Handler 确认不得提交）
+// - 外部调用失败但副作用是否发生未知（Succeeded=false）
+// - Handler 返回失败但 DeclaredSideEffect 为写（部分副作用可能已发生）
+// - Fence 未得到外部系统确认的写操作
 //
 // 审批门扩展（Actor 门 → 策略层）：
-//   RequiresApproval=true + 写副作用 + 未确认审批（approvalGranted=false）→
-//   禁止自动提交（Hold + RequiresApprovalBeforeCommit=true），
-//   防止绕过 Actor 审批门的直连调用自动执行外部写副作用。
-//   Actor 经 IAgentApprovalGate 放行后传 approvalGranted=true，保持既有提交流程。
+// RequiresApproval=true + 写副作用 + 未确认审批（approvalGranted=false）→
+// 禁止自动提交（Hold + RequiresApprovalBeforeCommit=true），
+// 防止绕过 Actor 审批门的直连调用自动执行外部写副作用。
+// Actor 经 IAgentApprovalGate 放行后传 approvalGranted=true，保持既有提交流程。
 //
 // 重试决策（Dispatch 失败时）：
-//   仅对重试安全的副作用自动重试：
-//     None/ReadOnly                       → 重试安全（无外部副作用，重放无影响）
-//     IdempotentWrite（带稳定幂等键）     → 外部系统可凭幂等键去重，重试安全
-//     Write（显式配置 MaxRetries>0）      → Descriptor 作者显式声明可接受重放
-//   NonIdempotentWrite/RequiresReconciliation/FencedWrite/Unknown → 永不自动重试
-//   退避：Linear = 固定 RetryDelay；Exponential = RetryDelay * 2^(attempt-1)。
+// 仅对重试安全的副作用自动重试：
+// None/ReadOnly → 重试安全（无外部副作用，重放无影响）
+// IdempotentWrite（带稳定幂等键） → 外部系统可凭幂等键去重，重试安全
+// Write（显式配置 MaxRetries>0） → Descriptor 作者显式声明可接受重放
+// NonIdempotentWrite/RequiresReconciliation/FencedWrite/Unknown → 永不自动重试
+// 退避：Linear = 固定 RetryDelay；Exponential = RetryDelay * 2^(attempt-1)。
 // ===========================================================================
 
 /// <summary>
@@ -57,8 +57,8 @@ public sealed class DefaultToolEffectPolicy : IToolEffectPolicy
         var policy = ResolveDisposition(descriptor, journal, result);
 
         // 2. 审批门扩展：RequiresApproval 声明 + 写副作用 + 未确认审批 → 禁止自动提交。
-        //    Actor 门放行后 approvalGranted=true，本门退化为记录标记（RequiresApprovalBeforeCommit=false）。
-        //    ReadOnly/None 无外部副作用，审批仅由 Actor 门负责，策略层不拦截。
+        // Actor 门放行后 approvalGranted=true，本门退化为记录标记（RequiresApprovalBeforeCommit=false）。
+        // ReadOnly/None 无外部副作用，审批仅由 Actor 门负责，策略层不拦截。
         if (descriptor.RequiresApproval && !approvalGranted && IsExternalSideEffect(descriptor.DeclaredSideEffect))
         {
             policy = policy with

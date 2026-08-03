@@ -10,7 +10,7 @@ using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
-/// <summary>覆盖 P3-4 混合检索的规则召回、向量召回、关系扩展和 trace。</summary>
+/// <summary>覆盖混合检索的规则召回、向量召回、关系扩展和 trace。</summary>
 [TestClass]
 [TestCategory("Retrieval")]
 public sealed class ContextCoreHybridRetrievalTests
@@ -1203,7 +1203,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// #7: Retrieval deterministic CandidateId tie-break —
+    /// Retrieval deterministic CandidateId tie-break —
     /// 同 Score + 同 EstimatedTokens 的候选按 CandidateId 升序稳定排序，
     /// 避免依赖输入枚举顺序导致跨 Provider/并发 Channel 结果不稳定。
     /// </summary>
@@ -1235,7 +1235,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// #8: Relation quota 语义修正——Pack 阶段为 relation-only 候选预留 TopK 名额。
+    /// Relation quota 语义修正——Pack 阶段为 relation-only 候选预留 TopK 名额。
     /// 当 main 候选分数高于 relation-only 候选时，仍应保留部分 TopK 槽位给 relation-only 候选，
     /// 而不是让高分 main 候选全部挤掉 relation-only 候选（之前的 cap-only 语义缺陷）。
     /// </summary>
@@ -1302,7 +1302,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// #8: 当 relation-only 候选不足预留量时，未填满的槽位 rollover 给 main 候选。
+    /// 当 relation-only 候选不足预留量时，未填满的槽位 rollover 给 main 候选。
     /// </summary>
     [TestMethod]
     public void Pack_RelationQuota_RollsOverUnusedSlotsToMain()
@@ -1367,7 +1367,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// #8: 当 main 候选不足 mainSlots 时，未填满的槽位 rollover 给 relation-only 候选。
+    /// 当 main 候选不足 mainSlots 时，未填满的槽位 rollover 给 relation-only 候选。
     /// </summary>
     [TestMethod]
     public void Pack_RelationQuota_RollsOverUnusedMainSlotsToRelationOnly()
@@ -1432,7 +1432,7 @@ public sealed class ContextCoreHybridRetrievalTests
     }
 
     /// <summary>
-    /// #8: 无 relation-only 候选时，reservation 不生效，行为与之前一致。
+    /// 无 relation-only 候选时，reservation 不生效，行为与之前一致。
     /// </summary>
     [TestMethod]
     public void Pack_RelationQuota_NoRelationOnly_BehavesUnchanged()

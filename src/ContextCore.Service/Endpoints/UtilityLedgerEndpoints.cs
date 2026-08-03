@@ -10,11 +10,11 @@ namespace ContextCore.Service.Endpoints;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 用户显式反馈（thumbs up/down / 评分修正 / 文本反馈 / 举报）通过 POST /api/utility-ledger/feedback 提交。
-///   2. 反馈与 Utility Ledger 条目通过 (workspace_id, collection_id, decision_id, candidate_item_id) 关联。
-///   3. 反馈不修改原始 ledger 条目（append-only 语义），独立写入 user_feedback_entries 表。
-///   4. 幂等键由调用方按需提供或自动生成；同键重复写入由 Store 保证覆盖或忽略。
-///   5. 反馈查询通过 GET /api/utility-ledger/feedback 暴露只读 API（按 workspace / decision / candidate / kind / 时间窗过滤）。
+/// 1. 用户显式反馈（thumbs up/down / 评分修正 / 文本反馈 / 举报）通过 POST /api/utility-ledger/feedback 提交。
+/// 2. 反馈与 Utility Ledger 条目通过 (workspace_id, collection_id, decision_id, candidate_item_id) 关联。
+/// 3. 反馈不修改原始 ledger 条目（append-only 语义），独立写入 user_feedback_entries 表。
+/// 4. 幂等键由调用方按需提供或自动生成；同键重复写入由 Store 保证覆盖或忽略。
+/// 5. 反馈查询通过 GET /api/utility-ledger/feedback 暴露只读 API（按 workspace / decision / candidate / kind / 时间窗过滤）。
 /// </remarks>
 internal static class UtilityLedgerEndpoints
 {

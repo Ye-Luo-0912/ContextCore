@@ -9,18 +9,18 @@ namespace ContextCore.Core.Services.ModelExecution;
 // 执行严格验证，防止异常模型输出污染排序。
 //
 // 验证项：
-//   1. Succeeded=true（推理本身成功）
-//   2. Outputs.Count == 输入行数（Count 一致）
-//   3. 每条 output 的 Score 不是 NaN / Infinity
-//   4. 每条 output 的 Confidence 不是 NaN / Infinity
-//   5. Confidence 在 [0, 1]
-//   6. SchemaVersion 与输入一致（仅 FeatureBatch 重载可校验）
-//   7. timeout 真实执行（Duration > 0 当 TimeoutMs > 0）
+// 1. Succeeded=true（推理本身成功）
+// 2. Outputs.Count == 输入行数（Count 一致）
+// 3. 每条 output 的 Score 不是 NaN / Infinity
+// 4. 每条 output 的 Confidence 不是 NaN / Infinity
+// 5. Confidence 在 [0, 1]
+// 6. SchemaVersion 与输入一致（仅 FeatureBatch 重载可校验）
+// 7. timeout 真实执行（Duration > 0 当 TimeoutMs > 0）
 //
 // 设计原则：
-//   - 不抛异常：返回结构化 ValidationResult，由调用方决定降级策略。
-//   - 完整违规清单：聚合所有违规（不止第一条），便于诊断。
-//   - 验证顺序无关：每条独立检查。
+// - 不抛异常：返回结构化 ValidationResult，由调用方决定降级策略。
+// - 完整违规清单：聚合所有违规（不止第一条），便于诊断。
+// - 验证顺序无关：每条独立检查。
 // ===========================================================================
 
 /// <summary>
@@ -92,7 +92,7 @@ public sealed class DefaultInferenceResultValidator : IInferenceResultValidator
         // 6. SchemaVersion 一致性
         // 注意：BatchInferenceResult 不携带 SchemaVersion；通过 Error 字段约定携带不一致时由引擎写入。
         // 这里无法直接校验（result 不含 schema version），留给调用方在 Scorer 层比对 batch.SchemaVersion。
-        // （若引擎在 Error 中报告了 schema 不匹配，已在 #1 路径捕获。）
+        // （若引擎在 Error 中报告了 schema 不匹配，已在 路径捕获。）
 
         return Build(violations.Count == 0, violations);
     }

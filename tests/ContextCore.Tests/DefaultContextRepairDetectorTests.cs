@@ -8,16 +8,16 @@ namespace ContextCore.Tests;
 /// DefaultContextRepairDetector 实现测试。
 ///
 /// 覆盖：
-///   1. null 输入处理（decision null 抛异常 / qualityReport null 返回空列表）
-///   2. 7 类异常独立检测（每类触发一个 Diagnosis）
-///   3. 7 类异常同时触发返回 7 个 Diagnosis
-///   4. 所有指标都满足阈值时返回空列表
-///   5. 自定义阈值覆盖默认值
-///   6. 阈值范围 [0,1] 校验（ArgumentOutOfRangeException）
-///   7. WorkspaceId/CollectionId 从 envelope 推导（Selected → Dropped → Empty）
-///   8. Diagnosis 字段映射（Reason/ReasonDetail/TriggerMetricValue/TriggerMetricThreshold/
-///      QualityReport/SuggestedRepairStrategy/DiagnosedAt/DiagnosisId 格式）
-///   9. CancellationToken 传递
+/// 1. null 输入处理（decision null 抛异常 / qualityReport null 返回空列表）
+/// 2. 7 类异常独立检测（每类触发一个 Diagnosis）
+/// 3. 7 类异常同时触发返回 7 个 Diagnosis
+/// 4. 所有指标都满足阈值时返回空列表
+/// 5. 自定义阈值覆盖默认值
+/// 6. 阈值范围 [0,1] 校验（ArgumentOutOfRangeException）
+/// 7. WorkspaceId/CollectionId 从 envelope 推导（Selected → Dropped → Empty）
+/// 8. Diagnosis 字段映射（Reason/ReasonDetail/TriggerMetricValue/TriggerMetricThreshold/
+/// QualityReport/SuggestedRepairStrategy/DiagnosedAt/DiagnosisId 格式）
+/// 9. CancellationToken 传递
 /// </summary>
 [TestClass]
 [TestCategory("R22")]

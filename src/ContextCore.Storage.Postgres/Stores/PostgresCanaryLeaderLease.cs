@@ -14,22 +14,22 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <b>租约模型</b>（每个 run_id 至多一条行）：
 /// <code>
 /// TryAcquireAsync:
-///   INSERT INTO canary_leader_leases (run_id, owner, lease_token, acquired_at, lease_expires_at)
-///   VALUES (...)
-///   ON CONFLICT (run_id) DO UPDATE
-///     SET owner = EXCLUDED.owner, lease_token = EXCLUDED.lease_token, ...
-///     WHERE canary_leader_leases.lease_expires_at &lt; now
-///   RETURNING lease_token;
-///   - 无现有行 → INSERT 成功，返回 token
-///   - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
-///   - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
+/// INSERT INTO canary_leader_leases (run_id, owner, lease_token, acquired_at, lease_expires_at)
+/// VALUES (...)
+/// ON CONFLICT (run_id) DO UPDATE
+/// SET owner = EXCLUDED.owner, lease_token = EXCLUDED.lease_token, ...
+/// WHERE canary_leader_leases.lease_expires_at &lt; now
+/// RETURNING lease_token;
+/// - 无现有行 → INSERT 成功，返回 token
+/// - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
+/// - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
 /// </code>
 ///
 /// <b>RenewAsync</b>：UPDATE WHERE lease_token = @token，延长 lease_expires_at。
 /// <b>ReleaseAsync</b>：DELETE WHERE lease_token = @token（主动让出）。
 /// <b>ReapExpiredAsync</b>：DELETE WHERE lease_expires_at &lt; now（崩溃 leader 持有的过期租约最终释放）。
 ///
-/// 复用 P0-1/P0-2 的租约模式（CAS + token 匹配），但状态机更简单：
+/// 复用租约模式（CAS + token 匹配），但状态机更简单：
 /// leader 租约无需 Pending → Leased → Acked 流转，只有 "持有" 与 "未持有" 两个状态。
 ///
 /// <b>Perf-7 严格 HA 单事务接口</b>：本类同时实现 <see cref="ICanaryDecisionApplier"/>，
@@ -221,9 +221,9 @@ WHERE lease_expires_at < @now;
     /// BEGIN;
     /// -- 1. lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行，防止并发续约/释放）
     /// SELECT 1 FROM canary_leader_leases
-    ///   WHERE run_id = @runId AND fencing_token = @fencingToken
-    ///     AND lease_expires_at > clock_timestamp()
-    ///   FOR UPDATE;
+    /// WHERE run_id = @runId AND fencing_token = @fencingToken
+    /// AND lease_expires_at > clock_timestamp()
+    /// FOR UPDATE;
     /// -- 无行 → ROLLBACK，返回 LeaseLost
     ///
     /// -- 2. 读取当前 pipeline 状态（percentage + revision）
@@ -232,14 +232,14 @@ WHERE lease_expires_at < @now;
     ///
     /// -- 3. pipeline revision CAS（UPSERT 处理首次初始化 + 后续更新）
     /// INSERT INTO canary_pipelines (run_id, percentage, status, revision, ...)
-    ///   VALUES (@runId, @newPct, @newStatus, 1, ...)
-    ///   ON CONFLICT (run_id) DO UPDATE SET
-    ///     percentage = EXCLUDED.percentage,
-    ///     status = EXCLUDED.status,
-    ///     revision = canary_pipelines.revision + 1,
-    ///     updated_at = now()
-    ///   WHERE canary_pipelines.revision = @expectedRevision
-    ///   RETURNING revision;
+    /// VALUES (@runId, @newPct, @newStatus, 1, ...)
+    /// ON CONFLICT (run_id) DO UPDATE SET
+    /// percentage = EXCLUDED.percentage,
+    /// status = EXCLUDED.status,
+    /// revision = canary_pipelines.revision + 1,
+    /// updated_at = now()
+    /// WHERE canary_pipelines.revision = @expectedRevision
+    /// RETURNING revision;
     /// -- 0 行 → ROLLBACK，返回 RevisionMismatch
     ///
     /// -- 4. transition audit 写入（同事务）
@@ -247,10 +247,10 @@ WHERE lease_expires_at < @now;
     ///
     /// -- 5. epoch 更新（UPSERT，同事务）
     /// INSERT INTO canary_run_epochs (run_id, current_epoch, advanced_at)
-    ///   VALUES (@runId, @newEpoch, now())
-    ///   ON CONFLICT (run_id) DO UPDATE SET
-    ///     current_epoch = EXCLUDED.current_epoch,
-    ///     advanced_at = EXCLUDED.advanced_at;
+    /// VALUES (@runId, @newEpoch, now())
+    /// ON CONFLICT (run_id) DO UPDATE SET
+    /// current_epoch = EXCLUDED.current_epoch,
+    /// advanced_at = EXCLUDED.advanced_at;
     /// COMMIT;
     /// </code>
     /// 任一步骤失败则整个事务 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
@@ -374,9 +374,9 @@ WHERE run_id = @run_id;
 
             // 步骤 3：pipeline revision CAS（UPSERT 处理首次初始化 + 后续更新）
             // ON CONFLICT WHERE revision = @expectedRevision 实现 CAS：
-            //   - 首次（expected=0，行不存在）→ INSERT 成功，revision=1
-            //   - 后续（expected=N，行存在且 revision=N）→ UPDATE 成功，revision=N+1
-            //   - 冲突（expected=N，行存在但 revision≠N）→ ON CONFLICT WHERE 不命中，0 行返回
+            // - 首次（expected=0，行不存在）→ INSERT 成功，revision=1
+            // - 后续（expected=N，行存在且 revision=N）→ UPDATE 成功，revision=N+1
+            // - 冲突（expected=N，行存在但 revision≠N）→ ON CONFLICT WHERE 不命中，0 行返回
             var newStatus = request.Decision switch
             {
                 CanaryDecision.Rollback => "RolledBack",

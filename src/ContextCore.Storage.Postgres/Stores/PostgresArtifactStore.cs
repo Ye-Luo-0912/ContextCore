@@ -14,7 +14,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL artifact 存储。
 /// 替代 UnsupportedArtifactStore。
 /// 设计权衡：与 FileArtifactStore 不同，Postgres 版将 artifact 内容存为 jsonb 行而非文件系统文件。
-/// 这是 R14-PG 边界声明中明确的"Postgres = HA 运行时（jsonb 存储），FileSystem = 本地（文件存储）"的体现。
+/// 这是 边界声明中明确的"Postgres = HA 运行时（jsonb 存储），FileSystem = 本地（文件存储）"的体现。
 /// WriteJsonAsync/WriteMarkdownAsync/AppendJsonLineAsync 返回合成标识符（relative_path），而非真实文件路径；
 /// 外部工具需通过 ReadJsonAsync 读回内容。
 /// </summary>

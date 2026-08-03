@@ -6,29 +6,29 @@ namespace ContextCore.Abstractions;
 // Bounded Context Orchestrator 契约
 //
 // 设计原则（对齐用户规格）：
-//   1. 不使用无限循环（Build → Evaluate → Refine → Evaluate → ...）；
-//      只允许一次有界修复：Plan → Decide → Build → Quality Evaluate →
-//      Optional Single Repair → Finalize。
-//   2. 只在确定性异常出现时修复：
-//      - PrimaryAnchorUncovered（primary anchor 未覆盖）
-//      - HardConstraintMissing（hard constraint 缺失）
-//      - MustHitMissing（must-hit 缺失）
-//      - SevereRedundancy（严重冗余）
-//      - SectionSqueezeAnomaly（section 异常挤压）
-//      - TokenUtilizationTooLow（token 使用率异常低）
-//      - LifecycleConflictUnresolved（lifecycle conflict 未解决）
-//   3. 修复预算必须显式（ContextRepairBudget 4 字段）。
-//   4. 离线 ContextEvolutionAgent 继续负责 Observe → Diagnose →
-//      Form Hypothesis → Run Experiment → Produce Proposal，不自动修改正式 Policy。
+// 1. 不使用无限循环（Build → Evaluate → Refine → Evaluate → ...）；
+// 只允许一次有界修复：Plan → Decide → Build → Quality Evaluate →
+// Optional Single Repair → Finalize。
+// 2. 只在确定性异常出现时修复：
+// - PrimaryAnchorUncovered（primary anchor 未覆盖）
+// - HardConstraintMissing（hard constraint 缺失）
+// - MustHitMissing（must-hit 缺失）
+// - SevereRedundancy（严重冗余）
+// - SectionSqueezeAnomaly（section 异常挤压）
+// - TokenUtilizationTooLow（token 使用率异常低）
+// - LifecycleConflictUnresolved（lifecycle conflict 未解决）
+// 3. 修复预算必须显式（ContextRepairBudget 4 字段）。
+// 4. 离线 ContextEvolutionAgent 继续负责 Observe → Diagnose →
+// Form Hypothesis → Run Experiment → Produce Proposal，不自动修改正式 Policy。
 //
 // 与 PackageQualityReport 的映射：
-//   - AnchorCoverage.Score < 阈值 → PrimaryAnchorUncovered
-//   - HardConstraintSatisfaction.Score < 阈值 → HardConstraintMissing
-//   - RequiredItemCoverage.Score < 阈值 → MustHitMissing
-//   - Redundancy.Score < 阈值 → SevereRedundancy
-//   - SectionBalance.Score < 阈值 → SectionSqueezeAnomaly
-//   - TokenEfficiency.Score < 阈值 → TokenUtilizationTooLow
-//   - LifecycleRisk.Score < 阈值 → LifecycleConflictUnresolved
+// - AnchorCoverage.Score < 阈值 → PrimaryAnchorUncovered
+// - HardConstraintSatisfaction.Score < 阈值 → HardConstraintMissing
+// - RequiredItemCoverage.Score < 阈值 → MustHitMissing
+// - Redundancy.Score < 阈值 → SevereRedundancy
+// - SectionBalance.Score < 阈值 → SectionSqueezeAnomaly
+// - TokenEfficiency.Score < 阈值 → TokenUtilizationTooLow
+// - LifecycleRisk.Score < 阈值 → LifecycleConflictUnresolved
 // ===========================================================================
 
 /// <summary>
@@ -66,18 +66,18 @@ public enum ContextRepairReason : byte
 /// </summary>
 /// <remarks>
 /// 对齐用户规格：
-///   public sealed record ContextRepairBudget
-///   {
-///       public int MaxAdditionalStoreCalls { get; init; }
-///       public int MaxAdditionalCandidates { get; init; }
-///       public int MaxAdditionalTokens { get; init; }
-///       public TimeSpan MaxAdditionalLatency { get; init; }
-///   }
+/// public sealed record ContextRepairBudget
+/// {
+/// public int MaxAdditionalStoreCalls { get; init; }
+/// public int MaxAdditionalCandidates { get; init; }
+/// public int MaxAdditionalTokens { get; init; }
+/// public TimeSpan MaxAdditionalLatency { get; init; }
+/// }
 ///
 /// 设计原则：
-///   1. 预算不可扩展：修复循环内不能再次调整预算，避免"再修复一次"递归。
-///   2. 预算必须显式：调用方在发起修复请求时必须指定预算，不提供默认值（强制显式）。
-///   3. 预算耗尽时立即终止修复，记录部分修复结果。
+/// 1. 预算不可扩展：修复循环内不能再次调整预算，避免"再修复一次"递归。
+/// 2. 预算必须显式：调用方在发起修复请求时必须指定预算，不提供默认值（强制显式）。
+/// 3. 预算耗尽时立即终止修复，记录部分修复结果。
 /// </remarks>
 public sealed record ContextRepairBudget
 {
@@ -203,10 +203,10 @@ public sealed record ContextRepairResponse
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Detector 是纯函数式评估：输入 DecisionResult + QualityReport，输出 ContextRepairDiagnosis 列表。
-///   2. Detector 不执行修复，只检测是否需要修复。
-///   3. 多个异常同时触发时，返回多个 Diagnosis（orchestrator 决定修复顺序）。
-///   4. 阈值参数通过实现类构造函数配置，不暴露在接口中。
+/// 1. Detector 是纯函数式评估：输入 DecisionResult + QualityReport，输出 ContextRepairDiagnosis 列表。
+/// 2. Detector 不执行修复，只检测是否需要修复。
+/// 3. 多个异常同时触发时，返回多个 Diagnosis（orchestrator 决定修复顺序）。
+/// 4. 阈值参数通过实现类构造函数配置，不暴露在接口中。
 /// </remarks>
 public interface IContextRepairDetector
 {
@@ -227,10 +227,10 @@ public interface IContextRepairDetector
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Executor 执行修复策略（re-retrieve / drop-redundant / rebalance / inject 等）。
-///   2. Executor 必须遵守 Budget 限制；超预算时立即终止并返回部分修复结果。
-///   3. Executor 是幂等的：相同 RepairRequest 应产生相同 RepairResponse。
-///   4. Executor 失败时（如 store 不可用）返回 IsSuccess=false + Errors，不抛异常。
+/// 1. Executor 执行修复策略（re-retrieve / drop-redundant / rebalance / inject 等）。
+/// 2. Executor 必须遵守 Budget 限制；超预算时立即终止并返回部分修复结果。
+/// 3. Executor 是幂等的：相同 RepairRequest 应产生相同 RepairResponse。
+/// 4. Executor 失败时（如 store 不可用）返回 IsSuccess=false + Errors，不抛异常。
 /// </remarks>
 public interface IContextRepairExecutor
 {
@@ -246,21 +246,21 @@ public interface IContextRepairExecutor
 /// </summary>
 /// <remarks>
 /// 设计原则（对齐用户规格）：
-///   1. 不允许无限循环：Plan → Decide → Build → Quality Evaluate →
-///      Optional Single Repair → Finalize（最多一次修复）。
-///   2. 修复预算必须显式（由调用方传入 ContextRepairBudget）。
-///   3. 离线 ContextEvolutionAgent 继续负责 Observe → Diagnose → Hypothesis →
-///      Experiment → Proposal，不自动修改正式 Policy。
-///   4. Orchestrator 是幂等的：相同输入应产生相同输出（确定性 tie-break）。
+/// 1. 不允许无限循环：Plan → Decide → Build → Quality Evaluate →
+/// Optional Single Repair → Finalize（最多一次修复）。
+/// 2. 修复预算必须显式（由调用方传入 ContextRepairBudget）。
+/// 3. 离线 ContextEvolutionAgent 继续负责 Observe → Diagnose → Hypothesis →
+/// Experiment → Proposal，不自动修改正式 Policy。
+/// 4. Orchestrator 是幂等的：相同输入应产生相同输出（确定性 tie-break）。
 ///
 /// 编排流程：
-///   1. Plan：调用方传入 DecisionRequest + Budget + QualityReport。
-///   2. Decide：调用 IContextDecisionEngine.DecideAsync 得到 DecisionResult。
-///   3. Build：（若已有 DecisionResult 则跳过；由调用方传入）
-///   4. Quality Evaluate：调用 IContextRepairDetector.DetectAsync 检测异常。
-///   5. Optional Single Repair：若检测到异常且预算允许，调用
-///      IContextRepairExecutor.ExecuteAsync 执行一次修复。
-///   6. Finalize：返回最终 DecisionResult + RepairResponse（可能为 null）。
+/// 1. Plan：调用方传入 DecisionRequest + Budget + QualityReport。
+/// 2. Decide：调用 IContextDecisionEngine.DecideAsync 得到 DecisionResult。
+/// 3. Build：（若已有 DecisionResult 则跳过；由调用方传入）
+/// 4. Quality Evaluate：调用 IContextRepairDetector.DetectAsync 检测异常。
+/// 5. Optional Single Repair：若检测到异常且预算允许，调用
+/// IContextRepairExecutor.ExecuteAsync 执行一次修复。
+/// 6. Finalize：返回最终 DecisionResult + RepairResponse（可能为 null）。
 /// </remarks>
 public interface IBoundedContextOrchestrator
 {

@@ -122,11 +122,11 @@ public sealed record CanaryMetricsSample
 /// <item><c>DivergenceRate</c>：加权平均 = SUM(divergent_count) / SUM(total_observations)。</item>
 /// <item><c>V2ErrorRate</c> / <c>LegacyErrorRate</c>：同上加权平均。</item>
 /// <item><c>V2P95LatencyMs</c> / <c>LegacyP95LatencyMs</c>：跨实例加权平均（按 TotalObservations 加权），
-///   替代旧 MAX（保守上界）；P10 修复：同时返回各实例 DDSketch 字节列表（V2InstanceSketches /
-///   LegacyInstanceSketches），Leader 反序列化后 MergeFrom 合并查询总体 P95，覆盖加权平均近似值。</item>
+/// 替代旧 MAX（保守上界）；修复：同时返回各实例 DDSketch 字节列表（V2InstanceSketches /
+/// LegacyInstanceSketches），Leader 反序列化后 MergeFrom 合并查询总体 P95，覆盖加权平均近似值。</item>
 /// <item><c>AverageQualityScore</c>：跨实例加权平均 = SUM(quality * observations) / SUM(observations)。</item>
-/// <item>外部指标：AVG 跳过 NULL（未采集的实例不参与均值）。P11 修复：TaskSuccessRate / ToolSuccessRate
-///   改为 SUM(分子) / SUM(分母) 替代 AVG(rate)，避免小样本实例与大样本实例权重相同。</item>
+/// <item>外部指标：AVG 跳过 NULL（未采集的实例不参与均值）。 修复：TaskSuccessRate / ToolSuccessRate
+/// 改为 SUM(分子) / SUM(分母) 替代 AVG(rate)，避免小样本实例与大样本实例权重相同。</item>
 /// <item>聚合时 <c>WHERE stage_epoch = current_epoch</c>，旧 epoch 数据不参与聚合。</item>
 /// </list>
 ///

@@ -10,14 +10,14 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. 表 <c>model_artifacts</c> 以 <c>model_artifact_id</c> 为主键。
-///   2. <see cref="RegisterAsync"/> 使用 <c>INSERT ... ON CONFLICT DO NOTHING</c> 探测插入；
-///      若 0 行受影响且行已存在 → 抛 <see cref="InvalidOperationException"/>（与不可变语义一致）。
-///   3. <see cref="GetAsync"/> 通过主键读取整行；映射反规范化列回 <see cref="ModelArtifactDescriptor"/>，
-///      避免反序列化 jsonb 以减少冷查询延迟。
-///   4. <see cref="GetLatestAsync"/> / <see cref="ListByVersionAsync"/> 通过
-///      <c>(model_name, registered_at DESC)</c> 索引按模型名查询最新版本或全部版本。
-///   5. <see cref="ListAllAsync"/> 通过 <c>(registered_at ASC)</c> 索引按注册顺序列出全部描述符。
+/// 1. 表 <c>model_artifacts</c> 以 <c>model_artifact_id</c> 为主键。
+/// 2. <see cref="RegisterAsync"/> 使用 <c>INSERT ... ON CONFLICT DO NOTHING</c> 探测插入；
+/// 若 0 行受影响且行已存在 → 抛 <see cref="InvalidOperationException"/>（与不可变语义一致）。
+/// 3. <see cref="GetAsync"/> 通过主键读取整行；映射反规范化列回 <see cref="ModelArtifactDescriptor"/>，
+/// 避免反序列化 jsonb 以减少冷查询延迟。
+/// 4. <see cref="GetLatestAsync"/> / <see cref="ListByVersionAsync"/> 通过
+/// <c>(model_name, registered_at DESC)</c> 索引按模型名查询最新版本或全部版本。
+/// 5. <see cref="ListAllAsync"/> 通过 <c>(registered_at ASC)</c> 索引按注册顺序列出全部描述符。
 /// </remarks>
 public sealed class PostgresModelArtifactRegistry : PostgresStoreBase, IPersistentModelArtifactRegistry
 {

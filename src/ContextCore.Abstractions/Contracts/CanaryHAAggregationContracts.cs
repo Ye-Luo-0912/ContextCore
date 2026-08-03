@@ -4,23 +4,23 @@ namespace ContextCore.Abstractions;
 // Canary HA 聚合与外部指标契约
 //
 // 目标（补齐 Canary 三-1 / 三-2 缺失）：
-//   1. ExternalResultMetrics：外部结果指标（TaskSuccessRate / ToolSuccessRate /
-//      RepairRate / SafetyViolationRate / ContextPrecision / ContextRecallProxy /
-//      UserAcceptance / AnswerQuality / TokenCost / InferenceCost），
-//      替代仅依赖 token budget coverage + FinalScore 的 quality_score。
-//   2. ICanaryExternalMetricsSource：外部指标采集源抽象（从 Tool 执行结果、
-//      用户反馈、安全审计等外部信号采集）。
-//   3. ICanaryMetricsAggregator：HA 聚合抽象（跨实例指标合并），让
-//      CanaryProgressionService 在多节点部署时消费全局聚合视图而非进程内局部视图。
-//   4. ICanaryLeaderLease：Leader 租约契约，确保 CanaryProgressionHostedService
-//      同一时刻仅一个实例处理同一 run（复用 P0-1 租约模式）。
+// 1. ExternalResultMetrics：外部结果指标（TaskSuccessRate / ToolSuccessRate /
+// RepairRate / SafetyViolationRate / ContextPrecision / ContextRecallProxy /
+// UserAcceptance / AnswerQuality / TokenCost / InferenceCost），
+// 替代仅依赖 token budget coverage + FinalScore 的 quality_score。
+// 2. ICanaryExternalMetricsSource：外部指标采集源抽象（从 Tool 执行结果、
+// 用户反馈、安全审计等外部信号采集）。
+// 3. ICanaryMetricsAggregator：HA 聚合抽象（跨实例指标合并），让
+// CanaryProgressionService 在多节点部署时消费全局聚合视图而非进程内局部视图。
+// 4. ICanaryLeaderLease：Leader 租约契约，确保 CanaryProgressionHostedService
+// 同一时刻仅一个实例处理同一 run（复用租约模式）。
 //
 // 设计原则：
-//   1. 契约层不引入存储 I/O：聚合与租约的实现层可注入 Postgres rollup /
-//      Prometheus 查询 / Redis stream 等。
-//   2. 外部指标为可选信号：未采集时为 null，聚合器应优雅降级到进程内指标。
-//   3. Leader 租约复用 ILeasedWorkStore 的 TryAcquireAsync/RenewAsync/ReleaseAsync
-//      状态机语义（Pending → Leased → Acked）。
+// 1. 契约层不引入存储 I/O：聚合与租约的实现层可注入 Postgres rollup /
+// Prometheus 查询 / Redis stream 等。
+// 2. 外部指标为可选信号：未采集时为 null，聚合器应优雅降级到进程内指标。
+// 3. Leader 租约复用 ILeasedWorkStore 的 TryAcquireAsync/RenewAsync/ReleaseAsync
+// 状态机语义（Pending → Leased → Acked）。
 // ===========================================================================
 
 /// <summary>
@@ -174,9 +174,9 @@ public sealed record CanaryAggregatedMetrics
 /// <list type="bullet">
 /// <item>每个 Canary run 维护一个单调递增的 <c>stage_epoch</c>，存储在 <c>canary_run_epochs</c> 表。</item>
 /// <item>各实例 UPSERT 本地快照到 <c>canary_metrics_samples</c>，PK = (run_id, stage_epoch, instance_id)，
-///   即每个 epoch 内每实例只保留最新一条快照。</item>
+/// 即每个 epoch 内每实例只保留最新一条快照。</item>
 /// <item>Leader 推进百分比档时调用 <see cref="AdvanceEpochAsync"/> 递增 epoch，
-///   随后所有实例在下一次轮询时检测到 epoch 变化并 Reset 本地 Collector，从 0 开始新 epoch 累计。</item>
+/// 随后所有实例在下一次轮询时检测到 epoch 变化并 Reset 本地 Collector，从 0 开始新 epoch 累计。</item>
 /// <item>聚合时只汇总 <c>WHERE stage_epoch = current_epoch</c> 的行，旧 epoch 数据不参与聚合。</item>
 /// </list>
 /// </remarks>
@@ -239,7 +239,7 @@ public interface ICanaryMetricsAggregator
 /// 处理同一 run，避免多实例同时推进/回滚同一 Canary。
 /// </summary>
 /// <remarks>
-/// 复用 P0-1 租约模式（Pending → Leased → Acked）。
+/// 复用租约模式（Pending → Leased → Acked）。
 /// 实现层应使用 Postgres FOR UPDATE SKIP LOCKED 或分布式锁。
 /// </remarks>
 public interface ICanaryLeaderLease

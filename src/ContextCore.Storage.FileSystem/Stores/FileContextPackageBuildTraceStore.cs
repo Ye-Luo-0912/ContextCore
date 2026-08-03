@@ -45,7 +45,7 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
 
         await _jsonLines.AppendAsync(path, result, cancellationToken).ConfigureAwait(false);
 
-        // #4：retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
+        // retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
         _pendingPurge = _janitor.MaybePurge(_paths.GetPackageBuildTraceDirectory(result.Package.WorkspaceId, result.Package.CollectionId));
     }
 

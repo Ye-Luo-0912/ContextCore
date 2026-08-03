@@ -8,19 +8,19 @@ namespace ContextCore.Tests;
 // Benchmark CI 验收测试
 //
 // 验证 Benchmark CI 基线的两个硬门控：
-//   1. 已提交的 benchmark JSON 基线每个 case 的样本数 N >= 15
-//      （BenchmarkOutputConfig.MinIterationCount=15 的下游证据）
-//      — N < 15 时 StdErr 未收敛，benchmark-compare.sh 的置信区间检查不可靠，
-//        且 MIN_SAMPLE_COUNT=5 会跳过 N<5 的 case，导致回归检测被静默跳过。
-//   2. benchmark-selftest.yml 注入回归自检工作流结构完整
-//      （注入 15% latency + 10% alloc 回归 → exit 1 + regression_found=true，
-//        并覆盖四层假阳性抑制参数：NOISE_FLOOR_PCT / MIN_SAMPLE_COUNT /
-//        CONFIDENCE_SIGMA / IO_BOUND_THRESHOLD_PCT）
+// 1. 已提交的 benchmark JSON 基线每个 case 的样本数 N >= 15
+// （BenchmarkOutputConfig.MinIterationCount=15 的下游证据）
+// — N < 15 时 StdErr 未收敛，benchmark-compare.sh 的置信区间检查不可靠，
+// 且 MIN_SAMPLE_COUNT=5 会跳过 N<5 的 case，导致回归检测被静默跳过。
+// 2. benchmark-selftest.yml 注入回归自检工作流结构完整
+// （注入 15% latency + 10% alloc 回归 → exit 1 + regression_found=true，
+// 并覆盖四层假阳性抑制参数：NOISE_FLOOR_PCT / MIN_SAMPLE_COUNT /
+// CONFIDENCE_SIGMA / IO_BOUND_THRESHOLD_PCT）
 //
 // 设计原则：
-//   - 纯文件结构验证，不实际运行 benchmark / CI
-//   - 基线 JSON 缺失或解析失败时 Assert.Inconclusive（不阻塞构建）
-//   - 复用 FindRepoRoot() 模式定位 repo root（参考 R29_FinalClosureAcceptanceTests）
+// - 纯文件结构验证，不实际运行 benchmark / CI
+// - 基线 JSON 缺失或解析失败时 Assert.Inconclusive（不阻塞构建）
+// - 复用 FindRepoRoot() 模式定位 repo root
 // ===========================================================================
 
 [TestClass]
@@ -135,7 +135,7 @@ public sealed class R29H_BenchmarkCIAcceptanceTests
         // 验证：benchmark-selftest.yml 注入回归自检工作流结构完整
         // — 注入 15% latency + 10% alloc 回归 → 期望 exit 1 + regression_found=true
         // — 覆盖四层假阳性抑制参数（MIN_SAMPLE_COUNT / NOISE_FLOOR_PCT /
-        //   CONFIDENCE_SIGMA / IO_BOUND_THRESHOLD_PCT）
+        // CONFIDENCE_SIGMA / IO_BOUND_THRESHOLD_PCT）
         // 纯文件结构验证，不实际运行 CI。
         var repoRoot = FindRepoRoot();
         var workflowPath = Path.Combine(repoRoot, ".github", "workflows", "benchmark-selftest.yml");
@@ -182,7 +182,7 @@ public sealed class R29H_BenchmarkCIAcceptanceTests
     }
 
     // =======================================================================
-    // 辅助：定位 repo root（参考 R29_FinalClosureAcceptanceTests.FindRepoRoot）
+    // 辅助：定位 repo root（参考既有 FindRepoRoot 模式）
     // =======================================================================
     private static string FindRepoRoot()
     {

@@ -14,13 +14,13 @@ namespace ContextCore.Tests;
 // Adaptive Retrieval Planner —— 自适应检索规划器验收测试
 //
 // 覆盖范围：
-//   1. IRetrievalPlanFeedbackStore（InMemory）：record / list（倒序）/ clear（全部 + 按签名）；
-//   2. AdaptiveRetrievalPlanSignature：确定性 / 不同输入不同签名；
-//   3. 策略计算：无反馈中性 / 预算超限收敛 / 低命中召回增强 / 样本不足中性；
-//   4. 规划器自适应：预算乘数应用与钳制、查询收敛（按权重保留）、召回权重增强、
-//      确定性（相同输入 + 相同反馈状态 → 相同计划）、反馈累积后策略生效；
-//   5. 迁移 SQL：retrieval_plan_feedback 表 + 签名索引 + RequiredOperationalTableSuffixes；
-//   6. 端点处理器：policy / feedback 列表 / 记录反馈 / reset 的状态码与响应形状。
+// 1. IRetrievalPlanFeedbackStore（InMemory）：record / list（倒序）/ clear（全部 + 按签名）；
+// 2. AdaptiveRetrievalPlanSignature：确定性 / 不同输入不同签名；
+// 3. 策略计算：无反馈中性 / 预算超限收敛 / 低命中召回增强 / 样本不足中性；
+// 4. 规划器自适应：预算乘数应用与钳制、查询收敛（按权重保留）、召回权重增强、
+// 确定性（相同输入 + 相同反馈状态 → 相同计划）、反馈累积后策略生效；
+// 5. 迁移 SQL：retrieval_plan_feedback 表 + 签名索引 + RequiredOperationalTableSuffixes；
+// 6. 端点处理器：policy / feedback 列表 / 记录反馈 / reset 的状态码与响应形状。
 //
 // 不连接真实数据库：规划器只依赖 IRetrievalPlanFeedbackStore 接口（InMemory 实现），
 // Postgres 侧 SQL 路径由集成测试（ContextCore.IntegrationTests）覆盖。

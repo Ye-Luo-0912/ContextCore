@@ -6,13 +6,13 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// Model Node Applied State（P0-8）—— 节点已应用状态存储 + 迁移 SQL
+// Model Node Applied State—— 节点已应用状态存储 + 迁移 SQL
 //
 // 覆盖范围：
-//   InMemoryModelNodeAppliedStateStore：Upsert CAS（仅当新 AppliedRevision ≥ 已存时覆盖）；
-//   Postgres 迁移 SQL：model_node_applied_state 表（PK node_id+slot_name）；
-//       cluster_model_slots 的 desired_status CHECK 约束（仅 'Inactive'/'Active' 合法）；
-//   ClusterModelSlotDesiredStatus 枚举：InMemory store 读写往返。
+// InMemoryModelNodeAppliedStateStore：Upsert CAS（仅当新 AppliedRevision ≥ 已存时覆盖）；
+// Postgres 迁移 SQL：model_node_applied_state 表（PK node_id+slot_name）；
+// cluster_model_slots 的 desired_status CHECK 约束（仅 'Inactive'/'Active' 合法）；
+// ClusterModelSlotDesiredStatus 枚举：InMemory store 读写往返。
 // ===========================================================================
 
 [TestClass]

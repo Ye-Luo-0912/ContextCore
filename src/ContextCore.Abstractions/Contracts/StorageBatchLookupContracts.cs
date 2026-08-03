@@ -76,16 +76,16 @@ public interface IMemoryStoreMetadataLookup
 // Late Hydration 契约
 //
 // 目标：
-//   补齐 Recall metadata → Merge/Score/Allocate → Selected IDs → Batch hydrate
-//   selected content 链路的最后一环。Provider 在 Recall 阶段使用 IncludeContent=false
-//   只返回 metadata（避免加载所有候选正文），Engine 选出最终 N 个 SelectedEnvelopes 后，
-//   由本接口对 Selected IDs 批量 hydrate 正文，避免对未选中候选做无用 I/O。
+// 补齐 Recall metadata → Merge/Score/Allocate → Selected IDs → Batch hydrate
+// selected content 链路的最后一环。Provider 在 Recall 阶段使用 IncludeContent=false
+// 只返回 metadata（避免加载所有候选正文），Engine 选出最终 N 个 SelectedEnvelopes 后，
+// 由本接口对 Selected IDs 批量 hydrate 正文，避免对未选中候选做无用 I/O。
 //
 // 设计原则：
-//   1. 接口可选注入：未注入时 Runtime 保持旧行为（直接使用 Provider 已加载的 Material）。
-//   2. 接口不修改 Envelope 决策字段，仅填充 WorkingSet.Materials 中 Selected 候选的 Content。
-//   3. 复用 IContextStoreBatchLookup / IMemoryStoreBatchLookup，避免 N+1 单条查询。
-//   4. 已 hydrate 的 Material（Content 非空）跳过，避免重复 I/O。
+// 1. 接口可选注入：未注入时 Runtime 保持旧行为（直接使用 Provider 已加载的 Material）。
+// 2. 接口不修改 Envelope 决策字段，仅填充 WorkingSet.Materials 中 Selected 候选的 Content。
+// 3. 复用 IContextStoreBatchLookup / IMemoryStoreBatchLookup，避免 N+1 单条查询。
+// 4. 已 hydrate 的 Material（Content 非空）跳过，避免重复 I/O。
 // ===========================================================================
 
 /// <summary>
@@ -95,7 +95,7 @@ public interface IMemoryStoreMetadataLookup
 /// </summary>
 /// <remarks>
 /// 链路位置：Recall（IncludeContent=false）→ Merge → Score → Allocate（SelectedEnvelopes）
-///   → <see cref="HydrateAsync"/>（本接口）→ Projector（消费已 hydrate 的 Material）。
+/// → <see cref="HydrateAsync"/>（本接口）→ Projector（消费已 hydrate 的 Material）。
 /// 未注入时 Runtime 退化为旧行为：Provider 在 Recall 阶段加载所有正文（IncludeContent=true）。
 /// </remarks>
 public interface ISelectedCandidateHydrator
@@ -113,7 +113,7 @@ public interface ISelectedCandidateHydrator
     /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>
-    /// hydrate 结果（修复后的 WorkingSet + 计数 + 预算修复诊断 + P1-7 正式修复决策 <see cref="HydrationResult.Repair"/>）；
+    /// hydrate 结果（修复后的 WorkingSet + 计数 + 预算修复诊断 + 正式修复决策 <see cref="HydrationResult.Repair"/>）；
     /// 未选中候选保持原样。Caller 必须基于 <see cref="HydrationRepairDecision"/> 重建 ContextDecisionResult。
     /// </returns>
     ValueTask<HydrationResult> HydrateAsync(
@@ -164,13 +164,13 @@ public sealed record HydrationResult
 /// </summary>
 /// <remarks>
 /// 字段语义：
-///   <list type="bullet">
-///   <item><see cref="HydratedSelected"/>：hydrate 成功且未被预算修复裁剪的候选 ID（仍保留在 SelectedEnvelopes）。</item>
-///   <item><see cref="HydrationDropped"/>：因预算修复裁剪或 hydrate 失败被丢弃的候选 ID（需从 SelectedEnvelopes 移除）。</item>
-///   <item><see cref="UpdatedAllocationDecisions"/>：反映 hydrate 后实际结果的分配决策（retained 标 Selected，dropped 标 TokenBudgetExceeded）。</item>
-///   <item><see cref="ExactTokenCount"/>：hydrate 后 retained 候选的精确 token 总数（基于真实正文重算，非估算）。</item>
-///   <item><see cref="HydrationFailures"/>：hydrate 失败的候选 ID → 错误描述（store 未命中 / 读取异常 / 正文为空）。</item>
-///   </list>
+/// <list type="bullet">
+/// <item><see cref="HydratedSelected"/>：hydrate 成功且未被预算修复裁剪的候选 ID（仍保留在 SelectedEnvelopes）。</item>
+/// <item><see cref="HydrationDropped"/>：因预算修复裁剪或 hydrate 失败被丢弃的候选 ID（需从 SelectedEnvelopes 移除）。</item>
+/// <item><see cref="UpdatedAllocationDecisions"/>：反映 hydrate 后实际结果的分配决策（retained 标 Selected，dropped 标 TokenBudgetExceeded）。</item>
+/// <item><see cref="ExactTokenCount"/>：hydrate 后 retained 候选的精确 token 总数（基于真实正文重算，非估算）。</item>
+/// <item><see cref="HydrationFailures"/>：hydrate 失败的候选 ID → 错误描述（store 未命中 / 读取异常 / 正文为空）。</item>
+/// </list>
 /// </remarks>
 public sealed record HydrationRepairDecision
 {

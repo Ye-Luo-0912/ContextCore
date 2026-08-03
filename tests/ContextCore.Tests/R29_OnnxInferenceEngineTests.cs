@@ -9,18 +9,18 @@ namespace ContextCore.Tests;
 // OnnxInferenceEngine 单元测试
 //
 // 覆盖范围：
-//   OnnxInferenceEngineOptions 默认值与 fallback 字段
-//   OnnxInferenceEngine 元数据暴露（ModelVersion / Kind / ContentHash / CalibrationVersion）
-//   OnnxInferenceEngine.InferBatchAsync 委托到 IOnnxInferenceSession
-//   OnnxInferenceEngine.InferAsync 字典路径 → FeatureBatch 转换
-//   空批次与取消处理
-//   超时控制（CreateLinkedCancellationTokenSource）
-//   DI 注册扩展（直接注册与工厂延迟加载）
+// OnnxInferenceEngineOptions 默认值与 fallback 字段
+// OnnxInferenceEngine 元数据暴露（ModelVersion / Kind / ContentHash / CalibrationVersion）
+// OnnxInferenceEngine.InferBatchAsync 委托到 IOnnxInferenceSession
+// OnnxInferenceEngine.InferAsync 字典路径 → FeatureBatch 转换
+// 空批次与取消处理
+// 超时控制（CreateLinkedCancellationTokenSource）
+// DI 注册扩展（直接注册与工厂延迟加载）
 //
 // 设计：
-//   使用 MockOnnxInferenceSession 隔离真实 ONNX 模型加载，
-//   让单元测试可在无模型文件、无 GPU 环境下运行。
-//   真实模型端到端测试由 WP-A-5 承担（需 Testcontainers + ONNX 模型工件）。
+// 使用 MockOnnxInferenceSession 隔离真实 ONNX 模型加载，
+// 让单元测试可在无模型文件、无 GPU 环境下运行。
+// 真实模型端到端测试由 承担（需 Testcontainers + ONNX 模型工件）。
 // ===========================================================================
 
 [TestClass]

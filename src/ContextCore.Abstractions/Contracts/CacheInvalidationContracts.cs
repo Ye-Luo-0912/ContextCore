@@ -90,7 +90,7 @@ public sealed class DependencyScopeSet
 }
 
 /// <summary>
-/// 上下文状态缓存接口。P0 返工：所有写入必须携带 <see cref="DependencyScopeSet"/>，
+/// 上下文状态缓存接口。所有写入必须携带 <see cref="DependencyScopeSet"/>，
 /// 确保每个缓存条目都可被 <see cref="InvalidateAsync"/> 命中。
 /// </summary>
 /// <remarks>

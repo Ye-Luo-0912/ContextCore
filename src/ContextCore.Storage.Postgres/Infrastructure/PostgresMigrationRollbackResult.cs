@@ -1,7 +1,7 @@
 namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
-/// Migration rollback 操作结果。R14-PG-8。
+/// Migration rollback 操作结果。。
 /// </summary>
 public sealed record PostgresMigrationRollbackResult
 {

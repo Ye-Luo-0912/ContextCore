@@ -8,14 +8,14 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R30E Retrieval Decision Truth —— 决策产出摘要重算 / Tokenizer 画像 / Selected 关系水合
+// Retrieval Decision Truth —— 决策产出摘要重算 / Tokenizer 画像 / Selected 关系水合
 //
 // 验收：
-//   - DecisionOutcomeRecomputer 是纯函数：摘要（计数 / token / sections）由最终
-//     Selected/Dropped 分区派生，任何调用方传入同一分区得到同一摘要；
-//   - TokenizerProfile 解析器按内容脚本分类（CJK 主导 → cjk-v1，复用 unicode-cjk-v1 判定）；
-//   - Selected 关系水合优先探测 IRelationHydrationStore 批量路径，未实现时回退逐条查询，
-//     统计恒等（RequestedCount = HydratedCount + MissingCount）。
+// - DecisionOutcomeRecomputer 是纯函数：摘要（计数 / token / sections）由最终
+// Selected/Dropped 分区派生，任何调用方传入同一分区得到同一摘要；
+// - TokenizerProfile 解析器按内容脚本分类（CJK 主导 → cjk-v1，复用 unicode-cjk-v1 判定）；
+// - Selected 关系水合优先探测 IRelationHydrationStore 批量路径，未实现时回退逐条查询，
+// 统计恒等（RequestedCount = HydratedCount + MissingCount）。
 // ===========================================================================
 
 [TestClass]

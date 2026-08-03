@@ -22,17 +22,17 @@ namespace ContextCore.Tests;
 // Production Admission Controller（实时探针 + TTL 缓存）与请求阶段准入中间件测试
 //
 // 覆盖：
-//   1. 控制器：非 ProductionHA 不执行实时探针；ProductionHA 全配置下 9 项静态
-//      强制项 + 3 项实时探针全部通过。
-//   2. 缓存语义：TTL 内复用缓存（不重复查询 Model Slot）；TTL 到期 / force=true
-//      时重新执行全量校验（以 CountingClusterModelSlotStore.GetAsync 调用次数断言）。
-//   3. 实时探针逐项失败：Postgres 不可达 / IPostgresConnectionFactory 未注册 /
-//      Model Slot 停用（刷新后）/ 应用未启动——对应探针 Fail 且 AllPassed=false。
-//   4. 请求阶段中间件：非 ProductionHA 透传；准入通过放行；准入失败返回 503 JSON；
-//      健康检查 / 准入状态路径豁免。
+// 1. 控制器：非 ProductionHA 不执行实时探针；ProductionHA 全配置下 9 项静态
+// 强制项 + 3 项实时探针全部通过。
+// 2. 缓存语义：TTL 内复用缓存（不重复查询 Model Slot）；TTL 到期 / force=true
+// 时重新执行全量校验（以 CountingClusterModelSlotStore.GetAsync 调用次数断言）。
+// 3. 实时探针逐项失败：Postgres 不可达 / IPostgresConnectionFactory 未注册 /
+// Model Slot 停用（刷新后）/ 应用未启动——对应探针 Fail 且 AllPassed=false。
+// 4. 请求阶段中间件：非 ProductionHA 透传；准入通过放行；准入失败返回 503 JSON；
+// 健康检查 / 准入状态路径豁免。
 //
 // 说明：中间件测试通过 UseTestServer 启动最小 Web 应用（不依赖 Program.cs 完整
-//   组合），仅注册 admission 栈与测试端点；控制器单元测试直接构造实例。
+// 组合），仅注册 admission 栈与测试端点；控制器单元测试直接构造实例。
 // ===========================================================================
 
 [TestClass]

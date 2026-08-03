@@ -10,10 +10,10 @@ namespace ContextCore.Tests;
 // 验证硬验收标准："外部 Tool 在所有 Kill Point 下不会静默重复执行"。
 // 每个 Kill Point 模拟崩溃后重启（journal 停留在对应状态），
 // 用真实 RecordingToolHandler 的调用计数断言外部副作用未被静默重放：
-//   - Prepared（外部调用从未开始）→ 安全重放，恰好执行一次
-//   - DispatchingIntent（外部调用可能已开始）→ 对账，不执行（调用计数 0）
-//   - Dispatched（外部调用已执行、结果未提交）→ 对账，不重跑（调用计数保持 1）
-//   - Committed（结果已持久化）→ 返回缓存结果，不重跑（调用计数保持 1）
+// - Prepared（外部调用从未开始）→ 安全重放，恰好执行一次
+// - DispatchingIntent（外部调用可能已开始）→ 对账，不执行（调用计数 0）
+// - Dispatched（外部调用已执行、结果未提交）→ 对账，不重跑（调用计数保持 1）
+// - Committed（结果已持久化）→ 返回缓存结果，不重跑（调用计数保持 1）
 // 另覆盖执行器 Truth 行为：ExternalOperationId 生成/下发/覆盖、
 // RequiresIdempotencyKey 兜底、RequiresLeaseFence fail-closed、声明副作用权威。
 // ===========================================================================

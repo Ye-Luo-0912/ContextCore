@@ -11,16 +11,16 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Agent Run Scheduler Truth 测试
 //
-// 验证 P0-6：AgentKernelHost 实现 IAgentRunScheduler，提供非阻塞入队
+// 验证 ：AgentKernelHost 实现 IAgentRunScheduler，提供非阻塞入队
 // TryEnqueueAsync + AgentRunEnqueueResult（队列满 / 已关闭 / 已活跃 / 已入队），
 // 消除"队列满时 HTTP 请求无限等待槽位"的阻塞问题：
-//   1. Accepted：入队后由 worker 执行到终态；
-//   2. AlreadyActive：同进程内重复入队幂等跳过；
-//   3. QueueFull：队列满时立即返回（无无限等待），且失败路径清理 _activeRuns；
-//   4. Closed：Host 已 Dispose 后拒绝入队；
-//   5. 指标：QueueDepth / QueueCapacity / ActiveRunCount / WorkerCount 反映调度状态；
-//   6. DI：IAgentRunScheduler 与 AgentKernelHost 同实例注册；
-//   7. 配置：AgentHostOptionsDefaultFactory 绑定 ChannelCapacity / WorkerCount / DrainTimeout。
+// 1. Accepted：入队后由 worker 执行到终态；
+// 2. AlreadyActive：同进程内重复入队幂等跳过；
+// 3. QueueFull：队列满时立即返回（无无限等待），且失败路径清理 _activeRuns；
+// 4. Closed：Host 已 Dispose 后拒绝入队；
+// 5. 指标：QueueDepth / QueueCapacity / ActiveRunCount / WorkerCount 反映调度状态；
+// 6. DI：IAgentRunScheduler 与 AgentKernelHost 同实例注册；
+// 7. 配置：AgentHostOptionsDefaultFactory 绑定 ChannelCapacity / WorkerCount / DrainTimeout。
 // ===========================================================================
 
 [TestClass]

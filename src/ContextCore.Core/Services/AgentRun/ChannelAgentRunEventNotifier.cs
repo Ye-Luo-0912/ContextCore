@@ -11,16 +11,16 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// <remarks>
 /// <b>设计要点</b>：
 /// <list type="bullet">
-///   <item>Per-run 维护一组 per-subscriber <see cref="Channel{Long}"/>（bounded, capacity 256），
-///     支持多订阅者 fan-out（每个 SSE 连接独立消费自己的 sequence 流）。</item>
-///   <item><see cref="Notify"/> 在事件批量提交事务 COMMIT 后由 Event Store 调用，
-///     向该 run 的所有订阅者 channel TryWrite 最新 sequence；channel 已满时丢弃（轮询兜底）。</item>
-///   <item><see cref="SubscribeAsync"/> 等待最多 500ms 读取新 sequence；超时则结束迭代，
-///     让调用方回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 轮询。</item>
-///   <item><see cref="RegisterSubscription"/> 分离订阅注册与事件等待，
-///     让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。</item>
-///   <item>订阅者断开（cancellationToken 取消或 Dispose）时从 per-run 订阅表移除 channel；
-///     某 run 无订阅者时清理其订阅表条目。</item>
+/// <item>Per-run 维护一组 per-subscriber <see cref="Channel{Long}"/>（bounded, capacity 256），
+/// 支持多订阅者 fan-out（每个 SSE 连接独立消费自己的 sequence 流）。</item>
+/// <item><see cref="Notify"/> 在事件批量提交事务 COMMIT 后由 Event Store 调用，
+/// 向该 run 的所有订阅者 channel TryWrite 最新 sequence；channel 已满时丢弃（轮询兜底）。</item>
+/// <item><see cref="SubscribeAsync"/> 等待最多 500ms 读取新 sequence；超时则结束迭代，
+/// 让调用方回退到 <see cref="IAgentRunEventStore.ReadAsync"/> 轮询。</item>
+/// <item><see cref="RegisterSubscription"/> 分离订阅注册与事件等待，
+/// 让 SSE 端点先注册订阅再读 DB，消除"DB 读取与订阅注册之间事件丢失"竞态。</item>
+/// <item>订阅者断开（cancellationToken 取消或 Dispose）时从 per-run 订阅表移除 channel；
+/// 某 run 无订阅者时清理其订阅表条目。</item>
 /// </list>
 ///
 /// <b>仅进程内</b>：多实例部署时每个实例的 SSE 连接由本实例的 Event Store 推送；

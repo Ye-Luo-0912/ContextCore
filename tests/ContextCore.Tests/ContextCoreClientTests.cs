@@ -7,7 +7,7 @@ using ContextCore.Client;
 
 namespace ContextCore.Tests;
 
-/// <summary>覆盖 P0-4 HTTP Client 对 P0 Minimal API 路由的封装。</summary>
+/// <summary>覆盖 HTTP Client 对 Minimal API 路由的封装。</summary>
 [TestClass]
 [TestCategory("Client")]
 public sealed class ContextCoreClientTests

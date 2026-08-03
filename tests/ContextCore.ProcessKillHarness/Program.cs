@@ -12,20 +12,20 @@ using ContextCore.Storage.Postgres.Stores;
 //
 // 目的：作为独立操作系统进程运行（由集成测试 Process.Start 启动），
 // 模拟"生产节点 A"正在执行一个 Run：
-//   1. 连接真实 Postgres（连接字符串 / table prefix 由参数注入）；
-//   2. 创建 Run 并获取 Run Lease（默认 15s，owner=kill-harness-owner）；
-//   3. 通过 AgentRunActor 执行 Run：模型返回 Tool 调用 → 分派到阻塞型 Tool；
-//   4. Tool 副作用开始时写入 effect 文件 + tool-started marker（集成测试据此判断
-//      "已执行到 Kill Point"），随后阻塞直到进程被 Kill（或 5 分钟兜底上限）。
+// 1. 连接真实 Postgres（连接字符串 / table prefix 由参数注入）；
+// 2. 创建 Run 并获取 Run Lease（默认 15s，owner=kill-harness-owner）；
+// 3. 通过 AgentRunActor 执行 Run：模型返回 Tool 调用 → 分派到阻塞型 Tool；
+// 4. Tool 副作用开始时写入 effect 文件 + tool-started marker（集成测试据此判断
+// "已执行到 Kill Point"），随后阻塞直到进程被 Kill（或 5 分钟兜底上限）。
 //
 // 集成测试在 marker 出现后执行 Process.Kill(true)（真进程终止，非优雅退出），
 // 随后验证：Run 数据未丢失、journal 处于 DispatchingIntent 模糊态、lease 过期后
 // 新节点可抢占（fencing token 递增）、Tool 副作用不重复执行。
 //
 // 设计说明：
-//   - 不依赖 AgentKernelHost 心跳循环，直接由 Actor 携带 lease 执行——进程被 Kill 后
-//     lease 无人续约，到期后新节点可抢占，行为与生产一致且完全确定。
-//   - 与集成测试共享同一 table prefix，确保恢复端（测试进程）读写同一 schema 与数据。
+// - 不依赖 AgentKernelHost 心跳循环，直接由 Actor 携带 lease 执行——进程被 Kill 后
+// lease 无人续约，到期后新节点可抢占，行为与生产一致且完全确定。
+// - 与集成测试共享同一 table prefix，确保恢复端（测试进程）读写同一 schema 与数据。
 // ===========================================================================
 
 var options = Harness.ParseArgs(args);

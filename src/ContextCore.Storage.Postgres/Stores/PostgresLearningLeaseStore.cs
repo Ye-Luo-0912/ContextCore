@@ -10,15 +10,15 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <b>租约模型</b>（每个 lease_id 至多一行），复用 <see cref="PostgresAgentRunLease"/> 模式：
 /// <code>
 /// TryAcquireAsync:
-///   INSERT INTO learning_leases (lease_id, lease_owner, lease_token, acquired_at, lease_expires_at)
-///   VALUES (...)
-///   ON CONFLICT (lease_id) DO UPDATE
-///     SET lease_owner = EXCLUDED.lease_owner, lease_token = EXCLUDED.lease_token, ...
-///     WHERE learning_leases.lease_expires_at &lt; now
-///   RETURNING lease_token;
-///   - 无现有行 → INSERT 成功，返回 token
-///   - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
-///   - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
+/// INSERT INTO learning_leases (lease_id, lease_owner, lease_token, acquired_at, lease_expires_at)
+/// VALUES (...)
+/// ON CONFLICT (lease_id) DO UPDATE
+/// SET lease_owner = EXCLUDED.lease_owner, lease_token = EXCLUDED.lease_token, ...
+/// WHERE learning_leases.lease_expires_at &lt; now
+/// RETURNING lease_token;
+/// - 无现有行 → INSERT 成功，返回 token
+/// - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
+/// - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
 /// </code>
 ///
 /// <b>RenewAsync</b>：UPDATE WHERE lease_token = @token AND lease_expires_at &gt; clock_timestamp()。

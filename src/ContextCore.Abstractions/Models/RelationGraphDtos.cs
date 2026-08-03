@@ -914,9 +914,9 @@ public sealed class RelationNeighborQuery
 /// </summary>
 /// <remarks>
 /// 语义：
-///   - <see cref="MaxSeeds"/>：单次图查询的最大种子数，超出部分直接截断（保留原序）。
-///   - <see cref="MaxEdgesPerSeed"/>：单种子返回的最大边数（per-seed Take 硬上限）。
-///   - <see cref="MaxTotalEdges"/>：单次图查询全局读取/返回的最大边数，超出即截断并标记 Truncated。
+/// - <see cref="MaxSeeds"/>：单次图查询的最大种子数，超出部分直接截断（保留原序）。
+/// - <see cref="MaxEdgesPerSeed"/>：单种子返回的最大边数（per-seed Take 硬上限）。
+/// - <see cref="MaxTotalEdges"/>：单次图查询全局读取/返回的最大边数，超出即截断并标记 Truncated。
 /// 存储层通过查询参数（<see cref="RelationNeighborBatchQuery.GlobalEdgeLimit"/>、MaxScan、Take）强制这些上限，
 /// 本类常量作为默认值与天花板（存储层对 GlobalEdgeLimit clamp 到 [1, MaxTotalEdges]）。
 /// </remarks>
@@ -1084,7 +1084,7 @@ public sealed class RelationMigrationReport
     public bool DryRun { get; init; }
 }
 
-/// <summary>P3.1-d：关系迁移选项。</summary>
+/// <summary>-d：关系迁移选项。</summary>
 public sealed class RelationMigrationOptions
 {
     /// <summary>限定迁移的集合范围（null = 工作空间内所有集合）。</summary>

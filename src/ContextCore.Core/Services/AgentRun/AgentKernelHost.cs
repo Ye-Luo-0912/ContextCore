@@ -8,27 +8,27 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // AgentKernelHost — 多 Session 隔离的 Kernel Host（生产化）
 //
 // 替代旧单例 Kernel 平面的全局状态，实现真正的多 Session 隔离：
-//   1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
-//   2. 通过 IServiceProvider 解析 Actor 所需依赖（与 DI 容器集成）；
-//   3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceId:runId）；
-//   4. StartRunAsync 创建 Actor 并写入 bounded 优先级队列（fire-and-forget）；
-//   5. GetRunStatusAsync 查询 Run 状态（通过 IAgentRunStore）；
-//   6. CancelRunAsync 取消指定 Run（TransitionState → Cancelled + CTS 触发）。
+// 1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
+// 2. 通过 IServiceProvider 解析 Actor 所需依赖（与 DI 容器集成）；
+// 3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceId:runId）；
+// 4. StartRunAsync 创建 Actor 并写入 bounded 优先级队列（fire-and-forget）；
+// 5. GetRunStatusAsync 查询 Run 状态（通过 IAgentRunStore）；
+// 6. CancelRunAsync 取消指定 Run（TransitionState → Cancelled + CTS 触发）。
 //
 // 子问题 9 生产化增强：
-//   - HA Run Lease：P0-4 方案 A — Worker 取到 Run + 获得执行槽之后再
-//     IAgentRunLease.TryAcquireAsync 获取租约，然后立即启动 heartbeat；入队前不获取 lease。
-//     heartbeat 续租失败时 CancellationTokenSource.Cancel() 取消 Actor（防止双执行）；
-//     处理完成后 Release；
-//   - 全局并发上限：SemaphoreSlim(MaxGlobalRuns)；
-//   - Workspace 级并发上限：per-workspace SemaphoreSlim(MaxWorkspaceRuns)；
+// - HA Run Lease： 方案 A — Worker 取到 Run + 获得执行槽之后再
+// IAgentRunLease.TryAcquireAsync 获取租约，然后立即启动 heartbeat；入队前不获取 lease。
+// heartbeat 续租失败时 CancellationTokenSource.Cancel() 取消 Actor（防止双执行）；
+// 处理完成后 Release；
+// - 全局并发上限：SemaphoreSlim(MaxGlobalRuns)；
+// - Workspace 级并发上限：per-workspace SemaphoreSlim(MaxWorkspaceRuns)；
 //
 // B3 Durable Scheduler 增强（替代 Task.Factory.StartNew / FIFO Channel）：
-//   - bounded 优先级队列（PriorityQueue + SemaphoreSlim 背压）+ 固定 worker 池：
-//     消除每 Run 一个 Task 的 Task 风暴风险；
-//   - 优先级调度：Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）；
-//   - 队列深度管理：ChannelCapacity 上限，超过后拒绝入队（QueueFull 拒绝策略）；
-//   - 优雅 drain：IAsyncDisposable.DisposeAsync 标记关闭 + 唤醒 worker 排空（DrainTimeout）。
+// - bounded 优先级队列（PriorityQueue + SemaphoreSlim 背压）+ 固定 worker 池：
+// 消除每 Run 一个 Task 的 Task 风暴风险；
+// - 优先级调度：Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）；
+// - 队列深度管理：ChannelCapacity 上限，超过后拒绝入队（QueueFull 拒绝策略）；
+// - 优雅 drain：IAsyncDisposable.DisposeAsync 标记关闭 + 唤醒 worker 排空（DrainTimeout）。
 // ===========================================================================
 
 /// <summary>
@@ -365,7 +365,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     }
 
     /// <summary>
-    /// 子问题 9 + P0-4 + 带租约心跳 + 并发上限的 Run 执行包装。
+    /// 子问题 9 + + 带租约心跳 + 并发上限的 Run 执行包装。
     /// </summary>
     /// <remarks>
     /// 方案 A：Worker 从队列取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，
@@ -508,10 +508,10 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// </summary>
     /// <remarks>
     /// 失败语义与旧的每 Run 心跳一致：
-    ///   - 续约失败（租约被抢占/过期）→ 取消对应 Actor，防止双执行；
-    ///   - 连续续约异常超过阈值（数据库不可达）→ 取消对应 Actor；
-    ///   - 本地 watchdog：最后一次确认的租约 ExpiresAt 已过 → 立即取消 Actor
-    ///     （续约异常不延长本地期限，防止租约实际已过期仍执行副作用）。
+    /// - 续约失败（租约被抢占/过期）→ 取消对应 Actor，防止双执行；
+    /// - 连续续约异常超过阈值（数据库不可达）→ 取消对应 Actor；
+    /// - 本地 watchdog：最后一次确认的租约 ExpiresAt 已过 → 立即取消 Actor
+    /// （续约异常不延长本地期限，防止租约实际已过期仍执行副作用）。
     /// </remarks>
     private async Task RunBatchHeartbeatLoopAsync(CancellationToken cancellationToken)
     {
@@ -831,7 +831,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var reconciliationStore = _serviceProvider.GetService(typeof(IToolReconciliationStore)) as IToolReconciliationStore;
         // 解析 IToolCatalog（提供模型 function calling 的 Tool 定义；未注册时 Actor 回退到 dispatcher 实现）
         var toolCatalog = _serviceProvider.GetService(typeof(IToolCatalog)) as IToolCatalog;
-        // P2-4 Recovery Integrity State：解析人工介入告警接收器（未注册时 Actor 不告警，best-effort 钩子）。
+        // Recovery Integrity State：解析人工介入告警接收器（未注册时 Actor 不告警，best-effort 钩子）。
         var recoveryAlertSink = _serviceProvider.GetService(typeof(IRecoveryAlertSink)) as IRecoveryAlertSink;
 
         return new AgentRunActor(

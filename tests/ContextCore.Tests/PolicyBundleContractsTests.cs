@@ -7,16 +7,16 @@ namespace ContextCore.Tests;
 /// 策略包契约可实施性验证。
 ///
 /// 验证目标：
-///   1. ContextPolicySet 默认值对齐 ContextDecisionPolicyVersions 5 个常量
-///   2. ModelArtifactReference 复用 LearningLoopContracts.ModelArtifactStatus（不重复定义）
-///   3. 3 个 Profile（Safety/Budget/Routing）可独立构造 + with 表达式
-///   4. RolloutPolicy 复用 EvolutionContracts.RollbackCondition
-///   5. ContextPolicyBundle 不可变性 + IsSuperseded 判定
-///   6. PolicyActivation 按 workspace/collection 作用域
-///   7. ContextPolicyOverride.IsCompliant 基础校验
-///   8. IPolicyRegistry 接口契约（方法签名 + 返回类型）
-///   9. 不引入存储 I/O（反射检查无 SaveAsync / PersistAsync 等存储方法）
-///  10. 5 个版本字段不允许 per-request override（用户澄清 #3）
+/// 1. ContextPolicySet 默认值对齐 ContextDecisionPolicyVersions 5 个常量
+/// 2. ModelArtifactReference 复用 LearningLoopContracts.ModelArtifactStatus（不重复定义）
+/// 3. 3 个 Profile（Safety/Budget/Routing）可独立构造 + with 表达式
+/// 4. RolloutPolicy 复用 EvolutionContracts.RollbackCondition
+/// 5. ContextPolicyBundle 不可变性 + IsSuperseded 判定
+/// 6. PolicyActivation 按 workspace/collection 作用域
+/// 7. ContextPolicyOverride.IsCompliant 基础校验
+/// 8. IPolicyRegistry 接口契约（方法签名 + 返回类型）
+/// 9. 不引入存储 I/O（反射检查无 SaveAsync / PersistAsync 等存储方法）
+/// 10. 5 个版本字段不允许 per-request override（用户澄清）
 /// </summary>
 [TestClass]
 [TestCategory("R19")]
@@ -525,7 +525,7 @@ public sealed class PolicyBundleContractsTests
     }
 
     // =========================================================================
-    // 12. 5 个版本字段不允许 per-request override（用户澄清 #3）
+    // 12. 5 个版本字段不允许 per-request override（用户澄清）
     // =========================================================================
 
     [TestMethod]

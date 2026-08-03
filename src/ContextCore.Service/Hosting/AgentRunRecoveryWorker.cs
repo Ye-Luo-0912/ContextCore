@@ -8,29 +8,29 @@ namespace ContextCore.Service.Hosting;
 // 生产 Composition Root — AgentRun Recovery Worker
 //
 // 目标：
-//   周期性扫描 <see cref="IAgentRunStore"/> 中处于非终态的 Run（崩溃前未完成），
-//   通过 <see cref="AgentKernelHost.StartRunAsync"/> 重新入队执行。
+// 周期性扫描 <see cref="IAgentRunStore"/> 中处于非终态的 Run（崩溃前未完成），
+// 通过 <see cref="AgentKernelHost.StartRunAsync"/> 重新入队执行。
 //
 // 运行时能力补齐：
-//   1. 超时检测：Run 在非终态停留超过 RunExecutionTimeout 且无活跃租约时原子标记为 LeaseLost
-//      （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；recovery worker 兜底）。
-//   2. Checkpoint resume：扫描时记录 Run 是否有 checkpoint（日志），
-//      AgentRunActor.ExecuteAsync 通过 run.State + 事件流自动重建上下文。
+// 1. 超时检测：Run 在非终态停留超过 RunExecutionTimeout 且无活跃租约时原子标记为 LeaseLost
+// （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；recovery worker 兜底）。
+// 2. Checkpoint resume：扫描时记录 Run 是否有 checkpoint（日志），
+// AgentRunActor.ExecuteAsync 通过 run.State + 事件流自动重建上下文。
 //
 // 设计边界：
-//   1. 仅对持久化 <see cref="IAgentRunStore"/> 生效（IPersistentAgentRunStore 标记）。
-//      InMemory store 在进程重启后数据丢失，无 Run 可恢复——worker 检测到非持久化
-//      实现后立即退出（no-op）。
-//   2. 幂等性：<see cref="AgentKernelHost.StartRunAsync"/> 内部通过 _activeRuns
-//      ConcurrentDictionary 去重，同一 Run 不会被重复入队。多实例场景下
-//      <see cref="IAgentRunLease"/> 确保仅一个实例处理（ProductionHA profile）。
-//   3. 非终态扫描：Created / ContextBuilding / ModelCalling / AwaitingApproval /
-//      ToolDispatching / Observing / Checkpointing 均为可恢复状态。
-//      Completed / Failed / Cancelled / LeaseLost 为终态，跳过。
-//   4. 异常隔离：单个 Run 恢复失败不中断整个轮询循环（catch + log）。
-//   5. 扫描防饥饿：每状态 keyset 游标（ORDER BY updated_at, run_id）跨轮次推进，
-//      每轮每状态最多扫描 MaxRunsPerStatePerScan 条，且状态按 round-robin 轮转起始——
-//      早期富状态无法独占扫描预算，后续状态与状态内后进 Run 都能持续获得超时检测/恢复机会。
+// 1. 仅对持久化 <see cref="IAgentRunStore"/> 生效（IPersistentAgentRunStore 标记）。
+// InMemory store 在进程重启后数据丢失，无 Run 可恢复——worker 检测到非持久化
+// 实现后立即退出（no-op）。
+// 2. 幂等性：<see cref="AgentKernelHost.StartRunAsync"/> 内部通过 _activeRuns
+// ConcurrentDictionary 去重，同一 Run 不会被重复入队。多实例场景下
+// <see cref="IAgentRunLease"/> 确保仅一个实例处理（ProductionHA profile）。
+// 3. 非终态扫描：Created / ContextBuilding / ModelCalling / AwaitingApproval /
+// ToolDispatching / Observing / Checkpointing 均为可恢复状态。
+// Completed / Failed / Cancelled / LeaseLost 为终态，跳过。
+// 4. 异常隔离：单个 Run 恢复失败不中断整个轮询循环（catch + log）。
+// 5. 扫描防饥饿：每状态 keyset 游标（ORDER BY updated_at, run_id）跨轮次推进，
+// 每轮每状态最多扫描 MaxRunsPerStatePerScan 条，且状态按 round-robin 轮转起始——
+// 早期富状态无法独占扫描预算，后续状态与状态内后进 Run 都能持续获得超时检测/恢复机会。
 // ===========================================================================
 
 /// <summary>
@@ -67,7 +67,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// PendingToolExecution（批准）或 Failed（拒绝）后才由 Recovery Worker 重新入队执行。
     /// 周期性重启 AwaitingApproval 会导致 Actor 重复加载审批状态、重复持久化 ApprovalRequested 事件。
     ///
-    /// P2-4：RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
+    /// RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
     /// 由本 Worker 在退避门（NextRetryAtUtc）通过后重新入队执行（退避期内跳过，不触发
     /// 超时→LeaseLost 逻辑；LeaseLost 会把等待退避的 Run 误判为卡死并移出恢复路径）。
     /// </remarks>
@@ -195,7 +195,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
             foreach (var run in runs)
             {
-                // P2-4 Recovery Integrity State：RecoveryDependencyUnavailable（17）是退避重试状态。
+                // Recovery Integrity State：RecoveryDependencyUnavailable（17）是退避重试状态。
                 // 跳过超时→LeaseLost 逻辑（Run 是故意等待退避门而非卡死——标记 LeaseLost 会把它
                 // 移出恢复路径，破坏 fail-closed 语义），并在退避门（NextRetryAtUtc）未通过时
                 // 跳过本轮入队；通过后重新入队，Actor 恢复路径重新读取事件流（依赖已恢复则继续，
@@ -230,7 +230,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                 // 运行时能力补齐：超时检测
                 // Run 在非终态停留超过 RunExecutionTimeout 且无人持有租约 → 原子标记为 LeaseLost
                 // （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；
-                //   recovery worker 兜底，LeaseLost 区别于 Failed——丢租而非执行失败）
+                // recovery worker 兜底，LeaseLost 区别于 Failed——丢租而非执行失败）
                 if (timeout > TimeSpan.Zero)
                 {
                     var elapsed = now - run.UpdatedAt;
@@ -299,8 +299,8 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
                 // 运行时能力补齐：resume from checkpoint
                 // AgentRunActor.ExecuteAsync 通过 run.State 检测是否为恢复场景：
-                //   - run.State == Created → 全新启动（正常路径）
-                //   - run.State != Created → 恢复场景，Actor 从事件流重建上下文
+                // - run.State == Created → 全新启动（正常路径）
+                // - run.State != Created → 恢复场景，Actor 从事件流重建上下文
                 // 此处仅记录日志，实际 resume 由 Actor 内部处理
                 try
                 {

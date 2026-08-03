@@ -6,40 +6,40 @@ namespace ContextCore.Abstractions;
 // 统一决策内核契约（Context Decision Engine Contracts）
 //
 // 目标：
-//   为 Retrieval 与 Package 两条决策主链建立统一的候选中间模型
-//   (ContextCandidateEnvelope)，让候选身份、特征协议、safety gate、
-//   utility score、reason code、token cost、policy/model version、
-//   decision evidence 共享同一套类型，避免未来 Router / Ranker /
-//   Relation Feature / 模型评分 / Agent refinement 必须接入两次。
+// 为 Retrieval 与 Package 两条决策主链建立统一的候选中间模型
+// (ContextCandidateEnvelope)，让候选身份、特征协议、safety gate、
+// utility score、reason code、token cost、policy/model version、
+// decision evidence 共享同一套类型，避免未来 Router / Ranker /
+// Relation Feature / 模型评分 / Agent refinement 必须接入两次。
 //
 // 设计原则：
-//   1. 这些契约仅定义"中间模型"，不替换 ContextRetrievalCandidate /
-//      ContextPackageDecision 等现有出口 DTO。Retrieval 与 Package
-//      仍通过不同 Projector 输出，避免 God Object。
-//   2. 复用 DecisionEvidenceV2 的字段设计（ChannelSources /
-//      ScoreBreakdown / FinalScore / MatchedAnchors / RelationPaths /
-//      LifecycleState / Rank / TokenBudget），把它从 trace-only
-//      投影"提升"为运行时候选 envelope。
-//   3. 复用 CandidateDecisionReasonCode 枚举作为统一 reason code。
-//   4. 不引入存储 I/O；envelope 是内存中的不可变 record。
-//   5. Model failure 时可通过将 Utility.ModelConfidence=0 + ReasonCode
-//      精确回退到 deterministic policy（Features + Safety 仍可用）。
+// 1. 这些契约仅定义"中间模型"，不替换 ContextRetrievalCandidate /
+// ContextPackageDecision 等现有出口 DTO。Retrieval 与 Package
+// 仍通过不同 Projector 输出，避免 God Object。
+// 2. 复用 DecisionEvidenceV2 的字段设计（ChannelSources /
+// ScoreBreakdown / FinalScore / MatchedAnchors / RelationPaths /
+// LifecycleState / Rank / TokenBudget），把它从 trace-only
+// 投影"提升"为运行时候选 envelope。
+// 3. 复用 CandidateDecisionReasonCode 枚举作为统一 reason code。
+// 4. 不引入存储 I/O；envelope 是内存中的不可变 record。
+// 5. Model failure 时可通过将 Utility.ModelConfidence=0 + ReasonCode
+// 精确回退到 deterministic policy（Features + Safety 仍可用）。
 //
 // 子阶段进度：
-//   （当前）：契约定义 + 单元测试验证可实施性。不触碰
-//                  HybridContextRetriever / BasicContextPackageBuilder。
-//   IContextDecisionEngine 接口 + Planner + Projector。
-//   Retrieval adapter（ContextRetrievalCandidate → Envelope）。
-//   Package adapter（PackageTraceCandidate → Envelope）。
+// （当前）：契约定义 + 单元测试验证可实施性。不触碰
+// HybridContextRetriever / BasicContextPackageBuilder。
+// IContextDecisionEngine 接口 + Planner + Projector。
+// Retrieval adapter（ContextRetrievalCandidate → Envelope）。
+// Package adapter（PackageTraceCandidate → Envelope）。
 // ===========================================================================
 
 /// <summary>
 /// 候选来源类型。统一替代 Retrieval 路径的 ContextRetrievalCandidateKind
-/// 与 Package 路径的字符串 Kind。8 个 Expert 概念对齐 R20 Multi-Expert。
+/// 与 Package 路径的字符串 Kind。8 个 Expert 概念对齐 Multi-Expert。
 /// </summary>
 /// <remarks>
 /// 取值与 <see cref="ContextRetrievalCandidateKind"/> 保持兼容，
-/// 新增的 MandatoryLexical / Constraint 概念为 R20 Expert 划分预留。
+/// 新增的 MandatoryLexical / Constraint 概念为 Expert 划分预留。
 /// </remarks>
 public enum ContextCandidateSource : byte
 {
@@ -97,7 +97,7 @@ public enum ContextCandidateSource : byte
 public sealed record CandidateSafetyState
 {
     /// <summary>
-    /// 约束强制级别（P0-1 修复新增）。仅当候选 <see cref="ContextCandidateSource.Constraint"/> 时填充。
+    /// 约束强制级别（修复新增）。仅当候选 <see cref="ContextCandidateSource.Constraint"/> 时填充。
     /// </summary>
     /// <remarks>
     /// 修复：不再从 <see cref="ContextCandidateSource"/> 推导约束强制级别。
@@ -146,8 +146,8 @@ public sealed record CandidateSafetyState
     /// <summary>候选是否通过 safety gate（true = 准入评分，false = 直接 drop）。</summary>
     /// <remarks>
     /// Engine 计算：!IsSuperseded &amp;&amp; !IsRequiredTagMismatch &amp;&amp;
-    ///   (!IsDeprecatedUsedByActiveChain || allowDeprecatedUsedByActiveChain) &amp;&amp;
-    ///   (!IsDuplicate || allowDuplicateReference)。
+    /// (!IsDeprecatedUsedByActiveChain || allowDeprecatedUsedByActiveChain) &amp;&amp;
+    /// (!IsDuplicate || allowDuplicateReference)。
     /// IsMandatory / IsHardConstraint 不影响准入（仍参与评分，仅在 Budget 中强制保留）。
     /// </remarks>
     public bool PassesSafetyGate { get; init; } = true;
@@ -212,14 +212,14 @@ public sealed record CandidateFeatureVector
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   - DeterministicScore：规则评分（Features 加权 + mandatory 优先 + tie-break），永不依赖模型。
-///   - ModelScore：模型评分（Router / Ranker / Listwise model 输出），可为 null。
-///   - FinalScore：Engine 聚合后的最终分数（deterministic + model 加权）。
-///   - ModelConfidence：模型置信度 [0,1]；0 或低于阈值时 Engine 回退到 DeterministicScore。
-///   - ModelAttempted/ModelApplied/ModelFallbackReason 区分"模型尝试过"和"实际参与排序"，
-///     避免把 fallback 误认为模型已生效。
+/// - DeterministicScore：规则评分（Features 加权 + mandatory 优先 + tie-break），永不依赖模型。
+/// - ModelScore：模型评分（Router / Ranker / Listwise model 输出），可为 null。
+/// - FinalScore：Engine 聚合后的最终分数（deterministic + model 加权）。
+/// - ModelConfidence：模型置信度 [0,1]；0 或低于阈值时 Engine 回退到 DeterministicScore。
+/// - ModelAttempted/ModelApplied/ModelFallbackReason 区分"模型尝试过"和"实际参与排序"，
+/// 避免把 fallback 误认为模型已生效。
 ///
-/// 这样 Model failure 时可精确回退到 deterministic policy（验收标准 #6）。
+/// 这样 Model failure 时可精确回退到 deterministic policy（验收标准）。
 /// </remarks>
 public sealed record CandidateUtilityScore
 {
@@ -272,11 +272,11 @@ public sealed record CandidateUtilityScore
 /// 路径的 SourceRefs 字符串列表。
 /// </summary>
 /// <remarks>
-/// 设计澄清（来自用户 8 项澄清 #1）：
-///   - Envelope 使用 ProvenanceRefs（来源引用，如 store path / buildId / traceId）。
-///   - V2 决策证据（DecisionEvidenceV2.EvidenceRefs）在其上追加决策引用
-///     （如 decisionId / auditRunId / modelArtifactRef），不重复 ProvenanceRefs。
-///   - 共享 EvidenceRef 类型使两条路径可聚合溯源链。
+/// 设计澄清（来自用户澄清）：
+/// - Envelope 使用 ProvenanceRefs（来源引用，如 store path / buildId / traceId）。
+/// - V2 决策证据（DecisionEvidenceV2.EvidenceRefs）在其上追加决策引用
+/// （如 decisionId / auditRunId / modelArtifactRef），不重复 ProvenanceRefs。
+/// - 共享 EvidenceRef 类型使两条路径可聚合溯源链。
 /// </remarks>
 public sealed record EvidenceRef
 {
@@ -306,17 +306,17 @@ public sealed record EvidenceRef
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 不可变 record（支持 with 表达式，便于 Engine 阶段化增强字段）。
-///   2. CandidateId 统一替代 Retrieval 的 CandidateId/SourceId 与 Package 的 ItemId。
-///   3. Source 统一替代两路径的 Kind/Type 字符串/枚举混合表达。
-///   4. Features/Safety/Utility 三个正交维度分离，避免 God Object。
-///   5. ProvenanceRefs 承载来源溯源链（EvidenceRef 列表）。
-///   6. PolicyVersion + ModelVersion 标识本候选决策使用的策略/模型版本。
+/// 1. 不可变 record（支持 with 表达式，便于 Engine 阶段化增强字段）。
+/// 2. CandidateId 统一替代 Retrieval 的 CandidateId/SourceId 与 Package 的 ItemId。
+/// 3. Source 统一替代两路径的 Kind/Type 字符串/枚举混合表达。
+/// 4. Features/Safety/Utility 三个正交维度分离，避免 God Object。
+/// 5. ProvenanceRefs 承载来源溯源链（EvidenceRef 列表）。
+/// 6. PolicyVersion + ModelVersion 标识本候选决策使用的策略/模型版本。
 ///
 /// 不包含：
-///   - 输出格式字段（Sections / Content / SelectedItems 等）— 由 Projector 输出。
-///   - 存储状态（TraceRow / DecisionRecord）— 由 V2 投影写入。
-///   - 执行控制（Cancelled / Failed）— 由 Engine 内部状态机管理。
+/// - 输出格式字段（Sections / Content / SelectedItems 等）— 由 Projector 输出。
+/// - 存储状态（TraceRow / DecisionRecord）— 由 V2 投影写入。
+/// - 执行控制（Cancelled / Failed）— 由 Engine 内部状态机管理。
 /// </remarks>
 public sealed record ContextCandidateEnvelope
 {
@@ -358,7 +358,7 @@ public sealed record ContextCandidateEnvelope
 
     /// <summary>来源溯源链（store path / buildId / traceId / modelArtifactRef）。</summary>
     /// <remarks>
-    /// 设计澄清（用户澄清 #1）：Envelope 使用 ProvenanceRefs；
+    /// 设计澄清（用户澄清）：Envelope 使用 ProvenanceRefs；
     /// V2 决策证据（DecisionEvidenceV2.EvidenceRefs）在其上追加决策引用，不重复 ProvenanceRefs。
     /// </remarks>
     public IReadOnlyList<EvidenceRef> ProvenanceRefs { get; init; } = Array.Empty<EvidenceRef>();
@@ -403,17 +403,17 @@ public sealed record ContextCandidateEnvelope
 /// <see cref="ContextCandidateEnvelope"/> 时所需的作用域信息与时间戳。
 /// </summary>
 /// <remarks>
-/// 设计原则（P0-5 修复）：
-///   1. 适配器不再在映射函数内部读取 <c>DateTimeOffset.UtcNow</c>；
-///      相同输入应产生相同输出（幂等性契约）。
-///   2. <see cref="ObservedAt"/> 由调用方在请求入口处统一传入，
-///      用于填充 <see cref="EvidenceRef.GeneratedAt"/>。
-///   3. <see cref="WorkspaceId"/> / <see cref="CollectionId"/> / <see cref="QueryText"/>
-///      由调用方从 <see cref="ContextDecisionRequest"/> 中带入，避免适配器在
-///      <c>ToDecisionRequest</c> 时丢失作用域（导致 PolicyRegistry 按空 workspace
-///      解析默认 Bundle）。
-///   4. <see cref="PolicySnapshot"/> 为已解析的策略快照引用（仅 BundleId + Version），
-///      适配器不直接消费策略内容，仅作为溯源信息附加到 EvidenceRef。
+/// 设计原则（修复）：
+/// 1. 适配器不再在映射函数内部读取 <c>DateTimeOffset.UtcNow</c>；
+/// 相同输入应产生相同输出（幂等性契约）。
+/// 2. <see cref="ObservedAt"/> 由调用方在请求入口处统一传入，
+/// 用于填充 <see cref="EvidenceRef.GeneratedAt"/>。
+/// 3. <see cref="WorkspaceId"/> / <see cref="CollectionId"/> / <see cref="QueryText"/>
+/// 由调用方从 <see cref="ContextDecisionRequest"/> 中带入，避免适配器在
+/// <c>ToDecisionRequest</c> 时丢失作用域（导致 PolicyRegistry 按空 workspace
+/// 解析默认 Bundle）。
+/// 4. <see cref="PolicySnapshot"/> 为已解析的策略快照引用（仅 BundleId + Version），
+/// 适配器不直接消费策略内容，仅作为溯源信息附加到 EvidenceRef。
 /// </remarks>
 public sealed record CandidateAdaptationContext
 {

@@ -109,7 +109,7 @@ public sealed class ContextJobWorker : BackgroundService
 					var eventSink = scope.ServiceProvider.GetRequiredService<IContextEventSink>();
 					await dispatcher.DispatchAsync(job, effectiveToken).ConfigureAwait(false);
 					await queue.AckAsync(job.JobId, stoppingToken).ConfigureAwait(false);
-					// #9: Event Sink fail-open——作业已成功并 Ack，sink 发射失败不得触发 Nack/error 路径。
+					// Event Sink fail-open——作业已成功并 Ack，sink 发射失败不得触发 Nack/error 路径。
 					// 之前 EmitAsync 抛出会落入外层 catch，导致对已 Ack 的作业执行 NackAsync（CAS 下为 no-op）
 					// 并发射误导性的 Error 事件。现在单独捕获并降级为 Warning 日志。
 					try

@@ -10,8 +10,8 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// #5：Package 冷路径 p95 与 allocation gate——
-/// 建立 InMemory 与 FileSystem 冷构建路径的回归闸门，避免 R13.2 之后的变更意外恶化性能。
+/// Package 冷路径 p95 与 allocation gate——
+/// 建立 InMemory 与 FileSystem 冷构建路径的回归闸门，避免后续变更意外恶化性能。
 ///
 /// 设计原则：
 /// - allocation gate 严格（基线 × 2，allocation 是确定性的，机器无关）。
@@ -20,14 +20,14 @@ namespace ContextCore.Tests;
 /// - 测试体 warmup 3 次后再测量，消除 JIT 编译开销。
 ///
 /// 基线（dbf963f, 2026-07-17）：
-///   BuildDetailed_Cold / InMemory / 50 items  : 2846.6 μs mean, 924.54 KB allocated
-///   BuildDetailed_Cold / InMemory / 200 items : 5823.6 μs mean, 1605.76 KB allocated
-///   FileSystem_AppCacheMiss_OsFileCacheWarm / 50 items  : 19015.1 μs mean, 1538.63 KB allocated
-///   FileSystem_AppCacheMiss_OsFileCacheWarm / 200 items : 72199.4 μs mean, 4272.09 KB allocated
+/// BuildDetailed_Cold / InMemory / 50 items : 2846.6 μs mean, 924.54 KB allocated
+/// BuildDetailed_Cold / InMemory / 200 items : 5823.6 μs mean, 1605.76 KB allocated
+/// FileSystem_AppCacheMiss_OsFileCacheWarm / 50 items : 19015.1 μs mean, 1538.63 KB allocated
+/// FileSystem_AppCacheMiss_OsFileCacheWarm / 200 items : 72199.4 μs mean, 4272.09 KB allocated
 ///
 /// 后预期：
 /// - InMemory 分配应保持或略降（dedup 减少中间 list，但 PackageReadPlan 新增少量字段，互相抵消）
-/// - FileSystem 分配应下降（R13.2 #2 snapshot cache 减少 4 次重复文件读取与反序列化）
+/// - FileSystem 分配应下降（snapshot cache 减少 4 次重复文件读取与反序列化）
 /// </summary>
 [TestClass]
 [TestCategory("Performance")]
@@ -42,7 +42,7 @@ public sealed class PackageColdPathPerformanceGateTests
 
     /// <summary>
     /// 基线 InMemory 50 items 924 KB → gate 2000 KB（×2.2 头部空间）。
-    /// 应保持在此线下，验证 #1+#3+#4 的 dedup 与 PackageReadPlan 新增字段未引入分配恶化。
+    /// 应保持在此线下，验证 ++ 的 dedup 与 PackageReadPlan 新增字段未引入分配恶化。
     /// </summary>
     [TestMethod]
     [DoNotParallelize]

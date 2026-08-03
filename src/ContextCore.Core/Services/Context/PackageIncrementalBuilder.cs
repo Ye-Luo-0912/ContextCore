@@ -15,11 +15,11 @@ namespace ContextCore.Core;
 /// <b>V2 实现策略</b>：
 /// <list type="bullet">
 /// <item><see cref="PackageDeltaKind.NoChange"/>：调用 <see cref="ISnapshotCapablePackageBuilder.RebuildFromSnapshotAsync"/>
-///   直接复用快照中的 PackageTemplate，跳过 build pipeline（PackageInputLoader + CandidateSelector），
-///   仅重新投影生成新的 PackageId/BuildId/CreatedAt/metadata。性能提升来自跳过 store 查询与候选选择。</item>
+/// 直接复用快照中的 PackageTemplate，跳过 build pipeline（PackageInputLoader + CandidateSelector），
+/// 仅重新投影生成新的 PackageId/BuildId/CreatedAt/metadata。性能提升来自跳过 store 查询与候选选择。</item>
 /// <item><see cref="PackageDeltaKind.RequestOnlyChange"/>/<see cref="PackageDeltaKind.PartialSectionChange"/>/
-///   <see cref="PackageDeltaKind.FullRebuildRequired"/>：委托到 <see cref="IContextPackageBuilder.BuildDetailedAsync"/>
-///   执行全量构建。PartialSectionChange 的选择性重载留待 V3，V2 保守策略保证等价性。</item>
+/// <see cref="PackageDeltaKind.FullRebuildRequired"/>：委托到 <see cref="IContextPackageBuilder.BuildDetailedAsync"/>
+/// 执行全量构建。PartialSectionChange 的选择性重载留待 V3，V2 保守策略保证等价性。</item>
 /// </list>
 /// 等价性保证：NoChange 路径的 <see cref="ISnapshotCapablePackageBuilder.RebuildFromSnapshotAsync"/>
 /// 调用 <see cref="ResultProjector"/>.ProjectResult(template, options)，是纯函数；

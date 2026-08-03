@@ -9,18 +9,18 @@ namespace ContextCore.Benchmarks;
 // Canary Metrics 微基准
 //
 // 覆盖：
-//   DefaultCanaryMetricsCollector.RecordObservation（ring buffer + 滚动计数器）
-//      - 小规模（n=100）/ 中规模（n=1000）/ 大规模（n=10000）
-//      - 包含容量内 vs 容量溢出（触发 EvictOldest）两条路径
-//   DefaultCanaryMetricsCollector.GetAggregatedMetrics（聚合 + DDSketch quantile）
-//   DDSketch.Add + GetQuantile（P95 估算微基准，绕过 collector 测纯 sketch 性能）
+// DefaultCanaryMetricsCollector.RecordObservation（ring buffer + 滚动计数器）
+// - 小规模（n=100）/ 中规模（n=1000）/ 大规模（n=10000）
+// - 包含容量内 vs 容量溢出（触发 EvictOldest）两条路径
+// DefaultCanaryMetricsCollector.GetAggregatedMetrics（聚合 + DDSketch quantile）
+// DDSketch.Add + GetQuantile（P95 估算微基准，绕过 collector 测纯 sketch 性能）
 //
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
 //
 // 依赖：
-//   - DefaultCanaryMetricsCollector（public，含 ring buffer + DDSketch）
-//   - DDSketch（internal sealed，通过 ContextCore.Core 的 InternalsVisibleTo 暴露）
-//   - ParityReport（R28-B B-2 双路径对比报告）
+// - DefaultCanaryMetricsCollector（public，含 ring buffer + DDSketch）
+// - DDSketch（internal sealed，通过 ContextCore.Core 的 InternalsVisibleTo 暴露）
+// - ParityReport（双路径对比报告）
 // ===========================================================================
 
 /// <summary>

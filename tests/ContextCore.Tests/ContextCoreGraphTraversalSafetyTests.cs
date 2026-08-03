@@ -457,8 +457,8 @@ public class ContextCoreGraphTraversalSafetyTests
         var engine = new RelationTraversalEngine(store);
 
         // seed 有两条出边：
-        //  - 到 hub-A (weight=1.0, confidence=1.0) → childScore=1.0
-        //  - 到 hub-B (weight=0.1, confidence=0.1) → childScore=0.01
+        // - 到 hub-A (weight=1.0, confidence=1.0) → childScore=1.0
+        // - 到 hub-B (weight=0.1, confidence=0.1) → childScore=0.01
         // hub-A 又有一条出边到 deep-A
         // 当 maxFanout=1 时，depth=2 只能扩展 1 个节点，应优先扩展 hub-A（score 更高）
         await store.SaveAsync(CreateRelation("seed", "hub-A", weight: 1.0, confidence: 1.0));
@@ -492,7 +492,7 @@ public class ContextCoreGraphTraversalSafetyTests
 
     /// <summary>
     /// EnableScorePropagation=false 时仅应用 DecayFactor，不传播 weight/confidence。
-    /// 保持与旧版（pre-P1-8）完全等价的语义。
+    /// 保持与旧版完全等价的语义。
     /// </summary>
     [TestMethod]
     public async Task P1_8_DisableScorePropagation_OnlyAppliesDecayFactor()

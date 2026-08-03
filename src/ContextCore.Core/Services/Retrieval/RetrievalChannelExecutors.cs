@@ -53,7 +53,7 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
                 context, requiredIds, batchContextStore, cancellationToken).ConfigureAwait(false);
         }
 
-        // 回退路径：并行单条查询（R17-C 消除 N+1 串行 await 的成果）。
+        // 回退路径：并行单条查询（消除 N+1 串行 await）。
         // 在 Batch API 落地前，用 BoundedFanout 施加 SemaphoreSlim 上限，
         // 避免 VectorTopK=100 / RequiredIds 很多时 Postgres 连接池击穿或 FileSystem 锁竞争加剧。
         var resolved = await BoundedFanout.WhenAllAsync(

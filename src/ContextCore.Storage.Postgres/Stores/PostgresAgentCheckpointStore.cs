@@ -10,13 +10,13 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. 表 <c>agent_checkpoints</c> 反规范化 session 字段（session_value / runtime_kind / workspace_id / collection_id）
-///      以便按 session 索引查询；完整 <see cref="AgentCheckpoint"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   2. 主键 (workspace_id, checkpoint_id)：跨 workspace 隔离 + 同 workspace 内 checkpoint id 唯一。
-///   3. <see cref="ListAsync"/> 按 session_value 过滤 + created_at DESC，与 InMemory 实现语义一致。
-///   4. <see cref="SaveAsync"/> 幂等（同主键覆盖）。
-///   5. P0-6 修复：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
-///      SQL WHERE 同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读 / 误删。
+/// 1. 表 <c>agent_checkpoints</c> 反规范化 session 字段（session_value / runtime_kind / workspace_id / collection_id）
+/// 以便按 session 索引查询；完整 <see cref="AgentCheckpoint"/> 对象保存在 <c>data jsonb</c>，由 store 反序列化。
+/// 2. 主键 (workspace_id, checkpoint_id)：跨 workspace 隔离 + 同 workspace 内 checkpoint id 唯一。
+/// 3. <see cref="ListAsync"/> 按 session_value 过滤 + created_at DESC，与 InMemory 实现语义一致。
+/// 4. <see cref="SaveAsync"/> 幂等（同主键覆盖）。
+/// 5. 修复：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
+/// SQL WHERE 同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读 / 误删。
 /// </remarks>
 public sealed class PostgresAgentCheckpointStore : PostgresStoreBase, IAgentCheckpointStore, IPersistentAgentCheckpointStore
 {

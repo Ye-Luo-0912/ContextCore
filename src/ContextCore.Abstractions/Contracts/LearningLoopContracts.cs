@@ -7,7 +7,7 @@ namespace ContextCore.Abstractions;
 // - 学习闭环第一条：PromotionJudge 验证训练与部署基础设施（最小作用域）
 // - 不使用单一质量总分决定上线；逐条 ExpectedGain + RollbackCondition 评估
 // - Token budget / section quota / duplicate suppression 导致的 dropped 不能被当作不相关负样本
-//   → DatasetManifest 显式记录 PositiveLabels / NegativeLabels / UnlabeledItems 三类计数
+// → DatasetManifest 显式记录 PositiveLabels / NegativeLabels / UnlabeledItems 三类计数
 // - 数据集 split 必须支持 GroupKeyed 策略以避免跨样本数据泄漏
 //
 // 本文件仅包含 Abstractions 层契约，不含任何实现逻辑。
@@ -301,7 +301,7 @@ public enum ModelArtifactStatus
     /// <summary>已 staging：已上传到 model registry，等待 promotion。</summary>
     Staged,
 
-    /// <summary>已激活：在 R17 pipeline 中被晋升为基线。</summary>
+    /// <summary>已激活：在 pipeline 中被晋升为基线。</summary>
     Active,
 
     /// <summary>已弃用：被新版本替代，但仍可查询。</summary>

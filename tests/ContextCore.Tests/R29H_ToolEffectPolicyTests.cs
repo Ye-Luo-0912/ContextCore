@@ -7,16 +7,16 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Tool Policy Engine 严格提交矩阵 Truth 测试
 //
-// 验证 P0-2：DefaultDurableToolExecutor 的提交判定不再基于
+// 验证 ：DefaultDurableToolExecutor 的提交判定不再基于
 // "effectiveSideEffect != Unknown" 的宽松条件，而是由 IToolEffectPolicy
 // 按 Descriptor.DeclaredSideEffect 严格矩阵处置（Commit / Hold / FailClosed）：
-//   None/ReadOnly         → Commit（结果确定后，重放安全）
-//   Write                 → 成功 Commit / 失败 Hold（副作用是否发生未知）
-//   IdempotentWrite       → 幂等键明确 + 成功 Commit / 否则 Hold
-//   FencedWrite           → 成功（Fence 窗口内）Commit / 失败 Hold
-//   NonIdempotentWrite    → 永不自动提交（Hold + 需对账确认）
-//   RequiresReconciliation→ 永不自动提交（Hold + 需对账确认）
-//   Unknown               → 永不自动提交（Hold，保守）
+// None/ReadOnly → Commit（结果确定后，重放安全）
+// Write → 成功 Commit / 失败 Hold（副作用是否发生未知）
+// IdempotentWrite → 幂等键明确 + 成功 Commit / 否则 Hold
+// FencedWrite → 成功（Fence 窗口内）Commit / 失败 Hold
+// NonIdempotentWrite → 永不自动提交（Hold + 需对账确认）
+// RequiresReconciliation→ 永不自动提交（Hold + 需对账确认）
+// Unknown → 永不自动提交（Hold，保守）
 //
 // 杜绝的危险误提交：NonIdempotentWrite 自动提交、RequiresReconciliation 自动提交、
 // 外部调用失败但副作用未知、Handler 失败但声明为写、Fence 未确认的写操作。

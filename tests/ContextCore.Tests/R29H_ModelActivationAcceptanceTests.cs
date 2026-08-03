@@ -11,18 +11,18 @@ namespace ContextCore.Tests;
 // Model Activation 硬验收门测试
 //
 // 验证任务D 修复后的六个核心模型激活保证：
-//   1. ActualModelFile_HashMatches_Descriptor
-//      模型激活时实际文件 SHA-256 与 descriptor.ContentHash 匹配。
-//   2. Warmup_UsesExact_FeatureSchemaWidth
-//      Warmup 使用准确的 FeatureSchema 宽度（而非默认值或猜测值）。
-//   3. GoldenProbe_PassesBefore_Activation
-//      Golden Probe 在模型激活前通过（probe 失败 → 模型不被激活）。
-//   4. HotSwap_DoesNotDispose_InFlightEngine
-//      热切换时不 Dispose 正在处理请求的旧引擎。
-//   5. OldEngine_IsEventuallyDisposed
-//      旧引擎最终被清理（不会泄漏）。
-//   6. NativeInferenceTimeout_DoesNotExhaust_Workers
-//      原生推理超时不会耗尽所有 worker（SemaphoreSlim 被释放）。
+// 1. ActualModelFile_HashMatches_Descriptor
+// 模型激活时实际文件 SHA-256 与 descriptor.ContentHash 匹配。
+// 2. Warmup_UsesExact_FeatureSchemaWidth
+// Warmup 使用准确的 FeatureSchema 宽度（而非默认值或猜测值）。
+// 3. GoldenProbe_PassesBefore_Activation
+// Golden Probe 在模型激活前通过（probe 失败 → 模型不被激活）。
+// 4. HotSwap_DoesNotDispose_InFlightEngine
+// 热切换时不 Dispose 正在处理请求的旧引擎。
+// 5. OldEngine_IsEventuallyDisposed
+// 旧引擎最终被清理（不会泄漏）。
+// 6. NativeInferenceTimeout_DoesNotExhaust_Workers
+// 原生推理超时不会耗尽所有 worker（SemaphoreSlim 被释放）。
 //
 // 这些测试是"硬验收门"——任一失败意味着 Model Activation 修复回退，不能合并。
 // ===========================================================================

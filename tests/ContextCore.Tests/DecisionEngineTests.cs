@@ -9,16 +9,16 @@ namespace ContextCore.Tests;
 /// 统一决策引擎接口 + Planner + Projectors 验证。
 ///
 /// 验证目标：
-///   1. DefaultContextDecisionEngine 三阶段编排（safety gate → utility scoring → budget allocation）
-///   2. mandatory 候选永远选入（不受 budget 限制）
-///   3. safety gate 拦截的候选进入 DroppedEnvelopes
-///   4. budget 超限候选进入 DroppedEnvelopes（带正确 ReasonCode）
-///   5. RetrievalResultProjector 投影为 ContextRetrievalResult（保持现有 DTO 兼容）
-///   6. PackageResultProjector 投影为 ContextPackageBuildResult（保持现有 DTO 兼容）
-///   7. ContextDecisionProjector.ProjectFromEnvelopes 投影为 ContextDecisionRecord
-///   8. 不破坏现有 ProjectPackage / ProjectRetrieval 路径（向后兼容）
-///   9. 幂等性：相同 Request 产生相同 Result
-///  10. Model failure 回退到 deterministic policy（验收标准 #6）
+/// 1. DefaultContextDecisionEngine 三阶段编排（safety gate → utility scoring → budget allocation）
+/// 2. mandatory 候选永远选入（不受 budget 限制）
+/// 3. safety gate 拦截的候选进入 DroppedEnvelopes
+/// 4. budget 超限候选进入 DroppedEnvelopes（带正确 ReasonCode）
+/// 5. RetrievalResultProjector 投影为 ContextRetrievalResult（保持现有 DTO 兼容）
+/// 6. PackageResultProjector 投影为 ContextPackageBuildResult（保持现有 DTO 兼容）
+/// 7. ContextDecisionProjector.ProjectFromEnvelopes 投影为 ContextDecisionRecord
+/// 8. 不破坏现有 ProjectPackage / ProjectRetrieval 路径（向后兼容）
+/// 9. 幂等性：相同 Request 产生相同 Result
+/// 10. Model failure 回退到 deterministic policy（验收标准）
 /// </summary>
 [TestClass]
 [TestCategory("R18")]

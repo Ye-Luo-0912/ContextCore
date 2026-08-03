@@ -9,20 +9,20 @@ namespace ContextCore.Core.Services.Evolution;
 //
 // 算法（基于 Cormode et al. "DDSketch: A Fast and Fully-Mergeable
 // Quantile Sketch with Relative-Error Guarantees"）：
-//   1. 每个非负值 v 映射到 bucket index = ceil(log(v) / log(1 + α))，
-//      其中 α 为相对误差（如 0.01 表示 1% 相对误差）。
-//   2. 每个 bucket 维护一个计数（落入该 bucket 的样本数）。
-//   3. 分位数查询（如 P95）：按 bucket index 升序遍历，累积计数，
-//      达到目标 quantile × total_count 时返回该 bucket 的代表值。
-//   4. 代表值取 bucket 下界（保守估计；真值落在 [bucket_lower, bucket_lower × (1 + α)]）。
+// 1. 每个非负值 v 映射到 bucket index = ceil(log(v) / log(1 + α))，
+// 其中 α 为相对误差（如 0.01 表示 1% 相对误差）。
+// 2. 每个 bucket 维护一个计数（落入该 bucket 的样本数）。
+// 3. 分位数查询（如 P95）：按 bucket index 升序遍历，累积计数，
+// 达到目标 quantile × total_count 时返回该 bucket 的代表值。
+// 4. 代表值取 bucket 下界（保守估计；真值落在 [bucket_lower, bucket_lower × (1 + α)]）。
 //
 // 设计权衡：
-//   - 使用 Dictionary<int, long> 稀疏存储 bucket（典型延迟分布仅几十个 bucket）。
-//   - 排序仅在查询时进行（O(b log b)，b 通常 < 100）。
-//   - P10 修复：支持 MergeFrom（跨实例 DDSketch 合并）与 Serialize/Deserialize（持久化到 bytea）。
-//   - 仅支持非负值（延迟 ms 不会为负）。
-//   - 容量上限：超过 maxBuckets（默认 4096）时拒绝新 bucket，避免极端值炸桶。
-//     此时退化精度但仍可查询（极端长尾值会被合并到最末 bucket）。
+// - 使用 Dictionary<int, long> 稀疏存储 bucket（典型延迟分布仅几十个 bucket）。
+// - 排序仅在查询时进行（O(b log b)，b 通常 < 100）。
+// - 修复：支持 MergeFrom（跨实例 DDSketch 合并）与 Serialize/Deserialize（持久化到 bytea）。
+// - 仅支持非负值（延迟 ms 不会为负）。
+// - 容量上限：超过 maxBuckets（默认 4096）时拒绝新 bucket，避免极端值炸桶。
+// 此时退化精度但仍可查询（极端长尾值会被合并到最末 bucket）。
 // ===========================================================================
 
 /// <summary>
@@ -218,7 +218,7 @@ public sealed class DDSketch
     /// <remarks>
     /// 格式（小端序）：
     /// <code>
-    /// [1 byte:  format version = 1]
+    /// [1 byte: format version = 1]
     /// [8 bytes: relativeAccuracy (double)]
     /// [8 bytes: totalCount (long)]
     /// [8 bytes: min (double)]

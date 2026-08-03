@@ -309,7 +309,7 @@ public sealed class LlmContextCompressor : IContextCompressor
         };
     }
 
-    /// <summary>构建压缩输出与来源内容的证据绑定记录（§6.2）。</summary>
+    /// <summary>构建压缩输出与来源内容的证据绑定记录。</summary>
     private static CompressionEvidenceBinding BuildEvidenceBinding(
         CompressionRequest request,
         CompressionResponse response,

@@ -12,23 +12,23 @@ namespace ContextCore.IntegrationTests;
 // 目标：补齐现有 4 个 E2E 测试的缺口——通过真实 HTTP API（而非直接构造 Actor/Store）
 // 验证完整 ASP.NET Core 主机 + 真实 PostgreSQL 后端的端到端可用性。
 //
-// 与现有 R29H_ProductionEvidenceE2ETests 的区别：
-//   - 现有测试直接构造 AgentRunActor / PostgresAgentRunStore，绕过 HTTP 层与 DI 容器。
-//   - 本测试通过 WebApplicationFactory<Program> 启动真实 Web 主机，用 HttpClient 调用 API，
-//     验证：HTTP 路由 → 模型绑定 → DI 解析 → 真实 PG 存储 → HTTP 响应序列化 的完整链路。
+// 与既有 Production Evidence E2E 测试的区别：
+// - 现有测试直接构造 AgentRunActor / PostgresAgentRunStore，绕过 HTTP 层与 DI 容器。
+// - 本测试通过 WebApplicationFactory<Program> 启动真实 Web 主机，用 HttpClient 调用 API，
+// 验证：HTTP 路由 → 模型绑定 → DI 解析 → 真实 PG 存储 → HTTP 响应序列化 的完整链路。
 //
 // 测试覆盖：
-//   1. E2E_Http_HealthEndpoints_ReturnOk — /health 与 /api/health/live 就绪探针
-//   2. E2E_Http_CreateRun_PersistsToPostgres — POST /api/agents/runs 持久化到真实 PG
-//   3. E2E_Http_CreateRun_IdempotencyKey_Dedup — 幂等键去重（P1-5 契约）
-//   4. E2E_Http_GetRunStatus_RoundTrip — GET /api/agents/runs/{id} 状态往返
-//   5. E2E_Http_Sse_EventsStream_PersistentSubscription — SSE 持久订阅（Perf-6）
+// 1. E2E_Http_HealthEndpoints_ReturnOk — /health 与 /api/health/live 就绪探针
+// 2. E2E_Http_CreateRun_PersistsToPostgres — POST /api/agents/runs 持久化到真实 PG
+// 3. E2E_Http_CreateRun_IdempotencyKey_Dedup — 幂等键去重
+// 4. E2E_Http_GetRunStatus_RoundTrip — GET /api/agents/runs/{id} 状态往返
+// 5. E2E_Http_Sse_EventsStream_PersistentSubscription — SSE 持久订阅（Perf-6）
 //
 // 设计原则：
-//   - 使用 PostgresE2EFixture 共享 PG 容器（消除样板代码）。
-//   - 使用 ProductionEvidenceWebFactory 启动真实 Web 主机（真实 PG + 完整 DI）。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过（不证明生产证据通过）。
-//   - 每个测试使用独立 tablePrefix 避免数据交叉污染。
+// - 使用 PostgresE2EFixture 共享 PG 容器（消除样板代码）。
+// - 使用 ProductionEvidenceWebFactory 启动真实 Web 主机（真实 PG + 完整 DI）。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过（不证明生产证据通过）。
+// - 每个测试使用独立 tablePrefix 避免数据交叉污染。
 // ===========================================================================
 
 [TestClass]

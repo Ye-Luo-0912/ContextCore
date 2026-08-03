@@ -161,7 +161,7 @@ public sealed class StoreRuntimeCapabilitiesTests
 
     /// <summary>
     /// 能力字段组合验证：FileSystem 不支持事务 + 不支持跨进程 → 应被调用方识别为"仅单进程一致"。
-    /// 这是 R13.3 #2（batch size / max concurrency / parallel read safety / consistency / transaction support）的输入。
+    /// 这是 batch size / max concurrency / parallel read safety / consistency / transaction support 能力的输入。
     /// </summary>
     [TestMethod]
     public void FileSystem_ConsistencyCapabilities_CorrectForSingleProcessUse()

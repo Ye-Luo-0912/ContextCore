@@ -18,9 +18,9 @@ namespace ContextCore.ModelGateway.Infrastructure;
 /// 模型若决定调用 Tool，应在响应内容中产出如下 JSON（可被 ```json 代码块包裹）：
 /// <code>
 /// {
-///   "tool_calls": [
-///     { "id": "call_1", "name": "search", "arguments": { "query": "..." } }
-///   ]
+/// "tool_calls": [
+/// { "id": "call_1", "name": "search", "arguments": { "query": "..." } }
+/// ]
 /// }
 /// </code>
 /// 解析成功 → <see cref="ModelChatFinishReason.ToolCalls"/>；失败 → <see cref="ModelChatFinishReason.Stop"/> + 原始文本。

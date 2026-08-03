@@ -8,18 +8,18 @@ namespace ContextCore.Tests;
 /// DefaultBoundedContextOrchestrator 实现测试。
 ///
 /// 覆盖：
-///   1. null 输入处理（decision/qualityReport/budget）
-///   2. CancellationToken 传递
-///   3. 无异常检测到 → WasRepaired=false，不调用 executor
-///   4. 异常检测到但预算全 0 → WasRepaired=false，不调用 executor
-///   5. 异常检测到 + 预算允许 → 调用 executor 一次（仅取第一条 Diagnosis）
-///   6. Executor 返回 WasRepaired=true → FinalDecision=RepairedDecision
-///   7. Executor 返回 WasRepaired=false → FinalDecision=原始（不变）
-///   8. FinalQualityReport 映射逻辑（repaired/response null/未修复）
-///   9. 多异常只触发一次修复（仅第一条 Diagnosis）
-///  10. Duration / OrchestrationId / IsSuccess 字段验证
-///  11. Detector 和 Executor 接收正确的输入参数
-///  12. CancellationToken 传递到 detector 和 executor
+/// 1. null 输入处理（decision/qualityReport/budget）
+/// 2. CancellationToken 传递
+/// 3. 无异常检测到 → WasRepaired=false，不调用 executor
+/// 4. 异常检测到但预算全 0 → WasRepaired=false，不调用 executor
+/// 5. 异常检测到 + 预算允许 → 调用 executor 一次（仅取第一条 Diagnosis）
+/// 6. Executor 返回 WasRepaired=true → FinalDecision=RepairedDecision
+/// 7. Executor 返回 WasRepaired=false → FinalDecision=原始（不变）
+/// 8. FinalQualityReport 映射逻辑（repaired/response null/未修复）
+/// 9. 多异常只触发一次修复（仅第一条 Diagnosis）
+/// 10. Duration / OrchestrationId / IsSuccess 字段验证
+/// 11. Detector 和 Executor 接收正确的输入参数
+/// 12. CancellationToken 传递到 detector 和 executor
 /// </summary>
 [TestClass]
 [TestCategory("R22")]

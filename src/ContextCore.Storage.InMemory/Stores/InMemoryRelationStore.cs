@@ -267,7 +267,7 @@ public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
 
             // 方向匹配 + 桶分配
             // Both 方向：source 是种子入 source 桶；target 是种子入 target 桶；
-            //           self-loop（source==target 且是种子）只入一次（source 桶）。
+            // self-loop（source==target 且是种子）只入一次（source 桶）。
             var sourceIsSeed = seedSet.Contains(item.SourceId);
             var targetIsSeed = seedSet.Contains(item.TargetId);
             switch (query.Direction)

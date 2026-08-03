@@ -9,14 +9,14 @@ namespace ContextCore.Tests;
 /// Package 候选适配器验证。
 ///
 /// 验证目标：
-///   1. PackageTraceCandidate → ContextCandidateEnvelope 字段映射正确
-///   2. Kind 字符串 → ContextCandidateSource 枚举映射（含 raw/legacy/current_task 归并）
-///   3. ItemScoreBreakdown 13 个子分维度 → Features.ScoreBreakdown 字典
-///   4. Metadata lifecycleStatus 覆盖 Safety.LifecycleState
-///   5. hard_constraint kind → IsMandatory + IsHardConstraint
-///   6. 批量转换 + 整体 ToDecisionRequest
-///   7. 不破坏现有 PackageTraceCandidate 类型（仅做适配，不修改）
-///   8. 端到端：Package result → Adapter → Engine → Projector → Package DTO
+/// 1. PackageTraceCandidate → ContextCandidateEnvelope 字段映射正确
+/// 2. Kind 字符串 → ContextCandidateSource 枚举映射（含 raw/legacy/current_task 归并）
+/// 3. ItemScoreBreakdown 13 个子分维度 → Features.ScoreBreakdown 字典
+/// 4. Metadata lifecycleStatus 覆盖 Safety.LifecycleState
+/// 5. hard_constraint kind → IsMandatory + IsHardConstraint
+/// 6. 批量转换 + 整体 ToDecisionRequest
+/// 7. 不破坏现有 PackageTraceCandidate 类型（仅做适配，不修改）
+/// 8. 端到端：Package result → Adapter → Engine → Projector → Package DTO
 /// </summary>
 [TestClass]
 [TestCategory("R18")]

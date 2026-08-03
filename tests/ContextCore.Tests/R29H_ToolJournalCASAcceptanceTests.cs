@@ -8,14 +8,14 @@ namespace ContextCore.Tests;
 // Tool Journal CAS 严格状态机验收测试（3 项）
 //
 // 验证任务B 修复后的 Tool Journal 严格 expected-state CAS 语义：
-//   1. 状态转换不能跳过 Dispatched 状态（Prepared → Committed 禁止）
-//   2. 相同 RequestId 但不同 Payload 的重复 Prepare 请求会被拒绝（fails closed）
-//   3. 相同 IdempotencyKey 的重复 Prepare 返回原始操作状态（而非新执行）
+// 1. 状态转换不能跳过 Dispatched 状态（Prepared → Committed 禁止）
+// 2. 相同 RequestId 但不同 Payload 的重复 Prepare 请求会被拒绝（fails closed）
+// 3. 相同 IdempotencyKey 的重复 Prepare 返回原始操作状态（而非新执行）
 //
 // 设计原则：
-//   - 使用真实 InMemoryToolDispatchJournal（不 mock），验证实际行为
-//   - 所有异步测试使用超时 CancellationTokenSource 防止挂起
-//   - 中文注释
+// - 使用真实 InMemoryToolDispatchJournal（不 mock），验证实际行为
+// - 所有异步测试使用超时 CancellationTokenSource 防止挂起
+// - 中文注释
 // ===========================================================================
 
 [TestClass]
@@ -41,7 +41,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             cts.Token);
 
         // 2. 尝试直接 MarkCommittedAsync（跳过 MarkDispatchedAsync）→ 应抛 InvalidOperationException（InvalidTransition）
-        //    expected-state 精确匹配，禁止跨级跳跃
+        // expected-state 精确匹配，禁止跨级跳跃
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
             () => journal.MarkCommittedAsync(requestId, cts.Token).AsTask(),
             "Prepared → Committed 跨级跳跃必须被拒绝（InvalidTransition）。");
@@ -76,7 +76,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareAsync(originalEntry, cts.Token);
 
         // 2. 第二次 PrepareAsync（相同 RequestId，但 PayloadDigest = digest-B，IdempotencyKey = idem-conflicting）
-        //    语义等价校验失败 → 抛 InvalidOperationException（RequestIdReuseDetected）
+        // 语义等价校验失败 → 抛 InvalidOperationException（RequestIdReuseDetected）
         var conflictingEntry = BuildEntry(
             requestId,
             ToolDispatchState.Prepared,
@@ -87,7 +87,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             "相同 RequestId 但不同 PayloadDigest 的重复 Prepare 必须被拒绝（RequestIdReuseDetected）。");
 
         // 3. 验证原始记录未被覆盖
-        //    PayloadDigest 仍是 digest-A；IdempotencyKey 仍是 idem-original
+        // PayloadDigest 仍是 digest-A；IdempotencyKey 仍是 idem-original
         var stored = await journal.GetEntryAsync(requestId, cts.Token);
         Assert.IsNotNull(stored, "原始条目应仍存在（未被冲突请求覆盖）。");
         Assert.AreEqual(
@@ -131,13 +131,13 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         Assert.AreEqual("ext-op-1", entryAfterFirstRun.ExternalOperationId);
 
         // 2. 第二次 PrepareAsync（相同 IdempotencyKey + 相同语义字段）→ 幂等命中
-        //    PrepareAsync 语义：key 已存在且语义等价 → 不抛异常，不覆盖既有状态
+        // PrepareAsync 语义：key 已存在且语义等价 → 不抛异常，不覆盖既有状态
         await journal.PrepareAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, idempotencyKey: idempotencyKey, payloadDigest: "digest-shared"),
             cts.Token);
 
         // 3. 验证返回的是原始操作的状态（Committed，未被重置为 Prepared）
-        //    说明：PrepareAsync 重复时不重置状态，原始操作推进的 Committed 状态被保留
+        // 说明：PrepareAsync 重复时不重置状态，原始操作推进的 Committed 状态被保留
         var entryAfterSecondPrepare = await journal.GetEntryAsync(requestId, cts.Token);
         Assert.IsNotNull(entryAfterSecondPrepare, "条目应仍存在。");
         Assert.AreEqual(
@@ -150,7 +150,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             "ExternalOperationId 应保留原始操作的值（未被覆盖为新操作）。");
 
         // 4. 二次 MarkDispatchedAsync 也应幂等命中（AlreadyApplied，不抛异常）
-        //    说明状态机不会重复推进
+        // 说明状态机不会重复推进
         await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-should-be-ignored", cancellationToken: cts.Token);
         var entryAfterSecondMark = await journal.GetEntryAsync(requestId, cts.Token);
         Assert.IsNotNull(entryAfterSecondMark);

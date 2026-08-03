@@ -6,15 +6,15 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// Agent Run 恢复 fail-closed（P0-10）—— 恢复失败状态 + 哈希重算 + 不回退全新启动
+// Agent Run 恢复 fail-closed—— 恢复失败状态 + 哈希重算 + 不回退全新启动
 //
 // 覆盖范围：
-//   RecoveryCorrupted：事件 ContentHash 重算不匹配 → 标记 RecoveryCorrupted（不重放 RunCreated）；
-//   RecoveryDependencyUnavailable：事件存储读取失败 → 标记 RecoveryDependencyUnavailable；
-//   RecoveryBlocked：非 Created 状态但事件流为空（数据丢失）→ 标记 RecoveryBlocked；
-//   Created + 零事件：仍走全新启动路径（无回归）；
-//   状态机：RecoveryBlocked / RecoveryCorrupted 为终态、RecoveryDependencyUnavailable 可重试
-//   （P2-4 退避重试），任意非终态可跳入恢复失败状态，终态不可跳出。
+// RecoveryCorrupted：事件 ContentHash 重算不匹配 → 标记 RecoveryCorrupted（不重放 RunCreated）；
+// RecoveryDependencyUnavailable：事件存储读取失败 → 标记 RecoveryDependencyUnavailable；
+// RecoveryBlocked：非 Created 状态但事件流为空（数据丢失）→ 标记 RecoveryBlocked；
+// Created + 零事件：仍走全新启动路径（无回归）；
+// 状态机：RecoveryBlocked / RecoveryCorrupted 为终态、RecoveryDependencyUnavailable 可重试
+// （退避重试），任意非终态可跳入恢复失败状态，终态不可跳出。
 // ===========================================================================
 
 [TestClass]
@@ -159,7 +159,7 @@ public sealed class R29H_AgentRunRecoveryFailClosedTests
     [TestMethod]
     public void StateMachine_RecoveryStates_AreTerminalAndReachableFromNonTerminal()
     {
-        // P2-4：RecoveryBlocked / RecoveryCorrupted（数据损坏）为终态；
+        // RecoveryBlocked / RecoveryCorrupted（数据损坏）为终态；
         // RecoveryDependencyUnavailable（依赖暂时不可用）不再是终态——退避重试，由恢复 Worker 重新入队。
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.RecoveryBlocked));
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.RecoveryCorrupted));
@@ -175,7 +175,7 @@ public sealed class R29H_AgentRunRecoveryFailClosedTests
         AgentRunStateMachine.ValidateTransition(AgentRunState.ToolDispatching, AgentRunState.RecoveryDependencyUnavailable);
         AgentRunStateMachine.ValidateTransition(AgentRunState.AwaitingApproval, AgentRunState.RecoveryBlocked);
 
-        // P2-4：RecoveryDependencyUnavailable → ContextBuilding 为合法前向流转（退避重试恢复执行）。
+        // RecoveryDependencyUnavailable → ContextBuilding 为合法前向流转（退避重试恢复执行）。
         AgentRunStateMachine.ValidateTransition(AgentRunState.RecoveryDependencyUnavailable, AgentRunState.ContextBuilding);
     }
 

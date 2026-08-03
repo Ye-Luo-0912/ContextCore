@@ -7,17 +7,17 @@ using Microsoft.Extensions.Logging;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-B Enqueue Timeout 验收测试
+// Enqueue Timeout 验收测试
 //
 // 验收："队列满时 HTTP 在确定时间内返回 202/429，不无限等待"。
 //
 // 覆盖：
-//   1. TryEnqueueAsync（HTTP 入口）：队列满立即返回 QueueFull（不等待槽位）；
-//   2. EnqueueAsync(timeout=0)：等价于非阻塞 TryEnqueueAsync（立即返回）；
-//   3. EnqueueAsync(timeout>0)：等待槽位最多 timeout，超时仍满 → QueueFull，
-//      且耗时在 [timeout 附近, 有限上界] 内（有界等待，绝不无限阻塞）；
-//   4. EnqueueAsync 槽位可得时正常 Accepted；
-//   5. Host 关闭后 EnqueueAsync 返回 Closed（不抛异常）。
+// 1. TryEnqueueAsync（HTTP 入口）：队列满立即返回 QueueFull（不等待槽位）；
+// 2. EnqueueAsync(timeout=0)：等价于非阻塞 TryEnqueueAsync（立即返回）；
+// 3. EnqueueAsync(timeout>0)：等待槽位最多 timeout，超时仍满 → QueueFull，
+// 且耗时在 [timeout 附近, 有限上界] 内（有界等待，绝不无限阻塞）；
+// 4. EnqueueAsync 槽位可得时正常 Accepted；
+// 5. Host 关闭后 EnqueueAsync 返回 Closed（不抛异常）。
 // ===========================================================================
 
 [TestClass]
@@ -188,7 +188,7 @@ public sealed class R30B_EnqueueTimeoutTests
         TurnBudget = new AgentTurnBudget { MaxTurns = 10, TurnsUsed = 0, MaxModelCalls = 10 }
     };
 
-    /// <summary>Host + Store + 阻塞 transport 的组合测试夹具（同 R29H_AgentRunSchedulerTests）。</summary>
+    /// <summary>Host + Store + 阻塞 transport 的组合测试夹具（同 AgentRun Scheduler 测试）。</summary>
     private sealed class Harness : IAsyncDisposable
     {
         private readonly BlockingModelTransport? _transport;
@@ -280,7 +280,7 @@ public sealed class R30B_EnqueueTimeoutTests
         }
     }
 
-    /// <summary>IAgentRunStore 包装（暴露 Inner 供事件流使用；同 R29H_AgentRunSchedulerTests）。</summary>
+    /// <summary>IAgentRunStore 包装（暴露 Inner 供事件流使用；同 AgentRun Scheduler 测试）。</summary>
     private sealed class AgentRunStoreWrapper : IAgentRunStore
     {
         public InMemoryAgentRunStore Inner { get; } = new();
@@ -308,7 +308,7 @@ public sealed class R30B_EnqueueTimeoutTests
             => Inner.ListByStateAsync(state, take, afterUpdatedAt, afterRunId, cancellationToken);
     }
 
-    /// <summary>transport stub：首次调用阻塞在 TCS，直到测试主动 Release（同 R29H_AgentRunSchedulerTests）。</summary>
+    /// <summary>transport stub：首次调用阻塞在 TCS，直到测试主动 Release（同 AgentRun Scheduler 测试）。</summary>
     private sealed class BlockingModelTransport : IAgentModelTransport
     {
         private readonly TaskCompletionSource<AgentModelResponse> _gate =

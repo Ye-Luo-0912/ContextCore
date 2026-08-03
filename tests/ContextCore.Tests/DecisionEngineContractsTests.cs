@@ -7,13 +7,13 @@ namespace ContextCore.Tests;
 /// 统一决策内核契约可实施性验证。
 ///
 /// 验证目标：
-///   1. ContextCandidateEnvelope + 4 个子 record 可正常构造（默认值 + with 表达式增强）
-///   2. ContextCandidateSource 枚举覆盖 R20 Expert 概念
-///   3. CandidateSafetyState 默认通过 safety gate（避免空构造误拦截）
-///   4. CandidateUtilityScore 默认 deterministic-only（ModelScore=null）
-///   5. EvidenceRef 可承载来源溯源链
-///   6. Envelope 不依赖现有 ContextRetrievalCandidate / ContextPackageDecision（独立契约）
-///   7. PolicyVersion 默认值 = ContextDecisionPolicyVersions.DecisionSchemaV2_0
+/// 1. ContextCandidateEnvelope + 4 个子 record 可正常构造（默认值 + with 表达式增强）
+/// 2. ContextCandidateSource 枚举覆盖 Expert 概念
+/// 3. CandidateSafetyState 默认通过 safety gate（避免空构造误拦截）
+/// 4. CandidateUtilityScore 默认 deterministic-only（ModelScore=null）
+/// 5. EvidenceRef 可承载来源溯源链
+/// 6. Envelope 不依赖现有 ContextRetrievalCandidate / ContextPackageDecision（独立契约）
+/// 7. PolicyVersion 默认值 = ContextDecisionPolicyVersions.DecisionSchemaV2_0
 /// </summary>
 [TestClass]
 [TestCategory("R18")]
@@ -116,7 +116,7 @@ public sealed class DecisionEngineContractsTests
     }
 
     // =========================================================================
-    // 2. ContextCandidateSource 枚举覆盖 R20 Expert 概念
+    // 2. ContextCandidateSource 枚举覆盖 Expert 概念
     // =========================================================================
 
     [TestMethod]
@@ -486,13 +486,13 @@ public sealed class DecisionEngineContractsTests
     }
 
     // =========================================================================
-    // 9. Model failure 回退路径（验收标准 #6）
+    // 9. Model failure 回退路径（验收标准）
     // =========================================================================
 
     [TestMethod]
     public void Envelope_ModelFailure_FallsBackToDeterministicPolicy()
     {
-        // 验收标准 #6：Model failure 时可精确回退到 deterministic policy
+        // 验收标准 ：Model failure 时可精确回退到 deterministic policy
         // 模拟：模型加载失败，ModelScore=null，ModelConfidence=0，FinalScore=DeterministicScore
         var envelopeWithModel = new ContextCandidateEnvelope
         {
@@ -544,13 +544,13 @@ public sealed class DecisionEngineContractsTests
     }
 
     // =========================================================================
-    // 10. 验收标准 #4：不引入存储 I/O
+    // 10. 验收标准 ：不引入存储 I/O
     // =========================================================================
 
     [TestMethod]
     public void Envelope_AndSubRecords_AreInMemoryOnly_NoStoreInterfaceDependencies()
     {
-        // 验收标准 #4：不新增存储 I/O
+        // 验收标准 ：不新增存储 I/O
         // 验证 envelope 契约不继承任何 IStore 接口
         var envelopeType = typeof(ContextCandidateEnvelope);
         var featureType = typeof(CandidateFeatureVector);

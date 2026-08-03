@@ -11,12 +11,12 @@ namespace ContextCore.IntegrationTests;
 /// PostgreSQL 关系写入 outbox 存储集成测试。
 /// 验证：
 /// <list type="bullet">
-///   <item>EnqueueAsync 与事务原子提交/回滚（scope-aware）。</item>
-///   <item>AcquirePendingAsync 使用 SELECT FOR UPDATE SKIP LOCKED——多 worker 并发无重复消费。</item>
-///   <item>Stale lease（Dispatched + lease 过期）可被 AcquirePendingAsync 抢占恢复。</item>
-///   <item>MarkAppliedAsync / MarkFailedAsync CAS 语义——仅 Dispatched 状态可转换。</item>
-///   <item>MarkFailedAsync retry_count +1 → 未超限时回退 Pending；超限时转 Failed。</item>
-///   <item>RenewHeartbeatAsync 仅对 lease_owner 匹配的 Dispatched 记录续约成功。</item>
+/// <item>EnqueueAsync 与事务原子提交/回滚（scope-aware）。</item>
+/// <item>AcquirePendingAsync 使用 SELECT FOR UPDATE SKIP LOCKED——多 worker 并发无重复消费。</item>
+/// <item>Stale lease（Dispatched + lease 过期）可被 AcquirePendingAsync 抢占恢复。</item>
+/// <item>MarkAppliedAsync / MarkFailedAsync CAS 语义——仅 Dispatched 状态可转换。</item>
+/// <item>MarkFailedAsync retry_count +1 → 未超限时回退 Pending；超限时转 Failed。</item>
+/// <item>RenewHeartbeatAsync 仅对 lease_owner 匹配的 Dispatched 记录续约成功。</item>
 /// </list>
 /// 使用 Testcontainers 启动临时 Postgres 实例；无 Docker 时所有测试标记为 Inconclusive。
 /// </summary>

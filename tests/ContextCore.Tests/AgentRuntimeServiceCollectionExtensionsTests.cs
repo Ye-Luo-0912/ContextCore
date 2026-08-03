@@ -9,17 +9,17 @@ namespace ContextCore.Tests;
 /// AgentRuntimeServiceCollectionExtensions DI 测试。
 ///
 /// 覆盖：
-///   1. AddAgentRuntimeRegistry 注册 IAgentRuntimeRegistry
-///   2. AddGenericToolAgentRuntime 注册 IAgentRuntime + GenericToolAgentAdapter
-///   3. AddCodexAgentRuntime 注册 IAgentRuntime + CodexAgentRuntimeAdapter
-///   4. AddClaudeCodeAgentRuntime 注册 IAgentRuntime + ClaudeCodeAgentRuntimeAdapter
-///   5. AddAgentWorkspaceContextProvider 注册 IAgentWorkspaceContextProvider
-///   6. AddAgentWorkspaceContextProvider 未注册 runtime 抛异常
-///   7. AddAgentContextDeltaCalculator 注册 IAgentContextDeltaCalculator
-///   8. AddInMemoryAgentCheckpointStore 注册 IAgentCheckpointStore
-///   9. AddAgentRuntimeDefaults 一键注册全部
-///  10. null services 抛异常
-///  11. 多次注册不冲突
+/// 1. AddAgentRuntimeRegistry 注册 IAgentRuntimeRegistry
+/// 2. AddGenericToolAgentRuntime 注册 IAgentRuntime + GenericToolAgentAdapter
+/// 3. AddCodexAgentRuntime 注册 IAgentRuntime + CodexAgentRuntimeAdapter
+/// 4. AddClaudeCodeAgentRuntime 注册 IAgentRuntime + ClaudeCodeAgentRuntimeAdapter
+/// 5. AddAgentWorkspaceContextProvider 注册 IAgentWorkspaceContextProvider
+/// 6. AddAgentWorkspaceContextProvider 未注册 runtime 抛异常
+/// 7. AddAgentContextDeltaCalculator 注册 IAgentContextDeltaCalculator
+/// 8. AddInMemoryAgentCheckpointStore 注册 IAgentCheckpointStore
+/// 9. AddAgentRuntimeDefaults 一键注册全部
+/// 10. null services 抛异常
+/// 11. 多次注册不冲突
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

@@ -8,11 +8,11 @@ namespace ContextCore.Storage.InMemory.Stores;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 与 PostgresModelArtifactRegistry 实现同一契约，让 FileSystem / InMemory provider
-///      下的 Model Control Plane API 仍可注册与查询模型工件描述符（注册数据在进程重启后丢失）。
-///   2. 同一 ModelArtifactId 仅允许注册一次（与 Postgres ON CONFLICT DO NOTHING → 抛异常语义一致）。
-///   3. GetLatestAsync / ListByVersionAsync 通过 ModelName 字段过滤；按 RegisteredAt 倒序 / 升序排序。
-///   4. 线程安全：使用 ConcurrentDictionary 存储，ConcurrentBag 仅用于列举。
+/// 1. 与 PostgresModelArtifactRegistry 实现同一契约，让 FileSystem / InMemory provider
+/// 下的 Model Control Plane API 仍可注册与查询模型工件描述符（注册数据在进程重启后丢失）。
+/// 2. 同一 ModelArtifactId 仅允许注册一次（与 Postgres ON CONFLICT DO NOTHING → 抛异常语义一致）。
+/// 3. GetLatestAsync / ListByVersionAsync 通过 ModelName 字段过滤；按 RegisteredAt 倒序 / 升序排序。
+/// 4. 线程安全：使用 ConcurrentDictionary 存储，ConcurrentBag 仅用于列举。
 /// </remarks>
 public sealed class InMemoryModelArtifactRegistry : IModelArtifactRegistry
 {

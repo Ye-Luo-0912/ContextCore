@@ -263,7 +263,7 @@ internal sealed class PackageTraceRecorder
         }
         catch (Exception ex)
         {
-            /* field mapping failure must not affect main flow */
+ /* field mapping failure must not affect main flow */
             Interlocked.Increment(ref _traceMapFailures);
             _lastFailureAt = DateTimeOffset.UtcNow;
             _lastFailureCategory = ex.GetType().Name;
@@ -276,7 +276,7 @@ internal sealed class PackageTraceRecorder
         }
         catch (Exception ex)
         {
-            /* sink write failure must not affect main flow */
+ /* sink write failure must not affect main flow */
             Interlocked.Increment(ref _traceSinkWriteFailures);
             _lastFailureAt = DateTimeOffset.UtcNow;
             _lastFailureCategory = ex.GetType().Name;

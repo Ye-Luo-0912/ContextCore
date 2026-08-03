@@ -6,12 +6,12 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 // InMemoryAgentCheckpointStore — Agent checkpoint 内存存储实现。
 //
-// 目标（对齐 R23 规格）：
-//   1. 实现 IAgentCheckpointStore 的 4 个方法（Save / Get / List / Delete）。
-//   2. 仅 in-memory；进程重启后丢失；生产实现应替换为基于 Postgres 的 store。
-//   3. 线程安全：ConcurrentDictionary + 按 session 维度分组查询。
-//   4. P0-6 修复：主键改为 (workspace_id, checkpoint_id) 复合键，
-//      GetAsync / DeleteAsync 必须同时传入 workspaceId 以保证跨 workspace 隔离。
+// 目标（对齐规格）：
+// 1. 实现 IAgentCheckpointStore 的 4 个方法（Save / Get / List / Delete）。
+// 2. 仅 in-memory；进程重启后丢失；生产实现应替换为基于 Postgres 的 store。
+// 3. 线程安全：ConcurrentDictionary + 按 session 维度分组查询。
+// 4. 修复：主键改为 (workspace_id, checkpoint_id) 复合键，
+// GetAsync / DeleteAsync 必须同时传入 workspaceId 以保证跨 workspace 隔离。
 // ===========================================================================
 
 /// <summary>

@@ -19,22 +19,22 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-R30.1-F Production Evidence 与性能门禁验收测试
+// WP- Production Evidence 与性能门禁验收测试
 //
 // 验证生产证据链的"强制层"完整可用（纯文件结构验证，不实际运行 CI）：
-//   1. appsettings.Postgres.sample.json 采用新 "Storage" 配置形状（postgres 生产直配）；
-//   2. ci.yml evidence job 在门禁前固化 TRX 清单（write-trx-manifest.py），
-//      gate-evidence.py 以 --trx-manifest 做清单与被门禁 TRX 集的一致性校验；
-//   3. .github/settings.yml 声明 main 分支保护（唯一必查 check = evidence），
-//      scripts/assert-branch-protection.py 逐行校验该声明；
-//   4. 生产端到端：真实 Postgres（Testcontainers）组合根下 Selected 关系水合
-//      走批量存储路径（relation-hydration-store）；filesystem 提供者下经真实
-//      HTTP 端点（POST /api/relations/hydration）完成水合并返回完整证据。
+// 1. appsettings.Postgres.sample.json 采用新 "Storage" 配置形状（postgres 生产直配）；
+// 2. ci.yml evidence job 在门禁前固化 TRX 清单（write-trx-manifest.py），
+// gate-evidence.py 以 --trx-manifest 做清单与被门禁 TRX 集的一致性校验；
+// 3. .github/settings.yml 声明 main 分支保护（唯一必查 check = evidence），
+// scripts/assert-branch-protection.py 逐行校验该声明；
+// 4. 生产端到端：真实 Postgres（Testcontainers）组合根下 Selected 关系水合
+// 走批量存储路径（relation-hydration-store）；filesystem 提供者下经真实
+// HTTP 端点（POST /api/relations/hydration）完成水合并返回完整证据。
 //
 // 设计原则：
-//   - 纯文件结构验证复用 R29H_CiEvidenceAcceptanceTests 的 FindRepoRoot() 模式；
-//   - Postgres 集成测试复用 R29H_ProductionHACompositionRootTests 的
-//     Testcontainers + 正式组合根模式（Docker 不可用时 Inconclusive 跳过）。
+// - 纯文件结构验证复用既有 CI 证据验收测试的 FindRepoRoot() 模式；
+// - Postgres 集成测试复用 Production HA 组合根测试的
+// Testcontainers + 正式组合根模式（Docker 不可用时 Inconclusive 跳过）。
 // ===========================================================================
 
 [TestClass]
@@ -336,7 +336,7 @@ public sealed class R30F_ProductionEvidenceTests
     }
 
     // =======================================================================
-    // 组合根构建（与 R29H_ProductionHACompositionRootTests 相同的 ProductionHA 组合路径）
+    // 组合根构建（与 Production HA 组合根测试相同的组合路径）
     // =======================================================================
     private static ServiceProvider BuildProductionHAComposition(
         PostgreSqlContainer container,
@@ -469,7 +469,7 @@ public sealed class R30F_ProductionEvidenceTests
     }
 
     // =======================================================================
-    // 辅助：定位 repo root（参考 R29H_CiEvidenceAcceptanceTests.FindRepoRoot）
+    // 辅助：定位 repo root（参考既有 FindRepoRoot 模式）
     // =======================================================================
     private static string FindRepoRoot()
     {

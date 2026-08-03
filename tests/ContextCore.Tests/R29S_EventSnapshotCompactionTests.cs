@@ -9,8 +9,8 @@ namespace ContextCore.Tests;
 /// Agent Run 事件流快照与压缩（Event Snapshot &amp; Compaction）验收测试。
 ///
 /// 覆盖：
-///   1. Schema 迁移验证：v54 版本 + agent_run_event_snapshots / agent_run_events_archive 新表定义存在
-///   2. ComputeFold 纯函数：前缀折叠 / 钳制 / 空流防御 / 乱序输入稳定排序
+/// 1. Schema 迁移验证：v54 版本 + agent_run_event_snapshots / agent_run_events_archive 新表定义存在
+/// 2. ComputeFold 纯函数：前缀折叠 / 钳制 / 空流防御 / 乱序输入稳定排序
 ///
 /// 不连接真实 PostgreSQL 数据库；端到端持久化语义（事务归档 / 热表删除 / 快照 UPSERT）
 /// 由 ContextCore.IntegrationTests 覆盖（需 Testcontainers），与 PostgresAgentRunEventStore

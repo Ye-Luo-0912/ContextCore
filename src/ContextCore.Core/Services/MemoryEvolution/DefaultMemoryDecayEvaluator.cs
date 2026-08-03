@@ -7,23 +7,23 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// </summary>
 /// <remarks>
 /// 降权因素优先级（高 → 低）：
-///   1. EvidenceInvalid → Rejected（evidence 失效）
-///   2. ConflictWithCurrent → Rejected（与当前状态冲突）
-///   3. NewVersionAvailable → Superseded（已有新版本）
-///   4. TaskCompleted → Archived（任务已完成）
-///   5. NoEffectiveContribution → Cooling（多次选择但无有效贡献）
-///   6. LongTermNoHit → Cooling/Dormant/Archived（长期未命中，按未命中时长决定）
+/// 1. EvidenceInvalid → Rejected（evidence 失效）
+/// 2. ConflictWithCurrent → Rejected（与当前状态冲突）
+/// 3. NewVersionAvailable → Superseded（已有新版本）
+/// 4. TaskCompleted → Archived（任务已完成）
+/// 5. NoEffectiveContribution → Cooling（多次选择但无有效贡献）
+/// 6. LongTermNoHit → Cooling/Dormant/Archived（长期未命中，按未命中时长决定）
 ///
 /// 阈值参数（可通过构造函数配置）：
-///   - CoolingThreshold：长期未命中 → Cooling 的阈值（默认 7 天）
-///   - DormantThreshold：Cooling → Dormant 的阈值（默认 30 天）
-///   - ArchiveThreshold：Dormant → Archived 的阈值（默认 90 天）
-///   - NoContributionSelectionThreshold：NoEffectiveContribution 触发的最小选择次数（默认 5 次）
-///   - NoContributionUsefulThreshold：NoEffectiveContribution 触发的最大有效贡献次数（默认 0 次）
+/// - CoolingThreshold：长期未命中 → Cooling 的阈值（默认 7 天）
+/// - DormantThreshold：Cooling → Dormant 的阈值（默认 30 天）
+/// - ArchiveThreshold：Dormant → Archived 的阈值（默认 90 天）
+/// - NoContributionSelectionThreshold：NoEffectiveContribution 触发的最小选择次数（默认 5 次）
+/// - NoContributionUsefulThreshold：NoEffectiveContribution 触发的最大有效贡献次数（默认 0 次）
 ///
 /// 状态机合法性：
-///   - 若当前状态不允许转换到目标状态（CanTransitionTo 返回 false），返回 TargetState = CurrentState。
-///   - 已是终态（Archived）的 item 不评估降权。
+/// - 若当前状态不允许转换到目标状态（CanTransitionTo 返回 false），返回 TargetState = CurrentState。
+/// - 已是终态（Archived）的 item 不评估降权。
 /// </remarks>
 public sealed class DefaultMemoryDecayEvaluator : IMemoryDecayEvaluator
 {

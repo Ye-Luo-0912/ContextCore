@@ -13,7 +13,7 @@ using ContextCore.Evaluation.Models;
 namespace ContextCore.Evaluation.Runners;
 
 /// <summary>
-/// 专项检索评测运行器（A5 §7.1）。
+/// 专项检索评测运行器。
 /// 使用真实 OnnxEmbeddingProvider（非 Mock），测量 bge-small-zh-v1.5 语义向量召回质量。
 /// 支持五个测试维度：向量语义召回、关键词精确召回、废弃项过滤、关系扩展、跨层检索。
 /// </summary>

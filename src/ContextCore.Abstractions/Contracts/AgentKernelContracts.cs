@@ -7,16 +7,16 @@ namespace ContextCore.Abstractions;
 // Tool Dispatch 与 Agent Checkpoint 契约
 //
 // 历史：本文件原为旧 Agent Kernel 契约（IAgentKernel / IAgentKernelTransport /
-//   IDurableTransport / IKernelResultOutbox 等旧指令平面契约）。执行平面已收敛到
-//   AgentRunStore → AgentKernelHost → AgentRunActor 单一平面，旧平面契约已删除
-//   （删除双执行平面）。
+// IDurableTransport / IKernelResultOutbox 等旧指令平面契约）。执行平面已收敛到
+// AgentRunStore → AgentKernelHost → AgentRunActor 单一平面，旧平面契约已删除
+// （删除双执行平面）。
 //
 // 当前保留：
-//   1. Tool Dispatch 契约（IToolDispatcher / IToolCatalog / IToolDispatchJournal /
-//      IDurableToolResultStore / ToolDispatchState 状态机等）——
-//      由 IDurableToolExecutor / AgentRunActor / RealToolDispatcher 使用。
-//   2. Agent Checkpoint 契约（IAgentCheckpointFactory / IPersistentAgentCheckpointStore）——
-//      由 AgentRunActor 的 checkpoint 持久化与 PostgresAgentCheckpointStore 使用。
+// 1. Tool Dispatch 契约（IToolDispatcher / IToolCatalog / IToolDispatchJournal /
+// IDurableToolResultStore / ToolDispatchState 状态机等）——
+// 由 IDurableToolExecutor / AgentRunActor / RealToolDispatcher 使用。
+// 2. Agent Checkpoint 契约（IAgentCheckpointFactory / IPersistentAgentCheckpointStore）——
+// 由 AgentRunActor 的 checkpoint 持久化与 PostgresAgentCheckpointStore 使用。
 // ===========================================================================
 
 /// <summary>
@@ -704,25 +704,25 @@ public sealed record ToolDispatchResult
 /// </summary>
 /// <remarks>
 /// 状态流转（不可逆，只能向前）：
-///   <see cref="Prepared"/> → <see cref="DispatchingIntent"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
+/// <see cref="Prepared"/> → <see cref="DispatchingIntent"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
 ///
 /// DispatchingIntent 外部副作用边界</b>。
 /// <see cref="DispatchingIntent"/> 在外部 Tool 调用发起<b>前</b>持久化，创建一个 durable 边界：
 /// 若进程在此之后崩溃，恢复时知道外部调用可能已开始。
 ///
 /// 恢复语义：
-///   - 无 journal 记录 → 安全重新执行（tool 从未被调用）。
-///   - <see cref="Prepared"/>（无 DispatchingIntent）→ 安全重新执行（tool 未真正调用）。
-///   - <see cref="DispatchingIntent"/> → <b>模糊状态</b>：外部调用可能已开始但未完成，
-///     需按 <see cref="ToolDescriptor.RecoveryStrategy"/> 决定（SafeReplay 重放 / UseCachedResult 查缓存 / 其他对账）。
-///   - <see cref="Dispatched"/> 但未 <see cref="Committed"/> → <b>模糊状态</b>：tool 可能已成功执行外部副作用，
-///     需调用方查询外部系统或人工裁决；不可盲目重新执行。
-///   - <see cref="Reconciling"/> → 对账进行中：外部副作用真相正在确认（以
-///     <see cref="ExternalOperationId"/> 查询外部系统 / 人工裁决），确认后经
-///     <see cref="IToolDispatchJournal.MarkReconciledWithResultAsync"/> 提交到
-///     <see cref="Committed"/>；对账未完成前绝不静默重放。
-///   - <see cref="Committed"/> 但未 <see cref="ResultDelivered"/> → 结果已持久化，可安全重发。
-///   - <see cref="ResultDelivered"/> → 完全完成，无需任何动作。
+/// - 无 journal 记录 → 安全重新执行（tool 从未被调用）。
+/// - <see cref="Prepared"/>（无 DispatchingIntent）→ 安全重新执行（tool 未真正调用）。
+/// - <see cref="DispatchingIntent"/> → <b>模糊状态</b>：外部调用可能已开始但未完成，
+/// 需按 <see cref="ToolDescriptor.RecoveryStrategy"/> 决定（SafeReplay 重放 / UseCachedResult 查缓存 / 其他对账）。
+/// - <see cref="Dispatched"/> 但未 <see cref="Committed"/> → <b>模糊状态</b>：tool 可能已成功执行外部副作用，
+/// 需调用方查询外部系统或人工裁决；不可盲目重新执行。
+/// - <see cref="Reconciling"/> → 对账进行中：外部副作用真相正在确认（以
+/// <see cref="ExternalOperationId"/> 查询外部系统 / 人工裁决），确认后经
+/// <see cref="IToolDispatchJournal.MarkReconciledWithResultAsync"/> 提交到
+/// <see cref="Committed"/>；对账未完成前绝不静默重放。
+/// - <see cref="Committed"/> 但未 <see cref="ResultDelivered"/> → 结果已持久化，可安全重发。
+/// - <see cref="ResultDelivered"/> → 完全完成，无需任何动作。
 ///
 /// <b>注意</b>：<see cref="DispatchingIntent"/> 使用数值 4（而非 1），
 /// 以避免破坏数据库中已有的 Dispatched=1 / Committed=2 / ResultDelivered=3 的 byte 映射。
@@ -902,7 +902,7 @@ public sealed record DurableToolResult
 public interface IDurableToolResultStore
 {
     // 旧方法（按 tool_call_id）保留兼容但已过时——tool_call_id 不保证跨 Run/Provider 唯一，
-    //       不能作为主键。新代码应使用 GetByRequestIdAsync / SaveByRequestIdAsync（按稳定 request_id）。
+    // 不能作为主键。新代码应使用 GetByRequestIdAsync / SaveByRequestIdAsync（按稳定 request_id）。
 
     /// <summary>
     /// 按 toolCallId 获取缓存结果（旧路径，已过时）。
@@ -1025,23 +1025,23 @@ public sealed record ToolDispatchPrepareResult
 /// 不保证崩溃恢复的 exactly-once。生产部署应注入持久化实现（如基于 DB/WAL 的 journal）。
 ///
 /// Journal 写入顺序（与 <see cref="ContextCore.Core.Services.AgentRunRuntime.DefaultDurableToolExecutor"/> 调用点对应）：
-///   1. <see cref="PrepareWithIntentAsync"/>（Prepare + 前置 Intent 单次原子写）：
-///      在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。也可用
-///      <see cref="PrepareAsync"/> + <see cref="MarkDispatchingIntentAsync"/> 两步完成等价流程。
-///   2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
-///   3. <see cref="MarkCommittedAsync"/>：结果写入 durable result store 后。
-///   4. <see cref="MarkResultDeliveredAsync"/>：结果成功送达后。
+/// 1. <see cref="PrepareWithIntentAsync"/>（Prepare + 前置 Intent 单次原子写）：
+/// 在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。也可用
+/// <see cref="PrepareAsync"/> + <see cref="MarkDispatchingIntentAsync"/> 两步完成等价流程。
+/// 2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
+/// 3. <see cref="MarkCommittedAsync"/>：结果写入 durable result store 后。
+/// 4. <see cref="MarkResultDeliveredAsync"/>：结果成功送达后。
 ///
 /// <b>expected-state 精确匹配（state = @expected）</b>。
 /// Mark* 方法使用精确前驱状态 CAS 推进状态机（而非旧版 <c>state &lt; @target</c> 宽松匹配），
 /// <b>不自动创建 stub 条目</b>，且<b>禁止跨级跳跃</b>（如 Prepared → Committed）：
 /// <list type="bullet">
-///   <item>当前 state = expected（精确前驱） → 成功前向推进（Applied）。</item>
-///   <item>当前 state = target（已到达目标） → 幂等成功（AlreadyApplied），不报错。</item>
-///   <item>当前 state &gt; target（已超过目标） → 幂等成功（AlreadyAdvanced），不报错。</item>
-///   <item>当前 state &lt; expected（缺失中间状态，跨级跳跃） → 抛 <see cref="InvalidOperationException"/>（InvalidTransition）。</item>
-///   <item>request_id 不存在（缺失前驱记录） → 抛 <see cref="InvalidOperationException"/>（MissingPredecessor），
-///     而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
+/// <item>当前 state = expected（精确前驱） → 成功前向推进（Applied）。</item>
+/// <item>当前 state = target（已到达目标） → 幂等成功（AlreadyApplied），不报错。</item>
+/// <item>当前 state &gt; target（已超过目标） → 幂等成功（AlreadyAdvanced），不报错。</item>
+/// <item>当前 state &lt; expected（缺失中间状态，跨级跳跃） → 抛 <see cref="InvalidOperationException"/>（InvalidTransition）。</item>
+/// <item>request_id 不存在（缺失前驱记录） → 抛 <see cref="InvalidOperationException"/>（MissingPredecessor），
+/// 而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
 /// </list>
 ///
 /// <b>PrepareAsync 语义等价校验</b>。
@@ -1057,9 +1057,9 @@ public sealed record ToolDispatchPrepareResult
 /// Journal 仅保证 ContextCore 内部的"恰好一次编排记录"——同一 request_id 的状态机只向前推进一次。
 /// 完整的外部副作用 exactly-once 还需要：
 /// <list type="bullet">
-///   <item>调用方提供 <see cref="ToolDispatchJournalEntry.IdempotencyKey"/>（持久化实现应有 UNIQUE 约束兜底去重）；</item>
-///   <item>Tool provider 支持幂等键 / 外部操作 ID（外部系统侧去重）；</item>
-///   <item>崩溃恢复时对 Dispatched 但未 Committed 的模糊状态进行外部对账。</item>
+/// <item>调用方提供 <see cref="ToolDispatchJournalEntry.IdempotencyKey"/>（持久化实现应有 UNIQUE 约束兜底去重）；</item>
+/// <item>Tool provider 支持幂等键 / 外部操作 ID（外部系统侧去重）；</item>
+/// <item>崩溃恢复时对 Dispatched 但未 Committed 的模糊状态进行外部对账。</item>
 /// </list>
 /// 对于不支持幂等键的 Tool，只能声明 at-least-once 或要求人工确认。
 /// </remarks>
@@ -1086,11 +1086,11 @@ public interface IToolDispatchJournal
     ///
     /// 返回值决策矩阵</b>：
     /// <list type="bullet">
-    ///   <item>Journal 不存在（新插入）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
-    ///   <item>Journal = Prepared（重复 Prepare）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
-    ///   <item>Journal = DispatchingIntent → <see cref="ToolDispatchPrepareResult.NeedsReconciliation"/>=true（外部调用可能已开始但未完成，需对账）。</item>
-    ///   <item>Journal = Dispatched → <see cref="ToolDispatchPrepareResult.NeedsReconciliation"/>=true（外部副作用可能已执行，需对账）。</item>
-    ///   <item>Journal = Committed/ResultDelivered → <see cref="ToolDispatchPrepareResult.CachedResult"/> 非空（禁止重新 Dispatch）。</item>
+    /// <item>Journal 不存在（新插入）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
+    /// <item>Journal = Prepared（重复 Prepare）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
+    /// <item>Journal = DispatchingIntent → <see cref="ToolDispatchPrepareResult.NeedsReconciliation"/>=true（外部调用可能已开始但未完成，需对账）。</item>
+    /// <item>Journal = Dispatched → <see cref="ToolDispatchPrepareResult.NeedsReconciliation"/>=true（外部副作用可能已执行，需对账）。</item>
+    /// <item>Journal = Committed/ResultDelivered → <see cref="ToolDispatchPrepareResult.CachedResult"/> 非空（禁止重新 Dispatch）。</item>
     /// </list>
     /// 调用方（<see cref="IDurableToolExecutor"/>）应根据返回值决定是否 Dispatch、对账或返回缓存结果。
     /// </remarks>

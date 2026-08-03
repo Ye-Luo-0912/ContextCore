@@ -10,21 +10,21 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 // Canary Progression HostedService（工作包 D）
 //
-// 目标（对齐 R28-B.8 规格）：
-//   1. 后台定时（按 CanarySchedulerOptions.PollingInterval）轮询所有处于 ScopedCanary
-//      阶段的 pipeline runs。
-//   2. 对每个 run：从 ICanaryMetricsCollector 获取聚合指标 → 转换为 baseline/experiment
-//      metrics 字典 → 调用 CanaryProgressionService.EvaluateAsync → 根据 Decision
-//      （Advance/Rollback/Hold）执行相应动作。
-//   3. Advance 时调用 AdvanceAsync + Reset metrics（开始新观察窗口）。
-//   4. 异常隔离：单个 run 的处理失败不中断整个轮询循环（catch + log）。
+// 目标：
+// 1. 后台定时（按 CanarySchedulerOptions.PollingInterval）轮询所有处于 ScopedCanary
+// 阶段的 pipeline runs。
+// 2. 对每个 run：从 ICanaryMetricsCollector 获取聚合指标 → 转换为 baseline/experiment
+// metrics 字典 → 调用 CanaryProgressionService.EvaluateAsync → 根据 Decision
+// （Advance/Rollback/Hold）执行相应动作。
+// 3. Advance 时调用 AdvanceAsync + Reset metrics（开始新观察窗口）。
+// 4. 异常隔离：单个 run 的处理失败不中断整个轮询循环（catch + log）。
 //
 // 设计边界：
-//   - 本服务仅推进 ScopedCanary 阶段内部的百分比阶梯；不替代 IPromotionJudge
-//     做跨阶段晋升决策。
-//   - CanarySchedulerOptions.Enabled=false 时立即退出 ExecuteAsync（不轮询）。
-//   - CanaryProgressionService 为 Singleton，直接注入；IServiceScopeFactory 保留用于
-//     未来 scoped 依赖解析。
+// - 本服务仅推进 ScopedCanary 阶段内部的百分比阶梯；不替代 IPromotionJudge
+// 做跨阶段晋升决策。
+// - CanarySchedulerOptions.Enabled=false 时立即退出 ExecuteAsync（不轮询）。
+// - CanaryProgressionService 为 Singleton，直接注入；IServiceScopeFactory 保留用于
+// 未来 scoped 依赖解析。
 // ===========================================================================
 
 /// <summary>

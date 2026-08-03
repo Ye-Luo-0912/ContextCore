@@ -1760,7 +1760,7 @@ public static partial class EvalCommand
         };
     }
 
-    // ── A5 §7.3 性能基线 ───────────────────────────────────────────────
+    // ── A5 性能基线 ───────────────────────────────────────────────
     private static readonly string[] PerfTexts =
     [
         "用户询问当前项目状态并请求摘要报告",
@@ -2029,7 +2029,7 @@ public static partial class EvalCommand
         public double SeqLen512AvgMs { get; init; }
     }
 
-    // ── A5.3 §7.3  规模查询延迟测试 ─────────────────────────────────
+    // ── A5.3 规模查询延迟测试 ─────────────────────────────────
     /// <summary>
     /// 在内存向量存储中生成 <paramref name="size"/> 条合成上下文，
     /// 批量 embedding 后执行 20 条查询，测量 p50/p95/p99 延迟。
@@ -2263,7 +2263,7 @@ public static partial class EvalCommand
         public int BatchSize { get; init; }
     }
 
-    // ── A5 §7.1 专项检索评测 ──────────────────────────────────────────
+    // ── A5 专项检索评测 ──────────────────────────────────────────
     private static async Task ExecuteRetrievalAsync(string outputPath, CancellationToken cancellationToken)
     {
         Console.WriteLine("\n========================================================");

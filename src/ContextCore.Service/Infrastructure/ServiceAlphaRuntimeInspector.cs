@@ -9,9 +9,9 @@ namespace ContextCore.Service.Infrastructure;
 /// 统一管理 Service Alpha 的 status / ready / deep probe。
 /// 设计原则：
 /// <list type="bullet">
-///   <item><c>/api/status</c> 只做轻量只读检查。</item>
-///   <item><c>/api/health/ready</c> 做中等强度检查，允许极低副作用（如根目录临时文件探针），默认不写业务数据。</item>
-///   <item><c>/api/status/deep</c> 做深度写探针，统一落在 <c>__system__/__health__</c> 作用域，并使用固定 ID 防止无限增长。</item>
+/// <item><c>/api/status</c> 只做轻量只读检查。</item>
+/// <item><c>/api/health/ready</c> 做中等强度检查，允许极低副作用（如根目录临时文件探针），默认不写业务数据。</item>
+/// <item><c>/api/status/deep</c> 做深度写探针，统一落在 <c>__system__/__health__</c> 作用域，并使用固定 ID 防止无限增长。</item>
 /// </list>
 /// </summary>
 internal sealed class ServiceAlphaRuntimeInspector

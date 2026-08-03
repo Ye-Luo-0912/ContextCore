@@ -13,21 +13,21 @@ namespace ContextCore.Service.Endpoints;
 // Agent Execution API — Agent Run 的 HTTP 入口
 //
 // 提供正式的 REST API 以驱动 Agent 执行循环：
-//   POST   /api/agents/runs                       — 创建并启动 AgentRun
-//   GET    /api/agents/runs/{id}                  — 获取 Run 状态
-//   POST   /api/agents/runs/{id}/cancel           — 取消 Run
-//   GET    /api/agents/runs/{id}/events           — SSE 事件流（支持 Last-Event-ID 断线重连）
-//   POST   /api/agents/runs/{id}/approvals/{approvalId} — 提交 approval 决策
-//   POST   /api/agents/runs/{id}/compact          — 压缩事件流前缀（Operator；折叠为快照并归档）
-//   GET    /api/agents/runs/{id}/events/snapshot  — 读取压缩快照（Operator；未压缩时 404）
+// POST /api/agents/runs — 创建并启动 AgentRun
+// GET /api/agents/runs/{id} — 获取 Run 状态
+// POST /api/agents/runs/{id}/cancel — 取消 Run
+// GET /api/agents/runs/{id}/events — SSE 事件流（支持 Last-Event-ID 断线重连）
+// POST /api/agents/runs/{id}/approvals/{approvalId} — 提交 approval 决策
+// POST /api/agents/runs/{id}/compact — 压缩事件流前缀（Operator；折叠为快照并归档）
+// GET /api/agents/runs/{id}/events/snapshot — 读取压缩快照（Operator；未压缩时 404）
 //
 // 设计原则：
-//   1. 遵循 ContextCore Minimal API 模式（IEndpointRouteBuilder 扩展方法）。
-//   2. Workspace 隔离：workspaceId 优先从 IWorkspaceContextAccessor（认证上下文）读取，
-//      未启用 RBAC 时回退到请求体中的 workspaceId，再回退到 "default"。
-//   3. 创建 Run 需要 WorkspacePermission.AgentRun 权限位。
-//   4. SSE 实现使用原始 HttpContext.Response.Body 流式写入，正确处理 CancellationToken。
-//   5. 失败返回 ContextCoreErrorResponse，与其它端点一致。
+// 1. 遵循 ContextCore Minimal API 模式（IEndpointRouteBuilder 扩展方法）。
+// 2. Workspace 隔离：workspaceId 优先从 IWorkspaceContextAccessor（认证上下文）读取，
+// 未启用 RBAC 时回退到请求体中的 workspaceId，再回退到 "default"。
+// 3. 创建 Run 需要 WorkspacePermission.AgentRun 权限位。
+// 4. SSE 实现使用原始 HttpContext.Response.Body 流式写入，正确处理 CancellationToken。
+// 5. 失败返回 ContextCoreErrorResponse，与其它端点一致。
 // ===========================================================================
 
 /// <summary>
@@ -223,16 +223,16 @@ internal static class AgentExecutionEndpoints
             await writer.FlushAsync(streamCt).ConfigureAwait(false);
 
             // SSE 轮询循环（修复永久丢唤醒窗口）：
-            //   a. 先注册 subscription（消除"DB 读取与订阅注册之间事件丢失"竞态）
-            //   b. DB 补读 watermark 之后的事件（catch-up）
-            //   c. 发送补读事件到 SSE 流
-            //   d. 检查终态
-            //   e. 等待 notifier 推送（30s watchdog 补偿，防止遗漏通知导致永久挂起）
+            // a. 先注册 subscription（消除"DB 读取与订阅注册之间事件丢失"竞态）
+            // b. DB 补读 watermark 之后的事件（catch-up）
+            // c. 发送补读事件到 SSE 流
+            // d. 检查终态
+            // e. 等待 notifier 推送（30s watchdog 补偿，防止遗漏通知导致永久挂起）
             while (!streamCt.IsCancellationRequested)
             {
                 // a. 先注册 subscription——注册时刻 = watermark。
-                //    注册前到 DB 补读之间提交的事件由 DB 补读捕获；
-                //    注册后提交的事件由 notifier 推送捕获。无竞态窗口。
+                // 注册前到 DB 补读之间提交的事件由 DB 补读捕获；
+                // 注册后提交的事件由 notifier 推送捕获。无竞态窗口。
                 using var subscription = eventNotifier?.RegisterSubscription(
                     workspaceId, id, lastEventSequence + 1);
 
@@ -571,8 +571,8 @@ internal static class AgentExecutionEndpoints
             }
 
             // 若 Run 处于 AwaitingApproval：
-            //   决策为拒绝 → 推进到 Failed（无法继续）
-            //   决策为批准 → 推进到 PendingToolExecution（Actor 恢复时直接执行原 Tool，不重新调用模型）
+            // 决策为拒绝 → 推进到 Failed（无法继续）
+            // 决策为批准 → 推进到 PendingToolExecution（Actor 恢复时直接执行原 Tool，不重新调用模型）
             // 旧路径批准后推进到 ToolDispatching，导致 Actor 重新调用模型、被批准的原 Tool 不会直接执行。
             if (run.State == AgentRunState.AwaitingApproval)
             {
@@ -691,10 +691,10 @@ internal static class AgentExecutionEndpoints
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
-        // ── Tool Reconciliation Control Plane（P2-B1）────────────────────
+        // ── Tool Reconciliation Control Plane（-B1）────────────────────
         // GET /api/agents/reconciliations 双模式：
-        //   ?externalOperationId=…  → 按 journal 外部操作 ID 反查（跨 Run 运维查询）；
-        //   无 externalOperationId   → ControlRoom 分页待决列表（过期高亮 + 告警计数）。
+        // ?externalOperationId=… → 按 journal 外部操作 ID 反查（跨 Run 运维查询）；
+        // 无 externalOperationId → ControlRoom 分页待决列表（过期高亮 + 告警计数）。
         var reconciliationGroup = app.MapGroup("/api/agents/reconciliations").WithTags(Tag);
         reconciliationGroup.MapGet("/", async Task<IResult> (
             [FromQuery] string? externalOperationId,
@@ -935,10 +935,10 @@ internal static class AgentExecutionEndpoints
         foreach (var evt in events)
         {
             // SSE 序列化公开 DTO（隐藏 Tool 参数/结果、原始模型输出、异常堆栈等敏感信息）。
-            //   id: {sequence}
-            //   event: {eventType}
-            //   data: {json}
-            //   (空行结束事件)
+            // id: {sequence}
+            // event: {eventType}
+            // data: {json}
+            // (空行结束事件)
             await writer.WriteLineAsync($"id: {evt.Sequence}").ConfigureAwait(false);
             await writer.WriteLineAsync($"event: {evt.EventType}").ConfigureAwait(false);
             await writer.WriteLineAsync($"data: {JsonSerializer.Serialize(ToPublicDto(evt))}").ConfigureAwait(false);
@@ -987,9 +987,9 @@ internal static class AgentExecutionEndpoints
     /// 将 <see cref="AgentRunEvent"/> 映射为公开 DTO（隐藏敏感信息）。
     /// 仅保留 UI 显示进度/用量/状态所需的最小字段集：
     /// <list type="bullet">
-    ///   <item>Tool 名称（用于进度显示），但隐藏 Tool 参数与结果。</item>
-    ///   <item>模型 token 统计（用于用量显示），但隐藏原始模型输出。</item>
-    ///   <item>错误类别与短消息（用于状态显示），但隐藏完整异常堆栈。</item>
+    /// <item>Tool 名称（用于进度显示），但隐藏 Tool 参数与结果。</item>
+    /// <item>模型 token 统计（用于用量显示），但隐藏原始模型输出。</item>
+    /// <item>错误类别与短消息（用于状态显示），但隐藏完整异常堆栈。</item>
     /// </list>
     /// Payload 解析失败或字段缺失时静默降级（返回已知字段 + null 敏感字段），
     /// 不影响 SSE 流的连续性。原始 Payload 仅通过管理员审计端点（/events/raw）暴露。
@@ -1217,7 +1217,7 @@ internal static class AgentExecutionEndpoints
             return Results.Ok(ToRunResponse(createResult.Run));
         }
 
-        // WP-B Workspace 配额强制：仅新创建的 Run 预留配额（幂等重放不重复扣减）。
+        // Workspace 配额强制：仅新创建的 Run 预留配额（幂等重放不重复扣减）。
         // 配额启用且服务已注册时，按 Run 预算（MaxTokens / MaxCostUsd）预留；
         // 预留失败（workspace 配额已耗尽）→ 429（中间件已做耗尽快路径，此处为权威扣减点）。
         var securityOptions = httpContext.RequestServices.GetService<SecurityOptions>();
@@ -1332,9 +1332,9 @@ public sealed class CancelRunRequest
 /// <remarks>
 /// 仅暴露 UI 显示进度 / 用量 / 状态所需的最小字段集：
 /// <list type="bullet">
-///   <item><see cref="ToolName"/>：Tool 名称（进度显示），不含参数与结果。</item>
-///   <item><see cref="PromptTokens"/> / <see cref="CompletionTokens"/>：模型 token 统计（用量显示），不含原始输出。</item>
-///   <item><see cref="ErrorCategory"/> / <see cref="ErrorMessage"/>：错误类别与短消息（状态显示），不含完整堆栈。</item>
+/// <item><see cref="ToolName"/>：Tool 名称（进度显示），不含参数与结果。</item>
+/// <item><see cref="PromptTokens"/> / <see cref="CompletionTokens"/>：模型 token 统计（用量显示），不含原始输出。</item>
+/// <item><see cref="ErrorCategory"/> / <see cref="ErrorMessage"/>：错误类别与短消息（状态显示），不含完整堆栈。</item>
 /// </list>
 /// 完整 Payload（含 Tool 参数、模型输出、异常堆栈）仅通过管理员审计端点
 /// <c>GET /api/agents/runs/{id}/events/raw</c> 暴露。

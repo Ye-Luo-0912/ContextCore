@@ -5,18 +5,18 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 // Codex / Claude Code Agent Runtime Adapter
 //
-// 目标（对齐 R23 规格）：
-//   1. 提供 AgentRuntimeKind=Codex / ClaudeCode 的具体 adapter 实现；
-//      共享 AgentRuntimeBase 的 session 状态管理 + 事件流逻辑。
-//   2. ContextCore 不直接依赖 OpenAI / Anthropic SDK；本实现仅提供命名空间占位 +
-//      RuntimeId/RuntimeKind 标识，外部项目可通过 override CreateSessionAsync
-//      扩展为真实 SDK 适配（如调用 SDK 初始化接口）。
-//   3. sealed 防止进一步继承污染。
+// 目标（对齐规格）：
+// 1. 提供 AgentRuntimeKind=Codex / ClaudeCode 的具体 adapter 实现；
+// 共享 AgentRuntimeBase 的 session 状态管理 + 事件流逻辑。
+// 2. ContextCore 不直接依赖 OpenAI / Anthropic SDK；本实现仅提供命名空间占位 +
+// RuntimeId/RuntimeKind 标识，外部项目可通过 override CreateSessionAsync
+// 扩展为真实 SDK 适配（如调用 SDK 初始化接口）。
+// 3. sealed 防止进一步继承污染。
 //
 // 设计边界：
-//   - Adapter 不调用 SDK；外部项目继承此类或装饰此类以添加 SDK 集成。
-//   - 不同 RuntimeKind 的 session 状态在 base 中通过 ConcurrentDictionary 隔离；
-//     跨 adapter 互不影响。
+// - Adapter 不调用 SDK；外部项目继承此类或装饰此类以添加 SDK 集成。
+// - 不同 RuntimeKind 的 session 状态在 base 中通过 ConcurrentDictionary 隔离；
+// 跨 adapter 互不影响。
 // ===========================================================================
 
 /// <summary>

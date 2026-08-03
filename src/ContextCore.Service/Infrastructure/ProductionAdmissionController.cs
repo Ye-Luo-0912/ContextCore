@@ -10,21 +10,21 @@ namespace ContextCore.Service.Infrastructure;
 // 生产准入控制器（实时探针 + TTL 缓存）
 //
 // 目标：
-//   1. 在启动时一次性校验（ProductionAdmissionValidator）之上，提供请求阶段的
-//      运行时准入判定：启动后运行时降级（Postgres 断连 / Model Slot 停用 /
-//      应用重启窗口）不再静默放行业务流量。
-//   2. 为请求阶段 admission 中间件提供缓存报告（TTL 内复用，避免每个请求
-//      都执行全量校验），为 /api/admission/status 提供强制刷新入口。
+// 1. 在启动时一次性校验（ProductionAdmissionValidator）之上，提供请求阶段的
+// 运行时准入判定：启动后运行时降级（Postgres 断连 / Model Slot 停用 /
+// 应用重启窗口）不再静默放行业务流量。
+// 2. 为请求阶段 admission 中间件提供缓存报告（TTL 内复用，避免每个请求
+// 都执行全量校验），为 /api/admission/status 提供强制刷新入口。
 //
 // 实时探针（仅 ProductionHA）：
-//   1. postgres-live — IPostgresConnectionFactory.PingAsync 实时连通性。
-//   2. model-slot-live — 重新查询 cluster model slot 'primary' 是否仍处于 Active。
-//   3. application-started-live — 应用是否已完成启动（所有 HostedService.StartAsync）。
+// 1. postgres-live — IPostgresConnectionFactory.PingAsync 实时连通性。
+// 2. model-slot-live — 重新查询 cluster model slot 'primary' 是否仍处于 Active。
+// 3. application-started-live — 应用是否已完成启动（所有 HostedService.StartAsync）。
 //
 // 缓存语义：
-//   - 非 ProductionHA：直接透传 validator 的 Skipped 报告（AllPassed=true），不执行实时探针。
-//   - TTL 内返回缓存报告；TTL 到期或 forceRefresh=true 时执行全量刷新。
-//   - SemaphoreSlim 串行化刷新，双检锁避免并发重复执行全量校验。
+// - 非 ProductionHA：直接透传 validator 的 Skipped 报告（AllPassed=true），不执行实时探针。
+// - TTL 内返回缓存报告；TTL 到期或 forceRefresh=true 时执行全量刷新。
+// - SemaphoreSlim 串行化刷新，双检锁避免并发重复执行全量校验。
 // ===========================================================================
 
 /// <summary>

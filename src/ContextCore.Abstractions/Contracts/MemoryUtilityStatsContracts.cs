@@ -6,23 +6,23 @@ namespace ContextCore.Abstractions;
 // Memory Utility Stats 聚合契约
 //
 // 对齐用户规格中的 Memory Utility Ledger：
-//   - Recall count：被检索命中次数
-//   - Selected count：被选入 Package 次数
-//   - Useful feedback count：产生有效反馈次数（R8 Learning Loop）
-//   - Correction count：被纠正次数（R8 Learning Loop）
-//   - Conflict count：参与冲突集合次数（R21-2 ConflictSet）
-//   - Token cost：累计 token 消耗（selected + dropped）
-//   - Unique anchor contribution：唯一锚点贡献次数（无其他 Expert 替代）
-//   - Last useful time：最近一次产生有效贡献的时间戳
+// - Recall count：被检索命中次数
+// - Selected count：被选入 Package 次数
+// - Useful feedback count：产生有效反馈次数（Learning Loop）
+// - Correction count：被纠正次数（Learning Loop）
+// - Conflict count：参与冲突集合次数（ConflictSet）
+// - Token cost：累计 token 消耗（selected + dropped）
+// - Unique anchor contribution：唯一锚点贡献次数（无其他 Expert 替代）
+// - Last useful time：最近一次产生有效贡献的时间戳
 //
 // 设计原则：
-//   - MemoryUtilityStats 是 per-Candidate per-workspace-collection 聚合统计，
-//     与 UtilityLedgerEntry（per-Decision per-Expert 快照）正交。
-//   - StatsStore 公共 API 是 read-only（QueryAsync / GetAsync / GetStatsForCandidateAsync）；
-//     写入由 internal AppendSnapshot 方法暴露，仅供 MemoryUtilityStatsMaterializer 调用。
-//   - Stats 由 UtilityLedgerEntry 异步聚合产生（materializer 在物化 ledger 时同步更新 stats）。
-//   - 模型可基于 stats 建议 promotion/demotion/merge/archive，
-//     但正式写入仍经过规则与审查边界（IMemoryDecayEvaluator + 人工 review）。
+// - MemoryUtilityStats 是 per-Candidate per-workspace-collection 聚合统计，
+// 与 UtilityLedgerEntry（per-Decision per-Expert 快照）正交。
+// - StatsStore 公共 API 是 read-only（QueryAsync / GetAsync / GetStatsForCandidateAsync）；
+// 写入由 internal AppendSnapshot 方法暴露，仅供 MemoryUtilityStatsMaterializer 调用。
+// - Stats 由 UtilityLedgerEntry 异步聚合产生（materializer 在物化 ledger 时同步更新 stats）。
+// - 模型可基于 stats 建议 promotion/demotion/merge/archive，
+// 但正式写入仍经过规则与审查边界（IMemoryDecayEvaluator + 人工 review）。
 // ===========================================================================
 
 /// <summary>
@@ -30,8 +30,8 @@ namespace ContextCore.Abstractions;
 /// </summary>
 /// <remarks>
 /// 字段对齐用户规格：
-///   RecallCount / SelectedCount / UsefulFeedbackCount / CorrectionCount /
-///   ConflictCount / TokenCost / UniqueAnchorContribution / LastUsefulTime。
+/// RecallCount / SelectedCount / UsefulFeedbackCount / CorrectionCount /
+/// ConflictCount / TokenCost / UniqueAnchorContribution / LastUsefulTime。
 /// </remarks>
 public sealed record MemoryUtilityStats
 {
@@ -56,13 +56,13 @@ public sealed record MemoryUtilityStats
     /// <summary>被 drop 次数（candidate 出现在 dropped envelopes 中）。</summary>
     public int DroppedCount { get; init; }
 
-    /// <summary>产生有效反馈次数（来自 R8 Learning Loop 的 PositiveLabels）。</summary>
+    /// <summary>产生有效反馈次数（来自 Learning Loop 的 PositiveLabels）。</summary>
     public int UsefulFeedbackCount { get; init; }
 
-    /// <summary>被纠正次数（来自 R8 Learning Loop 的 NegativeLabels）。</summary>
+    /// <summary>被纠正次数（来自 Learning Loop 的 NegativeLabels）。</summary>
     public int CorrectionCount { get; init; }
 
-    /// <summary>参与冲突集合次数（来自 R21-2 ConflictSet）。</summary>
+    /// <summary>参与冲突集合次数（来自 ConflictSet）。</summary>
     public int ConflictCount { get; init; }
 
     /// <summary>累计 token 消耗（所有被选入 Package 的 token 总和）。</summary>
@@ -139,13 +139,13 @@ public sealed record MemoryUtilityStatsQuery
 /// MemoryUtilityStats 存储（read-only 公共 API）。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4）：
-///   1. 公共 API 是 read-only：QueryAsync / GetAsync / GetStatsForCandidateAsync。
-///   2. 写入由 internal AppendSnapshot 方法暴露，仅供 MemoryUtilityStatsMaterializer 调用。
-///   3. StatsStore 与 UtilityLedgerStore 正交：
-///      - UtilityLedgerStore：per-Decision per-Expert 快照（细粒度 trace）。
-///      - StatsStore：per-Candidate per-workspace-collection 聚合统计（粗粒度决策输入）。
-///   4. 生产部署应替换为 PostgresMemoryUtilityStatsStore。
+/// 设计原则（对齐澄清）：
+/// 1. 公共 API 是 read-only：QueryAsync / GetAsync / GetStatsForCandidateAsync。
+/// 2. 写入由 internal AppendSnapshot 方法暴露，仅供 MemoryUtilityStatsMaterializer 调用。
+/// 3. StatsStore 与 UtilityLedgerStore 正交：
+/// - UtilityLedgerStore：per-Decision per-Expert 快照（细粒度 trace）。
+/// - StatsStore：per-Candidate per-workspace-collection 聚合统计（粗粒度决策输入）。
+/// 4. 生产部署应替换为 PostgresMemoryUtilityStatsStore。
 /// </remarks>
 public interface IMemoryUtilityStatsStore
 {

@@ -4,7 +4,7 @@ namespace ContextCore.Tests;
 
 /// <summary>
 /// 验收测试：验证 ContextDecisionPolicyVersions 按能力独立演进，
-/// 不再绑定全项目阶段编号（如 R14/R17）。V17_0/V18_0 保留为 alias 供历史消费者平滑迁移。
+/// 不再绑定全项目阶段编号（如 /）。V17_0/V18_0 保留为 alias 供历史消费者平滑迁移。
 /// </summary>
 [TestClass]
 [TestCategory("Contract")]

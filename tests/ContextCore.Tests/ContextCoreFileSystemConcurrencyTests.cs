@@ -418,7 +418,7 @@ public sealed class ContextCoreFileSystemConcurrencyTests
     }
 
     /// <summary>
-    /// #6: FileContextJobQueue Ack/Nack 原子化（CAS）— 仅当 job 处于 Running 时才转换状态。
+    /// FileContextJobQueue Ack/Nack 原子化（CAS）— 仅当 job 处于 Running 时才转换状态。
     /// 验证文件系统队列下过期 Ack/Nack 不还原终态、不增加 RetryCount。
     /// </summary>
     [TestMethod]
@@ -480,7 +480,7 @@ public sealed class ContextCoreFileSystemConcurrencyTests
     // ── JobId → 文件路径索引 ────────────────────────────────
 
     /// <summary>
-    /// #5：Enqueue 应将 jobId→路径写入进程内索引，后续 Ack 命中索引跳过扫描。
+    /// Enqueue 应将 jobId→路径写入进程内索引，后续 Ack 命中索引跳过扫描。
     /// 验证索引条目数在 Enqueue 后正确增长，且 Ack 后保持稳定（Ack 不新增索引条目）。
     /// </summary>
     [TestMethod]
@@ -536,7 +536,7 @@ public sealed class ContextCoreFileSystemConcurrencyTests
     }
 
     /// <summary>
-    /// #5：跨 workspace/collection 的多个 jobs.jsonl 文件下，Ack 应通过索引或扫描
+    /// 跨 workspace/collection 的多个 jobs.jsonl 文件下，Ack 应通过索引或扫描
     /// 正确解析目标 job 所在的文件，不误操作其他文件的 job。
     /// </summary>
     [TestMethod]
@@ -587,7 +587,7 @@ public sealed class ContextCoreFileSystemConcurrencyTests
     }
 
     /// <summary>
-    /// #5：对未经本队列 Enqueue 直接写入文件的外部 job，Ack 应回退到扫描定位，
+    /// 对未经本队列 Enqueue 直接写入文件的外部 job，Ack 应回退到扫描定位，
     /// 定位后回填索引，后续 Ack 命中索引。验证扫描回退与回填闭环。
     /// </summary>
     [TestMethod]

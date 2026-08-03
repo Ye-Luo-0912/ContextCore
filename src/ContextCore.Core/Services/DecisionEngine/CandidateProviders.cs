@@ -15,14 +15,14 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // 每个 Provider 对应一个 ExpertKind，注入对应 Store，产出 Envelope + Material 二元组。
 //
 // 设计原则：
-//   1. Provider 只负责召回（recall），不负责评分或分配 — 评分由 Engine 的 UtilityScorer
-//      执行，分配由 Engine 的 GlobalAllocator 执行。
-//   2. Provider 产出 CanonicalKey + Material sidecar，正文与决策分离。
-//   3. 可选 Store（IMemoryStore / IRelationStore / IVectorStore / IConstraintStore）为 null 时
-//      返回空结果，不抛异常 — Enabled mask 由 Router 控制，Provider 自身不做 mask 判断。
-//   4. EntityVersion 使用 stable content hash（SHA256 前 16 字符），保证同一内容跨请求
-//      产出相同 CanonicalKey，使 CanonicalMerger 能正确去重。
-//   5. EstimatedTokens 使用 content.Length / 4 的粗略估计（~4 chars/token）。
+// 1. Provider 只负责召回（recall），不负责评分或分配 — 评分由 Engine 的 UtilityScorer
+// 执行，分配由 Engine 的 GlobalAllocator 执行。
+// 2. Provider 产出 CanonicalKey + Material sidecar，正文与决策分离。
+// 3. 可选 Store（IMemoryStore / IRelationStore / IVectorStore / IConstraintStore）为 null 时
+// 返回空结果，不抛异常 — Enabled mask 由 Router 控制，Provider 自身不做 mask 判断。
+// 4. EntityVersion 使用 stable content hash（SHA256 前 16 字符），保证同一内容跨请求
+// 产出相同 CanonicalKey，使 CanonicalMerger 能正确去重。
+// 5. EstimatedTokens 使用 content.Length / 4 的粗略估计（~4 chars/token）。
 // ===========================================================================
 
 /// <summary>
@@ -99,7 +99,7 @@ internal static class CandidateProviderHelpers
     /// <remarks>
     /// PostgresContextStore.QueryAsync 在 IncludeContent=false 与 IncludeContent=true 两条路径下
     /// 都会把 ts_rank_cd × 100 写入 <see cref="ContentMetadataKeys.TsRank"/>。LexicalCandidateProvider
-    /// 读取后作为基础 score，确保 IncludeContent=false 时 ts_rank 仍进入评分（P0-10 修复要求）。
+    /// 读取后作为基础 score，确保 IncludeContent=false 时 ts_rank 仍进入评分（修复要求）。
     /// </remarks>
     internal static double? ReadPersistedTsRank(ContextItem item)
     {
@@ -376,7 +376,7 @@ internal static class CandidateProviderHelpers
         };
 
         // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
-        // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        // 未持久化时回退到 EnrichTokenCost（fail-fast：内容非空且无 tokenizer 时抛异常）。
         // IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
         // ContentTokens=0（tokenizes 空字符串）。此路径下用 item.Content（真实正文，store 未走
         // metadata-only 时仍存在）估算 token 数，确保 allocator 看到非零 token cost。
@@ -482,7 +482,7 @@ internal static class CandidateProviderHelpers
         };
 
         // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
-        // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        // 未持久化时回退到 EnrichTokenCost（fail-fast：内容非空且无 tokenizer 时抛异常）。
         // IncludeContent=false 时 material.Content 已被清空，直接 EnrichTokenCost 会得到
         // ContentTokens=0（tokenizes 空字符串）。此路径下用 memory.Content（真实正文）估算 token 数，
         // 确保 allocator 看到非零 token cost。
@@ -585,7 +585,7 @@ internal static class CandidateProviderHelpers
         };
 
         // 优先读取摄取阶段持久化的精确 token_cost，跳过在线 tokenizer 调用。
-        // 未持久化时回退到 EnrichTokenCost（R29 WP-D-3 fail-fast：内容非空且无 tokenizer 时抛异常）。
+        // 未持久化时回退到 EnrichTokenCost（fail-fast：内容非空且无 tokenizer 时抛异常）。
         var persistedTokenCost = ReadPersistedTokenCostFromMetadata(constraint.Metadata);
         if (persistedTokenCost.HasValue)
         {
@@ -707,9 +707,9 @@ internal static class CandidateProviderHelpers
 /// </summary>
 /// <remarks>
 /// 合并两条召回路径：
-///   1. Tags=["mandatory"] 查询标记为强制注入的条目（原有逻辑）。
-///   2. RetrievalInput.RequiredIds（或 PackageInput.RequiredIds）强制 ID 召回 —
-///      调用方显式要求强制召回的条目，按 ID 逐个 GetAsync 获取。
+/// 1. Tags=["mandatory"] 查询标记为强制注入的条目（原有逻辑）。
+/// 2. RetrievalInput.RequiredIds（或 PackageInput.RequiredIds）强制 ID 召回 —
+/// 调用方显式要求强制召回的条目，按 ID 逐个 GetAsync 获取。
 /// 两条路径结果合并去重。
 /// 这些条目的 Safety.IsMandatory=true，Engine 在 Budget Allocator 中无条件保留。
 /// </remarks>
@@ -1101,11 +1101,11 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
 /// </summary>
 /// <remarks>
 /// 流程：
-///   1. 如果 IVectorStore 未注册 → 返回空。
-///   2. 从 QueryText 生成 query embedding（通过 IEmbeddingProvider）。
-///   3. 向 IVectorStore 发起 SearchAsync。
-///   4. 按 SourceKind 分组 hydration：context hits → IContextStore，memory hits → IMemoryStore。
-///   5. 返回 Envelope + Material 二元组。
+/// 1. 如果 IVectorStore 未注册 → 返回空。
+/// 2. 从 QueryText 生成 query embedding（通过 IEmbeddingProvider）。
+/// 3. 向 IVectorStore 发起 SearchAsync。
+/// 4. 按 SourceKind 分组 hydration：context hits → IContextStore，memory hits → IMemoryStore。
+/// 5. 返回 Envelope + Material 二元组。
 /// </remarks>
 public sealed class SemanticCandidateProvider : ICandidateProvider
 {

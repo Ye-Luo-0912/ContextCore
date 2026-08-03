@@ -61,7 +61,7 @@ public sealed class StorageProviderCapabilityMatrixTests
     // 上述 4 个接口已正式绑定 Postgres 实现，移出此集合
     // IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已正式绑定 Postgres 实现，移出此集合
     // 上述 5 个接口（IVectorReindexReportStore / IVectorLifecycleMetadataReviewCandidateStore / IVectorLifecycleMetadataReviewStore / IVectorLifecycleSidecarMetadataStore / IArtifactStore）已正式绑定 Postgres 实现，移出此集合。
-    // 至此 R14-PG 阶段一（垂直闭环）完成，无 Unsupported 占位。
+    // 至此 阶段一（垂直闭环）完成，无 Unsupported 占位。
     private static readonly HashSet<Type> PostgresDeclaredUnsupported = new();
 
     // FileSystem 和 InMemory 不应注册任何 Unsupported 占位

@@ -7,15 +7,15 @@ namespace ContextCore.Storage.Postgres.Stores;
 // ===========================================================================
 // PostgresToolReconciliationStore — Tool 对账记录存储（PostgreSQL 持久化实现）
 //
-// Tool Reconciliation Control Plane（P2-B1）：对账记录跨进程持久化，
+// Tool Reconciliation Control Plane（-B1）：对账记录跨进程持久化，
 // 替代 InMemoryToolReconciliationStore 成为 ProductionHA 组合根下的真相源：
-//   - 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一数据库，
-//     杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失；
-//   - CreateAsync 按 (run_id, request_id) UNIQUE 幂等（重复创建返回既有记录）；
-//   - TryBeginAsync / TryResetToPendingAsync / MarkResolvedAsync / MarkRejectedAsync
-//     使用 expected-state CAS（0 行受影响 = 并发冲突/已裁决，幂等）；
-//   - deadline_utc 列 + ControlRoom 列表（ListAsync）支持过期未决高亮与告警计数；
-//   - external_operation_id partial 索引支持按 journal 外部操作 ID 反查。
+// - 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一数据库，
+// 杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失；
+// - CreateAsync 按 (run_id, request_id) UNIQUE 幂等（重复创建返回既有记录）；
+// - TryBeginAsync / TryResetToPendingAsync / MarkResolvedAsync / MarkRejectedAsync
+// 使用 expected-state CAS（0 行受影响 = 并发冲突/已裁决，幂等）；
+// - deadline_utc 列 + ControlRoom 列表（ListAsync）支持过期未决高亮与告警计数；
+// - external_operation_id partial 索引支持按 journal 外部操作 ID 反查。
 // ===========================================================================
 
 /// <summary>

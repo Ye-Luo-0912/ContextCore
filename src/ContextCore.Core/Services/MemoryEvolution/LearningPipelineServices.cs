@@ -11,13 +11,13 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 // Learning Event Pipeline 补齐实现
 //
 // 与 perf-5 已确认的 Durable Outbox + Dispatcher + Worker 并存：
-//   - LearningPipelineSink：非 decision 事件（user feedback / tool outcome / task completion）
-//     的统一入队入口。基础实现使用 in-memory bounded Channel + 后台日志消费。
-//     持久化扩展（写入 outbox）为后续演进点，契约层已解耦。
-//   - LabelQualityScorer / LeakageDetector / LearningDatasetSplitter / OfflineReplayGate：
-//     数据质量闸门链，复用 IUtilityLedgerStore + IUserFeedbackLedger 只读数据源。
-//   - DelayedUserFeedbackService：用户对已完成 AgentRun 的延迟反馈入口，
-//     写入 IUserFeedbackLedger + 入队 LearningPipelineEvent。
+// - LearningPipelineSink：非 decision 事件（user feedback / tool outcome / task completion）
+// 的统一入队入口。基础实现使用 in-memory bounded Channel + 后台日志消费。
+// 持久化扩展（写入 outbox）为后续演进点，契约层已解耦。
+// - LabelQualityScorer / LeakageDetector / LearningDatasetSplitter / OfflineReplayGate：
+// 数据质量闸门链，复用 IUtilityLedgerStore + IUserFeedbackLedger 只读数据源。
+// - DelayedUserFeedbackService：用户对已完成 AgentRun 的延迟反馈入口，
+// 写入 IUserFeedbackLedger + 入队 LearningPipelineEvent。
 //
 // 算法均为"基础实现"：可工作但非最优，便于后续替换为更复杂算法（接口稳定）。
 // ===========================================================================
@@ -28,11 +28,11 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. fire-and-forget：<see cref="EnqueueAsync"/> 写入 Channel 后立即返回，不等待消费。
-///   2. 背压控制：Channel 容量上限默认 1024，满时等待（与 LearningMaterializationDispatcher 一致）。
-///   3. 幂等：基于 <see cref="LearningPipelineEvent.IdempotencyKey"/> 去重（近期窗口内重复键忽略）。
-///   4. 优雅关闭：StopAsync 信号 Channel 完成，等待 worker 排空（最多 15 秒）。
-///   5. 失败降级：Channel 写入异常时 log + 静默吞掉（不阻塞调用方）。
+/// 1. fire-and-forget：<see cref="EnqueueAsync"/> 写入 Channel 后立即返回，不等待消费。
+/// 2. 背压控制：Channel 容量上限默认 1024，满时等待（与 LearningMaterializationDispatcher 一致）。
+/// 3. 幂等：基于 <see cref="LearningPipelineEvent.IdempotencyKey"/> 去重（近期窗口内重复键忽略）。
+/// 4. 优雅关闭：StopAsync 信号 Channel 完成，等待 worker 排空（最多 15 秒）。
+/// 5. 失败降级：Channel 写入异常时 log + 静默吞掉（不阻塞调用方）。
 /// </remarks>
 public sealed class LearningPipelineSink : ILearningPipelineSink, IAsyncDisposable
 {
@@ -323,10 +323,10 @@ public sealed class LabelQualityScorer : ILabelQualityScorer
 /// </summary>
 /// <remarks>
 /// 基础实现覆盖：
-///   1. <see cref="LeakageKind.DuplicateSample"/>：同 (DecisionId, CandidateItemId, Expert) 跨批次重复。
-///   2. <see cref="LeakageKind.TimestampOrderViolation"/>：同 candidate 的 ledger 条目 MaterializedAt
-///      与最新用户反馈 GivenAt 比较——若反馈早于物化则可能存在时序异常（基础启发式）。
-///   CrossSplitLeakage / FutureInformationLeakage 需结合 split 与特征 schema，留作后续扩展。
+/// 1. <see cref="LeakageKind.DuplicateSample"/>：同 (DecisionId, CandidateItemId, Expert) 跨批次重复。
+/// 2. <see cref="LeakageKind.TimestampOrderViolation"/>：同 candidate 的 ledger 条目 MaterializedAt
+/// 与最新用户反馈 GivenAt 比较——若反馈早于物化则可能存在时序异常（基础启发式）。
+/// CrossSplitLeakage / FutureInformationLeakage 需结合 split 与特征 schema，留作后续扩展。
 /// </remarks>
 public sealed class LeakageDetector : ILeakageDetector
 {
@@ -644,11 +644,11 @@ public sealed class OfflineReplayGate : IOfflineReplayGate
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 双写：UserFeedbackLedger（持久反馈记录）+ ILearningPipelineSink（pipeline 事件）。
-///   2. 关联 lineage：feedback 关联到原始 DecisionId + RunId + SessionId。
-///   3. 幂等：IdempotencyKey 由调用方提供或自动生成；sink 侧负责近期窗口去重。
-///   4. 失败降级：ledger 写入失败时仍尝试入队 pipeline（best-effort），反之亦然；
-///      两侧独立失败不互相阻塞，调用方通过 result 标志判断。
+/// 1. 双写：UserFeedbackLedger（持久反馈记录）+ ILearningPipelineSink（pipeline 事件）。
+/// 2. 关联 lineage：feedback 关联到原始 DecisionId + RunId + SessionId。
+/// 3. 幂等：IdempotencyKey 由调用方提供或自动生成；sink 侧负责近期窗口去重。
+/// 4. 失败降级：ledger 写入失败时仍尝试入队 pipeline（best-effort），反之亦然；
+/// 两侧独立失败不互相阻塞，调用方通过 result 标志判断。
 /// </remarks>
 public sealed class DelayedUserFeedbackService
 {

@@ -7,25 +7,25 @@ namespace ContextCore.Core.Services.Policy;
 // 策略包注册表默认实现 + 默认 bundle 工厂。
 //
 // 目标：
-//   把 R19-1 契约（ContextPolicyBundle / IPolicyRegistry）落到 Core 层，
-//   提供可立即注入 DI 的默认实现 + 一个"全局默认 bundle"
-//   （由 ContextDecisionPolicyVersions 静态常量 + 现有 hardcoded profile 默认值组装）。
+// 把 契约（ContextPolicyBundle / IPolicyRegistry）落到 Core 层，
+// 提供可立即注入 DI 的默认实现 + 一个"全局默认 bundle"
+// （由 ContextDecisionPolicyVersions 静态常量 + 现有 hardcoded profile 默认值组装）。
 //
 // 设计原则：
-//   1. DefaultPolicyRegistry 是 in-memory 实现：ConcurrentDictionary 线程安全。
-//      生产部署应替换为 PostgresPolicyRegistry（持久化）+ MemoryCache。
-//   2. GetActiveBundleAsync 在未激活时返回 DefaultPolicyBundleFactory.Create()，
-//      保证调用方始终拿到非 null bundle（用户澄清 #2：bundle 全局不可变）。
-//   3. P0-4 修复：RegisterBundleAsync 改为 insert-if-absent（相同 BundleId+Version
-//      已存在时抛 InvalidOperationException，不再静默覆盖）。
-//   4. P0-4 修复：TryActivateAsync 实现 CAS（compare-and-swap）原子激活。
-//   5. P0-2 修复：GetBundleAsync 按 bundleId + version 精确加载；未找到返回 null。
-//   6. ListBundlesAsync(includeSuperseded=false) 默认排除已 supersede 的 bundle。
+// 1. DefaultPolicyRegistry 是 in-memory 实现：ConcurrentDictionary 线程安全。
+// 生产部署应替换为 PostgresPolicyRegistry（持久化）+ MemoryCache。
+// 2. GetActiveBundleAsync 在未激活时返回 DefaultPolicyBundleFactory.Create()，
+// 保证调用方始终拿到非 null bundle（用户澄清 ：bundle 全局不可变）。
+// 3. 修复：RegisterBundleAsync 改为 insert-if-absent（相同 BundleId+Version
+// 已存在时抛 InvalidOperationException，不再静默覆盖）。
+// 4. 修复：TryActivateAsync 实现 CAS（compare-and-swap）原子激活。
+// 5. 修复：GetBundleAsync 按 bundleId + version 精确加载；未找到返回 null。
+// 6. ListBundlesAsync(includeSuperseded=false) 默认排除已 supersede 的 bundle。
 //
-// 与 R19-3 Pipeline 集成：
-//   Engine.DecideAsync 在请求 PolicyBundleId 为空时，通过 IPolicyRegistry
-//   解析当前 workspace+collection 的激活 bundle；未激活时使用默认 bundle。
-//   PolicyBundleId 非空时通过 GetBundleAsync 精确加载（fail-closed）。
+// 与 Pipeline 集成：
+// Engine.DecideAsync 在请求 PolicyBundleId 为空时，通过 IPolicyRegistry
+// 解析当前 workspace+collection 的激活 bundle；未激活时使用默认 bundle。
+// PolicyBundleId 非空时通过 GetBundleAsync 精确加载（fail-closed）。
 // ===========================================================================
 
 /// <summary>
@@ -146,9 +146,9 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
     {
         ArgumentNullException.ThrowIfNull(bundle);
         // insert-if-absent。(BundleId, Version) 为复合主键：
-        //   - 相同 (BundleId, Version) 已存在 → 抛 InvalidOperationException（不可变）
-        //   - 同 BundleId 不同 Version → 视为不同 bundle（支持 supersede 链）
-        //   - 同 BundleId 同 Version → 不允许（bundle 全局不可变）
+        // - 相同 (BundleId, Version) 已存在 → 抛 InvalidOperationException（不可变）
+        // - 同 BundleId 不同 Version → 视为不同 bundle（支持 supersede 链）
+        // - 同 BundleId 同 Version → 不允许（bundle 全局不可变）
         var key = BuildBundleKey(bundle.BundleId, bundle.Version);
         if (!_bundles.TryAdd(key, bundle))
         {
@@ -242,11 +242,11 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
 /// <remarks>
 /// 此工厂生产的 bundle 用作"未激活任何 workspace+collection 时的兜底"。
 /// 所有字段保持与现有 BasicContextPackageBuilder / HybridContextRetriever
-/// 隐式默认值一致，避免 R19-2 引入行为变更。
+/// 隐式默认值一致，避免 引入行为变更。
 /// </remarks>
 public static class DefaultPolicyBundleFactory
 {
-    /// <summary>默认 bundle ID（与 R19-1 测试中的"未激活兜底"对齐）。</summary>
+    /// <summary>默认 bundle ID（与 测试中的"未激活兜底"对齐）。</summary>
     public const string DefaultBundleId = "bundle-default";
 
     /// <summary>默认 bundle 版本号。</summary>
@@ -301,12 +301,12 @@ public static class DefaultPolicyBundleFactory
     /// </summary>
     /// <remarks>
     /// 当前 5 个 section 的默认比例：
-    ///   - working_memory: 0.30（任务状态与短期信号）
-    ///   - recent_context: 0.20（最近交互）
-    ///   - related_context: 0.20（图扩展）
-    ///   - stable_memory: 0.20（长期记忆）
-    ///   - global_context: 0.10（全局上下文）
-    /// 比例之和 = 1.0；可在 R19-3 Pipeline 集成后通过 PolicyBundle override 调整。
+    /// - working_memory: 0.30（任务状态与短期信号）
+    /// - recent_context: 0.20（最近交互）
+    /// - related_context: 0.20（图扩展）
+    /// - stable_memory: 0.20（长期记忆）
+    /// - global_context: 0.10（全局上下文）
+    /// 比例之和 = 1.0；可在 Pipeline 集成后通过 PolicyBundle override 调整。
     /// </remarks>
     private static IReadOnlyDictionary<string, double> CreateDefaultSectionRatios()
     {

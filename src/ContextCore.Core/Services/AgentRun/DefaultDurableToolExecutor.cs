@@ -11,43 +11,43 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 让 AgentRunActor 不再直接调用 IToolDispatcher。
 //
 // 流程：
-//   1. 生成稳定 RequestId（基于 runId + toolCall 哈希，确保可重放时一致）
-//      + 框架生成 ExternalOperationId（外部操作 ID，Prepare 时落库，重放稳定）
-//   2. 校验 ToolName 非空 + Dispatcher 支持 + 读取 ToolDescriptor 前置声明
-//   3. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
-//      （合并两次写为一次），根据结果决策：
-//      a. CachedResult 非空（Journal = Committed/ResultDelivered）→ 直接返回缓存结果，禁止重新 Dispatch
-//      b. NeedsReconciliation=true（Journal = DispatchingIntent/Dispatched）→ 返回对账结果（携带 ExternalOperationId），不重新 Dispatch
-//      c. ShouldDispatch=true（本次新插入或既有 Prepared 已推进，journal 已处于 DispatchingIntent）→ 继续 Dispatch
-//   4. 声明校验（fail-closed）：RequiresLeaseFence 但无 fence → 拒绝；RequiresIdempotencyKey
-//      但无键 → 以 ExternalOperationId 兜底为幂等键
-//   5. IToolDispatcher.DispatchAsync（携带 RequestId + IdempotencyKey + ExternalOperationId）
-//   6. Journal.MarkDispatchedAsync（若注入 journal）
-//   7. 副作用分类（声明优先，运行时结果仅验证）：
-//      - None/ReadOnly/Write 等（非 Unknown）→ Journal.MarkCommittedWithResultAsync（同事务持久化 state + result）
-//        并写入 IDurableToolResultStore（若注入，供 Postgres 路径缓存查询）
-//      - Unknown → 不提交（等待调用方裁决，返回 JournalState=Dispatched）
-//   8. 返回 ToolExecutionResult（含完整 Tool 身份信息）
+// 1. 生成稳定 RequestId（基于 runId + toolCall 哈希，确保可重放时一致）
+// + 框架生成 ExternalOperationId（外部操作 ID，Prepare 时落库，重放稳定）
+// 2. 校验 ToolName 非空 + Dispatcher 支持 + 读取 ToolDescriptor 前置声明
+// 3. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
+// （合并两次写为一次），根据结果决策：
+// a. CachedResult 非空（Journal = Committed/ResultDelivered）→ 直接返回缓存结果，禁止重新 Dispatch
+// b. NeedsReconciliation=true（Journal = DispatchingIntent/Dispatched）→ 返回对账结果（携带 ExternalOperationId），不重新 Dispatch
+// c. ShouldDispatch=true（本次新插入或既有 Prepared 已推进，journal 已处于 DispatchingIntent）→ 继续 Dispatch
+// 4. 声明校验（fail-closed）：RequiresLeaseFence 但无 fence → 拒绝；RequiresIdempotencyKey
+// 但无键 → 以 ExternalOperationId 兜底为幂等键
+// 5. IToolDispatcher.DispatchAsync（携带 RequestId + IdempotencyKey + ExternalOperationId）
+// 6. Journal.MarkDispatchedAsync（若注入 journal）
+// 7. 副作用分类（声明优先，运行时结果仅验证）：
+// - None/ReadOnly/Write 等（非 Unknown）→ Journal.MarkCommittedWithResultAsync（同事务持久化 state + result）
+// 并写入 IDurableToolResultStore（若注入，供 Postgres 路径缓存查询）
+// - Unknown → 不提交（等待调用方裁决，返回 JournalState=Dispatched）
+// 8. 返回 ToolExecutionResult（含完整 Tool 身份信息）
 //
 // 修复要点：
-//   - PrepareAsync 返回值决定是否 Dispatch，避免对 Committed/ResultDelivered 重复 Dispatch
-//   - Dispatched 模糊状态返回对账结果，不盲目重新执行外部副作用
-//   - MarkCommittedWithResultAsync 原子提交 state + result，确保崩溃恢复时缓存可读
-//   - IDurableToolResultStore 作为 Postgres 路径的结果缓存（InMemory journal 自带缓存）
-//   - ToolDescriptor 前置副作用声明参与执行前决策与提交分类（声明权威，运行时验证）
+// - PrepareAsync 返回值决定是否 Dispatch，避免对 Committed/ResultDelivered 重复 Dispatch
+// - Dispatched 模糊状态返回对账结果，不盲目重新执行外部副作用
+// - MarkCommittedWithResultAsync 原子提交 state + result，确保崩溃恢复时缓存可读
+// - IDurableToolResultStore 作为 Postgres 路径的结果缓存（InMemory journal 自带缓存）
+// - ToolDescriptor 前置副作用声明参与执行前决策与提交分类（声明权威，运行时验证）
 //
 // 设计决策：
-//   - RequestId 由本执行器生成（稳定哈希），确保 Actor 与 Dispatcher 共享同一 ID。
-//   - ExternalOperationId 由本执行器从稳定 RequestId 派生（"cc:" + requestId），
-//     Prepare 时随 journal 条目持久化；Handler 返回真实外部系统 ID 时在 MarkDispatchedAsync 覆盖。
-//   - Journal / Outbox / ResultStore 为可选依赖（null 时降级为直接 dispatch，无 durable 保证）。
-//   - 审批：Actor 在调用本执行器前通过 IAgentApprovalGate 完成审批，并经
-//     ExecuteAsync 的 approvalGranted=true 显式告知策略层；直连调用（approvalGranted=false）时
-//     策略层对 RequiresApproval 的写副作用 fail-safe（禁止自动提交），防止绕过 Actor 门。
-//   - 失败重试：由策略引擎决定（副作用重试安全 + 未达 MaxRetries 上限），
-//     退避等待后以同一 RequestId/幂等键/ExternalOperationId 重试，外部 Provider 幂等记录可命中。
-//   - 投递模式：AsyncDurable 时 Commit 后显式推进 ResultDelivered（结果已送达事件流）。
-//   - 异常时返回 Succeeded=false 的结果（不抛异常，让 Actor 决定如何处理）。
+// - RequestId 由本执行器生成（稳定哈希），确保 Actor 与 Dispatcher 共享同一 ID。
+// - ExternalOperationId 由本执行器从稳定 RequestId 派生（"cc:" + requestId），
+// Prepare 时随 journal 条目持久化；Handler 返回真实外部系统 ID 时在 MarkDispatchedAsync 覆盖。
+// - Journal / Outbox / ResultStore 为可选依赖（null 时降级为直接 dispatch，无 durable 保证）。
+// - 审批：Actor 在调用本执行器前通过 IAgentApprovalGate 完成审批，并经
+// ExecuteAsync 的 approvalGranted=true 显式告知策略层；直连调用（approvalGranted=false）时
+// 策略层对 RequiresApproval 的写副作用 fail-safe（禁止自动提交），防止绕过 Actor 门。
+// - 失败重试：由策略引擎决定（副作用重试安全 + 未达 MaxRetries 上限），
+// 退避等待后以同一 RequestId/幂等键/ExternalOperationId 重试，外部 Provider 幂等记录可命中。
+// - 投递模式：AsyncDurable 时 Commit 后显式推进 ResultDelivered（结果已送达事件流）。
+// - 异常时返回 Succeeded=false 的结果（不抛异常，让 Actor 决定如何处理）。
 // ===========================================================================
 
 /// <summary>
@@ -161,9 +161,9 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         }
 
         // 4. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
-        //    （合并 PrepareAsync + MarkDispatchingIntentAsync 两次往返为一次，且 durable 边界
-        //      与条目创建原子化——RecoveryDecision=Dispatch 时 journal 必已处于 DispatchingIntent）。
-        //    根据 ToolDispatchPrepareResult 决策：
+        // （合并 PrepareAsync + MarkDispatchingIntentAsync 两次往返为一次，且 durable 边界
+        // 与条目创建原子化——RecoveryDecision=Dispatch 时 journal 必已处于 DispatchingIntent）。
+        // 根据 ToolDispatchPrepareResult 决策：
         ToolDispatchPrepareResult? prepareResult = null;
         if (_dispatchJournal is not null)
         {
@@ -212,7 +212,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         journalState: prepareResult.CurrentState);
 
                 // 4c. Journal = Committed/ResultDelivered 但 journal 不缓存结果（Postgres 路径）
-                //     查询 IDurableToolResultStore；无 resultStore 或缓存未命中 → 返回对账结果
+                // 查询 IDurableToolResultStore；无 resultStore 或缓存未命中 → 返回对账结果
                 case ToolDispatchRecoveryDecision.UseCachedResult:
                     if (_resultStore is not null)
                     {
@@ -242,7 +242,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         reconciliationDeadline: descriptor?.ReconciliationDeadline);
 
                 // 4b. Journal = DispatchingIntent/Dispatched/Reconciling 模糊态 → 返回对账结果，不重新 Dispatch。
-                //     外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决。
+                // 外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决。
                 case ToolDispatchRecoveryDecision.Reconcile:
                     stopwatch.Stop();
                     return BuildReconciliationResult(
@@ -411,7 +411,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
 
         // 6. Journal.MarkDispatchedAsync（若注入 journal）
-        //    外部操作 ID：Handler 返回真实外部系统 ID 时优先，否则保留框架生成值。
+        // 外部操作 ID：Handler 返回真实外部系统 ID 时优先，否则保留框架生成值。
         if (_dispatchJournal is not null)
         {
             try
@@ -427,8 +427,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         }
 
         // 7. 执行后策略处置：由 Tool Policy Engine 决定提交 / 对账 / 拒绝
-        //    声明权威：Descriptor 明确声明副作用类型（非 Unknown）时以声明为准，
-        //    运行时结果仅用于验证（不一致时由调用方审计）；未声明（null/Unknown）时以运行时结果为准。
+        // 声明权威：Descriptor 明确声明副作用类型（非 Unknown）时以声明为准，
+        // 运行时结果仅用于验证（不一致时由调用方审计）；未声明（null/Unknown）时以运行时结果为准。
         var effectiveSideEffect = descriptor is { DeclaredSideEffect: not ToolSideEffect.Unknown }
             ? descriptor.DeclaredSideEffect
             : dispatchResult.SideEffect;

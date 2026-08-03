@@ -10,14 +10,14 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. 折叠前缀 [0..upToSequence]：锚点事件（sequence = upToSequence）保留在热表
-///      <c>agent_run_events</c> 作为新链头，前缀事件（sequence &lt; upToSequence）归档到
-///      <c>agent_run_events_archive</c> 后从热表删除——哈希链完整性不受影响
-///      （后续 AppendAsync 的 prev_chain_hash 校验基准 = 锚点 content_hash）。
-///   2. 快照写入 <c>agent_run_event_snapshots</c>（per-run 单行，UPSERT 幂等）。
-///   3. 压缩幂等：重复调用同一 upToSequence 返回相同结果；upToSequence 超过当前最后
-///      sequence 时自动钳制到最后事件。
-///   4. 归档表 ON CONFLICT DO NOTHING：重复压缩同一前缀不产生重复归档行。
+/// 1. 折叠前缀 [0..upToSequence]：锚点事件（sequence = upToSequence）保留在热表
+/// <c>agent_run_events</c> 作为新链头，前缀事件（sequence &lt; upToSequence）归档到
+/// <c>agent_run_events_archive</c> 后从热表删除——哈希链完整性不受影响
+/// （后续 AppendAsync 的 prev_chain_hash 校验基准 = 锚点 content_hash）。
+/// 2. 快照写入 <c>agent_run_event_snapshots</c>（per-run 单行，UPSERT 幂等）。
+/// 3. 压缩幂等：重复调用同一 upToSequence 返回相同结果；upToSequence 超过当前最后
+/// sequence 时自动钳制到最后事件。
+/// 4. 归档表 ON CONFLICT DO NOTHING：重复压缩同一前缀不产生重复归档行。
 /// </remarks>
 public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRunEventCompactor
 {

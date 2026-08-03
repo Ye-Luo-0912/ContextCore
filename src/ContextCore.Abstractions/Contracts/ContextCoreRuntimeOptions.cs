@@ -4,28 +4,28 @@ namespace ContextCore.Abstractions;
 // 统一运行配置入口契约
 //
 // 目标：
-//   把 ProductionHA Profile 与真实运行模式（Model / AgentModel / Tool）的分裂问题
-//   收敛到单一配置入口 ContextCoreRuntimeOptions。Program.cs 仅调用
-//   AddContextCoreRuntime(builder.Configuration)，由该方法一次性决定：
-//     - Store（根据 Profile 选择 InMemory/Postgres）
-//     - Agent Model Transport（根据 AgentModelMode 选择 Deterministic/RealModel）
-//     - Tool Registry（根据 ToolMode 选择 Echo/RealDispatch）
-//     - ONNX Activation Manager（ModelMode=RealModel 时注册）
-//     - Canary Mode（ProductionHA=Leader, SingleNode/Development=Progression）
-//     - HostedServices（根据 Profile 注册相应 Worker）
-//     - Readiness requirements
+// 把 ProductionHA Profile 与真实运行模式（Model / AgentModel / Tool）的分裂问题
+// 收敛到单一配置入口 ContextCoreRuntimeOptions。Program.cs 仅调用
+// AddContextCoreRuntime(builder.Configuration)，由该方法一次性决定：
+// - Store（根据 Profile 选择 InMemory/Postgres）
+// - Agent Model Transport（根据 AgentModelMode 选择 Deterministic/RealModel）
+// - Tool Registry（根据 ToolMode 选择 Echo/RealDispatch）
+// - ONNX Activation Manager（ModelMode=RealModel 时注册）
+// - Canary Mode（ProductionHA=Leader, SingleNode/Development=Progression）
+// - HostedServices（根据 Profile 注册相应 Worker）
+// - Readiness requirements
 //
 // 设计原则：
-//   1. 默认值保持向后兼容（Development profile + Deterministic 全部）。
-//   2. ModelMode 仅控制 IBatchInferenceEngine 注册选择；AgentModelMode 控制
-//      IAgentModelTransport；ToolMode 控制 IToolDispatcher。
-//   3. ProductionHA profile 强制 Postgres + Agent Run Lease + HA Canary Leader。
-//      （执行平面已收敛到 AgentRunStore → AgentKernelHost → AgentRunActor 单一平面，
-//      旧 Durable Transport 指令平面已删除。）
+// 1. 默认值保持向后兼容（Development profile + Deterministic 全部）。
+// 2. ModelMode 仅控制 IBatchInferenceEngine 注册选择；AgentModelMode 控制
+// IAgentModelTransport；ToolMode 控制 IToolDispatcher。
+// 3. ProductionHA profile 强制 Postgres + Agent Run Lease + HA Canary Leader。
+// （执行平面已收敛到 AgentRunStore → AgentKernelHost → AgentRunActor 单一平面，
+// 旧 Durable Transport 指令平面已删除。）
 //
 // 注：RuntimeProfile 枚举从 ContextCore.Service.Extensions 命名空间迁移到
-//   ContextCore.Abstractions，让 Abstractions 层的 ContextCoreRuntimeOptions
-//   能直接引用。ProductionRuntimeExtensions.cs 中保留同名别名以向后兼容。
+// ContextCore.Abstractions，让 Abstractions 层的 ContextCoreRuntimeOptions
+// 能直接引用。ProductionRuntimeExtensions.cs 中保留同名别名以向后兼容。
 // ===========================================================================
 
 /// <summary>

@@ -10,27 +10,27 @@ namespace ContextCore.Core.Services.AgentKernel;
 // RealToolDispatcher — IToolDispatcher 的真实分派实现
 //
 // 目标：
-//   替代 EchoToolDispatcher 作为生产环境的 IToolDispatcher 实现。
-//   通过 Tool 处理器注册表（IToolHandler）将 Tool 调用分派到真实实现，
-//   而非简单 echo payload。
+// 替代 EchoToolDispatcher 作为生产环境的 IToolDispatcher 实现。
+// 通过 Tool 处理器注册表（IToolHandler）将 Tool 调用分派到真实实现，
+// 而非简单 echo payload。
 //
 // 设计原则：
-//   1. 注册表模式：维护 ConcurrentDictionary<string, IToolHandler>，按 ToolName 分派。
-//      调用方通过 AddHandler / 构造函数注入注册真实 Tool 处理器。
-//   2. 优雅降级：未注册的 Tool 返回 Succeeded=false + 错误信息（不抛异常），
-//      让 Agent 循环能观察错误并继续/终止。
-//   3. 无副作用默认：新构造的 RealToolDispatcher 默认无注册 Handler，
-//      所有 Tool 调用返回 "tool not registered" 错误。
-//      生产部署应通过 DI 工厂注册所需 Handler（如 search / read_file / calculator）。
-//   4. 线程安全：ConcurrentDictionary + 不可变 ToolHandler 注册后不替换。
+// 1. 注册表模式：维护 ConcurrentDictionary<string, IToolHandler>，按 ToolName 分派。
+// 调用方通过 AddHandler / 构造函数注入注册真实 Tool 处理器。
+// 2. 优雅降级：未注册的 Tool 返回 Succeeded=false + 错误信息（不抛异常），
+// 让 Agent 循环能观察错误并继续/终止。
+// 3. 无副作用默认：新构造的 RealToolDispatcher 默认无注册 Handler，
+// 所有 Tool 调用返回 "tool not registered" 错误。
+// 生产部署应通过 DI 工厂注册所需 Handler（如 search / read_file / calculator）。
+// 4. 线程安全：ConcurrentDictionary + 不可变 ToolHandler 注册后不替换。
 //
 // 修复要点：
-//   - IToolHandler.HandleAsync 改为接收 ToolExecutionContext（携带 WorkspaceId/RunId/
-//     RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence），而非仅裸 JSON Payload。
-//   - 注册表冻结：Freeze() 后禁止 AddHandler；DI 工厂在注册完所有 Handler 后调用 Freeze()。
-//   - fail-fast 重复注册：构造函数与 AddHandler 遇到重复 ToolName 抛
-//     InvalidOperationException，不再静默覆盖（避免注册顺序依赖导致的隐蔽 bug）。
-//   - 缓存 SupportedTools：首次读取后缓存为不可变 FrozenSet，避免每次读取创建新 HashSet。
+// - IToolHandler.HandleAsync 改为接收 ToolExecutionContext（携带 WorkspaceId/RunId/
+// RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence），而非仅裸 JSON Payload。
+// - 注册表冻结：Freeze() 后禁止 AddHandler；DI 工厂在注册完所有 Handler 后调用 Freeze()。
+// - fail-fast 重复注册：构造函数与 AddHandler 遇到重复 ToolName 抛
+// InvalidOperationException，不再静默覆盖（避免注册顺序依赖导致的隐蔽 bug）。
+// - 缓存 SupportedTools：首次读取后缓存为不可变 FrozenSet，避免每次读取创建新 HashSet。
 // ===========================================================================
 
 /// <summary>

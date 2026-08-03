@@ -9,10 +9,10 @@ namespace ContextCore.Tests;
 // HA / Concurrency 硬验收门测试
 //
 // 验证任务C 修复后的两个核心 HA/并发保证：
-//   1. OnlyOneInstance_OwnsAgentRunLease
-//      同一 AgentRun 在同一时刻仅能有一个实例持有 Lease（HA 隔离基础）。
-//   2. ActorConcurrency_IsBounded_PerWorkspace
-//      AgentKernelHost 按 workspace 限制并发执行数（bounded Actor scheduler）。
+// 1. OnlyOneInstance_OwnsAgentRunLease
+// 同一 AgentRun 在同一时刻仅能有一个实例持有 Lease（HA 隔离基础）。
+// 2. ActorConcurrency_IsBounded_PerWorkspace
+// AgentKernelHost 按 workspace 限制并发执行数（bounded Actor scheduler）。
 //
 // 这些测试是"硬验收门"——任一失败意味着 HA/并发修复回退，不能合并。
 // ===========================================================================

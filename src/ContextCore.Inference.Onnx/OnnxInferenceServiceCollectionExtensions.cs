@@ -8,24 +8,24 @@ namespace ContextCore.Inference.Onnx;
 // OnnxInferenceServiceCollectionExtensions
 //
 // 目标：
-//   为 ContextCore.Inference.Onnx 提供 DI 注册扩展，让 Service 层能在启动时
-//   把 OnnxInferenceEngine 注入到 IBatchInferenceEngine 接口位。
+// 为 ContextCore.Inference.Onnx 提供 DI 注册扩展，让 Service 层能在启动时
+// 把 OnnxInferenceEngine 注入到 IBatchInferenceEngine 接口位。
 //
 // 设计边界：
-//   1. 不在 DI 容器中直接创建 InferenceSession（需要在启动时加载模型文件，
-//      可能涉及 I/O 与校验失败，不应阻塞 DI 容器构建）。
-//      OnnxInferenceEngine 通过工厂模式在构造时延迟加载模型。
-//   2. 支持两种注册方式：
-//      a) 直接注册：使用调用方提供的 IOnnxInferenceSession（通常用于测试）。
-//      b) 工厂注册：注入 IOnnxInferenceSessionFactory + OnnxInferenceEngineOptions +
-//         可选 ModelArtifactDescriptor，由工厂在首次解析时创建 session。
-//   3. IBatchInferenceEngine 绑定到 OnnxInferenceEngine；不替代 DeterministicBatchInferenceEngine
-//      （后者仍作为 fallback 注入到 IPerformanceMonitor 等路径）。
+// 1. 不在 DI 容器中直接创建 InferenceSession（需要在启动时加载模型文件，
+// 可能涉及 I/O 与校验失败，不应阻塞 DI 容器构建）。
+// OnnxInferenceEngine 通过工厂模式在构造时延迟加载模型。
+// 2. 支持两种注册方式：
+// a) 直接注册：使用调用方提供的 IOnnxInferenceSession（通常用于测试）。
+// b) 工厂注册：注入 IOnnxInferenceSessionFactory + OnnxInferenceEngineOptions +
+// 可选 ModelArtifactDescriptor，由工厂在首次解析时创建 session。
+// 3. IBatchInferenceEngine 绑定到 OnnxInferenceEngine；不替代 DeterministicBatchInferenceEngine
+// （后者仍作为 fallback 注入到 IPerformanceMonitor 等路径）。
 //
 // 新增：
-//   AddModelActivationManager 方法注册 IModelActivationManager 作为 IBatchInferenceEngine 的实现，
-//   以 DeterministicBatchInferenceEngine 为 fallback，运行时通过 ActivateAsync 切换到 OnnxInferenceEngine。
-//   消费方注入 IBatchInferenceEngine 无需感知激活状态。
+// AddModelActivationManager 方法注册 IModelActivationManager 作为 IBatchInferenceEngine 的实现，
+// 以 DeterministicBatchInferenceEngine 为 fallback，运行时通过 ActivateAsync 切换到 OnnxInferenceEngine。
+// 消费方注入 IBatchInferenceEngine 无需感知激活状态。
 // ===========================================================================
 
 /// <summary>

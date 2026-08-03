@@ -8,7 +8,7 @@ namespace ContextCore.Core.Services.BoundedContext;
 /// 编排单次有界修复循环：Plan → Decide → Build → Quality Evaluate → Optional Single Repair → Finalize。
 /// </summary>
 /// <remarks>
-/// <b>设计原则</b>（对齐用户规格与 R22-1 契约）：
+/// <b>设计原则</b>（对齐用户规格与 契约）：
 /// <list type="bullet">
 /// <item><b>不使用无限循环</b>：最多一次修复，不允许 Build → Evaluate → Refine → Evaluate → ... 递归。</item>
 /// <item><b>修复预算必须显式</b>：调用方传入 <see cref="ContextRepairBudget"/>；预算全 0 时跳过修复。</item>

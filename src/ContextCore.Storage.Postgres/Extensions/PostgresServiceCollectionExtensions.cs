@@ -130,7 +130,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IConstraintGapCandidateStore>(sp => sp.GetRequiredService<PostgresConstraintGapCandidateStore>());
 
         // vector lifecycle + artifact stores。
-        // 替代 Unsupported 占位，完成 R14-PG 阶段一垂直闭环，Postgres 无 Unsupported store。
+        // 替代 Unsupported 占位，完成 阶段一垂直闭环，Postgres 无 Unsupported store。
         services.AddSingleton<PostgresVectorReindexReportStore>();
         services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<PostgresVectorReindexReportStore>());
         services.AddSingleton<PostgresVectorLifecycleMetadataReviewCandidateStore>();
@@ -152,7 +152,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentCheckpointStore>();
         services.AddSingleton<IAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
         // 显式注册 IPersistentAgentCheckpointStore 标记接口以区分持久化能力。
-        // delta 链路（R28-G P1-5）完全由恢复路径（事件流 + checkpoint 链）通过标准 GetAsync 走链，
+        // delta 链路完全由恢复路径（事件流 + checkpoint 链）通过标准 GetAsync 走链，
         // Store 不需感知 delta 语义 — 只持久化完整 AgentCheckpoint blob。
         services.AddSingleton<IPersistentAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
         services.AddSingleton<PostgresAgentTaskStateStore>();
@@ -224,7 +224,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IContextPackagePolicyStore>(sp =>
             sp.GetRequiredService<PostgresContextPackagePolicyStore>());
 
-        // JobQueue + JobQueryStore + LeasedJobQueue (P0-4)
+        // JobQueue + JobQueryStore + LeasedJobQueue ()
         services.AddSingleton<PostgresContextJobQueue>();
         services.AddSingleton<IContextJobQueue>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
         services.AddSingleton<IContextJobQueryStore>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
@@ -284,22 +284,22 @@ public static class PostgresServiceCollectionExtensions
 
         // 运行时能力补齐：durable approval + HA Run Owner Lease 持久化（PostgreSQL）。
         // - IAgentApprovalStore：让 DefaultAgentApprovalGate 自动注入持久化实现，
-        //   审批状态（Pending/Approved/Rejected）跨进程持久化，崩溃恢复后可重新加载未决审批。
+        // 审批状态（Pending/Approved/Rejected）跨进程持久化，崩溃恢复后可重新加载未决审批。
         // - IAgentRunLease：让 AgentKernelHost 自动注入持久化租约实现，
-        //   确保同一时刻仅一个 Host 实例处理同一 Run（复用 canary_leader_leases 模式）。
+        // 确保同一时刻仅一个 Host 实例处理同一 Run（复用 canary_leader_leases 模式）。
         services.AddSingleton<PostgresAgentApprovalStore>();
         services.AddSingleton<IAgentApprovalStore>(sp => sp.GetRequiredService<PostgresAgentApprovalStore>());
         services.AddSingleton<IPersistentAgentApprovalStore>(sp => sp.GetRequiredService<PostgresAgentApprovalStore>());
         services.AddSingleton<PostgresAgentRunLease>();
         services.AddSingleton<IAgentRunLease>(sp => sp.GetRequiredService<PostgresAgentRunLease>());
 
-        // WP-D：Learning Materialization worker 池级租约（ILearningLeaseStore）。
+        // Learning Materialization worker 池级租约（ILearningLeaseStore）。
         // 与 learning_event_outbox 记录级租约互补；先于 CoreExtensions 的
         // TryAddSingleton 默认实现注册 → Postgres 实现胜出。
         services.AddSingleton<PostgresLearningLeaseStore>();
         services.AddSingleton<ILearningLeaseStore>(sp => sp.GetRequiredService<PostgresLearningLeaseStore>());
 
-        // Tool Reconciliation Control Plane（P2-B1）：对账记录 PostgreSQL 持久化。
+        // Tool Reconciliation Control Plane（-B1）：对账记录 PostgreSQL 持久化。
         // 替代 InMemoryToolReconciliationStore 成为 ProductionHA 组合根下的真相源：
         // 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一数据库，
         // 杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失。
@@ -327,16 +327,16 @@ public static class PostgresServiceCollectionExtensions
         // Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
         // 替代单节点 InMemory 默认实现，让 HA 场景下 Canary 指标可跨实例聚合 + Leader 选举确保单 leader 推进。
         // - ICanaryLeaderLease：CanaryLeaderHostedService 通过 TryAcquireAsync/RenewAsync/ReleaseAsync
-        //   竞争 per-run leader 租约（复用 P0-1/P0-2 租约模式，但状态机简化为"持有/未持有"两态）。
+        // 竞争 per-run leader 租约（复用 / 租约模式，但状态机简化为"持有/未持有"两态）。
         // - ICanaryMetricsAggregator：各实例将本地 CanaryObservationMetrics 快照写入 canary_metrics_samples 表，
-        //   leader 实例通过 SQL SUM/AVG/MAX 合并跨实例视图，产出 CanaryAggregatedMetrics 供 CanaryProgressionService 评估。
+        // leader 实例通过 SQL SUM/AVG/MAX 合并跨实例视图，产出 CanaryAggregatedMetrics 供 CanaryProgressionService 评估。
         // - ICanaryDecisionApplier（Perf-7）：将 lease/fencing 校验 + pipeline revision CAS + transition audit
-        //   写入 + epoch 递增合并为单一 PostgreSQL 事务，修复旧路径 AdvanceAsync → AdvanceEpochAsync 分两步
-        //   导致的 HA 正确性问题。由 PostgresCanaryLeaderLease 同时实现（共享 lease 表与连接工厂）。
+        // 写入 + epoch 递增合并为单一 PostgreSQL 事务，修复旧路径 AdvanceAsync → AdvanceEpochAsync 分两步
+        // 导致的 HA 正确性问题。由 PostgresCanaryLeaderLease 同时实现（共享 lease 表与连接工厂）。
         // 注意：CanaryLeaderHostedService 自身在 ContextCore.Service 项目中注册（依赖方向约束），
-        //       Storage.Postgres 不引用 Service；调用方应在 Service 层调用
-        //       <c>AddCanaryLeaderHostedService()</c>（若已提供）或 <c>services.AddHostedService&lt;CanaryLeaderHostedService&gt;()</c>
-        //       并配置 <see cref="CanaryLeaderOptions"/>（Enabled=true 启用 HA 模式）。
+        // Storage.Postgres 不引用 Service；调用方应在 Service 层调用
+        // <c>AddCanaryLeaderHostedService()</c>（若已提供）或 <c>services.AddHostedService&lt;CanaryLeaderHostedService&gt;()</c>
+        // 并配置 <see cref="CanaryLeaderOptions"/>（Enabled=true 启用 HA 模式）。
         services.AddSingleton<PostgresCanaryLeaderLease>();
         services.AddSingleton<ICanaryLeaderLease>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());
         services.AddSingleton<ICanaryDecisionApplier>(sp => sp.GetRequiredService<PostgresCanaryLeaderLease>());

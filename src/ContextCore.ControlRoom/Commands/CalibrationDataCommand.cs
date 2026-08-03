@@ -9,22 +9,22 @@ namespace ContextCore.ControlRoom.Commands;
 /// </summary>
 /// <remarks>
 /// 用法：
-///   export-calibration-data --out &lt;directory&gt; [--collection &lt;id&gt;] [--since &lt;ISO8601&gt;] [--until &lt;ISO8601&gt;]
-///                            [--decision-id &lt;id&gt;] [--model-artifact-id &lt;id&gt;] [--model-name &lt;name&gt;]
-///                            [--include-no-model-score] [--take &lt;N&gt;]
+/// export-calibration-data --out &lt;directory&gt; [--collection &lt;id&gt;] [--since &lt;ISO8601&gt;] [--until &lt;ISO8601&gt;]
+/// [--decision-id &lt;id&gt;] [--model-artifact-id &lt;id&gt;] [--model-name &lt;name&gt;]
+/// [--include-no-model-score] [--take &lt;N&gt;]
 ///
 /// 输出：
-///   {OutputDirectory}/calibration-data.jsonl          — 校准样本（每行一条 JSONL）
-///   {OutputDirectory}/calibration-data.manifest.json   — 清单（含 SHA-256、正负样本统计与 model artifact 追溯）
+/// {OutputDirectory}/calibration-data.jsonl — 校准样本（每行一条 JSONL）
+/// {OutputDirectory}/calibration-data.manifest.json — 清单（含 SHA-256、正负样本统计与 model artifact 追溯）
 ///
 /// 说明：
-///   - 校准数据用于拟合 Platt / Temperature / Isotonic 校准参数：
-///     predicted = ModelScore（模型原始推理分数）
-///     observed  = IsSelected（二分类实际结果）
-///     weight    = UtilityContribution（Expert 贡献比例，默认 1.0）
-///   - 默认仅导出 ModelScore 非 null 的条目（校准必须有模型预测分数）。
-///     使用 --include-no-model-score 可关闭此过滤（仅诊断用途）。
-///   - 导出过程幂等：重复执行覆盖输出文件，不修改 ledger 状态。
+/// - 校准数据用于拟合 Platt / Temperature / Isotonic 校准参数：
+/// predicted = ModelScore（模型原始推理分数）
+/// observed = IsSelected（二分类实际结果）
+/// weight = UtilityContribution（Expert 贡献比例，默认 1.0）
+/// - 默认仅导出 ModelScore 非 null 的条目（校准必须有模型预测分数）。
+/// 使用 --include-no-model-score 可关闭此过滤（仅诊断用途）。
+/// - 导出过程幂等：重复执行覆盖输出文件，不修改 ledger 状态。
 /// </remarks>
 public static class CalibrationDataCommand
 {
@@ -153,16 +153,16 @@ public static class CalibrationDataCommand
                                   [--take <N>]
 
         选项：
-          --out <directory>              输出目录（必填；不存在时自动创建）
-          --workspace <id>               workspace 作用域（默认：当前 ControlRoom 选中工作区）
-          --collection <id>              collection 作用域（默认：当前选中集合；传空字符串表示跨集合）
-          --since <ISO8601>             仅导出 MaterializedAt >= Since 的条目
-          --until <ISO8601>             仅导出 MaterializedAt <= Until 的条目
-          --decision-id <id>             仅导出指定 DecisionId 的条目
-          --model-artifact-id <id>       关联的 ModelArtifactId（写入 manifest 用于追溯）
-          --model-name <name>            关联的 ModelName（写入 manifest 用于追溯）
-          --include-no-model-score       包含 ModelScore=null 的条目（默认排除；仅诊断用途）
-          --take <N>                     最大导出条目数（0 = 不限制）
+          --out <directory> 输出目录（必填；不存在时自动创建）
+          --workspace <id> workspace 作用域（默认：当前 ControlRoom 选中工作区）
+          --collection <id> collection 作用域（默认：当前选中集合；传空字符串表示跨集合）
+          --since <ISO8601> 仅导出 MaterializedAt >= Since 的条目
+          --until <ISO8601> 仅导出 MaterializedAt <= Until 的条目
+          --decision-id <id> 仅导出指定 DecisionId 的条目
+          --model-artifact-id <id> 关联的 ModelArtifactId（写入 manifest 用于追溯）
+          --model-name <name> 关联的 ModelName（写入 manifest 用于追溯）
+          --include-no-model-score 包含 ModelScore=null 的条目（默认排除；仅诊断用途）
+          --take <N> 最大导出条目数（0 = 不限制）
 
         输出：
           {out}/calibration-data.jsonl          — 校准样本（每行一条 JSONL）

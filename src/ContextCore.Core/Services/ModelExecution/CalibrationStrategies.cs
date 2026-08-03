@@ -7,16 +7,16 @@ namespace ContextCore.Core.Services.ModelExecution;
 //
 // 目标：把校准从单一 PlattCalibrationService（默认 A=1 B=0 但实际执行 sigmoid，
 // 导致 raw=0 → 0.5 而非 0）重构为显式的多策略：
-//   - IdentityCalibration        —— calibrated = raw（真正的恒等变换）
-//   - PlattCalibration            —— calibrated = sigmoid(A*raw + B)
-//   - TemperatureCalibration      —— calibrated = sigmoid(raw / T)
-//   - IsotonicCalibration         —— 分段线性插值（points 必须按 Input 升序）
+// - IdentityCalibration —— calibrated = raw（真正的恒等变换）
+// - PlattCalibration —— calibrated = sigmoid(A*raw + B)
+// - TemperatureCalibration —— calibrated = sigmoid(raw / T)
+// - IsotonicCalibration —— 分段线性插值（points 必须按 Input 升序）
 //
 // 设计原则：
-//   1. 每种策略独立类型，便于单元测试与审计。
-//   2. ICalibrationStrategy 路由：DefaultCalibrationService 据 Kind 选择实现。
-//   3. 数值稳定：sigmoid 对 |x| > 35 饱和；插值外推用边界值。
-//   4. IdentityCalibration 不调用 Math.Exp，零开销。
+// 1. 每种策略独立类型，便于单元测试与审计。
+// 2. ICalibrationStrategy 路由：DefaultCalibrationService 据 Kind 选择实现。
+// 3. 数值稳定：sigmoid 对 |x| > 35 饱和；插值外推用边界值。
+// 4. IdentityCalibration 不调用 Math.Exp，零开销。
 // ===========================================================================
 
 /// <summary>

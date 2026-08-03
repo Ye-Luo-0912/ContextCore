@@ -8,10 +8,10 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 读 API：QueryFeedbackAsync / GetLatestFeedbackForCandidateAsync。
-///   2. 写 API：AppendFeedbackAsync — 单条追加，不去重（同 IdempotencyKey 可有多条历史快照）。
-///   3. 关联校验跳过：InMemory 实现不做 EXISTS 校验以保持测试友好；生产路径由 Postgres 实现负责。
-///   4. 生产部署应替换为 PostgresUserFeedbackLedgerStore（实现同一 <see cref="IUserFeedbackLedger"/> 契约）。
+/// 1. 读 API：QueryFeedbackAsync / GetLatestFeedbackForCandidateAsync。
+/// 2. 写 API：AppendFeedbackAsync — 单条追加，不去重（同 IdempotencyKey 可有多条历史快照）。
+/// 3. 关联校验跳过：InMemory 实现不做 EXISTS 校验以保持测试友好；生产路径由 Postgres 实现负责。
+/// 4. 生产部署应替换为 PostgresUserFeedbackLedgerStore（实现同一 <see cref="IUserFeedbackLedger"/> 契约）。
 /// </remarks>
 public sealed class InMemoryUserFeedbackLedgerStore : IUserFeedbackLedger
 {

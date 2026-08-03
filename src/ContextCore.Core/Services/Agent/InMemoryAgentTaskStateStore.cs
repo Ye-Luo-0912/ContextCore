@@ -7,12 +7,12 @@ namespace ContextCore.Core.Services.Agent;
 // InMemoryAgentTaskStateStore — Agent 任务状态内存存储实现。
 //
 // 实现 IAgentTaskStateStore：
-//   - ConcurrentDictionary<string, AgentTaskState> 后端
-//   - 主键 (workspace_id, task_id) 复合键（P0-6 修复）
-//   - SaveAsync 幂等（同主键覆盖）
-//   - GetAsync 必须传 workspaceId（P0-6 修复）；不存在返回 null
-//   - ListBySessionAsync 按 SessionId 过滤 + UpdatedAt 倒序
-//   - DeleteAsync 必须传 workspaceId（P0-6 修复）；存在/不存在
+// - ConcurrentDictionary<string, AgentTaskState> 后端
+// - 主键 (workspace_id, task_id) 复合键（修复）
+// - SaveAsync 幂等（同主键覆盖）
+// - GetAsync 必须传 workspaceId（修复）；不存在返回 null
+// - ListBySessionAsync 按 SessionId 过滤 + UpdatedAt 倒序
+// - DeleteAsync 必须传 workspaceId（修复）；存在/不存在
 // ===========================================================================
 
 /// <summary>

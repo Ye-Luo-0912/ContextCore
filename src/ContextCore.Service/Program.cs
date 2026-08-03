@@ -151,7 +151,7 @@ if (securityOptions.AllowedOrigins.Count > 0)
 var app = builder.Build();
 
 // 中间件顺序（重要）：
-//   RateLimiter → RequestTimeouts → CORS → ApiKey → WorkspaceContext → AuditLog → Endpoint
+// RateLimiter → RequestTimeouts → CORS → ApiKey → WorkspaceContext → AuditLog → Endpoint
 // RateLimiter 最先：在认证前拒绝超限请求（节省下游资源）。
 // ApiKey 在 WorkspaceContext 之前：WorkspaceContext 依赖 ApiKey 已写入的 ApiKeyId。
 // AuditLog 在 WorkspaceContext 之后：审计日志需要 workspace_id（由 WorkspaceContext 填充）。
@@ -366,7 +366,7 @@ static async Task RunProductionAdmissionAsync(WebApplication app, ILogger<Progra
 // ── PostgreSQL 启动连接、schema bootstrap 与 version 验证（fail-fast）────────────
 // 在 app.Run() 前先执行 SELECT 1 确认 Postgres 可达；然后（若 AutoBootstrap=true）应用幂等 baseline migration
 // 打破“缺 schema → 服务退出 → 无法访问迁移 HTTP 接口”自锁；最后校验 schema version 是否与代码期望一致。
-// 任一环节失败则 LogCritical 并中止进程。这是 B1 §9.2 fail-fast 保护，避免数据库不可达或 schema 过期时
+// 任一环节失败则 LogCritical 并中止进程。这是 B1 fail-fast 保护，避免数据库不可达或 schema 过期时
 // 服务静默启动但存储全部报错。超时设为 30 秒（schema 校验与迁移比 SELECT 1 慢）。
 if (storageOptions.IsPostgres)
 {

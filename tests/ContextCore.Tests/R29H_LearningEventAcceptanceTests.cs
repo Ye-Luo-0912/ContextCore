@@ -12,20 +12,20 @@ namespace ContextCore.Tests;
 // Learning Event 硬验收门测试
 //
 // 背景：
-//   任务 E 修复了 Learning Loop 静默丢训练数据问题——将 fire-and-forget
-//   Task.Run → MaterializeAsync → catch {} 模式替换为 Durable Outbox + batch worker。
-//   本验收门验证以下硬保证：
-//     1. Learning Event 入队到 Durable Outbox 后，进程崩溃（worker 未启动）也不丢数据。
-//     2. 物化失败被重试，且失败可观测（metrics.FailedEvents 递增），超过最大重试次数后进入 dead-letter。
-//     3. 数据集快照包含完整性报告与血缘信息（DatasetSnapshot 概念尚未实现 → Inconclusive）。
+// 任务 E 修复了 Learning Loop 静默丢训练数据问题——将 fire-and-forget
+// Task.Run → MaterializeAsync → catch {} 模式替换为 Durable Outbox + batch worker。
+// 本验收门验证以下硬保证：
+// 1. Learning Event 入队到 Durable Outbox 后，进程崩溃（worker 未启动）也不丢数据。
+// 2. 物化失败被重试，且失败可观测（metrics.FailedEvents 递增），超过最大重试次数后进入 dead-letter。
+// 3. 数据集快照包含完整性报告与血缘信息（DatasetSnapshot 概念尚未实现 → Inconclusive）。
 //
 // 设计说明：
-//   - 项目未提供 InMemory 版 ILearningEventOutboxStore（仅 Postgres 实现），故在测试内
-//     提供 InMemoryLearningEventOutboxStore 替身，精确模拟 PostgresLearningEventOutboxStore
-//     的 lease + retry + CAS 语义（SELECT FOR UPDATE SKIP LOCKED / retry_count + 1 >= max → DeadLettered）。
-//   - LearningMaterializationWorker 为 BackgroundService，需 DI scope + 生命周期，在 Postgres
-//     集成测试中覆盖；此处手动模拟 worker 循环（AcquirePending → Materialize → Ack/MarkFailed）
-//     以直接验证 outbox store 的 retry/dead-letter 契约 + 可观测性指标。
+// - 项目未提供 InMemory 版 ILearningEventOutboxStore（仅 Postgres 实现），故在测试内
+// 提供 InMemoryLearningEventOutboxStore 替身，精确模拟 PostgresLearningEventOutboxStore
+// 的 lease + retry + CAS 语义（SELECT FOR UPDATE SKIP LOCKED / retry_count + 1 >= max → DeadLettered）。
+// - LearningMaterializationWorker 为 BackgroundService，需 DI scope + 生命周期，在 Postgres
+// 集成测试中覆盖；此处手动模拟 worker 循环（AcquirePending → Materialize → Ack/MarkFailed）
+// 以直接验证 outbox store 的 retry/dead-letter 契约 + 可观测性指标。
 // ===========================================================================
 
 [TestClass]
@@ -47,8 +47,8 @@ public sealed class R29H_LearningEventAcceptanceTests
 
     // -----------------------------------------------------------------------
     // 1. LearningEvent_Survives_ProcessCrash
-    //    验证：Learning Event 入队到 Durable Outbox 后，即使进程"崩溃"（worker 未启动），
-    //    事件仍持久化在 outbox store 中（Pending 状态），不会丢失。
+    // 验证：Learning Event 入队到 Durable Outbox 后，即使进程"崩溃"（worker 未启动），
+    // 事件仍持久化在 outbox store 中（Pending 状态），不会丢失。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
@@ -99,8 +99,8 @@ public sealed class R29H_LearningEventAcceptanceTests
         // -----------------------------------------------------------------------
         // 附加：in-memory channel 路径（非 Postgres 回退）的排队语义验证。
         // 注意：in-memory channel 非持久（进程真实崩溃会丢失，与原 Task.Run 行为一致），
-        //       此处仅验证"未启动 worker = 未消费 = 未丢失"的排队语义，非崩溃持久性。
-        //       崩溃持久性的硬保证由上面的 Durable Outbox 路径提供。
+        // 此处仅验证"未启动 worker = 未消费 = 未丢失"的排队语义，非崩溃持久性。
+        // 崩溃持久性的硬保证由上面的 Durable Outbox 路径提供。
         // -----------------------------------------------------------------------
         var channelMetrics = new LearningMaterializationMetrics();
         var channelLedger = new InMemoryUtilityLedgerStore();
@@ -123,8 +123,8 @@ public sealed class R29H_LearningEventAcceptanceTests
 
     // -----------------------------------------------------------------------
     // 2. MaterializationFailure_IsRetried_AndObservable
-    //    验证：物化失败时被重试（retry_count 递增），失败可观测（metrics.FailedEvents 递增），
-    //    超过最大重试次数后转入 dead-letter（state=DeadLettered）。
+    // 验证：物化失败时被重试（retry_count 递增），失败可观测（metrics.FailedEvents 递增），
+    // 超过最大重试次数后转入 dead-letter（state=DeadLettered）。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
@@ -154,7 +154,7 @@ public sealed class R29H_LearningEventAcceptanceTests
         await dispatcher.EnqueueAsync(decision, "ws-retry", "col-retry", cts.Token);
 
         // 模拟 LearningMaterializationWorker 的 worker 循环：
-        //   AcquirePending → 反序列化 payload → MaterializeAsync（失败）→ MarkFailed（retry/dead-letter）。
+        // AcquirePending → 反序列化 payload → MaterializeAsync（失败）→ MarkFailed（retry/dead-letter）。
         // 反复直到无 Pending（已转入 DeadLettered）。
         var owner = "test-worker";
         var leaseDuration = TimeSpan.FromMinutes(1);
@@ -229,8 +229,8 @@ public sealed class R29H_LearningEventAcceptanceTests
 
     // -----------------------------------------------------------------------
     // 3. DatasetSnapshot_HasCompleteness_AndLineageReport
-    //    验证：数据集快照应包含完整性报告（completeness）与血缘信息（lineage）。
-    //    现状：项目仅有 TrainingDataExporter（JSONL + manifest），尚未实现独立 DatasetSnapshot。
+    // 验证：数据集快照应包含完整性报告（completeness）与血缘信息（lineage）。
+    // 现状：项目仅有 TrainingDataExporter（JSONL + manifest），尚未实现独立 DatasetSnapshot。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
@@ -302,9 +302,9 @@ public sealed class R29H_LearningEventAcceptanceTests
 
     // -----------------------------------------------------------------------
     // 4. ExpiredLease_AckNackRenewAllRejected
-    //    验证：lease 过期后，Ack/MarkFailed/RenewLease/RenewLeaseBatch 全部被拒绝
-    //    （CAS 统一校验 lease_expires_at > now）——旧 Worker 无法续活过期 lease，
-    //    也无法在过期后把记录回退/死信/确认。过期 Processing 记录仍可被新 Worker 重新抢占。
+    // 验证：lease 过期后，Ack/MarkFailed/RenewLease/RenewLeaseBatch 全部被拒绝
+    // （CAS 统一校验 lease_expires_at > now）——旧 Worker 无法续活过期 lease，
+    // 也无法在过期后把记录回退/死信/确认。过期 Processing 记录仍可被新 Worker 重新抢占。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
@@ -371,8 +371,8 @@ public sealed class R29H_LearningEventAcceptanceTests
 
     // -----------------------------------------------------------------------
     // 5. RenewLeaseBatch_ReturnsDbConfirmedExpiry
-    //    验证：批量续约返回每个成功续约 eventId 的数据库确认新到期时间（Postgres 为
-    //    RETURNING lease_expires_at）——Worker 以该值更新本地期限，不再以应用时钟重新估算。
+    // 验证：批量续约返回每个成功续约 eventId 的数据库确认新到期时间（Postgres 为
+    // RETURNING lease_expires_at）——Worker 以该值更新本地期限，不再以应用时钟重新估算。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
@@ -425,8 +425,8 @@ public sealed class R29H_LearningEventAcceptanceTests
 
     // -----------------------------------------------------------------------
     // 6. Acquire_ReturnsDbConfirmedLeaseExpiresAt
-    //    验证：AcquirePendingAsync 返回的记录携带数据库确认的 LeaseExpiresAt
-    //    （Postgres RETURNING lease_expires_at）——Worker 本地期限直接采用该值。
+    // 验证：AcquirePendingAsync 返回的记录携带数据库确认的 LeaseExpiresAt
+    // （Postgres RETURNING lease_expires_at）——Worker 本地期限直接采用该值。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]

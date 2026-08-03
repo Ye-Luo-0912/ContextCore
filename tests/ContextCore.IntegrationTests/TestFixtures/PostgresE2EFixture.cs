@@ -12,31 +12,31 @@ namespace ContextCore.IntegrationTests.TestFixtures;
 // 统一 Docker 不可用时的 Assert.Inconclusive 语义。
 //
 // 用法（MSTest Class-level fixture）：
-//   [TestClass]
-//   public sealed class MyE2ETests : IDisposable
-//   {
-//       private readonly PostgresE2EFixture _pg = new();
+// [TestClass]
+// public sealed class MyE2ETests : IDisposable
+// {
+// private readonly PostgresE2EFixture _pg = new();
 //
-//       [TestInitialize]
-//       public async Task InitializeAsync() => await _pg.StartAsync();
+// [TestInitialize]
+// public async Task InitializeAsync() => await _pg.StartAsync();
 //
-//       [TestCleanup]
-//       public Task CleanupAsync() => _pg.DisposeAsync().AsTask();
+// [TestCleanup]
+// public Task CleanupAsync() => _pg.DisposeAsync().AsTask();
 //
-//       [TestMethod]
-//       public async Task MyTest()
-//       {
-//           if (_pg.ShouldSkip) { Assert.Inconclusive(...); return; }
-//           var (factory, runner, serializer) = _pg.CreateInfrastructure("prefix_");
-//           ...
-//       }
-//   }
+// [TestMethod]
+// public async Task MyTest()
+// {
+// if (_pg.ShouldSkip) { Assert.Inconclusive(...); return; }
+// var (factory, runner, serializer) = _pg.CreateInfrastructure("prefix_");
+// ...
+// }
+// }
 //
 // 设计原则：
-//   1. 每个 fixture 实例启动独立的 PostgreSqlContainer（测试类间隔离）。
-//   2. Docker 不可用时 ShouldSkip=true，测试应 Assert.Inconclusive 跳过。
-//   3. 跳过提示语统一为"此结果不证明生产证据通过"——语义上明确区分"未跑"与"通过"。
-//   4. 镜像统一为 pgvector/pgvector:pg17（含 pgvector 扩展，与生产一致）。
+// 1. 每个 fixture 实例启动独立的 PostgreSqlContainer（测试类间隔离）。
+// 2. Docker 不可用时 ShouldSkip=true，测试应 Assert.Inconclusive 跳过。
+// 3. 跳过提示语统一为"此结果不证明生产证据通过"——语义上明确区分"未跑"与"通过"。
+// 4. 镜像统一为 pgvector/pgvector:pg17（含 pgvector 扩展，与生产一致）。
 // ===========================================================================
 
 /// <summary>

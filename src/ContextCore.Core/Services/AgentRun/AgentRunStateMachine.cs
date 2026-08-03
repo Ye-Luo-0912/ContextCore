@@ -7,10 +7,10 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //
 // 校验 AgentRunState 的合法状态流转（参考 AgentRunState 注释中的合法流转图）。
 // 状态机复用 ToolDispatchState 的 expected-state CAS + 不可逆前向推进模式：
-//   - 任意非终态可单向流转到下一阶段；
-//   - 任意状态可流转到 Failed（异常）/ Cancelled（用户取消）；
-//   - 终态（Completed / Failed / Cancelled）不可再流转；
-//   - 非法流转抛 InvalidOperationException。
+// - 任意非终态可单向流转到下一阶段；
+// - 任意状态可流转到 Failed（异常）/ Cancelled（用户取消）；
+// - 终态（Completed / Failed / Cancelled）不可再流转；
+// - 非法流转抛 InvalidOperationException。
 // ===========================================================================
 
 /// <summary>
@@ -20,20 +20,20 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// 合法流转图（与 <see cref="AgentRunState"/> 注释一致）：
 /// <code>
 /// Created → ContextBuilding → ModelCalling → AwaitingApproval
-///    ↓           ↓                ↓               ↓
-///    └───────────┴────────────────┴───────────────┘
-///                        ↓
-///               ToolDispatching → AwaitingApproval（需审批时挂起）
-///                        ↓            ↓
-///                        └────────────┘
-///                                     ↓
-///                          Observing → Checkpointing
-///                        ↓            ↓            ↓
-///                        └────────────┴────────────┘
-///                                     ↓
-///                          ┌────── Completed
-///                          ├────── Failed
-///                          └──── Cancelled (仅由外部取消触发)
+/// ↓ ↓ ↓ ↓
+/// └───────────┴────────────────┴───────────────┘
+/// ↓
+/// ToolDispatching → AwaitingApproval（需审批时挂起）
+/// ↓ ↓
+/// └────────────┘
+/// ↓
+/// Observing → Checkpointing
+/// ↓ ↓ ↓
+/// └────────────┴────────────┘
+/// ↓
+/// ┌────── Completed
+/// ├────── Failed
+/// └──── Cancelled (仅由外部取消触发)
 /// </code>
 /// 任意状态可跳转到 Failed（异常）或 Cancelled（用户取消）。
 /// Checkpointing 后回到 ContextBuilding 开启下一轮循环。
@@ -58,7 +58,7 @@ public static class AgentRunStateMachine
 
         // 任意状态可跳转到 Failed / Cancelled（终态短路，幂等收尾）
         // LeaseLost 表示丢租（区别于用户主动 Cancelled），但 Completed/Cancelled
-        //       已是确定终态，不可被旧 owner 的丢租写入覆盖（旧 owner 无 fencing token）。
+        // 已是确定终态，不可被旧 owner 的丢租写入覆盖（旧 owner 无 fencing token）。
         if (to == AgentRunState.Failed || to == AgentRunState.Cancelled)
         {
             // 已终态再跳 Failed/Cancelled 仍允许（幂等收尾），但不会改变事实
@@ -114,7 +114,7 @@ public static class AgentRunStateMachine
     /// <remarks>
     /// <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 不是终态：它表示恢复依赖（事件存储）
     /// 暂时不可用，fail-closed 下不得回退为全新启动，但依赖恢复后由恢复 Worker 在退避门
-    /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（P2-4 退避重试）。
+    /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（退避重试）。
     /// </remarks>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
@@ -153,12 +153,12 @@ public static class AgentRunStateMachine
             AgentRunState.Created => to == AgentRunState.ContextBuilding,
 
             // ContextBuilding → ModelCalling（开始调用模型）
-            //                   / AwaitingReconciliation（轮次结束且存在未裁决高风险 Tool，暂停等待对账）
+            // / AwaitingReconciliation（轮次结束且存在未裁决高风险 Tool，暂停等待对账）
             AgentRunState.ContextBuilding => to == AgentRunState.ModelCalling
                                               || to == AgentRunState.AwaitingReconciliation,
 
             // ModelCalling → AwaitingApproval（高风险需审批）/ ToolDispatching（直接分派）/ Completed（最终答案）/ ContextBuilding（重试）
-            //                 / AwaitingReconciliation（模型产出最终答案但存在未裁决高风险 Tool，暂停等待对账）
+            // / AwaitingReconciliation（模型产出最终答案但存在未裁决高风险 Tool，暂停等待对账）
             AgentRunState.ModelCalling => to == AgentRunState.AwaitingApproval
                                           || to == AgentRunState.ToolDispatching
                                           || to == AgentRunState.Completed
@@ -166,25 +166,25 @@ public static class AgentRunStateMachine
                                           || to == AgentRunState.AwaitingReconciliation,
 
             // AwaitingApproval → PendingToolExecution（审批通过后直接执行原 Tool，不重新调用模型）
-            //                    / ToolDispatching（旧路径兼容：批准后继续分派）
-            //                    / ContextBuilding（拒绝后回到上下文构建重试）/ Completed（拒绝且无法继续则完成）
+            // / ToolDispatching（旧路径兼容：批准后继续分派）
+            // / ContextBuilding（拒绝后回到上下文构建重试）/ Completed（拒绝且无法继续则完成）
             AgentRunState.AwaitingApproval => to == AgentRunState.PendingToolExecution
                                               || to == AgentRunState.ToolDispatching
                                               || to == AgentRunState.ContextBuilding
                                               || to == AgentRunState.Completed,
 
             // PendingToolExecution → Observing（原 Tool 执行完成后观察结果，继续 Observation→Model 循环）
-            //                        / Failed（执行异常）/ Cancelled（外部取消，由短路处理）
+            // / Failed（执行异常）/ Cancelled（外部取消，由短路处理）
             AgentRunState.PendingToolExecution => to == AgentRunState.Observing,
 
             // ToolDispatching → AwaitingApproval（Tool 分派中需审批时挂起等待人工裁决）/ Observing（观察结果）
-            //                    / AwaitingReconciliation（分派后存在未裁决高风险 Tool，等待对账）
+            // / AwaitingReconciliation（分派后存在未裁决高风险 Tool，等待对账）
             AgentRunState.ToolDispatching => to == AgentRunState.AwaitingApproval
                                               || to == AgentRunState.Observing
                                               || to == AgentRunState.AwaitingReconciliation,
 
             // Observing → Checkpointing（保存检查点）/ ContextBuilding（直接进入下一轮，跳过 checkpoint）/ Completed（无需继续则完成）
-            //             / AwaitingReconciliation（观察后存在未裁决高风险 Tool，等待对账）
+            // / AwaitingReconciliation（观察后存在未裁决高风险 Tool，等待对账）
             AgentRunState.Observing => to == AgentRunState.Checkpointing
                                        || to == AgentRunState.ContextBuilding
                                        || to == AgentRunState.Completed
@@ -195,14 +195,14 @@ public static class AgentRunStateMachine
                                             || to == AgentRunState.Completed,
 
             // AwaitingReconciliation → ReconciliationRunning（Worker 接管对账）
-            //                          / ContextBuilding（全部裁决完成，恢复执行）/ ReconciliationRejected（裁决被拒绝）
+            // / ContextBuilding（全部裁决完成，恢复执行）/ ReconciliationRejected（裁决被拒绝）
             AgentRunState.AwaitingReconciliation => to == AgentRunState.ReconciliationRunning
                                                     || to == AgentRunState.ContextBuilding
                                                     || to == AgentRunState.ReconciliationRejected,
 
             // ReconciliationRunning → AwaitingReconciliation（对账仍在进行/重试）
-            //                         / ContextBuilding（对账完成，Actor 恢复执行规范化）
-            //                         / ReconciliationRejected（裁决被拒绝）
+            // / ContextBuilding（对账完成，Actor 恢复执行规范化）
+            // / ReconciliationRejected（裁决被拒绝）
             AgentRunState.ReconciliationRunning => to == AgentRunState.AwaitingReconciliation
                                                    || to == AgentRunState.ContextBuilding
                                                    || to == AgentRunState.ReconciliationRejected,
@@ -210,7 +210,7 @@ public static class AgentRunStateMachine
             // ReconciliationRejected 已是终态（仅可跳转 Failed/Cancelled，由调用方短路处理）
             AgentRunState.ReconciliationRejected => false,
 
-            // RecoveryDependencyUnavailable → ContextBuilding（P2-4 退避重试）：
+            // RecoveryDependencyUnavailable → ContextBuilding（退避重试）：
             // 恢复依赖（事件存储）恢复后，由恢复 Worker 在退避门（NextRetryAtUtc）通过后
             // 重新入队执行；Actor 恢复路径将本地状态规范化为 ContextBuilding。
             // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入），不在此声明。

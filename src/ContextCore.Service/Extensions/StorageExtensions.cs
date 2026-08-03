@@ -28,7 +28,7 @@ internal static class StorageExtensions
 		=> sp.GetService<IStateCacheInvalidator>() ?? NullStateCacheInvalidator.Instance;
 
 	/// <summary>
-	/// 解析状态版本存储；未注册时返回 null（Decorator 跳过 bump）。R10-2 P3。
+	/// 解析状态版本存储；未注册时返回 null（Decorator 跳过 bump）。 。
 	/// </summary>
 	private static IContextStateVersionStore? GetVersionStore(IServiceProvider sp)
 		=> sp.GetService<IContextStateVersionStore>();
@@ -109,9 +109,9 @@ internal static class StorageExtensions
 	/// <summary>
 	/// 根据配置注册存储服务。
 	/// <list type="bullet">
-	///   <item><c>filesystem</c>：使用 <see cref="FileContextStore"/> 等文件系统实现，当前推荐的 Alpha 持久化后端。</item>
-	///   <item><c>memory</c>：使用 <see cref="InMemoryContextStore"/> 等内存实现（仅用于测试）。</item>
-		///   <item><c>postgres</c>：需配置 <see cref="StorageOptions.PostgresConnectionString"/>，启动时自动建表（AutoMigrate）。</item>
+	/// <item><c>filesystem</c>：使用 <see cref="FileContextStore"/> 等文件系统实现，当前推荐的 Alpha 持久化后端。</item>
+	/// <item><c>memory</c>：使用 <see cref="InMemoryContextStore"/> 等内存实现（仅用于测试）。</item>
+		/// <item><c>postgres</c>：需配置 <see cref="StorageOptions.PostgresConnectionString"/>，启动时自动建表（AutoMigrate）。</item>
 	/// </list>
 	/// </summary>
 	public static IServiceCollection AddContextStorage(

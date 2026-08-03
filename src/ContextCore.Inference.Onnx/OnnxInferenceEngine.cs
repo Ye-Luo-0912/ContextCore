@@ -7,23 +7,23 @@ namespace ContextCore.Inference.Onnx;
 // OnnxInferenceEngine — IBatchInferenceEngine 的 ONNX 实现
 //
 // 目标：
-//   1. 把 IOnnxInferenceSession 适配为 IBatchInferenceEngine，让 ContextCore
-//      既有评分链路（DefaultContextDecisionEngine / Scorer 等）能直接消费 ONNX 真实模型。
-//   2. 对外暴露 ModelVersion / Kind / ContentHash / CalibrationVersion 元数据，
-//      与 DeterministicBatchInferenceEngine 实现契约一致；Kind = RealModel。
-//   3. 同时支持字典路径（InferAsync）与连续内存路径（InferBatchAsync）：
-//      - InferBatchAsync：直接转发到 session，零拷贝。
-//      - InferAsync：将 FeatureVector.Values 字典转为连续 float 内存后调用 InferBatchAsync。
-//   4. 超时控制：构造 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts)
-//      并在请求的 TimeoutMs 或 options.InferenceTimeoutMs 中取较小者作为硬超时。
+// 1. 把 IOnnxInferenceSession 适配为 IBatchInferenceEngine，让 ContextCore
+// 既有评分链路（DefaultContextDecisionEngine / Scorer 等）能直接消费 ONNX 真实模型。
+// 2. 对外暴露 ModelVersion / Kind / ContentHash / CalibrationVersion 元数据，
+// 与 DeterministicBatchInferenceEngine 实现契约一致；Kind = RealModel。
+// 3. 同时支持字典路径（InferAsync）与连续内存路径（InferBatchAsync）：
+// - InferBatchAsync：直接转发到 session，零拷贝。
+// - InferAsync：将 FeatureVector.Values 字典转为连续 float 内存后调用 InferBatchAsync。
+// 4. 超时控制：构造 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts)
+// 并在请求的 TimeoutMs 或 options.InferenceTimeoutMs 中取较小者作为硬超时。
 //
 // 设计原则：
-//   1. 单例：构造时加载会话，所有推理请求复用同一 session；OnnxRuntime session.Run 线程安全。
-//   2. CalibrationVersion 来自外部注入（ICalibrationService 或 ModelArtifactDescriptor）；
-//      引擎本身不持久化校准参数。
-//   3. 异常隔离：session 抛出的非取消异常被捕获并转为 Succeeded=false 的结果，
-//      与 DeterministicBatchInferenceEngine 行为一致；OperationCanceledException 不被捕获
-//      （与项目内存约束一致：Authoritative Runtime 不捕获 OperationCanceledException）。
+// 1. 单例：构造时加载会话，所有推理请求复用同一 session；OnnxRuntime session.Run 线程安全。
+// 2. CalibrationVersion 来自外部注入（ICalibrationService 或 ModelArtifactDescriptor）；
+// 引擎本身不持久化校准参数。
+// 3. 异常隔离：session 抛出的非取消异常被捕获并转为 Succeeded=false 的结果，
+// 与 DeterministicBatchInferenceEngine 行为一致；OperationCanceledException 不被捕获
+// （与项目内存约束一致：Authoritative Runtime 不捕获 OperationCanceledException）。
 // ===========================================================================
 
 /// <summary>
@@ -260,16 +260,16 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     /// <summary>
     /// 子问题4：在并发槽位 + 超时 watchdog 下执行一次 session 推理。
     /// session.Run 是同步 native 调用，无法被 CancellationToken 中断；本方法：
-    ///   1. 通过 SemaphoreSlim 限制并发数（防止打满 ORT 线程池）；
-    ///   2. 通过 Task.Run 把同步调用 offload 到线程池，避免阻塞主线程；
-    ///   3. 通过 Task.WaitAsync(TimeSpan) 实现超时；超时后释放槽位让其他请求继续，
-    ///      native 调用仍在后台运行（无法中断）。
-    ///   4. 超时累计达 CircuitBreakerThreshold 后打开熔断器。
+    /// 1. 通过 SemaphoreSlim 限制并发数（防止打满 ORT 线程池）；
+    /// 2. 通过 Task.Run 把同步调用 offload 到线程池，避免阻塞主线程；
+    /// 3. 通过 Task.WaitAsync(TimeSpan) 实现超时；超时后释放槽位让其他请求继续，
+    /// native 调用仍在后台运行（无法中断）。
+    /// 4. 超时累计达 CircuitBreakerThreshold 后打开熔断器。
     /// 在 WaitAsync 之前用 _waitingCount 实现 bounded queue；超过 BatchQueueCapacity
-    ///   立即返回 QueueFull 失败，避免在过载场景下请求无限期堆积。
+    /// 立即返回 QueueFull 失败，避免在过载场景下请求无限期堆积。
     /// 子问题7：超时产生的孤儿 native 调用通过 _orphanedTaskCount 计数；当达
-    ///   MaxOrphanedInferences 时新请求立即返回 NativePoolSaturated 失败（back-pressure），
-    ///   防止孤儿任务耗尽 ORT 线程池导致全局推理雪崩。
+    /// MaxOrphanedInferences 时新请求立即返回 NativePoolSaturated 失败（back-pressure），
+    /// 防止孤儿任务耗尽 ORT 线程池导致全局推理雪崩。
     /// </summary>
     /// <param name="batch">单批次特征数据（已被分片逻辑切分到合理大小）。</param>
     /// <param name="ct">取消令牌（用于 WaitAsync 与 session 入口检查）。</param>

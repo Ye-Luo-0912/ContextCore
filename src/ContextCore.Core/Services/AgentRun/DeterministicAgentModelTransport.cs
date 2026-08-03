@@ -8,15 +8,15 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 子问题 7：DeterministicAgentModelTransport — IAgentModelTransport 的确定性 fallback 实现
 //
 // 不调用真实 LLM，基于 Task 关键词产生确定性响应：
-//   1. 默认返回 IsFinalAnswer=true 的简单文本（适合测试和 fallback）。
-//   2. 可配置为模拟 Tool 调用（基于 Task / context 中的关键词匹配）。
-//   3. 同一 runId + context 产出相同响应（可复现，便于测试断言）。
+// 1. 默认返回 IsFinalAnswer=true 的简单文本（适合测试和 fallback）。
+// 2. 可配置为模拟 Tool 调用（基于 Task / context 中的关键词匹配）。
+// 3. 同一 runId + context 产出相同响应（可复现，便于测试断言）。
 //
 // 设计决策：
-//   - 这是 fallback 实现，生产环境应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
-//   - 不消耗真实 token；TokensConsumed = context.Length / 4（粗略估算，非精确 tokenizer）。
-//   - 线程安全：内部使用 ConcurrentDictionary 跟踪每个 runId 的调用次数，避免无限循环。
-//   - 当检测到 context 含 "[Tool]" 观察标记（AgentMessage.Serialize 格式）且无更多 Tool 需求时，产出最终答案。
+// - 这是 fallback 实现，生产环境应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
+// - 不消耗真实 token；TokensConsumed = context.Length / 4（粗略估算，非精确 tokenizer）。
+// - 线程安全：内部使用 ConcurrentDictionary 跟踪每个 runId 的调用次数，避免无限循环。
+// - 当检测到 context 含 "[Tool]" 观察标记（AgentMessage.Serialize 格式）且无更多 Tool 需求时，产出最终答案。
 // ===========================================================================
 
 /// <summary>

@@ -10,23 +10,23 @@ namespace ContextCore.IntegrationTests;
 //
 // 目标：补齐现有 4 个 E2E 测试的缺口——现有"崩溃恢复"测试通过 SQL 重置状态模拟崩溃，
 // 非真实的进程退出/重启。本测试通过 WebApplicationFactory 的 Dispose 与重建模拟真实进程重启：
-//   Factory#1 启动 → 写入 Run → Dispose（模拟进程退出）→ Factory#2 启动（同一 PG）→ 验证状态连续性
+// Factory 启动 → 写入 Run → Dispose（模拟进程退出）→ Factory 启动（同一 PG）→ 验证状态连续性
 //
-// 与现有 R29H_ProductionEvidenceE2ETests.E2E_RealPostgres_CrashRecovery_MidToolExecution 的区别：
-//   - 现有测试：同一进程内用 SQL 重置 Run 状态，再创建新 Actor 恢复执行。
-//   - 本测试：完全 Dispose Web 主机（DI 容器、HostedService、连接池全部销毁），
-//     再用同一 PG 重新启动新主机，验证数据持久化跨进程重启。
+// 与既有 E2E_RealPostgres_CrashRecovery_MidToolExecution 的区别：
+// - 现有测试：同一进程内用 SQL 重置 Run 状态，再创建新 Actor 恢复执行。
+// - 本测试：完全 Dispose Web 主机（DI 容器、HostedService、连接池全部销毁），
+// 再用同一 PG 重新启动新主机，验证数据持久化跨进程重启。
 //
 // 测试覆盖：
-//   1. E2E_Restart_RunPersistsAcrossProcessRestart — Run 持久化跨进程重启
-//   2. E2E_Restart_IdempotencyKeySurvivesRestart — 幂等键跨进程重启仍去重
-//   3. E2E_Restart_LearningOutboxSurvivesRestart — Learning Outbox 跨进程重启持久
-//   4. E2E_Restart_NewProcessCanReadOldRuns — 新进程能读取旧进程写入的 Run
+// 1. E2E_Restart_RunPersistsAcrossProcessRestart — Run 持久化跨进程重启
+// 2. E2E_Restart_IdempotencyKeySurvivesRestart — 幂等键跨进程重启仍去重
+// 3. E2E_Restart_LearningOutboxSurvivesRestart — Learning Outbox 跨进程重启持久
+// 4. E2E_Restart_NewProcessCanReadOldRuns — 新进程能读取旧进程写入的 Run
 //
 // 设计原则：
-//   - 使用同一 PostgresE2EFixture（同一 PG 容器），两个 Factory 实例先后启动。
-//   - Factory#1 Dispose 后 PG 数据保留；Factory#2 启动时 AutoBootstrap migration 是 no-op。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
+// - 使用同一 PostgresE2EFixture（同一 PG 容器），两个 Factory 实例先后启动。
+// - Factory Dispose 后 PG 数据保留；Factory 启动时 AutoBootstrap migration 是 no-op。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
 // ===========================================================================
 
 [TestClass]
@@ -55,7 +55,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
     private static bool ShouldSkip(PostgresE2EFixture pg) => pg.ShouldSkip;
 
     // =======================================================================
-    // 测试 1：Run 持久化跨进程重启 — Factory#1 写入 → Dispose → Factory#2 读取
+    // 测试 1：Run 持久化跨进程重启 — Factory 写入 → Dispose → Factory 读取
     // =======================================================================
 
     [TestMethod]
@@ -65,7 +65,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
 
         string? runId;
 
-        // ── 进程 #1：创建 Run ──
+        // ── 进程 ：创建 Run ──
         await using (var factory1 = new ProductionEvidenceWebFactory(_pg.ConnectionString))
         {
             using var client1 = factory1.CreateClient();
@@ -82,9 +82,9 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
             var run1 = await response1.Content.ReadFromJsonAsync<JsonElement>();
             runId = run1.GetProperty("runId").GetString();
             Assert.IsFalse(string.IsNullOrEmpty(runId), "进程 #1 应返回 runId。");
-        } // factory1 Dispose — 模拟进程 #1 退出（DI 容器、连接池全部销毁）
+        } // factory1 Dispose — 模拟进程 退出（DI 容器、连接池全部销毁）
 
-        // ── 进程 #2：重新启动，验证 Run 仍然存在 ──
+        // ── 进程 ：重新启动，验证 Run 仍然存在 ──
         await using var factory2 = new ProductionEvidenceWebFactory(_pg.ConnectionString);
         using var client2 = factory2.CreateClient();
 
@@ -100,7 +100,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
     }
 
     // =======================================================================
-    // 测试 2：幂等键跨进程重启仍去重 — 进程 #2 用相同 key 应返回同一 Run
+    // 测试 2：幂等键跨进程重启仍去重 — 进程 用相同 key 应返回同一 Run
     // =======================================================================
 
     [TestMethod]
@@ -111,7 +111,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
         var idempotencyKey = "restart-idem-" + Guid.NewGuid().ToString("N");
         string? runId1;
 
-        // ── 进程 #1：用 IdempotencyKey 创建 Run ──
+        // ── 进程 ：用 IdempotencyKey 创建 Run ──
         await using (var factory1 = new ProductionEvidenceWebFactory(_pg.ConnectionString))
         {
             using var client1 = factory1.CreateClient();
@@ -130,7 +130,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
             runId1 = run1.GetProperty("runId").GetString();
         }
 
-        // ── 进程 #2：用相同 IdempotencyKey 创建（应返回同一 Run，200 OK）──
+        // ── 进程 ：用相同 IdempotencyKey 创建（应返回同一 Run，200 OK）──
         await using var factory2 = new ProductionEvidenceWebFactory(_pg.ConnectionString);
         using var client2 = factory2.CreateClient();
 
@@ -160,7 +160,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
     }
 
     // =======================================================================
-    // 测试 3：Learning Outbox 跨进程重启持久 — 进程 #1 入队 → 进程 #2 能 Acquire
+    // 测试 3：Learning Outbox 跨进程重启持久 — 进程 入队 → 进程 能 Acquire
     // =======================================================================
 
     [TestMethod]
@@ -170,8 +170,8 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
 
         var eventId = "restart-learn-" + Guid.NewGuid().ToString("N");
 
-        // ── 进程 #1：直接通过 PG 入队 Learning Event ──
-        // （HTTP API 未暴露 Learning Outbox 入队端点，用直连 PG 模拟进程 #1 的 Learning Dispatcher 写入）
+        // ── 进程 ：直接通过 PG 入队 Learning Event ──
+        // （HTTP API 未暴露 Learning Outbox 入队端点，用直连 PG 模拟进程 的 Learning Dispatcher 写入）
         var (factory1, migrationRunner1, serializer1) = _pg.CreateInfrastructure("restart1_");
         try
         {
@@ -204,7 +204,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
             await factory1.DisposeAsync();
         }
 
-        // ── 进程 #2：重新连接同一 PG，AcquirePending 应能取到进程 #1 入队的记录 ──
+        // ── 进程 ：重新连接同一 PG，AcquirePending 应能取到进程 入队的记录 ──
         var (factory2, migrationRunner2, serializer2) = _pg.CreateInfrastructure("restart1_");
         try
         {
@@ -219,7 +219,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
                 leaseDuration: TimeSpan.FromMinutes(2),
                 cts.Token);
 
-            // ── 断言：进程 #2 能取到进程 #1 入队的记录 ──
+            // ── 断言：进程 能取到进程 入队的记录 ──
             var found = acquired.FirstOrDefault(r => r.EventId == eventId);
             Assert.IsNotNull(found,
                 "进程 #2 应能 Acquire 到进程 #1 入队的 Learning Event（跨进程持久化）。");
@@ -247,7 +247,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
 
         var runIds = new List<string>();
 
-        // ── 进程 #1：创建 3 个 Run ──
+        // ── 进程 ：创建 3 个 Run ──
         await using (var factory1 = new ProductionEvidenceWebFactory(_pg.ConnectionString))
         {
             using var client1 = factory1.CreateClient();
@@ -268,7 +268,7 @@ public sealed class R29H_ProductionEvidenceRestartE2ETests : IAsyncDisposable
             }
         }
 
-        // ── 进程 #2：验证 3 个 Run 都能读取 ──
+        // ── 进程 ：验证 3 个 Run 都能读取 ──
         await using var factory2 = new ProductionEvidenceWebFactory(_pg.ConnectionString);
         using var client2 = factory2.CreateClient();
 

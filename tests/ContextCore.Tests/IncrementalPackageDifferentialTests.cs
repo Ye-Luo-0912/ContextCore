@@ -20,7 +20,7 @@ namespace ContextCore.Tests;
 /// <item>比较两者输出在 6 个维度完全等价：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs</item>
 /// </list>
 /// 所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。
-/// 这些测试为 R15 V2 的选择性重载提供安全网 — V2 实现后，相同测试应继续通过。
+/// 这些测试为 V2 的选择性重载提供安全网 — V2 实现后，相同测试应继续通过。
 /// </remarks>
 [TestClass]
 [TestCategory("Package")]
@@ -372,7 +372,7 @@ public sealed class IncrementalPackageDifferentialTests
         var snapshot = withSnapshot.Snapshot;
 
         // 2. 执行 IncrementalBuild（使用刚捕获的快照作为 previousSnapshot）
-        // 注意：R15 V1 中 IncrementalBuild 委托到 inner builder，所以这里与 FullBuild 等价
+        // 注意： V1 中 IncrementalBuild 委托到 inner builder，所以这里与 FullBuild 等价
         var incrementalResult = await fixture.IncrementalBuilder.IncrementalBuildAsync(
             snapshot, fixture.CurrentRequest);
 

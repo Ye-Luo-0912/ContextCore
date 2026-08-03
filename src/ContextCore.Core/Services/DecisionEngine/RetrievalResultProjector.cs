@@ -7,15 +7,15 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Retrieval 结果投影器
 //
 // 将 ContextDecisionResult 投影为 ContextRetrievalResult，作为 Engine 输出
-// 与现有 Retrieval 主链出口 DTO 之间的桥梁。R18-2 阶段仅做格式投影，
+// 与现有 Retrieval 主链出口 DTO 之间的桥梁。 阶段仅做格式投影，
 // 不改变决策结果（envelope 集合不变）。
 //
 // 设计原则：
-//   1. Projector 仅做格式投影，不调用 Engine 或 Storage；纯内存转换。
-//   2. Projector 是幂等的：相同 Result 产生相同 DTO。
-//   3. envelope.CandidateId → ContextRetrievalCandidate.CandidateId
-//      envelope.Utility.FinalScore → ContextRetrievalCandidate.Score
-//      envelope.Safety.BlockReasonCode → ContextRetrievalDecision.Reason（自由文本兼容）
+// 1. Projector 仅做格式投影，不调用 Engine 或 Storage；纯内存转换。
+// 2. Projector 是幂等的：相同 Result 产生相同 DTO。
+// 3. envelope.CandidateId → ContextRetrievalCandidate.CandidateId
+// envelope.Utility.FinalScore → ContextRetrievalCandidate.Score
+// envelope.Safety.BlockReasonCode → ContextRetrievalDecision.Reason（自由文本兼容）
 // ===========================================================================
 
 /// <summary>

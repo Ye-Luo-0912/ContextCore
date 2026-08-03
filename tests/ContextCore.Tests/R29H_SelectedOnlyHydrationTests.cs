@@ -12,24 +12,24 @@ namespace ContextCore.Tests;
 // Selected-only Hydration（Perf-2）验收测试
 //
 // 目标路径：轻量召回 → Score/Allocate → 只 hydrate Selected → 精确 tokenize
-//           → 正式 Decision Repair → Model Projection
+// → 正式 Decision Repair → Model Projection
 // 本测试验证 Perf-2 的"只 hydrate Selected"基础设施：
-//   1. Mandatory RequiredIds 路径：IncludeContent=false 时走 IContextStoreMetadataLookup
-//      （BatchGetMetadataAsync），不调用全量 BatchGetAsync（避免未选中正文 jsonb 入内存）
-//   2. Mandatory RequiredIds 路径：IncludeContent=true 时走 IContextStoreBatchLookup（全量批量）
-//   3. Semantic Provider：memory hits + IncludeContent=false 时走 IMemoryStoreMetadataLookup
-//   4. Semantic Provider：memory hits + IncludeContent=true 时走 IMemoryStoreBatchLookup
-//   5. Graph Provider：邻居 hydration + IncludeContent=false 时走 IContextStoreMetadataLookup
-//   6. WorkingMemory Provider：IncludeContent=false 透传到 ContextMemoryQuery.IncludeContent
-//   7. BuildFromMemoryItem：metadata-only（Content 空 + 持久化 content_length）→ 精确长度估算
-//      （避免 token 估算退化为 1）
-//   8. Projector：hydrated material 带精确 TokenCost 时 TotalTokens 使用精确 ContentTokens
-//   9. Projector：无 TokenCost 时回退整体长度估算（兼容降级路径）
+// 1. Mandatory RequiredIds 路径：IncludeContent=false 时走 IContextStoreMetadataLookup
+// （BatchGetMetadataAsync），不调用全量 BatchGetAsync（避免未选中正文 jsonb 入内存）
+// 2. Mandatory RequiredIds 路径：IncludeContent=true 时走 IContextStoreBatchLookup（全量批量）
+// 3. Semantic Provider：memory hits + IncludeContent=false 时走 IMemoryStoreMetadataLookup
+// 4. Semantic Provider：memory hits + IncludeContent=true 时走 IMemoryStoreBatchLookup
+// 5. Graph Provider：邻居 hydration + IncludeContent=false 时走 IContextStoreMetadataLookup
+// 6. WorkingMemory Provider：IncludeContent=false 透传到 ContextMemoryQuery.IncludeContent
+// 7. BuildFromMemoryItem：metadata-only（Content 空 + 持久化 content_length）→ 精确长度估算
+// （避免 token 估算退化为 1）
+// 8. Projector：hydrated material 带精确 TokenCost 时 TotalTokens 使用精确 ContentTokens
+// 9. Projector：无 TokenCost 时回退整体长度估算（兼容降级路径）
 //
 // 设计原则：
-//   - 使用 RecordingContextStore / RecordingMemoryStore 记录调用路径，精确断言分支选择
-//   - 复用 R29D 的 MakeSnapshot / MakeContext 构建模式
-//   - 所有代码注释使用中文
+// - 使用 RecordingContextStore / RecordingMemoryStore 记录调用路径，精确断言分支选择
+// - 复用既有测试的 MakeSnapshot / MakeContext 构建模式
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>

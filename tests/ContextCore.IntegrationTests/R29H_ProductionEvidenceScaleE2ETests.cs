@@ -12,14 +12,14 @@ namespace ContextCore.IntegrationTests;
 // 事件流规模恢复集成测试
 //
 // 目标：证明"10,000 条以上事件可以分页恢复"：
-//   1. 通过 AppendBatchAsync 分 10 批写入 10,000 条事件（哈希链连续）；
-//   2. 以每页 1,000 条分页读取（ReadAsync(fromSequence, take)），共 10 页；
-//   3. 验证：恢复条数 = 10,000、最后 sequence = 9,999、跨分页边界的哈希链完整。
+// 1. 通过 AppendBatchAsync 分 10 批写入 10,000 条事件（哈希链连续）；
+// 2. 以每页 1,000 条分页读取（ReadAsync(fromSequence, take)），共 10 页；
+// 3. 验证：恢复条数 = 10,000、最后 sequence = 9,999、跨分页边界的哈希链完整。
 //
 // 设计原则：
-//   - 使用真实 Postgres stores（PostgresAgentRunStore / PostgresAgentRunEventStore）。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
-//   - 独立 tablePrefix 避免数据交叉污染。
+// - 使用真实 Postgres stores（PostgresAgentRunStore / PostgresAgentRunEventStore）。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
+// - 独立 tablePrefix 避免数据交叉污染。
 // ===========================================================================
 
 [TestClass]

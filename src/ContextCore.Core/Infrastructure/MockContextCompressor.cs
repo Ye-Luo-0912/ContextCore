@@ -10,8 +10,8 @@ namespace ContextCore.Core;
 /// 不调用任何模型 API，直接将输入内容拼接为摘要并返回，不能作为生产压缩结果使用。
 /// </summary>
 /// <remarks>
-/// TODO-DEMO [P0-6]：此类保留给本地演示和单元测试，不具备任何语义压缩能力。
-/// 生产环境应配置 Compression:Provider = "llm"，真实 LLM 压缩器在 P2 阶段实现。
+/// 此类保留给本地演示和单元测试，不具备任何语义压缩能力。
+/// 生产环境应配置 Compression:Provider = "llm"，真实 LLM 压缩器在 阶段实现。
 /// </remarks>
 public sealed class MockContextCompressor : IContextCompressor
 {

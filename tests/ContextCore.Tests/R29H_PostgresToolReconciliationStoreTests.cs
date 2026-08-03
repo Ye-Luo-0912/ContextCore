@@ -10,19 +10,19 @@ using Testcontainers.PostgreSql;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// PostgresToolReconciliationStore 验收测试（P2-B1 Tool Reconciliation Control Plane）
+// PostgresToolReconciliationStore 验收测试（-B1 Tool Reconciliation Control Plane）
 //
 // 验证对账记录跨进程持久化真相源（ProductionHA 组合根下的 IToolReconciliationStore）：
-//   1. DI 注册：AddContextCorePostgresStorage 解析 IToolReconciliationStore →
-//      PostgresToolReconciliationStore（非 InMemory）；
-//   2. 幂等创建：按 (run_id, request_id) UNIQUE 幂等（重复创建返回既有记录）；
-//   3. CAS 推进：TryBegin / TryResetToPending / MarkResolved / MarkRejected
-//      互斥且幂等（0 行受影响 = 并发冲突/已裁决）；
-//   4. 未裁决门：HasUnresolvedForRunAsync 仅对 Pending/Running 返回 true
-//      （未决高风险副作用阻止 Run Completed 的数据库门）；
-//   5. ExternalOperationId 反查：按 journal 外部操作 ID 跨 Run 查询；
-//   6. ControlRoom 列表：分页 + 过期未决高亮（deadline_utc < now）+
-//      告警计数（OverdueCount）+ OverdueOnly 过滤。
+// 1. DI 注册：AddContextCorePostgresStorage 解析 IToolReconciliationStore →
+// PostgresToolReconciliationStore（非 InMemory）；
+// 2. 幂等创建：按 (run_id, request_id) UNIQUE 幂等（重复创建返回既有记录）；
+// 3. CAS 推进：TryBegin / TryResetToPending / MarkResolved / MarkRejected
+// 互斥且幂等（0 行受影响 = 并发冲突/已裁决）；
+// 4. 未裁决门：HasUnresolvedForRunAsync 仅对 Pending/Running 返回 true
+// （未决高风险副作用阻止 Run Completed 的数据库门）；
+// 5. ExternalOperationId 反查：按 journal 外部操作 ID 跨 Run 查询；
+// 6. ControlRoom 列表：分页 + 过期未决高亮（deadline_utc < now）+
+// 告警计数（OverdueCount）+ OverdueOnly 过滤。
 //
 // Docker 不可用时 Assert.Inconclusive 跳过（CI integration-postgres job 中 Docker 始终可用）。
 // ===========================================================================

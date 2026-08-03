@@ -399,7 +399,7 @@ public sealed class EvolutionContractsTests
     [TestMethod]
     public void Interfaces_Are_Interfaces()
     {
-        // 确保所有 R16/R17 主接口都是 interface 类型（编译期约束在运行时也成立）
+        // 确保所有 / 主接口都是 interface 类型（编译期约束在运行时也成立）
         Assert.IsTrue(typeof(IAgentObservationSource).IsInterface);
         Assert.IsTrue(typeof(IContextEvolutionAgent).IsInterface);
         Assert.IsTrue(typeof(IPromotionJudge).IsInterface);

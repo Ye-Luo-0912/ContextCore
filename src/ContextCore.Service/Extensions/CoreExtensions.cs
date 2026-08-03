@@ -61,7 +61,7 @@ internal static class CoreExtensions
 		// IContextStateCache（读路径可选缓存）和 IStateCacheInvalidator（写入边界失效信号接收）。
 		// Store Decorator 在写入成功后调用 InvalidateAsync，移除受影响的缓存项。
 		// 读路径不自动使用缓存——仅在调用方显式注入 ContextStateCacheAccessor 时生效。
-		// Cache 容量与 TTL 由 PackageTemplateCacheOptions 配置（默认值与 R11-P6 一致）。
+		// Cache 容量与 TTL 由 PackageTemplateCacheOptions 配置（默认值与 一致）。
 		// canary 关闭时仍注册此 singleton——store decorators 需要 IStateCacheInvalidator 实例（即使为空操作）。
 		services.AddSingleton(sp =>
 		{
@@ -263,7 +263,7 @@ internal static class CoreExtensions
 			sp.GetRequiredService<RelationTypeRegistry>(),
 			backfillPolicy: null));
 		services.AddSingleton<IContextTokenizerResolver, DefaultContextTokenizerResolver>();
-		// Tokenizer 画像解析器（WP-E：CJK 画像按内容脚本分类选择 tokenizer）。
+		// Tokenizer 画像解析器（：CJK 画像按内容脚本分类选择 tokenizer）。
 		services.TryAddSingleton<ITokenizerProfileResolver, DefaultTokenizerProfileResolver>();
 		services.AddSingleton<IContextCompressor>(sp =>
 		{
@@ -363,7 +363,7 @@ internal static class CoreExtensions
 			// 启用前置条件：Enabled=true + AllowedWorkspaces 非空 + 单实例（FileSystem provider 时检测
 			// FileSystemInstanceGuard.IsMultiProcessDetected；RequireSingleInstance=false 可绕过）。
 			// 启用后 ContextStateCacheAccessor.canaryGate 仅对 AllowedWorkspaces 列出的工作空间走缓存路径，
-			// 其余工作空间仍走全量流水线。R13.0 正确性测试（ContextStateCacheTests）覆盖 Cold 与 Hit 等价性、
+			// 其余工作空间仍走全量流水线。 正确性测试（ContextStateCacheTests）覆盖 Cold 与 Hit 等价性、
 			// 版本失效、对象隔离、poisoned key、shutdown 行为——canary 启用时不需重新验证。
 			CacheAccessor = BuildPackageTemplateCacheAccessorOrNull(sp),
 			// 注入 IStoreRuntimeCapabilities 以驱动 Retrieval fanout（替代 namespace 字符串推断）
@@ -375,7 +375,7 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPolicyValidator);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationTraversalEngine);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPreviewService);
-		// Selected 关系批量水合服务（WP-E：探测 IRelationHydrationStore，未实现时回退逐条查询）。
+		// Selected 关系批量水合服务（：探测 IRelationHydrationStore，未实现时回退逐条查询）。
 		services.TryAddSingleton<ISelectedRelationHydrationService, DefaultSelectedRelationHydrationService>();
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton<IMemoryPromotionService>(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
@@ -525,8 +525,8 @@ internal static class CoreExtensions
 		// 构造函数可直接注入（无需依赖 IOptions<T> 抽象）。
 		// Metrics 单例：线程安全 Interlocked 计数器 + 延迟环形缓冲，供 dispatcher / worker / 诊断端点共享。
 		// Dispatcher 单例 + IHostedService：构造时根据 ILearningEventOutboxStore 是否注册自动选择路径——
-		//   - Postgres provider：Durable Outbox（持久化，进程崩溃不丢数据）；
-		//   - FileSystem/InMemory：in-memory bounded Channel + 固定 worker（消除 Task.Run，但非持久）。
+		// - Postgres provider：Durable Outbox（持久化，进程崩溃不丢数据）；
+		// - FileSystem/InMemory：in-memory bounded Channel + 固定 worker（消除 Task.Run，但非持久）。
 		// 注入到 DefaultContextDecisionRuntime 后，主决策流通过 EnqueueAsync 入队（无 Task.Run）。
 		services.AddSingleton<LearningMaterializationOptions>(sp =>
 		{
@@ -919,14 +919,14 @@ internal static class CoreExtensions
 		// 子问题 9：IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
 		services.TryAddSingleton<IAgentRunLease, InMemoryAgentRunLease>();
 
-		// WP-D：ILearningLeaseStore（Learning Materialization worker 池级租约；进程内默认实现，
+		// ILearningLeaseStore（Learning Materialization worker 池级租约；进程内默认实现，
 		// Postgres provider 可覆盖为持久化实现）。
 		services.TryAddSingleton<ILearningLeaseStore, InMemoryLearningLeaseStore>();
 
 		// 子问题 9：AgentHostOptions 配置（默认单节点模式；生产部署通过配置覆盖）。
 		services.TryAddSingleton(AgentHostOptionsDefaultFactory);
 
-		// P2-4 Recovery Integrity State：人工介入告警接收器（默认日志实现；
+		// Recovery Integrity State：人工介入告警接收器（默认日志实现；
 		// 生产环境可注册 PagerDuty / Slack 等真实通道覆盖——TryAddSingleton 不覆盖已注册实现）。
 		services.TryAddSingleton<IRecoveryAlertSink, LoggingRecoveryAlertSink>();
 
@@ -999,7 +999,7 @@ internal static class CoreExtensions
 	/// 1. options.Enabled = true
 	/// 2. options.AllowedWorkspaces 非空（否则 canary 形同关闭）
 	/// 3. 单实例检查通过（RequireSingleInstance=true 时检测 FileSystemInstanceGuard.IsMultiProcessDetected；
-	///    非 FileSystem provider 不检查——operator 需自行确保单实例）
+	/// 非 FileSystem provider 不检查——operator 需自行确保单实例）
 	/// </summary>
 	private static ContextStateCacheAccessor? BuildPackageTemplateCacheAccessorOrNull(IServiceProvider sp)
 	{

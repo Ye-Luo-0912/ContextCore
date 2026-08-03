@@ -3,45 +3,45 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// Memory Evolution Engine 统一契约（替换 R21-1 的 SupersededItemState）
+// Memory Evolution Engine 统一契约（替换 的 SupersededItemState）
 //
 // 设计变更（用户选择"合并为统一 MemoryState 枚举"）：
-//   - 原 SupersededItemState（5 值：Unknown/Active/Superseded/Replaced/Archived）
-//     只覆盖 supersede 事件流，不覆盖记忆衰减生命周期。
-//   - 新 MemoryState（8 值：Fresh/Active/Cooling/Dormant/Superseded/Replaced/Archived/Rejected）
-//     统一了 supersede 事件状态与衰减生命周期，支持"forgetting 与降权"场景。
+// - 原 SupersededItemState（5 值：Unknown/Active/Superseded/Replaced/Archived）
+// 只覆盖 supersede 事件流，不覆盖记忆衰减生命周期。
+// - 新 MemoryState（8 值：Fresh/Active/Cooling/Dormant/Superseded/Replaced/Archived/Rejected）
+// 统一了 supersede 事件状态与衰减生命周期，支持"forgetting 与降权"场景。
 //
 // 状态机转换：
-//   Fresh → Active（首次命中/选入/写入）
-//   Fresh → Rejected（审核未通过）
-//   Active → Cooling（长期未命中）
-//   Active → Superseded（被新版本取代）
-//   Active → Rejected（审核拒绝）
-//   Cooling → Dormant（继续未命中）
-//   Cooling → Active（回温：重新被命中）
-//   Cooling → Rejected（审核拒绝）
-//   Dormant → Archived（彻底降权）
-//   Dormant → Active（回温：重新被命中）
-//   Dormant → Rejected（审核拒绝）
-//   Superseded → Replaced（Consolidation ETL Transform）
-//   Replaced → Archived（Consolidation ETL Load）
-//   Rejected → Archived（拒绝后归档）
-//   Archived：终态，不可逆
+// Fresh → Active（首次命中/选入/写入）
+// Fresh → Rejected（审核未通过）
+// Active → Cooling（长期未命中）
+// Active → Superseded（被新版本取代）
+// Active → Rejected（审核拒绝）
+// Cooling → Dormant（继续未命中）
+// Cooling → Active（回温：重新被命中）
+// Cooling → Rejected（审核拒绝）
+// Dormant → Archived（彻底降权）
+// Dormant → Active（回温：重新被命中）
+// Dormant → Rejected（审核拒绝）
+// Superseded → Replaced（Consolidation ETL Transform）
+// Replaced → Archived（Consolidation ETL Load）
+// Rejected → Archived（拒绝后归档）
+// Archived：终态，不可逆
 //
-// 降权因素（R21-4c 实现 DefaultMemoryDecayEvaluator）：
-//   1. 长期未命中 → Active → Cooling → Dormant → Archived
-//   2. 已有新版本 → Active → Superseded
-//   3. evidence 失效 → Active → Rejected
-//   4. 任务已完成 → Active → Archived
-//   5. 与当前状态冲突 → Active → Rejected
-//   6. 多次被选择但未产生有效贡献 → Active → Cooling
+// 降权因素（实现 DefaultMemoryDecayEvaluator）：
+// 1. 长期未命中 → Active → Cooling → Dormant → Archived
+// 2. 已有新版本 → Active → Superseded
+// 3. evidence 失效 → Active → Rejected
+// 4. 任务已完成 → Active → Archived
+// 5. 与当前状态冲突 → Active → Rejected
+// 6. 多次被选择但未产生有效贡献 → Active → Cooling
 //
 // 与现有系统的关系：
-//   - 不替换 IRelationProjector.ProjectForSupersede / SupersedeProjectionRequest
-//   - 不替换 StableMemoryGovernanceService 的统计聚合
-//   - 不替换 ContextMemoryStatus / StableMemoryLifecycle 字符串常量
-//   - R21-4 是新事件流：MemoryStateEventRecord 记录"何时/何因/由谁触发状态转换"
-//     Consolidation ETL 消费事件流驱动 store 状态迁移。
+// - 不替换 IRelationProjector.ProjectForSupersede / SupersedeProjectionRequest
+// - 不替换 StableMemoryGovernanceService 的统计聚合
+// - 不替换 ContextMemoryStatus / StableMemoryLifecycle 字符串常量
+// - 是新事件流：MemoryStateEventRecord 记录"何时/何因/由谁触发状态转换"
+// Consolidation ETL 消费事件流驱动 store 状态迁移。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -54,11 +54,11 @@ namespace ContextCore.Abstractions;
 /// </summary>
 /// <remarks>
 /// 状态分组：
-///   - 初始态：Fresh（新创建，未参与过决策）
-///   - 活跃态：Active（参与决策且最近命中）
-///   - 衰减态：Cooling（长期未命中，可回温）/ Dormant（更长期未命中，可回温）
-///   - 取代态：Superseded（被新版本取代，事件已记录）/ Replaced（ETL 处理中）
-///   - 终态：Archived（彻底归档，不可逆）/ Rejected（审核拒绝，可归档）
+/// - 初始态：Fresh（新创建，未参与过决策）
+/// - 活跃态：Active（参与决策且最近命中）
+/// - 衰减态：Cooling（长期未命中，可回温）/ Dormant（更长期未命中，可回温）
+/// - 取代态：Superseded（被新版本取代，事件已记录）/ Replaced（ETL 处理中）
+/// - 终态：Archived（彻底归档，不可逆）/ Rejected（审核拒绝，可归档）
 /// </remarks>
 public enum MemoryState : byte
 {
@@ -96,11 +96,11 @@ public enum MemoryState : byte
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 事件流不可变：一旦写入不可修改（append-only 语义）。
-///   2. 同一 item 可能有多次状态转换事件（如 Fresh→Active→Cooling→Active→Superseded→Replaced→Archived）；
-///      查询时按 OccurredAt 排序取最新。
-///   3. 不直接修改 item 状态；Consolidation ETL 与 DecayEvaluator 消费事件流驱动状态迁移。
-///   4. TargetItemId 可空：表示"无替换直接降权"（如 obsolete 知识）。
+/// 1. 事件流不可变：一旦写入不可修改（append-only 语义）。
+/// 2. 同一 item 可能有多次状态转换事件（如 Fresh→Active→Cooling→Active→Superseded→Replaced→Archived）；
+/// 查询时按 OccurredAt 排序取最新。
+/// 3. 不直接修改 item 状态；Consolidation ETL 与 DecayEvaluator 消费事件流驱动状态迁移。
+/// 4. TargetItemId 可空：表示"无替换直接降权"（如 obsolete 知识）。
 /// </remarks>
 public sealed record MemoryStateEventRecord
 {
@@ -193,10 +193,10 @@ public sealed record MemoryStateEventQuery
 /// <remarks>
 /// 实现层可注入 Postgres / InMemory / FileSystem store。
 /// 接口契约最小化：
-///   - AppendEventAsync：追加事件（不可变）。
-///   - QueryEventsAsync：按条件查询事件。
-///   - GetLatestStateAsync：查询 item 当前最新状态（按 OccurredAt 降序取首条 NewState）。
-///   - GetRecentAsync：返回最近 N 条事件（按 OccurredAt 降序）。
+/// - AppendEventAsync：追加事件（不可变）。
+/// - QueryEventsAsync：按条件查询事件。
+/// - GetLatestStateAsync：查询 item 当前最新状态（按 OccurredAt 降序取首条 NewState）。
+/// - GetRecentAsync：返回最近 N 条事件（按 OccurredAt 降序）。
 /// </remarks>
 public interface IMemoryStateStore
 {
@@ -239,10 +239,10 @@ public interface IMemoryStateStore
 /// </summary>
 /// <remarks>
 /// ETL 流程：
-///   1. Extract：从 IMemoryStateStore 查询符合条件的 Superseded/Replaced 状态事件。
-///   2. Transform：把对应 item 状态从 Superseded 推进到 Replaced（中间态），
-///      写入新 MemoryStateEventRecord（Reason="consolidation-etl"）。
-///   3. Load：把 item 写入归档 store，推进状态到 Archived，写入最终 MemoryStateEventRecord。
+/// 1. Extract：从 IMemoryStateStore 查询符合条件的 Superseded/Replaced 状态事件。
+/// 2. Transform：把对应 item 状态从 Superseded 推进到 Replaced（中间态），
+/// 写入新 MemoryStateEventRecord（Reason="consolidation-etl"）。
+/// 3. Load：把 item 写入归档 store，推进状态到 Archived，写入最终 MemoryStateEventRecord。
 ///
 /// DryRun=true：仅返回预计处理数量，不实际迁移。
 /// </remarks>
@@ -326,12 +326,12 @@ public sealed record ConsolidationRunResult
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. ETL 是幂等的：重复执行不会产生副作用（已 Archived 的 item 跳过）。
-///   2. ETL 是可中断的：批次大小限制单次处理量；调用方可循环执行直到 ExtractedCount=0。
-///   3. ETL 失败不破坏数据：Transform 阶段写入 Replaced 事件后失败，
-///      下次 ETL 会从 Replaced 状态继续推进到 Archived。
-///   4. ETL 不直接修改 active store 中的 item；只写入归档 store + 推进状态。
-///   5. 兼容 MemoryState 衰减路径：Dormant → Archived 也可由 ETL 推进（彻底降权）。
+/// 1. ETL 是幂等的：重复执行不会产生副作用（已 Archived 的 item 跳过）。
+/// 2. ETL 是可中断的：批次大小限制单次处理量；调用方可循环执行直到 ExtractedCount=0。
+/// 3. ETL 失败不破坏数据：Transform 阶段写入 Replaced 事件后失败，
+/// 下次 ETL 会从 Replaced 状态继续推进到 Archived。
+/// 4. ETL 不直接修改 active store 中的 item；只写入归档 store + 推进状态。
+/// 5. 兼容 MemoryState 衰减路径：Dormant → Archived 也可由 ETL 推进（彻底降权）。
 /// </remarks>
 public interface IConsolidationETL
 {

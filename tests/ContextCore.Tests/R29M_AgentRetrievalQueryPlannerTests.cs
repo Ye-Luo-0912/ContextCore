@@ -6,25 +6,25 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Agent 受控检索查询规划器生产验收测试
 //
-// 验证 P1-8 的受控检索规划设计：
-//   1. Plan_ControlledQuerySet_Bounded — 查询集有界（≤ MaxControlledQueries）且
-//      按 任务→意图→未解决目标→图种子 的顺序受控生成。
-//   2. Plan_RequiredIds_FromExplicitReferences — 从任务/意图/目标提取显式 ID 引用
-//      （去重 + 封顶 MaxRequiredIds）。
-//   3. Plan_ExcludedIds_FromFailedToolObservations — 失败 Tool 观察推导排除 ID，
-//      成功观察不产生排除项（封顶 MaxExcludedIds）。
-//   4. Plan_GraphSeeds_FromAnchorsAndTokens — 图种子取引号/书名号内显式锚点，
-//      补充长词元，封顶 MaxGraphSeeds。
-//   5. Plan_TokenBudget_FromTurnBudget — Token 预算由剩余 Turn 推导并钳制上下限。
-//   6. Plan_DiagnosticBackoff_ReducesBudget — 上一轮预算超限时受控回退减半。
-//   7. Plan_Deterministic_SameInputSameOutput — 相同输入产生相同计划（幂等）。
-//   8. Plan_EmptyTask_ReturnsMinimalControlledPlan — 空任务产出最小受控计划，不抛异常。
-//   9. Plan_NullInput_Throws — null 输入抛 ArgumentNullException。
+// 验证 的受控检索规划设计：
+// 1. Plan_ControlledQuerySet_Bounded — 查询集有界（≤ MaxControlledQueries）且
+// 按 任务→意图→未解决目标→图种子 的顺序受控生成。
+// 2. Plan_RequiredIds_FromExplicitReferences — 从任务/意图/目标提取显式 ID 引用
+// （去重 + 封顶 MaxRequiredIds）。
+// 3. Plan_ExcludedIds_FromFailedToolObservations — 失败 Tool 观察推导排除 ID，
+// 成功观察不产生排除项（封顶 MaxExcludedIds）。
+// 4. Plan_GraphSeeds_FromAnchorsAndTokens — 图种子取引号/书名号内显式锚点，
+// 补充长词元，封顶 MaxGraphSeeds。
+// 5. Plan_TokenBudget_FromTurnBudget — Token 预算由剩余 Turn 推导并钳制上下限。
+// 6. Plan_DiagnosticBackoff_ReducesBudget — 上一轮预算超限时受控回退减半。
+// 7. Plan_Deterministic_SameInputSameOutput — 相同输入产生相同计划（幂等）。
+// 8. Plan_EmptyTask_ReturnsMinimalControlledPlan — 空任务产出最小受控计划，不抛异常。
+// 9. Plan_NullInput_Throws — null 输入抛 ArgumentNullException。
 //
 // 设计原则：
-//   - 使用真实实现 DefaultAgentRetrievalQueryPlanner（纯内存、确定性）。
-//   - 断言聚焦受控性质（上限、去重、顺序、回退），不依赖脆弱的具体种子文本。
-//   - 中文注释。
+// - 使用真实实现 DefaultAgentRetrievalQueryPlanner（纯内存、确定性）。
+// - 断言聚焦受控性质（上限、去重、顺序、回退），不依赖脆弱的具体种子文本。
+// - 中文注释。
 // ===========================================================================
 
 [TestClass]

@@ -9,12 +9,12 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点：
-///   1. 表 <c>model_activation_audit</c> 以 <c>audit_id</c> 为主键，append-only（无 ON CONFLICT 子句）。
-///   2. <see cref="AppendAsync"/> 通过 INSERT 追加；不抛异常（best-effort，与契约"不抛异常"语义一致）。
-///   3. <see cref="ListByModelAsync"/> 通过 (model_artifact_id, timestamp DESC) 索引按模型工件 ID 查询历史。
-///   4. <see cref="ListAllAsync"/> 通过 (timestamp DESC) 索引按时间倒序列举全部审计记录。
-///   5. 反规范化列（model_artifact_id / model_name / operation / succeeded / timestamp 等）便于索引查询；
-///      完整 <see cref="ModelActivationAuditEntry"/> 保存在 data jsonb。
+/// 1. 表 <c>model_activation_audit</c> 以 <c>audit_id</c> 为主键，append-only（无 ON CONFLICT 子句）。
+/// 2. <see cref="AppendAsync"/> 通过 INSERT 追加；不抛异常（best-effort，与契约"不抛异常"语义一致）。
+/// 3. <see cref="ListByModelAsync"/> 通过 (model_artifact_id, timestamp DESC) 索引按模型工件 ID 查询历史。
+/// 4. <see cref="ListAllAsync"/> 通过 (timestamp DESC) 索引按时间倒序列举全部审计记录。
+/// 5. 反规范化列（model_artifact_id / model_name / operation / succeeded / timestamp 等）便于索引查询；
+/// 完整 <see cref="ModelActivationAuditEntry"/> 保存在 data jsonb。
 /// </remarks>
 public sealed class PostgresModelActivationAuditStore : PostgresStoreBase, IModelActivationAuditStore
 {

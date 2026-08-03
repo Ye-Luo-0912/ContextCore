@@ -14,11 +14,11 @@ namespace ContextCore.IntegrationTests;
 /// PostgreSQL 跨 store 写入事务作用域集成测试。
 /// 验证：
 /// <list type="bullet">
-///   <item>CommitAsync 成功后所有 store 写入持久化。</item>
-///   <item>RollbackAsync 或异常路径下所有 store 写入回滚（无脏数据）。</item>
-///   <item>事务内 Query 可读到同事务未提交数据。</item>
-///   <item>BasicContextIngestionService 在事务路径下 ContextStore + RelationStore 原子写入。</item>
-///   <item>工厂创建的 scope 是 PostgresWriteTransactionScope（暴露 Connection/Transaction）。</item>
+/// <item>CommitAsync 成功后所有 store 写入持久化。</item>
+/// <item>RollbackAsync 或异常路径下所有 store 写入回滚（无脏数据）。</item>
+/// <item>事务内 Query 可读到同事务未提交数据。</item>
+/// <item>BasicContextIngestionService 在事务路径下 ContextStore + RelationStore 原子写入。</item>
+/// <item>工厂创建的 scope 是 PostgresWriteTransactionScope（暴露 Connection/Transaction）。</item>
 /// </list>
 /// 使用 Testcontainers 启动临时 Postgres 实例；无 Docker 时所有测试标记为 Inconclusive。
 /// </summary>

@@ -250,8 +250,8 @@ public sealed class ContextCoreDiArchitectureTests
     public async Task ProductionComposition_Postgres_DataPlaneDecoratorPatternDuplicatesAreIntentional()
     {
         // 生产组合（AddContextStorage + AddContextCore）下，Data Plane 接口会出现 2 次注册：
-        //   1. AddContextCorePostgresStorage 注册 forward → Postgres*Store
-        //   2. StorageExtensions.RegisterPostgres 注册 Invalidating*Decorator 包装
+        // 1. AddContextCorePostgresStorage 注册 forward → Postgres*Store
+        // 2. StorageExtensions.RegisterPostgres 注册 Invalidating*Decorator 包装
         // 这是装饰器模式的预期行为（最后一次注册胜出 = decorator）。
         // 本测试验证：所有 Data Plane 接口的重复注册都遵循此模式（最后一次解析为 Invalidating*Decorator）。
         var services = new ServiceCollection();

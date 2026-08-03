@@ -6,63 +6,63 @@ namespace ContextCore.Abstractions;
 // Multi-Expert Retrieval Routing 契约
 //
 // 目标：
-//   为 HybridContextRetriever 的 5 channel（Mandatory / Keyword / Vector /
-//   Memory / Relation）+ Task-State 信号建立统一的 Expert 抽象，让 Router
-//   可以按 Expert 粒度开关 / 调整 TopK / 调整 TokenBudget，而不是按 channel
-//   字符串或 boolean flag 操作。
+// 为 HybridContextRetriever 的 5 channel（Mandatory / Keyword / Vector /
+// Memory / Relation）+ Task-State 信号建立统一的 Expert 抽象，让 Router
+// 可以按 Expert 粒度开关 / 调整 TopK / 调整 TokenBudget，而不是按 channel
+// 字符串或 boolean flag 操作。
 //
 // 设计原则：
-//   1. 8 个 Expert 对齐 R18-1 ContextCandidateSource 枚举（Mandatory /
-//      Lexical / Semantic / WorkingMemory / StableMemory / Graph / Recency /
-//      Constraint），与 ContextCandidateEnvelope.Source 一一对应。
-//   2. Mandatory / Constraint 两个 Expert "永不关闭"（用户澄清：safety gate
-//      准入与 budget 限制正交）。Router 无法通过 Mask 禁用这两个 Expert。
-//   3. ExpertRoutingDecision 是 per-Expert 的运行时决策，由 Router 根据
-//      PolicyBundle.Routing.EnabledExperts + Request 特征计算得出。
-//   4. RetrievalExpertMask 是位掩码，用于 O(1) 判断 Expert 是否启用。
-//   5. 不引入存储 I/O；契约是内存中的不可变 record。
-//   6. 不强制替换 HybridContextRetriever；Router 在 R20-2 阶段作为可选
-//      编排路径接入，由调用方决定是否启用。
+// 1. 8 个 Expert 对齐 ContextCandidateSource 枚举（Mandatory /
+// Lexical / Semantic / WorkingMemory / StableMemory / Graph / Recency /
+// Constraint），与 ContextCandidateEnvelope.Source 一一对应。
+// 2. Mandatory / Constraint 两个 Expert "永不关闭"（用户澄清：safety gate
+// 准入与 budget 限制正交）。Router 无法通过 Mask 禁用这两个 Expert。
+// 3. ExpertRoutingDecision 是 per-Expert 的运行时决策，由 Router 根据
+// PolicyBundle.Routing.EnabledExperts + Request 特征计算得出。
+// 4. RetrievalExpertMask 是位掩码，用于 O(1) 判断 Expert 是否启用。
+// 5. 不引入存储 I/O；契约是内存中的不可变 record。
+// 6. 不强制替换 HybridContextRetriever；Router 在 阶段作为可选
+// 编排路径接入，由调用方决定是否启用。
 //
 // 5 channel 对齐：
-//   HybridContextRetriever.CurrentChannels:
-//     - MandatoryRecallChannelExecutor → Expert.Mandatory
-//     - ContextRecallChannelExecutor (Keyword) → Expert.Lexical
-//     - VectorRecallChannelExecutor (Semantic) → Expert.Semantic
-//     - MemoryRecallChannelExecutor (WorkingMemory + StableMemory)
-//         → Expert.WorkingMemory + Expert.StableMemory（两个 Expert 共享 channel）
-//     - RelationRecallChannelExecutor (Graph) → Expert.Graph
-//   额外信号（不在 5 channel 中）：
-//     - RecentContext / CurrentTask → Expert.Recency（由 WorkingMemory channel
-//       副产品或独立 TaskState 信号提供）
-//     - Constraint → Expert.Constraint（由 Mandatory channel 副产品或独立
-//       ConstraintStore 查询提供）
+// HybridContextRetriever.CurrentChannels:
+// - MandatoryRecallChannelExecutor → Expert.Mandatory
+// - ContextRecallChannelExecutor (Keyword) → Expert.Lexical
+// - VectorRecallChannelExecutor (Semantic) → Expert.Semantic
+// - MemoryRecallChannelExecutor (WorkingMemory + StableMemory)
+// → Expert.WorkingMemory + Expert.StableMemory（两个 Expert 共享 channel）
+// - RelationRecallChannelExecutor (Graph) → Expert.Graph
+// 额外信号（不在 5 channel 中）：
+// - RecentContext / CurrentTask → Expert.Recency（由 WorkingMemory channel
+// 副产品或独立 TaskState 信号提供）
+// - Constraint → Expert.Constraint（由 Mandatory channel 副产品或独立
+// ConstraintStore 查询提供）
 //
 // 子阶段进度：
-//   （当前）：契约定义 + 单元测试验证可实施性。不触碰 HybridContextRetriever。
-//   DefaultRetrievalRouter 实现 + Budget-Aware TopK 模拟。
+// （当前）：契约定义 + 单元测试验证可实施性。不触碰 HybridContextRetriever。
+// DefaultRetrievalRouter 实现 + Budget-Aware TopK 模拟。
 // ===========================================================================
 
 /// <summary>
 /// 检索专家（Retrieval Expert）枚举。
-/// 8 个 Expert 对齐 R18-1 <see cref="ContextCandidateSource"/> 枚举，
+/// 8 个 Expert 对齐 <see cref="ContextCandidateSource"/> 枚举，
 /// 为 Router 提供 per-Expert 操作粒度。
 /// </summary>
 /// <remarks>
 /// <b>永不关闭</b>（用户澄清：safety gate 准入与 budget 限制正交）：
-///   <list type="bullet">
-///   <item><see cref="Mandatory"/>：hard constraint / required tag，无条件选入。</item>
-///   <item><see cref="Constraint"/>：constraint satisfaction，无条件参与。</item>
-///   </list>
+/// <list type="bullet">
+/// <item><see cref="Mandatory"/>：hard constraint / required tag，无条件选入。</item>
+/// <item><see cref="Constraint"/>：constraint satisfaction，无条件参与。</item>
+/// </list>
 /// <b>可关闭</b>（Router 可通过 <see cref="RetrievalExpertMask"/> 禁用）：
-///   <list type="bullet">
-///   <item><see cref="Lexical"/>：keyword / context recall。</item>
-///   <item><see cref="Semantic"/>：vector recall。</item>
-///   <item><see cref="WorkingMemory"/>：task state / short-term signal。</item>
-///   <item><see cref="StableMemory"/>：long-term verified memory。</item>
-///   <item><see cref="Graph"/>：relation expansion / traversal。</item>
-///   <item><see cref="Recency"/>：recent_context / current_task。</item>
-///   </list>
+/// <list type="bullet">
+/// <item><see cref="Lexical"/>：keyword / context recall。</item>
+/// <item><see cref="Semantic"/>：vector recall。</item>
+/// <item><see cref="WorkingMemory"/>：task state / short-term signal。</item>
+/// <item><see cref="StableMemory"/>：long-term verified memory。</item>
+/// <item><see cref="Graph"/>：relation expansion / traversal。</item>
+/// <item><see cref="Recency"/>：recent_context / current_task。</item>
+/// </list>
 /// </remarks>
 public enum RetrievalExpert : byte
 {
@@ -99,12 +99,12 @@ public enum RetrievalExpert : byte
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. Enabled=false 时该 Expert 不参与候选生成（但 Mandatory/Constraint 永远 Enabled=true）。
-///   2. TopK 是 per-Expert 的 candidate 数量上限（用户澄清：模拟各 Expert 的 Top-K 质量—成本曲线）。
-///   3. TokenBudget 是 per-Expert 的 token 预算上限；总和不超过 Request.TokenBudget。
-///   4. Weight 是 Expert 在最终评分中的权重（0.0-1.0）；不影响候选生成，影响排序。
-///   5. ReasonCode 标识路由原因（如 "default" / "ablation-disabled" /
-///      "budget-reduced" / "policy-disabled"）。
+/// 1. Enabled=false 时该 Expert 不参与候选生成（但 Mandatory/Constraint 永远 Enabled=true）。
+/// 2. TopK 是 per-Expert 的 candidate 数量上限（用户澄清：模拟各 Expert 的 Top-K 质量—成本曲线）。
+/// 3. TokenBudget 是 per-Expert 的 token 预算上限；总和不超过 Request.TokenBudget。
+/// 4. Weight 是 Expert 在最终评分中的权重（0.0-1.0）；不影响候选生成，影响排序。
+/// 5. ReasonCode 标识路由原因（如 "default" / "ablation-disabled" /
+/// "budget-reduced" / "policy-disabled"）。
 /// </remarks>
 public sealed record ExpertRoutingDecision
 {
@@ -135,7 +135,7 @@ public sealed record ExpertRoutingDecision
     /// <summary>Expert 在最终评分中的权重（0.0-1.0）。</summary>
     /// <remarks>
     /// 不影响候选生成（即使 Weight=0，Expert 仍可生成候选）；
-    /// 仅影响最终评分的 Expert 贡献权重。R20-2 Router 可调整此值。
+    /// 仅影响最终评分的 Expert 贡献权重。 Router 可调整此值。
     /// </remarks>
     public double Weight { get; init; } = 1.0;
 
@@ -155,10 +155,10 @@ public sealed record ExpertRoutingDecision
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 决策集合是不可变快照；Router 每次执行生成新的 ExpertRoutingDecisionSet。
-///   2. 强制 Mandatory / Constraint 永远 Enabled=true（构造时校验）。
-///   3. 提供 O(1) 查询：IsExpertEnabled(expert) / GetDecision(expert)。
-///   4. 不直接调用 HybridContextRetriever；Router 输出决策，调用方按决策执行。
+/// 1. 决策集合是不可变快照；Router 每次执行生成新的 ExpertRoutingDecisionSet。
+/// 2. 强制 Mandatory / Constraint 永远 Enabled=true（构造时校验）。
+/// 3. 提供 O(1) 查询：IsExpertEnabled(expert) / GetDecision(expert)。
+/// 4. 不直接调用 HybridContextRetriever；Router 输出决策，调用方按决策执行。
 /// </remarks>
 public sealed record ExpertRoutingDecisionSet
 {
@@ -204,10 +204,10 @@ public sealed record ExpertRoutingDecisionSet
 /// </summary>
 /// <remarks>
 /// 设计原则：
-///   1. 使用 int 类型底层（避免 byte 溢出；8 个 Expert 对应 8 bit）。
-///   2. Mandatory / Constraint 两个 bit 永远为 1（构造时强制）。
-///   3. 位掩码不是运行时决策的替代，仅用于快速判断；
-///      完整决策需查询 <see cref="ExpertRoutingDecisionSet"/>。
+/// 1. 使用 int 类型底层（避免 byte 溢出；8 个 Expert 对应 8 bit）。
+/// 2. Mandatory / Constraint 两个 bit 永远为 1（构造时强制）。
+/// 3. 位掩码不是运行时决策的替代，仅用于快速判断；
+/// 完整决策需查询 <see cref="ExpertRoutingDecisionSet"/>。
 /// </remarks>
 public readonly record struct RetrievalExpertMask
 {
@@ -303,21 +303,21 @@ public readonly record struct RetrievalExpertMask
 /// </summary>
 /// <remarks>
 /// 当前 HybridContextRetriever 有 5 个 channel executor：
-///   1. MandatoryRecallChannelExecutor → <see cref="RetrievalExpert.Mandatory"/>
-///   2. ContextRecallChannelExecutor (Keyword) → <see cref="RetrievalExpert.Lexical"/>
-///   3. VectorRecallChannelExecutor (Semantic) → <see cref="RetrievalExpert.Semantic"/>
-///   4. MemoryRecallChannelExecutor → <see cref="RetrievalExpert.WorkingMemory"/> + <see cref="RetrievalExpert.StableMemory"/>
-///   5. RelationRecallChannelExecutor (Graph) → <see cref="RetrievalExpert.Graph"/>
+/// 1. MandatoryRecallChannelExecutor → <see cref="RetrievalExpert.Mandatory"/>
+/// 2. ContextRecallChannelExecutor (Keyword) → <see cref="RetrievalExpert.Lexical"/>
+/// 3. VectorRecallChannelExecutor (Semantic) → <see cref="RetrievalExpert.Semantic"/>
+/// 4. MemoryRecallChannelExecutor → <see cref="RetrievalExpert.WorkingMemory"/> + <see cref="RetrievalExpert.StableMemory"/>
+/// 5. RelationRecallChannelExecutor (Graph) → <see cref="RetrievalExpert.Graph"/>
 ///
 /// 额外信号（不在 5 channel 中，由 channel 副产品或独立信号源提供）：
-///   - <see cref="RetrievalExpert.Recency"/>：由 WorkingMemory channel 的 Task-State 副产品或独立 TaskState 信号提供。
-///   - <see cref="RetrievalExpert.Constraint"/>：由 Mandatory channel 的 constraint 副产品或独立 ConstraintStore 查询提供。
+/// - <see cref="RetrievalExpert.Recency"/>：由 WorkingMemory channel 的 Task-State 副产品或独立 TaskState 信号提供。
+/// - <see cref="RetrievalExpert.Constraint"/>：由 Mandatory channel 的 constraint 副产品或独立 ConstraintStore 查询提供。
 ///
 /// 设计原则：
-///   1. 映射是静态常量；不依赖运行时状态。
-///   2. 一个 channel 可对应多个 Expert（如 MemoryRecallChannel → WorkingMemory + StableMemory）。
-///   3. 一个 Expert 可对应多个 channel（如 Constraint 可来自 Mandatory channel + 独立 ConstraintStore）。
-///   4. Router 通过此映射决定关闭某 Expert 时需禁用哪些 channel。
+/// 1. 映射是静态常量；不依赖运行时状态。
+/// 2. 一个 channel 可对应多个 Expert（如 MemoryRecallChannel → WorkingMemory + StableMemory）。
+/// 3. 一个 Expert 可对应多个 channel（如 Constraint 可来自 Mandatory channel + 独立 ConstraintStore）。
+/// 4. Router 通过此映射决定关闭某 Expert 时需禁用哪些 channel。
 /// </remarks>
 public static class RetrievalExpertChannels
 {

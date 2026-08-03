@@ -7,15 +7,15 @@ namespace ContextCore.Tests;
 /// DefaultAgentRuntimeRegistry 实现测试。
 ///
 /// 覆盖：
-///   1. RegisterAsync null 抛异常
-///   2. RegisterAsync 新增返回 true + Count 增长
-///   3. RegisterAsync 覆盖返回 false + Count 不变
-///   4. UnregisterAsync 存在/不存在
-///   5. Resolve 存在/不存在
-///   6. GetAll 按 RuntimeKind 排序
-///   7. Count 属性
-///   8. 三种 adapter（GenericTool/Codex/Claude）共存
-///   9. CancellationToken 传递
+/// 1. RegisterAsync null 抛异常
+/// 2. RegisterAsync 新增返回 true + Count 增长
+/// 3. RegisterAsync 覆盖返回 false + Count 不变
+/// 4. UnregisterAsync 存在/不存在
+/// 5. Resolve 存在/不存在
+/// 6. GetAll 按 RuntimeKind 排序
+/// 7. Count 属性
+/// 8. 三种 adapter（GenericTool/Codex/Claude）共存
+/// 9. CancellationToken 传递
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

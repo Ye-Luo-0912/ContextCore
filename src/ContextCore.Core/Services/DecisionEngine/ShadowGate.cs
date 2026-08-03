@@ -6,18 +6,18 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Shadow Gate 多维度验收
 //
 // 目标（B-3 阶段：Hard parity 验收 + replay fixtures）：
-//   1. ShadowGate：基于 ParityReport 的验收门控。
-//      - Hard parity（阻断 Authoritative cutover）：JaccardIndex ≥ 0.99 + token 偏差 ≤ 阈值
-//      - Diagnostic parity（告警不阻断）：0.90 ≤ JaccardIndex < 0.99
-//      - Divergent（发散）：JaccardIndex < 0.90 → 阻断切换 + 触发告警
-//   2. ReplayFixture：可重放的 parity fixture（序列化为 JSON，供回归测试消费）。
-//   3. ShadowGateEvaluator：批量评估多个 Shadow 报告，产出 cutover 就绪判定。
+// 1. ShadowGate：基于 ParityReport 的验收门控。
+// - Hard parity（阻断 Authoritative cutover）：JaccardIndex ≥ 0.99 + token 偏差 ≤ 阈值
+// - Diagnostic parity（告警不阻断）：0.90 ≤ JaccardIndex < 0.99
+// - Divergent（发散）：JaccardIndex < 0.90 → 阻断切换 + 触发告警
+// 2. ReplayFixture：可重放的 parity fixture（序列化为 JSON，供回归测试消费）。
+// 3. ShadowGateEvaluator：批量评估多个 Shadow 报告，产出 cutover 就绪判定。
 //
 // 设计原则：
-//   1. B-3 升级 DecisionExperimentPlane 的 Diagnostic parity 为 Hard parity（阻断切换）。
-//   2. ShadowGate 不修改 ShadowDecisionRuntime（B-2 产出 ParityReport；B-3 消费之）。
-//   3. Replay fixtures 可离线重放，用于回归测试和 CI 验收。
-//   4. 多维度验收：selected 集合一致性（Jaccard）+ token 预算偏差 + dropped 候选数偏差。
+// 1. B-3 升级 DecisionExperimentPlane 的 Diagnostic parity 为 Hard parity（阻断切换）。
+// 2. ShadowGate 不修改 ShadowDecisionRuntime（B-2 产出 ParityReport；B-3 消费之）。
+// 3. Replay fixtures 可离线重放，用于回归测试和 CI 验收。
+// 4. 多维度验收：selected 集合一致性（Jaccard）+ token 预算偏差 + dropped 候选数偏差。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -30,14 +30,14 @@ namespace ContextCore.Core.Services.DecisionEngine;
 /// </summary>
 /// <remarks>
 /// 验收维度：
-///   1. Selected 集合一致性（JaccardIndex ≥ threshold）
-///   2. Token 预算偏差（|LegacyTokenTotal - V2TokenTotal| / max(LegacyTokenTotal, 1) ≤ tokenTolerance）
-///   3. Dropped 候选数偏差（|LegacyDropped - V2Dropped| ≤ droppedTolerance）
+/// 1. Selected 集合一致性（JaccardIndex ≥ threshold）
+/// 2. Token 预算偏差（|LegacyTokenTotal - V2TokenTotal| / max(LegacyTokenTotal, 1) ≤ tokenTolerance）
+/// 3. Dropped 候选数偏差（|LegacyDropped - V2Dropped| ≤ droppedTolerance）
 ///
 /// 判定结果：
-///   - Pass（Hard parity）：全部维度通过 → 可安全切换
-///   - Warn（Diagnostic parity）：部分维度告警 → 可切换但需监控
-///   - Fail（Divergent）：关键维度发散 → 阻断切换
+/// - Pass（Hard parity）：全部维度通过 → 可安全切换
+/// - Warn（Diagnostic parity）：部分维度告警 → 可切换但需监控
+/// - Fail（Divergent）：关键维度发散 → 阻断切换
 /// </remarks>
 public sealed class ShadowGate
 {
@@ -319,12 +319,12 @@ public sealed record ReplayFixture(
     /// 新增的 StoredNormalizedRequest / StoredRequestSemanticHash /
     /// StoredFeatureSchemaVersion / StoredAllocatorVersion / StoredTokenizerVersion /
     /// StoredFinalTokenCost，使离线 replay 能纯决策重放（DecisionReplay / ExpertReplay）：
-    ///   - StoredPolicySnapshot：直接喂给 IContextDecisionEngine.DecideAsync，不重新解析 Policy；
-    ///   - StoredProviderOutputs：跳过 Provider 执行，直接 Merge 后进入 Engine；
-    ///   - StoredWorkingSet：Engine 入口候选快照；
-    ///   - StoredNormalizedRequest / StoredRequestSemanticHash：replay 匹配与标准化对比；
-    ///   - StoredFeatureSchemaVersion / StoredAllocatorVersion / StoredTokenizerVersion：replay 兼容性校验；
-    ///   - StoredFinalTokenCost：stored vs replayed token 成本漂移检测。
+    /// - StoredPolicySnapshot：直接喂给 IContextDecisionEngine.DecideAsync，不重新解析 Policy；
+    /// - StoredProviderOutputs：跳过 Provider 执行，直接 Merge 后进入 Engine；
+    /// - StoredWorkingSet：Engine 入口候选快照；
+    /// - StoredNormalizedRequest / StoredRequestSemanticHash：replay 匹配与标准化对比；
+    /// - StoredFeatureSchemaVersion / StoredAllocatorVersion / StoredTokenizerVersion：replay 兼容性校验；
+    /// - StoredFinalTokenCost：stored vs replayed token 成本漂移检测。
     /// </remarks>
     public static ReplayFixture FromExecution(
         ParityReport report,

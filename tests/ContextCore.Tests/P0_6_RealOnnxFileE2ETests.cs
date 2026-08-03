@@ -9,25 +9,25 @@ namespace ContextCore.Tests;
 // Real Model E2E — 加载实际 ONNX 文件的端到端测试
 //
 // 目标：
-//   验证 ModelActivationManager 框架（P0-7/P0-8 搭建）能加载真实 ONNX 模型文件，
-//   而非仅依赖 MockOnnxInferenceSession。通过 OnnxRuntimeInferenceSessionFactory
-//   读取真实模型元数据（InputMetadata/OutputMetadata），验证：
-//     1. 工厂成功加载真实 ONNX 文件并创建 session（张量名校验通过）
-//     2. 工厂拒绝错误张量名（证明真实读取了模型 metadata，而非 mock）
-//     3. ModelActivationManager 完整激活流程：registry → 校准验证 → schema 验证
-//        → session 创建 → 引擎切换（Kind 从 DeterministicReplay → RealModel）
-//     4. 真实模型推理调用 ONNX Runtime（embedding 模型期望 int64 input_ids，
-//        发送 float 特征会触发 OnnxRuntimeException，证明真实 session.Run 被调用）
-//     5. ActivateLatestAsync 解析最新版本
-//     6. 真实文件 SHA-256 ContentHash 流经 descriptor → engine
+// 验证 ModelActivationManager 框架能加载真实 ONNX 模型文件，
+// 而非仅依赖 MockOnnxInferenceSession。通过 OnnxRuntimeInferenceSessionFactory
+// 读取真实模型元数据（InputMetadata/OutputMetadata），验证：
+// 1. 工厂成功加载真实 ONNX 文件并创建 session（张量名校验通过）
+// 2. 工厂拒绝错误张量名（证明真实读取了模型 metadata，而非 mock）
+// 3. ModelActivationManager 完整激活流程：registry → 校准验证 → schema 验证
+// → session 创建 → 引擎切换（Kind 从 DeterministicReplay → RealModel）
+// 4. 真实模型推理调用 ONNX Runtime（embedding 模型期望 int64 input_ids，
+// 发送 float 特征会触发 OnnxRuntimeException，证明真实 session.Run 被调用）
+// 5. ActivateLatestAsync 解析最新版本
+// 6. 真实文件 SHA-256 ContentHash 流经 descriptor → engine
 //
 // 设计：
-//   - 使用项目内置 embedding 模型（bge-small-zh-v1.5 / all-MiniLM-L6-v2），
-//     它们是 BERT-based，具有标准张量名 input_ids（int64）与 last_hidden_state（float）。
-//   - 当 ONNX 文件不存在（CI 未下载模型）时，Assert.Inconclusive 跳过。
-//   - 复用 InMemoryModelArtifactRegistry（定义于 P0_7 测试文件，同 assembly internal 可见）。
-//   - 推理测试利用输入类型不匹配（float vs int64）触发 OnnxRuntime 错误，
-//     优雅失败（Succeeded=false）证明真实 session 被调用，而非 mock 返回固定值。
+// - 使用项目内置 embedding 模型（bge-small-zh-v1.5 / all-MiniLM-L6-v2），
+// 它们是 BERT-based，具有标准张量名 input_ids（int64）与 last_hidden_state（float）。
+// - 当 ONNX 文件不存在（CI 未下载模型）时，Assert.Inconclusive 跳过。
+// - 复用 InMemoryModelArtifactRegistry（定义于 P0_7 测试文件，同 assembly internal 可见）。
+// - 推理测试利用输入类型不匹配（float vs int64）触发 OnnxRuntime 错误，
+// 优雅失败（Succeeded=false）证明真实 session 被调用，而非 mock 返回固定值。
 // ===========================================================================
 
 [TestClass]

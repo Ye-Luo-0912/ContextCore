@@ -65,7 +65,7 @@ internal static class InvalidationKeys
 /// 派生类在 _inner 写入成功后调用 <see cref="AfterCommitAsync"/>。
 /// </summary>
 /// <remarks>
-/// #5: version bump 先于 physical eviction。
+/// version bump 先于 physical eviction。
 /// 版本递增先执行——版本号是版本感知读路径的"真相源"。bump 完成后，任何并发缓存读取
 /// 即使尚未被 InvalidateAsync 物理移除，也会因版本失配而被视为 stale（GetAsync 返回 null
 /// 并计 VersionMismatch）。InvalidateAsync 作为 best-effort 物理清理，回收已被版本判定为 stale 的条目，
@@ -75,11 +75,11 @@ internal static class InvalidationKeys
 /// 多实例 cache invalidation 语义。
 /// bump 通过 <see cref="IContextStateVersionStore"/> 完成，其实现决定跨实例可见性：
 /// - InMemoryContextStateVersionStore（FileSystem/InMemory provider 默认）：进程内可见，
-///   仅本实例 cache 感知到 bump；多实例场景下其他实例 cache 不会失配，但 FileSystem/InMemory
-///   本就是单机 provider，不存在多实例需求。
-/// - PostgresContextStateVersionStore（Postgres provider，R14-PG-6）：版本号持久化到 Postgres，
-///   多实例共享同一行级锁原子自增的版本号；Instance A bump 后，Instance B 的 cache.GetAsync
-///   通过 GetVersionsAsync 读到新版本号，触发 VersionMismatch，重新从 store 读取。
+/// 仅本实例 cache 感知到 bump；多实例场景下其他实例 cache 不会失配，但 FileSystem/InMemory
+/// 本就是单机 provider，不存在多实例需求。
+/// - PostgresContextStateVersionStore（Postgres provider，）：版本号持久化到 Postgres，
+/// 多实例共享同一行级锁原子自增的版本号；Instance A bump 后，Instance B 的 cache.GetAsync
+/// 通过 GetVersionsAsync 读到新版本号，触发 VersionMismatch，重新从 store 读取。
 /// 物理失效（InvalidateAsync）始终进程内，跨实例 cache 仅靠版本感知 GetAsync 被动失效——
 /// 不实现 LISTEN/NOTIFY 主动通知，避免引入额外复杂度。
 /// </remarks>
@@ -101,7 +101,7 @@ public abstract class InvalidatingStoreDecoratorBase
     /// <param name="key">失效范围键（其 WorkspaceId/CollectionId/StoreKind 同时用于版本递增）。</param>
     protected async Task AfterCommitAsync(CacheInvalidationKey key)
     {
-        // #5: 版本先于物理失效——版本是版本感知读路径的真相源，
+        // 版本先于物理失效——版本是版本感知读路径的真相源，
         // bump 完成后并发读取即使命中未物理移除的条目也会因版本失配返回 null。
         if (_versionStore is not null)
         {

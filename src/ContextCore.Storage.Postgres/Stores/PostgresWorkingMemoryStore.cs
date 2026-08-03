@@ -9,9 +9,9 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <summary>
 /// PostgreSQL 工作记忆存储，同时实现：
 /// <list type="bullet">
-///   <item><see cref="IWorkingMemoryService"/> — 短期工作记忆条目与活跃上下文管理</item>
-///   <item><see cref="IPromotionRecordStore"/> — 晋升记录持久化</item>
-///   <item><see cref="IPromotionCandidateStore"/> — 晋升候选项管理</item>
+/// <item><see cref="IWorkingMemoryService"/> — 短期工作记忆条目与活跃上下文管理</item>
+/// <item><see cref="IPromotionRecordStore"/> — 晋升记录持久化</item>
+/// <item><see cref="IPromotionCandidateStore"/> — 晋升候选项管理</item>
 /// </list>
 /// </summary>
 public sealed class PostgresWorkingMemoryStore : PostgresStoreBase,

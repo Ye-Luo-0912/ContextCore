@@ -12,21 +12,21 @@ namespace ContextCore.Tests;
 // Final Closure — 25 项硬验收测试
 //
 // 覆盖五条工作流（B-F）的核心契约：
-//   B. Tool 副作用安全（Tool Effect Safety）：Journal 状态机 + expected-state CAS
-//   C. Canary 真相（Canary Truth）：外部 ground-truth 指标采集器
-//   D. 模型激活（Model Activation）：ActivationManager 代理行为 + 失败路径
-//   E. Agent 智能（Agent Intelligence）：状态机 + 哈希链 + CAS Run Store
-//   F. 性能真相（Performance Truth）：组件健康注册表 + benchmark 脚本门控
+// B. Tool 副作用安全（Tool Effect Safety）：Journal 状态机 + expected-state CAS
+// C. Canary 真相（Canary Truth）：外部 ground-truth 指标采集器
+// D. 模型激活（Model Activation）：ActivationManager 代理行为 + 失败路径
+// E. Agent 智能（Agent Intelligence）：状态机 + 哈希链 + CAS Run Store
+// F. 性能真相（Performance Truth）：组件健康注册表 + benchmark 脚本门控
 //
 // 注：旧平面 Workflow A（Durable Delivery — Outbox + Transport）随双执行平面
-// 收敛删除（R29-Perf-1），由 AgentRunStore 事件溯源路径取代。
+// 收敛删除，由 AgentRunStore 事件溯源路径取代。
 //
 // 设计原则：
-//   - 全部使用 InMemory 实现（无 Postgres / 真实 ONNX 依赖）
-//   - 需要 Postgres / 真实 ONNX 的场景用 InMemory 模拟或 Assert.Inconclusive
-//   - 复用同 assembly 的 internal 测试辅助：InMemoryModelArtifactRegistry /
-//     MockOnnxInferenceSession / MockSessionFactory / FailingSessionFactory
-//   - 所有代码注释使用中文
+// - 全部使用 InMemory 实现（无 Postgres / 真实 ONNX 依赖）
+// - 需要 Postgres / 真实 ONNX 的场景用 InMemory 模拟或 Assert.Inconclusive
+// - 复用同 assembly 的 internal 测试辅助：InMemoryModelArtifactRegistry /
+// MockOnnxInferenceSession / MockSessionFactory / FailingSessionFactory
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================
@@ -78,7 +78,7 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
     [TestMethod]
     public async Task Journal_MarkDispatchedAsync_ThrowsWhenMissingPrepare()
     {
-        // 验证 P0-3 expected-state CAS：缺失 Prepared 前驱时抛 InvalidOperationException（不 auto-create stub）
+        // 验证 expected-state CAS：缺失 Prepared 前驱时抛 InvalidOperationException（不 auto-create stub）
         var journal = new InMemoryToolDispatchJournal();
 
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
@@ -88,7 +88,7 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
     [TestMethod]
     public async Task Journal_MarkResultDeliveredAsync_ThrowsWhenMissingPrepare()
     {
-        // 验证 P0-3 expected-state CAS：MarkResultDeliveredAsync 在缺失前驱记录时抛 InvalidOperationException
+        // 验证 expected-state CAS：MarkResultDeliveredAsync 在缺失前驱记录时抛 InvalidOperationException
         // （与 MarkDispatchedAsync 对称，保证审计链完整——不存在 → ResultDelivered 这样的跳跃不再可能）
         var journal = new InMemoryToolDispatchJournal();
 
@@ -340,7 +340,7 @@ public sealed class WorkflowD_ModelActivationAcceptanceTests
     public async Task ModelActivation_RealOnnxModel_E2E_InconclusiveWhenMissing()
     {
         // 验证：真实 ONNX E2E 激活路径；CI 未下载模型时 Assert.Inconclusive 跳过
-        // 对齐 P0-6 设计：当 ONNX 文件不存在时跳过，避免误报
+        // 对齐设计：当 ONNX 文件不存在时跳过，避免误报
         var repoRoot = FindRepoRoot();
         var bgePath = Path.Combine(repoRoot, "src", "ContextCore.Embedding", "Models",
             "bge-small-zh-v1.5", "onnx", "model_quantized.onnx");
@@ -508,7 +508,7 @@ public sealed class WorkflowE_AgentIntelligenceAcceptanceTests
     public async Task EventChain_BuildEvent_ComputesAndVerifiesContentHash()
     {
         // 验证：AgentRunEventChain.BuildEvent 自动计算 ContentHash；
-        //       VerifyContentHash 重算后与存储值一致
+        // VerifyContentHash 重算后与存储值一致
         var evt = AgentRunEventChain.BuildEvent(
             runId: "run-E4",
             workspaceId: "ws-E4",

@@ -6,12 +6,12 @@ namespace ContextCore.Core.Services.Agent;
 // DefaultAgentContextDeltaCalculator — 默认 delta 计算器实现。
 //
 // 实现 IAgentContextDeltaCalculator：
-//   - Section 比较：基于 SectionName（key）；Content 字符串不同 = Modified；
-//     仅在 ToSnapshot 中 = Added；仅在 FromSnapshot 中 = Removed。
-//   - Decision/Constraint ID：集合差集。
-//   - ToolCallRefs：ToSnapshot 中的新 key = AddedToolCallRefs。
-//   - TokenDelta：ToSnapshot.ActualTokens - FromSnapshot.ActualTokens。
-//   - 纯函数；无状态。
+// - Section 比较：基于 SectionName（key）；Content 字符串不同 = Modified；
+// 仅在 ToSnapshot 中 = Added；仅在 FromSnapshot 中 = Removed。
+// - Decision/Constraint ID：集合差集。
+// - ToolCallRefs：ToSnapshot 中的新 key = AddedToolCallRefs。
+// - TokenDelta：ToSnapshot.ActualTokens - FromSnapshot.ActualTokens。
+// - 纯函数；无状态。
 // ===========================================================================
 
 /// <summary>

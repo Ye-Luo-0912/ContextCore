@@ -9,12 +9,12 @@ namespace ContextCore.Tests;
 /// GenericToolAgentAdapter + GenericToolAgentSession + IAgentEventStream 实现测试。
 ///
 /// 覆盖：
-///   1. Adapter 基本属性 / CreateSessionAsync / CloseSessionAsync / IsSessionActiveAsync
-///   2. Session.StartTurnAsync / CompleteTurnAsync / RecordToolCallResultAsync
-///   3. EventStream.SubscribeAsync（push 模型 + 历史事件 + cancellation）
-///   4. EventStream.QueryAsync（按 Kind / Level / TurnId / Since/Until / Take 过滤）
-///   5. Closed session 写操作抛 InvalidOperationException
-///   6. SessionId mismatch 校验
+/// 1. Adapter 基本属性 / CreateSessionAsync / CloseSessionAsync / IsSessionActiveAsync
+/// 2. Session.StartTurnAsync / CompleteTurnAsync / RecordToolCallResultAsync
+/// 3. EventStream.SubscribeAsync（push 模型 + 历史事件 + cancellation）
+/// 4. EventStream.QueryAsync（按 Kind / Level / TurnId / Since/Until / Take 过滤）
+/// 5. Closed session 写操作抛 InvalidOperationException
+/// 6. SessionId mismatch 校验
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

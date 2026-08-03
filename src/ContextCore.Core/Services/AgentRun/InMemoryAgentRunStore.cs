@@ -7,16 +7,16 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // InMemoryAgentRunStore — 进程内 Agent Run Store（开发/测试用）
 //
 // 实现 IAgentRunStore 的进程内默认实现，与 InMemoryAgentCheckpointStore 模式对齐：
-//   - ConcurrentDictionary 维护 (workspaceId, runId) → AgentRun 映射；
-//   - CreateAsync 幂等（同主键 TryAdd 不覆盖）；
-//   - TransitionStateAsync 使用 expected-state CAS（CAS 失败抛 InvalidOperationException）；
-//   - UpdateAsync 直接覆盖（保留 State 不变以避免 CAS 旁路）；
-//   - ListBySessionAsync / ListByStateAsync 线性扫描过滤。
+// - ConcurrentDictionary 维护 (workspaceId, runId) → AgentRun 映射；
+// - CreateAsync 幂等（同主键 TryAdd 不覆盖）；
+// - TransitionStateAsync 使用 expected-state CAS（CAS 失败抛 InvalidOperationException）；
+// - UpdateAsync 直接覆盖（保留 State 不变以避免 CAS 旁路）；
+// - ListBySessionAsync / ListByStateAsync 线性扫描过滤。
 //
 // 设计决策：
-//   - 不持久化到磁盘：进程崩溃后状态丢失。生产部署应注入持久化实现。
-//   - 线程安全：所有读写通过 ConcurrentDictionary 原子操作。
-//   - CAS 实现：使用 ConcurrentDictionary 索引器 + Interlocked.CompareExchange 模拟。
+// - 不持久化到磁盘：进程崩溃后状态丢失。生产部署应注入持久化实现。
+// - 线程安全：所有读写通过 ConcurrentDictionary 原子操作。
+// - CAS 实现：使用 ConcurrentDictionary 索引器 + Interlocked.CompareExchange 模拟。
 // ===========================================================================
 
 /// <summary>

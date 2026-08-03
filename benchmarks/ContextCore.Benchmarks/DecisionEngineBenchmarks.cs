@@ -11,18 +11,18 @@ namespace ContextCore.Benchmarks;
 // Decision Engine 微基准
 //
 // 覆盖：
-//   DefaultGlobalAllocator.Allocate（V2.0 基线）
-//   DefaultAllocatorV2_1.AllocateWithDiversity（V2.1 主链：section rollover + MMR）
-//   MmrDiversityScorer.RerankWithMmr（MMR 重排序微基准）
-//   DefaultCanonicalCandidateMerger.Merge（跨 Expert 合并 + 去重）
-//   RetrievalResultProjector.Project（V2 → Legacy Retrieval DTO 投影）
-//   PackageResultProjector.Project（V2 → Legacy Package DTO 投影）
+// DefaultGlobalAllocator.Allocate（V2.0 基线）
+// DefaultAllocatorV2_1.AllocateWithDiversity（V2.1 主链：section rollover + MMR）
+// MmrDiversityScorer.RerankWithMmr（MMR 重排序微基准）
+// DefaultCanonicalCandidateMerger.Merge（跨 Expert 合并 + 去重）
+// RetrievalResultProjector.Project（V2 → Legacy Retrieval DTO 投影）
+// PackageResultProjector.Project（V2 → Legacy Package DTO 投影）
 //
 // 数据规模：[Params(10, 100, 1000)] 覆盖小/中/大候选集
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
 //
 // 依赖：MmrDiversityScorer 为 internal static，通过 ContextCore.Core 的
-//       InternalsVisibleTo("ContextCore.Benchmarks") 暴露。
+// InternalsVisibleTo("ContextCore.Benchmarks") 暴露。
 // ===========================================================================
 
 /// <summary>

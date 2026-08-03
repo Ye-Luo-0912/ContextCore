@@ -5,7 +5,7 @@ namespace ContextCore.Tests;
 
 /// <summary>
 /// Decision Evidence Contract 单元测试：验证证据 DTO 结构和 EvidenceAuditStatus enum 语义。
-/// NullDecisionEvidenceProvider 已删除（R18-十），未接入 provider 时审计报告标记 NotConfigured。
+/// NullDecisionEvidenceProvider 已删除（-十），未接入 provider 时审计报告标记 NotConfigured。
 /// </summary>
 [TestClass]
 [TestCategory("Decision")]

@@ -10,17 +10,17 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Authoritative Cutover — Retrieval → Package → AgentContext
 //
 // 目标（B-4 阶段：V2 Runtime 成为权威路径，Legacy 降级为可选 fallback）：
-//   1. AuthoritativeRetrievalRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
-//   2. AuthoritativePackageRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
-//   3. AuthoritativeAgentContextRuntime：V2 执行 + AgentContextProjector 投影。
-//   4. CutoverController：控制 Legacy → V2 切换比例（0% = Legacy only，
-//      100% = V2 only，中间值 = 按 requestId 哈希分流）。
+// 1. AuthoritativeRetrievalRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
+// 2. AuthoritativePackageRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
+// 3. AuthoritativeAgentContextRuntime：V2 执行 + AgentContextProjector 投影。
+// 4. CutoverController：控制 Legacy → V2 切换比例（0% = Legacy only，
+// 100% = V2 only，中间值 = 按 requestId 哈希分流）。
 //
 // 设计原则：
-//   1. 渐进切换：CutoverController 按 percentage 控制流量比例，支持灰度。
-//   2. Fallback 安全：V2 失败时自动回退到 Legacy（fail-open）。
-//   3. Parity 监控：切换期间持续 Shadow parity 校验，Divergent 自动回退。
-//   4. B-4 不删除 Legacy 代码（B-5 才删除）；Legacy 仍可通过 CutoverPercentage=0 启用。
+// 1. 渐进切换：CutoverController 按 percentage 控制流量比例，支持灰度。
+// 2. Fallback 安全：V2 失败时自动回退到 Legacy（fail-open）。
+// 3. Parity 监控：切换期间持续 Shadow parity 校验，Divergent 自动回退。
+// 4. B-4 不删除 Legacy 代码（B-5 才删除）；Legacy 仍可通过 CutoverPercentage=0 启用。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -108,17 +108,17 @@ internal static class CanaryRunIdResolver
 // Canary 质量分计算器
 //
 // 目标：
-//   从 ContextDecisionExecutionResult 计算 0.0-1.0 范围的质量分，
-//   综合 section 覆盖率（token 预算利用率）与候选相关性（FinalScore 均值）：
-//     quality_score = SectionCoverageWeight × SectionCoverage + RelevanceWeight × AvgRelevance
+// 从 ContextDecisionExecutionResult 计算 0.0-1.0 范围的质量分，
+// 综合 section 覆盖率（token 预算利用率）与候选相关性（FinalScore 均值）：
+// quality_score = SectionCoverageWeight × SectionCoverage + RelevanceWeight × AvgRelevance
 //
 // 设计边界：
-//   - 输入为 null（V2 失败/未执行）时返回 0.0（无质量信号）。
-//   - 权重默认 0.5 / 0.5，可通过 CanaryGateOptions 配置。
-//   - section 覆盖率优先从 FinalArtifactTokenCost 读取（精确），
-//     回退到 Outcome.EffectiveTokens / Outcome.TokenBudget（粗略）。
-//   - 候选相关性取 SelectedEnvelopes.Utility.FinalScore 均值，无选中候选时为 0.0。
-//   - 所有中间值 Clamp 到 [0.0, 1.0]，防止异常输入导致质量分越界。
+// - 输入为 null（V2 失败/未执行）时返回 0.0（无质量信号）。
+// - 权重默认 0.5 / 0.5，可通过 CanaryGateOptions 配置。
+// - section 覆盖率优先从 FinalArtifactTokenCost 读取（精确），
+// 回退到 Outcome.EffectiveTokens / Outcome.TokenBudget（粗略）。
+// - 候选相关性取 SelectedEnvelopes.Utility.FinalScore 均值，无选中候选时为 0.0。
+// - 所有中间值 Clamp 到 [0.0, 1.0]，防止异常输入导致质量分越界。
 // ===========================================================================
 
 /// <summary>
@@ -335,8 +335,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     /// <summary>
     /// 执行 Retrieval。按 CutoverController 决定走 V2 或 Legacy。
     /// 修复：
-    ///   - 100% V2 时跳过 Legacy 执行（不再 100% Legacy + 100% V2 second pass）。
-    ///   - catch 不再捕获 OperationCanceledException（用户取消应立即传播）。
+    /// - 100% V2 时跳过 Legacy 执行（不再 100% Legacy + 100% V2 second pass）。
+    /// - catch 不再捕获 OperationCanceledException（用户取消应立即传播）。
     /// </summary>
     public async Task<ContextRetrievalResult> RetrieveAsync(
         ContextRetrievalRequest request,

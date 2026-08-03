@@ -8,24 +8,24 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //
 // 实现 IAgentToolCallValidator 的默认安全校验逻辑（消费 Tool 声明，而非仅
 // 依赖硬编码黑名单）：
-//   1. ToolName 非空（基础合法性）。
-//   2. Dispatcher 成员校验：Tool 必须位于 IToolDispatcher.SupportedTools 范围，
-//      未注册 Tool 直接拒绝（fail-closed，不进入审批）。
-//   3. Arguments 为合法 JSON（参数基础合法性）。
-//   4. Schema 校验：从 IToolCatalog 的 Tool 定义读取 ParametersJsonSchema，
-//      校验必需参数存在 + 参数类型匹配（best-effort：schema 缺失/空/损坏时跳过）。
-//   5. 危险 Tool 黑名单（如 file_delete、shell_exec）→ RequiresApproval。
-//   6. Descriptor 消费：ToolDescriptor 声明 RequiresApproval / 危险副作用
-//      （NonIdempotentWrite、RequiresReconciliation）/ RequiresIdempotencyKey
-//      但调用未携带幂等键 / RequiresLeaseFence → RequiresApproval（聚合原因）。
+// 1. ToolName 非空（基础合法性）。
+// 2. Dispatcher 成员校验：Tool 必须位于 IToolDispatcher.SupportedTools 范围，
+// 未注册 Tool 直接拒绝（fail-closed，不进入审批）。
+// 3. Arguments 为合法 JSON（参数基础合法性）。
+// 4. Schema 校验：从 IToolCatalog 的 Tool 定义读取 ParametersJsonSchema，
+// 校验必需参数存在 + 参数类型匹配（best-effort：schema 缺失/空/损坏时跳过）。
+// 5. 危险 Tool 黑名单（如 file_delete、shell_exec）→ RequiresApproval。
+// 6. Descriptor 消费：ToolDescriptor 声明 RequiresApproval / 危险副作用
+// （NonIdempotentWrite、RequiresReconciliation）/ RequiresIdempotencyKey
+// 但调用未携带幂等键 / RequiresLeaseFence → RequiresApproval（聚合原因）。
 //
 // 设计决策：
-//   - Dispatcher / Catalog 通过构造参数注入（null 时跳过成员 / schema / descriptor
-//     检查，保持仅黑名单的旧行为——兼容直接 new DefaultAgentToolCallValidator() 的路径）；
-//   - Catalog 为空时回退到 Dispatcher 的 IToolCatalog 实现（与 Actor 的解析策略一致）；
-//   - 校验不通过的 Tool 返回 IsValid=false（不分派）；
-//   - 黑名单匹配使用 OrdinalIgnoreCase（大小写不敏感）；
-//   - 完全无副作用，可单例注册。
+// - Dispatcher / Catalog 通过构造参数注入（null 时跳过成员 / schema / descriptor
+// 检查，保持仅黑名单的旧行为——兼容直接 new DefaultAgentToolCallValidator() 的路径）；
+// - Catalog 为空时回退到 Dispatcher 的 IToolCatalog 实现（与 Actor 的解析策略一致）；
+// - 校验不通过的 Tool 返回 IsValid=false（不分派）；
+// - 黑名单匹配使用 OrdinalIgnoreCase（大小写不敏感）；
+// - 完全无副作用，可单例注册。
 // ===========================================================================
 
 /// <summary>
@@ -58,7 +58,7 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
     /// null 时回退到 dispatcher 的 IToolCatalog 实现；均无定义时跳过 schema 检查）。</param>
     /// <param name="dangerousTools">危险 Tool 黑名单（null 时使用 <see cref="DefaultDangerousTools"/>）。</param>
     /// <param name="approvalPolicy">
-    /// WP-B：Approval Policy 配置（SecurityOptions.ApprovalPolicy）。非 null 且 Enabled=true 时，
+    /// Approval Policy 配置（SecurityOptions.ApprovalPolicy）。非 null 且 Enabled=true 时，
     /// Tool 调用携带 <see cref="AgentToolCallRequest.EstimatedCostUsd"/> /
     /// <see cref="AgentToolCallRequest.EstimatedTokens"/> 且超过全局 CostThresholdUsd /
     /// TokenThreshold 时标记 RequiresApproval（费用/token 阈值的校验器侧触发；
@@ -163,7 +163,7 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
             }
 
             // 8. 费用 / token 审批阈值（ApprovalPolicyOptions 全局阈值，仅校验器侧触发；
-            //    workspace 覆盖由 IAgentApprovalGate 在裁决时合并——校验器无 workspace 上下文）。
+            // workspace 覆盖由 IAgentApprovalGate 在裁决时合并——校验器无 workspace 上下文）。
             if (_approvalPolicy is { Enabled: true })
             {
                 if (_approvalPolicy.CostThresholdUsd > 0 && (toolCall.EstimatedCostUsd ?? 0) >= _approvalPolicy.CostThresholdUsd)

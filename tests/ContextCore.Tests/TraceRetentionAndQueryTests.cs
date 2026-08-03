@@ -156,7 +156,7 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
             });
-            // #4：retention 现为 fire-and-forget，需等待清理 Task 完成后再断言目录状态。
+            // retention 现为 fire-and-forget，需等待清理 Task 完成后再断言目录状态。
             await AwaitPurgeAsync(store);
 
             Assert.IsFalse(
@@ -252,7 +252,7 @@ public sealed class TraceRetentionAndQueryTests
     // ── retention 自然日（UTC 日历日）边界语义 ────────────────
 
     /// <summary>
-    /// #3：恰好 retentionDays 天前的分片应保留（不严格早于 cutoff）。
+    /// 恰好 retentionDays 天前的分片应保留（不严格早于 cutoff）。
     /// 旧滑动窗口实现（cutoff = now - N 带时分秒）会在午夜后将此边界分片误删；
     /// 自然日语义下 cutoff 对齐到今日 UTC 午夜 - N，边界分片（today - N）等于 cutoff 而非早于，故保留。
     /// </summary>
@@ -299,7 +299,7 @@ public sealed class TraceRetentionAndQueryTests
     }
 
     /// <summary>
-    /// #3：超过 retentionDays 边界 1 天的分片应被清理。
+    /// 超过 retentionDays 边界 1 天的分片应被清理。
     /// </summary>
     [TestMethod]
     public async Task Retention_NaturalDayBoundary_ShardOlderThanRetentionDays_IsPurged()
@@ -343,7 +343,7 @@ public sealed class TraceRetentionAndQueryTests
     }
 
     /// <summary>
-    /// #3：自然日语义下保留今日与前 N 个完整自然日（共 N+1 天）。
+    /// 自然日语义下保留今日与前 N 个完整自然日（共 N+1 天）。
     /// 创建 today-8 .. today 共 9 个分片，N=7 时应保留 today-7..today（8 天），清理 today-8。
     /// </summary>
     [TestMethod]
@@ -400,7 +400,7 @@ public sealed class TraceRetentionAndQueryTests
         }
     }
 
-    // #4：retention 现为 fire-and-forget，测试需显式等待清理 Task 完成后再断言。
+    // retention 现为 fire-and-forget，测试需显式等待清理 Task 完成后再断言。
     private static async Task AwaitPurgeAsync(FileRetrievalTraceStore store)
     {
         if (store.PendingPurge is { } purge)

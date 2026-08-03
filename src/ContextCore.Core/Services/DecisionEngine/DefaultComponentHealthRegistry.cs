@@ -9,41 +9,41 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // DefaultComponentHealthRegistry — 默认组件健康注册表实现
 //
 // 性能优化（对齐 DDSketch 基准：10000 样本约 147μs）：
-//   1. DDSketch 替换 double[] ring buffer + Array.Sort + P95：
-//      - Record 路径 O(1)（DDSketch.Add 仅做 bucket index 计算 + 计数自增）。
-//      - P95 查询 O(b log b)，b 通常 < 100（1% 相对误差）。
-//      - 复用 ContextCore.Core.Services.Evolution.DDSketch（CanaryMetrics 同源）。
-//   2. Record 不计算 P95：状态机迁移到读取路径（EvaluateHealth），
-//      仅在 GetComponentHealth/ShouldFallbackComponent/GetDegradedComponents/
-//      GetComponentDiagnostics 调用时才查询 DDSketch 并更新缓存状态。
-//   3. scope TTL + 上限 + 后台清理：
-//      - 默认 5 分钟无更新则清除（_scopeTtl）。
-//      - 最大 scope 数 10000（_maxScopes），超限时驱逐 LastUpdatedAt 最旧。
-//      - 后台 Timer 每 60s 扫描过期 scope（_cleanupTimer）。
-//   4. 采样写入：DDSketch 延迟分布仅记录每 N 次样本（默认 N=1，即全量）；
-//      ConsecutiveFailures / ConsecutiveLowSamples / TotalSampleCount 始终全量记录，
-//      保证 Circuit Breaker 失败计数与恢复计数不受采样影响。
-//   5. Circuit Breaker 状态机（Closed/Open/HalfOpen）：
-//      - Closed：正常工作，记录失败与 P95。
-//      - Open：熔断，快速拒绝；冷却后或累积足够低阈值样本后进入 HalfOpen。
-//      - HalfOpen：允许一次真实 probe 请求探测恢复；
-//        probe 成功 → Closed；probe 失败 → Open。
-//      - 修复"fallback 路径快速样本被误认为原组件恢复"问题：
-//        Open 状态下 fallback 路径样本不触发状态迁移，仅 HalfOpen probe 才能恢复。
-//   6. Provider 细化到 (ComponentKind, ProviderKind) 粒度：
-//      - 独立维护 per-(ProviderKind, scopeKey) 的 ProviderScopeState。
-//      - ShouldFallbackProvider(ProviderKind, scopeKey) 查询单个 Provider 熔断状态。
-//      - ShouldFallbackComponent(Provider, scopeKey) 返回任意 Provider 熔断的聚合值。
-//   7. OpenTelemetry 暴露熔断状态：
-//      - 状态迁移时通过 CoreMetrics.ComponentCircuitBreakerTransition 计数器上报。
-//   8. Inference 阶段耗时：RecordInferencePhaseTime 记录 queue/copy/run/parse 各阶段。
+// 1. DDSketch 替换 double[] ring buffer + Array.Sort + P95：
+// - Record 路径 O(1)（DDSketch.Add 仅做 bucket index 计算 + 计数自增）。
+// - P95 查询 O(b log b)，b 通常 < 100（1% 相对误差）。
+// - 复用 ContextCore.Core.Services.Evolution.DDSketch（CanaryMetrics 同源）。
+// 2. Record 不计算 P95：状态机迁移到读取路径（EvaluateHealth），
+// 仅在 GetComponentHealth/ShouldFallbackComponent/GetDegradedComponents/
+// GetComponentDiagnostics 调用时才查询 DDSketch 并更新缓存状态。
+// 3. scope TTL + 上限 + 后台清理：
+// - 默认 5 分钟无更新则清除（_scopeTtl）。
+// - 最大 scope 数 10000（_maxScopes），超限时驱逐 LastUpdatedAt 最旧。
+// - 后台 Timer 每 60s 扫描过期 scope（_cleanupTimer）。
+// 4. 采样写入：DDSketch 延迟分布仅记录每 N 次样本（默认 N=1，即全量）；
+// ConsecutiveFailures / ConsecutiveLowSamples / TotalSampleCount 始终全量记录，
+// 保证 Circuit Breaker 失败计数与恢复计数不受采样影响。
+// 5. Circuit Breaker 状态机（Closed/Open/HalfOpen）：
+// - Closed：正常工作，记录失败与 P95。
+// - Open：熔断，快速拒绝；冷却后或累积足够低阈值样本后进入 HalfOpen。
+// - HalfOpen：允许一次真实 probe 请求探测恢复；
+// probe 成功 → Closed；probe 失败 → Open。
+// - 修复"fallback 路径快速样本被误认为原组件恢复"问题：
+// Open 状态下 fallback 路径样本不触发状态迁移，仅 HalfOpen probe 才能恢复。
+// 6. Provider 细化到 (ComponentKind, ProviderKind) 粒度：
+// - 独立维护 per-(ProviderKind, scopeKey) 的 ProviderScopeState。
+// - ShouldFallbackProvider(ProviderKind, scopeKey) 查询单个 Provider 熔断状态。
+// - ShouldFallbackComponent(Provider, scopeKey) 返回任意 Provider 熔断的聚合值。
+// 7. OpenTelemetry 暴露熔断状态：
+// - 状态迁移时通过 CoreMetrics.ComponentCircuitBreakerTransition 计数器上报。
+// 8. Inference 阶段耗时：RecordInferencePhaseTime 记录 queue/copy/run/parse 各阶段。
 //
 // 原始设计目标（保留）：
-//   1. 实现 IComponentHealthRegistry 接口，提供 per-scope per-component 样本存储。
-//   2. 当某组件 P95 超过阈值时，标记 FallbackActive。
-//   3. 触发回退后，连续 RecoverySamplesRequired 个低于阈值的样本累积后自愈。
-//   4. 线程安全：ConcurrentDictionary + per-state lock（per (ComponentKind, scopeKey)）。
-//   5. 冷启动保护：MinSamplesBeforeFallback 个样本之前不触发回退。
+// 1. 实现 IComponentHealthRegistry 接口，提供 per-scope per-component 样本存储。
+// 2. 当某组件 P95 超过阈值时，标记 FallbackActive。
+// 3. 触发回退后，连续 RecoverySamplesRequired 个低于阈值的样本累积后自愈。
+// 4. 线程安全：ConcurrentDictionary + per-state lock（per (ComponentKind, scopeKey)）。
+// 5. 冷启动保护：MinSamplesBeforeFallback 个样本之前不触发回退。
 // ===========================================================================
 
 /// <summary>Provider 类型枚举（用于 per-provider Circuit Breaker 细化）。</summary>

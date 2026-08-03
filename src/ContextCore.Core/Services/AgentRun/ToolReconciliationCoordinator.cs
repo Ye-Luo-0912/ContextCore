@@ -7,12 +7,12 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // ToolReconciliationCoordinator — Tool 对账协调器（Worker 与 resolve 端点共用）
 //
 // 集中封装对账记录裁决的唯一入口：
-//   - ResolveAsync：人工/自动裁决（POST /runs/{runId}/reconciliations/{id}/resolve 与
-//                    ToolReconciliationWorker 共用），返回 0=成功 / 1=不存在 / 2=已裁决；
-//   - ReconcileRecordAsync：Worker 路径——TryBeginAsync 接管 → 调 Handler 确认真相 →
-//                           CommitOutcomeAsync 提交；Handler 异常回退 Pending 重试；
-//   - CommitOutcomeAsync：journal 状态推进（DispatchingIntent/Dispatched → Reconciling →
-//                         Committed + 对账结果）与记录终态（Resolved/Rejected）原子完成。
+// - ResolveAsync：人工/自动裁决（POST /runs/{runId}/reconciliations/{id}/resolve 与
+// ToolReconciliationWorker 共用），返回 0=成功 / 1=不存在 / 2=已裁决；
+// - ReconcileRecordAsync：Worker 路径——TryBeginAsync 接管 → 调 Handler 确认真相 →
+// CommitOutcomeAsync 提交；Handler 异常回退 Pending 重试；
+// - CommitOutcomeAsync：journal 状态推进（DispatchingIntent/Dispatched → Reconciling →
+// Committed + 对账结果）与记录终态（Resolved/Rejected）原子完成。
 //
 // 不变量：任何记录从 Pending/Running 变为 Resolved/Rejected 的唯一路径都经过本协调器，
 // 保证 journal 真相与记录裁决一致（绝不出现"记录 Resolved 但 journal 未提交"的撕裂）。

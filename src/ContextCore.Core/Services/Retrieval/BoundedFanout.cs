@@ -11,9 +11,9 @@ internal static class BoundedFanout
     /// <summary>
     /// 对 source 中每个元素调用 selector 生成 Task，按 maxConcurrency 节流并行执行，结果按输入顺序返回。
     /// 快速路径：
-    ///   - 输入为空 → 返回空数组
-    ///   - maxConcurrency ≤ 1 → 串行执行，无 SemaphoreSlim 开销
-    ///   - 输入数量 ≤ maxConcurrency → 直接 Task.WhenAll，无节流开销
+    /// - 输入为空 → 返回空数组
+    /// - maxConcurrency ≤ 1 → 串行执行，无 SemaphoreSlim 开销
+    /// - 输入数量 ≤ maxConcurrency → 直接 Task.WhenAll，无节流开销
     /// 节流路径：为每次调用创建独立 SemaphoreSlim(maxConcurrency)，避免跨请求干扰。
     /// </summary>
     public static async Task<TOutput[]> WhenAllAsync<TInput, TOutput>(

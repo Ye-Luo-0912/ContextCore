@@ -4,19 +4,19 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-B Approval 阈值强制验收测试
+// Approval 阈值强制验收测试
 //
 // 目标：DefaultAgentApprovalGate 消费 ApprovalPolicyOptions.CostThresholdUsd /
 // TokenThreshold / WorkspaceOverrides（此前仅消费 ApprovalRequiredTools）；
 // DefaultAgentToolCallValidator 在全局阈值超限时标记 RequiresApproval。
 //
 // 覆盖：
-//   1. Gate：预估费用超过 CostThresholdUsd → 需人工审批（PendingApproval）；
-//   2. Gate：低于阈值 → 自动批准；
-//   3. Gate：预估 token 超过 TokenThreshold → 需人工审批；
-//   4. Gate：WorkspaceOverride 提高费用阈值 → 同一调用在该 workspace 自动批准；
-//   5. Gate：WorkspaceOverride 替换需审批 Tool 列表；
-//   6. Validator：全局费用阈值超限 → RequiresApproval=true；低于阈值 → false。
+// 1. Gate：预估费用超过 CostThresholdUsd → 需人工审批（PendingApproval）；
+// 2. Gate：低于阈值 → 自动批准；
+// 3. Gate：预估 token 超过 TokenThreshold → 需人工审批；
+// 4. Gate：WorkspaceOverride 提高费用阈值 → 同一调用在该 workspace 自动批准；
+// 5. Gate：WorkspaceOverride 替换需审批 Tool 列表；
+// 6. Validator：全局费用阈值超限 → RequiresApproval=true；低于阈值 → false。
 // ===========================================================================
 
 [TestClass]

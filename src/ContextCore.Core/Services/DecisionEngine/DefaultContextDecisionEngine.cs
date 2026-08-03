@@ -8,56 +8,56 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // / 统一决策引擎默认实现（DefaultContextDecisionEngine）
 //
 // 目标：
-//   实现 IContextDecisionEngine 接口，编排 envelope 集合的
-//   safety gate → utility scoring → budget allocation 三个阶段，
-//   输出 SelectedEnvelopes + DroppedEnvelopes 集合。
+// 实现 IContextDecisionEngine 接口，编排 envelope 集合的
+// safety gate → utility scoring → budget allocation 三个阶段，
+// 输出 SelectedEnvelopes + DroppedEnvelopes 集合。
 //
 // 设计原则：
-//   1. 不替换 HybridContextRetriever / BasicContextPackageBuilder 两条主链。
-//      Engine 仅作为可选编排路径，由调用方在 adapter（R18-3/R18-4）
-//      阶段决定是否接入。
-//   2. Engine 是纯内存编排，不调用任何存储；候选 envelope 由调用方传入。
-//   3. Engine 是幂等的：相同 Request 产生相同 Result（确定性 tie-break）。
-//   4. Engine 失败时回退到 deterministic policy（ModelConfidence=0 + FinalScore=DeterministicScore），
-//      不抛异常（除非 Request 本身非法）。
-//   5. 可选注入 IPolicyRegistry。当 registry 可用时，Engine 通过
-//      GetActiveBundleAsync(workspaceId, collectionId) 解析当前激活 bundle，
-//      应用 Safety/Budget/Routing 三个 profile。未注入时使用 hardcoded defaults
-//      保持向后兼容。
+// 1. 不替换 HybridContextRetriever / BasicContextPackageBuilder 两条主链。
+// Engine 仅作为可选编排路径，由调用方在 adapter（/）
+// 阶段决定是否接入。
+// 2. Engine 是纯内存编排，不调用任何存储；候选 envelope 由调用方传入。
+// 3. Engine 是幂等的：相同 Request 产生相同 Result（确定性 tie-break）。
+// 4. Engine 失败时回退到 deterministic policy（ModelConfidence=0 + FinalScore=DeterministicScore），
+// 不抛异常（除非 Request 本身非法）。
+// 5. 可选注入 IPolicyRegistry。当 registry 可用时，Engine 通过
+// GetActiveBundleAsync(workspaceId, collectionId) 解析当前激活 bundle，
+// 应用 Safety/Budget/Routing 三个 profile。未注入时使用 hardcoded defaults
+// 保持向后兼容。
 //
 // 阶段化处理流程：
-//   1. PolicyBundle 解析（R19-3 新增）：
-//      若 _policyRegistry 可用且 request.PolicyBundleId 为空 → 调用
-//      GetActiveBundleAsync(request.WorkspaceId, request.CollectionId) 解析激活 bundle。
-//      应用 per-request PolicyOverride（受限：仅 Budget + Routing.EnableModelScoring）。
-//   2. SafetyGate：根据 envelope.Safety + bundle.Safety 分离 passing / blocked
-//      - 候选 PassesSafetyGate=false（adapter 预先标记）→ 直接 blocked
-//      - IsSuperseded / IsRequiredTagMismatch → 永远 blocked（不受 bundle 控制）
-//      - IsDeprecatedUsedByActiveChain && !bundle.Safety.AllowDeprecatedUsedByActiveChain → blocked
-//      - IsDuplicate && !bundle.Safety.AllowDuplicateReference → blocked
-//   3. UtilityScoring：应用 deterministic scoring（mandatory 优先 + score + tie-break）
-//      + 可选 model scoring（bundle.Routing.EnableModelScoring + ModelConfidenceThreshold）
-//      + Model failure 精确回退（FinalScore=DeterministicScore, ModelScore=null）
-//   4. BudgetAllocation：根据 DecisionSource 选择不同策略
-//      - Retrieval：全局硬上限（按 TopK + TokenBudget 截断）
-//      - Package：section 级分层比例分配（R18-2 阶段使用简化版，section ratios 留待 R20）
-//      - bundle.Budget.DefaultTokenBudget / DefaultTopK 作为 request 字段为空时的兜底
-//   5. 输出：SelectedEnvelopes（按 FinalScore 降序 + CandidateId 升序）
-//      + DroppedEnvelopes（含 BlockReasonCode）
-//      + PolicyVersion（来自 bundle.Policies.DecisionSchemaVersion）
-//      + ModelVersion（来自 bundle.Routing.ModelArtifactId 或候选 ModelArtifactRef）
+// 1. PolicyBundle 解析（新增）：
+// 若 _policyRegistry 可用且 request.PolicyBundleId 为空 → 调用
+// GetActiveBundleAsync(request.WorkspaceId, request.CollectionId) 解析激活 bundle。
+// 应用 per-request PolicyOverride（受限：仅 Budget + Routing.EnableModelScoring）。
+// 2. SafetyGate：根据 envelope.Safety + bundle.Safety 分离 passing / blocked
+// - 候选 PassesSafetyGate=false（adapter 预先标记）→ 直接 blocked
+// - IsSuperseded / IsRequiredTagMismatch → 永远 blocked（不受 bundle 控制）
+// - IsDeprecatedUsedByActiveChain && !bundle.Safety.AllowDeprecatedUsedByActiveChain → blocked
+// - IsDuplicate && !bundle.Safety.AllowDuplicateReference → blocked
+// 3. UtilityScoring：应用 deterministic scoring（mandatory 优先 + score + tie-break）
+// + 可选 model scoring（bundle.Routing.EnableModelScoring + ModelConfidenceThreshold）
+// + Model failure 精确回退（FinalScore=DeterministicScore, ModelScore=null）
+// 4. BudgetAllocation：根据 DecisionSource 选择不同策略
+// - Retrieval：全局硬上限（按 TopK + TokenBudget 截断）
+// - Package：section 级分层比例分配（阶段使用简化版，section ratios 留待后续细化）
+// - bundle.Budget.DefaultTokenBudget / DefaultTopK 作为 request 字段为空时的兜底
+// 5. 输出：SelectedEnvelopes（按 FinalScore 降序 + CandidateId 升序）
+// + DroppedEnvelopes（含 BlockReasonCode）
+// + PolicyVersion（来自 bundle.Policies.DecisionSchemaVersion）
+// + ModelVersion（来自 bundle.Routing.ModelArtifactId 或候选 ModelArtifactRef）
 // ===========================================================================
 
 /// <summary>
-/// / R19-3 / 默认决策引擎实现。编排 envelope 集合的
+/// / / 默认决策引擎实现。编排 envelope 集合的
 /// safety gate → lifecycle gate → utility scoring → budget allocation 四个阶段。
 /// </summary>
 /// <remarks>
 /// Closure Gate：
-///   - 当注入 ISafetyGate/ILifecycleGate/IUtilityScorer/IGlobalAllocator 且 request.PolicySnapshot 非空时，
-///     走 V2 路径（委托注入的抽象执行全部四阶段）。
-///   - 当任一抽象为 null 或 PolicySnapshot 为空时，走 Legacy 静态路径（向后兼容 R18-2 测试）。
-///   - Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
+/// - 当注入 ISafetyGate/ILifecycleGate/IUtilityScorer/IGlobalAllocator 且 request.PolicySnapshot 非空时，
+/// 走 V2 路径（委托注入的抽象执行全部四阶段）。
+/// - 当任一抽象为 null 或 PolicySnapshot 为空时，走 Legacy 静态路径（向后兼容 测试）。
+/// - Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
 /// </remarks>
 public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
 {
@@ -70,7 +70,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     private readonly IPerformanceMonitor? _performanceMonitor;
     private readonly IComponentHealthRegistry? _componentHealthRegistry;
 
-    /// <summary>构造默认 Engine（无注入；使用静态内联逻辑，向后兼容 R18-2 行为）。</summary>
+    /// <summary>构造默认 Engine（无注入；使用静态内联逻辑，向后兼容 行为）。</summary>
     public DefaultContextDecisionEngine()
         : this(policyRegistry: null)
     {
@@ -129,7 +129,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     /// <param name="utilityScorer">效用评分器（null 时走 Legacy 静态路径）。</param>
     /// <param name="globalAllocator">全局分配器（V2.0 基础，null 时走 Legacy 静态路径）。</param>
     /// <param name="allocatorV2_1">V2.1 Allocator（section rollover + MMR；null 时回退 V2.0 Allocate）。</param>
-    /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 R28-G 行为）。</param>
+    /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 行为）。</param>
     public DefaultContextDecisionEngine(
         IPolicyRegistry? policyRegistry,
         ISafetyGate? safetyGate,
@@ -152,8 +152,8 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     /// <param name="utilityScorer">效用评分器（null 时走 Legacy 静态路径）。</param>
     /// <param name="globalAllocator">全局分配器（V2.0 基础，null 时走 Legacy 静态路径）。</param>
     /// <param name="allocatorV2_1">V2.1 Allocator（section rollover + MMR；null 时回退 V2.0 Allocate）。</param>
-    /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 R28-G 行为）。</param>
-    /// <param name="componentHealthRegistry">组件健康注册表（null 时不归因、不回退，向后兼容 P5 之前的行为）。</param>
+    /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 行为）。</param>
+    /// <param name="componentHealthRegistry">组件健康注册表（null 时不归因、不回退，向后兼容 之前的行为）。</param>
     public DefaultContextDecisionEngine(
         IPolicyRegistry? policyRegistry,
         ISafetyGate? safetyGate,
@@ -192,7 +192,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             return await ExecuteV2PathAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
-        // ---- Legacy 静态路径（向后兼容 R18-2 测试） ----
+        // ---- Legacy 静态路径（向后兼容 测试） ----
 
         // 解析 PolicyBundle
         // PolicyBundleId 非空 → 精确加载（fail-closed：找不到则抛异常，不静默回退默认 bundle）
@@ -256,7 +256,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
 
         // 排序键：IsMandatory 降序 → FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
         // 注意：IsMandatory 不影响 safety gate 准入（已在 SafetyState 注释中说明），
-        //       但在排序中强制 mandatory 候选优先于非 mandatory。
+        // 但在排序中强制 mandatory 候选优先于非 mandatory。
         // 使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
         var ordered = scored
             .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
@@ -519,7 +519,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             : snapshot;
         // 路径选择 — 当 request.DiversityOptions 非空 + IAllocatorV2_1 注入 +
         // AllocationContext 非空时，走 AllocateWithDiversity（section rollover + MMR）；
-        // 否则回退 V2.0 Allocate（向后兼容 R28-G 之前的行为）。
+        // 否则回退 V2.0 Allocate（向后兼容 之前的行为）。
         // 需要 AllocationContext 携带 Purpose + MandatoryOverflowPolicy，保证安全边界不被绕过。
         // forceV20Fallback=true 时强制跳过 V2.1 路径，避免性能回退拖累主链。
         // forceV20Fallback 也由 Allocation 组件回退触发（见上方 allocationFallbackActive）。
@@ -651,7 +651,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     // -----------------------------------------------------------------------
-    // Legacy SafetyGate 评估（向后兼容 R18-2 测试）
+    // Legacy SafetyGate 评估（向后兼容 测试）
     // -----------------------------------------------------------------------
 
     private static (bool Passes, CandidateDecisionReasonCode Reason, string Detail) EvaluateSafetyGate(
@@ -663,7 +663,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             return (false, candidate.BlockReasonCode, candidate.BlockReasonDetail);
         }
 
-        // 2. 无 bundle → 不应用额外 safety 检查（向后兼容 R18-2 行为）
+        // 2. 无 bundle → 不应用额外 safety 检查（向后兼容 行为）
         if (safety is null)
         {
             return (true, CandidateDecisionReasonCode.Unknown, string.Empty);
@@ -712,7 +712,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         var utility = envelope.Utility;
 
         // 未启用模型 且 候选有 ModelScore → 精确回退到 deterministic
-        // （验收标准 #6：Model failure 时 ModelConfidence=0 + ModelScore=null + ReasonCode="fallback-to-deterministic"）
+        // （验收标准 ：Model failure 时 ModelConfidence=0 + ModelScore=null + ReasonCode="fallback-to-deterministic"）
         if (!enableModel && utility.ModelScore is not null)
         {
             return envelope with
@@ -750,7 +750,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         }
 
         // 不重新计算 FinalScore；保留 envelope 预设值
-        // （Engine 信任调用方/adapter 已正确加权；R20 Router 才会真正注入模型权重）
+        // （Engine 信任调用方/adapter 已正确加权； Router 才会真正注入模型权重）
         return envelope;
     }
 

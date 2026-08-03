@@ -24,8 +24,8 @@ public sealed record EvalSubcommandEntry
     public string? Description { get; init; }
 
     /// <summary>
-    /// usage 行（如 "  eval run [--category &lt;name&gt;] [--out &lt;path&gt;]"）。
-    /// 为 null 时 PrintUsage 自动生成 "  eval &lt;name&gt;"。
+    /// usage 行（如 " eval run [--category &lt;name&gt;] [--out &lt;path&gt;]"）。
+    /// 为 null 时 PrintUsage 自动生成 " eval &lt;name&gt;"。
     /// </summary>
     public string? UsageLine { get; init; }
 
@@ -69,7 +69,7 @@ public sealed class EvalSubcommandRegistry
     /// 仅注册命令名（不含 handler）。用于命令名存在性检查（替代 s_knownSubcommands），
     /// 实际分发由 TryDispatchSubcommandAsync if-chain 处理。
     /// </summary>
-    /// <param name="usageLine">usage 行；为 null 时 PrintUsage 自动生成 "  eval &lt;name&gt;"。</param>
+    /// <param name="usageLine">usage 行；为 null 时 PrintUsage 自动生成 " eval &lt;name&gt;"。</param>
     public void RegisterCommandOnly(string name, string? description = null, string? usageLine = null)
     {
         if (string.IsNullOrWhiteSpace(name))

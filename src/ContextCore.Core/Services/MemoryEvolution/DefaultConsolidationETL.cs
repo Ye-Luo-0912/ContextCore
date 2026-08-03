@@ -7,15 +7,15 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// 推进到 Replaced → Archived，通过 IMemoryStateStore 的事件流驱动状态迁移。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R21-4 契约）：
-///   1. 幂等：重复执行不会产生副作用（已 Archived 的 item 跳过）。
-///   2. 可中断：批次大小限制单次处理量；调用方可循环执行直到 ExtractedCount=0。
-///   3. 失败不破坏数据：Transform 写入 Replaced 事件后失败，
-///      下次 ETL 从 Replaced 状态继续推进到 Archived。
-///   4. 不直接修改 active store 中的 item；只通过事件流推进状态。
-///      item 在 active store 中的实际删除由独立 GC 流程处理。
-///   5. DryRun=true 仅返回预计处理数量，不写入任何事件。
-///   6. 兼容衰减路径：Dormant → Archived 也可由 ETL 推进（彻底降权场景）。
+/// 设计原则（对齐契约）：
+/// 1. 幂等：重复执行不会产生副作用（已 Archived 的 item 跳过）。
+/// 2. 可中断：批次大小限制单次处理量；调用方可循环执行直到 ExtractedCount=0。
+/// 3. 失败不破坏数据：Transform 写入 Replaced 事件后失败，
+/// 下次 ETL 从 Replaced 状态继续推进到 Archived。
+/// 4. 不直接修改 active store 中的 item；只通过事件流推进状态。
+/// item 在 active store 中的实际删除由独立 GC 流程处理。
+/// 5. DryRun=true 仅返回预计处理数量，不写入任何事件。
+/// 6. 兼容衰减路径：Dormant → Archived 也可由 ETL 推进（彻底降权场景）。
 /// </remarks>
 public sealed class DefaultConsolidationETL : IConsolidationETL
 {

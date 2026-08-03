@@ -7,14 +7,14 @@ namespace ContextCore.Tests;
 /// CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter 测试。
 ///
 /// 覆盖：
-///   1. RuntimeId / RuntimeKind 正确
-///   2. CreateSessionAsync 创建的 sessionId.RuntimeKind 匹配 adapter 类型
-///   3. CreateSessionAsync 写入 SessionCreated event
-///   4. CloseSessionAsync / IsSessionActiveAsync 继承自 base 工作正常
-///   5. TryCreateSessionView 返回有效 view
-///   6. 与 DefaultAgentWorkspaceContextProvider 集成（Inject + GetContextSnapshot）
-///   7. SessionCount 增长
-///   8. Adapter 隔离：Codex session 不会出现在 Claude adapter 中
+/// 1. RuntimeId / RuntimeKind 正确
+/// 2. CreateSessionAsync 创建的 sessionId.RuntimeKind 匹配 adapter 类型
+/// 3. CreateSessionAsync 写入 SessionCreated event
+/// 4. CloseSessionAsync / IsSessionActiveAsync 继承自 base 工作正常
+/// 5. TryCreateSessionView 返回有效 view
+/// 6. 与 DefaultAgentWorkspaceContextProvider 集成（Inject + GetContextSnapshot）
+/// 7. SessionCount 增长
+/// 8. Adapter 隔离：Codex session 不会出现在 Claude adapter 中
 /// </summary>
 [TestClass]
 [TestCategory("R23")]

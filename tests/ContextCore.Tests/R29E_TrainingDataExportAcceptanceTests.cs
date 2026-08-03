@@ -12,25 +12,25 @@ namespace ContextCore.Tests;
 // 训练数据导出器验收测试
 //
 // 目标：
-//   验证 TrainingDataExporter 从 IUtilityLedgerStore 查询 ledger 条目，
-//   转换为 TrainingDataRecord（feature / label / metadata）后写入 JSONL 文件，
-//   并生成含 SHA-256 哈希的 sidecar manifest。
+// 验证 TrainingDataExporter 从 IUtilityLedgerStore 查询 ledger 条目，
+// 转换为 TrainingDataRecord（feature / label / metadata）后写入 JSONL 文件，
+// 并生成含 SHA-256 哈希的 sidecar manifest。
 //
 // 设计原则：
-//   1. 导出器是只读边界：不修改 ledger 状态；可重复执行（幂等）。
-//   2. 输出格式对齐 LearningFeatureDatasetService：JSONL + camelCase JSON。
-//   3. feature / label / metadata 三段式字段分类对齐 ML 训练流水线。
-//   4. SHA-256 哈希验证文件完整性；manifest 追溯 model artifact 版本。
+// 1. 导出器是只读边界：不修改 ledger 状态；可重复执行（幂等）。
+// 2. 输出格式对齐 LearningFeatureDatasetService：JSONL + camelCase JSON。
+// 3. feature / label / metadata 三段式字段分类对齐 ML 训练流水线。
+// 4. SHA-256 哈希验证文件完整性；manifest 追溯 model artifact 版本。
 //
 // 验收点：
-//   - 导出 JSONL 文件包含所有匹配 ledger 条目
-//   - feature 字段（DeterministicScore / ModelScore / UtilityContribution / Expert）正确映射
-//   - label 字段（IsSelected / DropReasonCode）正确映射
-//   - metadata 字段（DecisionId / CandidateItemId / 作用域 / 时间戳 / PolicyVersion）正确映射
-//   - manifest 含 SHA-256 哈希与 model artifact 追溯
-//   - 过滤条件（WorkspaceId / CollectionId / Since / Until / IsSelected / DecisionId）生效
-//   - 空结果路径生成空 JSONL 文件但 manifest 仍写入
-//   - 重复导出覆盖输出文件（幂等）
+// - 导出 JSONL 文件包含所有匹配 ledger 条目
+// - feature 字段（DeterministicScore / ModelScore / UtilityContribution / Expert）正确映射
+// - label 字段（IsSelected / DropReasonCode）正确映射
+// - metadata 字段（DecisionId / CandidateItemId / 作用域 / 时间戳 / PolicyVersion）正确映射
+// - manifest 含 SHA-256 哈希与 model artifact 追溯
+// - 过滤条件（WorkspaceId / CollectionId / Since / Until / IsSelected / DecisionId）生效
+// - 空结果路径生成空 JSONL 文件但 manifest 仍写入
+// - 重复导出覆盖输出文件（幂等）
 // ===========================================================================
 
 [TestClass]
@@ -212,7 +212,7 @@ public sealed class R29E_TrainingDataExportAcceptanceTests
     public async Task ExportAsync_FiltersByWorkspaceIdAndCollectionId()
     {
         // 验证 WorkspaceId 过滤：只导出匹配 workspace 的条目。
-        // 这是 WP-E-3 修复的 InMemoryUtilityLedgerStore.QueryAsync WorkspaceId 过滤 bug 的回归测试。
+        // 这是 修复的 InMemoryUtilityLedgerStore.QueryAsync WorkspaceId 过滤 bug 的回归测试。
         var ledgerStore = new InMemoryUtilityLedgerStore();
         var now = DateTimeOffset.UtcNow;
         await ledgerStore.AppendEntriesAsync(new[]

@@ -11,21 +11,21 @@ namespace ContextCore.Tests;
 // 性能监控 + 自动回退阈值验收测试
 //
 // 覆盖：
-//   DefaultPerformanceMonitor 基础行为（RecordExecutionTime / ShouldFallbackToV20）
-//   冷启动保护（MinSamplesBeforeFallback 个样本前不触发回退）
-//   自愈机制（连续 RecoverySamples 个低于阈值样本后解除回退）
-//   scope 隔离（不同 scope 独立计数）
-//   估算（> 阈值的样本触发回退，单次抖动 + 已累积低样本不误触发）
-//   Engine 集成：未注入 IPerformanceMonitor 时保持旧行为（向后兼容）
-//   Engine 集成：注入 monitor 后，超阈值触发回退 → 下次请求跳过 V2.1 走 V2.0
-//   Engine 集成：低于阈值解除后恢复 V2.1 路径
-//   Engine 集成：Result.Outcome.Diagnostics 包含 performance.* 字段
-//   Engine 集成：6-param 构造函数向后兼容（不注入 monitor）
+// DefaultPerformanceMonitor 基础行为（RecordExecutionTime / ShouldFallbackToV20）
+// 冷启动保护（MinSamplesBeforeFallback 个样本前不触发回退）
+// 自愈机制（连续 RecoverySamples 个低于阈值样本后解除回退）
+// scope 隔离（不同 scope 独立计数）
+// 估算（> 阈值的样本触发回退，单次抖动 + 已累积低样本不误触发）
+// Engine 集成：未注入 IPerformanceMonitor 时保持旧行为（向后兼容）
+// Engine 集成：注入 monitor 后，超阈值触发回退 → 下次请求跳过 V2.1 走 V2.0
+// Engine 集成：低于阈值解除后恢复 V2.1 路径
+// Engine 集成：Result.Outcome.Diagnostics 包含 performance.* 字段
+// Engine 集成：6-param 构造函数向后兼容（不注入 monitor）
 //
 // 设计原则：
-//   - 使用 SpyAllocatorV2_1 验证 V2.1 vs V2.0 路径选择
-//   - 使用 DefaultPerformanceMonitor 直接构造 + 注入 Engine 端到端验证
-//   - 所有代码注释使用中文
+// - 使用 SpyAllocatorV2_1 验证 V2.1 vs V2.0 路径选择
+// - 使用 DefaultPerformanceMonitor 直接构造 + 注入 Engine 端到端验证
+// - 所有代码注释使用中文
 // ===========================================================================
 
 /// <summary>
@@ -38,7 +38,7 @@ namespace ContextCore.Tests;
 public sealed class R29F_AutoFallbackTests
 {
     // =======================================================================
-    // -§5: DefaultPerformanceMonitor 单元行为
+    // -: DefaultPerformanceMonitor 单元行为
     // =======================================================================
 
     [TestMethod]
@@ -220,7 +220,7 @@ public sealed class R29F_AutoFallbackTests
     }
 
     // =======================================================================
-    // 辅助：SpyAllocatorV2_1（复用 R29D 测试模式）
+    // 辅助：SpyAllocatorV2_1（复用同类测试模式）
     // =======================================================================
 
     private sealed class SpyAllocatorV2_1 : IAllocatorV2_1
@@ -333,7 +333,7 @@ public sealed class R29F_AutoFallbackTests
     }
 
     // =======================================================================
-    // -§10: Engine 集成测试
+    // -: Engine 集成测试
     // =======================================================================
 
     [TestMethod]

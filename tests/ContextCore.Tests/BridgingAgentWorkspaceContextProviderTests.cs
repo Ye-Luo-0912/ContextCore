@@ -9,19 +9,19 @@ namespace ContextCore.Tests;
 /// BridgingAgentWorkspaceContextProvider 实现测试。
 ///
 /// 覆盖：
-///   1. 构造函数 null bridge / null inner 抛异常
-///   2. 构造函数 contextCoreBudgetRatio 边界（0、1、负数）
-///   3. GetContextSnapshotAsync null session / tokenBudget <= 0 抛异常
-///   4. 成功路径：Bridge + inner provider 都调用
-///   5. 合并后 Sections 顺序（ContextCore 在前 + inner 在后）
-///   6. 合并后 SortOrder 连续
-///   7. 合并后 DecisionRequestIds / ConstraintIds / ToolCallRefs 合并去重
-///   8. 合并后 ActualTokens = cc + inner
-///   9. Token 预算分配（70/30 默认）
-///  10. Bridge 失败 fail-open（仍调用 inner provider，bridgeFailed=true）
-///  11. Bridge 抛 OperationCanceledException 透传
-///  12. InjectAsync / IngestToolResultAsync 委托给 inner provider
-///  13. CancellationToken 传递
+/// 1. 构造函数 null bridge / null inner 抛异常
+/// 2. 构造函数 contextCoreBudgetRatio 边界（0、1、负数）
+/// 3. GetContextSnapshotAsync null session / tokenBudget <= 0 抛异常
+/// 4. 成功路径：Bridge + inner provider 都调用
+/// 5. 合并后 Sections 顺序（ContextCore 在前 + inner 在后）
+/// 6. 合并后 SortOrder 连续
+/// 7. 合并后 DecisionRequestIds / ConstraintIds / ToolCallRefs 合并去重
+/// 8. 合并后 ActualTokens = cc + inner
+/// 9. Token 预算分配（70/30 默认）
+/// 10. Bridge 失败 fail-open（仍调用 inner provider，bridgeFailed=true）
+/// 11. Bridge 抛 OperationCanceledException 透传
+/// 12. InjectAsync / IngestToolResultAsync 委托给 inner provider
+/// 13. CancellationToken 传递
 /// </summary>
 [TestClass]
 [TestCategory("R25")]

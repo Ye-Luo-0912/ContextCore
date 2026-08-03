@@ -7,9 +7,9 @@ namespace ContextCore.Abstractions;
 /// 取代基于方法名前缀（Get/Query/List/Search/BatchGet）的脆弱推断。
 /// 源生成器（<c>InvalidatingDecoratorGenerator</c>）读取此 attribute 决定：
 /// <list type="bullet">
-///   <item><see cref="Read"/> → 生成透传实现，直接调用 <c>_inner</c>。</item>
-///   <item><see cref="Write"/> → 不生成，由手写 partial 实现并触发缓存失效。</item>
-///   <item>未标注 → 编译诊断，不进行猜测。</item>
+/// <item><see cref="Read"/> → 生成透传实现，直接调用 <c>_inner</c>。</item>
+/// <item><see cref="Write"/> → 不生成，由手写 partial 实现并触发缓存失效。</item>
+/// <item>未标注 → 编译诊断，不进行猜测。</item>
 /// </list>
 /// </remarks>
 public enum StoreOperationKind

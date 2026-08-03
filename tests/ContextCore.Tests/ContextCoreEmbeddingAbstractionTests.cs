@@ -7,7 +7,7 @@ using ContextCore.Embedding.Services;
 
 namespace ContextCore.Tests;
 
-/// <summary>覆盖 P3 embedding 与向量检索公共契约。</summary>
+/// <summary>覆盖 embedding 与向量检索公共契约。</summary>
 [TestClass]
 [TestCategory("Embedding")]
 public sealed class ContextCoreEmbeddingAbstractionTests

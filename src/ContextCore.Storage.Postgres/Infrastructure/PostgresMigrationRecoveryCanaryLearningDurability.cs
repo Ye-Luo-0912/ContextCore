@@ -5,11 +5,11 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 /// <summary>
 /// v56 → v57：Recovery、Canary 与 Learning Durability。
 /// 1. pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列：
-///    Canary 状态并入 PipelineRunSnapshot（单一真相源），由
-///    <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> CAS 维护；
-///    重启后可从 run snapshot 直接恢复 canary 状态，不再依赖 canary_pipelines 表恢复。
+/// Canary 状态并入 PipelineRunSnapshot（单一真相源），由
+/// <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> CAS 维护；
+/// 重启后可从 run snapshot 直接恢复 canary 状态，不再依赖 canary_pipelines 表恢复。
 /// 2. 新建 learning_leases 表：Learning Materialization worker 池级租约
-///    （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
+/// （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
 /// 单 Online 阶段幂等执行（ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS），
 /// 与基线 DDL 保持同一套 SQL；新数据库由基线 DDL 直接建好，PreCheck 跳过。
 /// </summary>

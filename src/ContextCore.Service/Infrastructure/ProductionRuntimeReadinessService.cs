@@ -16,15 +16,15 @@ namespace ContextCore.Service.Infrastructure;
 // Production Runtime Readiness Service
 //
 // 目标：
-//   1. 为 /health/ready 端点提供就绪检查（Worker 启动 / Postgres / Durable Transport / Model Activation）。
-//   2. 为 /api/runtime/status 端点提供当前激活组件报告（Profile / Worker 列表 / Model / Transport / Canary）。
+// 1. 为 /health/ready 端点提供就绪检查（Worker 启动 / Postgres / Durable Transport / Model Activation）。
+// 2. 为 /api/runtime/status 端点提供当前激活组件报告（Profile / Worker 列表 / Model / Transport / Canary）。
 //
 // 设计原则：
-//   - Worker 启动状态通过 IHostApplicationLifetime.ApplicationStarted 判断：
-//     ApplicationStarted 触发表示所有 IHostedService.StartAsync 已完成。
-//   - Worker 注册状态通过 ProductionRuntimeWorkerRegistry（注册阶段捕获的类型名列表）判断。
-//   - Postgres 连接检查复用 PostgresConnectionFactory.PingAsync（与 Program.cs 启动验证一致）。
-//   - 不缓存就绪结果——每次调用实时检查（端点本身有调用频率限制）。
+// - Worker 启动状态通过 IHostApplicationLifetime.ApplicationStarted 判断：
+// ApplicationStarted 触发表示所有 IHostedService.StartAsync 已完成。
+// - Worker 注册状态通过 ProductionRuntimeWorkerRegistry（注册阶段捕获的类型名列表）判断。
+// - Postgres 连接检查复用 PostgresConnectionFactory.PingAsync（与 Program.cs 启动验证一致）。
+// - 不缓存就绪结果——每次调用实时检查（端点本身有调用频率限制）。
 // ===========================================================================
 
 /// <summary>

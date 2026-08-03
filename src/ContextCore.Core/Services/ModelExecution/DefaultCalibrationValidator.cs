@@ -6,20 +6,20 @@ namespace ContextCore.Core.Services.ModelExecution;
 // Default Calibration Validator
 //
 // 目标：
-//   在模型加载时对 CalibrationParameters 执行统计有效性验证，按 Kind 路由：
-//     - Identity        —— 恒通过（Info：始终恒等变换）
-//     - Platt(A, B)     —— A/B 有限；A != 0；|A| 过大 → Warning（饱和）
-//     - Temperature(T) —— T > 0 且有限；T 极小 → Warning（饱和）；T 极大 → Warning（近似 identity）
-//     - Isotonic(points)—— Count >= 2；Input 升序；Input/Output 有限；
-//                          Output 单调非递减；Output 在 [0,1]；覆盖率不足 → Warning
+// 在模型加载时对 CalibrationParameters 执行统计有效性验证，按 Kind 路由：
+// - Identity —— 恒通过（Info：始终恒等变换）
+// - Platt(A, B) —— A/B 有限；A != 0；|A| 过大 → Warning（饱和）
+// - Temperature(T) —— T > 0 且有限；T 极小 → Warning（饱和）；T 极大 → Warning（近似 identity）
+// - Isotonic(points)—— Count >= 2；Input 升序；Input/Output 有限；
+// Output 单调非递减；Output 在 [0,1]；覆盖率不足 → Warning
 //
 // 设计原则：
-//   1. 不抛异常：所有非法情形转为 Error 级 CalibrationViolation。
-//   2. 完整违规清单：聚合所有违规（Error + Warning + Info），便于诊断。
-//   3. 不依赖外部统计库：所有检验用纯 .NET 实现。
-//   4. 与 ICalibrationStrategy 实现的运行时校验互补：
-//      策略在 Calibrate() 中抛 ArgumentException 是 fail-fast；
-//      Validator 在加载时返回结构化结果是 fail-safe（让上层决定降级策略）。
+// 1. 不抛异常：所有非法情形转为 Error 级 CalibrationViolation。
+// 2. 完整违规清单：聚合所有违规（Error + Warning + Info），便于诊断。
+// 3. 不依赖外部统计库：所有检验用纯 .NET 实现。
+// 4. 与 ICalibrationStrategy 实现的运行时校验互补：
+// 策略在 Calibrate() 中抛 ArgumentException 是 fail-fast；
+// Validator 在加载时返回结构化结果是 fail-safe（让上层决定降级策略）。
 // ===========================================================================
 
 /// <summary>

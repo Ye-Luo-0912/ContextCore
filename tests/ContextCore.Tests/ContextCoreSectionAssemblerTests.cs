@@ -4,7 +4,7 @@ using ContextCore.Core;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// + P0-6.2 验收测试：Section 装配的候选归属精度。
+/// + 验收测试：Section 装配的候选归属精度。
 /// 6.1: 安全兜底截断后重新计算 accepted/partial/rejected attribution。
 /// 6.2: Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合。
 /// </summary>
@@ -151,14 +151,14 @@ public sealed class ContextCoreSectionAssemblerTests
         Assert.IsTrue(result.RejectedCandidateIds.Contains("item-C"),
             "item-C 完全在截断点之后，应被 rejected");
 
-        // #4: 安全兜底截断后 PartiallyAcceptedIncludedTokens 必须反映实际保留的 token 数。
+        // 安全兜底截断后 PartiallyAcceptedIncludedTokens 必须反映实际保留的 token 数。
         // item-B 的 builder 边界为 start=8（"AAAAAA\n\n" 之后）、end=14（"BBBBBB" 之后）。
         // 安全截断后 contentLength=12，retainedLength = min(14,12) - 8 = 4 → 保留 "BBBB"。
         // estimate("BBBB") = 4/3 = 1（不含 \n，按 length/3 估算）。
         Assert.AreEqual(1, result.PartiallyAcceptedIncludedTokens,
             $"PartiallyAcceptedIncludedTokens 应等于保留子串 'BBBB' 的 token 估算（1），实际 {result.PartiallyAcceptedIncludedTokens}");
 
-        // #5: 安全兜底截断后 section refs 只引用真正进入输出的 segment。
+        // 安全兜底截断后 section refs 只引用真正进入输出的 segment。
         // item-A（accepted）和 item-B（partially accepted）的 SourceRef 应在 section.SourceRefs 中，
         // item-C（rejected after safety trim）的 SourceRef 不应在 section.SourceRefs 中。
         var section = sections.Single();
@@ -171,7 +171,7 @@ public sealed class ContextCoreSectionAssemblerTests
     }
 
     /// <summary>
-    /// #4: 构建阶段 partial（逐 segment 截断）且无安全兜底截断时，
+    /// 构建阶段 partial（逐 segment 截断）且无安全兜底截断时，
     /// PartiallyAcceptedIncludedTokens 必须等于构建阶段保留的截断子串的 token 估算。
     /// </summary>
     [TestMethod]

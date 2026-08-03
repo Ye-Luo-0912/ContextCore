@@ -4,17 +4,17 @@ namespace ContextCore.Abstractions;
 /// 校准数据导出器接口。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R29 §9.1 校准数据导出目标）：
-///   1. 导出器是只读边界：从 <see cref="IUtilityLedgerStore"/> 查询 ledger 条目，
-///      按 model artifact 版本聚合为校准集（predicted / observed / weight）。
-///   2. 校准数据用于拟合 Platt / Temperature / Isotonic 校准参数：
-///      - predicted = <see cref="UtilityLedgerEntry.ModelScore"/>（模型原始推理分数）
-///      - observed  = <see cref="UtilityLedgerEntry.IsSelected"/>（二分类实际结果）
-///      - weight    = <see cref="UtilityLedgerEntry.UtilityContribution"/>（Expert 贡献权重，可选）
-///   3. 输出格式为 JSONL（与 TrainingDataExporter 一致），每行一条样本。
-///   4. 仅导出 <see cref="UtilityLedgerEntry.ModelScore"/> 非 null 的条目（无模型分数无法用于校准）。
-///   5. 导出过程不修改 ledger 状态；可重复执行（幂等）。
-///   6. 生产路径注入 Postgres-backed IUtilityLedgerStore；开发 / 测试路径注入 InMemory 实现。
+/// 设计原则（对齐校准数据导出目标）：
+/// 1. 导出器是只读边界：从 <see cref="IUtilityLedgerStore"/> 查询 ledger 条目，
+/// 按 model artifact 版本聚合为校准集（predicted / observed / weight）。
+/// 2. 校准数据用于拟合 Platt / Temperature / Isotonic 校准参数：
+/// - predicted = <see cref="UtilityLedgerEntry.ModelScore"/>（模型原始推理分数）
+/// - observed = <see cref="UtilityLedgerEntry.IsSelected"/>（二分类实际结果）
+/// - weight = <see cref="UtilityLedgerEntry.UtilityContribution"/>（Expert 贡献权重，可选）
+/// 3. 输出格式为 JSONL（与 TrainingDataExporter 一致），每行一条样本。
+/// 4. 仅导出 <see cref="UtilityLedgerEntry.ModelScore"/> 非 null 的条目（无模型分数无法用于校准）。
+/// 5. 导出过程不修改 ledger 状态；可重复执行（幂等）。
+/// 6. 生产路径注入 Postgres-backed IUtilityLedgerStore；开发 / 测试路径注入 InMemory 实现。
 /// </remarks>
 public interface ICalibrationDataExporter
 {
@@ -133,10 +133,10 @@ public sealed record CalibrationDataExportResult
 /// </summary>
 /// <remarks>
 /// 字段分类对齐 ML 校准流水线（Platt / Temperature / Isotonic）：
-///   - predicted: 模型原始推理分数（用于拟合校准函数的输入）
-///   - observed : 实际结果（二分类标签，用于拟合校准函数的目标）
-///   - weight   : 样本权重（默认 1.0；可使用 UtilityContribution 加权）
-///   - metadata : 追溯与分组信息（用于按决策/模型版本分组校准）
+/// - predicted: 模型原始推理分数（用于拟合校准函数的输入）
+/// - observed : 实际结果（二分类标签，用于拟合校准函数的目标）
+/// - weight : 样本权重（默认 1.0；可使用 UtilityContribution 加权）
+/// - metadata : 追溯与分组信息（用于按决策/模型版本分组校准）
 /// </remarks>
 public sealed record CalibrationDataRecord
 {

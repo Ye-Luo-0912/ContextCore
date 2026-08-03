@@ -7,17 +7,17 @@ namespace ContextCore.Tests;
 /// Memory Evolution 统一契约测试。
 ///
 /// 验证目标：
-///   1. MemoryState 枚举 8 值（byte 底层）
-///   2. MemoryStateEventRecord 必填字段 + 默认值
-///   3. MemoryStateEventQuery 查询条件字段
-///   4. IMemoryStateStore 接口最小化（4 方法）
-///   5. ConsolidationRequest 默认值
-///   6. ConsolidationRunResult 字段 + IsSuccess / Duration
-///   7. IConsolidationETL 接口最小化（仅 RunAsync）
-///   8. MemoryStateExtensions：IsTerminal / CanTransitionTo / NeedsConsolidation / IsDecaying / IsActiveOrFresh / CanReheat
-///   9. 状态机转换合法性（Fresh→Active→Cooling→Dormant→Archived 等）
-///  10. 终态 Archived 不可推进
-///  11. 回温转换合法性（Cooling→Active / Dormant→Active）
+/// 1. MemoryState 枚举 8 值（byte 底层）
+/// 2. MemoryStateEventRecord 必填字段 + 默认值
+/// 3. MemoryStateEventQuery 查询条件字段
+/// 4. IMemoryStateStore 接口最小化（4 方法）
+/// 5. ConsolidationRequest 默认值
+/// 6. ConsolidationRunResult 字段 + IsSuccess / Duration
+/// 7. IConsolidationETL 接口最小化（仅 RunAsync）
+/// 8. MemoryStateExtensions：IsTerminal / CanTransitionTo / NeedsConsolidation / IsDecaying / IsActiveOrFresh / CanReheat
+/// 9. 状态机转换合法性（Fresh→Active→Cooling→Dormant→Archived 等）
+/// 10. 终态 Archived 不可推进
+/// 11. 回温转换合法性（Cooling→Active / Dormant→Active）
 /// </summary>
 [TestClass]
 [TestCategory("R21")]

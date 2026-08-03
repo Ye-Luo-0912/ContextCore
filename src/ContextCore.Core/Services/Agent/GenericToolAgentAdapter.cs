@@ -7,23 +7,23 @@ namespace ContextCore.Core.Services.Agent;
 // ===========================================================================
 // /Agent Runtime Adapter 实现
 //
-// 设计原则（对齐 R23 规格）：
-//   1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型
-//      保留在 Adapter 实现内部，不进入 Abstractions。
-//   2. Adapter 持有 session 状态（events / injections / tool results / snapshots），
-//      保存在 ConcurrentDictionary；同一 process 内多线程访问安全。
-//   3. R23-3 提供 GenericToolAgentAdapter（通用 in-memory 实现）；
-//      提供 CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter
-//      （不依赖 SDK，仅命名空间占位 + RuntimeId/RuntimeKind 标识）。
-//   4. 三个 adapter 共享 AgentRuntimeBase 基类（session 状态管理 + 事件流），
-//      避免代码重复；各 adapter sealed 防止进一步继承污染。
+// 设计原则（对齐规格）：
+// 1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型
+// 保留在 Adapter 实现内部，不进入 Abstractions。
+// 2. Adapter 持有 session 状态（events / injections / tool results / snapshots），
+// 保存在 ConcurrentDictionary；同一 process 内多线程访问安全。
+// 3. 提供 GenericToolAgentAdapter（通用 in-memory 实现）；
+// 提供 CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter
+// （不依赖 SDK，仅命名空间占位 + RuntimeId/RuntimeKind 标识）。
+// 4. 三个 adapter 共享 AgentRuntimeBase 基类（session 状态管理 + 事件流），
+// 避免代码重复；各 adapter sealed 防止进一步继承污染。
 //
 // 设计边界：
-//   - Base + Adapter 只负责 session 生命周期与事件流；不直接调用 ContextCore 内部接口
-//     （如 IContextPackageBuilder）；context snapshot 组装由
-//     DefaultAgentWorkspaceContextProvider 完成。
-//   - Base 暴露 GetSessionState / TryAppendEvent 等 public 方法供 provider 使用。
-//   - Session 关闭后所有写操作抛 InvalidOperationException；读取仍允许。
+// - Base + Adapter 只负责 session 生命周期与事件流；不直接调用 ContextCore 内部接口
+// （如 IContextPackageBuilder）；context snapshot 组装由
+// DefaultAgentWorkspaceContextProvider 完成。
+// - Base 暴露 GetSessionState / TryAppendEvent 等 public 方法供 provider 使用。
+// - Session 关闭后所有写操作抛 InvalidOperationException；读取仍允许。
 // ===========================================================================
 
 /// <summary>
@@ -204,7 +204,7 @@ public abstract class AgentRuntimeBase : IAgentRuntime
 /// </summary>
 /// <remarks>
 /// 适用于不需要 Agent SDK 适配的场景（如本地工具型 Agent / 测试 / 演示）。
-/// 生产场景如需对接 Codex / Claude Code，请使用对应的 RuntimeAdapter（R23-4）。
+/// 生产场景如需对接 Codex / Claude Code，请使用对应的 RuntimeAdapter。
 /// </remarks>
 public sealed class GenericToolAgentAdapter : AgentRuntimeBase
 {

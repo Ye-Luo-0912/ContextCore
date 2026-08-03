@@ -12,23 +12,23 @@ namespace ContextCore.Inference.Onnx;
 // OnnxRuntime Inference Session Factory + Session 实现
 //
 // 目标：
-//   1. OnnxRuntimeInferenceSessionFactory：使用 Microsoft.ML.OnnxRuntime.InferenceSession
-//      加载本地 ONNX 模型文件，构造 OnnxRuntimeInferenceSession。
-//   2. OnnxRuntimeInferenceSession：封装推理调用，把 FeatureBatch 的连续 float 内存
-//      映射为 DenseTensor<float>，运行 session.Run，解析输出张量并按
-//      OnnxInferenceEngineOptions 配置应用 sigmoid 与列选择。
+// 1. OnnxRuntimeInferenceSessionFactory：使用 Microsoft.ML.OnnxRuntime.InferenceSession
+// 加载本地 ONNX 模型文件，构造 OnnxRuntimeInferenceSession。
+// 2. OnnxRuntimeInferenceSession：封装推理调用，把 FeatureBatch 的连续 float 内存
+// 映射为 DenseTensor<float>，运行 session.Run，解析输出张量并按
+// OnnxInferenceEngineOptions 配置应用 sigmoid 与列选择。
 //
 // 设计原则：
-//   1. 单一会话对应单个模型工件；多次推理复用同一会话，避免重复加载开销。
-//   2. 推理调用同步执行（session.Run 是同步 API），但通过 ValueTask 异步签名
-//      与上游 IBatchInferenceEngine 对齐；高并发场景由调用方控制并发度。
-//   3. 不在本层做 timeout 取消：OnnxRuntime 的 Run 不支持 CancellationToken；
-//      超时控制由 OnnxInferenceEngine 通过 CancellationTokenSource 实现。
-//   4. 输出张量解析支持一维 [batch] 与二维 [batch, classes] 两种形态：
-//      - 一维：Score 取第 0 列，Confidence = 1.0（默认高置信，子问题5修正：
-//        模型只输出单个分数时无独立 confidence 信号，不再用 1-Score 互补猜测）
-//      - 二维：Score 取 ScoreOutputIndex 列，Confidence 取 ConfidenceOutputIndex 列
-//        或从独立 ConfidenceOutputName 输出张量读取（classes≥2 时才有效）。
+// 1. 单一会话对应单个模型工件；多次推理复用同一会话，避免重复加载开销。
+// 2. 推理调用同步执行（session.Run 是同步 API），但通过 ValueTask 异步签名
+// 与上游 IBatchInferenceEngine 对齐；高并发场景由调用方控制并发度。
+// 3. 不在本层做 timeout 取消：OnnxRuntime 的 Run 不支持 CancellationToken；
+// 超时控制由 OnnxInferenceEngine 通过 CancellationTokenSource 实现。
+// 4. 输出张量解析支持一维 [batch] 与二维 [batch, classes] 两种形态：
+// - 一维：Score 取第 0 列，Confidence = 1.0（默认高置信，子问题5修正：
+// 模型只输出单个分数时无独立 confidence 信号，不再用 1-Score 互补猜测）
+// - 二维：Score 取 ScoreOutputIndex 列，Confidence 取 ConfidenceOutputIndex 列
+// 或从独立 ConfidenceOutputName 输出张量读取（classes≥2 时才有效）。
 // ===========================================================================
 
 /// <summary>
@@ -457,9 +457,9 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
             : scoreTensor;
 
         // 输出零拷贝：
-        //   - 热路径（ORT 始终返回 DenseTensor<float>）：直接用 Buffer.Span 访问底层内存，零分配。
-        //   - 回退路径（理论非 DenseTensor，ORT 不会触发）：用 ArrayPool 租借 buffer 并 CopyTo，
-        //     避免每批 ToArray 产生堆分配。buffer 在 finally 中归还。
+        // - 热路径（ORT 始终返回 DenseTensor<float>）：直接用 Buffer.Span 访问底层内存，零分配。
+        // - 回退路径（理论非 DenseTensor，ORT 不会触发）：用 ArrayPool 租借 buffer 并 CopyTo，
+        // 避免每批 ToArray 产生堆分配。buffer 在 finally 中归还。
         // Span 的生命周期由 using var results 限定（DisposableNamedOnnxValue Dispose 后失效）。
         var scoreRented = TryGetBuffer(scoreTensor, out var scoreMemory)
             ? null
@@ -522,9 +522,9 @@ internal sealed class OnnxRuntimeInferenceSession : IOnnxInferenceSession
         // 当 Score 与 Confidence 来自同一张量（confidenceTensor == scoreTensor）且该张量为 1D [batch] 时，
         // 每行只有 1 个元素，Score 与 Confidence 会从同一元素读取，导致 Confidence == Score（而非互补概率）。
         // 修复：1D 同张量场景下，Confidence 不再从同一元素读取，而是使用默认值 1.0（高置信）。
-        //  - 1.0 表示"模型只输出了 score，没有独立的 confidence 信号，假定高置信"。
-        //  - 这避免下游 Scorer 因 Confidence == Score 而误判置信度（如 Score=0.9 时 Confidence=0.9 看似合理，
-        //    但 Score=0.1 时 Confidence=0.1 会触发低置信回退，而模型实际上没有提供 confidence 信息）。
+        // - 1.0 表示"模型只输出了 score，没有独立的 confidence 信号，假定高置信"。
+        // - 这避免下游 Scorer 因 Confidence == Score 而误判置信度（如 Score=0.9 时 Confidence=0.9 看似合理，
+        // 但 Score=0.1 时 Confidence=0.1 会触发低置信回退，而模型实际上没有提供 confidence 信息）。
         // 当 confidenceTensor != scoreTensor（独立 confidence 输出张量）或张量为 2D [batch, classes≥2] 时，
         // 仍按原逻辑从指定列读取 confidence。
         var sameTensor1D = ReferenceEquals(scoreTensor, confidenceTensor) && scoreDims.Length == 1;

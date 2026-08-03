@@ -5,21 +5,21 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 // Per-Run CutoverController 隔离
 //
-// 目标（对齐 R28-B.8 工作包 B 规格）：
-//   1. CutoverController 不再以 Singleton 形式被所有 canary run 共享，
-//      避免多个 run 的百分比互相覆盖。
-//   2. CutoverControllerRegistry 管理 per-runId 的 CutoverController 实例：
-//      每个 canary run 拥有独立的控制器，AdvanceAsync/RollbackAsync 只影响该 run。
-//   3. 无活跃 canary run 时使用默认控制器（CutoverPercentage 从环境变量读取），
-//      保持与 B-5 阶段向后兼容。
-//   4. ICutoverControllerResolver 提供 runId → 控制器的解析入口，
-//      AuthoritativeRuntime 通过它为每个请求路由到正确的 run 专用控制器。
+// 目标（对齐规格）：
+// 1. CutoverController 不再以 Singleton 形式被所有 canary run 共享，
+// 避免多个 run 的百分比互相覆盖。
+// 2. CutoverControllerRegistry 管理 per-runId 的 CutoverController 实例：
+// 每个 canary run 拥有独立的控制器，AdvanceAsync/RollbackAsync 只影响该 run。
+// 3. 无活跃 canary run 时使用默认控制器（CutoverPercentage 从环境变量读取），
+// 保持与 B-5 阶段向后兼容。
+// 4. ICutoverControllerResolver 提供 runId → 控制器的解析入口，
+// AuthoritativeRuntime 通过它为每个请求路由到正确的 run 专用控制器。
 //
 // 设计边界：
-//   - Registry 自身是线程安全的（ConcurrentDictionary）。
-//   - 默认控制器在构造时注入，CutoverPercentage 从 CutoverConfiguration 读取。
-//   - GetActive() 仅在恰好一个活跃 run 时返回该 run 的控制器；否则返回 null
-//     （多 run 场景由调用方通过 runId 显式解析，避免歧义）。
+// - Registry 自身是线程安全的（ConcurrentDictionary）。
+// - 默认控制器在构造时注入，CutoverPercentage 从 CutoverConfiguration 读取。
+// - GetActive() 仅在恰好一个活跃 run 时返回该 run 的控制器；否则返回 null
+// （多 run 场景由调用方通过 runId 显式解析，避免歧义）。
 // ===========================================================================
 
 /// <summary>

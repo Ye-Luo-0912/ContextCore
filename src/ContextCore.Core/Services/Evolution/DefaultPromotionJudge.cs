@@ -19,13 +19,13 @@ namespace ContextCore.Core.Services.Evolution;
 /// <item>RollbackCondition 触发检查：对每个 condition，若 experimentMetrics 包含对应 metric 且 IsTriggered → Decision=Rollback。</item>
 /// <item>ExpectedGain 方向检查：对每个 gain，比较 experimentMetrics 与 baselineMetrics 的 delta 方向与 EstimatedDelta 方向是否一致；任一相反 → Reject。</item>
 /// <item>Stage 推进规则：
-///   <list type="bullet">
-///   <item>OfflineExperiment → Shadow：所有 ExpectedGain 方向匹配 + 无 RollbackCondition 触发 → Advance。</item>
-///   <item>Shadow → ScopedCanary：无 RollbackCondition 触发 + ExpectedGain 方向不相反 → Advance。</item>
-///   <item>ScopedCanary → Promotion：所有 ExpectedGain 达置信阈值（默认）+ 无 RollbackCondition 触发 → Promote。</item>
-///   <item>AutomaticRollback：返回 Rollback（终态）。</item>
-///   <item>Promotion：返回 Promote（终态）。</item>
-///   </list>
+/// <list type="bullet">
+/// <item>OfflineExperiment → Shadow：所有 ExpectedGain 方向匹配 + 无 RollbackCondition 触发 → Advance。</item>
+/// <item>Shadow → ScopedCanary：无 RollbackCondition 触发 + ExpectedGain 方向不相反 → Advance。</item>
+/// <item>ScopedCanary → Promotion：所有 ExpectedGain 达置信阈值（默认）+ 无 RollbackCondition 触发 → Promote。</item>
+/// <item>AutomaticRollback：返回 Rollback（终态）。</item>
+/// <item>Promotion：返回 Promote（终态）。</item>
+/// </list>
 /// </item>
 /// <item>Hold：metric 数据不足（ExpectedGain 的 metric 在 experiment/baseline 都缺失）。</item>
 /// </list>

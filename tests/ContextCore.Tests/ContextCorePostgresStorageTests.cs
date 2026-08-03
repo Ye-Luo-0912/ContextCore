@@ -167,7 +167,7 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentCheckpointStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentTaskStateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentTaskStateStore)));
-        // IPersistent* 标记接口注册（WP-B-2 旧平面 KernelResultOutbox 已随双执行平面收敛删除）
+        // IPersistent* 标记接口注册（旧平面 KernelResultOutbox 已随双执行平面收敛删除）
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentToolDispatchJournal)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPersistentAgentCheckpointStore)));
         // Evolution Pipeline 持久化注册
@@ -804,7 +804,7 @@ public sealed class ContextCorePostgresStorageTests
             $"Postgres provider 启用时 IContextStateVersionStore 应为 PostgresContextStateVersionStore，实际: {versionStore.GetType().Name}");
     }
 
-    // ========== R14-PG-8：Migration version/rollback 框架测试 ==========
+    // ========== ：Migration version/rollback 框架测试 ==========
 
     [TestMethod]
     public void PostgresMigrationRegistry_ContainsBaselineMigration()

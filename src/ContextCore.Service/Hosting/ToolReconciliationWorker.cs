@@ -11,12 +11,12 @@ namespace ContextCore.Service.Hosting;
 // 轮询 IToolReconciliationStore 中的 Pending 对账记录，按
 // ToolDescriptor.ReconciliationHandler 名称解析 IToolReconciliationHandler，
 // 以 ExternalOperationId 查询外部系统确认模糊 Tool 调用的外部副作用真相：
-//   - SideEffectOccurred=true  → journal.BeginReconciliationAsync + MarkReconciledWithResultAsync
-//                               （提交真相结果），记录 → Resolved；
-//   - SideEffectOccurred=false → journal 提交 void 结果（Succeeded=false），记录 → Rejected
-//                               （禁止重放该 Tool，模型看到失败后可调整策略）；
-//   - Handler 缺失/未注册       → 记录保持 Pending，等待人工 resolve 端点裁决；
-//   - Handler 抛异常            → 记录回退 Pending，下轮重试。
+// - SideEffectOccurred=true → journal.BeginReconciliationAsync + MarkReconciledWithResultAsync
+// （提交真相结果），记录 → Resolved；
+// - SideEffectOccurred=false → journal 提交 void 结果（Succeeded=false），记录 → Rejected
+// （禁止重放该 Tool，模型看到失败后可调整策略）；
+// - Handler 缺失/未注册 → 记录保持 Pending，等待人工 resolve 端点裁决；
+// - Handler 抛异常 → 记录回退 Pending，下轮重试。
 //
 // 裁决完成后若该 Run 无未裁决记录，将 Run 重新入队（Actor 恢复执行），
 // 并先把 Run 状态从 ReconciliationRunning 回退到 AwaitingReconciliation。

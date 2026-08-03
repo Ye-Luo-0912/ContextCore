@@ -12,30 +12,30 @@ namespace ContextCore.Tests;
 // 校准数据导出器验收测试
 //
 // 目标：
-//   验证 CalibrationDataExporter 从 IUtilityLedgerStore 查询 ledger 条目，
-//   转换为 CalibrationDataRecord（predicted / observed / weight / metadata）后写入 JSONL，
-//   并生成含 SHA-256 哈希与正负样本统计的 sidecar manifest。
+// 验证 CalibrationDataExporter 从 IUtilityLedgerStore 查询 ledger 条目，
+// 转换为 CalibrationDataRecord（predicted / observed / weight / metadata）后写入 JSONL，
+// 并生成含 SHA-256 哈希与正负样本统计的 sidecar manifest。
 //
 // 设计原则：
-//   1. 导出器是只读边界：不修改 ledger 状态；可重复执行（幂等）。
-//   2. 输出格式对齐 TrainingDataExporter：JSONL + camelCase JSON。
-//   3. predicted / observed / weight / metadata 四段式字段分类对齐 ML 校准流水线。
-//   4. SHA-256 哈希验证文件完整性；manifest 追溯 model artifact 版本。
-//   5. 默认仅导出 ModelScore 非 null 的条目（校准必须有模型预测分数）。
+// 1. 导出器是只读边界：不修改 ledger 状态；可重复执行（幂等）。
+// 2. 输出格式对齐 TrainingDataExporter：JSONL + camelCase JSON。
+// 3. predicted / observed / weight / metadata 四段式字段分类对齐 ML 校准流水线。
+// 4. SHA-256 哈希验证文件完整性；manifest 追溯 model artifact 版本。
+// 5. 默认仅导出 ModelScore 非 null 的条目（校准必须有模型预测分数）。
 //
 // 验收点：
-//   - 导出 JSONL 文件包含所有匹配 ledger 条目（仅 ModelScore 非 null）
-//   - predicted 字段（ModelScore / DeterministicScore / FinalScore）正确映射
-//   - observed 字段（IsSelected / DropReasonCode）正确映射
-//   - weight 字段（UtilityContribution 或 1.0）正确映射
-//   - metadata 字段（DecisionId / CandidateItemId / 作用域 / Expert / 时间戳 / PolicyVersion）正确映射
-//   - manifest 含 SHA-256 哈希与 model artifact 追溯与正负样本统计
-//   - 过滤条件（WorkspaceId / CollectionId / Since / Until / DecisionId）生效
-//   - RequireModelScore=true 默认排除 ModelScore=null 的条目
-//   - RequireModelScore=false 包含所有条目（诊断用途）
-//   - 空结果路径生成空 JSONL 文件但 manifest 仍写入
-//   - 重复导出覆盖输出文件（幂等）
-//   - CLI 命令 CalibrationDataCommand 端到端可用
+// - 导出 JSONL 文件包含所有匹配 ledger 条目（仅 ModelScore 非 null）
+// - predicted 字段（ModelScore / DeterministicScore / FinalScore）正确映射
+// - observed 字段（IsSelected / DropReasonCode）正确映射
+// - weight 字段（UtilityContribution 或 1.0）正确映射
+// - metadata 字段（DecisionId / CandidateItemId / 作用域 / Expert / 时间戳 / PolicyVersion）正确映射
+// - manifest 含 SHA-256 哈希与 model artifact 追溯与正负样本统计
+// - 过滤条件（WorkspaceId / CollectionId / Since / Until / DecisionId）生效
+// - RequireModelScore=true 默认排除 ModelScore=null 的条目
+// - RequireModelScore=false 包含所有条目（诊断用途）
+// - 空结果路径生成空 JSONL 文件但 manifest 仍写入
+// - 重复导出覆盖输出文件（幂等）
+// - CLI 命令 CalibrationDataCommand 端到端可用
 // ===========================================================================
 
 [TestClass]

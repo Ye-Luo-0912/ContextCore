@@ -10,19 +10,19 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// / PostgreSQL ConflictSet Store 持久化实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R21-2 契约澄清 #4 + R29 学习闭环）：
-///   1. 实现 <see cref="IConflictSetLedger"/>：读 API（QueryAsync / GetAsync /
-///      GetConflictsForCandidateAsync）+ 异步批量写 API（<see cref="AppendConflictSetsAsync"/>）。
-///   2. 写入由 <c>UtilityLedgerMaterializer</c> 通过 <see cref="AppendConflictSetsAsync"/> 调用
-///      （生产路径）；与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryConflictSetStore"/>
-///      实现同一 <see cref="IConflictSetLedger"/> 契约，materializer 无需感知存储后端。
-///   3. 表 <c>conflict_sets</c> 反规范化 workspace_id / collection_id / kind / decision_id /
-///      resolution_status / created_at 字段以便索引查询；完整 <see cref="ConflictSet"/> 对象保存在
-///      <c>data jsonb</c>，由 store 反序列化。
-///   4. <see cref="GetConflictsForCandidateAsync"/> / 按 CandidateItemId 过滤的 QueryAsync 使用
-///      jsonb 包含查询 <c>data-&gt;'Entries' @&gt; '[{"CandidateItemId":"..."}]'</c>（PascalCase 对齐
-///      PostgresJsonSerializer 默认序列化），由 GIN 索引加速。
-///   5. QueryAsync 按 created_at DESC 排序（created_at 列对应 record 的 MaterializedAt，与 InMemory 语义一致）。
+/// 设计原则（对齐学习闭环）：
+/// 1. 实现 <see cref="IConflictSetLedger"/>：读 API（QueryAsync / GetAsync /
+/// GetConflictsForCandidateAsync）+ 异步批量写 API（<see cref="AppendConflictSetsAsync"/>）。
+/// 2. 写入由 <c>UtilityLedgerMaterializer</c> 通过 <see cref="AppendConflictSetsAsync"/> 调用
+/// （生产路径）；与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryConflictSetStore"/>
+/// 实现同一 <see cref="IConflictSetLedger"/> 契约，materializer 无需感知存储后端。
+/// 3. 表 <c>conflict_sets</c> 反规范化 workspace_id / collection_id / kind / decision_id /
+/// resolution_status / created_at 字段以便索引查询；完整 <see cref="ConflictSet"/> 对象保存在
+/// <c>data jsonb</c>，由 store 反序列化。
+/// 4. <see cref="GetConflictsForCandidateAsync"/> / 按 CandidateItemId 过滤的 QueryAsync 使用
+/// jsonb 包含查询 <c>data-&gt;'Entries' @&gt; '[{"CandidateItemId":"..."}]'</c>（PascalCase 对齐
+/// PostgresJsonSerializer 默认序列化），由 GIN 索引加速。
+/// 5. QueryAsync 按 created_at DESC 排序（created_at 列对应 record 的 MaterializedAt，与 InMemory 语义一致）。
 /// </remarks>
 public sealed class PostgresConflictSetStore : PostgresStoreBase, IConflictSetLedger, ITransactionalConflictSetLedger
 {

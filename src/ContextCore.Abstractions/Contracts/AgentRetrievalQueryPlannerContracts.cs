@@ -4,22 +4,22 @@ namespace ContextCore.Abstractions;
 // Agent 受控检索查询规划器契约（Agent Retrieval Query Planner Contracts）
 //
 // 目标：
-//   在 Agent 执行循环中，将（原始任务、最新意图、Tool 观察、未解决目标、
-//   上一轮检索诊断、Turn 预算）解析为<b>受控</b>的检索计划：
-//   有界查询集 + 必需/排除 ID + 图种子 + Token 预算。
+// 在 Agent 执行循环中，将（原始任务、最新意图、Tool 观察、未解决目标、
+// 上一轮检索诊断、Turn 预算）解析为<b>受控</b>的检索计划：
+// 有界查询集 + 必需/排除 ID + 图种子 + Token 预算。
 //
 // 设计原则：
-//   1. 受控优先：无论输入多嘈杂，规划器只产出有界的查询集（MaxControlledQueries
-//      上限），绝不让检索查询随对话膨胀为自由检索（uncontrolled）——每次检索的
-//      查询数、Token 预算、图种子数都有硬上限。
-//   2. 纯内存计算：规划器不调用任何存储 / 检索执行器，只输出计划；
-//      检索执行由调用方（如 AgentRunActor 的 ContextBuilding 阶段）按计划驱动。
-//   3. 确定性 / 幂等：相同输入产生相同计划（无随机性、无外部状态），
-//      便于审计与回归测试。
-//   4. 正交于决策引擎：本规划器不替代 IContextDecisionRuntime / IRetrievalRouter；
-//      它回答的是"检索什么"（查询 + 约束），而非"候选如何排序/分配"。
-//   5. 诊断回退：PreviousRetrievalDiagnostics 表明上一轮预算超限 / 命中率低时，
-//      规划器执行受控回退（缩减 Token 预算、收敛查询），避免反复撞墙。
+// 1. 受控优先：无论输入多嘈杂，规划器只产出有界的查询集（MaxControlledQueries
+// 上限），绝不让检索查询随对话膨胀为自由检索（uncontrolled）——每次检索的
+// 查询数、Token 预算、图种子数都有硬上限。
+// 2. 纯内存计算：规划器不调用任何存储 / 检索执行器，只输出计划；
+// 检索执行由调用方（如 AgentRunActor 的 ContextBuilding 阶段）按计划驱动。
+// 3. 确定性 / 幂等：相同输入产生相同计划（无随机性、无外部状态），
+// 便于审计与回归测试。
+// 4. 正交于决策引擎：本规划器不替代 IContextDecisionRuntime / IRetrievalRouter；
+// 它回答的是"检索什么"（查询 + 约束），而非"候选如何排序/分配"。
+// 5. 诊断回退：PreviousRetrievalDiagnostics 表明上一轮预算超限 / 命中率低时，
+// 规划器执行受控回退（缩减 Token 预算、收敛查询），避免反复撞墙。
 // ===========================================================================
 
 /// <summary>
@@ -131,10 +131,10 @@ public sealed record AgentRetrievalPlan
 /// <remarks>
 /// <b>受控的含义</b>：规划器对以下维度施加硬上限，保证检索成本可控——
 /// <list type="bullet">
-///   <item>查询数：最多 <c>MaxControlledQueries</c> 条（默认 4），不随对话增长。</item>
-///   <item>必需/排除 ID：最多各 <c>MaxRequiredIds</c> / <c>MaxExcludedIds</c> 条（默认 8）。</item>
-///   <item>图种子：最多 <c>MaxGraphSeeds</c> 个（默认 6）。</item>
-///   <item>Token 预算：由 Turn 预算推导，钳制在 [MinTokenBudget, MaxTokenBudget]（默认 512–8192）。</item>
+/// <item>查询数：最多 <c>MaxControlledQueries</c> 条（默认 4），不随对话增长。</item>
+/// <item>必需/排除 ID：最多各 <c>MaxRequiredIds</c> / <c>MaxExcludedIds</c> 条（默认 8）。</item>
+/// <item>图种子：最多 <c>MaxGraphSeeds</c> 个（默认 6）。</item>
+/// <item>Token 预算：由 Turn 预算推导，钳制在 [MinTokenBudget, MaxTokenBudget]（默认 512–8192）。</item>
 /// </list>
 /// 实现必须纯内存、确定性、幂等：相同输入产生相同计划。
 /// </remarks>

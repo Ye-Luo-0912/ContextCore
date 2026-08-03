@@ -10,15 +10,15 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Tool Validator 消费 Descriptor Truth 测试
 //
-// 验证 P0-5：DefaultAgentToolCallValidator 从"硬编码黑名单"升级为消费
+// 验证 ：DefaultAgentToolCallValidator 从"硬编码黑名单"升级为消费
 // Tool 声明（IToolDispatcher.SupportedTools 成员校验 + IToolCatalog 的
 // ParametersJsonSchema + IToolDispatcher.GetDescriptor 的审批/副作用/幂等/fence）：
-//   1. 成员校验：未注册 Tool fail-closed 拒绝（不进入审批）；
-//   2. 黑名单：危险 Tool 仍需审批（与 Dispatcher 成员校验组合）；
-//   3. Schema：required 属性存在性 + 属性类型匹配（best-effort，坏 schema 跳过）；
-//   4. Descriptor：RequiresApproval / 危险副作用 / 幂等键缺失 / fence → 审批聚合；
-//   5. 兼容性：无 Dispatcher/Catalog 注入时保持仅黑名单旧行为；
-//   6. DI：RealDispatch 模式下校验器自动注入 Dispatcher+Catalog，schema 生效。
+// 1. 成员校验：未注册 Tool fail-closed 拒绝（不进入审批）；
+// 2. 黑名单：危险 Tool 仍需审批（与 Dispatcher 成员校验组合）；
+// 3. Schema：required 属性存在性 + 属性类型匹配（best-effort，坏 schema 跳过）；
+// 4. Descriptor：RequiresApproval / 危险副作用 / 幂等键缺失 / fence → 审批聚合；
+// 5. 兼容性：无 Dispatcher/Catalog 注入时保持仅黑名单旧行为；
+// 6. DI：RealDispatch 模式下校验器自动注入 Dispatcher+Catalog，schema 生效。
 // ===========================================================================
 
 [TestClass]

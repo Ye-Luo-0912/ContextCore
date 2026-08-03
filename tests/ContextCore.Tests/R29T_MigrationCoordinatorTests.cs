@@ -9,12 +9,12 @@ namespace ContextCore.Tests;
 /// HA 迁移协调器（Migration Coordinator）验收测试。
 ///
 /// 覆盖：
-///   1. MigrationCoordinatorOptions 默认值
-///   2. 迁移互斥锁键派生（确定性 / 正 long / 不同前缀不同键）
-///   3. 协调器阶段状态机（Idle → AcquiringLock → Migrating → UpToDate / Failed）
-///   4. 已最新版本短路（不执行迁移）
-///   5. 并发调用单执行者（SemaphoreSlim 门闩串行化）
-///   6. 失败路径（Failed 状态 + 重新抛出）
+/// 1. MigrationCoordinatorOptions 默认值
+/// 2. 迁移互斥锁键派生（确定性 / 正 long / 不同前缀不同键）
+/// 3. 协调器阶段状态机（Idle → AcquiringLock → Migrating → UpToDate / Failed）
+/// 4. 已最新版本短路（不执行迁移）
+/// 5. 并发调用单执行者（SemaphoreSlim 门闩串行化）
+/// 6. 失败路径（Failed 状态 + 重新抛出）
 ///
 /// 不连接真实 PostgreSQL 数据库：通过 internal 构造函数注入假的迁移执行器与
 /// 版本读取器（InternalsVisibleTo），验证协调语义与状态机；pg_advisory_lock

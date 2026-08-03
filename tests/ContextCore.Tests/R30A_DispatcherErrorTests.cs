@@ -5,14 +5,14 @@ using ContextCore.Core.Services.AgentRunRuntime;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R30A Dispatcher Error 修正 —— 结构化错误分类验收
+// Dispatcher Error 修正 —— 结构化错误分类验收
 //
 // Dispatcher 错误修正：ToolDispatchResult / ToolExecutionResult 携带类型化
 // DispatchErrorKind（替代纯字符串错误语义），策略层 / 对账 / 审计可按类别处理：
-//   - 未注册 Tool → UnregisteredTool（默认 RequiresReconciliation，不静默重放）；
-//   - Handler 异常 → HandlerException（外部副作用状态未知 → RequiresReconciliation）；
-//   - LeaseFence 缺失/过期 → LeaseFenceViolation（fail-closed，不触碰外部副作用）；
-//   - 策略拒绝 → PolicyRejected。
+// - 未注册 Tool → UnregisteredTool（默认 RequiresReconciliation，不静默重放）；
+// - Handler 异常 → HandlerException（外部副作用状态未知 → RequiresReconciliation）；
+// - LeaseFence 缺失/过期 → LeaseFenceViolation（fail-closed，不触碰外部副作用）；
+// - 策略拒绝 → PolicyRejected。
 // ===========================================================================
 
 [TestClass]

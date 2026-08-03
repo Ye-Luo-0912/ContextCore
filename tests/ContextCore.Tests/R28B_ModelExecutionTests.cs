@@ -7,17 +7,17 @@ namespace ContextCore.Tests;
 // Model Execution Runtime 验收测试
 //
 // 覆盖范围（6 个验收用例）：
-//   1. FeatureRegistry_RegisterAndGet_ReturnsSchema          —— 注册后按版本号取回
-//   2. FeatureRegistry_GetLatest_ReturnsMostRecent           —— GetLatest 返回最新 CreatedAt
-//   3. BatchInference_ProducesDeterministicScore             —— 相同输入产出相同分数
-//   4. BatchInference_FallbackSucceeds                       —— 真实模型不可用时 fallback 成功
-//   5. Calibration_PlattScaling_ProducesValidProbability     —— 校准后分数在 [0,1]
-//   6. Calibration_BatchCalibrate_AllInValidRange            —— 批量校准全部在 [0,1]
+// 1. FeatureRegistry_RegisterAndGet_ReturnsSchema —— 注册后按版本号取回
+// 2. FeatureRegistry_GetLatest_ReturnsMostRecent —— GetLatest 返回最新 CreatedAt
+// 3. BatchInference_ProducesDeterministicScore —— 相同输入产出相同分数
+// 4. BatchInference_FallbackSucceeds —— 真实模型不可用时 fallback 成功
+// 5. Calibration_PlattScaling_ProducesValidProbability —— 校准后分数在 [0,1]
+// 6. Calibration_BatchCalibrate_AllInValidRange —— 批量校准全部在 [0,1]
 //
 // 设计原则：
-//   - 每个 [TestClass] 自包含，无共享 fixture（与现有 R28-B 测试模式一致）
-//   - 共享 helper 放在 file-level internal static class
-//   - 验收点对应任务描述中给出的 6 个验收用例
+// - 每个 [TestClass] 自包含，无共享 fixture（与现有 测试模式一致）
+// - 共享 helper 放在 file-level internal static class
+// - 验收点对应任务描述中给出的 6 个验收用例
 // ===========================================================================
 
 [TestClass]

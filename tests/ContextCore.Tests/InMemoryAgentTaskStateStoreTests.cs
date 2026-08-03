@@ -7,18 +7,18 @@ namespace ContextCore.Tests;
 /// InMemoryAgentTaskStateStore 实现测试。
 ///
 /// 覆盖：
-///   1. SaveAsync null 抛异常
-///   2. SaveAsync 新增 + GetAsync 往返
-///   3. SaveAsync 同 (workspaceId, TaskId) 覆盖
-///   4. GetAsync 不存在返回 null
-///   5. GetAsync 空 workspaceId/TaskId 抛异常
-///   6. ListBySessionAsync 按 session 过滤 + UpdatedAt 倒序
-///   7. ListBySessionAsync null session 抛异常
-///   8. DeleteAsync 存在/不存在
-///   9. DeleteAsync 空 workspaceId/TaskId 抛异常
-///  10. Count 属性
-///  11. CancellationToken 传递
-///  12. 跨 workspace 隔离
+/// 1. SaveAsync null 抛异常
+/// 2. SaveAsync 新增 + GetAsync 往返
+/// 3. SaveAsync 同 (workspaceId, TaskId) 覆盖
+/// 4. GetAsync 不存在返回 null
+/// 5. GetAsync 空 workspaceId/TaskId 抛异常
+/// 6. ListBySessionAsync 按 session 过滤 + UpdatedAt 倒序
+/// 7. ListBySessionAsync null session 抛异常
+/// 8. DeleteAsync 存在/不存在
+/// 9. DeleteAsync 空 workspaceId/TaskId 抛异常
+/// 10. Count 属性
+/// 11. CancellationToken 传递
+/// 12. 跨 workspace 隔离
 /// </summary>
 [TestClass]
 [TestCategory("R24")]

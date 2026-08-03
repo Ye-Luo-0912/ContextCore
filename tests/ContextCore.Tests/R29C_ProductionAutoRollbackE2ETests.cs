@@ -15,20 +15,20 @@ namespace ContextCore.Tests;
 // 在真实流量（RetrieveAsync / BuildDetailedAsync 多次调用）下验证自动回滚决策。
 //
 // 与既有测试的区别：
-//   - R28B_CanaryProductionSampleSourceAcceptanceTests 只验证 RecordObservation 被调用
-//     （TotalObservations >= 1），从未推进到 CanaryProgressionService.AdvanceAsync。
-//   - R29C_QualityScoreTests 用手构 experimentMetrics dict 直接调用 AdvanceAsync，
-//     未走 AuthoritativeRuntime → RecordObservation → ToExperimentMetrics 真实链路。
-//   - 本文件验证：真实 V2 ExecutionResult → CanaryQualityScoreCalculator →
-//     RecordObservation(qualityScore) → ToExperimentMetrics → AdvanceAsync → 回滚决策。
+// - 既有验收测试只验证 RecordObservation 被调用
+// （TotalObservations >= 1），从未推进到 CanaryProgressionService.AdvanceAsync。
+// - QualityScore 测试用手构 experimentMetrics dict 直接调用 AdvanceAsync，
+// 未走 AuthoritativeRuntime → RecordObservation → ToExperimentMetrics 真实链路。
+// - 本文件验证：真实 V2 ExecutionResult → CanaryQualityScoreCalculator →
+// RecordObservation(qualityScore) → ToExperimentMetrics → AdvanceAsync → 回滚决策。
 //
 // 设计原则：
-//   - 使用真实组件（AuthoritativeRetrievalRuntime、AuthoritativePackageRuntime、
-//     ShadowDecisionRuntime、RetrievalResultProjector、PackageResultProjector、
-//     DefaultCanaryMetricsCollector、CanaryProgressionService、CutoverController、
-//     InMemoryPipelineRunStore、CanaryAcceptanceTimeProvider）。
-//   - 仅 stub IContextDecisionRuntime（V2 Runtime）和 IContextStore（Legacy 数据源）。
-//   - 所有代码注释使用中文。
+// - 使用真实组件（AuthoritativeRetrievalRuntime、AuthoritativePackageRuntime、
+// ShadowDecisionRuntime、RetrievalResultProjector、PackageResultProjector、
+// DefaultCanaryMetricsCollector、CanaryProgressionService、CutoverController、
+// InMemoryPipelineRunStore、CanaryAcceptanceTimeProvider）。
+// - 仅 stub IContextDecisionRuntime（V2 Runtime）和 IContextStore（Legacy 数据源）。
+// - 所有代码注释使用中文。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ internal sealed class QueueDecisionRuntime : IContextDecisionRuntime
 }
 
 // ---------------------------------------------------------------------------
-// 测试辅助：R29C_E2E_Helpers — 构建 E2E 测试组件与请求
+// 测试辅助：E2E Helpers — 构建 E2E 测试组件与请求
 // ---------------------------------------------------------------------------
 
 internal static class R29C_E2E_Helpers
@@ -188,14 +188,14 @@ internal static class R29C_E2E_Helpers
     /// <remarks>
     /// 注意：PercentageLadder[0] 决定 InitializeCanary 后的初始 cutover 百分比。
     /// 使用 99 而非 1 是因为 CutoverController.ShouldUseV2 基于 operationId 哈希取模：
-    ///   - 1% cutover → 仅 1% 的 operationId 走 V2（5 个请求中几乎必然 0 个走 V2）
-    ///   - 99% cutover → 99% 的 operationId 走 V2 Mixed mode（5 个请求几乎必然全部走 V2）
+    /// - 1% cutover → 仅 1% 的 operationId 走 V2（5 个请求中几乎必然 0 个走 V2）
+    /// - 99% cutover → 99% 的 operationId 走 V2 Mixed mode（5 个请求几乎必然全部走 V2）
     /// <para>
     /// 关键：MaxDivergenceRate 设为 2.0（>1.0 上限）以禁用 parity 阈值回滚。
     /// 原因：测试用 CallTrackingContextStore（空 Legacy 数据源），Legacy 路径产出空候选，
     /// 与健康 V2 候选完全发散 → Jaccard=0 → DivergenceRate=1.0。若不放宽阈值，
     /// 任何健康 V2 请求都会被 parity 检查误判为回滚，无法验证 quality_score 推进路径。
-    /// 本测试文件聚焦 quality_score + V2 错误率回滚场景，parity 由 R28B 既有覆盖测试验证。
+    /// 本测试文件聚焦 quality_score + V2 错误率回滚场景，parity 由既有覆盖测试验证。
     /// </para>
     /// </remarks>
     public static CanaryGateOptions BuildOptionsWithQuality(double minQualityScore = 0.3)
@@ -281,8 +281,8 @@ public sealed class RetrievalE2EAutoRollbackTests
 {
     // ===========================================================================
     // 1. HealthyV2_SeveralRequests_AdvancesCanary
-    //    验证：Mixed mode（99%）下，多次健康 V2 请求 + 推进时间后，CanaryProgressionService
-    //    从 99% → 100% 推进。证明 E2E 链路联通（RecordObservation → ToExperimentMetrics → AdvanceAsync）。
+    // 验证：Mixed mode（99%）下，多次健康 V2 请求 + 推进时间后，CanaryProgressionService
+    // 从 99% → 100% 推进。证明 E2E 链路联通（RecordObservation → ToExperimentMetrics → AdvanceAsync）。
     // ===========================================================================
     [TestMethod]
     public async Task HealthyV2_SeveralRequests_AdvancesCanary()
@@ -329,10 +329,10 @@ public sealed class RetrievalE2EAutoRollbackTests
 
     // ===========================================================================
     // 2. LowQualityV2_SeveralRequests_TriggersRollback
-    //    验证：Mixed mode（99%）下，多次低质量 V2 请求（空候选 → score≈0.0）→
-    //    CanaryProgressionService 在 AdvanceAsync 中触发回滚（quality_score < MinQualityScore=0.3）。
-    //    完整链路：AuthoritativeRetrievalRuntime → CanaryQualityScoreCalculator →
-    //    RecordObservation → ToExperimentMetrics → AdvanceAsync → Rollback。
+    // 验证：Mixed mode（99%）下，多次低质量 V2 请求（空候选 → score≈0.0）→
+    // CanaryProgressionService 在 AdvanceAsync 中触发回滚（quality_score < MinQualityScore=0.3）。
+    // 完整链路：AuthoritativeRetrievalRuntime → CanaryQualityScoreCalculator →
+    // RecordObservation → ToExperimentMetrics → AdvanceAsync → Rollback。
     // ===========================================================================
     [TestMethod]
     public async Task LowQualityV2_SeveralRequests_TriggersRollback()
@@ -383,10 +383,10 @@ public sealed class RetrievalE2EAutoRollbackTests
 
     // ===========================================================================
     // 3. V2Failure_RecordsV2Error_TriggersRollback
-    //    验证：V2 Runtime 抛异常时（fail-open 回退 Legacy），RecordObservation 被调用且
-    //    v2Succeeded=false → V2ErrorRate 高 → AdvanceAsync 触发回滚。
-    //    完整链路：ThrowingDecisionRuntime → Exception catch → RecordCanaryObservation
-    //    → V2ErrorRate > 阈值 → AdvanceAsync → Rollback。
+    // 验证：V2 Runtime 抛异常时（fail-open 回退 Legacy），RecordObservation 被调用且
+    // v2Succeeded=false → V2ErrorRate 高 → AdvanceAsync 触发回滚。
+    // 完整链路：ThrowingDecisionRuntime → Exception catch → RecordCanaryObservation
+    // → V2ErrorRate > 阈值 → AdvanceAsync → Rollback。
     // ===========================================================================
     [TestMethod]
     public async Task V2Failure_RecordsV2Error_TriggersRollback()
@@ -428,9 +428,9 @@ public sealed class RetrievalE2EAutoRollbackTests
 
     // ===========================================================================
     // 4. SampledShadowPath_RecordsObservationAndCanRollback
-    //    验证：100% cutover + EnableSampledShadow=true + ShadowSampleRate=1.0 时，
-    //    所有请求走 V2 权威路径 + 旁路执行 Legacy 对照 + RecordObservation 上报样本。
-    //    低质量 V2 产出 → CanaryProgressionService 触发回滚。
+    // 验证：100% cutover + EnableSampledShadow=true + ShadowSampleRate=1.0 时，
+    // 所有请求走 V2 权威路径 + 旁路执行 Legacy 对照 + RecordObservation 上报样本。
+    // 低质量 V2 产出 → CanaryProgressionService 触发回滚。
     // ===========================================================================
     [TestMethod]
     public async Task SampledShadowPath_RecordsObservationAndCanRollback()
@@ -508,7 +508,7 @@ public sealed class PackageE2EAutoRollbackTests
 {
     // ===========================================================================
     // 1. HealthyV2_PackagePath_AdvancesCanary
-    //    验证：Package Mixed mode（99%）下，健康 V2 产出 → 上报高质量样本 → AdvanceAsync 推进。
+    // 验证：Package Mixed mode（99%）下，健康 V2 产出 → 上报高质量样本 → AdvanceAsync 推进。
     // ===========================================================================
     [TestMethod]
     public async Task HealthyV2_PackagePath_AdvancesCanary()
@@ -547,8 +547,8 @@ public sealed class PackageE2EAutoRollbackTests
 
     // ===========================================================================
     // 2. LowQualityV2_PackagePath_TriggersRollback
-    //    验证：Package Mixed mode（99%）下，空候选 V2 产出 → 上报零质量样本 →
-    //    AdvanceAsync 触发回滚。
+    // 验证：Package Mixed mode（99%）下，空候选 V2 产出 → 上报零质量样本 →
+    // AdvanceAsync 触发回滚。
     // ===========================================================================
     [TestMethod]
     public async Task LowQualityV2_PackagePath_TriggersRollback()
@@ -600,9 +600,9 @@ public sealed class ProgressiveDegradationE2ETests
 {
     // ===========================================================================
     // 1. ProgressiveQualityDegradation_TriggersRollbackAtLaterStage
-    //    场景：90% 阶段（3 次健康）→ 推进到 95%；95% 阶段（3 次低质量）→ 触发回滚。
-    //    验证完整审计轨迹：Advance（90→95）→ Rollback（95→0）。
-    //    使用 90→95 阶梯确保两个阶段都在 Mixed mode（< 100%）触发 RecordObservation。
+    // 场景：90% 阶段（3 次健康）→ 推进到 95%；95% 阶段（3 次低质量）→ 触发回滚。
+    // 验证完整审计轨迹：Advance（90→95）→ Rollback（95→0）。
+    // 使用 90→95 阶梯确保两个阶段都在 Mixed mode（< 100%）触发 RecordObservation。
     // ===========================================================================
     [TestMethod]
     public async Task ProgressiveQualityDegradation_TriggersRollbackAtLaterStage()
@@ -689,9 +689,9 @@ public sealed class ProgressiveDegradationE2ETests
 
     // ===========================================================================
     // 2. TwoStageProgression_AllHealthy_AdvancesFrom90To95
-    //    验证：2 个阶段全部健康时，Canary 推进 90% → 95%。
-    //    证明 E2E 链路在多次推进中保持稳定（无状态污染、无指标残留）。
-    //    使用 90→95 阶梯（避免达到 100% 后切换到 V2-only 路径，丢失 RecordObservation）。
+    // 验证：2 个阶段全部健康时，Canary 推进 90% → 95%。
+    // 证明 E2E 链路在多次推进中保持稳定（无状态污染、无指标残留）。
+    // 使用 90→95 阶梯（避免达到 100% 后切换到 V2-only 路径，丢失 RecordObservation）。
     // ===========================================================================
     [TestMethod]
     public async Task TwoStageProgression_AllHealthy_AdvancesFrom90To95()
@@ -760,7 +760,7 @@ public sealed class ProgressiveDegradationE2ETests
 // ===========================================================================
 // 测试类 4：MixedTrafficE2ETests
 // 验证：混合流量（带 canaryRunId 与不带 canaryRunId 的请求交替）下，
-//       Collector 不被无 runId 的请求污染，canary 推进/回滚决策正确。
+// Collector 不被无 runId 的请求污染，canary 推进/回滚决策正确。
 // ===========================================================================
 
 [TestClass]
@@ -771,8 +771,8 @@ public sealed class MixedTrafficE2ETests
 {
     // ===========================================================================
     // 1. MixedRunIdAndNoRunId_OnlyRunIdRecorded
-    //    验证：5 次带 runId 请求 + 5 次不带 runId 请求交替，Collector 只记录 5 个样本。
-    //    无 runId 的请求不污染 canary run 的指标。
+    // 验证：5 次带 runId 请求 + 5 次不带 runId 请求交替，Collector 只记录 5 个样本。
+    // 无 runId 的请求不污染 canary run 的指标。
     // ===========================================================================
     [TestMethod]
     public async Task MixedRunIdAndNoRunId_OnlyRunIdRecorded()

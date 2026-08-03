@@ -15,22 +15,22 @@ namespace ContextCore.Tests;
 // B3 Durable Agent Run Scheduler 生产验收测试
 //
 // 验证 Durable Run Scheduler（优先级队列 + SKIP LOCKED 领取 + 重试/死信 + 重启恢复）：
-//   1. Host_PriorityQueue_HigherPriorityRunsFirst — AgentKernelHost 优先级队列
-//      按 Priority DESC 出队（高优先级先执行），同优先级保持 FIFO；
-//   2. Host_PriorityQueue_SamePriorityPreservesFifoOrder — 同优先级先入队先执行；
-//   3. StateMachine_DeadLettered_IsTerminal — DeadLettered 为终态；
-//   4. MigrationSql_AgentRuns_ContainsSchedulingColumnsAndIndex — 基线 DDL 含调度/重试列 + 领取索引；
-//   5. MigrationStepRegistry_AgentRunScheduling_DeclaresV52ToV53 — v52→v53 迁移步骤元数据；
-//   6. Store_ClaimPending_ZeroTake_ReturnsEmpty / Store_DeadLetter_ZeroTake_ReturnsEmpty —
-//      非 DB 参数校验路径（take<=0 短路返回，不触库）；
-//   7. Claimer_Loops_ClaimsAndExecutesRuns — PostgresPendingRunClaimer 周期性领取
-//      pending Run 并驱动执行到终态（重启恢复语义）。
+// 1. Host_PriorityQueue_HigherPriorityRunsFirst — AgentKernelHost 优先级队列
+// 按 Priority DESC 出队（高优先级先执行），同优先级保持 FIFO；
+// 2. Host_PriorityQueue_SamePriorityPreservesFifoOrder — 同优先级先入队先执行；
+// 3. StateMachine_DeadLettered_IsTerminal — DeadLettered 为终态；
+// 4. MigrationSql_AgentRuns_ContainsSchedulingColumnsAndIndex — 基线 DDL 含调度/重试列 + 领取索引；
+// 5. MigrationStepRegistry_AgentRunScheduling_DeclaresV52ToV53 — v52→v53 迁移步骤元数据；
+// 6. Store_ClaimPending_ZeroTake_ReturnsEmpty / Store_DeadLetter_ZeroTake_ReturnsEmpty —
+// 非 DB 参数校验路径（take<=0 短路返回，不触库）；
+// 7. Claimer_Loops_ClaimsAndExecutesRuns — PostgresPendingRunClaimer 周期性领取
+// pending Run 并驱动执行到终态（重启恢复语义）。
 //
 // 设计原则：
-//   - Host 优先级/公平性用真实 InMemory store + 阻塞 transport 验证（确定性时序）；
-//   - Claimer 用 IPersistentAgentRunStore 包装器（录制领取调用）验证循环与入队；
-//   - Postgres SKIP LOCKED SQL 语义由 ContextCore.IntegrationTests（Testcontainers）覆盖；
-//     本文件仅验证可离线的部分（SQL 字符串 / 步骤元数据 / 参数校验）。
+// - Host 优先级/公平性用真实 InMemory store + 阻塞 transport 验证（确定性时序）；
+// - Claimer 用 IPersistentAgentRunStore 包装器（录制领取调用）验证循环与入队；
+// - Postgres SKIP LOCKED SQL 语义由 ContextCore.IntegrationTests（Testcontainers）覆盖；
+// 本文件仅验证可离线的部分（SQL 字符串 / 步骤元数据 / 参数校验）。
 // ===========================================================================
 
 [TestClass]

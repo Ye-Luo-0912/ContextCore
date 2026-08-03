@@ -9,37 +9,37 @@ namespace ContextCore.Tests;
 // 质量分指标 + Canary 回滚阈值接入验收测试
 //
 // 覆盖范围（3 个测试类，共 22 项）：
-//   1. CanaryQualityScoreCalculatorTests（8 项）— 质量分计算器单元行为
-//      - null execution / null decision → 0.0
-//      - 无选中候选 → avg relevance = 0
-//      - section coverage 主路径（FinalArtifactTokenCost）
-//      - section coverage 回退路径（Outcome.TokenBudget）
-//      - section coverage 无预算约束 → 1.0
-//      - 候选相关性均值（FinalScore）
-//      - 0.5/0.5 默认权重合成
-//      - FinalScore > 1.0 被 Clamp；NaN/Infinity 被忽略
-//   2. CanaryMetricsCollectorQualityScoreTests（6 项）— 采集器聚合行为
-//      - RecordObservation 接受 qualityScore 参数
-//      - qualityScore=null 默认为 0.0
-//      - AverageQualityScore = sum / total
-//      - ToExperimentMetrics 包含 quality_score 字段
-//      - ToBaselineMetrics 不包含 quality_score 字段（仅 V2 路径）
-//      - Ring buffer 淘汰时 QualityScoreSum 正确回滚
-//   3. CanaryProgressionServiceQualityScoreTests（8 项）— 回滚阈值集成
-//      - quality_score 高于 MinQualityScore → 不回滚（Advance）
-//      - quality_score 低于 MinQualityScore → 触发回滚（Rollback）
-//      - MinQualityScore=0.0 时禁用质量分检查
-//      - experimentMetrics 缺失 quality_score → 不回滚（graceful）
-//      - quality_score = MinQualityScore 边界 → 不回滚（< 而非 <=）
-//      - 端到端：AdvanceAsync 在低 quality_score 下走 Rollback 路径
-//      - 默认 CanaryGateOptions.MinQualityScore = 0.3
-//      - FromEnvironment 解析 CC_CANARY_MIN_QUALITY_SCORE
+// 1. CanaryQualityScoreCalculatorTests（8 项）— 质量分计算器单元行为
+// - null execution / null decision → 0.0
+// - 无选中候选 → avg relevance = 0
+// - section coverage 主路径（FinalArtifactTokenCost）
+// - section coverage 回退路径（Outcome.TokenBudget）
+// - section coverage 无预算约束 → 1.0
+// - 候选相关性均值（FinalScore）
+// - 0.5/0.5 默认权重合成
+// - FinalScore > 1.0 被 Clamp；NaN/Infinity 被忽略
+// 2. CanaryMetricsCollectorQualityScoreTests（6 项）— 采集器聚合行为
+// - RecordObservation 接受 qualityScore 参数
+// - qualityScore=null 默认为 0.0
+// - AverageQualityScore = sum / total
+// - ToExperimentMetrics 包含 quality_score 字段
+// - ToBaselineMetrics 不包含 quality_score 字段（仅 V2 路径）
+// - Ring buffer 淘汰时 QualityScoreSum 正确回滚
+// 3. CanaryProgressionServiceQualityScoreTests（8 项）— 回滚阈值集成
+// - quality_score 高于 MinQualityScore → 不回滚（Advance）
+// - quality_score 低于 MinQualityScore → 触发回滚（Rollback）
+// - MinQualityScore=0.0 时禁用质量分检查
+// - experimentMetrics 缺失 quality_score → 不回滚（graceful）
+// - quality_score = MinQualityScore 边界 → 不回滚（< 而非 <=）
+// - 端到端：AdvanceAsync 在低 quality_score 下走 Rollback 路径
+// - 默认 CanaryGateOptions.MinQualityScore = 0.3
+// - FromEnvironment 解析 CC_CANARY_MIN_QUALITY_SCORE
 //
 // 设计原则：
-//   - 直接测试 CanaryQualityScoreCalculator（internal static，通过 InternalsVisibleTo 暴露）
-//   - 使用真实 InMemoryPipelineRunStore + CutoverController + DefaultCanaryMetricsCollector
-//   - 使用可推进时间的 CanaryAcceptanceTimeProvider（复用 R28B 共享 helper）
-//   - 所有代码注释使用中文
+// - 直接测试 CanaryQualityScoreCalculator（internal static，通过 InternalsVisibleTo 暴露）
+// - 使用真实 InMemoryPipelineRunStore + CutoverController + DefaultCanaryMetricsCollector
+// - 使用可推进时间的 CanaryAcceptanceTimeProvider（复用共享 helper）
+// - 所有代码注释使用中文
 // ===========================================================================
 
 // ===========================================================================
@@ -58,7 +58,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 1. Compute_ReturnsZero_WhenExecutionIsNull
-    //    验证：execution=null 时直接返回 0.0（不抛 NRE）
+    // 验证：execution=null 时直接返回 0.0（不抛 NRE）
     // ===========================================================================
     [TestMethod]
     public void Compute_ReturnsZero_WhenExecutionIsNull()
@@ -69,9 +69,9 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 2. Compute_ReturnsZero_WhenDecisionIsNull
-    //    验证：直接调用 Compute(decision: null, ...) 重载时返回 0.0
-    //    注：ContextDecisionExecutionResult.Decision 是 required 字段不可为 null，
-    //        此测试覆盖 Compute(ContextDecisionResult?, ...) 重载的 null 防御逻辑
+    // 验证：直接调用 Compute(decision: null, ...) 重载时返回 0.0
+    // 注：ContextDecisionExecutionResult.Decision 是 required 字段不可为 null，
+    // 此测试覆盖 Compute(ContextDecisionResult?, ...) 重载的 null 防御逻辑
     // ===========================================================================
     [TestMethod]
     public void Compute_ReturnsZero_WhenDecisionIsNull()
@@ -82,7 +82,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 3. Compute_AvgRelevanceIsZero_WhenNoSelectedEnvelopes
-    //    验证：SelectedEnvelopes 为空时 avg relevance=0；section coverage 由预算决定
+    // 验证：SelectedEnvelopes 为空时 avg relevance=0；section coverage 由预算决定
     // ===========================================================================
     [TestMethod]
     public void Compute_AvgRelevanceIsZero_WhenNoSelectedEnvelopes()
@@ -100,7 +100,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 4. Compute_SectionCoverageFromFinalArtifactTokenCost
-    //    验证：FinalArtifactTokenCost.BudgetLimit 优先于 Outcome.TokenBudget
+    // 验证：FinalArtifactTokenCost.BudgetLimit 优先于 Outcome.TokenBudget
     // ===========================================================================
     [TestMethod]
     public void Compute_SectionCoverageFromFinalArtifactTokenCost()
@@ -127,7 +127,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 5. Compute_SectionCoverageFallsBackToOutcome
-    //    验证：FinalArtifactTokenCost=null 时回退到 Outcome.EffectiveTokens/TokenBudget
+    // 验证：FinalArtifactTokenCost=null 时回退到 Outcome.EffectiveTokens/TokenBudget
     // ===========================================================================
     [TestMethod]
     public void Compute_SectionCoverageFallsBackToOutcome()
@@ -146,7 +146,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 6. Compute_SectionCoverageIsOne_WhenNoBudgetConstraint
-    //    验证：FinalArtifactTokenCost=null 且 Outcome.TokenBudget=0 → coverage=1.0（视为完整覆盖）
+    // 验证：FinalArtifactTokenCost=null 且 Outcome.TokenBudget=0 → coverage=1.0（视为完整覆盖）
     // ===========================================================================
     [TestMethod]
     public void Compute_SectionCoverageIsOne_WhenNoBudgetConstraint()
@@ -164,7 +164,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 7. Compute_AvgRelevanceFromFinalScore
-    //    验证：avg relevance = SelectedEnvelopes.Utility.FinalScore 均值
+    // 验证：avg relevance = SelectedEnvelopes.Utility.FinalScore 均值
     // ===========================================================================
     [TestMethod]
     public void Compute_AvgRelevanceFromFinalScore()
@@ -188,7 +188,7 @@ public sealed class CanaryQualityScoreCalculatorTests
 
     // ===========================================================================
     // 8. Compute_ClampsToUnitInterval_WhenFinalScoreExceedsOne
-    //    验证：FinalScore > 1.0 被 Clamp 到 1.0；NaN/Infinity 被忽略
+    // 验证：FinalScore > 1.0 被 Clamp 到 1.0；NaN/Infinity 被忽略
     // ===========================================================================
     [TestMethod]
     public void Compute_ClampsToUnitInterval_WhenFinalScoreExceedsOne()
@@ -288,7 +288,7 @@ public sealed class CanaryMetricsCollectorQualityScoreTests
 {
     // ===========================================================================
     // 1. RecordObservation_AcceptsQualityScoreParameter
-    //    验证：RecordObservation 接受 qualityScore 参数，AverageQualityScore 反映该值
+    // 验证：RecordObservation 接受 qualityScore 参数，AverageQualityScore 反映该值
     // ===========================================================================
     [TestMethod]
     public void RecordObservation_AcceptsQualityScoreParameter()
@@ -312,7 +312,7 @@ public sealed class CanaryMetricsCollectorQualityScoreTests
 
     // ===========================================================================
     // 2. RecordObservation_QualityScoreNullDefaultsToZero
-    //    验证：qualityScore=null 时记为 0.0（不影响 latency/error/divergence）
+    // 验证：qualityScore=null 时记为 0.0（不影响 latency/error/divergence）
     // ===========================================================================
     [TestMethod]
     public void RecordObservation_QualityScoreNullDefaultsToZero()
@@ -339,7 +339,7 @@ public sealed class CanaryMetricsCollectorQualityScoreTests
 
     // ===========================================================================
     // 3. AverageQualityScore_IsMeanOfAllSamples
-    //    验证：多次观察的 AverageQualityScore = sum / total
+    // 验证：多次观察的 AverageQualityScore = sum / total
     // ===========================================================================
     [TestMethod]
     public void AverageQualityScore_IsMeanOfAllSamples()
@@ -363,7 +363,7 @@ public sealed class CanaryMetricsCollectorQualityScoreTests
 
     // ===========================================================================
     // 4. ToExperimentMetrics_IncludesQualityScore
-    //    验证：ToExperimentMetrics 包含 "quality_score" 字段
+    // 验证：ToExperimentMetrics 包含 "quality_score" 字段
     // ===========================================================================
     [TestMethod]
     public void ToExperimentMetrics_IncludesQualityScore()
@@ -388,7 +388,7 @@ public sealed class CanaryMetricsCollectorQualityScoreTests
 
     // ===========================================================================
     // 5. ToBaselineMetrics_DoesNotIncludeQualityScore
-    //    验证：ToBaselineMetrics 不包含 quality_score（仅 V2 路径有质量分）
+    // 验证：ToBaselineMetrics 不包含 quality_score（仅 V2 路径有质量分）
     // ===========================================================================
     [TestMethod]
     public void ToBaselineMetrics_DoesNotIncludeQualityScore()
@@ -409,7 +409,7 @@ public sealed class CanaryMetricsCollectorQualityScoreTests
 
     // ===========================================================================
     // 6. RingBufferEviction_RollsBackQualityScoreSum
-    //    验证：ring buffer 容量超限时淘汰最旧样本，QualityScoreSum 正确回滚
+    // 验证：ring buffer 容量超限时淘汰最旧样本，QualityScoreSum 正确回滚
     // ===========================================================================
     [TestMethod]
     public void RingBufferEviction_RollsBackQualityScoreSum()
@@ -462,7 +462,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 1. QualityScoreAboveThreshold_AdvancesSuccessfully
-    //    验证：quality_score > MinQualityScore 时不触发回滚，正常推进
+    // 验证：quality_score > MinQualityScore 时不触发回滚，正常推进
     // ===========================================================================
     [TestMethod]
     public async Task QualityScoreAboveThreshold_AdvancesSuccessfully()
@@ -495,7 +495,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 2. QualityScoreBelowThreshold_TriggersRollback
-    //    验证：quality_score < MinQualityScore 时触发自动回滚
+    // 验证：quality_score < MinQualityScore 时触发自动回滚
     // ===========================================================================
     [TestMethod]
     public async Task QualityScoreBelowThreshold_TriggersRollback()
@@ -527,7 +527,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 3. MinQualityScoreZero_DisablesQualityCheck
-    //    验证：MinQualityScore=0.0 时禁用质量分检查（即使 quality_score=0.0 也不回滚）
+    // 验证：MinQualityScore=0.0 时禁用质量分检查（即使 quality_score=0.0 也不回滚）
     // ===========================================================================
     [TestMethod]
     public async Task MinQualityScoreZero_DisablesQualityCheck()
@@ -559,7 +559,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 4. QualityScoreAbsent_DoesNotTriggerRollback
-    //    验证：experimentMetrics 不含 quality_score 字段时，不触发回滚（graceful）
+    // 验证：experimentMetrics 不含 quality_score 字段时，不触发回滚（graceful）
     // ===========================================================================
     [TestMethod]
     public async Task QualityScoreAbsent_DoesNotTriggerRollback()
@@ -590,7 +590,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 5. QualityScoreEqualsThreshold_DoesNotTriggerRollback
-    //    验证：quality_score == MinQualityScore 时不回滚（使用 < 而非 <=）
+    // 验证：quality_score == MinQualityScore 时不回滚（使用 < 而非 <=）
     // ===========================================================================
     [TestMethod]
     public async Task QualityScoreEqualsThreshold_DoesNotTriggerRollback()
@@ -621,8 +621,8 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 6. EndToEnd_AdvanceAsyncInvokesRollbackOnLowQuality
-    //    验证：端到端流程下，AdvanceAsync 检测到低 quality_score 后走 Rollback 路径
-    //         并将 CutoverController 重置为 0%
+    // 验证：端到端流程下，AdvanceAsync 检测到低 quality_score 后走 Rollback 路径
+    // 并将 CutoverController 重置为 0%
     // ===========================================================================
     [TestMethod]
     public async Task EndToEnd_AdvanceAsyncInvokesRollbackOnLowQuality()
@@ -666,7 +666,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 7. DefaultOptions_HasMinQualityScorePointThree
-    //    验证：默认 CanaryGateOptions.MinQualityScore = 0.3
+    // 验证：默认 CanaryGateOptions.MinQualityScore = 0.3
     // ===========================================================================
     [TestMethod]
     public void DefaultOptions_HasMinQualityScorePointThree()
@@ -678,7 +678,7 @@ public sealed class CanaryProgressionServiceQualityScoreTests
 
     // ===========================================================================
     // 8. FromEnvironment_ParsesMinQualityScore
-    //    验证：CC_CANARY_MIN_QUALITY_SCORE 环境变量被正确解析
+    // 验证：CC_CANARY_MIN_QUALITY_SCORE 环境变量被正确解析
     // ===========================================================================
     [TestMethod]
     public void FromEnvironment_ParsesMinQualityScore()

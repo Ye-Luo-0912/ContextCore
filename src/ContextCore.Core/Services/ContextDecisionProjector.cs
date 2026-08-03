@@ -236,7 +236,7 @@ public static class ContextDecisionProjector
     /// <summary>
     /// 从 <see cref="ContextDecisionResult"/>（envelope 集合）投影决策记录。
     /// 与 <see cref="ProjectPackage"/> / <see cref="ProjectRetrieval"/> 并存，
-    /// 用于 R18-3 / R18-4 阶段的 adapter 路径。envelope 集合保持不变。
+    /// 用于 / 阶段的 adapter 路径。envelope 集合保持不变。
     /// </summary>
     /// <param name="result">Engine 输出的决策结果（SelectedEnvelopes + DroppedEnvelopes）。</param>
     /// <returns>只读 <see cref="ContextDecisionRecord"/>，所有 Risk 标志位恒为 false。</returns>

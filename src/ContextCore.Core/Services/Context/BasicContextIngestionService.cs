@@ -73,7 +73,7 @@ public sealed class BasicContextIngestionService
             : item.Checksum;
 
         // 摄取阶段计算精确 token cost（若注入了 tokenizer），Provider 召回时直接读取跳过在线 tokenize。
-        // 未注入 tokenizer 时 content_token_cost 不写入 Metadata，Provider 回退到 fail-fast（R29 WP-D-3 不变）。
+        // 未注入 tokenizer 时 content_token_cost 不写入 Metadata，Provider 回退到 fail-fast（语义不变）。
         int? contentTokenCost = null;
         if (_tokenizerResolver is not null)
         {

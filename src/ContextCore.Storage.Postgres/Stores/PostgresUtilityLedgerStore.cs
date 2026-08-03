@@ -9,17 +9,17 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// / PostgreSQL Utility Ledger 持久化实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R21-2 契约澄清 #4 + R29 学习闭环）：
-///   1. 实现 <see cref="IUtilityLedger"/>：读 API（QueryAsync / GetLatestEntryAsync /
-///      GetExpertContributionsAsync）+ 异步批量写 API（<see cref="AppendEntriesAsync"/>）。
-///   2. 写入由 <c>UtilityLedgerMaterializer</c> 通过 <see cref="AppendEntriesAsync"/> 调用
-///      （生产路径）；与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryUtilityLedgerStore"/>
-///      实现同一 <see cref="IUtilityLedger"/> 契约，materializer 无需感知存储后端。
-///   3. 表 <c>utility_ledger_entries</c> 反规范化 workspace_id / collection_id / candidate_item_id /
-///      expert / decision_id / materialized_at 等字段以便索引查询；完整 <see cref="UtilityLedgerEntry"/>
-///      对象保存在 <c>data jsonb</c>，由 store 反序列化。
-///   4. QueryAsync 按 materialized_at DESC 排序（与 InMemory 实现语义一致）。
-///   5. GetExpertContributionsAsync 在数据库侧 GROUP BY expert 求平均（避免拉全量行到应用侧）。
+/// 设计原则（对齐学习闭环）：
+/// 1. 实现 <see cref="IUtilityLedger"/>：读 API（QueryAsync / GetLatestEntryAsync /
+/// GetExpertContributionsAsync）+ 异步批量写 API（<see cref="AppendEntriesAsync"/>）。
+/// 2. 写入由 <c>UtilityLedgerMaterializer</c> 通过 <see cref="AppendEntriesAsync"/> 调用
+/// （生产路径）；与 <see cref="ContextCore.Core.Services.MemoryEvolution.InMemoryUtilityLedgerStore"/>
+/// 实现同一 <see cref="IUtilityLedger"/> 契约，materializer 无需感知存储后端。
+/// 3. 表 <c>utility_ledger_entries</c> 反规范化 workspace_id / collection_id / candidate_item_id /
+/// expert / decision_id / materialized_at 等字段以便索引查询；完整 <see cref="UtilityLedgerEntry"/>
+/// 对象保存在 <c>data jsonb</c>，由 store 反序列化。
+/// 4. QueryAsync 按 materialized_at DESC 排序（与 InMemory 实现语义一致）。
+/// 5. GetExpertContributionsAsync 在数据库侧 GROUP BY expert 求平均（避免拉全量行到应用侧）。
 /// </remarks>
 public sealed class PostgresUtilityLedgerStore : PostgresStoreBase, IUtilityLedger, ITransactionalUtilityLedger
 {

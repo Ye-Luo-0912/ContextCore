@@ -4,30 +4,30 @@ namespace ContextCore.Abstractions;
 // / Model Execution Runtime 契约
 //
 // 目标：
-//   把分散在 ModelGateway 基础设施之上的特征管理、批量推理、模型校准能力
-//   显式契约化，补齐以下四个抽象：
-//     1. IFeatureRegistry       —— Feature Registry：管理特征 schema 版本
-//     2. IBatchInferenceEngine  —— Batch Inference Engine：批量推理
-//     3. ICalibrationService    —— Calibration Service：模型分数校准
-//     4. Deterministic fallback —— 由 DeterministicBatchInferenceEngine 提供，
-//        在真实模型不可用时使用 feature hash 产出确定性分数
+// 把分散在 ModelGateway 基础设施之上的特征管理、批量推理、模型校准能力
+// 显式契约化，补齐以下四个抽象：
+// 1. IFeatureRegistry —— Feature Registry：管理特征 schema 版本
+// 2. IBatchInferenceEngine —— Batch Inference Engine：批量推理
+// 3. ICalibrationService —— Calibration Service：模型分数校准
+// 4. Deterministic fallback —— 由 DeterministicBatchInferenceEngine 提供，
+// 在真实模型不可用时使用 feature hash 产出确定性分数
 //
 // 设计原则：
-//   1. 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
-//   2. FeatureSchema 全局不可变：版本号一旦注册不可修改，新版本通过新 schema 注册实现。
-//   3. BatchInference 必须可降级：当真实模型不可用时回退到 Deterministic 实现，
-//      保证主链始终能产出非空结果（fail-safe 而非 fail-fast）。
-//   4. Calibration 默认 identity：未配置参数时校准等价于恒等变换（返回原始 raw score）。
+// 1. 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
+// 2. FeatureSchema 全局不可变：版本号一旦注册不可修改，新版本通过新 schema 注册实现。
+// 3. BatchInference 必须可降级：当真实模型不可用时回退到 Deterministic 实现，
+// 保证主链始终能产出非空结果（fail-safe 而非 fail-fast）。
+// 4. Calibration 默认 identity：未配置参数时校准等价于恒等变换（返回原始 raw score）。
 //
 // （本迭代新增）：
-//   - ModelExecutionSnapshot：把 ModelArtifactId/ModelVersion/FeatureSchemaVersion/
-//     CalibrationVersion/InferenceEngineKind/ContentHash 组成精确模型执行快照，
-//     替代之前用 engine.ModelVersion 直接解析 FeatureSchema 的耦合。
-//   - CalibrationParameters 扩展：支持 Platt(A,B)/Temperature(T)/Isotonic(points)/Identity，
-//     旧的 Parameter 字段保留为 Platt A 的兼容别名。
-//   - FeatureBatch：连续数值内存（ReadOnlyMemory<float>），替代 boxing 字典。
-//   - IBatchInferenceEngine 增加 ContentHash/CalibrationVersion/InferBatchAsync。
-//   - IInferenceResultValidator：推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
+// - ModelExecutionSnapshot：把 ModelArtifactId/ModelVersion/FeatureSchemaVersion/
+// CalibrationVersion/InferenceEngineKind/ContentHash 组成精确模型执行快照，
+// 替代之前用 engine.ModelVersion 直接解析 FeatureSchema 的耦合。
+// - CalibrationParameters 扩展：支持 Platt(A,B)/Temperature(T)/Isotonic(points)/Identity，
+// 旧的 Parameter 字段保留为 Platt A 的兼容别名。
+// - FeatureBatch：连续数值内存（ReadOnlyMemory<float>），替代 boxing 字典。
+// - IBatchInferenceEngine 增加 ContentHash/CalibrationVersion/InferBatchAsync。
+// - IInferenceResultValidator：推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
 // ===========================================================================
 
 /// <summary>Feature Registry — 管理特征 schema 版本。</summary>
@@ -104,9 +104,9 @@ public enum InferenceEngineKind : byte
 
     /// <summary>
     /// 确定性回放（feature hash / 规则评分）。仅用于：
-    ///   - 模型不可用时的 fail-safe 降级
-    ///   - 基础设施测试与本地预览
-    ///   - contract test
+    /// - 模型不可用时的 fail-safe 降级
+    /// - 基础设施测试与本地预览
+    /// - contract test
     /// 默认配置下不得改变 FinalScore（除非显式开启 EnableModelScoring 且接受 hash 评分）。
     /// </summary>
     DeterministicReplay = 1,
@@ -264,7 +264,7 @@ public enum CalibrationMethodKind : byte
 
 /// <summary>
 /// / 校准参数。
-/// 原始契约仅暴露单个 Parameter（= Platt A）；R28-F 扩展为完整支持
+/// 原始契约仅暴露单个 Parameter（= Platt A）； 扩展为完整支持
 /// Platt(A,B) / Temperature(T) / Isotonic(points) / Identity。
 /// 旧字段 Parameter 保留为 Platt A 的兼容别名（值同步 ParameterA）。
 /// </summary>
@@ -330,8 +330,8 @@ public sealed record IsotonicPoint
 /// 把 ModelArtifactId / ModelVersion / FeatureSchemaVersion / CalibrationVersion /
 /// InferenceEngineKind / ContentHash 组成精确的模型执行快照，
 /// 用于：(1) Scorer 解耦 schema 解析与模型版本；
-///       (2) 审计/复现一次推理所用的精确工件组合；
-///       (3) 检测跨节点 HA 不一致（不同节点加载了不同 ContentHash）。
+/// (2) 审计/复现一次推理所用的精确工件组合；
+/// (3) 检测跨节点 HA 不一致（不同节点加载了不同 ContentHash）。
 /// </summary>
 public sealed record ModelExecutionSnapshot
 {
@@ -364,8 +364,8 @@ public sealed record ModelExecutionSnapshot
 /// </summary>
 /// <remarks>
 /// 推荐使用方式：
-///   var batch = FeatureBatch.FromRows(schema, rows);
-///   var result = await engine.InferBatchAsync(batch, ct);
+/// var batch = FeatureBatch.FromRows(schema, rows);
+/// var result = await engine.InferBatchAsync(batch, ct);
 /// 一次 batch inference / request，避免每候选装箱与字典查找。
 /// </remarks>
 public sealed record FeatureBatch
@@ -410,11 +410,11 @@ public sealed record InferenceValidationResult
 /// <summary>
 /// 推理输出验证器。
 /// 在 Scorer 应用模型分数到 Allocator 排序前，对 BatchInferenceResult 执行严格验证：
-///   - Outputs.Count == Inputs.Count
-///   - Score/Confidence 不是 NaN/Infinity
-///   - Confidence 在 [0,1]
-///   - schema/version 与输入一致
-///   - timeout 真实执行（Duration > 0 当 TimeoutMs > 0）
+/// - Outputs.Count == Inputs.Count
+/// - Score/Confidence 不是 NaN/Infinity
+/// - Confidence 在 [0,1]
+/// - schema/version 与输入一致
+/// - timeout 真实执行（Duration > 0 当 TimeoutMs > 0）
 /// </summary>
 public interface IInferenceResultValidator
 {

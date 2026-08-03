@@ -11,13 +11,13 @@ namespace ContextCore.Core;
 /// <remarks>
 /// 优化：
 /// <list type="bullet">
-/// <item><b>R13.2 #1 merged constraint 去重</b>：当 hard_constraints/soft_constraints section 与
+/// <item><b> merged constraint 去重</b>：当 hard_constraints/soft_constraints section 与
 /// merged constraints section 同时启用时，Hard/Soft 查询只发一次（Take = max(100, ConstraintMergeMaxItems)），
 /// 结果按需切片复用给两个 section。store 排序为 Level→Confidence→UpdatedAt 的稳定序，
 /// 故 Take 大值查询的前 N 条等于 Take=N 查询的结果，去重不改变 selected set。</item>
-/// <item><b>R13.2 #3 current_task 并行化</b>：current_task 解析仅依赖 request + WorkingMemoryService，
+/// <item><b> current_task 并行化</b>：current_task 解析仅依赖 request + WorkingMemoryService，
 /// 与 6 源预取无依赖，并入 prefetchTasks 集合一次 Task.WhenAll，消除串行 I/O 延迟。</item>
-/// <item><b>R13.2 #4 Store call count</b>：<see cref="PackageReadPlanBuilder"/> 记录每次 store 调用，
+/// <item><b> Store call count</b>：<see cref="PackageReadPlanBuilder"/> 记录每次 store 调用，
 /// 去重命中计数 DedupHits，最终通过 <see cref="PackageInputs.ReadPlan"/> 暴露到结果。</item>
 /// </list>
 /// </remarks>
@@ -45,7 +45,7 @@ internal sealed class PackageInputLoader
 
     /// <summary>
     /// 加载阶段：按 ResolvedPackageOptions 决定需要预取的数据源，并行查询后返回 <see cref="PackageInputs"/>。
-    /// #3：current_task 与 6 源预取 + merged constraints 并行执行（无依赖时）。
+    /// current_task 与 6 源预取 + merged constraints 并行执行（无依赖时）。
     /// Hard/Soft 在 section 与 merged 之间去重，单次查询结果按 Take 切片复用。
     /// </summary>
     internal async Task<PackageInputs> LoadAsync(
@@ -132,7 +132,7 @@ internal sealed class PackageInputLoader
 
         // 每层独立查询：Working 与 Stable 各自拥有独立的 Take 预算与 store 层过滤。
         // 不使用"全局 Take 后分区"——那会让多数层占满共享预算，少数层可能拿到 0 候选，
-        // 从而改变 Package selected set（参见 P0 修复 4.2）。
+        // 从而改变 Package selected set（参见 修复 4.2）。
         // FileMemoryStore 内部 SemaphoreSlim 串行化两次查询的代价可接受；若需进一步优化，
         // 应由 provider 内部复用同一文件快照，而非在 loader 层做全局 Take。
         Task<IReadOnlyList<ContextMemoryItem>>? workingCandidatesRawTask =
@@ -211,7 +211,7 @@ internal sealed class PackageInputLoader
             planBuilder.RecordCall("ConstraintStore.Query(All)");
         }
 
-        // #3：current_task + 6 源 + merged All 一起并行（彼此无依赖）。
+        // current_task + 6 源 + merged All 一起并行（彼此无依赖）。
         var prefetchTasks = new List<Task>();
         if (currentTaskTask is not null) prefetchTasks.Add(currentTaskTask);
         if (recentItemsTask is not null) prefetchTasks.Add(recentItemsTask);
@@ -356,7 +356,7 @@ internal sealed class PackageInputLoader
 }
 
 /// <summary>
-/// #4：读路径调用计数器。记录每个 store kind + 用途的查询次数与去重命中。
+/// 读路径调用计数器。记录每个 store kind + 用途的查询次数与去重命中。
 /// </summary>
 internal sealed class PackageReadPlanBuilder
 {

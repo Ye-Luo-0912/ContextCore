@@ -16,23 +16,23 @@ namespace ContextCore.IntegrationTests;
 // 真进程 Kill + DB 网络分区集成测试
 //
 // 目标：
-//   1. E2E_RealProcessKill_MidToolExecution_NoDuplicateSideEffect — 真实操作系统进程
-//      在 Tool 执行中途被 Kill（非优雅终止），验证：
-//      a. Run 数据与事件流未丢失（Postgres 持久化）；
-//      b. journal 停留在 DispatchingIntent 模糊态（外部副作用可能已开始）；
-//      c. 租约随进程消失，真实过期后新节点可抢占（fencing token 递增）；
-//      d. 恢复节点接管后 Tool 副作用不重复执行（exactly-once，对账而非盲目重放）。
-//   2. E2E_DbNetworkPartition_LeaseExpires_NewOwnerFencingWins — 停止 Postgres 容器
-//      模拟 DB 网络分区，分区期间租约真实过期，分区恢复后：
-//      a. 旧 owner 的续约失败（token 已失效）；
-//      b. 新 owner 抢占成功且 fencing token 递增；
-//      c. Run 数据未丢失。
+// 1. E2E_RealProcessKill_MidToolExecution_NoDuplicateSideEffect — 真实操作系统进程
+// 在 Tool 执行中途被 Kill（非优雅终止），验证：
+// a. Run 数据与事件流未丢失（Postgres 持久化）；
+// b. journal 停留在 DispatchingIntent 模糊态（外部副作用可能已开始）；
+// c. 租约随进程消失，真实过期后新节点可抢占（fencing token 递增）；
+// d. 恢复节点接管后 Tool 副作用不重复执行（exactly-once，对账而非盲目重放）。
+// 2. E2E_DbNetworkPartition_LeaseExpires_NewOwnerFencingWins — 停止 Postgres 容器
+// 模拟 DB 网络分区，分区期间租约真实过期，分区恢复后：
+// a. 旧 owner 的续约失败（token 已失效）；
+// b. 新 owner 抢占成功且 fencing token 递增；
+// c. Run 数据未丢失。
 //
 // 设计原则：
-//   - 真进程 Kill 通过独立控制台项目 ContextCore.ProcessKillHarness 实现
-//     （Process.Start + Process.Kill(true)），非 SQL 重置模拟。
-//   - DB 分区通过 Testcontainers StopAsync/StartAsync 实现（数据保留，仅网络中断）。
-//   - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
+// - 真进程 Kill 通过独立控制台项目 ContextCore.ProcessKillHarness 实现
+// （Process.Start + Process.Kill(true)），非 SQL 重置模拟。
+// - DB 分区通过 Testcontainers StopAsync/StartAsync 实现（数据保留，仅网络中断）。
+// - Docker/Postgres 不可用时 Assert.Inconclusive 跳过。
 // ===========================================================================
 
 [TestClass]

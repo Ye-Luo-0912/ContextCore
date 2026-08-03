@@ -14,7 +14,7 @@ namespace ContextCore.Core.Services.Evolution;
 /// 不允许输出 <see cref="OptimizationProposalStatus.Shadow"/> /
 /// <see cref="OptimizationProposalStatus.ScopedCanary"/> /
 /// <see cref="OptimizationProposalStatus.Promoted"/> /
-/// <see cref="OptimizationProposalStatus.RolledBack"/>（这些状态由 R17 pipeline 推进）。</item>
+/// <see cref="OptimizationProposalStatus.RolledBack"/>（这些状态由 pipeline 推进）。</item>
 /// <item><see cref="DiagnoseAsync"/> 总是输出 <see cref="OptimizationProposalStatus.Validated"/>（有可执行假设时）。</item>
 /// <item><see cref="RefineProposalAsync"/> 根据新证据方向决定推进到 <see cref="OptimizationProposalStatus.ExperimentReady"/> 或
 /// 退回 <see cref="OptimizationProposalStatus.Rejected"/>；状态推进不可逆（已 Rejected 的 proposal 不再变更状态）。</item>

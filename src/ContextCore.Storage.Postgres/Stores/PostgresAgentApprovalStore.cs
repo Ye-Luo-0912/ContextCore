@@ -10,12 +10,12 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// </summary>
 /// <remarks>
 /// 设计要点（参考 <see cref="PostgresAgentRunStore"/>）：
-///   1. 表 <c>agent_run_approvals</c> 反规范化 workspace_id / approval_id / run_id / tool_call_id /
-///      tool_name / status 字段以便索引查询；完整 <see cref="AgentApproval"/> 对象保存在 <c>data jsonb</c>。
-///   2. 主键 (workspace_id, approval_id)：跨 workspace 隔离 + 同 workspace 内 approval_id 唯一。
-///   3. <see cref="CreateAsync"/> 使用 <c>INSERT ... ON CONFLICT DO NOTHING</c> 保证幂等。
-///   4. <see cref="ResolveAsync"/> 使用 expected-state CAS：
-///      <c>UPDATE ... SET status=@new WHERE status=Pending</c>；0 行受影响时抛 <see cref="InvalidOperationException"/>。
+/// 1. 表 <c>agent_run_approvals</c> 反规范化 workspace_id / approval_id / run_id / tool_call_id /
+/// tool_name / status 字段以便索引查询；完整 <see cref="AgentApproval"/> 对象保存在 <c>data jsonb</c>。
+/// 2. 主键 (workspace_id, approval_id)：跨 workspace 隔离 + 同 workspace 内 approval_id 唯一。
+/// 3. <see cref="CreateAsync"/> 使用 <c>INSERT ... ON CONFLICT DO NOTHING</c> 保证幂等。
+/// 4. <see cref="ResolveAsync"/> 使用 expected-state CAS：
+/// <c>UPDATE ... SET status=@new WHERE status=Pending</c>；0 行受影响时抛 <see cref="InvalidOperationException"/>。
 /// </remarks>
 public sealed class PostgresAgentApprovalStore : PostgresStoreBase, IAgentApprovalStore, IPersistentAgentApprovalStore
 {
@@ -292,7 +292,7 @@ LIMIT 1;
         }
 
         // 目标状态：批准 → PendingToolExecution（Actor 恢复时直接执行原 Tool）；
-        //           拒绝 → Failed（终态，设置 finished_at）。调用方可通过 targetRunState 显式指定。
+        // 拒绝 → Failed（终态，设置 finished_at）。调用方可通过 targetRunState 显式指定。
         var newState = targetRunState ?? (decision == AgentApprovalStatus.Approved
             ? AgentRunState.PendingToolExecution
             : AgentRunState.Failed);
@@ -335,7 +335,7 @@ LIMIT 1;
         }
 
         // 1b. 幂等重试：审批已裁决且 decisionRequestId 匹配时，
-        //     决策一致 → 幂等成功（不重复写入事件/推进状态）；决策相反 → 冲突。
+        // 决策一致 → 幂等成功（不重复写入事件/推进状态）；决策相反 → 冲突。
         var currentStatus = (AgentApprovalStatus)currentStatusByte;
         if (currentStatus != AgentApprovalStatus.Pending)
         {

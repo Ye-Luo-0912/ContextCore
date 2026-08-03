@@ -7,11 +7,11 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// IConflictSetLedger 的 in-memory 实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4 + R29 WP-E-1）：
-///   1. 读 API 由 <see cref="IConflictSetStore"/> 提供（QueryAsync / GetAsync / GetConflictsForCandidateAsync）。
-///   2. 写 API 由 <see cref="IConflictSetLedger"/> 提供（AppendConflictSetsAsync）；内部仍保留同步
-///      <c>AppendConflictSets</c> 供遗留调用方使用，但 materializer 已迁移到异步接口。
-///   3. 生产部署应替换为 PostgresConflictSetStore（实现同一 <see cref="IConflictSetLedger"/> 契约）。
+/// 设计原则（对齐澄清）：
+/// 1. 读 API 由 <see cref="IConflictSetStore"/> 提供（QueryAsync / GetAsync / GetConflictsForCandidateAsync）。
+/// 2. 写 API 由 <see cref="IConflictSetLedger"/> 提供（AppendConflictSetsAsync）；内部仍保留同步
+/// <c>AppendConflictSets</c> 供遗留调用方使用，但 materializer 已迁移到异步接口。
+/// 3. 生产部署应替换为 PostgresConflictSetStore（实现同一 <see cref="IConflictSetLedger"/> 契约）。
 /// </remarks>
 public sealed class InMemoryConflictSetStore : IConflictSetLedger
 {

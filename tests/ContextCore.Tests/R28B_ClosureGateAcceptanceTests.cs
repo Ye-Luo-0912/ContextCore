@@ -10,19 +10,19 @@ namespace ContextCore.Tests;
 // Authoritative Closure Gate — 验收测试（25 项）
 //
 // 覆盖范围（7 个测试类，对应规格 A-G）：
-//   A. ProviderNetworkAcceptanceTests — Provider 网络真实召回（4 项）
-//   B. PolicyResolutionAcceptanceTests — 策略快照稳定性（2 项）
-//   C. CanonicalKeyAcceptanceTests — CanonicalKey + Material 冲突检测（3 项）
-//   D. EngineAllocationAcceptanceTests — Engine 唯一分配 + dropped 保留（4 项）
-//   E. ParityAcceptanceTests — Jaccard + selected/dropped 分离（4 项）
-//   F. CutoverAndDiAcceptanceTests — Cutover + DI + cancellation（5 项）
-//   G. ProjectorAcceptanceTests — Projector 内容恢复 + session 保留（3 项）
+// A. ProviderNetworkAcceptanceTests — Provider 网络真实召回（4 项）
+// B. PolicyResolutionAcceptanceTests — 策略快照稳定性（2 项）
+// C. CanonicalKeyAcceptanceTests — CanonicalKey + Material 冲突检测（3 项）
+// D. EngineAllocationAcceptanceTests — Engine 唯一分配 + dropped 保留（4 项）
+// E. ParityAcceptanceTests — Jaccard + selected/dropped 分离（4 项）
+// F. CutoverAndDiAcceptanceTests — Cutover + DI + cancellation（5 项）
+// G. ProjectorAcceptanceTests — Projector 内容恢复 + session 保留（3 项）
 //
 // 设计原则：
-//   - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
-//   - Stub 仅用于隔离 I/O（Router/Provider/Store），不替换决策内核
-//   - 每个 [TestClass] 自包含，Stub 作为 private nested class
-//   - 共享 R28BTestHelpers（MakeEnvelope / MakeResult / MakeMaterial / MakeAllocation）
+// - 使用真实 DefaultContextDecisionRuntime + DefaultContextDecisionEngine（V2 路径）
+// - Stub 仅用于隔离 I/O（Router/Provider/Store），不替换决策内核
+// - 每个 [TestClass] 自包含，Stub 作为 private nested class
+// - 共享 TestHelpers（MakeEnvelope / MakeResult / MakeMaterial / MakeAllocation）
 // ===========================================================================
 
 // ===========================================================================
@@ -899,7 +899,7 @@ public sealed class ProjectorAcceptanceTests
         Assert.IsTrue(item.EstimatedTokens > 0, "EstimatedTokens 必须大于 0（由 truncator 重算）。");
         Assert.IsTrue(item.EstimatedTokens <= 150, "EstimatedTokens 不应超过 AllocationDecision.IncludedTokens。");
 
-        // Package 非空 + Sections 非空检查（R28-B.6 测试缺陷修复：原测试漏检 Package 结构）
+        // Package 非空 + Sections 非空检查（测试缺陷修复：原测试漏检 Package 结构）
         Assert.IsNotNull(dto.Package, "Package 必须非空（含 Sections/PackageId/EstimatedTokens）。");
         Assert.AreEqual("build-1", dto.BuildId, "BuildId 从 result.RequestId 恢复。");
         Assert.IsTrue(dto.Package.Sections.Count > 0, "Package.Sections 必须非空。");

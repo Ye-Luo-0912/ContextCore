@@ -8,22 +8,22 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// WP-D：Recovery、Canary 与 Learning Durability — 验收测试
+// Recovery、Canary 与 Learning Durability — 验收测试
 //
 // 覆盖范围：
-//   1. 迁移 SQL：pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列，
-//      learning_leases 表创建 + 必需表后缀注册。
-//   2. IPipelineRunStore.UpdateCanaryStateAsync：单真相源 CAS 写入
-//      （成功推进 / revision 不匹配返回 null / run 不存在返回 null）。
-//   3. CanaryProgressionService 单真相源写入：Advance/Rollback 后将 canary 状态并入
-//      pipeline run snapshot（CanaryPercentage / CanaryRevision / CanaryEpoch）。
-//   4. RecoverFromStoreAsync：snapshot 优先恢复（单一真相源），legacy canary_pipelines
-//      仅作为 CanaryRevision == 0 时的回退路径。
-//   5. ILearningLeaseStore（InMemory）：获取排他 / token CAS 续约 / 释放 / 过期清理。
+// 1. 迁移 SQL：pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列，
+// learning_leases 表创建 + 必需表后缀注册。
+// 2. IPipelineRunStore.UpdateCanaryStateAsync：单真相源 CAS 写入
+// （成功推进 / revision 不匹配返回 null / run 不存在返回 null）。
+// 3. CanaryProgressionService 单真相源写入：Advance/Rollback 后将 canary 状态并入
+// pipeline run snapshot（CanaryPercentage / CanaryRevision / CanaryEpoch）。
+// 4. RecoverFromStoreAsync：snapshot 优先恢复（单一真相源），legacy canary_pipelines
+// 仅作为 CanaryRevision == 0 时的回退路径。
+// 5. ILearningLeaseStore（InMemory）：获取排他 / token CAS 续约 / 释放 / 过期清理。
 //
 // 设计原则：
-//   - 复用 R28B/R29H 的 InMemoryPipelineRunStore + FakeTimeProvider 模式，不 stub 决策内核。
-//   - 迁移断言复用 R29S 的 BuildMigrationSql 文本校验模式。
+// - 复用既有测试的 InMemoryPipelineRunStore + FakeTimeProvider 模式，不 stub 决策内核。
+// - 迁移断言复用 BuildMigrationSql 文本校验模式。
 // ===========================================================================
 
 [TestClass]

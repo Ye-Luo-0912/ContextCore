@@ -13,7 +13,7 @@ namespace ContextCore.Service.Security;
 // 填充到 accessor，并在请求结束时清理 AsyncLocal。
 //
 // 中间件链顺序（重要）：
-//   ApiKeyMiddleware → WorkspaceContextMiddleware → AuditLogMiddleware → Endpoint
+// ApiKeyMiddleware → WorkspaceContextMiddleware → AuditLogMiddleware → Endpoint
 // ApiKeyMiddleware 已校验 API Key（含轮换支持，见 InMemoryApiKeyStore），
 // WorkspaceContextMiddleware 基于已认证的 ApiKeyId 解析 workspace 与角色。
 // ===========================================================================

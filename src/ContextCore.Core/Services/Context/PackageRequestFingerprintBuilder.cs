@@ -12,7 +12,7 @@ namespace ContextCore.Core;
 /// 使用长度前缀编码防止分隔符碰撞（输入值中包含 | 或 : 不会导致不同输入产生相同指纹）。
 /// 纳入时间桶（5 分钟窗口），确保 Working Memory 评分依赖的时间边界（24h/7d/30d）
 /// 跨越后缓存自动失效。 <see cref="BuildHashed"/> 输出 SHA-256 固定长度哈希，避免明文驻留。
-/// #7: semantic metadata fingerprint——request.Metadata 中仅纳入语义字段
+/// semantic metadata fingerprint——request.Metadata 中仅纳入语义字段
 /// （影响 package 模板的字段），排除操作性字段（requestId/traceId 等 per-call 标识）。
 /// 语义字段（mustHit/currentTask/tokenizerModel/anchor metadata）已显式提取，
 /// 剩余 metadata 按 denylist 排除已知操作性 key，其余视为语义字段纳入指纹。
@@ -23,7 +23,7 @@ internal static class PackageRequestFingerprintBuilder
     private const long TimeBucketSeconds = 300;
 
     /// <summary>
-    /// #7: 操作性 metadata key denylist——这些 key 是 per-call 标识/诊断字段，
+    /// 操作性 metadata key denylist——这些 key 是 per-call 标识/诊断字段，
     /// 不影响 package 模板内容（仅用于追踪/日志/响应元数据回显）。
     /// 排除后避免相同语义请求因不同 requestId/traceId 导致缓存 miss。
     /// 使用 Ordinal 比较器匹配大小写敏感的 key。
@@ -43,7 +43,7 @@ internal static class PackageRequestFingerprintBuilder
     /// <summary>
     /// 构建请求指纹：仅包含影响构建输出的字段，排除 OperationId/RequestId（per-call GUID）。
     /// 末尾追加时间桶，确保时间依赖评分跨越边界后缓存自动失效。
-    /// #7: request.Metadata 按 denylist 排除操作性 key，仅纳入语义字段。
+    /// request.Metadata 按 denylist 排除操作性 key，仅纳入语义字段。
     /// </summary>
     internal static string Build(ContextPackageRequest request, ContextPackagePolicy policy)
     {
@@ -87,7 +87,7 @@ internal static class PackageRequestFingerprintBuilder
         AppendSortedKeyValuePairs(sb, policy.SectionPriorities);
         AppendSortedKeyValuePairs(sb, policy.SectionTokenBudgets);
         AppendSortedStringDictionary(sb, policy.Metadata);
-        // #7: request.Metadata 按 denylist 排除操作性 key（requestId/traceId 等）。
+        // request.Metadata 按 denylist 排除操作性 key（requestId/traceId 等）。
         // 语义字段（mustHit/currentTask/tokenizerModel）已显式提取，anchor metadata key
         // （mode/taskKind/intent/project 等）不在 denylist 中，仍纳入指纹。
         // 响应 metadata 在 ProjectResult 中从当前 request 重建，缓存命中时使用新 request 的 metadata，
@@ -203,7 +203,7 @@ internal static class PackageRequestFingerprintBuilder
     }
 
     /// <summary>
-    /// #7: 将 request.Metadata 中语义字段（非操作性 key）按 Ordinal 排序后写入指纹。
+    /// 将 request.Metadata 中语义字段（非操作性 key）按 Ordinal 排序后写入指纹。
     /// 排除 <see cref="OperationalMetadataKeys"/> 中的 per-call 标识/诊断字段（requestId/traceId 等），
     /// 仅保留影响 package 模板的语义字段（如 mode/taskKind/intent/project/desiredOutputFormat/timeRange
     /// 及未在 denylist 中的自定义业务字段）。

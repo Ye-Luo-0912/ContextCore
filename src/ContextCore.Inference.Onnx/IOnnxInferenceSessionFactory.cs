@@ -5,23 +5,23 @@ namespace ContextCore.Inference.Onnx;
 // ===========================================================================
 // ONNX Inference Session 契约
 //
-// 目标（对齐 R29 Production Intelligence Spec §8 Workstream A）：
-//   1. 把 ONNX Runtime 的会话生命周期与推理调用从 IBatchInferenceEngine 实现中
-//      剥离出来，便于在 OnnxInferenceEngine 之外做单元测试（mock session），
-//      同时与 ContextCore.Embedding.IOnnxEmbeddingSessionFactory 模式对齐。
-//   2. 契约层不暴露 Microsoft.ML.OnnxRuntime 类型，让测试与替代实现可绕过
-//      原生库依赖（OnnxRuntime 在容器外环境加载真实模型代价较高）。
-//   3. IOnnxInferenceSession 暴露 ModelArtifactId / ModelVersion / ContentHash
-//      三个元数据属性，让 OnnxInferenceEngine 直接读取并填充
-//      IBatchInferenceEngine.ModelVersion / ContentHash / Kind。
+// 目标（对齐 Production Intelligence 规格）：
+// 1. 把 ONNX Runtime 的会话生命周期与推理调用从 IBatchInferenceEngine 实现中
+// 剥离出来，便于在 OnnxInferenceEngine 之外做单元测试（mock session），
+// 同时与 ContextCore.Embedding.IOnnxEmbeddingSessionFactory 模式对齐。
+// 2. 契约层不暴露 Microsoft.ML.OnnxRuntime 类型，让测试与替代实现可绕过
+// 原生库依赖（OnnxRuntime 在容器外环境加载真实模型代价较高）。
+// 3. IOnnxInferenceSession 暴露 ModelArtifactId / ModelVersion / ContentHash
+// 三个元数据属性，让 OnnxInferenceEngine 直接读取并填充
+// IBatchInferenceEngine.ModelVersion / ContentHash / Kind。
 //
 // 设计边界：
-//   - 推理路径仅暴露 InferBatchAsync(FeatureBatch)：FeatureBatch 是 R28-F 引入的
-//     连续 float 内存表示；字典路径（FeatureVector）由 OnnxInferenceEngine 在
-//     内部转换为 FeatureBatch 后调用本接口，避免在 session 层维护两条路径。
-//   - 工厂方法接受 OnnxInferenceEngineOptions + ModelArtifactDescriptor：
-//     前者负责张量映射与运行时参数，后者负责模型工件路径与元数据。
-//     descriptor 为 null 时退化为不带元数据的会话（仅供本地测试使用）。
+// - 推理路径仅暴露 InferBatchAsync(FeatureBatch)：FeatureBatch 为统一批处理输入
+// 连续 float 内存表示；字典路径（FeatureVector）由 OnnxInferenceEngine 在
+// 内部转换为 FeatureBatch 后调用本接口，避免在 session 层维护两条路径。
+// - 工厂方法接受 OnnxInferenceEngineOptions + ModelArtifactDescriptor：
+// 前者负责张量映射与运行时参数，后者负责模型工件路径与元数据。
+// descriptor 为 null 时退化为不带元数据的会话（仅供本地测试使用）。
 // ===========================================================================
 
 /// <summary>

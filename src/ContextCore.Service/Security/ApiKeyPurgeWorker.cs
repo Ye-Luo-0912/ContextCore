@@ -10,9 +10,9 @@ namespace ContextCore.Service.Security;
 // TimeSpan.Zero 时本 worker 不启动（由 AddContextCoreApiKeyPurgeWorker 跳过注册）。
 //
 // 设计：
-//   1. 基于 BackgroundService + PeriodicTimer（轻量，无外部依赖）。
-//   2. 异常隔离：单次清理失败不终止 worker（记录日志后继续下一周期）。
-//   3. 优雅关闭：DisposeAsync 时取消等待中的 timer。
+// 1. 基于 BackgroundService + PeriodicTimer（轻量，无外部依赖）。
+// 2. 异常隔离：单次清理失败不终止 worker（记录日志后继续下一周期）。
+// 3. 优雅关闭：DisposeAsync 时取消等待中的 timer。
 // ===========================================================================
 
 /// <summary>

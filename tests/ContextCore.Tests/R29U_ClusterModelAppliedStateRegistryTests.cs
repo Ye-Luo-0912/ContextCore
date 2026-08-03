@@ -8,12 +8,12 @@ namespace ContextCore.Tests;
 // Cluster Model Applied-State Registry —— 集群模型已应用状态注册表验收测试
 //
 // 覆盖范围：
-//   1. IModelNodeAppliedStateStore.ListBySlotAsync（InMemory）：仅返回目标槽位、
-//      按 NodeId 字典序排序、无记录/空槽位返回空列表；
-//   2. 注册表 GetSlotSummaryAsync 聚合：期望状态读取（含槽位未初始化默认值）、
-//      收敛判定（全部节点 AppliedRevision == DesiredRevision）、落后节点计数、
-//      内容哈希冲突计数、无节点时的默认摘要；
-//   3. 注册表 ListNodeStatesAsync：IsCurrent / IsBehind 标记、NodeId 排序。
+// 1. IModelNodeAppliedStateStore.ListBySlotAsync（InMemory）：仅返回目标槽位、
+// 按 NodeId 字典序排序、无记录/空槽位返回空列表；
+// 2. 注册表 GetSlotSummaryAsync 聚合：期望状态读取（含槽位未初始化默认值）、
+// 收敛判定（全部节点 AppliedRevision == DesiredRevision）、落后节点计数、
+// 内容哈希冲突计数、无节点时的默认摘要；
+// 3. 注册表 ListNodeStatesAsync：IsCurrent / IsBehind 标记、NodeId 排序。
 //
 // 不连接真实数据库：注册表只依赖 IClusterModelSlotStore + IModelNodeAppliedStateStore
 // 接口（任何存储实现均可），测试用 InMemory store + 固定槽位 fake 验证聚合语义；

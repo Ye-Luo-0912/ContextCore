@@ -9,20 +9,20 @@ namespace ContextCore.Tests;
 /// Pipeline 集成 — Engine.DecideAsync 读取 PolicyBundle 测试。
 ///
 /// 验证目标：
-///   1. 无 IPolicyRegistry 时向后兼容（hardcoded defaults，与 R18-2 行为一致）
-///   2. 有 IPolicyRegistry 时 Engine 从 bundle 读取 SafetyProfile（IsDuplicate / IsDeprecated 阻断）
-///   3. 有 IPolicyRegistry 时 Engine 从 bundle 读取 BudgetProfile（DefaultTokenBudget / DefaultTopK 作为 request 字段为空时的兜底）
-///   4. 有 IPolicyRegistry 时 Engine 从 bundle 读取 RoutingProfile（EnableModelScoring 控制 enableModel）
-///   5. per-request PolicyOverride.BudgetOverride 受限调整 Budget
-///   6. per-request PolicyOverride.RoutingOverride 受限调整 Routing.EnableModelScoring
-///   7. ModelConfidence 低于 bundle.Routing.ModelConfidenceThreshold 时回退到 DeterministicScore（验收标准 #6）
-///   8. PolicyVersion 来自 bundle.Policies.DecisionSchemaVersion
-///   9. ModelVersion 来自 bundle.Routing.ModelArtifactId（当 model 启用时）
-///  10. GetActiveBundleAsync 未激活时返回默认 bundle（DefaultPolicyBundleFactory.Create）
-///  11. SafetyProfile 不允许 per-request override（ContextPolicyOverride 不包含 SafetyOverride 字段）
-///  12. 已 blocked 候选的 BlockReasonCode 在重写时保留原值（不覆盖 adapter 预设）
-///  13. PolicyBundleId 显式提供时不调用 registry（caller 已有 bundle 引用）
-///  14. 默认 bundle 的 RoutingProfile.EnableModelScoring=false → 模型路径禁用
+/// 1. 无 IPolicyRegistry 时向后兼容（hardcoded defaults）
+/// 2. 有 IPolicyRegistry 时 Engine 从 bundle 读取 SafetyProfile（IsDuplicate / IsDeprecated 阻断）
+/// 3. 有 IPolicyRegistry 时 Engine 从 bundle 读取 BudgetProfile（DefaultTokenBudget / DefaultTopK 作为 request 字段为空时的兜底）
+/// 4. 有 IPolicyRegistry 时 Engine 从 bundle 读取 RoutingProfile（EnableModelScoring 控制 enableModel）
+/// 5. per-request PolicyOverride.BudgetOverride 受限调整 Budget
+/// 6. per-request PolicyOverride.RoutingOverride 受限调整 Routing.EnableModelScoring
+/// 7. ModelConfidence 低于 bundle.Routing.ModelConfidenceThreshold 时回退到 DeterministicScore（验收标准）
+/// 8. PolicyVersion 来自 bundle.Policies.DecisionSchemaVersion
+/// 9. ModelVersion 来自 bundle.Routing.ModelArtifactId（当 model 启用时）
+/// 10. GetActiveBundleAsync 未激活时返回默认 bundle（DefaultPolicyBundleFactory.Create）
+/// 11. SafetyProfile 不允许 per-request override（ContextPolicyOverride 不包含 SafetyOverride 字段）
+/// 12. 已 blocked 候选的 BlockReasonCode 在重写时保留原值（不覆盖 adapter 预设）
+/// 13. PolicyBundleId 显式提供时不调用 registry（caller 已有 bundle 引用）
+/// 14. 默认 bundle 的 RoutingProfile.EnableModelScoring=false → 模型路径禁用
 /// </summary>
 [TestClass]
 [TestCategory("R19")]
@@ -389,7 +389,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
     }
 
     // =========================================================================
-    // 5. ModelConfidence 低于阈值 → 回退到 DeterministicScore（验收标准 #6）
+    // 5. ModelConfidence 低于阈值 → 回退到 DeterministicScore（验收标准）
     // =========================================================================
 
     [TestMethod]

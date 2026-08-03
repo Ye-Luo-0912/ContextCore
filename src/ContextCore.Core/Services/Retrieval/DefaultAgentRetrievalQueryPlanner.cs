@@ -7,26 +7,26 @@ namespace ContextCore.Core.Services.Retrieval;
 // DefaultAgentRetrievalQueryPlanner — 受控检索查询规划器（默认实现）
 //
 // 目标：
-//   将 AgentRetrievalPlannerInput 解析为受控的 AgentRetrievalPlan。
-//   受控优先：查询数 / 必需-排除 ID / 图种子 / Token 预算全部有硬上限，
-//   绝不随对话膨胀为自由检索。
+// 将 AgentRetrievalPlannerInput 解析为受控的 AgentRetrievalPlan。
+// 受控优先：查询数 / 必需-排除 ID / 图种子 / Token 预算全部有硬上限，
+// 绝不随对话膨胀为自由检索。
 //
 // 算法：
-//   1. 必需召回 ID：从（原始任务 + 最新意图 + 未解决目标）提取显式
-//      id:/ref:/uuid: 引用（正则），去重后封顶 MaxRequiredIds。
-//   2. 排除 ID：从失败的 Tool 观察（Succeeded=false）的 Error/Result 中
-//      提取 ID 引用（"确认不存在"的实体），封顶 MaxExcludedIds。
-//   3. 图种子：优先取引号 / 书名号内显式实体锚点，不足时取长词元
-//      （长度 2..32、非停用词、非纯数字，按长度降序），封顶 MaxGraphSeeds。
-//   4. 受控查询集：原始任务（混合）→ 最新意图（关键词）→ 未解决目标（向量）
-//      → 图种子锚定查询（关键词），封顶 MaxControlledQueries 条。
-//   5. Token 预算：TurnBudget.Remaining × 1024，钳制 [512, 8192]；
-//      上一轮诊断 BudgetExceeded=true 时减半（受控回退）。
+// 1. 必需召回 ID：从（原始任务 + 最新意图 + 未解决目标）提取显式
+// id:/ref:/uuid: 引用（正则），去重后封顶 MaxRequiredIds。
+// 2. 排除 ID：从失败的 Tool 观察（Succeeded=false）的 Error/Result 中
+// 提取 ID 引用（"确认不存在"的实体），封顶 MaxExcludedIds。
+// 3. 图种子：优先取引号 / 书名号内显式实体锚点，不足时取长词元
+// （长度 2..32、非停用词、非纯数字，按长度降序），封顶 MaxGraphSeeds。
+// 4. 受控查询集：原始任务（混合）→ 最新意图（关键词）→ 未解决目标（向量）
+// → 图种子锚定查询（关键词），封顶 MaxControlledQueries 条。
+// 5. Token 预算：TurnBudget.Remaining × 1024，钳制 [512, 8192]；
+// 上一轮诊断 BudgetExceeded=true 时减半（受控回退）。
 //
 // 设计原则：
-//   - 纯内存、确定性、幂等：相同输入产生相同计划（无随机性、无外部状态）。
-//   - 不调用任何存储 / 检索执行器；只输出计划，执行由调用方驱动。
-//   - 空输入仍产出受控计划（空查询集 + 最小预算），绝不抛异常。
+// - 纯内存、确定性、幂等：相同输入产生相同计划（无随机性、无外部状态）。
+// - 不调用任何存储 / 检索执行器；只输出计划，执行由调用方驱动。
+// - 空输入仍产出受控计划（空查询集 + 最小预算），绝不抛异常。
 // ===========================================================================
 
 /// <summary>

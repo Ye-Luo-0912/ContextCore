@@ -12,12 +12,12 @@ namespace ContextCore.Service.Tests;
 /// RelationReconciliationWorker 单元测试。
 /// 使用 fake IRelationOutboxStore / IRelationStore / IRelationProjectionWriter 验证：
 /// <list type="bullet">
-///   <item>Enabled=false → worker 立即退出，不调用任何 store。</item>
-///   <item>IRelationOutboxStore 未注册 → worker 优雅退出（no-op）。</item>
-///   <item>Relation 已落库且字段匹配 → MarkAppliedAsync 被调用。</item>
-///   <item>Relation 缺失 → projectionWriter.WriteAsync 回放 → MarkAppliedAsync。</item>
-///   <item>Payload 为 null → MarkFailedAsync（无法回放）。</item>
-///   <item>RenewHeartbeatAsync 返回 false → 处理中止（不调用 MarkApplied/MarkFailed）。</item>
+/// <item>Enabled=false → worker 立即退出，不调用任何 store。</item>
+/// <item>IRelationOutboxStore 未注册 → worker 优雅退出（no-op）。</item>
+/// <item>Relation 已落库且字段匹配 → MarkAppliedAsync 被调用。</item>
+/// <item>Relation 缺失 → projectionWriter.WriteAsync 回放 → MarkAppliedAsync。</item>
+/// <item>Payload 为 null → MarkFailedAsync（无法回放）。</item>
+/// <item>RenewHeartbeatAsync 返回 false → 处理中止（不调用 MarkApplied/MarkFailed）。</item>
 /// </list>
 /// </summary>
 [TestClass]

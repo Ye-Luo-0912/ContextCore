@@ -7,11 +7,11 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 /// IUtilityLedger 的 in-memory 实现。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐澄清 #4 + R29 WP-E-1）：
-///   1. 读 API 由 <see cref="IUtilityLedgerStore"/> 提供（QueryAsync / GetLatestEntryAsync / GetExpertContributionsAsync）。
-///   2. 写 API 由 <see cref="IUtilityLedger"/> 提供（AppendEntriesAsync）；内部仍保留同步
-///      <c>AppendEntries</c> 供遗留调用方使用，但 materializer 已迁移到异步接口。
-///   3. 生产部署应替换为 PostgresUtilityLedgerStore（实现同一 <see cref="IUtilityLedger"/> 契约）。
+/// 设计原则（对齐澄清）：
+/// 1. 读 API 由 <see cref="IUtilityLedgerStore"/> 提供（QueryAsync / GetLatestEntryAsync / GetExpertContributionsAsync）。
+/// 2. 写 API 由 <see cref="IUtilityLedger"/> 提供（AppendEntriesAsync）；内部仍保留同步
+/// <c>AppendEntries</c> 供遗留调用方使用，但 materializer 已迁移到异步接口。
+/// 3. 生产部署应替换为 PostgresUtilityLedgerStore（实现同一 <see cref="IUtilityLedger"/> 契约）。
 /// </remarks>
 public sealed class InMemoryUtilityLedgerStore : IUtilityLedger
 {

@@ -8,30 +8,30 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // DefaultSelectedCandidateHydrator — Selected 候选正文批量 hydrator 默认实现
 //
 // 目标：
-//   补齐 Late Hydration 链路最后一环。Provider 在 Recall 阶段使用 IncludeContent=false
-//   只返回 metadata（避免加载所有候选正文），Engine 选出最终 N 个 SelectedEnvelopes 后，
-//   由本实现按 (EntityKind, WorkspaceId, CollectionId) 分组，复用
-//   IContextStoreBatchLookup / IMemoryStoreBatchLookup 批量读取正文，
-//   仅对 Selected IDs 做 I/O，避免对未选中候选做无用读取。
+// 补齐 Late Hydration 链路最后一环。Provider 在 Recall 阶段使用 IncludeContent=false
+// 只返回 metadata（避免加载所有候选正文），Engine 选出最终 N 个 SelectedEnvelopes 后，
+// 由本实现按 (EntityKind, WorkspaceId, CollectionId) 分组，复用
+// IContextStoreBatchLookup / IMemoryStoreBatchLookup 批量读取正文，
+// 仅对 Selected IDs 做 I/O，避免对未选中候选做无用读取。
 //
 // 设计原则：
-//   1. 接口可选注入：IContextStoreBatchLookup / IMemoryStoreBatchLookup 任一为 null 时，
-//      对应 EntityKind 跳过 hydrate（Material.Content 保持空，Projector 降级为摘要）。
-//   2. 不修改 Envelope 决策字段，仅填充 WorkingSet.Materials 中 Selected 候选的 Content。
-//   3. 已 hydrate 的 Material（Content 非空）跳过，避免重复 I/O。
-//   4. Constraint / 其他 EntityKind 不需要 hydrate（Constraint Provider 已在 Recall 阶段
-//      从 IConstraintStore 加载完整 Content，IncludeContent=false 不适用）。
-//   5. 批量读取按 (WorkspaceId, CollectionId) 分组，避免跨 collection 混查；
-//      PostgresContextStore.BatchGetAsync 按 (workspaceId, collectionId, ids[]) 过滤。
+// 1. 接口可选注入：IContextStoreBatchLookup / IMemoryStoreBatchLookup 任一为 null 时，
+// 对应 EntityKind 跳过 hydrate（Material.Content 保持空，Projector 降级为摘要）。
+// 2. 不修改 Envelope 决策字段，仅填充 WorkingSet.Materials 中 Selected 候选的 Content。
+// 3. 已 hydrate 的 Material（Content 非空）跳过，避免重复 I/O。
+// 4. Constraint / 其他 EntityKind 不需要 hydrate（Constraint Provider 已在 Recall 阶段
+// 从 IConstraintStore 加载完整 Content，IncludeContent=false 不适用）。
+// 5. 批量读取按 (WorkspaceId, CollectionId) 分组，避免跨 collection 混查；
+// PostgresContextStore.BatchGetAsync 按 (workspaceId, collectionId, ids[]) 过滤。
 //
 // 链路位置：
-//   Recall（IncludeContent=false）→ Merge → Score → Allocate（SelectedEnvelopes）
-//   → ISelectedCandidateHydrator.HydrateAsync（本实现）
-//   → Projector（消费已 hydrate 的 Material）。
+// Recall（IncludeContent=false）→ Merge → Score → Allocate（SelectedEnvelopes）
+// → ISelectedCandidateHydrator.HydrateAsync（本实现）
+// → Projector（消费已 hydrate 的 Material）。
 //
 // 本实现额外返回 HydrationRepairDecision（HydrationResult.Repair），携带 hydrate 后
-//   真实的 selected / dropped 候选 ID、更新的 AllocationDecisions、精确 token 总数与失败明细，
-//   让 Caller 重建整个 ContextDecisionResult（而非仅替换 WorkingSet）。
+// 真实的 selected / dropped 候选 ID、更新的 AllocationDecisions、精确 token 总数与失败明细，
+// 让 Caller 重建整个 ContextDecisionResult（而非仅替换 WorkingSet）。
 // ===========================================================================
 
 /// <summary>
@@ -342,8 +342,8 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
             var section = DecisionOutcomeRecomputer.ResolveSection(envelope);
 
             // 判断候选是否被 dropped：
-            //   1. 被预算修复裁剪（key 在 droppedKeys 中）
-            //   2. 需 hydrate 但失败（key 在 candidateKeys 中但不在 materialUpdates 中）
+            // 1. 被预算修复裁剪（key 在 droppedKeys 中）
+            // 2. 需 hydrate 但失败（key 在 candidateKeys 中但不在 materialUpdates 中）
             bool isDropped = false;
             if (droppedKeys is not null && droppedKeys.Contains(key))
             {
@@ -401,7 +401,7 @@ public sealed class DefaultSelectedCandidateHydrator : ISelectedCandidateHydrato
         };
     }
 
-    // section 解析统一委托 DecisionOutcomeRecomputer.ResolveSection（WP-E 单一真相源，
+    // section 解析统一委托 DecisionOutcomeRecomputer.ResolveSection（单一真相源，
     // 与 UnifiedRuntimeDefaults 共享同一份实现，消除三处重复 switch）。
 
     /// <summary>

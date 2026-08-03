@@ -44,7 +44,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
     }
 
     /// <summary>
-    /// 读取关系列表，带 mtime 缓存。P0-fix: 读后复核 mtime，避免在读取期间文件被替换时缓存脏数据。
+    /// 读取关系列表，带 mtime 缓存。读后复核 mtime，避免在读取期间文件被替换时缓存脏数据。
     /// </summary>
     private async Task<IReadOnlyList<ContextRelation>> ReadRelationsCachedAsync(
         string path,
@@ -96,7 +96,7 @@ public sealed class FileRelationStore : IRelationStore, IRelationStreamStore, IR
         _relationCache.TryRemove(path, out _);
     }
 
-    /// <summary>P0-fix: 防止缓存无限增长；超过上限时清空（本地开发场景，简单策略）。</summary>
+    /// <summary>防止缓存无限增长；超过上限时清空（本地开发场景，简单策略）。</summary>
     private void EnforceCacheBound()
     {
         if (_relationCache.Count >= MaxCacheEntries)

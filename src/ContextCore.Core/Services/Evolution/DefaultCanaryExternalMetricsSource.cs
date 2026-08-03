@@ -7,20 +7,20 @@ namespace ContextCore.Core.Services.Evolution;
 // 默认的外部指标采集源（ICanaryExternalMetricsSource 实现）。
 //
 // 目标：
-//   1. 提供 RegisterTaskResult / RegisterToolResult / RegisterRepairResult /
-//      RegisterSafetyEvent / RegisterUserFeedback / RegisterContextEvaluation /
-//      RegisterCost 等方法，供外部信号源（Tool 执行结果、用户反馈、安全审计、
-//      评估标注集、计费/用量仪表）调用注册结果。
-//   2. CollectAsync 按 runId 聚合窗口内的累计计数，计算比率与均值。
-//   3. 未采集的指标字段返回 null（CanaryProgressionService 优雅降级跳过回滚检查）。
+// 1. 提供 RegisterTaskResult / RegisterToolResult / RegisterRepairResult /
+// RegisterSafetyEvent / RegisterUserFeedback / RegisterContextEvaluation /
+// RegisterCost 等方法，供外部信号源（Tool 执行结果、用户反馈、安全审计、
+// 评估标注集、计费/用量仪表）调用注册结果。
+// 2. CollectAsync 按 runId 聚合窗口内的累计计数，计算比率与均值。
+// 3. 未采集的指标字段返回 null（CanaryProgressionService 优雅降级跳过回滚检查）。
 //
 // 设计边界：
-//   - 本实现为进程内 in-memory 计数器（Singleton），不跨实例持久化。
-//     HA 场景下应替换为 PostgresCanaryMetricsAggregator 的全局聚合视图。
-//   - ToolSuccessRate 优先从 IToolDispatchJournal 验证（若注入），但累加器仍由
-//     RegisterToolResult 维护（Journal 无 ListAsync 接口，无法跨 runId 批量查询）。
-//   - 窗口语义：本实现维护的是"自 Reset 以来的累计计数"，CollectAsync 返回的
-//     WindowStart/WindowEnd 反映首条/末条样本的时间戳。
+// - 本实现为进程内 in-memory 计数器（Singleton），不跨实例持久化。
+// HA 场景下应替换为 PostgresCanaryMetricsAggregator 的全局聚合视图。
+// - ToolSuccessRate 优先从 IToolDispatchJournal 验证（若注入），但累加器仍由
+// RegisterToolResult 维护（Journal 无 ListAsync 接口，无法跨 runId 批量查询）。
+// - 窗口语义：本实现维护的是"自 Reset 以来的累计计数"，CollectAsync 返回的
+// WindowStart/WindowEnd 反映首条/末条样本的时间戳。
 // ===========================================================================
 
 /// <summary>

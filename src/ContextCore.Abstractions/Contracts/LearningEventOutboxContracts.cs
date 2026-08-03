@@ -4,15 +4,15 @@ namespace ContextCore.Abstractions;
 // Learning Loop Durable Outbox 契约层
 //
 // 目标（修复 Learning Loop 静默丢训练数据问题）：
-//   1. 定义 LearningEventOutboxRecord：持久化的 Decision 物化事件，承载完整 payload。
-//   2. 定义 ILearningEventOutboxStore：outbox 存储抽象（Enqueue / AcquirePending / Ack / DeadLetter）。
-//   3. 定义 LearningMaterializationMetricsSnapshot：可观测性指标快照。
+// 1. 定义 LearningEventOutboxRecord：持久化的 Decision 物化事件，承载完整 payload。
+// 2. 定义 ILearningEventOutboxStore：outbox 存储抽象（Enqueue / AcquirePending / Ack / DeadLetter）。
+// 3. 定义 LearningMaterializationMetricsSnapshot：可观测性指标快照。
 //
 // 设计原则：
-//   1. 复用 RelationOutboxStore 的 lease + retry + CAS 模式（SELECT FOR UPDATE SKIP LOCKED）。
-//   2. 契约层不引入存储 I/O；持久化由 IPersistent 标记接口区分。
-//   3. Postgres provider 注册此接口；FileSystem/InMemory 不注册——Dispatcher 检测到 null
-//      时回退到 in-memory bounded Channel + fixed worker（非持久但消除 Task.Run）。
+// 1. 复用 RelationOutboxStore 的 lease + retry + CAS 模式（SELECT FOR UPDATE SKIP LOCKED）。
+// 2. 契约层不引入存储 I/O；持久化由 IPersistent 标记接口区分。
+// 3. Postgres provider 注册此接口；FileSystem/InMemory 不注册——Dispatcher 检测到 null
+// 时回退到 in-memory bounded Channel + fixed worker（非持久但消除 Task.Run）。
 // ===========================================================================
 
 /// <summary>

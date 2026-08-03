@@ -8,21 +8,21 @@ namespace ContextCore.Tests;
 // 行为测试 — DecisionEngine 基础设施
 //
 // 覆盖范围（10 个测试类）：
-//   1. RetrievalResultProjectorTests — Projector 投影 + Material sidecar 恢复 + AllocationDecisions 消费
-//   2. PackageResultProjectorTests — Projector 投影 + section budget 构建 + IsTruncated 标记
-//   3. ShadowGateTests — Parity 验收门控（Hard/Diagnostic/Divergent）
-//   4. DecisionExperimentPlaneTests — Parity 对比 + Jaccard 数学（P0-4 回归）
-//   5. CutoverControllerTests — 流量比例切换 + 稳定哈希
-//   6. CutoverConfigurationTests — 配置默认值 + 环境变量解析
-//   7. InMemoryExperimentRecorderTests — 持久化抽象默认实现（P0-9）
-//   8. DecisionExperimentPlaneIntegrationTests — RecordShadowReport + Sampled shadow + 历史评估
-//   9. ReplayFixtureTests — FromReport vs FromShadowReport（WorkingSet/V2Result 传播）
-//  10. ShadowDecisionRuntimeTests — Shadow tee 编排 + Parity 报告
+// 1. RetrievalResultProjectorTests — Projector 投影 + Material sidecar 恢复 + AllocationDecisions 消费
+// 2. PackageResultProjectorTests — Projector 投影 + section budget 构建 + IsTruncated 标记
+// 3. ShadowGateTests — Parity 验收门控（Hard/Diagnostic/Divergent）
+// 4. DecisionExperimentPlaneTests — Parity 对比 + Jaccard 数学（回归）
+// 5. CutoverControllerTests — 流量比例切换 + 稳定哈希
+// 6. CutoverConfigurationTests — 配置默认值 + 环境变量解析
+// 7. InMemoryExperimentRecorderTests — 持久化抽象默认实现
+// 8. DecisionExperimentPlaneIntegrationTests — RecordShadowReport + Sampled shadow + 历史评估
+// 9. ReplayFixtureTests — FromReport vs FromShadowReport（WorkingSet/V2Result 传播）
+// 10. ShadowDecisionRuntimeTests — Shadow tee 编排 + Parity 报告
 //
 // 设计原则：
-//   - 每个 [TestClass] 自包含，无共享 fixture（与现有 DecisionEngineTests 模式一致）
-//   - 共享 helper（MakeEnvelope / MakeResult / MakeParityReport）放在 file-level internal static class
-//   - 重点回归 P0-4 / P0-7 / P0-8 / P0-9 修复点
+// - 每个 [TestClass] 自包含，无共享 fixture（与现有 DecisionEngineTests 模式一致）
+// - 共享 helper（MakeEnvelope / MakeResult / MakeParityReport）放在 file-level internal static class
+// - 重点回归 / / / 修复点
 // ===========================================================================
 
 internal static class R28BTestHelpers
@@ -564,7 +564,7 @@ public sealed class ShadowGateTests
 }
 
 // ===========================================================================
-// 4. DecisionExperimentPlaneTests — Parity 对比 + Jaccard 数学（P0-4 回归）
+// 4. DecisionExperimentPlaneTests — Parity 对比 + Jaccard 数学（回归）
 // ===========================================================================
 
 [TestClass]
@@ -882,7 +882,7 @@ public sealed class CutoverConfigurationTests
 }
 
 // ===========================================================================
-// 7. InMemoryExperimentRecorderTests — P0-9 持久化抽象默认实现
+// 7. InMemoryExperimentRecorderTests — 持久化抽象默认实现
 // ===========================================================================
 
 [TestClass]
@@ -985,7 +985,7 @@ public sealed class InMemoryExperimentRecorderTests
 }
 
 // ===========================================================================
-// 8. DecisionExperimentPlaneIntegrationTests — P0-9 集成入口
+// 8. DecisionExperimentPlaneIntegrationTests — 集成入口
 // ===========================================================================
 
 [TestClass]
@@ -1227,7 +1227,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 }
 
 // ===========================================================================
-// 9. ReplayFixtureTests — P0-9 完整重放数据传播
+// 9. ReplayFixtureTests — 完整重放数据传播
 // ===========================================================================
 
 [TestClass]

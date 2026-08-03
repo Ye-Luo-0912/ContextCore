@@ -8,15 +8,15 @@ namespace ContextCore.Tests;
 /// Retrieval 候选适配器验证。
 ///
 /// 验证目标：
-///   1. ContextRetrievalCandidate → ContextCandidateEnvelope 字段映射正确
-///   2. CandidateId 为空时回退到 SourceId
-///   3. Kind=MemoryItem → Source=WorkingMemory；Kind=ContextItem → Source=Lexical
-///   4. Metadata["source"] 可覆盖默认 Source 推断
-///   5. Metadata["mandatory"]=true → Safety.IsMandatory=true
-///   6. Metadata["lifecycleStatus"]=superseded → Safety.IsSuperseded=true
-///   7. SourceRefs → ProvenanceRefs（封装为 EvidenceRef）
-///   8. 批量转换 + 整体 ToDecisionRequest
-///   9. 不破坏现有 ContextRetrievalCandidate 类型（仅做适配，不修改）
+/// 1. ContextRetrievalCandidate → ContextCandidateEnvelope 字段映射正确
+/// 2. CandidateId 为空时回退到 SourceId
+/// 3. Kind=MemoryItem → Source=WorkingMemory；Kind=ContextItem → Source=Lexical
+/// 4. Metadata["source"] 可覆盖默认 Source 推断
+/// 5. Metadata["mandatory"]=true → Safety.IsMandatory=true
+/// 6. Metadata["lifecycleStatus"]=superseded → Safety.IsSuperseded=true
+/// 7. SourceRefs → ProvenanceRefs（封装为 EvidenceRef）
+/// 8. 批量转换 + 整体 ToDecisionRequest
+/// 9. 不破坏现有 ContextRetrievalCandidate 类型（仅做适配，不修改）
 /// </summary>
 [TestClass]
 [TestCategory("R18")]

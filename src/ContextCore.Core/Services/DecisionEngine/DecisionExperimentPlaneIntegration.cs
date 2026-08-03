@@ -80,21 +80,21 @@ public sealed class InMemoryExperimentRecorder : IExperimentRecorder
 // Legacy Removal + DecisionExperimentPlane 长期保留
 //
 // 目标（B-5 阶段：V2 成为唯一权威路径，Legacy 代码保留但默认停用）：
-//   1. DecisionExperimentPlaneIntegration：长期保留的实验平面集成入口。
-//      提供 sampled shadow（抽样校验）、replay fixture 存储、CI 验收 hook。
-//   2. CutoverConfiguration：从配置读取默认 cutover 比例（默认 0% = Legacy only（Closure Gate 通过前安全默认））。
-//   3. LegacyCodeMarkedDeprecated：标记 Legacy 路径为 [Obsolete]（不物理删除，
-//      保留用于回滚和 DecisionExperimentPlane 的 parity 对比基线）。
+// 1. DecisionExperimentPlaneIntegration：长期保留的实验平面集成入口。
+// 提供 sampled shadow（抽样校验）、replay fixture 存储、CI 验收 hook。
+// 2. CutoverConfiguration：从配置读取默认 cutover 比例（默认 0% = Legacy only（Closure Gate 通过前安全默认））。
+// 3. LegacyCodeMarkedDeprecated：标记 Legacy 路径为 [Obsolete]（不物理删除，
+// 保留用于回滚和 DecisionExperimentPlane 的 parity 对比基线）。
 //
 // 设计原则：
-//   1. B-5 不物理删除 Legacy 代码（HybridContextRetriever / BasicContextPackageBuilder）。
-//      原因：DecisionExperimentPlane 需要 Legacy 作为 parity 基线；
-//      回滚安全需要 Legacy 代码可用。
-//   2. CutoverController 默认 0%（Legacy only），可通过配置降级。
-//   3. DecisionExperimentPlane 作为长期基础设施：
-//      - Sampled shadow：即使 V2 已权威，仍按采样率执行 Legacy + parity 对比
-//      - Replay fixture：存储历史 parity 报告供回归分析
-//      - CI 验收 hook：ShadowGateEvaluator 输出 CutoverReadinessAssessment
+// 1. B-5 不物理删除 Legacy 代码（HybridContextRetriever / BasicContextPackageBuilder）。
+// 原因：DecisionExperimentPlane 需要 Legacy 作为 parity 基线；
+// 回滚安全需要 Legacy 代码可用。
+// 2. CutoverController 默认 0%（Legacy only），可通过配置降级。
+// 3. DecisionExperimentPlane 作为长期基础设施：
+// - Sampled shadow：即使 V2 已权威，仍按采样率执行 Legacy + parity 对比
+// - Replay fixture：存储历史 parity 报告供回归分析
+// - CI 验收 hook：ShadowGateEvaluator 输出 CutoverReadinessAssessment
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ public sealed class CutoverConfiguration
     /// <summary>环境变量名：控制 V2 流量百分比（0-100）。</summary>
     public const string CutoverPercentageEnvVar = "CC_CUTOVER_PERCENTAGE";
 
-    /// <summary>默认 cutover 百分比（R28-B.6 Closure Gate: 0 = Legacy only，直到 Closure Gate 通过）。</summary>
+    /// <summary>默认 cutover 百分比（Closure Gate: 0 = Legacy only，直到 Closure Gate 通过）。</summary>
     /// <remarks>
     /// 曾设为 100（V2 only），但 B.6 Closure Gate 要求在验收测试通过前
     /// 默认走 Legacy，避免未完成的 Provider 网络导致空结果。
@@ -179,13 +179,13 @@ public sealed class CutoverConfiguration
 /// </summary>
 /// <remarks>
 /// B-5 后 V2 已权威，但 DecisionExperimentPlane 仍作为长期基础设施保留：
-///   1. Sampled shadow：按采样率执行 Legacy + parity 对比（监控 V2 漂移）
-///   2. Replay fixture 存储：历史 parity 报告供回归分析
-///   3. CI 验收 hook：ShadowGateEvaluator 输出 CutoverReadinessAssessment
+/// 1. Sampled shadow：按采样率执行 Legacy + parity 对比（监控 V2 漂移）
+/// 2. Replay fixture 存储：历史 parity 报告供回归分析
+/// 3. CI 验收 hook：ShadowGateEvaluator 输出 CutoverReadinessAssessment
 ///
 /// 与 B-2~B-4 的区别：
-///   - B-2~B-4：Shadow 是切换前的验收手段
-///   - B-5：Shadow 是切换后的持续监控手段（detect V2 drift over time）
+/// - B-2~B-4：Shadow 是切换前的验收手段
+/// - B-5：Shadow 是切换后的持续监控手段（detect V2 drift over time）
 /// </remarks>
 public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 {
@@ -217,7 +217,7 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 
     // 可靠性计数器 + dead-letter。
     // _droppedCount：入队失败（writer 已完成 / bounded 满 DropOldest 时 TryWrite 仍返回 true，
-    //   仅在 writer 完成后 TryWrite 返回 false 时累加）。
+    // 仅在 writer 完成后 TryWrite 返回 false 时累加）。
     // _failedWriteCount：重试 3 次后仍写入失败的 Record 事件数。
     // _processedCount：成功落盘的 Record 事件数。
     private int _droppedCount;
@@ -228,10 +228,10 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 
     // sequence-aware flush。
     // _sequenceCounter：单调递增的事件序号（Enqueue 时 Interlocked.Increment 分配）。
-    //   让 FlushResult 能返回 AcceptedSequence（sentinel 序号）+ LastPersistedSequence（最后成功落盘序号），
-    //   调用方可据此判断 flush 是否覆盖了目标序号之前所有事件。
+    // 让 FlushResult 能返回 AcceptedSequence（sentinel 序号）+ LastPersistedSequence（最后成功落盘序号），
+    // 调用方可据此判断 flush 是否覆盖了目标序号之前所有事件。
     // _lastPersistedSequence：consumer 最后一次成功 RecordAsync 的事件序号；
-    //   失败/丢弃事件不更新此值，使 LastPersistedSequence 准确反映"已落盘到哪个序号"。
+    // 失败/丢弃事件不更新此值，使 LastPersistedSequence 准确反映"已落盘到哪个序号"。
     private long _sequenceCounter;
     private long _lastPersistedSequence;
 
@@ -372,7 +372,7 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
         return (hash % 10000) < (_configuration.ShadowSampleRate * 10000);
     }
 
-    /// <summary>记录 parity fixture（仅聚合标量；P0-9 前的旧入口）。</summary>
+    /// <summary>记录 parity fixture（仅聚合标量； 前的旧入口）。</summary>
     /// <remarks>
     /// 非阻塞入队，立即返回。后台 consumer 异步调用 _recorder.RecordAsync。
     /// 调用方若需保证落盘可见，应随后调用 <see cref="FlushAsync"/> 或使用读取入口
@@ -489,9 +489,9 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// 与 <see cref="LiveReexecutionComparisonAsync"/> 的差异：
-    ///   - DecisionReplay 不重新解析 Policy、不调用 Router、不执行 Providers、不访问 Store；
-    ///   - 输入完全来自 fixture 的 StoredWorkingSet + StoredPolicySnapshot；
-    ///   - 直接调用 <see cref="IContextDecisionEngine.DecideAsync"/>，验证纯决策内核的可重现性。
+    /// - DecisionReplay 不重新解析 Policy、不调用 Router、不执行 Providers、不访问 Store；
+    /// - 输入完全来自 fixture 的 StoredWorkingSet + StoredPolicySnapshot；
+    /// - 直接调用 <see cref="IContextDecisionEngine.DecideAsync"/>，验证纯决策内核的可重现性。
     /// Engine 未注入（构造时 engine=null）时抛 <see cref="InvalidOperationException"/>。
     /// </remarks>
     /// <param name="fixture">要重放的 fixture（必须携带 StoredWorkingSet + StoredPolicySnapshot）。</param>
@@ -520,12 +520,12 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// 流程：
-    ///   1. 从 fixture.StoredProviderOutputs 合并所有 Provider 的 Envelopes + Materials。
-    ///      使用 <see cref="ICanonicalCandidateMerger"/> 执行正式合并逻辑
-    ///      （冲突检测：相同 CanonicalCandidateKey + 不同 content hash → 抛异常；
-    ///       相同 key + 相同 content hash → 合并 SourceRefs），而非后写覆盖。
-    ///   2. 用合并后的候选集合 + StoredPolicySnapshot 构建 Engine 请求。
-    ///   3. 调用 <see cref="IContextDecisionEngine.DecideAsync"/>，跳过 Provider/Router/Store。
+    /// 1. 从 fixture.StoredProviderOutputs 合并所有 Provider 的 Envelopes + Materials。
+    /// 使用 <see cref="ICanonicalCandidateMerger"/> 执行正式合并逻辑
+    /// （冲突检测：相同 CanonicalCandidateKey + 不同 content hash → 抛异常；
+    /// 相同 key + 相同 content hash → 合并 SourceRefs），而非后写覆盖。
+    /// 2. 用合并后的候选集合 + StoredPolicySnapshot 构建 Engine 请求。
+    /// 3. 调用 <see cref="IContextDecisionEngine.DecideAsync"/>，跳过 Provider/Router/Store。
     /// 与 <see cref="DecisionReplayAsync"/> 的差异：DecisionReplay 直接用 StoredWorkingSet；
     /// ExpertReplay 从多个 Provider 快照重建 WorkingSet（验证 Provider 输出快照的可重放性）。
     /// </remarks>
@@ -548,9 +548,9 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 
         // 使用正式合并逻辑（ICanonicalCandidateMerger），而非后写覆盖。
         // 将 ProviderOutputSnapshot 转换为 ExpertExecutionResult，委托给合并器执行：
-        //   - 相同 CanonicalCandidateKey + 相同 content hash → 合并 SourceRefs（union）；
-        //   - 相同 key + 不同 content hash → 抛 InvalidOperationException（fail-fast，检测冲突）；
-        //   - 不同 EntityVersion → CanonicalKey 自然不同，两个 Material 都保留。
+        // - 相同 CanonicalCandidateKey + 相同 content hash → 合并 SourceRefs（union）；
+        // - 相同 key + 不同 content hash → 抛 InvalidOperationException（fail-fast，检测冲突）；
+        // - 不同 EntityVersion → CanonicalKey 自然不同，两个 Material 都保留。
         // 这与生产路径（DefaultContextDecisionRuntime 调用 _canonicalMerger.Merge）语义一致，
         // 确保 replay 合并结果与生产一致，不因后写覆盖掩盖冲突。
         var expertOutputs = fixture.StoredProviderOutputs
@@ -613,12 +613,12 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// 原 <c>ReplayFixtureAsync</c> 重命名为 <c>LiveReexecutionComparisonAsync</c>，
     /// 以区分 <see cref="DecisionReplayAsync"/>（纯 Engine replay）与 <see cref="ExpertReplayAsync"/>（Provider 快照 replay）。
     /// 流程：
-    ///   1. 按 fixtureId 从 recorder 加载 ReplayFixture。
-    ///   2. 若 fixture 携带 WorkingSet + V2Result（P0-9 增强字段），使用 WorkingSet 作为 SeedCandidates
-    ///      重新执行 V2 决策。
-    ///   3. 用 DecisionExperimentPlane.Compare 对比存储的 V2Result 与重放结果，产出 ParityReport。
-    ///   4. fixture 不含完整重放数据（WorkingSet/V2Result 为 null）时返回 null，调用方可降级到
-    ///      EvaluateHistoricalFixtures 的标量路径。
+    /// 1. 按 fixtureId 从 recorder 加载 ReplayFixture。
+    /// 2. 若 fixture 携带 WorkingSet + V2Result（增强字段），使用 WorkingSet 作为 SeedCandidates
+    /// 重新执行 V2 决策。
+    /// 3. 用 DecisionExperimentPlane.Compare 对比存储的 V2Result 与重放结果，产出 ParityReport。
+    /// 4. fixture 不含完整重放数据（WorkingSet/V2Result 为 null）时返回 null，调用方可降级到
+    /// EvaluateHistoricalFixtures 的标量路径。
     /// </remarks>
     /// <param name="fixtureId">要重放的 fixture ID。</param>
     /// <param name="v2Runtime">V2 pure Runtime，用于重放决策。null 时返回 null（仅离线扫描 fixture 元数据）。</param>
@@ -783,10 +783,10 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// 入队前为事件分配单调递增的 Sequence（Interlocked.Increment），
     /// 让 FlushResult 能返回 AcceptedSequence + LastPersistedSequence，实现 sequence-aware flush。
     /// bounded channel（Wait 模式）下：TryWrite 在以下情况返回 false：
-    ///   1. 队列已满（consumer 跟不上写入速率）— R28-B.7 P1-6 修复：DropOldest 模式下
-    ///      TryWrite 永远返回 true（内部静默丢弃最旧事件），DroppedCount 不可信；
-    ///      Wait 模式下 TryWrite 返回 false，此处据此递增 _droppedCount，使指标准确；
-    ///   2. writer 已完成（DisposeAsync 后）— shutdown 后入队失败，计数并丢弃。
+    /// 1. 队列已满（consumer 跟不上写入速率）— 修复：DropOldest 模式下
+    /// TryWrite 永远返回 true（内部静默丢弃最旧事件），DroppedCount 不可信；
+    /// Wait 模式下 TryWrite 返回 false，此处据此递增 _droppedCount，使指标准确；
+    /// 2. writer 已完成（DisposeAsync 后）— shutdown 后入队失败，计数并丢弃。
     /// 两种情况均累加 _droppedCount 并静默丢弃，不阻塞调用方，不抛异常
     /// （避免 shutdown 后或队列满时调用 RecordFixture 导致进程崩溃）。
     /// </remarks>

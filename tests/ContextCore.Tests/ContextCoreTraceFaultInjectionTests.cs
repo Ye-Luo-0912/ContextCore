@@ -11,10 +11,10 @@ namespace ContextCore.Tests;
 /// <summary>
 /// Trace 写入与正式返回解耦的 fault injection 测试。
 ///
-/// 验证目标（用户指令 #3）：
-///   "Trace 写入与正式返回解耦的 fault injection 测试
-///    (latency 100ms / exception / queue full / shutdown / disk full / Postgres 不可用)
-///    正式请求结果必须保持不变。"
+/// 验证目标（用户指令）：
+/// "Trace 写入与正式返回解耦的 fault injection 测试
+/// (latency 100ms / exception / queue full / shutdown / disk full / Postgres 不可用)
+/// 正式请求结果必须保持不变。"
 ///
 /// 验证范围：
 /// 1. IRuntimeCandidateTraceSink (PackageTraceRecorder 路径) — latency / exception / disk full
@@ -26,8 +26,8 @@ namespace ContextCore.Tests;
 /// - queue full: 当前 IRuntimeCandidateTraceSink 为同步 lock 实现，无 bounded queue
 /// - shutdown during flush: 当前 sink Dispose 仅 flush StreamWriter，无残余队列 drain
 /// - Postgres 不可用: trace sink 无 Postgres 实现；PostgresDecisionTraceStore/PostgresRetrievalTraceStore
-///   的故障路径已在 IDecisionTraceStore/IRetrievalTraceStore 的 fault injection exception 测试中通过
-///   throwing fake 覆盖（任何异常类型包括 Npgsql.NpgsqlException 均被 fail-open catch 吞掉）。
+/// 的故障路径已在 IDecisionTraceStore/IRetrievalTraceStore 的 fault injection exception 测试中通过
+/// throwing fake 覆盖（任何异常类型包括 Npgsql.NpgsqlException 均被 fail-open catch 吞掉）。
 /// </summary>
 [TestClass]
 [TestCategory("Trace")]

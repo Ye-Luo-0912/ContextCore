@@ -10,17 +10,17 @@ namespace ContextCore.Benchmarks;
 // Agent Kernel 微基准
 //
 // 覆盖：
-//   InMemoryToolDispatchJournal 状态机（Prepared → Dispatched → Committed → ResultDelivered）
-//   DefaultAgentCheckpointFactory.CreateCheckpointAsync（Full + Delta 模式）
-//   InMemoryAgentCheckpointStore SaveAsync / GetAsync 往返
+// InMemoryToolDispatchJournal 状态机（Prepared → Dispatched → Committed → ResultDelivered）
+// DefaultAgentCheckpointFactory.CreateCheckpointAsync（Full + Delta 模式）
+// InMemoryAgentCheckpointStore SaveAsync / GetAsync 往返
 //
 // 数据规模：[Params(1, 10, 100)] 覆盖单 turn / 小批次 / 大批次指令
 // 指标：Mean / Median / StdDev / P95（BenchmarkDotNet 默认）+ Allocated bytes（[MemoryDiagnoser]）
 //
 // 依赖：
-//   - InMemoryToolDispatchJournal（Durable Tool Journal 进程内默认实现）
-//   - DefaultAgentCheckpointFactory + KernelStateAccessor（checkpoint 序列化工具）
-//   - InMemoryAgentCheckpointStore（生产 InMemory checkpoint store）
+// - InMemoryToolDispatchJournal（Durable Tool Journal 进程内默认实现）
+// - DefaultAgentCheckpointFactory + KernelStateAccessor（checkpoint 序列化工具）
+// - InMemoryAgentCheckpointStore（生产 InMemory checkpoint store）
 // ===========================================================================
 
 /// <summary>

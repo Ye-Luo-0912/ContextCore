@@ -8,7 +8,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// FTS Keyset 分页公开契约测试（P1-4）：
+/// FTS Keyset 分页公开契约测试：
 /// 1) 不透明游标编解码器：roundtrip / 篡改 / 版本 / 垃圾输入 / 密钥失配；
 /// 2) IContextQueryPageStore 分页契约：HasMore / NextCursor / 无缝隙续取；
 /// 3) ContextQueryRevision 语义修订稳定性。

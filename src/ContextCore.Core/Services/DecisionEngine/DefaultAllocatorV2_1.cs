@@ -8,15 +8,15 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // Allocator V2.1 默认实现（section rollover + MMR diversity）
 //
 // 设计原则：
-//   1. 继承 IGlobalAllocator（V2.0）：基接口 Allocate 委托给 _baseAllocator，保持向后兼容。
-//   2. AllocateWithDiversity（V2.1）：
-//      a. 按 Section 分组（mandatory / memory / relations / global / related / default）
-//      b. 每个 section 内分离 mandatory / non-mandatory（mandatory 不受 MMR 影响）
-//      c. 对 non-mandatory 候选使用 MMR 重排序（Lambda < 1.0 时）
-//      d. Section 顺序分配：每个 section 获得剩余预算，未用完的 rollover 到下一 section
-//      e. 合并所有 section 的 decisions，构建最终 AllocationResult
-//   3. mandatory 候选始终优先选入（overflow 允许），不被 MMR 重排序。
-//   4. 确定性：相同输入产生相同输出（section 顺序固定，tie-break 按 CandidateId 升序）。
+// 1. 继承 IGlobalAllocator（V2.0）：基接口 Allocate 委托给 _baseAllocator，保持向后兼容。
+// 2. AllocateWithDiversity（V2.1）：
+// a. 按 Section 分组（mandatory / memory / relations / global / related / default）
+// b. 每个 section 内分离 mandatory / non-mandatory（mandatory 不受 MMR 影响）
+// c. 对 non-mandatory 候选使用 MMR 重排序（Lambda < 1.0 时）
+// d. Section 顺序分配：每个 section 获得剩余预算，未用完的 rollover 到下一 section
+// e. 合并所有 section 的 decisions，构建最终 AllocationResult
+// 3. mandatory 候选始终优先选入（overflow 允许），不被 MMR 重排序。
+// 4. 确定性：相同输入产生相同输出（section 顺序固定，tie-break 按 CandidateId 升序）。
 // ===========================================================================
 
 /// <summary>
@@ -117,11 +117,11 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         // 接入 MandatoryOverflowPolicy。
         // section 分配阶段 mandatory 候选始终选入（AllowOverflowWithDiagnostic 语义），
         // 此处在 section 分配完成后统一检查总 mandatory token 是否超出总预算：
-        //   - FailClosed：收集溢出 mandatory 候选 ID + 总 token 需求，抛 MandatoryContextWindowExceededException
-        //     （Runtime 不捕获，让请求真正失败，fail-closed 语义）
-        //   - RejectLowestAuthorityMandatory：按 FinalScore 升序（最低优先级优先）拒绝 mandatory 候选，
-        //     直到总 mandatory token 降至预算内；被拒绝的候选移入 dropped，decision 标记 TokenBudgetExceeded
-        //   - AllowOverflowWithDiagnostic（默认）：当前行为不变，仅在诊断中记录溢出量
+        // - FailClosed：收集溢出 mandatory 候选 ID + 总 token 需求，抛 MandatoryContextWindowExceededException
+        // （Runtime 不捕获，让请求真正失败，fail-closed 语义）
+        // - RejectLowestAuthorityMandatory：按 FinalScore 升序（最低优先级优先）拒绝 mandatory 候选，
+        // 直到总 mandatory token 降至预算内；被拒绝的候选移入 dropped，decision 标记 TokenBudgetExceeded
+        // - AllowOverflowWithDiagnostic（默认）：当前行为不变，仅在诊断中记录溢出量
         var mandatoryOverflowPolicy = context.MandatoryOverflowPolicy;
         var mandatorySelected = selected
             .Where(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
@@ -232,10 +232,10 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
     /// 逐 section 分配，含 rollover 逻辑。
     /// 修正：原实现"第一个 section 获得全部剩余预算 → 下一 section 只获得前一 section
     /// 剩余量 × ratio"会让靠后的 section 饿死。改为两轮分配：
-    ///   1. 第一轮：每个 section 获得 minimum reserve（totalBudget × SectionReserveRatio），
-    ///      在 reserve 内做基础分配，收集未使用的预算（unused reserve）。
-    ///   2. 第二轮：把所有 unused reserve 汇总，按 section 顺序（已 MMR 排序）重新分配给
-    ///      仍有候选被丢弃的 section，直到耗尽或全部 section 满足。
+    /// 1. 第一轮：每个 section 获得 minimum reserve（totalBudget × SectionReserveRatio），
+    /// 在 reserve 内做基础分配，收集未使用的预算（unused reserve）。
+    /// 2. 第二轮：把所有 unused reserve 汇总，按 section 顺序（已 MMR 排序）重新分配给
+    /// 仍有候选被丢弃的 section，直到耗尽或全部 section 满足。
     /// 启用 rollover 时执行两轮；禁用时只执行第一轮（等分预算，不结转）。
     /// </summary>
     private static IReadOnlyList<SectionAllocationResult> AllocateSectionsWithRollover(
@@ -330,9 +330,9 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         // 原实现"下一 section 只获得前一 section 剩余量 × ratio"会让靠后 section 饿死；
         // 改为 round 1 各 section 仅消费自身 reserve，剩余全部预算汇总到全局 pool 供 round 2 分配。
         // 关键修正：
-        //   - pool = (totalBudget - totalUsed) × RolloverRatio（含未消费的 reserve + 完全未分配的预算余额）
-        //   - 否则单 section + 高 token 候选场景下 reserve 用不完、又拿不到主预算，会被饿死。
-        //   - RolloverRatio < 1 时按比例缩放结转量（保留"仅结转 50%"语义）。
+        // - pool = (totalBudget - totalUsed) × RolloverRatio（含未消费的 reserve + 完全未分配的预算余额）
+        // - 否则单 section + 高 token 候选场景下 reserve 用不完、又拿不到主预算，会被饿死。
+        // - RolloverRatio < 1 时按比例缩放结转量（保留"仅结转 50%"语义）。
         var totalUsedAfterRound1 = sectionStates.Sum(s => s.UsedTokens);
         var rawRemaining = totalBudget - totalUsedAfterRound1;
         var rolloverRatio = Math.Clamp(options.RolloverRatio, 0.0, 1.0);

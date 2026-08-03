@@ -5,17 +5,17 @@ namespace ContextCore.Abstractions;
 // ===========================================================================
 // Agent Context Delta Calculator 契约
 //
-// 目标（对齐 R23 规格）：
-//   1. 计算两次 AgentContextSnapshot 之间的 AgentContextDelta（增量变更）。
-//   2. 增量类型：Added/Modified/Removed Sections + Added/Removed DecisionIds +
-//      Added/Removed ConstraintIds + Added ToolCallRefs + TokenDelta。
-//   3. 纯函数：不修改输入 snapshot；输出 deterministic delta。
+// 目标：
+// 1. 计算两次 AgentContextSnapshot 之间的 AgentContextDelta（增量变更）。
+// 2. 增量类型：Added/Modified/Removed Sections + Added/Removed DecisionIds +
+// Added/Removed ConstraintIds + Added ToolCallRefs + TokenDelta。
+// 3. 纯函数：不修改输入 snapshot；输出 deterministic delta。
 //
 // 设计边界：
-//   - Section 比较基于 SectionName（key）；内容差异用 Content 字符串比较；
-//   - Decision/Constraint ID 比较基于字符串集合差集；
-//   - TokenDelta = ToSnapshot.ActualTokens - FromSnapshot.ActualTokens（可为负）；
-//   - 不引入存储 I/O；calculator 无状态。
+// - Section 比较基于 SectionName（key）；内容差异用 Content 字符串比较；
+// - Decision/Constraint ID 比较基于字符串集合差集；
+// - TokenDelta = ToSnapshot.ActualTokens - FromSnapshot.ActualTokens（可为负）；
+// - 不引入存储 I/O；calculator 无状态。
 // ===========================================================================
 
 /// <summary>
