@@ -363,4 +363,10 @@ public interface IModelNodeAppliedStateStore
     /// 已存记录的 AppliedRevision 时生效。返回实际生效的记录（CAS 拒绝时返回已存记录）。
     /// </summary>
     ValueTask<ModelNodeAppliedState> UpsertAsync(ModelNodeAppliedState state, CancellationToken ct = default);
+
+    /// <summary>
+    /// 列出某槽位下所有节点的已应用状态记录（集群注册表聚合用），按 NodeId 字典序排序。
+    /// 无记录时返回空列表。
+    /// </summary>
+    ValueTask<IReadOnlyList<ModelNodeAppliedState>> ListBySlotAsync(string slotName, CancellationToken ct = default);
 }

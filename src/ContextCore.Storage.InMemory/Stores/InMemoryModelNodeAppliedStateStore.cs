@@ -42,4 +42,20 @@ public sealed class InMemoryModelNodeAppliedStateStore : IModelNodeAppliedStateS
             (_, existing) => state.AppliedRevision >= existing.AppliedRevision ? state : existing);
         return new ValueTask<ModelNodeAppliedState>(updated);
     }
+
+    /// <inheritdoc />
+    public ValueTask<IReadOnlyList<ModelNodeAppliedState>> ListBySlotAsync(string slotName, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(slotName))
+        {
+            return new ValueTask<IReadOnlyList<ModelNodeAppliedState>>(Array.Empty<ModelNodeAppliedState>());
+        }
+
+        var entries = _states.Values
+            .Where(s => string.Equals(s.SlotName, slotName, StringComparison.Ordinal))
+            .OrderBy(s => s.NodeId, StringComparer.Ordinal)
+            .ToArray();
+        return new ValueTask<IReadOnlyList<ModelNodeAppliedState>>(entries);
+    }
 }

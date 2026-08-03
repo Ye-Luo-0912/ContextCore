@@ -93,6 +93,34 @@ RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash,
                 $"ModelNodeAppliedState '{state.NodeId}/{state.SlotName}' 写入失败：既无法 INSERT 也无法 SELECT。");
     }
 
+    public async ValueTask<IReadOnlyList<ModelNodeAppliedState>> ListBySlotAsync(string slotName, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(slotName))
+        {
+            return Array.Empty<ModelNodeAppliedState>();
+        }
+
+        await EnsureMigratedAsync(ct).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT node_id, slot_name, applied_revision, model_artifact_id, content_hash, applied_at
+FROM {Table("model_node_applied_state")}
+WHERE slot_name = @slot_name
+ORDER BY node_id;
+""";
+        command.Parameters.AddWithValue("slot_name", slotName);
+
+        var results = new List<ModelNodeAppliedState>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            results.Add(ReadState(reader));
+        }
+        return results;
+    }
+
     private static ModelNodeAppliedState ReadState(System.Data.Common.DbDataReader reader)
     {
         var nodeIdOrdinal = reader.GetOrdinal("node_id");

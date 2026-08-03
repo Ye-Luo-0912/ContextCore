@@ -770,6 +770,12 @@ internal static class CoreExtensions
 		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，Postgres 持久化实现生效。
 		services.TryAddSingleton<IModelNodeAppliedStateStore, InMemoryModelNodeAppliedStateStore>();
 
+		// IClusterModelAppliedStateRegistry —— 集群模型已应用状态注册表（只读聚合）。
+		// 聚合控制面期望状态（IClusterModelSlotStore）与各节点已应用状态
+		// （IModelNodeAppliedStateStore.ListBySlotAsync）为集群收敛视图；
+		// 供控制面端点查询集群是否收敛 / 落后节点 / 内容哈希冲突。
+		services.TryAddSingleton<IClusterModelAppliedStateRegistry, ClusterModelAppliedStateRegistry>();
+
 		// ICalibrationValidator — 模型加载时校准参数的统计有效性验证。
 		// 不抛异常：返回结构化 CalibrationValidationResult（Error / Warning / Info），
 		// 让 ModelArtifactRegistry 加载 descriptor 后能拒绝在统计上不合理的校准配置，

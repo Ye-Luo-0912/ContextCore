@@ -751,6 +751,40 @@ internal static class ModelControlPlaneEndpoints
         .WithSummary("节点一致性报告：本节点当前 active 模型（HA 多节点对账用）")
         .Produces<NodeConsistencyResponse>(StatusCodes.Status200OK);
 
+        // ── 集群已应用状态注册表 ───────────────────────────────────────
+        // 聚合各节点对某槽位的已应用状态（model_node_applied_state）与控制面期望状态，
+        // 报告集群收敛视图：是否已收敛到期望 Revision、落后节点数、内容哈希冲突数。
+        // 只读聚合（read model）：不写入任何持久化状态，数据源即节点已应用状态表。
+        group.MapGet("/cluster/applied-state", async Task<IResult> (
+            [FromServices] IClusterModelAppliedStateRegistry? registry,
+            string? slot,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (registry is null)
+            {
+                return ContextCoreHttpResultMapper.StorageUnavailable(
+                    httpContext, string.Empty, "models.cluster.appliedState",
+                    "集群模型已应用状态注册表未注册。");
+            }
+
+            var slotName = string.IsNullOrWhiteSpace(slot) ? "primary" : slot;
+            var summary = await registry.GetSlotSummaryAsync(slotName, ct).ConfigureAwait(false);
+            var nodes = await registry.ListNodeStatesAsync(slotName, ct).ConfigureAwait(false);
+            return Results.Ok(new ClusterAppliedStateResponse
+            {
+                SlotName = slotName,
+                Summary = summary,
+                Nodes = nodes,
+                NodeCount = nodes.Count
+            });
+        })
+        .WithName("GetClusterAppliedState")
+        .RequireWorkspacePermission(WorkspacePermission.ModelRead)
+        .WithSummary("集群模型已应用状态注册表：聚合各节点已应用记录，报告集群收敛 / 落后节点 / 内容哈希冲突")
+        .Produces<ClusterAppliedStateResponse>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status503ServiceUnavailable);
+
         // ── 激活审计历史查询 ──────────────────────────────────────────
         group.MapGet("/{id}/audit", async Task<IResult> (
             string id,
@@ -1380,4 +1414,20 @@ public sealed class ModelActivationAuditEntryResponse
     public bool Succeeded { get; init; }
     public string? ErrorMessage { get; init; }
     public string? NodeId { get; init; }
+}
+
+/// <summary>集群模型已应用状态注册表响应。</summary>
+public sealed class ClusterAppliedStateResponse
+{
+    /// <summary>槽位名（如 "primary"）。</summary>
+    public string SlotName { get; init; } = "primary";
+
+    /// <summary>集群已应用状态摘要（收敛 / 落后 / 内容哈希冲突分析）。</summary>
+    public required ClusterSlotAppliedSummary Summary { get; init; }
+
+    /// <summary>各节点已应用状态条目（按 NodeId 排序）。</summary>
+    public IReadOnlyList<ClusterNodeAppliedEntry> Nodes { get; init; } = Array.Empty<ClusterNodeAppliedEntry>();
+
+    /// <summary>节点条目数。</summary>
+    public int NodeCount { get; init; }
 }
