@@ -1,21 +1,27 @@
 # 工作状态（Work State）
 
-> 用途：上下文压缩时快速恢复当前状态。只记录必要信息，保持简洁；任务完成立即更新。
+> 用途：上下文压缩时快速恢复当前状态。只保留必要信息（状态、计划、目标、必要元信息）；任务完成立即更新，无关内容及时清理。
 > 维护规则见 AGENTS.md「工作状态维护」；路线图与历史见 TODO.md。
 
-## 当前状态（2026-08-04）
+## 目标与计划
 
-- **HEAD**：`60a7ba07`（已推送 main）。
-- **上一个完成项**：新增根 `WORK_STATE.md`（本文件）+ AGENTS.md「工作状态维护」规则。
-- **当前进行中**：无。
-- **下一步**：待用户决定。候选方向见 TODO.md（R30 Self-Learning Agent Runtime）。
+- 当前目标：随用户指示推进，无既定进行中任务。
+- 候选方向（详见 TODO.md）：R30 Self-Learning Agent Runtime —— Utility Ledger 物化 → Dataset Builder → 训练/校准 → Replay → Canary → Promotion。
 
-## 验证基线（每次改动后须保持）
+## 当前状态
 
-- 构建 0 错误（150 个既有警告，不得新增）。
-- ContextCore.Tests：失败**恰好 11 个既有项**（名单见下），其余 3348 通过 / 14 跳过。
-- 规则：build 与 test 串行执行，禁止并发。
+- **HEAD**：`17d0403b`（已推送 main）。
+- **进行中**：无。
+- **最近完成**：建立 WORK_STATE.md 并落地「工作状态维护」规则。
 
-### 既有 11 个测试失败（勿当回归处理）
+## 必要元信息
+
+- 解决方案：`ContextCore.sln`（.NET 10，Windows / pwsh）。
+- 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
+- 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
+- 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；ContextCore.Tests 失败须**恰好 11 个既有项**（名单见下）。
+
+## 既有 11 个测试失败（勿当回归处理）
 
 `Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`、`ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured`、`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList`、`RequiredIndexes_IncludeUtilityLedgerIndexes`、`SchemaVersion_IsV30`
