@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `a0c8bd0d`（工作树仅剩 WP-P5 与 WORK_STATE 待提交）。
+- **基线**：main @ `92d7c11e`（WP-P5 已提交并推送；工作树干净）。
 - **进行中**：无（性能优化 P1~P5 全部完成，最终全量验证通过）。
-- **最近完成**：WP-P5 CI Artifact 瘦身（-55%）+ 修复 P4 引入的 DI 校验回归。
+- **最近完成**：TODO.md 路线图更新至 R30.1 Production Semantics Stabilization（HEAD `92d7c11e`，Closed 4 项 / Open P0 8 项）；WP-P5 CI Artifact 瘦身（-55%）+ 修复 P4 引入的 DI 校验回归。
 
 ### 性能优化工作包进度
 

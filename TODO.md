@@ -1,16 +1,38 @@
 # ContextCore 项目路线图
 
-> 最近更新：R29 Final Closure 六条工作流全部完成 + 30 项硬验收测试通过（2026-07-27，HEAD `1502b72`）。下一阶段为 R30 Self-Learning Agent Runtime。
+> 最近更新：2026-08-04。
+> **Current HEAD：`92d7c11e`**（WP-P5 CI Artifact 瘦身；其后无提交，与 origin/main 一致）。
+> **Current Phase：R30.1 Production Semantics Stabilization** —— 已关闭 4 项、待办 P0 8 项，详见「当前阶段」。
 
-> 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
+> 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R29 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
 ---
 
 ## 当前阶段
 
-**R29 Final Closure — Production Truth Gate 已完成**（HEAD `1502b72`）。六条工作流全部收口，30 项硬验收测试通过。下一阶段为 R30 Self-Learning Agent Runtime。
+**R30.1 Production Semantics Stabilization（进行中，HEAD `92d7c11e`）**
 
-### R28 — 持久化可靠性基础（已完成，HEAD `6fe3203` → `1502b72`）
+**Closed（已关闭）**：
+- Single execution plane
+- Engine lease lifecycle
+- Native model protocol hardening
+- FTS/Graph hot-path improvements
+
+**Open P0（待办）**：
+- Tool stable identity
+- Effect policy matrix
+- AwaitingReconciliation
+- Agent ingress backpressure
+- Model HA revision/staged identity
+- Durable canary kill switch
+- Recovery corruption fail-closed
+- Production admission/evidence
+
+## 历史快照（R27~R29 已完成记录，不作为当前架构依据）
+
+> 以下 R28/R29 记录描述的是**已删除的旧 Agent Kernel / Durable Transport 执行平面**。执行平面已收敛为单一平面（`AgentRunStore → AgentKernelHost → AgentRunActor`，见 `CoreExtensions.cs` 与 `AgentKernelContracts.cs` 的注释），本章节仅作回溯，不得作为当前架构依据。
+
+### R28 — 持久化可靠性基础（历史快照：已完成，HEAD `6fe3203` → `1502b72`）
 
 R28 系列为 R29 Final Closure 奠定持久化可靠性基础，涵盖 Tool Journal、Durable Transport、Outbox、Checkpoint 哈希链、Canary Metrics 等核心组件。
 
@@ -19,7 +41,7 @@ R28 系列为 R29 Final Closure 奠定持久化可靠性基础，涵盖 Tool Jou
 - **R28-E Tool Journal**：IToolDispatchJournal 契约 + InMemoryToolDispatchJournal + 持久化标记接口 IPersistentToolDispatchJournal
 - **R28-F Model Execution**：DeterministicBatchInferenceEngine（FNV-1a 64-bit hash，无装箱）+ FeatureBatch 连续内存路径 + ContentHash/CalibrationVersion 契约
 
-### R29 — Final Closure Production Truth Gate（已完成，HEAD `1502b72`）
+### R29 — Final Closure Production Truth Gate（历史快照：已完成，HEAD `1502b72`）
 
 R29 作为完整里程碑推进六条工作流，不再拆分小阶段。所有工作流已实现完成并通过硬验收测试。
 
@@ -142,14 +164,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-27 R29 Final Closure 完成）
+## 当前验收指标（2026-08-04 R30.1 Production Semantics Stabilization）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `1502b72`（R29 Final Closure）；R28 持久化可靠性基础 → R29 六条工作流（Durable Delivery / Tool Effect Safety / Model Activation / Agent Intelligence / Canary Truth / Performance Truth）全部完成 | - |
+| 当前 HEAD | `92d7c11e`（R30.1 进行中；WP-P1~P5 性能优化工作包全部完成并推送） | - |
 | PublicApi baseline 行数 | R29 新增 AgentRunContracts + CanaryHAAggregationContracts + PerformanceAttributionContracts 三大契约集（IAgentModelTransport/IAgentLoopPolicy/IAgentRunStore/IAgentApprovalGate/IAgentToolCallValidator/IAgentRunEventStore + ICanaryExternalMetricsSource/ICanaryMetricsAggregator/ICanaryLeaderLease + IComponentHealthRegistry 等） | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 2103/2103 passed / 9 skipped（R27 +34 自 R26 的 2069）；IntegrationTests 75/75（1 skip pg_dump）；Service.Tests 61/61（1 skip manual OpenApi_RegenerateSnapshot） | 0 失败 |
+| 测试 | 最近一次全量验证：ContextCore.Tests 3395 总数 / **恰好 11 个既有失败**（3370 通过，14 跳过）；Service.Tests 0 失败 / 64 通过（1 跳过）。既有 11 项失败名单见 WORK_STATE.md | 除既有 11 项外 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -200,9 +222,13 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ## 下一阶段任务
 
-### R30 — Self-Learning Agent Runtime（待启动）
+> 当前待办即「当前阶段」的 **Open P0** 清单。以下小节为已完成阶段的记录与候选方向，供回溯参考。
 
-R29 Final Closure 完成后，下一阶段为 R30 Self-Learning Agent Runtime。核心闭环：
+### R30 候选方向（历史设计，暂缓启动）— Self-Learning Agent Runtime
+
+> 状态：R30 系列已更名为 **R30.1 Production Semantics Stabilization**（当前进行中）。本节为更名前的候选设计，不再作为下一阶段任务；其闭环设计（Utility Ledger → Dataset Builder → 训练/校准 → Replay → Canary → Promotion）保留为候选方向（见 WORK_STATE.md「候选方向」）。
+
+R29 Final Closure 完成后，下一阶段原规划为 R30 Self-Learning Agent Runtime。核心闭环：
 
 ```
 Execution Artifact
