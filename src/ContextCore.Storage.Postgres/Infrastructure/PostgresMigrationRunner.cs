@@ -115,8 +115,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   - agent_run_events_archive：被折叠的 [0, upToSequence] 前缀事件归档表（幂等迁移，重复压缩不产生重复行）。
     ///   - agent_run_event_snapshots：per-run 单行快照（锚点 sequence + chain_head_hash + state_json + 折叠计数），
     ///     压缩后事件流从锚点续读，哈希链完整性不受影响。
+    /// v54 → v55，新增 retrieval_plan_feedback 表（自适应检索规划器反馈持久化）：
+    ///   记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），跨进程重启保留，
+    ///   供规划器按计划签名聚合自适应策略（预算收敛 / 召回增强），
+    ///   支持按签名或全量清除以重置自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v54";
+    public const string SchemaVersion = "cc-schema-v55";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -211,6 +215,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "canary_transition_audit",
         // 集群级 Canary Kill Switch（运维紧急覆盖：活跃覆盖强制回退 V1）
         "canary_emergency_overrides",
+        // 自适应检索规划器反馈持久化（命中数 / 预算超限 / 有效性，按计划签名聚合）
+        "retrieval_plan_feedback",
         // Learning Loop Durable Outbox：Decision 物化事件持久化（替代 fire-and-forget Task.Run）
         "learning_event_outbox",
         // Model Control Plane 激活审计持久化（Activate/Rollback/Retire/Shadow 等生命周期事件审计记录）
@@ -550,6 +556,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var modelNodeAppliedStates = Infrastructure.PostgresNames.Table(options, "model_node_applied_state");
         // Tool Reconciliation Control Plane（对账记录持久化表）
         var toolReconciliationEntries = Infrastructure.PostgresNames.Table(options, "tool_reconciliation_entries");
+        // 自适应检索规划器反馈持久化表
+        var retrievalPlanFeedback = Infrastructure.PostgresNames.Table(options, "retrieval_plan_feedback");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -2271,6 +2279,22 @@ CREATE TABLE IF NOT EXISTS {canaryEmergencyOverrides} (
 
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "canary_emergency_overrides", "active")}
     ON {canaryEmergencyOverrides} (run_id) WHERE cleared_at IS NULL;
+
+-- 自适应检索规划器反馈持久化表。
+-- retrieval_plan_feedback：记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），
+--   按计划签名聚合自适应策略（预算收敛 / 召回增强），跨进程重启保留；
+--   ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持按签名或全量重置。
+CREATE TABLE IF NOT EXISTS {retrievalPlanFeedback} (
+    plan_signature text NOT NULL,
+    query_text text NOT NULL DEFAULT '',
+    hits_returned integer NOT NULL DEFAULT 0,
+    budget_exceeded boolean NOT NULL DEFAULT false,
+    effective boolean NOT NULL DEFAULT true,
+    recorded_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_plan_feedback", "signature")}
+    ON {retrievalPlanFeedback} (plan_signature, recorded_at DESC);
 
 -- Learning Loop Durable Outbox：Decision 物化事件持久化表。
 -- 替代 fire-and-forget Task.Run → MaterializeAsync → catch-all 模式，消除进程崩溃时静默丢训练数据。

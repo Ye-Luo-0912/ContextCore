@@ -866,6 +866,17 @@ internal static class CoreExtensions
 		// 纯内存、确定性、幂等；由 AgentRunActor 的 ContextBuilding 阶段按计划驱动检索。
 		services.TryAddSingleton<IAgentRetrievalQueryPlanner, DefaultAgentRetrievalQueryPlanner>();
 
+		// 自适应检索规划器反馈存储。默认 in-memory（单节点可用）；
+		// Postgres provider 注册 Postgres 实现（AddSingleton 先注册，TryAdd 跳过）。
+		services.TryAddSingleton<IRetrievalPlanFeedbackStore, InMemoryRetrievalPlanFeedbackStore>();
+
+		// 自适应检索规划器（装饰确定性受控规划器）：按计划签名聚合近期检索反馈，
+		// 计算自适应策略（Token 预算乘数 / 查询收敛乘数 / 召回增强乘数）并应用于后续规划。
+		// 供检索执行方（AgentRunActor ContextBuilding）选用；运维端点查询策略与反馈。
+		services.AddSingleton<IAdaptiveRetrievalPlanner>(sp => new AdaptiveRetrievalPlanner(
+			sp.GetRequiredService<IAgentRetrievalQueryPlanner>(),
+			sp.GetRequiredService<IRetrievalPlanFeedbackStore>()));
+
 		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
 		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。
 		services.TryAddSingleton<IDurableToolExecutor, DefaultDurableToolExecutor>();

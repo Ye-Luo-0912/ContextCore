@@ -339,6 +339,10 @@ public static class PostgresServiceCollectionExtensions
         // CanaryProgressionService 恢复逻辑读取集群共享的紧急覆盖。
         services.AddSingleton<PostgresCanaryEmergencyOverrideStore>();
         services.AddSingleton<ICanaryEmergencyOverrideStore>(sp => sp.GetRequiredService<PostgresCanaryEmergencyOverrideStore>());
+        // 自适应检索规划器反馈存储（PostgreSQL 持久化）。
+        // 先于 CoreExtensions 的 TryAddSingleton 默认实现注册，确保自适应策略跨实例共享反馈历史。
+        services.AddSingleton<PostgresRetrievalPlanFeedbackStore>();
+        services.AddSingleton<IRetrievalPlanFeedbackStore>(sp => sp.GetRequiredService<PostgresRetrievalPlanFeedbackStore>());
 
         // 注册 ILeasedWorkStore 用于 Canary Leader 租约（统一租约基础设施）。
         // 与 ICanaryLeaderLease 共享同一底层表（canary_leader_leases），但使用统一的 ILeasedWorkStore 接口。
