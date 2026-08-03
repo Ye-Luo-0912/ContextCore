@@ -211,8 +211,8 @@ public sealed class R29H_KillPointExternalEffectTests
     // ── 执行器 Truth：ExternalOperationId 生成 / 下发 / 覆盖 ──────────────────
 
     /// <summary>
-    /// 验证：框架在 Prepare 时生成 ExternalOperationId 并下发给 Tool Handler；
-    /// Handler 未返回外部 ID 时结果沿用框架生成值。
+    /// 验证：框架从稳定 RequestId 派生 ExternalOperationId（"cc:" + requestId）并下发给 Tool Handler；
+    /// Handler 未返回外部 ID 时结果沿用派生值。
     /// </summary>
     [TestMethod]
     public async Task Executor_ExternalOperationId_GeneratedAndDeliveredToHandler()
@@ -226,7 +226,7 @@ public sealed class R29H_KillPointExternalEffectTests
 
         Assert.IsTrue(result.Succeeded);
         Assert.IsNotNull(result.ExternalOperationId, "框架应生成外部操作 ID。");
-        Assert.AreEqual(32, result.ExternalOperationId!.Length, "框架生成的外部操作 ID 应为 32 位 hex（GUID N 格式）。");
+        Assert.AreEqual("cc:" + result.RequestId, result.ExternalOperationId, "外部操作 ID 应从稳定 RequestId 派生（cc: 前缀），不使用 GUID。");
         Assert.AreEqual(result.ExternalOperationId, handler.LastContext!.ExternalOperationId, "外部操作 ID 应下发给 Tool Handler。");
 
         var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
@@ -257,7 +257,7 @@ public sealed class R29H_KillPointExternalEffectTests
 
     /// <summary>
     /// 验证：声明 RequiresIdempotencyKey 但调用方未提供幂等键时，
-    /// 框架以 ExternalOperationId 兜底为幂等键下发给 Handler（重放稳定，provider 侧可去重）。
+    /// 框架以 providerNamespace + ":" + requestId 兜底为幂等键下发给 Handler（重放稳定，provider 侧可去重）。
     /// </summary>
     [TestMethod]
     public async Task Executor_RequiresIdempotencyKey_MissingKey_FrameworkProvidesStableKey()
@@ -277,9 +277,49 @@ public sealed class R29H_KillPointExternalEffectTests
 
         Assert.IsTrue(result.Succeeded, "框架应兜底提供幂等键，调用成功。");
         Assert.IsNotNull(handler.LastContext!.IdempotencyKey, "Handler 应收到幂等键。");
-        Assert.AreEqual(handler.LastContext.ExternalOperationId, handler.LastContext.IdempotencyKey,
-            "兜底幂等键应等于外部操作 ID（同一次调用稳定唯一）。");
+        Assert.AreEqual("charge:" + result.RequestId, handler.LastContext.IdempotencyKey,
+            "兜底幂等键应为 providerNamespace + ':' + requestId（同一次调用稳定唯一）。");
         Assert.AreEqual(handler.LastContext.IdempotencyKey, result.IdempotencyKey);
+    }
+
+    /// <summary>
+    /// 验证：外部操作 ID 与兜底幂等键从稳定 RequestId 派生（"cc:" + requestId / "charge:" + requestId），
+    /// 崩溃恢复重跑时派生值不变，Journal 语义等价检查通过并返回持久化身份——不出现身份漂移。
+    /// </summary>
+    [TestMethod]
+    public async Task Executor_Identity_StableAcrossReplay_NoRegeneration()
+    {
+        var handler = CreateHandler("charge", descriptor: new ToolDescriptor
+        {
+            Name = "charge",
+            DeclaredSideEffect = ToolSideEffect.IdempotentWrite,
+            RequiresIdempotencyKey = true,
+            RecoveryStrategy = ToolRecoveryStrategy.SafeReplay
+        });
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (_, executor, journal, _) = CreateExecutor(handler);
+
+        var toolCall = BuildToolCall("charge", "arg-stable", idempotencyKey: null);
+
+        // 第一次调用 → Journal 持久化派生身份
+        var first = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
+        Assert.IsTrue(first.Succeeded);
+        Assert.AreEqual("cc:" + first.RequestId, first.ExternalOperationId, "外部操作 ID 应为 cc: + requestId。");
+        Assert.AreEqual("charge:" + first.RequestId, first.IdempotencyKey, "兜底幂等键应为 providerNamespace + ':' + requestId。");
+
+        // 崩溃恢复重跑 → 同一 (runId, modelTurn, toolCallId, toolName, arguments) 派生相同身份，
+        // Journal 语义等价检查通过，返回持久化身份与缓存结果——身份不漂移、外部副作用不重复。
+        var second = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
+        Assert.IsTrue(second.Succeeded, "恢复重跑应返回缓存结果。");
+        Assert.AreEqual(ToolDispatchState.Committed, second.JournalState);
+        Assert.AreEqual(first.ExternalOperationId, second.ExternalOperationId, "恢复后外部操作 ID 必须与首次一致。");
+        Assert.AreEqual(first.IdempotencyKey, second.IdempotencyKey, "恢复后幂等键必须与首次一致。");
+        Assert.AreEqual(1, handler.InvocationCount, "外部副作用不得重复执行。");
+
+        // Journal 条目持久化身份与派生值一致
+        var entry = await journal.GetEntryAsync(first.RequestId, cts.Token);
+        Assert.AreEqual("cc:" + first.RequestId, entry!.ExternalOperationId);
+        Assert.AreEqual("charge:" + first.RequestId, entry.IdempotencyKey);
     }
 
     // ── 执行器 Truth：RequiresLeaseFence fail-closed ─────────────────────────

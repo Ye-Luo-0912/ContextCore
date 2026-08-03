@@ -95,7 +95,19 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
             ShouldDispatch = currentState == ToolDispatchState.Prepared,
             NeedsReconciliation = currentState == ToolDispatchState.Dispatched || currentState == ToolDispatchState.DispatchingIntent,
             ExternalOperationId = current?.ExternalOperationId,
-            CachedResult = cachedResult
+            CachedResult = cachedResult,
+            // Journal 是身份的权威来源：RequestId / 生效幂等键 / 恢复决策原子返回。
+            RequestId = current?.RequestId ?? entry.RequestId,
+            EffectiveIdempotencyKey = current?.IdempotencyKey ?? entry.IdempotencyKey,
+            RecoveryDecision = cachedResult is not null
+                ? ToolDispatchRecoveryDecision.UseCachedResult
+                : currentState == ToolDispatchState.Committed || currentState == ToolDispatchState.ResultDelivered
+                    ? ToolDispatchRecoveryDecision.UseCachedResult
+                    : currentState == ToolDispatchState.DispatchingIntent
+                      || currentState == ToolDispatchState.Dispatched
+                      || currentState == ToolDispatchState.Reconciling
+                        ? ToolDispatchRecoveryDecision.Reconcile
+                        : ToolDispatchRecoveryDecision.Dispatch
         });
     }
 
@@ -160,7 +172,22 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
             NeedsReconciliation = !inserted && !advancedFromPrepared
                                   && (currentState == ToolDispatchState.DispatchingIntent || currentState == ToolDispatchState.Dispatched),
             ExternalOperationId = current?.ExternalOperationId,
-            CachedResult = cachedResult
+            CachedResult = cachedResult,
+            // Journal 是身份的权威来源：新插入返回调用方派生的值，重放返回既有条目持久化值。
+            RequestId = current?.RequestId ?? entry.RequestId,
+            EffectiveIdempotencyKey = current?.IdempotencyKey ?? entry.IdempotencyKey,
+            RecoveryDecision = cachedResult is not null
+                ? ToolDispatchRecoveryDecision.UseCachedResult
+                : inserted || advancedFromPrepared
+                    // 本次新插入或既有 Prepared 前驱已推进（外部调用尚未开始）→ 可安全分派。
+                    // 注意：不能仅按 currentState==DispatchingIntent 判定为 Reconcile——
+                    // 新插入/推进的 DispatchingIntent 表示"即将分派"，而残留的才表示"可能已开始"。
+                    ? ToolDispatchRecoveryDecision.Dispatch
+                    : currentState == ToolDispatchState.DispatchingIntent
+                      || currentState == ToolDispatchState.Dispatched
+                      || currentState == ToolDispatchState.Reconciling
+                        ? ToolDispatchRecoveryDecision.Reconcile
+                        : ToolDispatchRecoveryDecision.UseCachedResult
         });
     }
 

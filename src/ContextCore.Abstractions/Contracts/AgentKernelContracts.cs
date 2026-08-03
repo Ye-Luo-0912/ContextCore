@@ -521,16 +521,44 @@ public interface IDurableToolResultStore
 }
 
 /// <summary>
+/// <see cref="IToolDispatchJournal.PrepareWithIntentAsync"/> 返回的恢复决策。
+/// Journal 是调用身份的权威来源——恢复决策与生效身份（ExternalOperationId / IdempotencyKey）
+/// 均由 Journal 原子返回，调用方（<see cref="IDurableToolExecutor"/>）只能使用这些值，
+/// 不能使用恢复时重新生成的值（否则崩溃恢复后身份漂移，外部幂等记录无法命中）。
+/// </summary>
+public enum ToolDispatchRecoveryDecision : byte
+{
+    /// <summary>本次为新调用（journal 新插入或既有 Prepared 已推进），应继续分派。</summary>
+    Dispatch = 0,
+
+    /// <summary>journal 已提交（Committed/ResultDelivered），应使用缓存结果，禁止重新分派。</summary>
+    UseCachedResult = 1,
+
+    /// <summary>
+    /// journal 处于模糊状态（DispatchingIntent/Dispatched），外部副作用可能已发生，
+    /// 需对账（携带 Journal 返回的 ExternalOperationId），禁止盲目重新分派。
+    /// </summary>
+    Reconcile = 2,
+
+    /// <summary>journal 状态异常或身份冲突，应 fail-closed 拒绝执行。</summary>
+    FailClosed = 3
+}
+
+/// <summary>
 /// <see cref="IToolDispatchJournal.PrepareAsync"/> 返回值。
 /// 描述 Prepare 后 Journal 的当前状态，供 <see cref="IDurableToolExecutor"/> 决策是否 Dispatch。
 /// </summary>
 /// <remarks>
 /// <b>决策矩阵</b>：
 /// <list type="bullet">
-///   <item><see cref="ShouldDispatch"/>=true（Journal 不存在或 Prepared）→ 调用方应执行 Dispatch。</item>
-///   <item><see cref="NeedsReconciliation"/>=true（Journal = DispatchingIntent 或 Dispatched）→ 调用方应返回对账结果（携带 <see cref="ExternalOperationId"/>），不重新 Dispatch。DispatchingIntent 表示外部调用可能已开始但未完成。</item>
-///   <item><see cref="CachedResult"/> 非空（Journal = Committed/ResultDelivered）→ 调用方应直接返回缓存结果，<b>禁止重新 Dispatch</b>。</item>
+/// <item><see cref="ShouldDispatch"/>=true（Journal 不存在或 Prepared）→ 调用方应执行 Dispatch。</item>
+/// <item><see cref="NeedsReconciliation"/>=true（Journal = DispatchingIntent 或 Dispatched）→ 调用方应返回对账结果（携带 <see cref="ExternalOperationId"/>），不重新 Dispatch。DispatchingIntent 表示外部调用可能已开始但未完成。</item>
+/// <item><see cref="CachedResult"/> 非空（Journal = Committed/ResultDelivered）→ 调用方应直接返回缓存结果，<b>禁止重新 Dispatch</b>。</item>
 /// </list>
+/// <b>身份权威</b>：<see cref="RequestId"/> / <see cref="ExternalOperationId"/> /
+/// <see cref="EffectiveIdempotencyKey"/> 是 Journal 返回的唯一生效身份。
+/// 新插入时返回调用方派生的值；重放时返回既有条目持久化值——
+/// 调用方后续只能使用这些值，不得重新生成（保证崩溃恢复后身份稳定）。
 /// </remarks>
 public sealed record ToolDispatchPrepareResult
 {
@@ -551,6 +579,18 @@ public sealed record ToolDispatchPrepareResult
     /// 非空时调用方应直接返回此结果，禁止重新 Dispatch。
     /// </summary>
     public DurableToolResult? CachedResult { get; init; }
+
+    /// <summary>与条目对应的稳定 RequestId（Journal 返回的唯一调用身份）。</summary>
+    public string? RequestId { get; init; }
+
+    /// <summary>
+    /// 生效的幂等键（Journal 返回；新插入返回调用方派生的值，重放返回既有条目持久化值）。
+    /// 调用方后续只能使用此值——不能以恢复时重新生成的值覆盖。
+    /// </summary>
+    public string? EffectiveIdempotencyKey { get; init; }
+
+    /// <summary>恢复决策（Dispatch / UseCachedResult / Reconcile / FailClosed）。</summary>
+    public ToolDispatchRecoveryDecision RecoveryDecision { get; init; } = ToolDispatchRecoveryDecision.Dispatch;
 }
 
 /// <summary>

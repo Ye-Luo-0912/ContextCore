@@ -38,8 +38,8 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //
 // 设计决策：
 //   - RequestId 由本执行器生成（稳定哈希），确保 Actor 与 Dispatcher 共享同一 ID。
-//   - ExternalOperationId 由本执行器生成（GUID），Prepare 时随 journal 条目持久化；
-//     Handler 返回真实外部系统 ID 时在 MarkDispatchedAsync 覆盖。
+//   - ExternalOperationId 由本执行器从稳定 RequestId 派生（"cc:" + requestId），
+//     Prepare 时随 journal 条目持久化；Handler 返回真实外部系统 ID 时在 MarkDispatchedAsync 覆盖。
 //   - Journal / Outbox / ResultStore 为可选依赖（null 时降级为直接 dispatch，无 durable 保证）。
 //   - 不处理审批（审批由 Actor 在调用本执行器前通过 IAgentApprovalGate 完成）。
 //   - 异常时返回 Succeeded=false 的结果（不抛异常，让 Actor 决定如何处理）。
@@ -106,18 +106,21 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         // toolCallId 优先使用模型分配的 ToolCallId，缺失时回退到 RequestId
         var toolCallId = !string.IsNullOrWhiteSpace(toolCall.ToolCallId) ? toolCall.ToolCallId! : requestId;
 
-        // 框架生成外部操作 ID（GUID）：Prepare 时随 journal 条目持久化（重放时读回保持稳定），
-        // 在外部调用发起前下发给 Tool Handler 供外部系统关联/去重；Handler 返回真实 ID 时覆盖。
-        var externalOperationId = Guid.NewGuid().ToString("N");
+        // 外部操作 ID 从稳定 RequestId 派生（"cc:" + requestId），不使用 GUID。
+        // 崩溃恢复时同一 (runId, modelTurn, toolCallId, toolName, arguments) 产出相同 RequestId，
+        // 派生值即恢复值；Journal 条目持久化的也是该派生值，外部 Provider 幂等记录恢复后可命中。
+        // 若 Handler 在 Dispatch 后返回真实外部系统 ID，MarkDispatchedAsync 时以真实 ID 覆盖。
+        var externalOperationId = "cc:" + requestId;
 
         // 读取 Tool 前置声明（副作用 / 审批 / 幂等 / fence / 恢复策略），
         // 用于 Dispatch 前的 fail-closed 校验与提交分类（声明权威，运行时结果仅验证）。
         var descriptor = _toolDispatcher.GetDescriptor(toolCall.ToolName);
 
-        // 幂等键兜底：声明要求幂等键但调用方未提供 → 以 ExternalOperationId 作为幂等键。
-        // 该值随 journal 持久化，重放时从 Prepare 结果/既有条目读回，保证同一次调用键稳定。
+        // 幂等键兜底：声明要求幂等键但调用方未提供 → 从稳定 RequestId 派生
+        // （providerNamespace + ":" + requestId，providerNamespace 取 ToolName 命名空间）。
+        // 派生值随 journal 持久化，重放时从 Prepare 结果读回，保证同一次调用键稳定。
         var effectiveIdempotencyKey = descriptor is { RequiresIdempotencyKey: true } && string.IsNullOrWhiteSpace(idempotencyKey)
-            ? externalOperationId
+            ? toolCall.ToolName + ":" + requestId
             : idempotencyKey;
 
         var startedAt = DateTimeOffset.UtcNow;
@@ -145,7 +148,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
         // 4. Journal.PrepareWithIntentAsync（若注入 journal）→ 单次原子写完成 Prepare + 前置 Intent
         //    （合并 PrepareAsync + MarkDispatchingIntentAsync 两次往返为一次，且 durable 边界
-        //      与条目创建原子化——ShouldDispatch=true 时 journal 必已处于 DispatchingIntent）。
+        //      与条目创建原子化——RecoveryDecision=Dispatch 时 journal 必已处于 DispatchingIntent）。
         //    根据 ToolDispatchPrepareResult 决策：
         ToolDispatchPrepareResult? prepareResult = null;
         if (_dispatchJournal is not null)
@@ -176,53 +179,71 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     duration: stopwatch.Elapsed);
             }
 
-            // 根据 Prepare 结果决策是否 Dispatch
-            // 4a. CachedResult 非空（Journal = Committed/ResultDelivered，InMemory 自带缓存）→ 直接返回缓存，禁止重新 Dispatch
-            if (prepareResult.CachedResult is not null)
+            // Journal 是调用身份的权威来源：PrepareWithIntentAsync 原子返回
+            // RequestId / ExternalOperationId / EffectiveIdempotencyKey / CurrentState / RecoveryDecision。
+            // 新插入返回本次派生的值；崩溃恢复（重放）返回既有条目持久化的值。
+            // 后续 Dispatch / MarkDispatched / MarkCommitted 一律使用 Journal 返回的身份——
+            // 不能使用恢复时重新生成的值，否则 ExternalOperationId / IdempotencyKey 漂移，
+            // 外部 Provider 幂等记录无法命中，Journal 语义等价检查报 RequestIdReuseDetected。
+            requestId = prepareResult.RequestId ?? requestId;
+            externalOperationId = prepareResult.ExternalOperationId ?? externalOperationId;
+            effectiveIdempotencyKey = prepareResult.EffectiveIdempotencyKey ?? effectiveIdempotencyKey;
+
+            switch (prepareResult.RecoveryDecision)
             {
-                stopwatch.Stop();
-                return BuildCachedResult(prepareResult.CachedResult, stopwatch.Elapsed);
-            }
+                // 4a. Journal = Committed/ResultDelivered 且缓存结果可用 → 直接返回缓存，禁止重新 Dispatch
+                case ToolDispatchRecoveryDecision.UseCachedResult when prepareResult.CachedResult is not null:
+                    stopwatch.Stop();
+                    return BuildCachedResult(prepareResult.CachedResult, stopwatch.Elapsed);
 
-            // 4b. NeedsReconciliation=true（Journal = Dispatched/DispatchingIntent 模糊态）→ 返回对账结果，不重新 Dispatch
-            //     外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决
-            if (prepareResult.NeedsReconciliation)
-            {
-                stopwatch.Stop();
-                return BuildReconciliationResult(
-                    requestId, effectiveIdempotencyKey, prepareResult.ExternalOperationId ?? externalOperationId, stopwatch.Elapsed);
-            }
-
-            // 4c. ShouldDispatch=false（Postgres 路径：journal 已 Committed/ResultDelivered 但 journal 不缓存结果）
-            //     查询 IDurableToolResultStore 获取缓存结果；无 resultStore 或缓存未命中 → 返回对账结果
-            if (!prepareResult.ShouldDispatch)
-            {
-                if (_resultStore is not null)
-                {
-                    DurableToolResult? cached = null;
-                    try
+                // 4c. Journal = Committed/ResultDelivered 但 journal 不缓存结果（Postgres 路径）
+                //     查询 IDurableToolResultStore；无 resultStore 或缓存未命中 → 返回对账结果
+                case ToolDispatchRecoveryDecision.UseCachedResult:
+                    if (_resultStore is not null)
                     {
-                        cached = await _resultStore.GetByRequestIdAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        DurableToolResult? cached = null;
+                        try
+                        {
+                            cached = await _resultStore.GetByRequestIdAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            // ResultStore 查询失败不阻断流程；降级为对账结果
+                        }
+                        if (cached is not null)
+                        {
+                            stopwatch.Stop();
+                            return BuildCachedResult(cached, stopwatch.Elapsed);
+                        }
                     }
-                    catch
-                    {
-                        // ResultStore 查询失败不阻断流程；降级为对账结果
-                    }
-                    if (cached is not null)
-                    {
-                        stopwatch.Stop();
-                        return BuildCachedResult(cached, stopwatch.Elapsed);
-                    }
-                }
 
-                // 无 resultStore 或缓存未命中，但 journal 已 Committed/ResultDelivered → 模糊状态，返回对账结果
-                // 不重新 Dispatch（journal 明确指示 ShouldDispatch=false，重新执行会违反 exactly-once）
-                stopwatch.Stop();
-                return BuildReconciliationResult(
-                    requestId, effectiveIdempotencyKey, prepareResult.ExternalOperationId ?? externalOperationId, stopwatch.Elapsed);
+                    // 无 resultStore 或缓存未命中，但 journal 已 Committed/ResultDelivered → 模糊状态，返回对账结果
+                    // 不重新 Dispatch（journal 明确指示 UseCachedResult，重新执行会违反 exactly-once）
+                    stopwatch.Stop();
+                    return BuildReconciliationResult(
+                        requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed);
+
+                // 4b. Journal = DispatchingIntent/Dispatched/Reconciling 模糊态 → 返回对账结果，不重新 Dispatch。
+                //     外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决。
+                case ToolDispatchRecoveryDecision.Reconcile:
+                    stopwatch.Stop();
+                    return BuildReconciliationResult(
+                        requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed);
+
+                // 4e. Journal 明确要求 fail-closed → 返回失败，不 Dispatch。
+                case ToolDispatchRecoveryDecision.FailClosed:
+                    stopwatch.Stop();
+                    return BuildFailedResult(
+                        requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
+                        error: $"Journal 恢复决策为 FailClosed（{prepareResult.CurrentState}），禁止执行 Tool '{toolCall.ToolName}'。",
+                        journalState: prepareResult.CurrentState,
+                        duration: stopwatch.Elapsed);
+
+                // 4d. Dispatch：本次新插入或既有 Prepared 已推进，journal 已处于 DispatchingIntent → 继续 Dispatch
+                case ToolDispatchRecoveryDecision.Dispatch:
+                default:
+                    break;
             }
-
-            // 4d. ShouldDispatch=true（本次新插入或既有 Prepared 已推进，journal 已处于 DispatchingIntent）→ 继续 Dispatch
         }
 
         // 5. Dispatch（携带 RequestId + 执行上下文：WorkspaceId/RunId/IdempotencyKey/ExternalOperationId）

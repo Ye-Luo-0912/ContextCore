@@ -965,6 +965,10 @@ F:ContextCore.Abstractions.StorageProviderKind.Postgres
 F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
+F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.Dispatch
+F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.FailClosed
+F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.Reconcile
+F:ContextCore.Abstractions.ToolDispatchRecoveryDecision.UseCachedResult
 F:ContextCore.Abstractions.ToolDispatchState.Committed
 F:ContextCore.Abstractions.ToolDispatchState.Dispatched
 F:ContextCore.Abstractions.ToolDispatchState.DispatchingIntent
@@ -10666,8 +10670,11 @@ P:ContextCore.Abstractions.ToolDispatchJournalEntry.UpdatedAt (get|init)
 P:ContextCore.Abstractions.ToolDispatchJournalEntry.WorkspaceId (get|init)
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.CachedResult (get|init)
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.CurrentState (get|init)
+P:ContextCore.Abstractions.ToolDispatchPrepareResult.EffectiveIdempotencyKey (get|init)
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.ExternalOperationId (get|init)
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.NeedsReconciliation (get|init)
+P:ContextCore.Abstractions.ToolDispatchPrepareResult.RecoveryDecision (get|init)
+P:ContextCore.Abstractions.ToolDispatchPrepareResult.RequestId (get|init)
 P:ContextCore.Abstractions.ToolDispatchPrepareResult.ShouldDispatch (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.DeadlineAt (get|init)
 P:ContextCore.Abstractions.ToolDispatchRequest.ExternalOperationId (get|init)
@@ -11781,6 +11788,7 @@ T:ContextCore.Abstractions.ToolAuthorizationResult
 T:ContextCore.Abstractions.ToolDescriptor
 T:ContextCore.Abstractions.ToolDispatchJournalEntry
 T:ContextCore.Abstractions.ToolDispatchPrepareResult
+T:ContextCore.Abstractions.ToolDispatchRecoveryDecision (Enum)
 T:ContextCore.Abstractions.ToolDispatchRequest
 T:ContextCore.Abstractions.ToolDispatchResult
 T:ContextCore.Abstractions.ToolDispatchState (Enum)

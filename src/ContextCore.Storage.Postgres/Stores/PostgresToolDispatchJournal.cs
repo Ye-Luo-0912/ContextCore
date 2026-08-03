@@ -88,29 +88,43 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
         var affected = await InsertEntryAsync(connection, entry, cancellationToken).ConfigureAwait(false);
         if (affected > 0)
         {
-            // 成功插入新条目 → ShouldDispatch = true
+            // 成功插入新条目 → ShouldDispatch = true；返回调用方派生的身份（Journal 权威回传）。
             return new ToolDispatchPrepareResult
             {
                 CurrentState = ToolDispatchState.Prepared,
                 ShouldDispatch = true,
                 NeedsReconciliation = false,
-                ExternalOperationId = null,
-                CachedResult = null
+                ExternalOperationId = entry.ExternalOperationId,
+                CachedResult = null,
+                RequestId = entry.RequestId,
+                EffectiveIdempotencyKey = entry.IdempotencyKey,
+                RecoveryDecision = ToolDispatchRecoveryDecision.Dispatch
             };
         }
 
         // 0 行插入意味着 request_id 已存在——读取既有行并验证语义等价，
         // 防止同一 RequestId 被复用为另一项操作时静默沿用旧 journal 记录。
-        var (existingState, existingExternalOperationId) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+        var (existingState, existingExternalOperationId, existingIdempotencyKey) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
 
         // 语义等价：幂等成功（重复 Prepare 同一操作）。根据当前状态构建 Prepare 结果。
+        // 注意：ToolDispatchState 字节值非逻辑有序（DispatchingIntent=4/Reconciling=5 大于 Committed=2），
+        // 必须用显式状态判定而非数值比较。
         return new ToolDispatchPrepareResult
         {
             CurrentState = existingState,
             ShouldDispatch = existingState == ToolDispatchState.Prepared,
             NeedsReconciliation = existingState == ToolDispatchState.Dispatched || existingState == ToolDispatchState.DispatchingIntent,
             ExternalOperationId = existingExternalOperationId,
-            CachedResult = null // Postgres 结果缓存由调用方管理
+            CachedResult = null, // Postgres 结果缓存由调用方管理
+            RequestId = entry.RequestId,
+            EffectiveIdempotencyKey = existingIdempotencyKey,
+            RecoveryDecision = existingState == ToolDispatchState.Committed || existingState == ToolDispatchState.ResultDelivered
+                ? ToolDispatchRecoveryDecision.UseCachedResult
+                : existingState == ToolDispatchState.DispatchingIntent
+                  || existingState == ToolDispatchState.Dispatched
+                  || existingState == ToolDispatchState.Reconciling
+                    ? ToolDispatchRecoveryDecision.Reconcile
+                    : ToolDispatchRecoveryDecision.Dispatch
         };
     }
 
@@ -138,18 +152,22 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
             connection, entry with { State = ToolDispatchState.DispatchingIntent }, cancellationToken).ConfigureAwait(false);
         if (affected > 0)
         {
+            // 成功插入 → ShouldDispatch=true；返回调用方派生的身份（Journal 权威回传）。
             return new ToolDispatchPrepareResult
             {
                 CurrentState = ToolDispatchState.DispatchingIntent,
                 ShouldDispatch = true,
                 NeedsReconciliation = false,
-                ExternalOperationId = null,
-                CachedResult = null
+                ExternalOperationId = entry.ExternalOperationId,
+                CachedResult = null,
+                RequestId = entry.RequestId,
+                EffectiveIdempotencyKey = entry.IdempotencyKey,
+                RecoveryDecision = ToolDispatchRecoveryDecision.Dispatch
             };
         }
 
         // 2. 已存在：语义等价校验（RequestId 复用检测）
-        var (existingState, existingExternalOperationId) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+        var (existingState, existingExternalOperationId, existingIdempotencyKey) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
 
         // 3. 既有 Prepared 前驱（旧两步流程崩溃残留）→ CAS 原子推进到 DispatchingIntent
         if (existingState == ToolDispatchState.Prepared)
@@ -164,12 +182,15 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
                     ShouldDispatch = true,
                     NeedsReconciliation = false,
                     ExternalOperationId = existingExternalOperationId,
-                    CachedResult = null
+                    CachedResult = null,
+                    RequestId = entry.RequestId,
+                    EffectiveIdempotencyKey = existingIdempotencyKey,
+                    RecoveryDecision = ToolDispatchRecoveryDecision.Dispatch
                 };
             }
 
             // 并发推进（0 行受影响）→ 重读实际状态后按矩阵返回
-            (existingState, existingExternalOperationId) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
+            (existingState, existingExternalOperationId, existingIdempotencyKey) = await ReadAndValidateExistingAsync(connection, entry, cancellationToken).ConfigureAwait(false);
         }
 
         // 4. 按当前状态构建决策矩阵
@@ -179,7 +200,16 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
             ShouldDispatch = existingState == ToolDispatchState.Prepared,
             NeedsReconciliation = existingState == ToolDispatchState.Dispatched || existingState == ToolDispatchState.DispatchingIntent,
             ExternalOperationId = existingExternalOperationId,
-            CachedResult = null // Postgres 结果缓存由调用方管理
+            CachedResult = null, // Postgres 结果缓存由调用方管理
+            RequestId = entry.RequestId,
+            EffectiveIdempotencyKey = existingIdempotencyKey,
+            RecoveryDecision = existingState == ToolDispatchState.Committed || existingState == ToolDispatchState.ResultDelivered
+                ? ToolDispatchRecoveryDecision.UseCachedResult
+                : existingState == ToolDispatchState.DispatchingIntent
+                  || existingState == ToolDispatchState.Dispatched
+                  || existingState == ToolDispatchState.Reconciling
+                    ? ToolDispatchRecoveryDecision.Reconcile
+                    : ToolDispatchRecoveryDecision.Dispatch
         };
     }
 
@@ -217,7 +247,7 @@ ON CONFLICT (request_id) DO NOTHING;
     /// 读取既有行并验证与本次条目语义等价（ToolName/IdempotencyKey/PayloadDigest/WorkspaceId/RunId）。
     /// 任一不等价 → 抛 RequestIdReuseDetected；行缺失（并发删除）→ 抛审计链断裂异常。
     /// </summary>
-    private async Task<(ToolDispatchState State, string? ExternalOperationId)> ReadAndValidateExistingAsync(
+    private async Task<(ToolDispatchState State, string? ExternalOperationId, string? IdempotencyKey)> ReadAndValidateExistingAsync(
         NpgsqlConnection connection,
         ToolDispatchJournalEntry entry,
         CancellationToken cancellationToken)
@@ -276,7 +306,7 @@ LIMIT 1;
                 $"同一 RequestId 不能复用为另一项操作。差异：{string.Join("；", mismatches)}。");
         }
 
-        return (existingState, existingExternalOperationId);
+        return (existingState, existingExternalOperationId, existingIdempotencyKey);
     }
 
     /// <summary>CAS 推进 Prepared → DispatchingIntent；0 行受影响表示状态已被并发推进。</summary>
