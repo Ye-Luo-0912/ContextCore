@@ -16,6 +16,11 @@ public sealed class HybridContextRetriever : IContextRetriever
     private readonly IDecisionTraceStore? _decisionTraceStore;
     private readonly RetrievalTraceAssembler _traceAssembler;
     private readonly IRetrievalChannelExecutor _vectorRecallChannelExecutor;
+    // 可选 tokenizer：Selected 水合后按真实正文精确重算 token（null 时回退 length/4 估算）。
+    private readonly IContextTokenizerResolver? _tokenizerResolver;
+    // 存储引用（Selected 正文水合阶段按需批量读取）。
+    private readonly IContextStore _contextStore;
+    private readonly IMemoryStore? _memoryStore;
     private int _retrievalTraceWriteFailures;
     private int _decisionTraceWriteFailures;
 
@@ -31,10 +36,15 @@ public sealed class HybridContextRetriever : IContextRetriever
         IRetrievalTraceStore? traceStore = null,
         IDecisionTraceStore? decisionTraceStore = null,
         // 显式覆盖 fanout 上限；为 null 时按 store 类型自动解析
-        RetrievalFanoutOptions? fanoutOptions = null)
+        RetrievalFanoutOptions? fanoutOptions = null,
+        // 可选 tokenizer：Selected 水合后精确重算 token；null 时回退 length/4 估算。
+        IContextTokenizerResolver? tokenizerResolver = null)
     {
         _traceStore = traceStore;
         _decisionTraceStore = decisionTraceStore;
+        _tokenizerResolver = tokenizerResolver;
+        _contextStore = contextStore;
+        _memoryStore = memoryStore;
         var contextObjectResolver = new DefaultContextObjectResolver(contextStore, memoryStore);
         var relationFrontierBuilder = new RelationFrontierBuilder();
         var relationExpansionService = relationStore is null
@@ -186,7 +196,10 @@ public sealed class HybridContextRetriever : IContextRetriever
             relationOnlyCandidatesView);
 
         var packed = RetrievalPackingPolicy.Pack(request, ranked, relationOnlyIds);
-        var effectivePacked = packed;
+        // Selected 正文水合 + token 重算：向量通道元数据投影路径下候选 Content 为空，
+        // 仅对 Pack 选中的候选批量读取正文（未选中候选不读正文 jsonb）。
+        var effectivePacked = await SelectedCandidateContentHydrator.HydrateAsync(
+            request, packed, _contextStore, _memoryStore, _tokenizerResolver, cancellationToken).ConfigureAwait(false);
 
         // 累积失败指标（prior calls）：写入 metadata 供 trace 与 result 消费。
         metadata["retrievalTraceWriteFailures"] = _retrievalTraceWriteFailures.ToString();

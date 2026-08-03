@@ -1,3 +1,4 @@
+using System.Globalization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -265,10 +266,22 @@ internal sealed class RetrievalCandidateBuilder
         return string.Join(";", parts);
     }
 
-    private static int EstimateTokens(string? text)
+    private int EstimateTokens(string? text)
     {
-        return string.IsNullOrWhiteSpace(text)
-            ? 0
-            : Math.Max(1, text.Length / 4);
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            return Math.Max(1, text.Length / 4);
+        }
+
+        // 元数据投影路径（Content 为空）下回退到摄取阶段持久化的精确 token 数，
+        // 避免打包预算把未加载正文的候选视为 0 token 而绕过预算过滤。
+        if (Metadata.TryGetValue(ContentMetadataKeys.ContentTokenCost, out var tokenValue)
+            && int.TryParse(tokenValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokens)
+            && tokens > 0)
+        {
+            return tokens;
+        }
+
+        return 0;
     }
 }

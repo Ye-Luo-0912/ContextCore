@@ -192,7 +192,8 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText =
             "SELECT workspace_id, collection_id, id, type, title, importance, version, " +
-            "updated_at, created_at, content_hash, content_token_cost, tags, refs, source_refs " +
+            "updated_at, created_at, content_hash, content_token_cost, tags, refs, source_refs, " +
+            "data->'Metadata' AS metadata " +
             $"FROM {Table("context_items")} " +
             "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
         command.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -299,14 +300,14 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
             // ts_rank 列仅在 hasQueryText 时追加（与排序条件一致）。
             // 列顺序固定为：workspace_id(0), collection_id(1), id(2), type(3), title(4),
             // importance(5), version(6), updated_at(7), created_at(8), content_hash(9),
-            // content_token_cost(10), tags(11), refs(12), source_refs(13), ts_rank?(14)
+            // content_token_cost(10), tags(11), refs(12), source_refs(13), metadata(14), ts_rank?(15), source_order?(16)
             if (hasQueryText && rankExpression is not null)
             {
                 command.CommandText = $"""
 WITH fts_hits AS (
     SELECT workspace_id, collection_id, id, type, title, importance, version,
            updated_at, created_at, content_hash, content_token_cost,
-           tags, refs, source_refs,
+           tags, refs, source_refs, data->'Metadata' AS metadata,
            {rankExpression} AS ts_rank, 0 AS source_order
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND search_vector @@ websearch_to_tsquery('simple', cjk_pre_tokenize(@query_text))
@@ -317,7 +318,7 @@ WITH fts_hits AS (
 id_hits AS (
     SELECT workspace_id, collection_id, id, type, title, importance, version,
            updated_at, created_at, content_hash, content_token_cost,
-           tags, refs, source_refs,
+           tags, refs, source_refs, data->'Metadata' AS metadata,
            NULL::real AS ts_rank, 1 AS source_order
     FROM {Table("context_items")}
     WHERE {baseFilterSql} AND (id = @query_exact OR id LIKE @query_prefix)
@@ -335,7 +336,7 @@ deduped AS (
 )
 SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
-       tags, refs, source_refs, ts_rank, source_order
+       tags, refs, source_refs, data->'Metadata' AS metadata, ts_rank, source_order
 FROM deduped
 ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
 {finalLimitSql};
@@ -346,7 +347,7 @@ ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC
                 command.CommandText = $"""
 SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
-       tags, refs, source_refs
+       tags, refs, source_refs, data->'Metadata' AS metadata
 FROM {Table("context_items")}
 WHERE {baseFilterSql} {plainAfterSql}
 ORDER BY importance DESC, updated_at DESC, id DESC
@@ -355,8 +356,8 @@ ORDER BY importance DESC, updated_at DESC, id DESC
             }
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            var tsRankColumnIndex = hasQueryText && rankExpression is not null ? 14 : -1;
-            var sourceOrderColumnIndex = hasQueryText && rankExpression is not null ? 15 : -1;
+            var tsRankColumnIndex = hasQueryText && rankExpression is not null ? 15 : -1;
+            var sourceOrderColumnIndex = hasQueryText && rankExpression is not null ? 16 : -1;
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 results.Add(ReadMetadataRow(reader, tsRankColumnIndex, sourceOrderColumnIndex));
@@ -562,11 +563,11 @@ ORDER BY importance DESC, updated_at DESC, id DESC
     /// 列顺序与 QueryAsync 中 IncludeContent=false 的 SELECT 子句一一对应：
     /// workspace_id(0), collection_id(1), id(2), type(3), title(4), importance(5), version(6),
     /// updated_at(7), created_at(8), content_hash(9), content_token_cost(10),
-    /// tags(11), refs(12), source_refs(13), ts_rank?(14)。
+    /// tags(11), refs(12), source_refs(13), metadata(14), ts_rank?(15), source_order?(16)。
     /// </remarks>
     /// <param name="tsRankColumnIndex">ts_rank 列索引（查询文本路径）；-1 = 无该列。</param>
     /// <param name="sourceOrderColumnIndex">source_order 列索引（查询文本路径）；-1 = 无该列。</param>
-    private static ContextItem ReadMetadataRow(
+    private ContextItem ReadMetadataRow(
         System.Data.Common.DbDataReader reader,
         int tsRankColumnIndex = -1,
         int sourceOrderColumnIndex = -1)
@@ -586,9 +587,23 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         var refs = reader.IsDBNull(12) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(12);
         var sourceRefs = reader.IsDBNull(13) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(13);
 
+        // 合并存储的元数据字典（data->'Metadata'），使元数据投影与全量读取路径
+        // 在 status 等自定义键上保持一致——检索阶段的废弃项过滤与候选元数据输出不因投影而丢失信息。
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!reader.IsDBNull(14))
+        {
+            var storedJson = reader.GetString(14);
+            if (!string.Equals(storedJson, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                var stored = Serializer.Deserialize<Dictionary<string, string>>(storedJson);
+                foreach (var entry in stored)
+                {
+                    metadata[entry.Key] = entry.Value;
+                }
+            }
+        }
         // 把持久化的 content_hash / content_token_cost 写入 Metadata，
         // Provider 在 BuildFromContextItem 中读取后跳过在线 SHA-256 + tokenizer 调用。
-        var metadata = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(contentHash))
         {
             metadata[ContentMetadataKeys.ContentHash] = contentHash;

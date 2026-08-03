@@ -16,13 +16,14 @@
 ## 当前状态
 
 - **基线**：main @ `c94f8298`（工作树干净）。
-- **进行中**：性能优化 WP-P1 已完成，待提交（见下）。
-- **最近完成**：WP-P1 作业队列批量化 + Workspace 公平 + queue wait 指标 + 工具定义冻结缓存。
+- **进行中**：性能优化 WP-P2 已完成，待提交（见下）。
+- **最近完成**：WP-P2 检索 Selected-only 正文水合 + Exact token 只对 Selected。
 
 ### 性能优化工作包进度
 
 - **WP-P1 已完成**：`ILeasedJobQueue.AcquireLeaseBatchAsync`（批量领取 + per-workspace 公平，两阶段 ROW_NUMBER）；`ContextJobWorker` 改为批量领取并按空闲槽位分派；新增 `PostgresJobQueueMetrics.QueueWait` 直方图（入队→领取等待时长）；`RealToolDispatcher.GetToolDefinitions` 冻结缓存；`JobWorkerOptions.MaxPerWorkspaceClaim`（默认 10）。验证：build 0 错误；ContextCore.Tests 11 既有失败不变（+2 新测试通过）；Service.Tests 64 通过；集成测试本地跳过（Docker 不可用，CI 覆盖）。
-- WP-P2（检索 Selected-only Content 水合 + Exact token 只对 Selected）、WP-P3（推理热路径）、WP-P4（快照自动压缩）、WP-P5（CI Artifact）待做。
+- **WP-P2 已完成**：检索 Selected-only 正文水合 + Exact token 只对 Selected。keyword/mandatory 通道保留 IncludeContent=true（评分依赖正文，不改基线）；向量通道改为元数据投影召回（探测 `IContextStoreMetadataLookup`/`IMemoryStoreMetadataLookup`，缺失则回退批量/单条）；Postgres context/memory 元数据投影补齐存储元数据字典（`data->'Metadata'`，修正 metadata 路径下 deprecated 过滤）；pack 阶段 token 估算回退摄取持久化的 `__content_token_cost`；新增 `SelectedCandidateContentHydrator`，Pack 后仅对 Selected 候选批量水合正文并重算 token；`HybridContextRetriever` 可选接入 tokenizer。验证：build 0 错误（无新增警告）；全量 ContextCore.Tests 3379 总数 / 11 既有失败不变（+4 新测试通过）；Service.Tests 0 失败 64 通过；集成测试本地跳过（CI 覆盖）。
+- **WP-P3（推理热路径）**、**WP-P4（快照自动压缩）**、**WP-P5（CI Artifact）** 待做。
 
 ## 必要元信息
 
@@ -30,7 +31,7 @@
 - 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
 - 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
 - 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
-- 验证门禁：build 0 错误；build 与 test **串行**执行；ContextCore.Tests 失败须**恰好 11 个既有项**（名单见下）。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须**恰好 11 个既有项**，名单见下）。
 
 ## 既有 11 个测试失败（勿当回归处理）
 

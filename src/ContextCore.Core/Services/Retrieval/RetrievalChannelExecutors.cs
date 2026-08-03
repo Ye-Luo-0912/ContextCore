@@ -533,21 +533,17 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
     {
         var batchContextStore = _contextStore as IContextStoreBatchLookup;
         var batchMemoryStore = _memoryStore as IMemoryStoreBatchLookup;
+        // 元数据投影：store 实现 IContextStoreMetadataLookup 时只取元数据（Content 为空），
+        // 未选中候选不读正文 jsonb；正文由 Selected 水合阶段按需批量读取（SelectedCandidateContentHydrator）。
+        var metadataContextStore = _contextStore as IContextStoreMetadataLookup;
+        var metadataMemoryStore = _memoryStore as IMemoryStoreMetadataLookup;
 
-        // 若两个 store 都不支持批量，回退到并行单条查询
-        if (batchContextStore is null && batchMemoryStore is null)
+        // 若两个 store 都不支持批量（含元数据投影），回退到并行单条查询
+        if (batchContextStore is null && batchMemoryStore is null
+            && metadataContextStore is null && metadataMemoryStore is null)
         {
-            // 对回退路径施加 SemaphoreSlim 上限
-            var parallelCandidates = await BoundedFanout.WhenAllAsync(
-                hits,
-                (hit, ct) => CreateVectorHitCandidateAsync(context, hit, ct),
-                _maxReadFanout,
-                cancellationToken).ConfigureAwait(false);
-            var fallback = new List<RetrievalChannelCandidate>();
-            foreach (var c in parallelCandidates)
-            {
-                if (c is not null) fallback.Add(c);
-            }
+            var fallback = new List<RetrievalChannelCandidate>(hits.Count);
+            await HydrateVectorHitsFallbackAsync(context, hits, fallback, cancellationToken).ConfigureAwait(false);
             return fallback;
         }
 
@@ -568,60 +564,82 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
 
         var results = new List<RetrievalChannelCandidate>(hits.Count);
 
-        // Context hits
+        // Context hits：优先元数据投影，其次全量批量，最后带节流的并行回退
         if (contextHits.Count > 0)
         {
-            if (batchContextStore is not null)
+            if (metadataContextStore is not null)
             {
                 await HydrateContextHitsBatchAsync(
-                    context, contextHits, batchContextStore, results, cancellationToken).ConfigureAwait(false);
+                    context, contextHits,
+                    (collectionId, ids, ct) => metadataContextStore.BatchGetMetadataAsync(
+                        context.Request.WorkspaceId, collectionId, ids, ct),
+                    results, cancellationToken).ConfigureAwait(false);
+            }
+            else if (batchContextStore is not null)
+            {
+                await HydrateContextHitsBatchAsync(
+                    context, contextHits,
+                    (collectionId, ids, ct) => batchContextStore.BatchGetAsync(
+                        context.Request.WorkspaceId, collectionId, ids, ct),
+                    results, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                // batchContextStore is null — 带节流的并行回退
-                var cs = await BoundedFanout.WhenAllAsync(
-                    contextHits,
-                    (h, ct) => CreateVectorHitCandidateAsync(context, h, ct),
-                    _maxReadFanout,
-                    cancellationToken).ConfigureAwait(false);
-                foreach (var c in cs)
-                {
-                    if (c is not null) results.Add(c);
-                }
+                await HydrateVectorHitsFallbackAsync(context, contextHits, results, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        // Memory hits
+        // Memory hits：优先元数据投影，其次全量批量，最后带节流的并行回退
         if (memoryHits.Count > 0)
         {
-            if (batchMemoryStore is not null)
+            if (metadataMemoryStore is not null)
             {
                 await HydrateMemoryHitsBatchAsync(
-                    context, memoryHits, batchMemoryStore, results, cancellationToken).ConfigureAwait(false);
+                    context, memoryHits,
+                    (collectionId, ids, ct) => metadataMemoryStore.BatchGetMetadataAsync(
+                        context.Request.WorkspaceId, collectionId, ids, ct),
+                    results, cancellationToken).ConfigureAwait(false);
+            }
+            else if (batchMemoryStore is not null)
+            {
+                await HydrateMemoryHitsBatchAsync(
+                    context, memoryHits,
+                    (collectionId, ids, ct) => batchMemoryStore.BatchGetAsync(
+                        context.Request.WorkspaceId, collectionId, ids, ct),
+                    results, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                // batchMemoryStore is null — 带节流的并行回退
-                var ms = await BoundedFanout.WhenAllAsync(
-                    memoryHits,
-                    (h, ct) => CreateVectorHitCandidateAsync(context, h, ct),
-                    _maxReadFanout,
-                    cancellationToken).ConfigureAwait(false);
-                foreach (var c in ms)
-                {
-                    if (c is not null) results.Add(c);
-                }
+                await HydrateVectorHitsFallbackAsync(context, memoryHits, results, cancellationToken).ConfigureAwait(false);
             }
         }
 
         return results;
     }
 
+    /// <summary>带节流的并行单条查询回退（store 不支持批量查询时复用）。</summary>
+    private async Task HydrateVectorHitsFallbackAsync(
+        RetrievalChannelContext context,
+        IReadOnlyList<VectorSearchResult> hits,
+        List<RetrievalChannelCandidate> results,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await BoundedFanout.WhenAllAsync(
+            hits,
+            (hit, ct) => CreateVectorHitCandidateAsync(context, hit, ct),
+            _maxReadFanout,
+            cancellationToken).ConfigureAwait(false);
+        foreach (var c in candidates)
+        {
+            if (c is not null) results.Add(c);
+        }
+    }
+
     /// <summary>按 CollectionId 分组批量查询 ContextStore，构造 vector 候选。</summary>
     private async Task HydrateContextHitsBatchAsync(
         RetrievalChannelContext context,
         List<VectorSearchResult> hits,
-        IContextStoreBatchLookup batchStore,
+        Func<string, string[], CancellationToken, Task<IReadOnlyList<ContextItem>>> batchFetch,
         List<RetrievalChannelCandidate> results,
         CancellationToken cancellationToken)
     {
@@ -631,11 +649,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
         {
             var collectionId = group.Key;
             var sourceIds = group.Select(h => h.Record.SourceId).ToArray();
-            var items = await batchStore.BatchGetAsync(
-                context.Request.WorkspaceId,
-                collectionId,
-                sourceIds,
-                cancellationToken).ConfigureAwait(false);
+            var items = await batchFetch(collectionId, sourceIds, cancellationToken).ConfigureAwait(false);
 
             // 按 Id 索引命中结果
             var itemDict = items.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
@@ -662,7 +676,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
     private async Task HydrateMemoryHitsBatchAsync(
         RetrievalChannelContext context,
         List<VectorSearchResult> hits,
-        IMemoryStoreBatchLookup batchStore,
+        Func<string, string[], CancellationToken, Task<IReadOnlyList<ContextMemoryItem>>> batchFetch,
         List<RetrievalChannelCandidate> results,
         CancellationToken cancellationToken)
     {
@@ -671,11 +685,7 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
         {
             var collectionId = group.Key;
             var sourceIds = group.Select(h => h.Record.SourceId).ToArray();
-            var memories = await batchStore.BatchGetAsync(
-                context.Request.WorkspaceId,
-                collectionId,
-                sourceIds,
-                cancellationToken).ConfigureAwait(false);
+            var memories = await batchFetch(collectionId, sourceIds, cancellationToken).ConfigureAwait(false);
 
             var memDict = memories.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
             foreach (var hit in group)

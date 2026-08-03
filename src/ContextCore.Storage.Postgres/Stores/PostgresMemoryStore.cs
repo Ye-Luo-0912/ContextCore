@@ -205,7 +205,8 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
         command.CommandText =
             "SELECT workspace_id, collection_id, id, layer, status, type, tags, source_refs, relation_refs, " +
             "importance, confidence, version, created_at, updated_at, " +
-            "content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at " +
+            "content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at, " +
+            "data->'Metadata' AS metadata " +
             $"FROM {Table("memory_items")} " +
             "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
         command.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -277,7 +278,8 @@ WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = @
             command.CommandText = $"""
 SELECT workspace_id, collection_id, id, layer, status, type, tags, source_refs, relation_refs,
        importance, confidence, version, created_at, updated_at,
-       content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at
+       content_hash, content_length, tokenizer_id, tokenizer_version, token_count, counted_at,
+       data->'Metadata' AS metadata
 FROM {Table("memory_items")}
 WHERE {string.Join(" AND ", filters)}
 ORDER BY importance DESC, updated_at DESC
@@ -429,8 +431,23 @@ LIMIT @take;
         var tokenCount = reader.IsDBNull(18) ? (int?)null : reader.GetInt32(18);
         var countedAt = reader.IsDBNull(19) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(19);
 
+        // 合并存储的元数据字典（data->'Metadata'），使元数据投影与全量读取路径
+        // 在自定义键上保持一致；再叠加摄取阶段持久化的 tokenization 专用列。
+        var baseMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!reader.IsDBNull(20))
+        {
+            var storedJson = reader.GetString(20);
+            if (!string.Equals(storedJson, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                var stored = Serializer.Deserialize<Dictionary<string, string>>(storedJson);
+                foreach (var entry in stored)
+                {
+                    baseMetadata[entry.Key] = entry.Value;
+                }
+            }
+        }
         var metadata = MergePersistedTokenizationColumns(
-            new Dictionary<string, string>(StringComparer.Ordinal),
+            baseMetadata,
             contentHash, contentLength, tokenizerId, tokenizerVersion, tokenCount, countedAt);
 
         return new ContextMemoryItem

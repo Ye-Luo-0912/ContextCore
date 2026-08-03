@@ -69,7 +69,8 @@ public static class ContextRuntimeBuilder
             options.VectorStore,
             options.RetrievalTraceStore,
             decisionTraceStore: options.DecisionTraceStore,
-            fanoutOptions: fanoutOptions);
+            fanoutOptions: fanoutOptions,
+            tokenizerResolver: options.TokenizerResolver);
 
         return new RuntimeServices
         {
