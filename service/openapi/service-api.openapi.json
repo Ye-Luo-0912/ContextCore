@@ -8432,6 +8432,46 @@
         }
       }
     },
+    "/api/models/cluster/applied-state": {
+      "get": {
+        "tags": [
+          "ModelControlPlane"
+        ],
+        "summary": "集群模型已应用状态注册表：聚合各节点已应用记录，报告集群收敛 / 落后节点 / 内容哈希冲突",
+        "operationId": "GetClusterAppliedState",
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterAppliedStateResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/models/{id}/audit": {
       "get": {
         "tags": [
@@ -9275,6 +9315,380 @@
           }
         }
       }
+    },
+    "/api/canary/emergency/{runId}/kill": {
+      "post": {
+        "tags": [
+          "CanaryEmergency"
+        ],
+        "summary": "触发集群级 Canary 紧急覆盖：路由层强制回退 V1，Progression 暂停推进直到清除",
+        "operationId": "CanaryEmergencyKill",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillCanaryOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanaryEmergencyOverrideResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/canary/emergency/{runId}/clear": {
+      "post": {
+        "tags": [
+          "CanaryEmergency"
+        ],
+        "summary": "清除集群级 Canary 紧急覆盖：恢复 Canary 推进与路由百分比",
+        "operationId": "CanaryEmergencyClear",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operatorName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanaryEmergencyOverrideResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/canary/emergency/overrides": {
+      "get": {
+        "tags": [
+          "CanaryEmergency"
+        ],
+        "summary": "查询全部活跃的 Canary 紧急覆盖（Kill Switch 状态）",
+        "operationId": "CanaryEmergencyListOverrides",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanaryEmergencyOverrideListResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/retrieval/adaptive/policy": {
+      "get": {
+        "tags": [
+          "AdaptiveRetrieval"
+        ],
+        "summary": "查询自适应检索策略（预算收敛 / 查询收敛 / 召回增强乘数；signature 或规划输入字段）",
+        "operationId": "GetAdaptiveRetrievalPolicy",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "originalTask",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "latestAssistantIntent",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "goals",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptiveRetrievalPolicy"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/retrieval/adaptive/feedback": {
+      "get": {
+        "tags": [
+          "AdaptiveRetrieval"
+        ],
+        "summary": "列出指定计划签名最近 N 条检索结果反馈（按记录时间倒序）",
+        "operationId": "ListAdaptiveRetrievalFeedback",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptiveRetrievalFeedbackListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AdaptiveRetrieval"
+        ],
+        "summary": "记录一条检索结果反馈（自适应规划器的学习信号）",
+        "operationId": "RecordAdaptiveRetrievalFeedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordAdaptiveRetrievalFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptiveRetrievalFeedbackRecordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/retrieval/adaptive/reset": {
+      "post": {
+        "tags": [
+          "AdaptiveRetrieval"
+        ],
+        "summary": "清除检索结果反馈并重置自适应状态（signature 缺省时清除全部）",
+        "operationId": "ResetAdaptiveRetrieval",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptiveRetrievalResetResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9370,6 +9784,110 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "AdaptiveRetrievalFeedbackListResponse": {
+        "type": "object",
+        "properties": {
+          "planSignature": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RetrievalPlanFeedback"
+            }
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "AdaptiveRetrievalFeedbackRecordResponse": {
+        "type": "object",
+        "properties": {
+          "planSignature": {
+            "type": "string"
+          },
+          "recorded": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdaptiveRetrievalPolicy": {
+        "required": [
+          "planSignature",
+          "tokenBudgetMultiplier",
+          "queryConvergenceMultiplier",
+          "recallBoostMultiplier",
+          "feedbackSampleCount",
+          "computedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "planSignature": {
+            "type": "string"
+          },
+          "tokenBudgetMultiplier": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "queryConvergenceMultiplier": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "recallBoostMultiplier": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "feedbackSampleCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "computedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "AdaptiveRetrievalResetResponse": {
+        "type": "object",
+        "properties": {
+          "cleared": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "scope": {
+            "type": "string"
           }
         }
       },
@@ -9642,6 +10160,59 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "CanaryEmergencyOverrideListResponse": {
+        "type": "object",
+        "properties": {
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanaryEmergencyOverrideResponse"
+            }
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CanaryEmergencyOverrideResponse": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "operatorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "clearedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "clearedBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
           }
         }
       },
@@ -10478,6 +11049,179 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ClusterAppliedStateResponse": {
+        "required": [
+          "summary"
+        ],
+        "type": "object",
+        "properties": {
+          "slotName": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ClusterSlotAppliedSummary"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClusterNodeAppliedEntry"
+            }
+          },
+          "nodeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ClusterModelSlotDesiredStatus": {
+        "type": "integer"
+      },
+      "ClusterNodeAppliedEntry": {
+        "required": [
+          "nodeId",
+          "appliedRevision",
+          "appliedAt",
+          "isCurrent",
+          "isBehind"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeId": {
+            "type": "string"
+          },
+          "appliedRevision": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "modelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contentHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "isBehind": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClusterSlotAppliedSummary": {
+        "required": [
+          "slotName",
+          "desiredRevision",
+          "desiredStatus",
+          "nodeCount",
+          "minAppliedRevision",
+          "maxAppliedRevision",
+          "converged",
+          "nodesBehind",
+          "contentHashConflictCount",
+          "computedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "slotName": {
+            "type": "string"
+          },
+          "desiredRevision": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "desiredStatus": {
+            "$ref": "#/components/schemas/ClusterModelSlotDesiredStatus"
+          },
+          "desiredModelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "desiredContentHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "minAppliedRevision": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "maxAppliedRevision": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "converged": {
+            "type": "boolean"
+          },
+          "nodesBehind": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "contentHashConflictCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "latestAppliedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "computedAtUtc": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -15538,6 +16282,23 @@
         }
       },
       "JsonElement": { },
+      "KillCanaryOverrideRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "operatorName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "LatencyStats": {
         "required": [
           "p50",
@@ -17618,6 +18379,37 @@
           }
         }
       },
+      "RecordAdaptiveRetrievalFeedbackRequest": {
+        "type": "object",
+        "properties": {
+          "planSignature": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "queryText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hitsReturned": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "budgetExceeded": {
+            "type": "boolean"
+          },
+          "effective": {
+            "type": "boolean"
+          }
+        }
+      },
       "RegisterModelRequest": {
         "type": "object",
         "properties": {
@@ -18793,6 +19585,39 @@
             ]
           },
           "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RetrievalPlanFeedback": {
+        "required": [
+          "planSignature",
+          "recordedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "planSignature": {
+            "type": "string"
+          },
+          "queryText": {
+            "type": "string"
+          },
+          "hitsReturned": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "budgetExceeded": {
+            "type": "boolean"
+          },
+          "effective": {
+            "type": "boolean"
+          },
+          "recordedAtUtc": {
             "type": "string",
             "format": "date-time"
           }
@@ -23242,6 +24067,12 @@
     },
     {
       "name": "AgentExecution"
+    },
+    {
+      "name": "CanaryEmergency"
+    },
+    {
+      "name": "AdaptiveRetrieval"
     }
   ]
 }

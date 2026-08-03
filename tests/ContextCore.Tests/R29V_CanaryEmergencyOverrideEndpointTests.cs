@@ -3,6 +3,7 @@ using ContextCore.Abstractions;
 using ContextCore.Service.Endpoints;
 using ContextCore.Storage.InMemory.Stores;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ContextCore.Tests;
 
@@ -27,6 +28,9 @@ namespace ContextCore.Tests;
 public sealed class R29V_CanaryEmergencyOverrideEndpointTests
 {
     private const string RunId = "run-canary-emergency-001";
+
+    // 服务器响应为 camelCase（Results.Ok 使用 web 默认序列化选项）。
+    private static readonly JsonSerializerOptions JsonWeb = new(JsonSerializerDefaults.Web);
 
     // =========================================================================
     // 触发（kill）
@@ -69,7 +73,7 @@ public sealed class R29V_CanaryEmergencyOverrideEndpointTests
             store, RunId, new KillCanaryOverrideRequest { Reason = "v2 P95 恶化", OperatorName = "ops-oncall" }, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideResponse>(body);
+        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideResponse>(body, JsonWeb);
         Assert.IsNotNull(response);
         Assert.AreEqual(RunId, response!.RunId);
         Assert.AreEqual("v2 P95 恶化", response.Reason);
@@ -125,7 +129,7 @@ public sealed class R29V_CanaryEmergencyOverrideEndpointTests
             store, RunId, "ops-oncall", Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideResponse>(body);
+        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideResponse>(body, JsonWeb);
         Assert.IsNotNull(response);
         Assert.AreEqual(RunId, response!.RunId);
         Assert.IsFalse(response.IsActive, "清除后 IsActive 应为 false。");
@@ -165,7 +169,7 @@ public sealed class R29V_CanaryEmergencyOverrideEndpointTests
             new InMemoryCanaryEmergencyOverrideStore(), Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideListResponse>(body);
+        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideListResponse>(body, JsonWeb);
         Assert.IsNotNull(response);
         Assert.AreEqual(0, response!.Count);
         Assert.AreEqual(0, response.Overrides.Count);
@@ -182,7 +186,7 @@ public sealed class R29V_CanaryEmergencyOverrideEndpointTests
             store, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideListResponse>(body);
+        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideListResponse>(body, JsonWeb);
         Assert.IsNotNull(response);
         Assert.AreEqual(2, response!.Count);
         Assert.AreEqual(2, response.Overrides.Count);
@@ -207,7 +211,7 @@ public sealed class R29V_CanaryEmergencyOverrideEndpointTests
             store, RunId, new KillCanaryOverrideRequest { Reason = "再次触发" }, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status, "清除后再次触发应成功（覆盖生命周期可重复）。");
-        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideResponse>(body);
+        var response = JsonSerializer.Deserialize<CanaryEmergencyOverrideResponse>(body, JsonWeb);
         Assert.AreEqual("再次触发", response!.Reason);
         Assert.IsTrue(response.IsActive);
     }
@@ -221,6 +225,8 @@ public sealed class R29V_CanaryEmergencyOverrideEndpointTests
         var httpContext = new DefaultHttpContext();
         httpContext.TraceIdentifier = "test-trace";
         httpContext.Response.Body = new MemoryStream();
+        // .NET 10 的 Ok<T>/JsonHttpResult<T>.ExecuteAsync 需要从 RequestServices 解析 ILoggerFactory。
+        httpContext.RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider();
         return httpContext;
     }
 

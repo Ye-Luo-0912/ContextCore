@@ -6,6 +6,7 @@ using ContextCore.Storage.InMemory.Stores;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ContextCore.Tests;
 
@@ -32,6 +33,9 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
 {
     private const string TaskText = "分析 「AlphaProtocol」 的部署状态并整理修复建议";
     private const string IntentText = "先查 AlphaProtocol 的配置项";
+
+    // 服务器响应为 camelCase（Results.Ok 使用 web 默认序列化选项）。
+    private static readonly JsonSerializerOptions JsonWeb = new(JsonSerializerDefaults.Web);
 
     // =========================================================================
     // Part 1: IRetrievalPlanFeedbackStore（InMemory）
@@ -335,7 +339,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
             planner, signature: null, originalTask: TaskText, latestAssistantIntent: IntentText, goals: null, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var policy = JsonSerializer.Deserialize<AdaptiveRetrievalPolicy>(body);
+        var policy = JsonSerializer.Deserialize<AdaptiveRetrievalPolicy>(body, JsonWeb);
         Assert.IsNotNull(policy);
         Assert.AreEqual(1.0, policy!.TokenBudgetMultiplier);
     }
@@ -362,7 +366,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
             planner, signature: signature, limit: 10, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var response = JsonSerializer.Deserialize<AdaptiveRetrievalFeedbackListResponse>(body);
+        var response = JsonSerializer.Deserialize<AdaptiveRetrievalFeedbackListResponse>(body, JsonWeb);
         Assert.IsNotNull(response);
         Assert.AreEqual(1, response!.Count);
     }
@@ -394,7 +398,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
             }, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var recorded = JsonSerializer.Deserialize<AdaptiveRetrievalFeedbackRecordResponse>(body);
+        var recorded = JsonSerializer.Deserialize<AdaptiveRetrievalFeedbackRecordResponse>(body, JsonWeb);
         Assert.IsTrue(recorded!.Recorded);
         var stored = await store.ListRecentAsync(signature);
         Assert.AreEqual(1, stored.Count);
@@ -422,7 +426,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
             planner, signature: signature, Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
-        var response = JsonSerializer.Deserialize<AdaptiveRetrievalResetResponse>(body);
+        var response = JsonSerializer.Deserialize<AdaptiveRetrievalResetResponse>(body, JsonWeb);
         Assert.AreEqual(1, response!.Cleared);
         Assert.AreEqual(signature, response.Scope);
         Assert.AreEqual(0, (await store.ListRecentAsync(signature)).Count);
@@ -451,7 +455,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         };
         if (remainingTurns is not null)
         {
-            input = input with { TurnBudget = new AgentTurnBudget { Remaining = remainingTurns.Value } };
+            input = input with { TurnBudget = new AgentTurnBudget { MaxTurns = remainingTurns.Value, TurnsUsed = 0 } };
         }
         return input;
     }
@@ -482,6 +486,8 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var httpContext = new DefaultHttpContext();
         httpContext.TraceIdentifier = "test-trace";
         httpContext.Response.Body = new MemoryStream();
+        // .NET 10 的 Ok<T>/JsonHttpResult<T>.ExecuteAsync 需要从 RequestServices 解析 ILoggerFactory。
+        httpContext.RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider();
         return httpContext;
     }
 
