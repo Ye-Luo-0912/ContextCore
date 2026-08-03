@@ -205,7 +205,8 @@ app
 	.MapModelControlPlaneEndpoints()
 	.MapUtilityLedgerEndpoints()
 	.MapProductionRuntimeEndpoints()
-	.MapAgentExecutionEndpoints();
+	.MapAgentExecutionEndpoints()
+	.MapCanaryEmergencyEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", utc = DateTimeOffset.UtcNow }))
 	.WithTags("Health")
