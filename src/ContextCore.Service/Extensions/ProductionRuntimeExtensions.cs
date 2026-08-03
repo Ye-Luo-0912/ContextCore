@@ -179,6 +179,11 @@ internal static class ProductionRuntimeExtensions
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
 
+        // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
+        // 无条件注册（进程内 store 始终可用；无记录时为 no-op）。
+        services.AddHostedService<ToolReconciliationWorker>();
+        workerRegistry.Add<ToolReconciliationWorker>();
+
         // 单节点 Canary Progression HostedService 注册。
         // CanaryProgressionHostedService 通过 IOptionsMonitor<CanarySchedulerOptions> 读取 Enabled 标志，
         // ProductionHA 模式的 PostConfigure(Enabled=false) 能被正确感知。
@@ -206,6 +211,10 @@ internal static class ProductionRuntimeExtensions
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
+
+        // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
+        services.AddHostedService<ToolReconciliationWorker>();
+        workerRegistry.Add<ToolReconciliationWorker>();
 
         // 单节点 Canary Progression HostedService 注册。
         services.AddHostedService<CanaryProgressionHostedService>();
@@ -256,6 +265,10 @@ internal static class ProductionRuntimeExtensions
             services.AddHostedService<AgentRunRecoveryWorker>();
             workerRegistry.Add<AgentRunRecoveryWorker>();
         }
+
+        // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
+        services.AddHostedService<ToolReconciliationWorker>();
+        workerRegistry.Add<ToolReconciliationWorker>();
 
         // 3. HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。

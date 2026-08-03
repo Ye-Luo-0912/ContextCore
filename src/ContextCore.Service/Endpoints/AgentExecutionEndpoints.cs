@@ -626,7 +626,138 @@ internal static class AgentExecutionEndpoints
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
+        // ── 裁决 Tool 对账记录 ─────────────────────────────────────
+        group.MapPost("/{id}/reconciliations/{reconciliationId}/resolve", async Task<IResult> (
+            string id,
+            string reconciliationId,
+            ResolveReconciliationRequest request,
+            IAgentRunStore runStore,
+            [FromServices] ToolReconciliationCoordinator? coordinator,
+            [FromServices] IToolReconciliationStore? reconciliationStore,
+            [FromServices] AgentKernelHost? host,
+            IWorkspaceContextAccessor workspaceContextAccessor,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var workspaceId = ResolveWorkspaceId(workspaceContextAccessor, null);
+
+            var run = await runStore.GetAsync(workspaceId, id, ct).ConfigureAwait(false);
+            if (run is null)
+            {
+                return ContextCoreHttpResultMapper.NotFound(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    $"未找到 RunId='{id}'。");
+            }
+
+            if (AgentRunStateMachine.IsTerminalState(run.State))
+            {
+                return ContextCoreHttpResultMapper.InvalidRequest(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    $"Run 已处于终态 {run.State}，无法裁决对账记录。",
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+
+            var outcome = new ToolReconciliationOutcome
+            {
+                SideEffectOccurred = request.SideEffectOccurred,
+                Result = request.Result,
+                Error = request.Error
+            };
+
+            int code;
+            if (coordinator is not null)
+            {
+                code = await coordinator.ResolveAsync(reconciliationId, outcome, ct).ConfigureAwait(false);
+            }
+            else if (reconciliationStore is not null)
+            {
+                // 协调器未注册（独立宿主场景）→ 回退到存储幂等裁决（不提交 journal）。
+                var record = await reconciliationStore.GetAsync(reconciliationId, ct).ConfigureAwait(false);
+                if (record is null)
+                {
+                    code = 1;
+                }
+                else if (record.Status is ToolReconciliationStatus.Resolved or ToolReconciliationStatus.Rejected)
+                {
+                    code = 2;
+                }
+                else if (outcome.SideEffectOccurred)
+                {
+                    await reconciliationStore.MarkResolvedAsync(reconciliationId, outcome, ct).ConfigureAwait(false);
+                    code = 0;
+                }
+                else
+                {
+                    await reconciliationStore.MarkRejectedAsync(reconciliationId, outcome, ct).ConfigureAwait(false);
+                    code = 0;
+                }
+            }
+            else
+            {
+                return ContextCoreHttpResultMapper.InternalError(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    "未注册 ToolReconciliationCoordinator / IToolReconciliationStore，无法裁决对账记录。");
+            }
+
+            return code switch
+            {
+                1 => ContextCoreHttpResultMapper.NotFound(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    $"未找到 reconciliationId='{reconciliationId}'。"),
+                2 => ContextCoreHttpResultMapper.InvalidRequest(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    $"对账记录 '{reconciliationId}' 已裁决，重复提交被拒绝。",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => await ResolveAccepted(workspaceId, id, reconciliationId, reconciliationStore, host, httpContext, ct)
+            };
+        })
+        .WithName("ResolveAgentRunReconciliation")
+        .RequireWorkspacePermission(WorkspacePermission.AgentRun)
+        .WithSummary("裁决 Tool 对账记录（确认外部副作用真相 / 拒绝重放）")
+        .Produces(StatusCodes.Status202Accepted)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
+
         return app;
+    }
+
+    /// <summary>
+    /// 裁决成功后返回 202，并在 Run 无未裁决记录时立即重新入队（缩短对账完成到恢复执行的延迟）。
+    /// </summary>
+    private static async Task<IResult> ResolveAccepted(
+        string workspaceId,
+        string runId,
+        string reconciliationId,
+        IToolReconciliationStore? reconciliationStore,
+        AgentKernelHost? host,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        // 仍有未裁决记录 → 保持停车，等待后续裁决全部完成后由 Worker 重新入队。
+        if (reconciliationStore is not null
+            && await reconciliationStore.HasUnresolvedForRunAsync(runId, ct).ConfigureAwait(false))
+        {
+            return Results.Accepted($"/api/agents/runs/{runId}");
+        }
+
+        // 全部裁决完成 → 立即重新入队（不等 Worker 轮询）。
+        if (host is not null)
+        {
+            try
+            {
+                var run = await host.GetRunStatusAsync(workspaceId, runId, ct).ConfigureAwait(false);
+                if (run is not null)
+                {
+                    await host.StartRunAsync(run, CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // 入队失败非致命：RecoveryWorker 会重新入队执行。
+            }
+        }
+
+        return Results.Accepted($"/api/agents/runs/{runId}");
     }
 
     // -----------------------------------------------------------------------
@@ -972,6 +1103,19 @@ public sealed class ApprovalRequest
 
     /// <summary>审批者标识（可选；未提供时从认证上下文读取）。</summary>
     public string? Approver { get; init; }
+}
+
+/// <summary>裁决 Tool 对账记录请求（POST /runs/{runId}/reconciliations/{id}/resolve）。</summary>
+public sealed class ResolveReconciliationRequest
+{
+    /// <summary>外部副作用是否确实发生（true=已发生并提交真相结果；false=未发生，提交 void 并拒绝重放）。</summary>
+    public bool SideEffectOccurred { get; init; }
+
+    /// <summary>外部系统查得的真相结果（SideEffectOccurred=true 时填充）。</summary>
+    public string? Result { get; init; }
+
+    /// <summary>拒绝/失败原因（SideEffectOccurred=false 或无法确认时填充）。</summary>
+    public string? Error { get; init; }
 }
 
 /// <summary>Agent Run 响应。</summary>

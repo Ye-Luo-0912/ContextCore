@@ -62,6 +62,8 @@ public sealed class AgentRunActor
     private readonly IAgentCheckpointStore? _checkpointStore;
     // 子问题 5：Durable Tool Executor（封装 journal + dispatch）
     private readonly IDurableToolExecutor? _durableToolExecutor;
+    // Tool 对账记录存储（null 时禁用"未裁决不完成"约束，仅 journal 自身保证模糊态不被重放）
+    private readonly IToolReconciliationStore? _reconciliationStore;
     // 模型上下文投影器（从 WorkingSet.Materials 取正文 + Token 预算控制）
     private readonly IAgentModelContextProjector? _modelContextProjector;
     // Tool 定义列表（从 RealToolDispatcher 构建，用于原生 function calling 声明）
@@ -174,6 +176,7 @@ public sealed class AgentRunActor
     /// <param name="durableToolExecutor">子问题 5：Durable Tool Executor（null 时回退到 IToolDispatcher）。</param>
     /// <param name="modelContextProjector">模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
     /// <param name="approvalStore">审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
+    /// <param name="reconciliationStore">Tool 对账记录存储（null 时跳过"未裁决不完成"约束）。</param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -187,7 +190,8 @@ public sealed class AgentRunActor
         IContextDecisionRuntime? decisionRuntime = null,
         IAgentCheckpointStore? checkpointStore = null,
         IDurableToolExecutor? durableToolExecutor = null,
-        IAgentModelContextProjector? modelContextProjector = null)
+        IAgentModelContextProjector? modelContextProjector = null,
+        IToolReconciliationStore? reconciliationStore = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -202,6 +206,7 @@ public sealed class AgentRunActor
         _checkpointStore = checkpointStore;
         _durableToolExecutor = durableToolExecutor;
         _modelContextProjector = modelContextProjector;
+        _reconciliationStore = reconciliationStore;
         // 从 RealToolDispatcher 构建 Tool 定义（原生 function calling）；
         // EchoToolDispatcher 或其他实现无 Tool 定义 → 空列表（模型不感知 Tool）。
         _toolDefinitions = (toolDispatcher as RealToolDispatcher)?.GetToolDefinitions()
@@ -377,6 +382,13 @@ public sealed class AgentRunActor
 
                     case AgentLoopDecision.Complete:
                         state = await CompleteAsync(state, cancellationToken).ConfigureAwait(false);
+                        // 存在未裁决 Tool → CompleteAsync 已转为 AwaitingReconciliation 并持久化。
+                        // 退出执行槽（释放 Worker/Semaphore/Lease），等待 ToolReconciliationWorker
+                        // 对账全部完成后重新入队，Actor 恢复执行。
+                        if (state.Run.State == AgentRunState.AwaitingReconciliation)
+                        {
+                            return;
+                        }
                         break;
 
                     case AgentLoopDecision.Fail:
@@ -1215,6 +1227,10 @@ public sealed class AgentRunActor
                 error: toolResult.Error,
                 durationMs: toolResult.Duration.TotalMilliseconds)));
 
+            // Journal 处于模糊状态（DispatchingIntent/Dispatched/Reconciling）→ 创建对账记录。
+            // 只要 Run 存在未裁决记录，CompleteAsync 就不得推进到 Completed（等待 Worker/人工裁决）。
+            await EnsureReconciliationRecordAsync(state, toolResult, pendingCommand.ToolName, cancellationToken).ConfigureAwait(false);
+
             // 观察结果
             var observation = toolResult.Succeeded
                 ? $"{toolResult.Result}"
@@ -1895,6 +1911,9 @@ public sealed class AgentRunActor
                 error: toolResult.Error,
                 durationMs: toolResult.Duration.TotalMilliseconds)));
 
+            // Journal 处于模糊状态 → 创建对账记录（幂等；阻止 Run 在未裁决时 Completed）。
+            await EnsureReconciliationRecordAsync(state, toolResult, toolCall.ToolName, cancellationToken).ConfigureAwait(false);
+
             // 观察结果以结构化 ToolObservation 形式追加到 Context.ToolObservations
             // （替代旧路径直接 Add AgentMessage 到 Messages）；
             // ProjectForModel 投影时一次性合成 Tool 角色 AgentMessage，避免在每次模型响应/Tool 观察时复制既有字符串。
@@ -1976,6 +1995,44 @@ public sealed class AgentRunActor
 
         return state;
     }
+
+    /// <summary>
+    /// Journal 处于模糊状态（DispatchingIntent/Dispatched/Reconciling）时创建对账记录。
+    /// 幂等：按 RunId+RequestId 已存在时返回既有记录。只要 Run 存在未裁决记录，
+    /// <see cref="CompleteAsync"/> 就不得推进到 Completed（等待 Worker 或人工 resolve 端点裁决）。
+    /// </summary>
+    private async Task EnsureReconciliationRecordAsync(
+        AgentRunExecutionState state,
+        ToolExecutionResult toolResult,
+        string toolName,
+        CancellationToken cancellationToken)
+    {
+        if (_reconciliationStore is null || !RequiresReconciliation(toolResult.JournalState))
+        {
+            return;
+        }
+
+        var record = new ToolReconciliationRecord
+        {
+            ReconciliationId = "rec:" + toolResult.RequestId,
+            RunId = state.Run.RunId,
+            WorkspaceId = state.Run.WorkspaceId,
+            RequestId = toolResult.RequestId,
+            ToolName = toolName,
+            ExternalOperationId = toolResult.ExternalOperationId,
+            ReconciliationHandler = toolResult.ReconciliationHandler,
+            Status = ToolReconciliationStatus.Pending,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        await _reconciliationStore.CreateAsync(record, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Journal 模糊状态判定：外部副作用可能已执行但未提交，需对账确认真相。</summary>
+    private static bool RequiresReconciliation(ToolDispatchState state)
+        => state == ToolDispatchState.DispatchingIntent
+           || state == ToolDispatchState.Dispatched
+           || state == ToolDispatchState.Reconciling;
 
     /// <summary>
     /// 子问题 6：构建 ToolCallCompleted 事件 payload（含完整 Tool 身份信息）。
@@ -2132,6 +2189,21 @@ public sealed class AgentRunActor
     /// <summary>执行 Complete 阶段。</summary>
     private async Task<AgentRunExecutionState> CompleteAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
+        // 只要 Run 存在未裁决的对账记录（Journal 模糊态 Tool），就禁止进入 Completed。
+        // 转为 AwaitingReconciliation 停车（本地推进 + 缓冲 StateTransition 事件后立即 flush）：
+        // ToolReconciliationWorker 对账完成后将 Run 重新入队，Actor 从事件流恢复执行。
+        if (_reconciliationStore is not null)
+        {
+            var unresolved = await _reconciliationStore
+                .HasUnresolvedForRunAsync(state.Run.RunId, cancellationToken).ConfigureAwait(false);
+            if (unresolved)
+            {
+                state = TransitionStateLocal(state, AgentRunState.AwaitingReconciliation);
+                await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+                return state;
+            }
+        }
+
         var finalAnswer = state.LastModelResponse?.Content ?? string.Empty;
 
         // 更新本地 Run 副本（含最终答案 + ModelCallsUsed）

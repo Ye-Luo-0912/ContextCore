@@ -313,6 +313,141 @@ public interface IToolEffectPolicy
 }
 
 /// <summary>
+/// Tool 对账记录状态。
+/// </summary>
+public enum ToolReconciliationStatus : byte
+{
+    /// <summary>待对账（Run 处于 AwaitingReconciliation，等待 Worker 或人工裁决）。</summary>
+    Pending = 0,
+
+    /// <summary>对账进行中（ToolReconciliationWorker 已接管，正在确认外部副作用真相）。</summary>
+    Running = 1,
+
+    /// <summary>已裁决：外部副作用确认发生并已提交（journal → Committed，含对账结果）。</summary>
+    Resolved = 2,
+
+    /// <summary>已拒绝：外部副作用确认未发生或人工拒绝（journal 已提交 void 结果，禁止重放）。</summary>
+    Rejected = 3
+}
+
+/// <summary>
+/// Tool 对账记录：Run 级协调单元，对应一条未裁决的 Tool journal 条目
+/// （DispatchingIntent/Dispatched/Reconciling 高风险状态）。
+/// 只要 Run 存在未 Resolved/Rejected 的记录，就不得进入 <see cref="AgentRunState.Completed"/>。
+/// </summary>
+public sealed record ToolReconciliationRecord
+{
+    /// <summary>对账记录 ID（POST /runs/{runId}/reconciliations/{id}/resolve 用）。</summary>
+    public required string ReconciliationId { get; init; }
+
+    /// <summary>所属 Agent Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>所属 Workspace ID。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>对应 Tool 调用 RequestId（journal 主键；与 ToolCallStarted/Completed 事件一致）。</summary>
+    public required string RequestId { get; init; }
+
+    /// <summary>Tool 名称。</summary>
+    public required string ToolName { get; init; }
+
+    /// <summary>外部操作 ID（对账时查询外部系统的操作标识；journal 条目持久化的值）。</summary>
+    public string? ExternalOperationId { get; init; }
+
+    /// <summary>对账处理程序名（ToolDescriptor.ReconciliationHandler；null = 仅人工裁决）。</summary>
+    public string? ReconciliationHandler { get; init; }
+
+    /// <summary>当前对账状态。</summary>
+    public required ToolReconciliationStatus Status { get; init; }
+
+    /// <summary>对账确认的外部副作用结果（Resolved 时填充）。</summary>
+    public string? Result { get; init; }
+
+    /// <summary>外部副作用真相（true = 已发生；false = 未发生）。</summary>
+    public bool? SideEffectOccurred { get; init; }
+
+    /// <summary>拒绝/失败原因（Rejected 时填充）。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>记录创建时间（UTC）。</summary>
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>最近更新时间（UTC）。</summary>
+    public DateTimeOffset? UpdatedAt { get; init; }
+
+    /// <summary>裁决完成时间（UTC；Resolved/Rejected 时填充）。</summary>
+    public DateTimeOffset? ResolvedAt { get; init; }
+}
+
+/// <summary>
+/// 对账结果：Reconciliation Handler 确认的外部副作用真相。
+/// </summary>
+public sealed record ToolReconciliationOutcome
+{
+    /// <summary>外部副作用是否确实发生。</summary>
+    public required bool SideEffectOccurred { get; init; }
+
+    /// <summary>外部系统查得的真相结果（SideEffectOccurred=true 时填充）。</summary>
+    public string? Result { get; init; }
+
+    /// <summary>对账失败原因（无法确认时填充；记录保持 Pending 等待重试/人工）。</summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>
+/// Tool 对账处理程序：按 <see cref="ToolDescriptor.ReconciliationHandler"/> 名称注册，
+/// 以 <see cref="ToolReconciliationRecord.ExternalOperationId"/> 查询外部系统，
+/// 确认模糊 Tool 调用的外部副作用真相（occurred + result，或未发生）。
+/// </summary>
+public interface IToolReconciliationHandler
+{
+    /// <summary>处理程序名称（与 ToolDescriptor.ReconciliationHandler 匹配）。</summary>
+    string HandlerName { get; }
+
+    /// <summary>对账指定记录：确认外部副作用真相。</summary>
+    ValueTask<ToolReconciliationOutcome> ReconcileAsync(
+        ToolReconciliationRecord record,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Tool 对账记录存储：持久化 <see cref="ToolReconciliationRecord"/>，
+/// 支撑 Run 级"未裁决不完成"约束与 ToolReconciliationWorker 轮询。
+/// </summary>
+public interface IToolReconciliationStore
+{
+    /// <summary>
+    /// 创建对账记录（按 RunId+RequestId 幂等：已存在时返回既有记录）。
+    /// </summary>
+    ValueTask<ToolReconciliationRecord> CreateAsync(ToolReconciliationRecord record, CancellationToken cancellationToken = default);
+
+    /// <summary>按对账记录 ID 查询。</summary>
+    ValueTask<ToolReconciliationRecord?> GetAsync(string reconciliationId, CancellationToken cancellationToken = default);
+
+    /// <summary>按 Run 列出全部对账记录（含已裁决）。</summary>
+    ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>Run 是否存在未裁决（Pending/Running）对账记录。</summary>
+    ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>列出待对账记录（ToolReconciliationWorker 轮询用，按创建时间升序）。</summary>
+    ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(int take, CancellationToken cancellationToken = default);
+
+    /// <summary>CAS 推进 Pending → Running（并发 Worker 互斥，防止重复对账）。</summary>
+    ValueTask<bool> TryBeginAsync(string reconciliationId, CancellationToken cancellationToken = default);
+
+    /// <summary>CAS 回退 Running → Pending（Handler 对账失败时重置，等待下轮重试）。</summary>
+    ValueTask<bool> TryResetToPendingAsync(string reconciliationId, CancellationToken cancellationToken = default);
+
+    /// <summary>裁决为已发生并提交（记录 → Resolved）。</summary>
+    ValueTask<bool> MarkResolvedAsync(string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken cancellationToken = default);
+
+    /// <summary>裁决为未发生/拒绝（记录 → Rejected）。</summary>
+    ValueTask<bool> MarkRejectedAsync(string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Tool 分派结果。
 /// </summary>
 public sealed record ToolDispatchResult

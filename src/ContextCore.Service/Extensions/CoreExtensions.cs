@@ -854,6 +854,13 @@ internal static class CoreExtensions
 		// 让 DefaultDurableToolExecutor 在 Committed 时缓存结果，供后续 PrepareAsync 查询。
 		services.TryAddSingleton<IDurableToolResultStore, InMemoryDurableToolResultStore>();
 
+		// Tool 对账记录存储（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
+		// Actor 在 Tool Journal 模糊态时创建记录；ToolReconciliationWorker / resolve 端点裁决。
+		services.TryAddSingleton<IToolReconciliationStore, InMemoryToolReconciliationStore>();
+
+		// Tool 对账协调器（Worker 与 resolve 端点共用裁决入口）。
+		services.TryAddSingleton<ToolReconciliationCoordinator>();
+
 		// 子问题 9：IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
 		services.TryAddSingleton<IAgentRunLease, InMemoryAgentRunLease>();
 

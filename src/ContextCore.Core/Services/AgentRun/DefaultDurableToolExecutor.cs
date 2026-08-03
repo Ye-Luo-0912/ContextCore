@@ -228,14 +228,16 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     // 不重新 Dispatch（journal 明确指示 UseCachedResult，重新执行会违反 exactly-once）
                     stopwatch.Stop();
                     return BuildReconciliationResult(
-                        requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed);
+                        requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed,
+                        reconciliationHandler: descriptor?.ReconciliationHandler);
 
                 // 4b. Journal = DispatchingIntent/Dispatched/Reconciling 模糊态 → 返回对账结果，不重新 Dispatch。
                 //     外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决。
                 case ToolDispatchRecoveryDecision.Reconcile:
                     stopwatch.Stop();
                     return BuildReconciliationResult(
-                        requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed);
+                        requestId, effectiveIdempotencyKey, externalOperationId, stopwatch.Elapsed,
+                        reconciliationHandler: descriptor?.ReconciliationHandler);
 
                 // 4e. Journal 明确要求 fail-closed → 返回失败，不 Dispatch。
                 case ToolDispatchRecoveryDecision.FailClosed:
@@ -437,7 +439,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     requestId, effectiveIdempotencyKey, effectiveSideEffect,
                     error: $"Tool 执行策略拒绝（fail-closed）：{policy.Reason}",
                     journalState: ToolDispatchState.Dispatched,
-                    duration: stopwatch.Elapsed);
+                    duration: stopwatch.Elapsed,
+                    reconciliationHandler: descriptor?.ReconciliationHandler);
         }
 
         stopwatch.Stop();
@@ -449,6 +452,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             SideEffect = effectiveSideEffect,
             ExternalOperationId = effectiveExternalOperationId,
             JournalState = finalJournalState,
+            ReconciliationHandler = descriptor?.ReconciliationHandler,
             Result = dispatchResult.Result,
             Succeeded = dispatchResult.Succeeded,
             Error = dispatchResult.Error,
@@ -483,7 +487,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         string requestId,
         string? idempotencyKey,
         string? externalOperationId,
-        TimeSpan elapsed)
+        TimeSpan elapsed,
+        string? reconciliationHandler = null)
     {
         return new ToolExecutionResult
         {
@@ -492,6 +497,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             SideEffect = ToolSideEffect.Unknown, // 模糊状态视为 Unknown
             ExternalOperationId = externalOperationId,
             JournalState = ToolDispatchState.Dispatched,
+            ReconciliationHandler = reconciliationHandler,
             Result = null,
             Succeeded = false,
             Error = $"Tool dispatch 处于 Dispatched 模糊状态（外部副作用可能已执行但未提交）。" +
@@ -526,7 +532,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         ToolSideEffect sideEffect,
         string error,
         ToolDispatchState journalState,
-        TimeSpan duration)
+        TimeSpan duration,
+        string? reconciliationHandler = null)
     {
         return new ToolExecutionResult
         {
@@ -535,6 +542,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             SideEffect = sideEffect,
             ExternalOperationId = null,
             JournalState = journalState,
+            ReconciliationHandler = reconciliationHandler,
             Result = null,
             Succeeded = false,
             Error = error,

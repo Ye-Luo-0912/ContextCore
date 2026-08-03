@@ -57,6 +57,7 @@ F:ContextCore.Abstractions.AgentRunEventType.StateTransition
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallCompleted
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallStarted
 F:ContextCore.Abstractions.AgentRunState.AwaitingApproval
+F:ContextCore.Abstractions.AgentRunState.AwaitingReconciliation
 F:ContextCore.Abstractions.AgentRunState.Cancelled
 F:ContextCore.Abstractions.AgentRunState.Checkpointing
 F:ContextCore.Abstractions.AgentRunState.Completed
@@ -67,6 +68,8 @@ F:ContextCore.Abstractions.AgentRunState.LeaseLost
 F:ContextCore.Abstractions.AgentRunState.ModelCalling
 F:ContextCore.Abstractions.AgentRunState.Observing
 F:ContextCore.Abstractions.AgentRunState.PendingToolExecution
+F:ContextCore.Abstractions.AgentRunState.ReconciliationRejected
+F:ContextCore.Abstractions.AgentRunState.ReconciliationRunning
 F:ContextCore.Abstractions.AgentRunState.ToolDispatching
 F:ContextCore.Abstractions.AgentRuntimeKind.ClaudeCode
 F:ContextCore.Abstractions.AgentRuntimeKind.Codex
@@ -980,6 +983,10 @@ F:ContextCore.Abstractions.ToolExecutionDisposition.FailClosed
 F:ContextCore.Abstractions.ToolExecutionDisposition.HoldForReconciliation
 F:ContextCore.Abstractions.ToolExecutionMode.Echo
 F:ContextCore.Abstractions.ToolExecutionMode.RealDispatch
+F:ContextCore.Abstractions.ToolReconciliationStatus.Pending
+F:ContextCore.Abstractions.ToolReconciliationStatus.Rejected
+F:ContextCore.Abstractions.ToolReconciliationStatus.Resolved
+F:ContextCore.Abstractions.ToolReconciliationStatus.Running
 F:ContextCore.Abstractions.ToolRecoveryStrategy.NeverReplay
 F:ContextCore.Abstractions.ToolRecoveryStrategy.RequireReconciliation
 F:ContextCore.Abstractions.ToolRecoveryStrategy.SafeReplay
@@ -2390,6 +2397,16 @@ M:ContextCore.Abstractions.IToolDispatchJournal.PrepareWithIntentAsync(ContextCo
 M:ContextCore.Abstractions.IToolDispatcher.DispatchAsync(ContextCore.Abstractions.ToolDispatchRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolDispatcher.GetDescriptor(System.String)
 M:ContextCore.Abstractions.IToolEffectPolicy.Resolve(ContextCore.Abstractions.ToolDescriptor, ContextCore.Abstractions.ToolDispatchPrepareResult, ContextCore.Abstractions.ToolExecutionResult)
+M:ContextCore.Abstractions.IToolReconciliationHandler.ReconcileAsync(ContextCore.Abstractions.ToolReconciliationRecord, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.CreateAsync(ContextCore.Abstractions.ToolReconciliationRecord, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.GetAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.HasUnresolvedForRunAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.ListByRunAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.ListPendingAsync(System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.MarkRejectedAsync(System.String, ContextCore.Abstractions.ToolReconciliationOutcome, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.MarkResolvedAsync(System.String, ContextCore.Abstractions.ToolReconciliationOutcome, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.TryBeginAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.TryResetToPendingAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITrainingDataExporter.ExportAsync(ContextCore.Abstractions.TrainingDataExportRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalConflictSetLedger.AppendConflictSetsAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ConflictSet>, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITransactionalContextStore.SaveAsync(ContextCore.Abstractions.Models.ContextItem, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
@@ -5212,6 +5229,20 @@ M:ContextCore.Abstractions.ToolObservation.GetHashCode()
 M:ContextCore.Abstractions.ToolObservation.GetType()
 M:ContextCore.Abstractions.ToolObservation.ToAgentMessage()
 M:ContextCore.Abstractions.ToolObservation.ToString()
+M:ContextCore.Abstractions.ToolReconciliationOutcome.#ctor()
+M:ContextCore.Abstractions.ToolReconciliationOutcome.<Clone>$()
+M:ContextCore.Abstractions.ToolReconciliationOutcome.Equals(ContextCore.Abstractions.ToolReconciliationOutcome)
+M:ContextCore.Abstractions.ToolReconciliationOutcome.Equals(System.Object)
+M:ContextCore.Abstractions.ToolReconciliationOutcome.GetHashCode()
+M:ContextCore.Abstractions.ToolReconciliationOutcome.GetType()
+M:ContextCore.Abstractions.ToolReconciliationOutcome.ToString()
+M:ContextCore.Abstractions.ToolReconciliationRecord.#ctor()
+M:ContextCore.Abstractions.ToolReconciliationRecord.<Clone>$()
+M:ContextCore.Abstractions.ToolReconciliationRecord.Equals(ContextCore.Abstractions.ToolReconciliationRecord)
+M:ContextCore.Abstractions.ToolReconciliationRecord.Equals(System.Object)
+M:ContextCore.Abstractions.ToolReconciliationRecord.GetHashCode()
+M:ContextCore.Abstractions.ToolReconciliationRecord.GetType()
+M:ContextCore.Abstractions.ToolReconciliationRecord.ToString()
 M:ContextCore.Abstractions.TrainingCalibrationSplitOptions.#ctor()
 M:ContextCore.Abstractions.TrainingCalibrationSplitOptions.Equals(System.Object)
 M:ContextCore.Abstractions.TrainingCalibrationSplitOptions.GetHashCode()
@@ -6298,6 +6329,7 @@ P:ContextCore.Abstractions.IPerformanceMonitor.Options (get)
 P:ContextCore.Abstractions.IStoreRuntimeCapabilities.Profile (get)
 P:ContextCore.Abstractions.IToolDispatchJournal.PersistsResults (get)
 P:ContextCore.Abstractions.IToolDispatcher.SupportedTools (get)
+P:ContextCore.Abstractions.IToolReconciliationHandler.HandlerName (get)
 P:ContextCore.Abstractions.IWorkspaceContextAccessor.Current (get)
 P:ContextCore.Abstractions.IWriteTransactionScope.IsActive (get)
 P:ContextCore.Abstractions.InferenceOutput.Confidence (get|init)
@@ -10718,6 +10750,7 @@ P:ContextCore.Abstractions.ToolExecutionResult.Error (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.ExternalOperationId (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.IdempotencyKey (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.JournalState (get|init)
+P:ContextCore.Abstractions.ToolExecutionResult.ReconciliationHandler (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.RequestId (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.Result (get|init)
 P:ContextCore.Abstractions.ToolExecutionResult.SideEffect (get|init)
@@ -10727,6 +10760,23 @@ P:ContextCore.Abstractions.ToolObservation.Result (get|init)
 P:ContextCore.Abstractions.ToolObservation.Succeeded (get|init)
 P:ContextCore.Abstractions.ToolObservation.ToolCallId (get|init)
 P:ContextCore.Abstractions.ToolObservation.ToolName (get|init)
+P:ContextCore.Abstractions.ToolReconciliationOutcome.Error (get|init)
+P:ContextCore.Abstractions.ToolReconciliationOutcome.Result (get|init)
+P:ContextCore.Abstractions.ToolReconciliationOutcome.SideEffectOccurred (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.CreatedAt (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.ExternalOperationId (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.Reason (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.ReconciliationHandler (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.ReconciliationId (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.RequestId (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.ResolvedAt (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.Result (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.RunId (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.SideEffectOccurred (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.Status (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.ToolName (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.UpdatedAt (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.WorkspaceId (get|init)
 P:ContextCore.Abstractions.TrainingCalibrationSplitOptions.CalibrationRatio (get|set)
 P:ContextCore.Abstractions.TrainingCalibrationSplitOptions.GroupKeyed (get|set)
 P:ContextCore.Abstractions.TrainingCalibrationSplitOptions.Seed (get|set)
@@ -11205,6 +11255,8 @@ T:ContextCore.Abstractions.IToolCatalog (Interface)
 T:ContextCore.Abstractions.IToolDispatchJournal (Interface)
 T:ContextCore.Abstractions.IToolDispatcher (Interface)
 T:ContextCore.Abstractions.IToolEffectPolicy (Interface)
+T:ContextCore.Abstractions.IToolReconciliationHandler (Interface)
+T:ContextCore.Abstractions.IToolReconciliationStore (Interface)
 T:ContextCore.Abstractions.ITrainingDataExporter (Interface)
 T:ContextCore.Abstractions.ITransactionalConflictSetLedger (Interface)
 T:ContextCore.Abstractions.ITransactionalContextStore (Interface)
@@ -11813,6 +11865,9 @@ T:ContextCore.Abstractions.ToolExecutionMode (Enum)
 T:ContextCore.Abstractions.ToolExecutionPolicy
 T:ContextCore.Abstractions.ToolExecutionResult
 T:ContextCore.Abstractions.ToolObservation
+T:ContextCore.Abstractions.ToolReconciliationOutcome
+T:ContextCore.Abstractions.ToolReconciliationRecord
+T:ContextCore.Abstractions.ToolReconciliationStatus (Enum)
 T:ContextCore.Abstractions.ToolRecoveryStrategy (Enum)
 T:ContextCore.Abstractions.ToolSideEffect (Enum)
 T:ContextCore.Abstractions.TrainingCalibrationSplitOptions

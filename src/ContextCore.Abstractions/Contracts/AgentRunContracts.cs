@@ -92,7 +92,28 @@ public enum AgentRunState : byte
     /// <see cref="PendingToolCommand"/>（不重新调用模型），执行完成后进入 Observing 继续循环。
     /// 确保被批准的 Tool 确定性执行，不依赖模型重生成。
     /// </summary>
-    PendingToolExecution = 11
+    PendingToolExecution = 11,
+
+    /// <summary>
+    /// 等待 Tool 对账（Reconciliation）：存在未裁决的高风险 Tool
+    /// （journal 处于 DispatchingIntent/Dispatched/Reconciling，或对账记录未 Resolved）。
+    /// Run 暂停执行（退出执行槽），由 ToolReconciliationWorker / 人工 resolve 端点裁决；
+    /// 裁决完成前 Run 不得进入 <see cref="Completed"/>。
+    /// </summary>
+    AwaitingReconciliation = 12,
+
+    /// <summary>
+    /// 对账进行中：ToolReconciliationWorker 已接管该 Run 的待对账记录
+    /// （记录状态 Pending → Running），正在确认外部副作用真相。
+    /// </summary>
+    ReconciliationRunning = 13,
+
+    /// <summary>
+    /// 对账被拒绝：至少一个对账记录被裁决为"外部副作用未发生"或人工拒绝
+    /// （记录状态 → Rejected，journal 已提交 void 结果）。Run 由此恢复执行，
+    /// 模型看到该 Tool 失败后可调整策略；不进入 Completed 前必须无未裁决记录。
+    /// </summary>
+    ReconciliationRejected = 14
 }
 
 /// <summary>
@@ -1677,6 +1698,13 @@ public sealed record ToolExecutionResult
     /// Dispatched 表示模糊状态（tool 可能已成功执行但未 commit），需调用方裁决。
     /// </summary>
     public required ToolDispatchState JournalState { get; init; }
+
+    /// <summary>
+    /// 对账处理程序名称（ToolDescriptor.ReconciliationHandler 回传；null = 未声明，等待人工裁决）。
+    /// Journal 处于模糊状态（DispatchingIntent/Dispatched/Reconciling）时，Actor 据此创建
+    /// <see cref="ToolReconciliationRecord"/>，由 ToolReconciliationWorker 匹配 Handler 对账。
+    /// </summary>
+    public string? ReconciliationHandler { get; init; }
 
     /// <summary>Tool 输出（成功时）。</summary>
     public string? Result { get; init; }

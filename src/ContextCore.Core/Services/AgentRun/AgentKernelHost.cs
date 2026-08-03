@@ -670,6 +670,8 @@ public sealed class AgentKernelHost : IAsyncDisposable
         var durableToolExecutor = _serviceProvider.GetService(typeof(IDurableToolExecutor)) as IDurableToolExecutor;
         // 解析 IAgentModelContextProjector
         var modelContextProjector = _serviceProvider.GetService(typeof(IAgentModelContextProjector)) as IAgentModelContextProjector;
+        // 解析 IToolReconciliationStore（未注册时 Actor 跳过"未裁决不完成"约束）
+        var reconciliationStore = _serviceProvider.GetService(typeof(IToolReconciliationStore)) as IToolReconciliationStore;
 
         return new AgentRunActor(
             _runStore,
@@ -684,7 +686,8 @@ public sealed class AgentKernelHost : IAsyncDisposable
             decisionRuntime,
             checkpointStore,
             durableToolExecutor,
-            modelContextProjector);
+            modelContextProjector,
+            reconciliationStore);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

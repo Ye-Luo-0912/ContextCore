@@ -67,13 +67,13 @@ public static class AgentRunStateMachine
 
         if (to == AgentRunState.LeaseLost)
         {
-            // LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled。
-            // Completed/Cancelled 是确定终态，不应被丢租覆盖。
-            if (from == AgentRunState.Completed || from == AgentRunState.Cancelled)
+            // LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled/ReconciliationRejected。
+            // Completed/Cancelled 是确定终态，不应被丢租覆盖；ReconciliationRejected 是裁决终态，也不应被丢租覆盖。
+            if (from == AgentRunState.Completed || from == AgentRunState.Cancelled || from == AgentRunState.ReconciliationRejected)
             {
                 throw new InvalidOperationException(
                     $"Agent Run 状态机非法转换：{from} 不可流转到 {to}。" +
-                    $"Completed/Cancelled 已是确定终态，不应被标记为 LeaseLost。");
+                    $"Completed/Cancelled/ReconciliationRejected 已是确定终态，不应被标记为 LeaseLost。");
             }
             return;
         }
@@ -97,7 +97,7 @@ public static class AgentRunStateMachine
     }
 
     /// <summary>
-    /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost）。
+    /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost / ReconciliationRejected）。
     /// </summary>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
@@ -105,7 +105,8 @@ public static class AgentRunStateMachine
         => state == AgentRunState.Completed
            || state == AgentRunState.Failed
            || state == AgentRunState.Cancelled
-           || state == AgentRunState.LeaseLost;
+           || state == AgentRunState.LeaseLost
+           || state == AgentRunState.ReconciliationRejected;
 
     /// <summary>
     /// 判断 from → to 是否为合法前向推进（不含 Failed/Cancelled 短路；调用方已先短路）。
@@ -117,13 +118,17 @@ public static class AgentRunStateMachine
             AgentRunState.Created => to == AgentRunState.ContextBuilding,
 
             // ContextBuilding → ModelCalling（开始调用模型）
-            AgentRunState.ContextBuilding => to == AgentRunState.ModelCalling,
+            //                   / AwaitingReconciliation（轮次结束且存在未裁决高风险 Tool，暂停等待对账）
+            AgentRunState.ContextBuilding => to == AgentRunState.ModelCalling
+                                              || to == AgentRunState.AwaitingReconciliation,
 
             // ModelCalling → AwaitingApproval（高风险需审批）/ ToolDispatching（直接分派）/ Completed（最终答案）/ ContextBuilding（重试）
+            //                 / AwaitingReconciliation（模型产出最终答案但存在未裁决高风险 Tool，暂停等待对账）
             AgentRunState.ModelCalling => to == AgentRunState.AwaitingApproval
                                           || to == AgentRunState.ToolDispatching
                                           || to == AgentRunState.Completed
-                                          || to == AgentRunState.ContextBuilding,
+                                          || to == AgentRunState.ContextBuilding
+                                          || to == AgentRunState.AwaitingReconciliation,
 
             // AwaitingApproval → PendingToolExecution（审批通过后直接执行原 Tool，不重新调用模型）
             //                    / ToolDispatching（旧路径兼容：批准后继续分派）
@@ -138,17 +143,37 @@ public static class AgentRunStateMachine
             AgentRunState.PendingToolExecution => to == AgentRunState.Observing,
 
             // ToolDispatching → AwaitingApproval（Tool 分派中需审批时挂起等待人工裁决）/ Observing（观察结果）
+            //                    / AwaitingReconciliation（分派后存在未裁决高风险 Tool，等待对账）
             AgentRunState.ToolDispatching => to == AgentRunState.AwaitingApproval
-                                              || to == AgentRunState.Observing,
+                                              || to == AgentRunState.Observing
+                                              || to == AgentRunState.AwaitingReconciliation,
 
             // Observing → Checkpointing（保存检查点）/ ContextBuilding（直接进入下一轮，跳过 checkpoint）/ Completed（无需继续则完成）
+            //             / AwaitingReconciliation（观察后存在未裁决高风险 Tool，等待对账）
             AgentRunState.Observing => to == AgentRunState.Checkpointing
                                        || to == AgentRunState.ContextBuilding
-                                       || to == AgentRunState.Completed,
+                                       || to == AgentRunState.Completed
+                                       || to == AgentRunState.AwaitingReconciliation,
 
             // Checkpointing → ContextBuilding（循环继续）/ Completed（保存后即完成）
             AgentRunState.Checkpointing => to == AgentRunState.ContextBuilding
                                             || to == AgentRunState.Completed,
+
+            // AwaitingReconciliation → ReconciliationRunning（Worker 接管对账）
+            //                          / ContextBuilding（全部裁决完成，恢复执行）/ ReconciliationRejected（裁决被拒绝）
+            AgentRunState.AwaitingReconciliation => to == AgentRunState.ReconciliationRunning
+                                                    || to == AgentRunState.ContextBuilding
+                                                    || to == AgentRunState.ReconciliationRejected,
+
+            // ReconciliationRunning → AwaitingReconciliation（对账仍在进行/重试）
+            //                         / ContextBuilding（对账完成，Actor 恢复执行规范化）
+            //                         / ReconciliationRejected（裁决被拒绝）
+            AgentRunState.ReconciliationRunning => to == AgentRunState.AwaitingReconciliation
+                                                   || to == AgentRunState.ContextBuilding
+                                                   || to == AgentRunState.ReconciliationRejected,
+
+            // ReconciliationRejected 已是终态（仅可跳转 Failed/Cancelled，由调用方短路处理）
+            AgentRunState.ReconciliationRejected => false,
 
             // 终态已在调用方短路；此处不应到达
             _ => false
