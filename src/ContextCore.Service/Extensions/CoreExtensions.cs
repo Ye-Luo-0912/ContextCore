@@ -871,6 +871,9 @@ internal static class CoreExtensions
 
 		// 子问题 8：AgentKernelHost（Singleton，per-run Actor 通过 IServiceProvider 解析）。
 		services.TryAddSingleton<AgentKernelHost>();
+		// Agent Run 调度器抽象与 Host 同实例注册（端点经 IAgentRunScheduler 非阻塞入队，
+		// 按 AgentRunEnqueueResult.Status 返回 202 / 429，避免无限等待队列槽位）。
+		services.TryAddSingleton<IAgentRunScheduler>(sp => sp.GetRequiredService<AgentKernelHost>());
 
 		return services;
 	}
@@ -896,6 +899,15 @@ internal static class CoreExtensions
 			opts.LeaseEnabled = section.GetValue("LeaseEnabled", opts.LeaseEnabled);
 			opts.MaxGlobalRuns = section.GetValue("MaxGlobalRuns", opts.MaxGlobalRuns);
 			opts.MaxWorkspaceRuns = section.GetValue("MaxWorkspaceRuns", opts.MaxWorkspaceRuns);
+			// 调度队列参数绑定（队列深度 / worker 池 / 优雅 drain 超时）。
+			opts.ChannelCapacity = section.GetValue("ChannelCapacity", opts.ChannelCapacity);
+			opts.WorkerCount = section.GetValue("WorkerCount", opts.WorkerCount);
+
+			var drainTimeoutStr = section["DrainTimeout"];
+			if (TimeSpan.TryParse(drainTimeoutStr, out var dt))
+			{
+				opts.DrainTimeout = dt;
+			}
 
 			var leaseDurationStr = section["LeaseDuration"];
 			if (TimeSpan.TryParse(leaseDurationStr, out var ld))

@@ -43,6 +43,10 @@ F:ContextCore.Abstractions.AgentMessageRole.Tool
 F:ContextCore.Abstractions.AgentMessageRole.User
 F:ContextCore.Abstractions.AgentModelMode.Deterministic
 F:ContextCore.Abstractions.AgentModelMode.RealModel
+F:ContextCore.Abstractions.AgentRunEnqueueStatus.Accepted
+F:ContextCore.Abstractions.AgentRunEnqueueStatus.AlreadyActive
+F:ContextCore.Abstractions.AgentRunEnqueueStatus.Closed
+F:ContextCore.Abstractions.AgentRunEnqueueStatus.QueueFull
 F:ContextCore.Abstractions.AgentRunEventType.ApprovalRequested
 F:ContextCore.Abstractions.AgentRunEventType.ApprovalResolved
 F:ContextCore.Abstractions.AgentRunEventType.CheckpointSaved
@@ -1221,6 +1225,13 @@ M:ContextCore.Abstractions.AgentRunCreateResult.Equals(System.Object)
 M:ContextCore.Abstractions.AgentRunCreateResult.GetHashCode()
 M:ContextCore.Abstractions.AgentRunCreateResult.GetType()
 M:ContextCore.Abstractions.AgentRunCreateResult.ToString()
+M:ContextCore.Abstractions.AgentRunEnqueueResult.#ctor()
+M:ContextCore.Abstractions.AgentRunEnqueueResult.<Clone>$()
+M:ContextCore.Abstractions.AgentRunEnqueueResult.Equals(ContextCore.Abstractions.AgentRunEnqueueResult)
+M:ContextCore.Abstractions.AgentRunEnqueueResult.Equals(System.Object)
+M:ContextCore.Abstractions.AgentRunEnqueueResult.GetHashCode()
+M:ContextCore.Abstractions.AgentRunEnqueueResult.GetType()
+M:ContextCore.Abstractions.AgentRunEnqueueResult.ToString()
 M:ContextCore.Abstractions.AgentRunEvent.#ctor()
 M:ContextCore.Abstractions.AgentRunEvent.<Clone>$()
 M:ContextCore.Abstractions.AgentRunEvent.Equals(ContextCore.Abstractions.AgentRunEvent)
@@ -2012,6 +2023,7 @@ M:ContextCore.Abstractions.IAgentRunLease.ReleaseAsync(System.String, System.Str
 M:ContextCore.Abstractions.IAgentRunLease.RenewAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunLease.RenewBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.AgentRunLeaseRenewal>, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunLease.TryAcquireAsync(System.String, System.TimeSpan, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRunScheduler.TryEnqueueAsync(ContextCore.Abstractions.AgentRun, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunStore.CreateAsync(ContextCore.Abstractions.AgentRun, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunStore.CreateOrGetByIdempotencyKeyAsync(ContextCore.Abstractions.AgentRun, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunStore.GetAsync(System.String, System.String, System.Threading.CancellationToken)
@@ -5546,6 +5558,12 @@ P:ContextCore.Abstractions.AgentRun.WorkspaceId (get|init)
 P:ContextCore.Abstractions.AgentRunCreateResult.Created (get|init)
 P:ContextCore.Abstractions.AgentRunCreateResult.Run (get|init)
 P:ContextCore.Abstractions.AgentRunCreateResult.WasExisting (get|init)
+P:ContextCore.Abstractions.AgentRunEnqueueResult.ActiveCount (get|init)
+P:ContextCore.Abstractions.AgentRunEnqueueResult.Capacity (get|init)
+P:ContextCore.Abstractions.AgentRunEnqueueResult.Detail (get|init)
+P:ContextCore.Abstractions.AgentRunEnqueueResult.QueueDepth (get|init)
+P:ContextCore.Abstractions.AgentRunEnqueueResult.RunId (get|init)
+P:ContextCore.Abstractions.AgentRunEnqueueResult.Status (get|init)
 P:ContextCore.Abstractions.AgentRunEvent.ContentHash (get|init)
 P:ContextCore.Abstractions.AgentRunEvent.EventId (get|init)
 P:ContextCore.Abstractions.AgentRunEvent.EventType (get|init)
@@ -10949,6 +10967,8 @@ T:ContextCore.Abstractions.AgentModelRequest
 T:ContextCore.Abstractions.AgentModelResponse
 T:ContextCore.Abstractions.AgentRun
 T:ContextCore.Abstractions.AgentRunCreateResult
+T:ContextCore.Abstractions.AgentRunEnqueueResult
+T:ContextCore.Abstractions.AgentRunEnqueueStatus (Enum)
 T:ContextCore.Abstractions.AgentRunEvent
 T:ContextCore.Abstractions.AgentRunEventType (Enum)
 T:ContextCore.Abstractions.AgentRunLeaseRenewal
@@ -11104,6 +11124,7 @@ T:ContextCore.Abstractions.IAgentRunEventNotifier (Interface)
 T:ContextCore.Abstractions.IAgentRunEventStore (Interface)
 T:ContextCore.Abstractions.IAgentRunEventSubscription (Interface)
 T:ContextCore.Abstractions.IAgentRunLease (Interface)
+T:ContextCore.Abstractions.IAgentRunScheduler (Interface)
 T:ContextCore.Abstractions.IAgentRunStore (Interface)
 T:ContextCore.Abstractions.IAgentRuntime (Interface)
 T:ContextCore.Abstractions.IAgentRuntimeRegistry (Interface)

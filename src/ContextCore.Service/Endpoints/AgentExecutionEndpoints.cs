@@ -140,25 +140,27 @@ internal static class AgentExecutionEndpoints
                 return Results.Ok(ToRunResponse(createResult.Run));
             }
 
-            // Created: try to enqueue to Host. If enqueue fails, return 202 Accepted
-            // (run is persisted, Recovery will pick it up)
-            try
-            {
-                await host.StartRunAsync(createResult.Run, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (InvalidOperationException)
-            {
-                // Channel closed or queue full - run is persisted, Recovery will handle it
-                return Results.Accepted($"/api/agents/runs/{createResult.Run.RunId}", ToRunResponse(createResult.Run));
-            }
+            // Created: try to enqueue to Host. Queue full → 429 (prompt rejection,
+            // run is persisted, client can poll or Recovery will pick it up);
+            // Host closed → 202 Accepted (run is persisted, Recovery will pick it up).
+            var enqueue = await host.TryEnqueueAsync(createResult.Run, CancellationToken.None).ConfigureAwait(false);
             var response = ToRunResponse(createResult.Run);
-            return Results.Created($"/api/agents/runs/{createResult.Run.RunId}", response);
+            return enqueue.Status switch
+            {
+                AgentRunEnqueueStatus.QueueFull => Results.Json(
+                    response,
+                    statusCode: StatusCodes.Status429TooManyRequests),
+                AgentRunEnqueueStatus.Closed => Results.Accepted(
+                    $"/api/agents/runs/{createResult.Run.RunId}", response),
+                _ => Results.Created($"/api/agents/runs/{createResult.Run.RunId}", response)
+            };
         })
         .WithName("CreateAgentRun")
         .RequireWorkspacePermission(WorkspacePermission.AgentRun)
         .WithSummary("创建并启动 Agent Run")
         .Produces<RunResponse>(StatusCodes.Status201Created)
         .Produces<RunResponse>(StatusCodes.Status200OK)
+        .Produces<RunResponse>(StatusCodes.Status429TooManyRequests)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status500InternalServerError);
 
@@ -520,12 +522,13 @@ internal static class AgentExecutionEndpoints
                             var updatedRun = await runStore.GetAsync(workspaceId, id, ct).ConfigureAwait(false);
                             if (updatedRun is not null)
                             {
-                                await host.StartRunAsync(updatedRun, CancellationToken.None).ConfigureAwait(false);
+                                // 非阻塞入队：队列满/关闭时不阻塞 HTTP 请求（RecoveryWorker 会重新入队执行）。
+                                await host.TryEnqueueAsync(updatedRun, CancellationToken.None).ConfigureAwait(false);
                             }
                         }
                         catch (InvalidOperationException)
                         {
-                            // 入队失败非致命：RecoveryWorker 会重新入队执行。
+                            // 入队失败（Actor 依赖缺失）非致命：RecoveryWorker 会重新入队执行。
                         }
                     }
 
@@ -748,12 +751,13 @@ internal static class AgentExecutionEndpoints
                 var run = await host.GetRunStatusAsync(workspaceId, runId, ct).ConfigureAwait(false);
                 if (run is not null)
                 {
-                    await host.StartRunAsync(run, CancellationToken.None).ConfigureAwait(false);
+                    // 非阻塞入队：队列满/关闭时不阻塞 HTTP 请求（RecoveryWorker 会重新入队执行）。
+                    await host.TryEnqueueAsync(run, CancellationToken.None).ConfigureAwait(false);
                 }
             }
             catch (InvalidOperationException)
             {
-                // 入队失败非致命：RecoveryWorker 会重新入队执行。
+                // 入队失败（Actor 依赖缺失）非致命：RecoveryWorker 会重新入队执行。
             }
         }
 

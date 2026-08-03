@@ -1915,6 +1915,67 @@ public sealed class AgentHostOptions
     public TimeSpan DrainTimeout { get; set; } = TimeSpan.FromSeconds(30);
 }
 
+// ── Agent Run 调度（IAgentRunScheduler：非阻塞入队 + 队列快照）──────────────
+
+/// <summary>
+/// Agent Run 入队结果状态。
+/// </summary>
+public enum AgentRunEnqueueStatus : byte
+{
+    /// <summary>已入队（将由 Host worker 执行）。</summary>
+    Accepted = 0,
+
+    /// <summary>同进程内已有活跃 Run（幂等跳过，不重复入队）。</summary>
+    AlreadyActive = 1,
+
+    /// <summary>调度队列已满（拒绝入队；Run 已持久化，由 RecoveryWorker 稍后接管）。</summary>
+    QueueFull = 2,
+
+    /// <summary>调度器已关闭（Host 已 Dispose，无法入队）。</summary>
+    Closed = 3
+}
+
+/// <summary>
+/// Agent Run 入队结果（含调度队列快照，供调用方决策与监控）。
+/// </summary>
+public sealed record AgentRunEnqueueResult
+{
+    /// <summary>入队结果状态。</summary>
+    public required AgentRunEnqueueStatus Status { get; init; }
+
+    /// <summary>Run ID（透传，便于调用方关联）。</summary>
+    public string? RunId { get; init; }
+
+    /// <summary>入队后队列深度（当前等待执行的 Run 数）。</summary>
+    public int QueueDepth { get; init; }
+
+    /// <summary>当前活跃 Run 数（正在执行）。</summary>
+    public int ActiveCount { get; init; }
+
+    /// <summary>队列容量上限。</summary>
+    public int Capacity { get; init; }
+
+    /// <summary>补充说明（如队列已满时的拒绝原因）。</summary>
+    public string? Detail { get; init; }
+}
+
+/// <summary>
+/// Agent Run 调度器抽象：非阻塞入队（TryEnqueueAsync），拒绝语义通过
+/// <see cref="AgentRunEnqueueResult.Status"/> 表达（调用方据此返回 202 / 429 等）。
+/// 与具体调度实现（AgentKernelHost 的 bounded Channel + worker 池）解耦。
+/// </summary>
+public interface IAgentRunScheduler
+{
+    /// <summary>
+    /// 非阻塞尝试入队一个 Run 执行。不会无限等待队列槽位——
+    /// 队列满时立即返回 <see cref="AgentRunEnqueueStatus.QueueFull"/>。
+    /// </summary>
+    /// <param name="run">待执行的 Run 元数据。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>入队结果（含状态与队列快照）。</returns>
+    ValueTask<AgentRunEnqueueResult> TryEnqueueAsync(AgentRun run, CancellationToken cancellationToken = default);
+}
+
 // ── Durable Approval（运行时能力补齐：持久化审批状态）──────────────────────
 
 /// <summary>

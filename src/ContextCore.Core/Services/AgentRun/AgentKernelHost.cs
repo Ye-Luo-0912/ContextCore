@@ -41,7 +41,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// 替代原 Task.Factory.StartNew 模式。Channel 提供队列深度管理与拒绝策略；
 /// worker 池提供固定并发上限与优雅 drain。
 /// </remarks>
-public sealed class AgentKernelHost : IAsyncDisposable
+public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IAgentRunStore _runStore;
@@ -126,22 +126,51 @@ public sealed class AgentKernelHost : IAsyncDisposable
     /// <param name="run">待执行的 Run 元数据。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示入队完成的任务（不等待执行完成）。</returns>
-    /// <exception cref="InvalidOperationException">Channel 已关闭（Host 已 Dispose）或队列已满（拒绝策略）。</exception>
+    /// <exception cref="InvalidOperationException">Host 已关闭（<see cref="AgentRunEnqueueStatus.Closed"/>）。</exception>
     /// <remarks>
     /// 方案 A：入队前不获取 lease。Worker 从 Channel 取到 Run + 获得执行槽之后再
     /// <see cref="RunWithLeaseAndConcurrencyAsync"/> 中 Acquire Lease，然后立即启动 heartbeat。
     /// 避免排队期间 lease 过期导致 heartbeat 无法续租、双实例并发执行同一 Run。
+    /// 队列满时不阻塞（非致命：Run 已持久化，RecoveryWorker 稍后接管）。
     /// </remarks>
     public async Task StartRunAsync(AgentRun run, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        // 子问题 9：本地活跃 Run 去重（同进程内不重复启动）
+        var result = await TryEnqueueAsync(run, cancellationToken).ConfigureAwait(false);
+        if (result.Status == AgentRunEnqueueStatus.Closed)
+        {
+            throw new InvalidOperationException("AgentKernelHost 已关闭，无法入队新的 Run。");
+        }
+    }
+
+    /// <inheritdoc />
+    /// <summary>
+    /// 非阻塞入队：队列满 / Host 已关闭时立即返回对应状态，不无限等待槽位。
+    /// 所有失败路径（入队失败 / 重复竞争 / 关闭）都会清理 <see cref="_activeRuns"/> 条目与 CTS，
+    /// 不残留活跃 Run 跟踪。
+    /// </summary>
+    public ValueTask<AgentRunEnqueueResult> TryEnqueueAsync(AgentRun run, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        var capacity = _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
         var key = ActiveRunKey(run.WorkspaceId, run.RunId);
+
+        // 本地活跃 Run 去重（同进程内不重复启动）
         if (_activeRuns.ContainsKey(key))
         {
-            // 已存在活跃 Run → 不重复启动
-            return;
+            return ValueTask.FromResult(BuildEnqueueResult(
+                AgentRunEnqueueStatus.AlreadyActive, run.RunId, capacity,
+                "同进程内已有活跃 Run，跳过重复入队。"));
+        }
+
+        // Host 已 Dispose（Channel 已 Completed）→ Closed，不再尝试入队
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return ValueTask.FromResult(BuildEnqueueResult(
+                AgentRunEnqueueStatus.Closed, run.RunId, capacity,
+                "AgentKernelHost 已关闭，无法入队新的 Run。"));
         }
 
         // 方案 A：入队前不获取 lease；Worker 从 Channel 取到 Run + 获得执行槽之后再 Acquire Lease。
@@ -152,27 +181,55 @@ public sealed class AgentKernelHost : IAsyncDisposable
 
         if (!_activeRuns.TryAdd(key, activeRun))
         {
-            // 并发竞争：其他线程先添加 → 退出
+            // 并发竞争：其他线程先添加 → 清理并退出
             cts.Dispose();
-            return;
+            return ValueTask.FromResult(BuildEnqueueResult(
+                AgentRunEnqueueStatus.AlreadyActive, run.RunId, capacity,
+                "同进程内已有活跃 Run（并发竞争），跳过重复入队。"));
         }
 
-        // 入队到 bounded Channel（替代 Task.Factory.StartNew）。
-        // Channel 满时 WaitToWriteAsync 会阻塞直到有槽位；若需立即拒绝可改为 TryWrite + 检查返回值。
-        // 这里使用 WriteAsync 以提供背压（调用方等待入队完成）。
+        // 非阻塞入队（替代 WriteAsync：满队列不无限等待，立即返回 QueueFull）。
+        // TryWrite 在 Channel 已 Completed 时返回 false（DisposeAsync 竞态窗口）。
         var workItem = new RunWorkItem(run, key, activeRun);
-        try
+        if (!_channel.Writer.TryWrite(workItem))
         {
-            await _channel.Writer.WriteAsync(workItem, cancellationToken).ConfigureAwait(false);
-        }
-        catch (ChannelClosedException)
-        {
-            // Host 已 Dispose → 清理资源
+            // 失败路径清理：移除活跃 Run 跟踪 + 释放 CTS（不留残留）
             _activeRuns.TryRemove(key, out _);
             cts.Dispose();
-            throw new InvalidOperationException("AgentKernelHost 已关闭，无法入队新的 Run。");
+
+            var closed = Volatile.Read(ref _disposed) != 0;
+            return ValueTask.FromResult(BuildEnqueueResult(
+                closed ? AgentRunEnqueueStatus.Closed : AgentRunEnqueueStatus.QueueFull,
+                run.RunId, capacity,
+                closed
+                    ? "AgentKernelHost 已关闭，无法入队新的 Run。"
+                    : $"调度队列已满（容量 {capacity}），Run 已持久化，将由 RecoveryWorker 稍后接管执行。"));
         }
+
+        return ValueTask.FromResult(BuildEnqueueResult(
+            AgentRunEnqueueStatus.Accepted, run.RunId, capacity, null));
     }
+
+    private AgentRunEnqueueResult BuildEnqueueResult(
+        AgentRunEnqueueStatus status, string runId, int capacity, string? detail)
+        => new()
+        {
+            Status = status,
+            RunId = runId,
+            QueueDepth = _channel.Reader.Count,
+            ActiveCount = _activeRuns.Count,
+            Capacity = capacity,
+            Detail = detail
+        };
+
+    /// <summary>当前队列深度（等待执行的 Run 数；诊断/监控用）。</summary>
+    public int QueueDepth => _channel.Reader.Count;
+
+    /// <summary>调度队列容量上限（诊断/监控用）。</summary>
+    public int QueueCapacity => _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
+
+    /// <summary>固定 worker 数（从 Channel 拉取 Run 并执行的后台任务数）。</summary>
+    public int WorkerCount => _workerCount;
 
     /// <summary>
     /// 固定 worker 循环：从 Channel 读取 Run work item，调用 RunWithLeaseAndConcurrencyAsync。
