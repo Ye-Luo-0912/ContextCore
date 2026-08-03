@@ -18,9 +18,42 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 3. 压缩幂等：重复调用同一 upToSequence 返回相同结果；upToSequence 超过当前最后
 /// sequence 时自动钳制到最后事件。
 /// 4. 归档表 ON CONFLICT DO NOTHING：重复压缩同一前缀不产生重复归档行。
+/// 5. <b>仅限终态 Run（R30.1 安全限制）</b>：<see cref="FindCandidatesAsync"/> 只选取
+/// 终态（或重试已耗尽）的 Run——当前 Recovery 不读取快照/归档，非终态 Run 被压缩后
+/// 重启恢复会因事件链断裂判定 RecoveryCorrupted。正式可恢复快照方案（Snapshot + Anchor
+/// + Hot Delta + Archived Audit Stream）落地前保持此限制；操作员端点同样拒绝非终态 Run。
 /// </remarks>
 public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRunEventCompactor
 {
+    /// <summary>
+    /// 可压缩的终态集合（与 <see cref="ContextCore.Abstractions.AgentRunState"/> 字节值一致）：
+    /// 这些状态不会再被 Recovery 重放。Failed 单独处理（重试耗尽才可压缩）。
+    /// </summary>
+    private static readonly byte[] CompactableTerminalStates =
+    [
+        (byte)AgentRunState.Completed,
+        (byte)AgentRunState.Cancelled,
+        (byte)AgentRunState.LeaseLost,
+        (byte)AgentRunState.ReconciliationRejected,
+        (byte)AgentRunState.RecoveryBlocked,
+        (byte)AgentRunState.RecoveryCorrupted,
+        (byte)AgentRunState.DeadLettered
+    ];
+
+    /// <summary>
+    /// 判定 Run 是否可压缩（仅限终态）：终态直接可压缩；Failed 只有在重试已耗尽
+    /// （<paramref name="retryCount"/> &gt;= <paramref name="maxRetries"/>）时才可压缩，
+    /// 因为仍可重试的 Failed 会被调度器重新领取并全量重放事件流。
+    /// </summary>
+    public static bool IsCompactableRunState(AgentRunState state, int retryCount, int maxRetries)
+    {
+        if (CompactableTerminalStates.Contains((byte)state))
+        {
+            return true;
+        }
+
+        return state == AgentRunState.Failed && retryCount >= maxRetries;
+    }
     /// <summary>初始化 Postgres 持久化 Agent Run 事件流压缩器。</summary>
     public PostgresAgentRunEventCompactor(
         PostgresConnectionFactory connectionFactory,
@@ -194,6 +227,8 @@ LIMIT @take;
     /// <remarks>
     /// 热表按 Run 分组统计（PK (workspace_id, run_id, sequence) 覆盖分组扫描），
     /// 按事件数降序取前 limit 个，供后台 worker 逐轮处理。
+    /// <b>仅限终态 Run</b>：JOIN <c>agent_runs</c>，只选取终态或重试已耗尽的 Run
+    /// （见 <see cref="IsCompactableRunState"/>），避免压缩仍可被 Recovery 重放的非终态 Run。
     /// </remarks>
     public async Task<IReadOnlyList<AgentRunCompactionCandidate>> FindCandidatesAsync(
         int minEventCount,
@@ -214,16 +249,22 @@ LIMIT @take;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        var terminalStateList = string.Join(", ", CompactableTerminalStates);
         command.CommandText = $"""
-SELECT workspace_id, run_id, COUNT(*) AS event_count, MAX(sequence) AS last_sequence
-FROM {Table("agent_run_events")}
-GROUP BY workspace_id, run_id
+SELECT e.workspace_id, e.run_id, COUNT(*) AS event_count, MAX(e.sequence) AS last_sequence
+FROM {Table("agent_run_events")} e
+JOIN {Table("agent_runs")} ar
+  ON ar.workspace_id = e.workspace_id AND ar.run_id = e.run_id
+WHERE ar.state IN ({terminalStateList})
+   OR (ar.state = @failed_state AND ar.retry_count >= ar.max_retries)
+GROUP BY e.workspace_id, e.run_id
 HAVING COUNT(*) >= @min_event_count
 ORDER BY event_count DESC
 LIMIT @limit;
 """;
         command.Parameters.AddWithValue("min_event_count", minEventCount);
         command.Parameters.AddWithValue("limit", limit);
+        command.Parameters.AddWithValue("failed_state", (byte)AgentRunState.Failed);
 
         var candidates = new List<AgentRunCompactionCandidate>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

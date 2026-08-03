@@ -4,6 +4,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
+using ContextCore.Storage.Postgres.Stores;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -769,6 +770,17 @@ internal static class AgentExecutionEndpoints
                 return ContextCoreHttpResultMapper.NotFound(
                     httpContext, string.Empty, "agents.runs.compact",
                     $"未找到 RunId='{id}'。");
+            }
+
+            // R30.1 安全限制：仅终态（或重试已耗尽）的 Run 允许压缩——当前 Recovery 不读取
+            // 快照/归档，非终态 Run 压缩后重启恢复会因事件链断裂判定 RecoveryCorrupted。
+            // 与 PostgresAgentRunEventCompactor.FindCandidatesAsync 的候选过滤保持一致。
+            if (!PostgresAgentRunEventCompactor.IsCompactableRunState(run.State, run.RetryCount, run.MaxRetries))
+            {
+                return ContextCoreHttpResultMapper.InvalidRequest(
+                    httpContext, string.Empty, "agents.runs.compact",
+                    $"RunId='{id}' 当前状态 {run.State} 非终态，不允许压缩事件流（可恢复快照方案落地前仅限终态 Run）。",
+                    statusCode: StatusCodes.Status409Conflict);
             }
 
             if (compactor is null)

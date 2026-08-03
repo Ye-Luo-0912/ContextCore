@@ -15,9 +15,13 @@
 
 ## 当前状态
 
-- **基线**：main @ `92d7c11e`（WP-P5 已提交并推送；工作树干净）。
-- **进行中**：无（性能优化 P1~P5 全部完成，最终全量验证通过）。
-- **最近完成**：TODO.md 路线图更新至 R30.1 Production Semantics Stabilization（HEAD `92d7c11e`，Closed 4 项 / Open P0 8 项）；WP-P5 CI Artifact 瘦身（-55%）+ 修复 P4 引入的 DI 校验回归。
+- **基线**：main @ `10c86ee2`（TODO.md 路线图更新已推送；R30.1 实施中）。
+- **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
+- **最近完成**：WP-C1 事件压缩仅限终态 Run（P0-10 即时安全）。
+
+### R30.1 P0 阻断项修复进度
+
+- **WP-C1 已完成**（P0-10 即时安全）：事件压缩仅限终态 Run。`PostgresAgentRunEventCompactor.FindCandidatesAsync` JOIN `agent_runs` 过滤——终态（Completed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered）直接可压缩，Failed 仅在重试已耗尽（retry_count >= max_retries）时可压缩（仍可重试的 Failed 会被调度器重放事件流）；新增公共静态 `IsCompactableRunState`（Storage.Postgres，非 Abstractions，无 baseline 影响）；操作员 `POST /{id}/compact` 端点增加同规则守卫（非终态 409）。背景：当前 Recovery 不读快照/归档，非终态压缩会导致重启恢复判定 RecoveryCorrupted。验证：build 0 错误；新测试 4/4 + R30S/R29S 压缩相关 18 项全通过。
 
 ### 性能优化工作包进度
 
