@@ -7,12 +7,17 @@
 
 - 当前目标：随用户指示推进，无既定进行中任务。
 - 候选方向（详见 TODO.md）：R30 Self-Learning Agent Runtime —— Utility Ledger 物化 → Dataset Builder → 训练/校准 → Replay → Canary → Promotion。
+- **性能优化优先级**（三组，实施前先核对现状，部分已有基础）：
+  - **第一组 正确性+性能**：Agent 调度（队列满快速返回、DB claim 替代反复 Recovery 扫描、Workspace 公平队列、批量领取 Run、queue wait histogram）；Tool Effect（Prepare+Intent 单事务、Result 按 RequestId 点查、Reconciliation 批量扫描、Descriptor Frozen Cache、恢复避免重复模型调用）；Retrieval（正式 Keyset Cursor、Selected-only Content/Relation Hydration、Graph per-seed 配额、投影 DTO 避免 JSONB、Exact token 只对 Selected 执行）；Event Recovery（从 Checkpoint Cursor 起、Event page、Snapshot compaction、终态 SSE 全量 drain、Raw events 分页）。
+  - **第二组 推理热路径**（Inference Scheduler 生命周期问题已基本关闭）：MaxConcurrency 按 CPU/CUDA/DirectML profile 配置（单 GPU 默认不用 ProcessorCount）；记录 batch fill ratio / queue wait / cancellation waste / session contention / shard count；避免每请求额外小数组与 continuation 分配。
+  - **第三组 CI 性能**：当前 CI 多 Job 上传下载整个 `**/bin`、`**/obj`；先实测 Artifact 大小，再选方案（每 Job restore/build、只上传测试所需输出、分项目 Artifact、或 reusable build cache）。
+  - 注：批量领取 Run（R29 P1 LeaseBatch）、Checkpoint Cursor（R29 P4 Cursor>Delta>Full）已有基础。
 
 ## 当前状态
 
-- **基线**：main @ `c45f6b27`（工作树干净）。
+- **基线**：main @ `6065d366`（工作树干净）。
 - **进行中**：无。
-- **最近完成**：WORK_STATE.md 承载计划/目标与必要元信息；确立「提交只针对项目任务，状态更新并入任务提交」约定。
+- **最近完成**：记录性能优化优先级（三组：正确性+性能 / 推理热路径 / CI 性能）到目标与计划。
 
 ## 必要元信息
 
