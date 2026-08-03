@@ -56,11 +56,11 @@ public sealed class R29H_AgentRunProcessRestartTests
         await runStore.CreateAsync(run);
 
         // ── 模拟进程 A：执行到 ContextBuilding 后"崩溃" ──
-        // 手动将状态推进到 ContextBuilding（非终态），模拟崩溃前状态
-        await runStore.TransitionStateAsync(
-            run.WorkspaceId, run.RunId,
-            AgentRunState.Created,
-            AgentRunState.ContextBuilding);
+        // 崩溃发生在首次 flush 之后：事件流已写入（RunCreated + StateTransition→ContextBuilding）
+        // 且 Run 状态已推进到 ContextBuilding（非终态）。恢复 fail-closed 契约下，
+        // 非 Created + 零事件的 Run 视为事件数据丢失（RecoveryBlocked，不得回退全新启动），
+        // 因此崩溃模拟必须包含已持久化的事件流，恢复路径才能合法重放并继续执行。
+        await SeedEventsAsync(eventStore, run, AgentRunState.ContextBuilding);
 
         // ── 模拟进程重启：新 Actor 实例接管同一 Run ──
         var resumedRun = await runStore.GetAsync(run.WorkspaceId, run.RunId);
@@ -161,17 +161,19 @@ public sealed class R29H_AgentRunProcessRestartTests
         await runStore.CreateAsync(run);
 
         // ── 模拟进程 A：已调用 2 次模型后崩溃 ──
-        var crashedRun = run with
+        // 崩溃发生在首次 flush 之后：事件流已写入（RunCreated + StateTransition→ContextBuilding），
+        // Run 快照记录 ModelCallsUsed=2 / Turn=2（恢复时从 Run 元数据续计数）。
+        // 恢复 fail-closed 契约下非 Created + 零事件视为事件数据丢失（RecoveryBlocked），
+        // 因此崩溃模拟必须包含已持久化的事件流。
+        await SeedEventsAsync(eventStore, run, AgentRunState.ContextBuilding);
+        var persisted = await runStore.GetAsync(run.WorkspaceId, run.RunId);
+        Assert.IsNotNull(persisted, "预置事件流后 Run 应存在。");
+        var crashedRun = persisted! with
         {
-            State = AgentRunState.ContextBuilding,
             ModelCallsUsed = 2,
             Turn = 2,
             UpdatedAt = DateTimeOffset.UtcNow
         };
-        await runStore.TransitionStateAsync(
-            run.WorkspaceId, run.RunId,
-            AgentRunState.Created,
-            AgentRunState.ContextBuilding);
         await runStore.UpdateAsync(crashedRun);
 
         // ── 模拟进程重启：新 Actor 读取已保存的 ModelCallsUsed ──
@@ -717,6 +719,40 @@ public sealed class R29H_AgentRunProcessRestartTests
             return el.GetInt32();
         }
         throw new AssertFailedException($"payload 中未找到整型字段 {fieldName}。");
+    }
+
+    /// <summary>
+    /// 预置合法事件流（RunCreated + StateTransition→targetState）并将 Run 状态推进到目标状态。
+    /// 模拟"进程崩溃于首次 flush 之后"：事件已持久化、状态已推进，恢复路径可合法重放。
+    /// </summary>
+    private static async Task SeedEventsAsync(
+        InMemoryAgentRunEventStore eventStore,
+        AgentRun run,
+        AgentRunState targetState)
+    {
+        var seq0 = AgentRunEventChain.BuildEvent(
+            run.RunId, run.WorkspaceId, sequence: 0,
+            type: AgentRunEventType.RunCreated,
+            state: AgentRunState.Created,
+            payload: """{"runId":"seed"}""",
+            prevChainHash: null);
+        var seq1 = AgentRunEventChain.BuildEvent(
+            run.RunId, run.WorkspaceId, sequence: 1,
+            type: AgentRunEventType.StateTransition,
+            state: targetState,
+            payload: $$"""{"from":"Created","to":"{{targetState}}"}""",
+            prevChainHash: seq0.ContentHash);
+
+        var runStateUpdate = new AgentRunStateUpdate
+        {
+            WorkspaceId = run.WorkspaceId,
+            RunId = run.RunId,
+            ExpectedCurrentState = AgentRunState.Created,
+            NewState = targetState,
+            RunSnapshot = run with { State = targetState, UpdatedAt = DateTimeOffset.UtcNow }
+        };
+        await eventStore.AppendBatchAsync(
+            [seq0, seq1], runStateUpdate, checkpointCursor: null, checkpointBody: null, CancellationToken.None);
     }
 
     /// <summary>

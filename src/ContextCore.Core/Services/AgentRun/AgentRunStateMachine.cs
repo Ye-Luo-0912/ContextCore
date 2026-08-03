@@ -83,7 +83,16 @@ public static class AgentRunStateMachine
         {
             throw new InvalidOperationException(
                 $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
-                $"终态（Completed/Failed/Cancelled/LeaseLost）不可再推进。");
+                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/RecoveryDependencyUnavailable）不可再推进。");
+        }
+
+        // 恢复失败状态（fail-closed）：任意非终态可跳入；进入后即为终态，
+        // 等待运维介入（不自动重试、不推进、不回退为全新启动）。
+        if (to == AgentRunState.RecoveryBlocked
+            || to == AgentRunState.RecoveryCorrupted
+            || to == AgentRunState.RecoveryDependencyUnavailable)
+        {
+            return;
         }
 
         if (!IsValidForwardTransition(from, to))
@@ -97,7 +106,8 @@ public static class AgentRunStateMachine
     }
 
     /// <summary>
-    /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost / ReconciliationRejected）。
+    /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost / ReconciliationRejected /
+    /// RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable）。
     /// </summary>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
@@ -106,7 +116,10 @@ public static class AgentRunStateMachine
            || state == AgentRunState.Failed
            || state == AgentRunState.Cancelled
            || state == AgentRunState.LeaseLost
-           || state == AgentRunState.ReconciliationRejected;
+           || state == AgentRunState.ReconciliationRejected
+           || state == AgentRunState.RecoveryBlocked
+           || state == AgentRunState.RecoveryCorrupted
+           || state == AgentRunState.RecoveryDependencyUnavailable;
 
     /// <summary>
     /// 判断 from → to 是否为合法前向推进（不含 Failed/Cancelled 短路；调用方已先短路）。

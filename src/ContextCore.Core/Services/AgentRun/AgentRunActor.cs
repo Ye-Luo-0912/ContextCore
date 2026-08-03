@@ -487,6 +487,8 @@ public sealed class AgentRunActor
         string? expectedPrevChainHash = null;
         AgentRunEvent? boundaryEvent = null;
         var readFailed = false;
+        // 区分恢复失败原因：事件数据损坏（哈希链/序列号/ContentHash） vs 存储不可用。
+        var recoveryCorruptionDetected = false;
 
         while (true)
         {
@@ -507,7 +509,7 @@ public sealed class AgentRunActor
                     else
                     {
                         // 游标指向的事件不存在（数据异常）→ 降级为全量重放
-                        throw new InvalidOperationException(
+                        throw new AgentRunRecoveryCorruptionException(
                             $"checkpoint 游标指向的事件不存在（sequence={fromSequence - 1}，run={state.Run.RunId}）。");
                     }
                 }
@@ -528,15 +530,23 @@ public sealed class AgentRunActor
                     {
                         var evt = page[i];
                         var expectedSequence = fromSequence + i;
+
+                        // 重算 ContentHash 校验（fail-closed）：不信任存储的 ContentHash，
+                        // 每次恢复读取都按事件内容重算比对，检测篡改/损坏。
+                        if (!AgentRunEventChain.VerifyContentHash(evt))
+                        {
+                            throw new AgentRunRecoveryCorruptionException(
+                                $"事件 ContentHash 校验失败：sequence={evt.Sequence} 重算哈希与存储值不匹配（run={state.Run.RunId}）。");
+                        }
                         if (evt.Sequence != expectedSequence)
                         {
-                            throw new InvalidOperationException(
+                            throw new AgentRunRecoveryCorruptionException(
                                 $"事件序列号不连续：期望 {expectedSequence}，实际 {evt.Sequence}（run={state.Run.RunId}）。");
                         }
                         var expectedHash = (i == 0) ? expectedPrevChainHash : page[i - 1].ContentHash;
                         if (!string.Equals(evt.PrevChainHash, expectedHash, StringComparison.Ordinal))
                         {
-                            throw new InvalidOperationException(
+                            throw new AgentRunRecoveryCorruptionException(
                                 $"事件哈希链断裂：sequence={evt.Sequence} 的 PrevChainHash 与前一事件 ContentHash 不匹配（run={state.Run.RunId}）。");
                         }
                     }
@@ -552,12 +562,13 @@ public sealed class AgentRunActor
                 }
                 break;
             }
-            catch
+            catch (Exception ex)
             {
-                // 事件流读取失败（store 不可用 / 跨 workspace 不可见 / 哈希链断裂）。
-                // 快路径先降级为全量重放重试一次；仍失败则回退为全新启动路径
-                // （此时 _turnStartState = run.State（非 Created），首次 CAS 可能失败，
-                // Actor 的 catch 块会转 Failed 状态）。
+                // 事件流读取失败（store 不可用 / 跨 workspace 不可见 / 哈希链断裂 / 内容损坏）。
+                // 记录失败类型：损坏异常 → RecoveryCorrupted；其余 → RecoveryDependencyUnavailable。
+                // 快路径先降级为全量重放重试一次；仍失败则进入恢复失败终态（fail-closed，
+                // 不回退为全新启动——回退可能重复已执行的外部副作用）。
+                recoveryCorruptionDetected = ex is AgentRunRecoveryCorruptionException;
                 if (useCursorFastPath)
                 {
                     useCursorFastPath = false;
@@ -575,14 +586,12 @@ public sealed class AgentRunActor
 
         if (readFailed)
         {
-            state = BufferEvent(state, AgentRunEventType.RunCreated, JsonSerializer.Serialize(new
-            {
-                runId = state.Run.RunId,
-                sessionId = state.Run.SessionId,
-                task = state.Run.Task
-            }));
-            state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
-            return state;
+            // fail-closed：恢复读取失败不得回退为全新启动（可能重复外部副作用）。
+            // 事件数据损坏 → RecoveryCorrupted；存储不可用 → RecoveryDependencyUnavailable。
+            var recoveryState = recoveryCorruptionDetected
+                ? AgentRunState.RecoveryCorrupted
+                : AgentRunState.RecoveryDependencyUnavailable;
+            return await EnterRecoveryFailureStateAsync(state, recoveryState, cancellationToken).ConfigureAwait(false);
         }
 
         // 快路径：checkpoint 已覆盖游标之前的历史，仅需重放游标之后的新事件
@@ -594,15 +603,11 @@ public sealed class AgentRunActor
 
         if (allEvents.Count == 0)
         {
-            // 无事件 — 崩溃发生在首次 flush 之前 → 回退为全新启动路径
-            state = BufferEvent(state, AgentRunEventType.RunCreated, JsonSerializer.Serialize(new
-            {
-                runId = state.Run.RunId,
-                sessionId = state.Run.SessionId,
-                task = state.Run.Task
-            }));
-            state = TransitionStateLocal(state, AgentRunState.ContextBuilding);
-            return state;
+            // fail-closed：仅「Run 确实处于 Created 且从未写入任何事件」允许回退为全新启动。
+            // 本方法仅在 isResume（run.State != Created）时被调用，因此零事件意味着
+            // Run 已推进过状态但事件流为空（事件数据丢失）→ 不得回退为全新启动，
+            // 标记 RecoveryBlocked 等待运维介入（回退可能重复已执行的外部副作用）。
+            return await EnterRecoveryFailureStateAsync(state, AgentRunState.RecoveryBlocked, cancellationToken).ConfigureAwait(false);
         }
 
         // 从 Cursor 初始化 _eventsSinceLastCheckpoint。
@@ -697,6 +702,57 @@ public sealed class AgentRunActor
             EventSequence = lastEvent.Sequence + 1,
             EventChainHash = lastEvent.ContentHash
         };
+    }
+
+    /// <summary>
+    /// 进入恢复失败终态（fail-closed）并尽力持久化。
+    /// </summary>
+    /// <param name="state">当前执行状态。</param>
+    /// <param name="recoveryState">恢复失败状态（RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>已标记恢复失败状态的执行状态（本地为终态，主循环不会执行）。</returns>
+    /// <remarks>
+    /// 恢复失败路径不向事件流追加事件：事件流本身可能已损坏或不可用，追加 StateTransition
+    /// 事件需要读取真实尾事件作为序列/哈希链锚点，而依赖不可用时无法读取；且向待运维修复的
+    /// 事件流写入会引入更多不确定状态。因此采用状态直写（与 RecoveryWorker / Endpoints 的
+    /// "无事件状态推进"路径一致）：run store 的 state CAS（expected = _turnStartState）+
+    /// 字段更新（FailureReason）。持久化失败（典型场景：RecoveryDependencyUnavailable 时
+    /// 存储本身不可用）时静默降级并记录警告——Run 保持原非终态，由 RecoveryWorker 在依赖
+    /// 恢复后重试恢复；不抛给 FailAsync，避免把恢复失败误标为 Failed 而丢失 Recovery* 语义。
+    /// </remarks>
+    private async Task<AgentRunExecutionState> EnterRecoveryFailureStateAsync(
+        AgentRunExecutionState state,
+        AgentRunState recoveryState,
+        CancellationToken cancellationToken)
+    {
+        var failureReason = recoveryState switch
+        {
+            AgentRunState.RecoveryBlocked => "RecoveryBlocked：事件流为空（事件数据丢失），无法安全重建执行状态，需运维介入。",
+            AgentRunState.RecoveryCorrupted => "RecoveryCorrupted：事件流损坏（哈希链断裂 / 序列不连续 / ContentHash 重算不匹配），需运维介入。",
+            _ => "RecoveryDependencyUnavailable：事件存储不可用，等待依赖恢复后由恢复 Worker 重试。"
+        };
+
+        // 本地推进为终态（不缓冲事件）：主循环据此退出，不执行任何 Agent 逻辑。
+        state = TransitionStateLocal(state, recoveryState, bufferEvent: false);
+        try
+        {
+            await _runStore.TransitionStateAsync(
+                state.Run.WorkspaceId, state.Run.RunId, _turnStartState, recoveryState,
+                cancellationToken, _leaseToken, _fencingToken).ConfigureAwait(false);
+            await _runStore.UpdateAsync(
+                state.Run with { FailureReason = failureReason, UpdatedAt = DateTimeOffset.UtcNow },
+                cancellationToken).ConfigureAwait(false);
+            _turnStartState = recoveryState;
+        }
+        catch (Exception ex)
+        {
+            // 尽力而为：无法持久化恢复失败状态时记录警告，Run 保持原非终态等待重试。
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] 持久化恢复失败状态 {0} 失败（run={1}，workspace={2}）：{3}。" +
+                "Run 保持原状态，将由 RecoveryWorker 在依赖恢复后重试恢复。",
+                recoveryState, state.Run.RunId, state.Run.WorkspaceId, ex.Message);
+        }
+        return state;
     }
 
     /// <summary>
@@ -2250,7 +2306,7 @@ public sealed class AgentRunActor
     /// <param name="state">当前执行状态。</param>
     /// <param name="newState">目标状态。</param>
     /// <returns>更新后的执行状态（Run.State = newState）。</returns>
-    private AgentRunExecutionState TransitionStateLocal(AgentRunExecutionState state, AgentRunState newState)
+    private AgentRunExecutionState TransitionStateLocal(AgentRunExecutionState state, AgentRunState newState, bool bufferEvent = true)
     {
         // 校验状态机
         AgentRunStateMachine.ValidateTransition(state.Run.State, newState);
@@ -2263,12 +2319,15 @@ public sealed class AgentRunActor
 
         var newStateObj = state with { Run = updatedRun };
 
-        // 缓冲 StateTransition 事件
-        return BufferEvent(newStateObj, AgentRunEventType.StateTransition, JsonSerializer.Serialize(new
-        {
-            from = state.Run.State.ToString(),
-            to = newState.ToString()
-        }));
+        // 缓冲 StateTransition 事件。恢复失败路径（bufferEvent: false）不缓冲：
+        // 事件流可能已损坏或不可用，且恢复失败状态采用状态直写（见 EnterRecoveryFailureStateAsync）。
+        return bufferEvent
+            ? BufferEvent(newStateObj, AgentRunEventType.StateTransition, JsonSerializer.Serialize(new
+            {
+                from = state.Run.State.ToString(),
+                to = newState.ToString()
+            }))
+            : newStateObj;
     }
 
     /// <summary>

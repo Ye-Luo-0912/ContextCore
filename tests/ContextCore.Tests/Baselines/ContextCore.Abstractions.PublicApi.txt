@@ -74,6 +74,9 @@ F:ContextCore.Abstractions.AgentRunState.Observing
 F:ContextCore.Abstractions.AgentRunState.PendingToolExecution
 F:ContextCore.Abstractions.AgentRunState.ReconciliationRejected
 F:ContextCore.Abstractions.AgentRunState.ReconciliationRunning
+F:ContextCore.Abstractions.AgentRunState.RecoveryBlocked
+F:ContextCore.Abstractions.AgentRunState.RecoveryCorrupted
+F:ContextCore.Abstractions.AgentRunState.RecoveryDependencyUnavailable
 F:ContextCore.Abstractions.AgentRunState.ToolDispatching
 F:ContextCore.Abstractions.AgentRuntimeKind.ClaudeCode
 F:ContextCore.Abstractions.AgentRuntimeKind.Codex

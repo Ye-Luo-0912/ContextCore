@@ -113,7 +113,26 @@ public enum AgentRunState : byte
     /// （记录状态 → Rejected，journal 已提交 void 结果）。Run 由此恢复执行，
     /// 模型看到该 Tool 失败后可调整策略；不进入 Completed 前必须无未裁决记录。
     /// </summary>
-    ReconciliationRejected = 14
+    ReconciliationRejected = 14,
+
+    /// <summary>
+    /// 恢复被阻塞：Run 已推进到非 Created 状态但事件流为空（事件数据丢失），
+    /// 无法安全重建执行状态。fail-closed：不得回退为全新启动（可能重复外部副作用），
+    /// 需运维介入修复或重建 Run。
+    /// </summary>
+    RecoveryBlocked = 15,
+
+    /// <summary>
+    /// 恢复发现事件流损坏：哈希链断裂 / 序列号不连续 / 事件 ContentHash 重算不匹配。
+    /// fail-closed：不得继续执行，需运维介入修复事件流后重试。
+    /// </summary>
+    RecoveryCorrupted = 16,
+
+    /// <summary>
+    /// 恢复依赖（事件存储）不可用：读取事件流失败（存储故障 / 网络分区）。
+    /// fail-closed：不得回退为全新启动；待依赖恢复后由恢复 Worker 重试。
+    /// </summary>
+    RecoveryDependencyUnavailable = 17
 }
 
 /// <summary>
