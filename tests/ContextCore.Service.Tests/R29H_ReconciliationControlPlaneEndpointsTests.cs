@@ -85,8 +85,11 @@ public sealed class R29H_ReconciliationControlPlaneEndpointsTests
             await store.CreateAsync(BuildRecord("rec-old-2", "req-old-2", Ws, deadline: now - TimeSpan.FromMinutes(30)), default);
             await store.CreateAsync(BuildRecord("rec-fresh", "req-fresh", Ws, deadline: now + TimeSpan.FromHours(2)), default);
             await store.CreateAsync(BuildRecord("rec-resolved", "req-resolved", Ws, deadline: now - TimeSpan.FromHours(1)), default);
+            // 先原子取得裁决权（P0-5）再提交终态：MarkRejectedAsync 需持有有效租约。
+            var resolvedLease = await store.TryBeginAsync("rec-resolved", "test", TimeSpan.FromMinutes(1), default);
+            Assert.IsNotNull(resolvedLease, "Pending 记录可领取裁决租约。");
             await store.MarkRejectedAsync(
-                "rec-resolved", new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, default);
+                "rec-resolved", resolvedLease!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, default);
 
             var response = await httpClient.GetAsync($"/api/agents/reconciliations?workspaceId={Ws}&limit=50");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "ControlRoom 列表应返回 200。");

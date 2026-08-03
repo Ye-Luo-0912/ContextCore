@@ -78,21 +78,25 @@ public sealed class R29H_ToolReconciliationTests
         Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, cts.Token));
 
         // 裁决为 Resolved → 不再未裁决
-        await store.MarkResolvedAsync("rec-1", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, cts.Token);
+        var lease1 = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease1, "Pending → Running 接管成功。");
+        await store.MarkResolvedAsync("rec-1", lease1!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, cts.Token);
         Assert.IsFalse(await store.HasUnresolvedForRunAsync(RunId, cts.Token), "全部 Resolved → 无未裁决记录。");
 
         // Running 记录 → 未裁决
         await store.CreateAsync(BuildRecord("rec-2", "req-2", "bank-transfer"), cts.Token);
-        await store.TryBeginAsync("rec-2", cts.Token);
+        var lease2 = await store.TryBeginAsync("rec-2", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease2, "Pending → Running 接管成功。");
         Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, cts.Token), "Running 记录仍属未裁决。");
 
         // 裁决为 Rejected → 不再未裁决
-        await store.MarkRejectedAsync("rec-2", new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, cts.Token);
+        await store.MarkRejectedAsync("rec-2", lease2!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, cts.Token);
         Assert.IsFalse(await store.HasUnresolvedForRunAsync(RunId, cts.Token));
     }
 
     /// <summary>
-    /// 验证：TryBeginAsync CAS Pending→Running（并发互斥），TryResetToPendingAsync 回退。
+    /// 验证：TryBeginAsync 领取裁决租约（Pending → Running + lease/fencing，P0-4），
+    /// TryResetToPendingAsync 回退；有效租约持有期间不可重复接管。
     /// </summary>
     [TestMethod]
     public async Task Store_TryBeginAndReset_CasSemantics()
@@ -101,18 +105,31 @@ public sealed class R29H_ToolReconciliationTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        await store.CreateAsync(BuildRecord("rec-2", "req-2", "bank-transfer"), cts.Token);
 
-        Assert.IsTrue(await store.TryBeginAsync("rec-1", cts.Token), "Pending → Running 首次接管成功。");
-        Assert.IsFalse(await store.TryBeginAsync("rec-1", cts.Token), "Running 状态不可重复接管。");
+        // ── rec-1：接管 → 回退（带退避）→ Pending + last_error；退避未到期不可接管（P0-4）──
+        var lease = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease, "Pending → Running 首次接管成功。");
+        Assert.IsTrue(!string.IsNullOrEmpty(lease!.LeaseToken), "领取返回租约令牌。");
+        Assert.AreEqual(1, lease.FencingToken, "首次领取 fencing=1。");
+        Assert.IsNull(await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token), "有效租约持有中不可重复接管。");
         Assert.AreEqual(ToolReconciliationStatus.Running, (await store.GetAsync("rec-1", cts.Token))!.Status);
 
-        Assert.IsTrue(await store.TryResetToPendingAsync("rec-1", cts.Token), "Running → Pending 回退成功。");
-        Assert.IsFalse(await store.TryResetToPendingAsync("rec-1", cts.Token), "仅 Running 可回退。");
+        Assert.IsTrue(await store.TryResetToPendingAsync("rec-1", lease.LeaseToken, "first-attempt", TimeSpan.FromSeconds(30), cts.Token), "Running → Pending 回退成功。");
+        Assert.IsFalse(await store.TryResetToPendingAsync("rec-1", lease.LeaseToken, null, null, cts.Token), "租约已清除，不可重复回退。");
         Assert.AreEqual(ToolReconciliationStatus.Pending, (await store.GetAsync("rec-1", cts.Token))!.Status);
+        Assert.AreEqual("first-attempt", (await store.GetAsync("rec-1", cts.Token))!.LastError, "回退记录 last_error。");
+        Assert.IsNull(await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token), "退避未到期不可重新接管。");
 
-        // 终态记录不可接管
-        await store.MarkResolvedAsync("rec-1", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
-        Assert.IsFalse(await store.TryBeginAsync("rec-1", cts.Token), "终态记录不可重新接管。");
+        // ── rec-2：无退避回退后再次接管（fencing 递增）→ 终态记录不可接管 ──
+        var lease2 = await store.TryBeginAsync("rec-2", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease2, "Pending → Running 接管成功。");
+        Assert.IsTrue(await store.TryResetToPendingAsync("rec-2", lease2!.LeaseToken, "retry", null, cts.Token), "无退避回退成功。");
+        var lease3 = await store.TryBeginAsync("rec-2", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease3, "回退后 Pending 可再次接管。");
+        Assert.AreEqual(2, lease3!.FencingToken, "再次接管 fencing 递增。");
+        await store.MarkResolvedAsync("rec-2", lease3.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
+        Assert.IsNull(await store.TryBeginAsync("rec-2", "test", TimeSpan.FromMinutes(1), cts.Token), "终态记录不可重新接管。");
     }
 
     /// <summary>
@@ -125,9 +142,9 @@ public sealed class R29H_ToolReconciliationTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => store.TryBeginAsync("rec-missing", cts.Token).AsTask());
+            () => store.TryBeginAsync("rec-missing", "test", TimeSpan.FromMinutes(1), cts.Token).AsTask());
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => store.MarkResolvedAsync("rec-missing", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token).AsTask());
+            () => store.MarkResolvedAsync("rec-missing", "token", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token).AsTask());
     }
 
     /// <summary>
@@ -141,13 +158,15 @@ public sealed class R29H_ToolReconciliationTests
 
         await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
 
+        var lease = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease, "Pending → Running 接管成功。");
         Assert.IsTrue(await store.MarkResolvedAsync(
-            "rec-1", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" }, cts.Token));
+            "rec-1", lease!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" }, cts.Token));
         Assert.IsFalse(await store.MarkResolvedAsync(
-            "rec-1", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-999" }, cts.Token),
+            "rec-1", lease.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-999" }, cts.Token),
             "已裁决记录二次裁决 → false。");
         Assert.IsFalse(await store.MarkRejectedAsync(
-            "rec-1", new ToolReconciliationOutcome { SideEffectOccurred = false }, cts.Token));
+            "rec-1", lease.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false }, cts.Token));
 
         var record = await store.GetAsync("rec-1", cts.Token);
         Assert.AreEqual(ToolReconciliationStatus.Resolved, record!.Status);
@@ -167,7 +186,9 @@ public sealed class R29H_ToolReconciliationTests
         await store.CreateAsync(BuildRecord("rec-1", "req-1", "tool-a", createdAt: DateTimeOffset.UtcNow.AddSeconds(-5)), cts.Token);
         await store.CreateAsync(BuildRecord("rec-2", "req-2", "tool-b", createdAt: DateTimeOffset.UtcNow.AddSeconds(-3)), cts.Token);
         await store.CreateAsync(BuildRecord("rec-3", "req-3", "tool-c", createdAt: DateTimeOffset.UtcNow.AddSeconds(-1)), cts.Token);
-        await store.MarkResolvedAsync("rec-2", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
+        var lease = await store.TryBeginAsync("rec-2", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease, "Pending → Running 接管成功。");
+        await store.MarkResolvedAsync("rec-2", lease!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
 
         var pending = await store.ListPendingAsync(10, cts.Token);
         Assert.AreEqual(2, pending.Count, "仅 Pending 记录被列出。");
@@ -212,7 +233,9 @@ public sealed class R29H_ToolReconciliationTests
         await store.CreateAsync(BuildRecord("rec-fresh", "req-fresh", "tool-b", createdAt: now.AddSeconds(-4)) with { DeadlineUtc = now + TimeSpan.FromHours(2) }, cts.Token);
         // 已裁决但过期：不计告警
         await store.CreateAsync(BuildRecord("rec-resolved", "req-resolved", "tool-c", createdAt: now.AddSeconds(-3)) with { DeadlineUtc = now - TimeSpan.FromHours(1) }, cts.Token);
-        await store.MarkRejectedAsync("rec-resolved", new ToolReconciliationOutcome { SideEffectOccurred = false }, cts.Token);
+        var lease = await store.TryBeginAsync("rec-resolved", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease, "Pending → Running 接管成功。");
+        await store.MarkRejectedAsync("rec-resolved", lease!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false }, cts.Token);
         // 其他 Run 的同 workspace 记录不干扰分页（workspace 过滤）
         await store.CreateAsync(BuildRecord("rec-ws2", "req-ws2", "tool-d", runId: "run-ws2") with { WorkspaceId = "ws-other", DeadlineUtc = now - TimeSpan.FromHours(3) }, cts.Token);
 
@@ -242,7 +265,7 @@ public sealed class R29H_ToolReconciliationTests
     public async Task Coordinator_Resolve_NotFound_ReturnsOne()
     {
         var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal: null, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var code = await coordinator.ResolveAsync("rec-missing", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
@@ -257,8 +280,8 @@ public sealed class R29H_ToolReconciliationTests
     {
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(handler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-A"), 0, cts.Token);
@@ -282,8 +305,8 @@ public sealed class R29H_ToolReconciliationTests
     {
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(handler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // 非幂等写成功也不自动提交 → journal 停在 Dispatched（模糊态）
@@ -328,8 +351,8 @@ public sealed class R29H_ToolReconciliationTests
     {
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(handler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var toolCall = BuildToolCall("bank-transfer", "arg-C");
@@ -364,8 +387,8 @@ public sealed class R29H_ToolReconciliationTests
     {
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(handler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-D"), 0, cts.Token);
@@ -389,8 +412,8 @@ public sealed class R29H_ToolReconciliationTests
     {
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(handler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-E"), 0, cts.Token);
@@ -421,15 +444,16 @@ public sealed class R29H_ToolReconciliationTests
 
         var toolHandler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(toolHandler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // 两条 Pending 记录：一条声明 handler，一条未声明
         var withHandler = await executor.ExecuteAsync(run.RunId, Ws, BuildToolCall("bank-transfer", "arg-F"), 0, cts.Token);
         var manualOnly = await executor.ExecuteAsync(run.RunId, Ws, BuildToolCall("bank-transfer", "arg-G"), 0, cts.Token);
-        var recWithHandler = await store.CreateAsync(BuildRecord("rec:" + withHandler.RequestId, withHandler.RequestId, "bank-transfer", withHandler), cts.Token);
-        var recManual = await store.CreateAsync(BuildRecord("rec:" + manualOnly.RequestId, manualOnly.RequestId, "bank-transfer", manualOnly, reconciliationHandler: null), cts.Token);
+        // 对账记录使用真实 run.RunId（与 journal 条目租户键一致，P0-5 完整租户键）。
+        var recWithHandler = await store.CreateAsync(BuildRecord("rec:" + withHandler.RequestId, withHandler.RequestId, "bank-transfer", withHandler, runId: run.RunId), cts.Token);
+        var recManual = await store.CreateAsync(BuildRecord("rec:" + manualOnly.RequestId, manualOnly.RequestId, "bank-transfer", manualOnly, runId: run.RunId, reconciliationHandler: null), cts.Token);
 
         var worker = new ToolReconciliationWorker(
             coordinator,
@@ -464,12 +488,12 @@ public sealed class R29H_ToolReconciliationTests
 
         var toolHandler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (_, executor, journal, _) = CreateExecutor(toolHandler);
-        var store = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(store, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var result = await executor.ExecuteAsync(run.RunId, Ws, BuildToolCall("bank-transfer", "arg-H"), 0, cts.Token);
-        await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
+        await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result, runId: run.RunId), cts.Token);
 
         var worker = new ToolReconciliationWorker(
             coordinator, store, handlers: null, kernelHost: null, runStore,
@@ -497,7 +521,7 @@ public sealed class R29H_ToolReconciliationTests
 
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
-        var reconciliationStore = new InMemoryToolReconciliationStore();
+        var reconciliationStore = new InMemoryToolReconciliationStore(journal: journal);
 
         // 第 1 次模型调用请求转账工具（成功但非幂等写 → 不自动提交），第 2 次返回最终答案
         var transport = new SequenceModelTransport(new[]
@@ -574,8 +598,8 @@ public sealed class R29H_ToolReconciliationTests
 
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
-        var reconciliationStore = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(reconciliationStore, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var reconciliationStore = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(reconciliationStore, NullLogger<ToolReconciliationCoordinator>.Instance);
 
         // 阶段 1：工具调用（非幂等写成功 → Hold）+ 最终答案 → 停在 AwaitingReconciliation
         var phase1Transport = new SequenceModelTransport(new[]
@@ -671,8 +695,8 @@ public sealed class R29H_ToolReconciliationTests
 
         var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
-        var reconciliationStore = new InMemoryToolReconciliationStore();
-        var coordinator = new ToolReconciliationCoordinator(reconciliationStore, journal, NullLogger<ToolReconciliationCoordinator>.Instance);
+        var reconciliationStore = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(reconciliationStore, NullLogger<ToolReconciliationCoordinator>.Instance);
 
         var phase1Transport = new SequenceModelTransport(new[]
         {

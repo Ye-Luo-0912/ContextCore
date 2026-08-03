@@ -131,8 +131,14 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// 重启后可从 run snapshot 直接恢复，不再依赖 canary_pipelines 表恢复。
     /// - 新建 learning_leases 表：Learning Materialization worker 池级租约
     /// （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
+    /// v57 → v58，Tool Reconciliation 裁决租约 + 完整租户键：
+    /// - tool_reconciliation_entries 追加 lease_owner / lease_token / lease_expires_at /
+    ///   fencing_token / attempt_count / next_attempt_at / last_error 列（P0-4）：
+    ///   Reconciliation Running 必须有租约，Worker 崩溃后 ListPendingAsync 重新领取
+    ///   过期 Running，杜绝永久卡死；所有 Resolve/Fail/Renew 校验 lease_token + 未过期。
+    /// - 唯一键 (run_id, request_id) → (workspace_id, run_id, request_id)（P0-5 完整租户键）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v57";
+    public const string SchemaVersion = "cc-schema-v58";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2495,8 +2501,11 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
 
 -- Tool Reconciliation Control Plane（对账记录持久化表）
 -- 与 ToolReconciliationRecord 字段一一对应；完整对象同时存入 data jsonb（供审计/反序列化）。
--- (run_id, request_id) UNIQUE：按 RunId+RequestId 幂等创建（重复创建返回既有记录）。
+-- (workspace_id, run_id, request_id) UNIQUE（P0-5 完整租户键）：按租户键幂等创建（重复创建返回既有记录）。
 -- status 存 smallint（ToolReconciliationStatus 枚举值）。
+-- 租约列（P0-4）：Running 记录必须持有有效租约（lease_token + lease_expires_at），
+-- 所有 Resolve/Fail/Renew 校验 lease_token = @token AND lease_expires_at > clock_timestamp()；
+-- fencing_token 单调递增隔离过期持有者；attempt_count / next_attempt_at / last_error 支撑重试退避。
 CREATE TABLE IF NOT EXISTS {toolReconciliationEntries} (
     reconciliation_id text NOT NULL,
     run_id text NOT NULL,
@@ -2513,10 +2522,17 @@ CREATE TABLE IF NOT EXISTS {toolReconciliationEntries} (
     updated_at timestamptz NULL,
     resolved_at timestamptz NULL,
     deadline_utc timestamptz NULL,
+    lease_owner text NULL,
+    lease_token text NULL,
+    lease_expires_at timestamptz NULL,
+    fencing_token bigint NOT NULL DEFAULT 0,
+    attempt_count integer NOT NULL DEFAULT 0,
+    next_attempt_at timestamptz NULL,
+    last_error text NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (reconciliation_id),
     CONSTRAINT {Infrastructure.PostgresNames.Constraint(options, "tool_reconciliation_entries", "ws_run_request_unique")}
-        UNIQUE (run_id, request_id)
+        UNIQUE (workspace_id, run_id, request_id)
 );
 
 -- ControlRoom 列表（按 workspace + 状态 + 时间倒序分页）

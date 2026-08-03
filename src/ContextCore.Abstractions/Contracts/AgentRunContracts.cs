@@ -424,7 +424,13 @@ public enum AgentRunEventType : byte
     RunFailed = 11,
 
     /// <summary>Run 取消。</summary>
-    RunCancelled = 12
+    RunCancelled = 12,
+
+    /// <summary>
+    /// Tool 对账裁决完成（P0-3：与记录终态同一事务追加的审计事件，
+    /// 记录 reconciliationId / requestId / sideEffectOccurred / result / error）。
+    /// </summary>
+    ToolReconciliationResolved = 13
 }
 
 /// <summary>

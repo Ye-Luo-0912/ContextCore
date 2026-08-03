@@ -15,9 +15,10 @@ namespace ContextCore.Tests;
 // 验证对账记录跨进程持久化真相源（ProductionHA 组合根下的 IToolReconciliationStore）：
 // 1. DI 注册：AddContextCorePostgresStorage 解析 IToolReconciliationStore →
 // PostgresToolReconciliationStore（非 InMemory）；
-// 2. 幂等创建：按 (run_id, request_id) UNIQUE 幂等（重复创建返回既有记录）；
-// 3. CAS 推进：TryBegin / TryResetToPending / MarkResolved / MarkRejected
-// 互斥且幂等（0 行受影响 = 并发冲突/已裁决）；
+// 2. 幂等创建：按 (workspace_id, run_id, request_id) UNIQUE 幂等（P0-5 完整租户键）；
+// 3. 裁决租约（P0-4）：TryBeginAsync 领取租约（Pending → Running + lease/fencing），
+// 互斥且幂等；TryResetToPending / MarkResolved / MarkRejected 必须持有有效租约
+// （lease_token 匹配 + 未过期）；
 // 4. 未裁决门：HasUnresolvedForRunAsync 仅对 Pending/Running 返回 true
 // （未决高风险副作用阻止 Run Completed 的数据库门）；
 // 5. ExternalOperationId 反查：按 journal 外部操作 ID 跨 Run 查询；
@@ -97,22 +98,26 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
 
                 Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, default), "Pending 记录 → 未裁决。");
 
-                Assert.IsTrue(await store.TryBeginAsync("rec-1", default), "Pending → Running 首次接管成功。");
-                Assert.IsFalse(await store.TryBeginAsync("rec-1", default), "Running 状态不可重复接管。");
+                var lease = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), default);
+                Assert.IsNotNull(lease, "Pending → Running 首次接管成功。");
+                Assert.IsNull(await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), default), "Running 状态不可重复接管。");
                 Assert.AreEqual(ToolReconciliationStatus.Running, (await store.GetAsync("rec-1", default))!.Status);
                 Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, default), "Running 记录仍属未裁决。");
 
-                Assert.IsTrue(await store.TryResetToPendingAsync("rec-1", default), "Running → Pending 回退成功。");
-                Assert.IsFalse(await store.TryResetToPendingAsync("rec-1", default), "仅 Running 可回退。");
+                Assert.IsTrue(await store.TryResetToPendingAsync("rec-1", lease!.LeaseToken, null, null, default), "Running → Pending 回退成功。");
+                Assert.IsFalse(await store.TryResetToPendingAsync("rec-1", lease.LeaseToken, null, null, default), "仅 Running 可回退。");
 
+                // P0-4：终态裁决必须持有有效租约——回退后重新领取再裁决。
+                var lease2 = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), default);
+                Assert.IsNotNull(lease2, "回退后 Pending 可再次接管。");
                 Assert.IsTrue(await store.MarkResolvedAsync(
-                    "rec-1", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, default),
-                    "Pending → Resolved 裁决成功。");
+                    "rec-1", lease2!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, default),
+                    "持有有效租约 → Resolved 裁决成功。");
                 Assert.IsFalse(await store.MarkResolvedAsync(
-                    "rec-1", new ToolReconciliationOutcome { SideEffectOccurred = true }, default),
+                    "rec-1", lease2.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true }, default),
                     "已 Resolved 记录重复裁决必须幂等失败。");
                 Assert.IsFalse(await store.MarkRejectedAsync(
-                    "rec-1", new ToolReconciliationOutcome { SideEffectOccurred = false }, default),
+                    "rec-1", lease2.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false }, default),
                     "已 Resolved 记录不可再 Rejected。");
                 Assert.IsFalse(await store.HasUnresolvedForRunAsync(RunId, default), "全部终态 → 无未裁决记录。");
 
@@ -194,8 +199,10 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
                 await store.CreateAsync(BuildRecord("rec-fresh", "req-fresh", Deadline: now + TimeSpan.FromHours(2)), default);
                 // 1 条已裁决（即使过期也不计告警）
                 await store.CreateAsync(BuildRecord("rec-resolved", "req-resolved", Deadline: now - TimeSpan.FromHours(1)), default);
+                var lease = await store.TryBeginAsync("rec-resolved", "test", TimeSpan.FromMinutes(1), default);
+                Assert.IsNotNull(lease, "Pending → Running 接管成功。");
                 await store.MarkRejectedAsync(
-                    "rec-resolved", new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, default);
+                    "rec-resolved", lease!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, default);
 
                 // 全量列表：total=4；OverdueCount=2（仅 Pending 且 deadline 已过）
                 var all = await store.ListAsync(new ReconciliationQuery { WorkspaceId = Ws, Limit = 50 }, default);

@@ -548,6 +548,33 @@ public sealed record ToolReconciliationRecord
     /// </summary>
     public DateTimeOffset? DeadlineUtc { get; init; }
 
+    /// <summary>裁决租约持有者标识（Worker / 人工 resolve 端点；null = 未被接管）。</summary>
+    public string? LeaseOwner { get; init; }
+
+    /// <summary>
+    /// 裁决租约令牌（唯一随机值；P0-4：所有 Resolve/Fail/Renew 必须校验
+    /// <c>lease_token = @token</c> 且 <c>lease_expires_at &gt; clock_timestamp()</c>）。
+    /// </summary>
+    public string? LeaseToken { get; init; }
+
+    /// <summary>裁决租约过期时间（UTC；过期后其他 Worker 可重新接管，防止崩溃后永久卡死）。</summary>
+    public DateTimeOffset? LeaseExpiresAt { get; init; }
+
+    /// <summary>
+    /// 裁决栅栏令牌（每次成功领取租约单调递增；P0-5：原子裁决验证
+    /// <c>fencing_token = 领取时的版本</c>，防止人工裁决与自动 Handler 双裁决竞争）。
+    /// </summary>
+    public long FencingToken { get; init; }
+
+    /// <summary>接管尝试次数（每次领取租约 +1，供诊断与重试观测）。</summary>
+    public int AttemptCount { get; init; }
+
+    /// <summary>下次可接管时间（UTC；Handler 失败重置时设置退避，避免热循环）。</summary>
+    public DateTimeOffset? NextAttemptAt { get; init; }
+
+    /// <summary>最近一次失败原因（Handler 异常重置时记录，供运维诊断）。</summary>
+    public string? LastError { get; init; }
+
     /// <summary>当前对账状态。</summary>
     public required ToolReconciliationStatus Status { get; init; }
 
@@ -583,6 +610,56 @@ public sealed record ToolReconciliationOutcome
 
     /// <summary>对账失败原因（无法确认时填充；记录保持 Pending 等待重试/人工）。</summary>
     public string? Error { get; init; }
+}
+
+/// <summary>
+/// Tool 对账裁决租约（P0-4/P0-5）：<see cref="IToolReconciliationStore.TryBeginAsync"/> 成功领取时
+/// 返回的裁决权凭证。持有者凭 LeaseToken + FencingToken 执行 Resolve/Fail/Renew；
+/// 任何裁决操作都必须携带有效租约，防止过期持有者与并发接管者竞争。
+/// </summary>
+public sealed record ToolReconciliationLease
+{
+    /// <summary>租约令牌（唯一随机值；所有裁决操作必须携带）。</summary>
+    public required string LeaseToken { get; init; }
+
+    /// <summary>领取时的裁决栅栏令牌（= 记录 FencingToken 的新值；原子裁决校验版本）。</summary>
+    public required long FencingToken { get; init; }
+
+    /// <summary>租约过期时间（UTC）。</summary>
+    public required DateTimeOffset ExpiresAt { get; init; }
+}
+
+/// <summary>
+/// 对账原子裁决结果状态（P0-3：<see cref="IToolReconciliationStore.ResolveReconciliationAtomicallyAsync"/>）。
+/// </summary>
+public enum ToolReconciliationResolutionStatus : byte
+{
+    /// <summary>裁决已原子提交（journal + 结果 + 记录终态 + 可选 Run 推进 + 审计事件，整体成功）。</summary>
+    Resolved = 0,
+
+    /// <summary>记录不存在（workspace_id + run_id + request_id 未匹配）。</summary>
+    NotFound = 1,
+
+    /// <summary>记录已裁决（Resolved/Rejected），重复提交被拒绝。</summary>
+    AlreadyTerminal = 2,
+
+    /// <summary>裁决权丢失：租约令牌不匹配或租约已过期（被并发接管/过期）。</summary>
+    ArbitrationLost = 3,
+
+    /// <summary>记录版本不匹配：fencing_token 已被并发接管递增（P0-5 双裁决竞争）。</summary>
+    VersionMismatch = 4
+}
+
+/// <summary>
+/// 对账原子裁决结果（P0-3）。<see cref="Record"/> 在 Resolved 时返回裁决后的最新记录。
+/// </summary>
+public sealed record ToolReconciliationResolution
+{
+    /// <summary>裁决结果状态。</summary>
+    public required ToolReconciliationResolutionStatus Status { get; init; }
+
+    /// <summary>裁决后的记录（Resolved 时返回最新记录；其余状态为 null）。</summary>
+    public ToolReconciliationRecord? Record { get; init; }
 }
 
 /// <summary>
@@ -643,11 +720,12 @@ public sealed record ReconciliationListResult
 /// <summary>
 /// Tool 对账记录存储：持久化 <see cref="ToolReconciliationRecord"/>，
 /// 支撑 Run 级"未裁决不完成"约束与 ToolReconciliationWorker 轮询。
+/// 完整租户键为 (workspace_id, run_id, request_id)（P0-5）。
 /// </summary>
 public interface IToolReconciliationStore
 {
     /// <summary>
-    /// 创建对账记录（按 RunId+RequestId 幂等：已存在时返回既有记录）。
+    /// 创建对账记录（按 WorkspaceId+RunId+RequestId 幂等：已存在时返回既有记录）。
     /// </summary>
     ValueTask<ToolReconciliationRecord> CreateAsync(ToolReconciliationRecord record, CancellationToken cancellationToken = default);
 
@@ -666,20 +744,78 @@ public interface IToolReconciliationStore
     /// <summary>Run 是否存在未裁决（Pending/Running）对账记录。</summary>
     ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default);
 
-    /// <summary>列出待对账记录（ToolReconciliationWorker 轮询用，按创建时间升序）。</summary>
+    /// <summary>
+    /// 列出待接管记录（ToolReconciliationWorker 轮询用，按创建时间升序）：
+    /// Pending 记录 + 租约已过期的 Running 记录（P0-4：Worker 崩溃后重新领取，
+    /// 避免永久卡死在 Running）；并跳过 next_attempt_at 未到期的退避记录。
+    /// </summary>
     ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(int take, CancellationToken cancellationToken = default);
 
-    /// <summary>CAS 推进 Pending → Running（并发 Worker 互斥，防止重复对账）。</summary>
-    ValueTask<bool> TryBeginAsync(string reconciliationId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 领取裁决租约（P0-4）：Pending → Running 并写入租约字段
+    /// （lease_owner / lease_token / lease_expires_at / fencing_token+1 / attempt_count+1）；
+    /// 租约已过期的 Running 记录可被重新接管（fencing 递增隔离旧持有者）。
+    /// 返回 null = 无法领取（记录不存在抛 <see cref="InvalidOperationException"/>；
+    /// 已被有效租约持有 / 终态 / 退避未到期 → null）。
+    /// </summary>
+    ValueTask<ToolReconciliationLease?> TryBeginAsync(
+        string reconciliationId,
+        string leaseOwner,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>CAS 回退 Running → Pending（Handler 对账失败时重置，等待下轮重试）。</summary>
-    ValueTask<bool> TryResetToPendingAsync(string reconciliationId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 续租（心跳，P0-4）：校验 <c>lease_token = @token</c> 且未过期后延长租期。
+    /// 返回 false = 租约已失效（过期/被接管），调用方应停止执行并放弃裁决。
+    /// </summary>
+    ValueTask<bool> RenewLeaseAsync(
+        string reconciliationId,
+        string leaseToken,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>裁决为已发生并提交（记录 → Resolved）。</summary>
-    ValueTask<bool> MarkResolvedAsync(string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// CAS 回退 Running → Pending（Handler 对账失败时重置，等待下轮重试）：
+    /// 必须持有有效租约（P0-4）；记录 last_error 并设置 next_attempt_at 退避。
+    /// </summary>
+    ValueTask<bool> TryResetToPendingAsync(
+        string reconciliationId,
+        string leaseToken,
+        string? lastError,
+        TimeSpan? retryDelay,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>裁决为未发生/拒绝（记录 → Rejected）。</summary>
-    ValueTask<bool> MarkRejectedAsync(string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken cancellationToken = default);
+    /// <summary>裁决为已发生并提交（记录 → Resolved）：必须持有有效租约（P0-4）。</summary>
+    ValueTask<bool> MarkResolvedAsync(
+        string reconciliationId,
+        string leaseToken,
+        ToolReconciliationOutcome outcome,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>裁决为未发生/拒绝（记录 → Rejected）：必须持有有效租约（P0-4）。</summary>
+    ValueTask<bool> MarkRejectedAsync(
+        string reconciliationId,
+        string leaseToken,
+        ToolReconciliationOutcome outcome,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-3：原子裁决。单事务内完成：锁定对账记录 → 验证唯一裁决者
+    /// （lease_token 匹配 + 未过期 + fencing_token = expectedReconciliationVersion）→
+    /// journal Reconciling → Committed → Durable Result UPSERT → 记录终态 →
+    /// 可选 Run 状态推进（targetRunState 非空且 Run 处于停车状态时）→ 审计事件追加。
+    /// 任意一步失败整体回滚；返回 <see cref="ToolReconciliationResolution"/> 描述结果。
+    /// </summary>
+    ValueTask<ToolReconciliationResolution> ResolveReconciliationAtomicallyAsync(
+        string workspaceId,
+        string runId,
+        string requestId,
+        string leaseToken,
+        long expectedReconciliationVersion,
+        ToolReconciliationOutcome outcome,
+        DurableToolResult durableResult,
+        AgentRunState? targetRunState,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -17,7 +17,7 @@
 
 - **基线**：main @ `10c86ee2`（TODO.md 路线图更新已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-A1 Tool 失败阶段 + 重试安全契约（P0-1 + P0-2）。
+- **最近完成**：WP-A2 对账原子裁决 + 租约（P0-3 + P0-4 + P0-5）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -28,6 +28,12 @@
   - 测试：新增 `R30X_ToolFailurePhaseTests`（8 项：异常路径真实状态 + 对账字段 + ExternalOperationId 保留、重试耗尽、状态查询失败 fail-closed、Fence 过期、ProviderReturned 字段回传、ProviderConfirmedNoEffect 端到端重试）；反转 `Policy_Retry_WriteWithMaxRetries_RetriesWithDelay` 为默认不可重试并新增 6 项安全门矩阵；`Executor_RequiresLeaseFence_NoFence_FailsClosed` 断言从 Prepared 改为 DispatchingIntent；两处 Reconcile 路径断言从 Dispatched 改为 DispatchingIntent（真实状态）。
   - 验证：build 0 错误；定向 111 项全通过（含 PublicApi baseline）；Service.Tests 无受影响断言。
 - **WP-C1 已完成**（P0-10 即时安全）：事件压缩仅限终态 Run。`PostgresAgentRunEventCompactor.FindCandidatesAsync` JOIN `agent_runs` 过滤——终态（Completed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered）直接可压缩，Failed 仅在重试已耗尽（retry_count >= max_retries）时可压缩（仍可重试的 Failed 会被调度器重放事件流）；新增公共静态 `IsCompactableRunState`（Storage.Postgres，非 Abstractions，无 baseline 影响）；操作员 `POST /{id}/compact` 端点增加同规则守卫（非终态 409）。背景：当前 Recovery 不读快照/归档，非终态压缩会导致重启恢复判定 RecoveryCorrupted。验证：build 0 错误；新测试 4/4 + R30S/R29S 压缩相关 18 项全通过。
+- **WP-A2 已完成**（P0-3 + P0-4 + P0-5）：对账原子裁决 + 裁决租约 + 仲裁权 + 完整租户键。
+  - 契约（Abstractions，PublicApi baseline 已更新）：`IToolReconciliationStore` 新增 `TryBeginAsync(id, owner, duration)` 返回 `ToolReconciliationLease`（LeaseToken/FencingToken/ExpiresAt）、`RenewLeaseAsync`、`TryResetToPendingAsync(id, token, lastError, retryDelay)`、`ResolveReconciliationAtomicallyAsync(workspaceId, runId, requestId, leaseToken, expectedReconciliationVersion, outcome, durableResult, targetRunState)`（单事务原子裁决，返回 `ToolReconciliationResolution`：Resolved/NotFound/AlreadyTerminal/ArbitrationLost/VersionMismatch）；`MarkResolvedAsync/MarkRejectedAsync` 增加 leaseToken 参数；对账 API 与唯一键全部使用 (workspace_id, run_id, request_id)。
+  - P0-3 修复（Postgres + InMemory + Coordinator）：`ResolveReconciliationAtomicallyAsync` 单事务完成七步——锁定 Reconciliation Record → 验证唯一裁决者（lease_token + 未过期 + fencing）→ Journal Reconciling → Committed → Durable Result UPSERT → 记录终态 → Run 状态推进（停车态 AwaitingReconciliation/ReconciliationRunning）→ 审计事件（ToolReconciliationResolved=13，延续事件哈希链）；任意失败整体回滚（fail-closed，记录终态 UPDATE 0 行即抛）；`ToolReconciliationCoordinator` 删除 "log-then-terminal" 撕裂路径，journal 参数移除，CommitOutcomeAsync 只走原子方法。
+  - P0-4 修复：租约列（lease_owner / lease_token / lease_expires_at / fencing_token / attempt_count / next_attempt_at / last_error）；`TryBeginAsync` 用 CTE `FOR UPDATE SKIP LOCKED`（Pending 或租约已过期的 Running）领取并 fencing+1 / attempt+1；`ListPendingAsync` 重新拾取过期 Running（含 next_attempt_at 退避门）；Renew/Reset/Terminal 全部校验 `lease_token = @token AND lease_expires_at > clock_timestamp()`；Coordinator Worker 路径 TryBegin → Handler 期间 30s 心跳续租 → 原子提交，Handler 异常回退 Pending（last_error + 30s 退避）。
+  - P0-5 修复：所有裁决入口先 `TryBeginAsync` 原子取得裁决权再提交 Journal（人工 resolve 端点与自动 Handler 竞争只有一个赢家）；schema v58（迁移 `PostgresMigrationToolReconciliationLease` 0005：7 租约列 + UNIQUE(workspace_id, run_id, request_id) 重建）。
+  - 测试：新增 `R30X_ReconciliationLeaseAtomicTests`（14 项：租约互斥/过期接管/fencing 递增/续租校验/退避/终态校验/七步原子集成含 Run 推进+审计链/ArbitrationLost/VersionMismatch/AlreadyTerminal/NotFound/租户键幂等/协调器 busy→3）；更新 R29H（租约先行 + 真实 runId 租户键 + 退避语义）与 R29H_Postgres（租约先行）；Service.Tests 端点测试 MarkRejected 改租约先行。验证：build 0 错误 0 警告；定向 44 通过（R29H + R30X + R29S + PublicApi）+ Service.Tests 2 通过。
 
 ### 性能优化工作包进度
 

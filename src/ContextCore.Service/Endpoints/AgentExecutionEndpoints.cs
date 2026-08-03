@@ -646,6 +646,7 @@ internal static class AgentExecutionEndpoints
             else if (reconciliationStore is not null)
             {
                 // 协调器未注册（独立宿主场景）→ 回退到存储幂等裁决（不提交 journal）。
+                // P0-5：先原子取得裁决权（租约）再裁决，避免与自动 Handler 竞争写入相反结果。
                 var record = await reconciliationStore.GetAsync(reconciliationId, ct).ConfigureAwait(false);
                 if (record is null)
                 {
@@ -655,15 +656,24 @@ internal static class AgentExecutionEndpoints
                 {
                     code = 2;
                 }
-                else if (outcome.SideEffectOccurred)
-                {
-                    await reconciliationStore.MarkResolvedAsync(reconciliationId, outcome, ct).ConfigureAwait(false);
-                    code = 0;
-                }
                 else
                 {
-                    await reconciliationStore.MarkRejectedAsync(reconciliationId, outcome, ct).ConfigureAwait(false);
-                    code = 0;
+                    var lease = await reconciliationStore.TryBeginAsync(
+                        reconciliationId, "manual:endpoint", TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
+                    if (lease is null)
+                    {
+                        code = 3; // 仲裁权被占用（有效租约持有中）
+                    }
+                    else if (outcome.SideEffectOccurred)
+                    {
+                        await reconciliationStore.MarkResolvedAsync(reconciliationId, lease.LeaseToken, outcome, ct).ConfigureAwait(false);
+                        code = 0;
+                    }
+                    else
+                    {
+                        await reconciliationStore.MarkRejectedAsync(reconciliationId, lease.LeaseToken, outcome, ct).ConfigureAwait(false);
+                        code = 0;
+                    }
                 }
             }
             else
@@ -681,6 +691,10 @@ internal static class AgentExecutionEndpoints
                 2 => ContextCoreHttpResultMapper.InvalidRequest(
                     httpContext, string.Empty, "agents.runs.reconciliations",
                     $"对账记录 '{reconciliationId}' 已裁决，重复提交被拒绝。",
+                    statusCode: StatusCodes.Status409Conflict),
+                3 => ContextCoreHttpResultMapper.InvalidRequest(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    $"对账记录 '{reconciliationId}' 的裁决权正被其他 Worker/请求持有，请稍后重试。",
                     statusCode: StatusCodes.Status409Conflict),
                 _ => await ResolveAccepted(workspaceId, id, reconciliationId, reconciliationStore, host, httpContext, ct)
             };
