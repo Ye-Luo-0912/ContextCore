@@ -44,10 +44,13 @@ jobs:
       # 下游 test job 执行 `dotnet test --no-build --no-restore`，只会运行测试项目
       # （ContextCore.Tests / ContextCore.IntegrationTests / ContextCore.Service.Tests），
       # 其 bin 已自含全部传递依赖（含 OnnxRuntime 原生库）；应用/基准项目 bin 对
-      # --no-build 执行无用，不再上传。本步额外剔除三类冗余：
+      # --no-build 执行无用，不再上传。本步额外剔除四类冗余：
       # (1) 测试 bin 中跨平台原生运行时——runtimes 下除 linux-x64 外的 ios/android/osx/win
       #     等平台负载（运行器为 ubuntu-latest，按 RID 只加载 linux-x64）；
-      # (2) PDB 符号（运行测试不需要）；(3) obj 中间编译产物——仅保留 NuGet 恢复资产
+      # (2) Service.Tests / IntegrationTests bin 中重复的 ONNX 原生库（linux-x64）——
+      #     这两个项目不引用 OnnxRuntime，只有 ContextCore.Tests 的真实 ONNX E2E
+      #     需要加载，三份重复副本收敛为一份；
+      # (3) PDB 符号（运行测试不需要）；(4) obj 中间编译产物——仅保留 NuGet 恢复资产
       #     （project.assets.json 与 *.nuget.*，缺失时 --no-restore 会在资产解析阶段失败）。
       # 本地 Release 配置实测：tests/**/bin 724MB（其中跨平台 runtimes 590MB）+ obj 60MB
       # → 瘦身后约 0.2GB（再 -75%）。
@@ -57,6 +60,9 @@ jobs:
           set -euo pipefail
           # 仅保留 linux-x64 运行时原生负载，剔除其余平台
           find tests -type d -path '*/bin/Release/*/runtimes/*' ! -path '*/runtimes/linux-x64*' -prune -exec rm -rf {} +
+          # 剔除 Service.Tests / IntegrationTests 中重复的 ONNX 原生库（linux-x64）
+          find tests/ContextCore.Service.Tests tests/ContextCore.IntegrationTests \
+            -path '*/bin/Release/*/runtimes/linux-x64/native/*onnxruntime*' -type f -delete
           # 剔除测试 bin 中的 PDB 符号
           find tests -path '*/bin/Release/*' -type f -name '*.pdb' -delete
           # obj 仅保留 NuGet 恢复资产（project.assets.json 与 *.nuget.*）
@@ -71,11 +77,11 @@ jobs:
           name: build-output
           path: |
             tests/**/bin/
-            **/obj/project.assets.json
-            **/obj/project.nuget.cache
-            **/obj/*.nuget.dgspec.json
-            **/obj/*.nuget.g.props
-            **/obj/*.nuget.g.targets
+            tests/**/obj/project.assets.json
+            tests/**/obj/project.nuget.cache
+            tests/**/obj/*.nuget.dgspec.json
+            tests/**/obj/*.nuget.g.props
+            tests/**/obj/*.nuget.g.targets
           retention-days: 1
 
   unit:
