@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `92a19c3d`（WP-B 已推送；R30.1 实施中；WP-C3 待推送）。
+- **基线**：main @ `0edacb3a`（WP-C3 已推送；R30.1 实施中；WP-D1 待推送）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-C3 可恢复快照（P0-10 正式方案，Snapshot + Anchor + Hot Delta + Archived Audit Stream）。
+- **最近完成**：WP-D1 自动回滚先写持久化 Kill Switch（P0-11，RollbackAsync 先 TrySetOverrideAsync + fail-closed）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -54,6 +54,13 @@
   - Raw Events 审计（AgentExecutionEndpoints）：`GET /{id}/events/raw` 注入 compactor 时读取归档 + 热表并按 Sequence 双指针归并（`MergeRawEventStreams`，同 Sequence 归档优先），压缩后管理员仍可看完整历史。
   - 测试：新增 `R30S_RecoverableSnapshotTests`（11 项：Rebuild 构建对话/观察/轮次/哈希头、空流抛、序列化往返、旧格式锚点 JSON 返回 null、ApprovalRequested 提取 PendingToolCommands、ExecutionModelTurn 嵌入值 max + legacy 计数、Actor 快照恢复后重放热 delta、锚点哈希不一致 fail-closed RecoveryCorrupted、Raw Events 归档热表按 Sequence 交错、limit 截断、无归档回退热表）；PublicApi baseline 重新生成（+~24 项）。
   - 验证：build 0 错误；R30S 11/11 + 相邻套件（R29S+R30S+R30Z+R30X+R30Y）54/54；PublicApi 2 通过 1 跳过；920 项定向扫描 910 通过 / 6 失败全部命中既有 11 项 / 4 跳过。
+- **WP-D1 已完成**（P0-11）：自动回滚先写持久化 Kill Switch + fail-closed。
+  - 修复（CanaryProgressionService.RollbackAsync）：安全顺序改为 Create Emergency Override → Local route = 0% → 尝试推进 Canary 真相源（DB CAS）——先调用 `_emergencyOverrideStore.TrySetOverrideAsync(runId, "Canary 自动回滚：reason=...", "system:automatic-rollback")`（返回 false = 已存在活跃覆盖，GetActive 确认后视为已生效，不覆盖人工覆盖；写入抛异常则 catch 并保持 fail-closed），随后无条件 `UpdateInMemoryPercentage(0)`（本地 route 立即 0%），再走 DB CAS；DB CAS 成功时保留 Override 等待人工确认清除（与 RecoverFromStoreAsync 语义一致：活跃覆盖期间 run 不进入 Consistent）。旧行为（DB CAS 失败只置本地标记、从不写 Override）导致节点重启后旧百分比恢复——已消除。
+  - fail-closed：Kill Switch 写入失败（存储抛异常）时本地持续 fail-closed——不标记 Consistent，标记 LocalEmergencyRollback | OperatorAlertRequired（DB CAS 也失败时叠加 PersistPending）并 LogError；节点重启后 RecoverFromStoreAsync 依据持久化 Override 强制 0%。
+  - AdvanceAsync 阻断判定升级：新增 `IsProgressionBlockedAsync`——含 PersistPending 的紧急状态（DB 未持久化）必须等重试持久化/Operator 修复，不能仅凭清除覆盖解除；无 PersistPending 的紧急状态（由活跃 Override 引起）在 Operator 清除覆盖后自动解除并重新同步为 Consistent（DB 为权威真相源）；Kill Switch 查询失败按覆盖活跃处理（fail-closed）。
+  - 本地状态表：Override 生效 + DB 成功 → LocalEmergencyRollback|OperatorAlertRequired（无 PersistPending，推进被阻断直到覆盖清除）；Override 生效 + DB 失败 → 叠加 PersistPending；Override 写入失败 + DB 成功 → LocalEmergencyRollback|OperatorAlertRequired（DB 0% 为可恢复权威回滚，推进可恢复）；Override 写入失败 + DB 失败 → 叠加 PersistPending；无存储 + DB 成功 → Consistent（原语义，向后兼容）。
+  - 范围说明：HA Leader 路径（CanaryLeaderHostedService）为单事务原子回滚（lease/fencing + revision CAS + audit + epoch 同事务，失败整体回滚、本地百分比仅在 Applied 后同步），无本地/DB 撕裂，不在 P0-11 所述缺陷范围内。
+  - 测试：新增 `R30E_CanaryRollbackKillSwitchTests`（7 项：DB CAS 失败仍先持久化 Override（Operator=system:automatic-rollback）+ PersistPending 阻断且清除覆盖不解阻、DB CAS 成功保留 Override 且不进入 Consistent + 推进阻断、Override 写入失败 + DB 失败 fail-closed、Override 写入失败 + DB 成功本地立即 fail-closed 且推进可恢复、无存储维持 Consistent、既有人工覆盖不被覆盖、清除覆盖后推进解除阻断并重新同步）。验证：build 0 错误；R30E 7/7；Canary 定向 237 通过 / 2 既有失败（SchemaVersion_IsV30、RequiredIndexes_IncludeUtilityLedgerIndexes）/ 1 跳过；Service build 0 错误。
 
 ### 性能优化工作包进度
 

@@ -13,6 +13,10 @@ namespace ContextCore.Core.Services.Evolution;
 // 但旧实现没有把"本地已回滚 / DB 未持久化"这一不一致状态建模出来，
 // 后续 AdvanceAsync 会把本地与 DB 状态当作一致继续推进，可能掩盖 DB 真实状态。
 //
+// P0-11：RollbackAsync 先写入持久化 Kill Switch（Emergency Override）再回滚。
+// 覆盖存在期间 run 不进入 Consistent（推进被阻断，与 RecoverFromStoreAsync 语义一致），
+// 直到 Operator 清除覆盖；Kill Switch 写入失败时本地持续 fail-closed。
+//
 // 本枚举显式建模本地 vs DB 的一致性状态，让 Progression 流水线在 DB 持久化
 // 失败后能拒绝推进、要求 Operator 介入或重试持久化。
 //
@@ -31,7 +35,9 @@ namespace ContextCore.Core.Services.Evolution;
 /// </para>
 /// <para>
 /// <b>典型组合</b>：DB CAS 失败的紧急回滚会同时设置
-/// <see cref="LocalEmergencyRollback"/> | <see cref="PersistPending"/> | <see cref="OperatorAlertRequired"/>。
+/// <see cref="LocalEmergencyRollback"/> | <see cref="PersistPending"/> | <see cref="OperatorAlertRequired"/>；
+/// 已持久化 Kill Switch 的自动回滚（DB 已回滚 0%）设置
+/// <see cref="LocalEmergencyRollback"/> | <see cref="OperatorAlertRequired"/>（覆盖保留，等待人工确认清除）。
 /// </para>
 /// </remarks>
 [Flags]
@@ -40,7 +46,7 @@ public enum CanaryLocalState : byte
     /// <summary>本地与 DB 一致（无任何未持久化变更）。</summary>
     Consistent = 0,
 
-    /// <summary>本地已紧急回滚到 0%，但 DB CAS 失败（DB 仍记录旧百分比）。</summary>
+    /// <summary>本地已紧急回滚到 0% 且紧急状态尚未解除（活跃 Kill Switch 覆盖，或 DB CAS 失败）。</summary>
     LocalEmergencyRollback = 1,
 
     /// <summary>等待 DB 持久化（本地变更尚未写入 <c>canary_pipelines</c>）。</summary>
@@ -162,7 +168,12 @@ public sealed class CanaryProgressionService
     private readonly ICanaryDecisionApplier? _decisionApplier;
     // 可选的集群级 Kill Switch 存储。非空时 RecoverFromStoreAsync 对存在活跃紧急覆盖的
     // run 强制恢复 0% 且不进入 Consistent；路由层在命中 V2 时也会先检查本存储。
+    // P0-11：RollbackAsync 会先向本存储写入自动回滚覆盖（持久化 Kill Switch），
+    // 写入失败时本地持续 fail-closed。
     private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
+
+    // 自动回滚写入 Kill Switch 时使用的固定 Operator 标识（区别于人工运维 API 的账号）。
+    private const string AutomaticRollbackOperatorName = "system:automatic-rollback";
     // per-run 本地状态标记（DB 一致性），用于在 DB CAS 失败时拒绝后续推进。
     // Consistent = 与 DB 一致；非 Consistent = 本地有未持久化变更，AdvanceAsync 应拒绝推进。
     private readonly ConcurrentDictionary<string, CanaryLocalState> _localStates
@@ -436,19 +447,28 @@ public sealed class CanaryProgressionService
         // 本地状态一致性检查。如果本地存在未持久化变更（如紧急回滚后 DB CAS 失败），
         // 拒绝推进并返回错误。调用方需先解决 PersistPending 状态（重试 RollbackAsync 持久化
         // 或 Operator 介入修复 DB 状态），让 _localStates[runId] 回到 Consistent 后才能推进。
+        // P0-11：活跃 Kill Switch（Emergency Override）引起的紧急状态（无 PersistPending）
+        // 在 Operator 清除覆盖后自动解除（重新查询覆盖并重新同步为 Consistent）。
         var localState = GetLocalState(runId);
         if (localState != CanaryLocalState.Consistent)
         {
-            return new CanaryProgressionResult
+            if (await IsProgressionBlockedAsync(runId, localState, cancellationToken).ConfigureAwait(false))
             {
-                Decision = CanaryProgressionDecision.Hold,
-                Rationale = $"本地状态非 Consistent（{localState}）；拒绝推进。需先解决 PersistPending（重试 RollbackAsync 持久化或 Operator 介入）。",
-                PreviousPercentage = previousPercentage,
-                CurrentPercentage = previousPercentage,
-                Applied = false,
-                TransitionId = transitionId,
-                IdempotencyKey = idempotencyKey
-            };
+                return new CanaryProgressionResult
+                {
+                    Decision = CanaryProgressionDecision.Hold,
+                    Rationale = $"本地状态非 Consistent（{localState}）；拒绝推进。需先解决 PersistPending（重试 RollbackAsync 持久化或 Operator 介入）或清除活跃紧急覆盖（Kill Switch）。",
+                    PreviousPercentage = previousPercentage,
+                    CurrentPercentage = previousPercentage,
+                    Applied = false,
+                    TransitionId = transitionId,
+                    IdempotencyKey = idempotencyKey
+                };
+            }
+
+            // 阻断已解除（Operator 清除了 Kill Switch 且无 PersistPending）：
+            // 重新同步为 Consistent（DB 为权威真相源），允许本次推进继续。
+            _localStates[runId] = CanaryLocalState.Consistent;
         }
 
         var evaluation = await EvaluateAsync(runId, baselineMetrics, experimentMetrics, cancellationToken).ConfigureAwait(false);
@@ -598,6 +618,15 @@ public sealed class CanaryProgressionService
     /// <summary>
     /// 自动回滚：将 CutoverController 重置为 0%（全部 Legacy）并记录回滚审计。
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>P0-11 安全顺序</b>：先写入持久化 Kill Switch（<see cref="ICanaryEmergencyOverrideStore"/>），
+    /// 再本地切 0%，最后尝试推进 Canary 真相源（DB CAS）。覆盖存在期间 run 不进入
+    /// <see cref="CanaryLocalState.Consistent"/>（推进被阻断，直到 Operator 清除覆盖）；
+    /// Kill Switch 写入失败时本地持续 fail-closed（<see cref="CanaryLocalState.LocalEmergencyRollback"/>），
+    /// 不能只保存在内存——否则节点重启后旧百分比可能重新恢复。
+    /// </para>
+    /// </remarks>
     /// <param name="runId">Run ID。</param>
     /// <param name="reason">回滚原因。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -617,28 +646,78 @@ public sealed class CanaryProgressionService
         var previousPercentage = GetCurrentPercentage(runId);
         var now = _timeProvider.GetUtcNow();
 
+        // P0-11：先建立持久化 Kill Switch（Emergency Override），再本地切 0%，
+        // 最后尝试推进 Canary 真相源（DB CAS）。
+        // 覆盖已存在时视为已生效（TrySetOverrideAsync 返回 false = 已有活跃覆盖，不覆盖不报错）。
+        // Kill Switch 写入失败时 overridePersisted=false——下方统一按 fail-closed 处理，
+        // 无论 DB CAS 结果如何都不会标记 Consistent。
+        var overridePersisted = false;
+        if (_emergencyOverrideStore is not null)
+        {
+            try
+            {
+                overridePersisted = await _emergencyOverrideStore.TrySetOverrideAsync(
+                    runId,
+                    $"Canary 自动回滚：reason={reason}",
+                    AutomaticRollbackOperatorName,
+                    cancellationToken).ConfigureAwait(false);
+                if (!overridePersisted)
+                {
+                    // 已存在活跃覆盖（人工或更早的自动回滚触发）→ Kill Switch 已生效。
+                    overridePersisted = await _emergencyOverrideStore.GetActiveAsync(
+                        runId, cancellationToken).ConfigureAwait(false) is not null;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Kill Switch 持久化失败：保持 fail-closed（本地 0% + 紧急状态 + 告警）。
+                _logger.LogError(ex,
+                    "P0-11：Canary run {RunId} 紧急回滚无法持久化 Kill Switch（Emergency Override 写入失败）；" +
+                    "本地必须持续 fail-closed，不能只保存在内存。",
+                    runId);
+            }
+        }
+
+        // 本地 route = 0%（无条件，安全优先——无论 Kill Switch / DB CAS 结果如何）。
+        UpdateInMemoryPercentage(runId, 0);
+
         // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
         // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
         if (_decisionApplier is not null)
         {
-            // 捕获 DB CAS 结果，用于决定本地状态标记。
-            // 项目 memory 约束：RollbackAsync 必须无条件立即更新 in-memory 百分比为 0%，
-            // 无论 DB CAS 是否成功（安全优先 — 本地先回滚可以成立）。
-            // 但 DB CAS 失败时，本地与 DB 状态不再一致，必须建模为 LocalEmergencyRollback。
             var dbResult = await ApplyDecisionToStoreAsync(
                 runId, CanaryDecision.Rollback, 0, previousPercentage,
                 tid, $"Canary 自动回滚：reason={reason}", cancellationToken).ConfigureAwait(false);
 
-            // 无论 DB CAS 是否成功，都更新内存为 0%（确保路由立即回到 0%，全部 Legacy）
-            UpdateInMemoryPercentage(runId, 0);
-
             if (dbResult.Applied)
             {
-                // DB CAS 成功 → 本地与 DB 一致
-                _localStates[runId] = CanaryLocalState.Consistent;
                 // 单真相源写入 — 回滚到 0%
                 await PersistCanaryStateToRunAsync(
                     runId, 0, dbResult.NewEpoch, now, cancellationToken).ConfigureAwait(false);
+            }
+
+            _localStates[runId] = ResolveRollbackLocalState(overridePersisted, dbResult.Applied);
+
+            if (overridePersisted && dbResult.Applied)
+            {
+                // DB 已持久化 0%；保留 Override 等待人工确认清除（P0-11）——
+                // 与 RecoverFromStoreAsync 语义一致：活跃覆盖期间不得标记 Consistent。
+                _logger.LogWarning(
+                    "P0-11：Canary run {RunId} 自动回滚已持久化 Kill Switch（Emergency Override）并回滚到 0%；" +
+                    "保留覆盖等待人工确认清除；本地状态标记为 {State}，推进被阻断。",
+                    runId, _localStates[runId]);
+            }
+            else if (dbResult.Applied)
+            {
+                // DB 成功但 Kill Switch 未能持久化（无存储或写入失败）→ 0% 已持久化。
+                // 有存储但写入失败时保持 fail-closed（不标记 Consistent）。
+                if (_emergencyOverrideStore is not null)
+                {
+                    _logger.LogError(
+                        "P0-11：Canary run {RunId} 自动回滚 DB 已持久化 0%，但 Kill Switch 未能持久化；" +
+                        "本地状态标记为 {State}（fail-closed）。",
+                        runId, _localStates[runId]);
+                }
             }
             else
             {
@@ -646,23 +725,16 @@ public sealed class CanaryProgressionService
                 // 建模为 LocalEmergencyRollback + PersistPending + OperatorAlertRequired。
                 // 后续 AdvanceAsync 将拒绝推进，直到通过重试 RollbackAsync 持久化成功
                 // 或 Operator 介入修复 DB 状态。
-                var emergencyState = CanaryLocalState.LocalEmergencyRollback
-                    | CanaryLocalState.PersistPending
-                    | CanaryLocalState.OperatorAlertRequired;
-                _localStates[runId] = emergencyState;
                 _logger.LogWarning(
-                    "P1-6：Canary run {RunId} 紧急回滚：本地已切到 0%，但 DB CAS 失败（{FailureReason}）。" +
+                    "P0-11：Canary run {RunId} 紧急回滚：本地已切到 0%，但 DB CAS 失败（{FailureReason}）。" +
                     "本地状态标记为 {State}；AdvanceAsync 将拒绝推进，直到持久化成功或 Operator 介入。",
-                    runId, dbResult.FailureReason, emergencyState);
+                    runId, dbResult.FailureReason, _localStates[runId]);
             }
         }
         else
         {
             // 回退路径（_decisionApplier=null，测试场景）：仅写进程内状态
-            // registry 非空时操作 per-run 专用控制器
-            GetController(runId).SetCutoverPercentage(0);
-            _runStates[runId] = new CanaryRunState(0, now);
-
+            // （本地 0% 已由上方 UpdateInMemoryPercentage 无条件完成）。
             await RecordTransitionAsync(new StageTransitionRecord
             {
                 TransitionId = tid,
@@ -677,6 +749,9 @@ public sealed class CanaryProgressionService
 
             // 单真相源写入 — 回滚到 0%（epoch 自增）
             await PersistCanaryStateToRunAsync(runId, 0, newEpoch: null, now, cancellationToken).ConfigureAwait(false);
+
+            // 回退路径无 DB CAS：视为本地已持久化（dbPersisted=true）。
+            _localStates[runId] = ResolveRollbackLocalState(overridePersisted, dbPersisted: true);
         }
 
         // 同步持久化 RollbackRecord 到 store（供 Pipeline 的 GetRollbackRecordAsync 查询）
@@ -718,6 +793,91 @@ public sealed class CanaryProgressionService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         return _localStates.TryGetValue(runId, out var state) ? state : CanaryLocalState.Consistent;
+    }
+
+    /// <summary>
+    /// 解析自动回滚后的本地状态（P0-11：Kill Switch 优先 + fail-closed）。
+    /// </summary>
+    /// <param name="overridePersisted">持久化 Kill Switch（Emergency Override）是否已生效。</param>
+    /// <param name="dbPersisted">Canary 真相源（canary_pipelines / DB CAS）是否已持久化 0%。</param>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>无 Kill Switch 存储：无法建立持久化覆盖，维持原语义（DB 成功 → Consistent）。</item>
+    /// <item>覆盖已生效：保留等待人工确认清除——即使 DB 已回滚 0% 也不得标记 Consistent
+    /// （与 <see cref="RecoverFromStoreAsync"/> 语义一致），推进被阻断直到覆盖被清除。</item>
+    /// <item>覆盖写入失败：持续 fail-closed，不得标记 Consistent（无论 DB CAS 结果如何）。</item>
+    /// </list>
+    /// DB 未持久化时叠加 <see cref="CanaryLocalState.PersistPending"/>（DB 需修复或重试持久化）。
+    /// </remarks>
+    private CanaryLocalState ResolveRollbackLocalState(bool overridePersisted, bool dbPersisted)
+    {
+        if (_emergencyOverrideStore is null)
+        {
+            // 无 Kill Switch 存储：无法建立持久化覆盖，维持原语义。
+            return dbPersisted
+                ? CanaryLocalState.Consistent
+                : CanaryLocalState.LocalEmergencyRollback | CanaryLocalState.PersistPending | CanaryLocalState.OperatorAlertRequired;
+        }
+
+        var state = CanaryLocalState.LocalEmergencyRollback | CanaryLocalState.OperatorAlertRequired;
+        if (!dbPersisted)
+        {
+            state |= CanaryLocalState.PersistPending;
+        }
+        return state;
+    }
+
+    /// <summary>
+    /// 判断推进是否被本地一致性状态阻断（P0-11：Kill Switch 感知的阻断判定）。
+    /// </summary>
+    /// <param name="runId">Canary run ID。</param>
+    /// <param name="localState">当前本地状态（非 Consistent 时调用）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true = 阻断推进；false = 可放行（且调用方应重新同步本地状态为 Consistent）。</returns>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>含 <see cref="CanaryLocalState.PersistPending"/>：DB 真相源未持久化（紧急回滚 DB CAS 失败），
+    /// 必须等重试持久化或 Operator 修复——不能仅凭 Override 清除解除（DB 仍可能持有旧百分比）。</item>
+    /// <item>无 PersistPending 的紧急状态由活跃 Kill Switch（Override）引起
+    /// （<see cref="RollbackAsync"/> / <see cref="RecoverFromStoreAsync"/> 设置）：
+    /// Operator 清除覆盖后解除阻断并重新同步为 Consistent（DB 为权威真相源）。</item>
+    /// <item>Kill Switch 查询失败 → fail-closed：视为覆盖仍活跃，保持阻断并告警。</item>
+    /// </list>
+    /// </remarks>
+    private async ValueTask<bool> IsProgressionBlockedAsync(
+        string runId,
+        CanaryLocalState localState,
+        CancellationToken cancellationToken)
+    {
+        if (localState == CanaryLocalState.Consistent)
+        {
+            return false;
+        }
+
+        if (localState.HasFlag(CanaryLocalState.PersistPending))
+        {
+            return true;
+        }
+
+        // 无 PersistPending 的紧急状态：由活跃 Override 引起。
+        if (_emergencyOverrideStore is null)
+        {
+            // 无 Kill Switch 存储：视为已解除（防御性；生产 profile 恒注册）。
+            return false;
+        }
+
+        try
+        {
+            return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Kill Switch 查询失败 → fail-closed：视为覆盖仍活跃，保持阻断并告警。
+            _logger.LogWarning(ex,
+                "P0-11：Canary run {RunId} 推进前查询 Kill Switch 失败；按覆盖活跃处理（fail-closed）。",
+                runId);
+            return true;
+        }
     }
 
     /// <summary>
