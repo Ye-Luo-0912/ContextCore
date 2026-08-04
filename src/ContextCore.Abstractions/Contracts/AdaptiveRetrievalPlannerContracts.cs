@@ -79,6 +79,13 @@ public sealed class AdaptiveRetrievalOptions
 
     /// <summary>命中数上限（记录时钳制，防异常大值扭曲加权平均）。</summary>
     public int MaxHitsClamp { get; set; } = 100;
+
+    /// <summary>策略缓存 TTL：同一计划签名在 TTL 内复用已计算策略，
+    /// 避免每轮规划都读取近期反馈重新聚合（记录新反馈时立即失效对应签名）。</summary>
+    public TimeSpan PolicyCacheTtl { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>策略缓存最大条目数（超过时淘汰过期/最旧条目，防无界增长）。</summary>
+    public int PolicyCacheMaxEntries { get; set; } = 512;
 }
 
 /// <summary>

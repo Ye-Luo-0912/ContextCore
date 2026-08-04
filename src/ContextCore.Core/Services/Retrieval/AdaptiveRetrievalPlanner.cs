@@ -62,6 +62,14 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
     private readonly IRetrievalPlanFeedbackStore _feedbackStore;
     private readonly AdaptiveRetrievalOptions _options;
 
+    // 签名 → 缓存策略（TTL 内复用，避免每轮规划都读取近期反馈重新聚合；
+    // 记录新反馈时立即失效对应签名，下次读取即重算）。
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedPolicy> _policyCache =
+        new(System.StringComparer.Ordinal);
+
+    /// <summary>缓存条目：策略 + 缓存时刻（TTL 判定依据）。</summary>
+    private sealed record CachedPolicy(AdaptiveRetrievalPolicy Policy, DateTimeOffset CachedAtUtc);
+
     public AdaptiveRetrievalPlanner(
         IAgentRetrievalQueryPlanner inner,
         IRetrievalPlanFeedbackStore feedbackStore,
@@ -87,8 +95,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         }
 
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        var recent = await _feedbackStore.ListRecentAsync(signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
-        var policy = ComputePolicy(signature, recent, _options);
+        var policy = await GetCachedPolicyAsync(signature, ct).ConfigureAwait(false);
 
         // Shadow：计算策略但不应用（观察学习信号，验证无副作用后再启用）。
         if (_options.Mode == AdaptiveRetrievalMode.Shadow)
@@ -119,6 +126,9 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         };
 
         await _feedbackStore.RecordAsync(sanitized, ct).ConfigureAwait(false);
+
+        // 新反馈立即失效该签名的缓存策略——下次读取即反映最新学习信号（不等 TTL 过期）。
+        _policyCache.TryRemove(sanitized.PlanSignature, out _);
     }
 
     /// <inheritdoc />
@@ -126,16 +136,14 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
     {
         ArgumentNullException.ThrowIfNull(input);
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        var recent = await _feedbackStore.ListRecentAsync(signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
-        return ComputePolicy(signature, recent, _options);
+        return await GetCachedPolicyAsync(signature, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public async ValueTask<AdaptiveRetrievalPolicy> GetPolicyForSignatureAsync(string planSignature, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planSignature);
-        var recent = await _feedbackStore.ListRecentAsync(planSignature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
-        return ComputePolicy(planSignature, recent, _options);
+        return await GetCachedPolicyAsync(planSignature, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -143,10 +151,79 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         => _feedbackStore.ListRecentAsync(planSignature, limit, ct);
 
     /// <inheritdoc />
-    public ValueTask<int> ResetAsync(string? planSignature = null, CancellationToken ct = default)
-        => _feedbackStore.ClearAsync(planSignature, ct);
+    public async ValueTask<int> ResetAsync(string? planSignature = null, CancellationToken ct = default)
+    {
+        var cleared = await _feedbackStore.ClearAsync(planSignature, ct).ConfigureAwait(false);
+        if (planSignature is null)
+        {
+            _policyCache.Clear();
+        }
+        else
+        {
+            _policyCache.TryRemove(planSignature, out _);
+        }
+        return cleared;
+    }
 
     // ── 策略计算 ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 按签名获取策略：缓存命中且未过期 → 直接返回；否则读取近期反馈重算并写入缓存。
+    /// TTL 非正时禁用缓存（每次重算，行为等价于无缓存版本）。
+    /// </summary>
+    private async ValueTask<AdaptiveRetrievalPolicy> GetCachedPolicyAsync(string signature, CancellationToken ct)
+    {
+        var ttl = _options.PolicyCacheTtl;
+        var now = DateTimeOffset.UtcNow;
+        if (ttl > TimeSpan.Zero
+            && _policyCache.TryGetValue(signature, out var cached)
+            && now - cached.CachedAtUtc < ttl)
+        {
+            return cached.Policy;
+        }
+
+        var recent = await _feedbackStore.ListRecentAsync(signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
+        var policy = ComputePolicy(signature, recent, _options);
+        SetCachedPolicy(signature, policy, ttl);
+        return policy;
+    }
+
+    /// <summary>写入缓存并做上限保护：超过最大条目数时先淘汰过期条目，仍超限则移除最旧条目。</summary>
+    private void SetCachedPolicy(string signature, AdaptiveRetrievalPolicy policy, TimeSpan ttl)
+    {
+        if (ttl <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        _policyCache[signature] = new CachedPolicy(policy, DateTimeOffset.UtcNow);
+
+        if (_policyCache.Count <= _options.PolicyCacheMaxEntries)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var expired = _policyCache
+            .Where(kvp => now - kvp.Value.CachedAtUtc >= ttl)
+            .Select(kvp => kvp.Key)
+            .ToList();
+        foreach (var key in expired)
+        {
+            _policyCache.TryRemove(key, out _);
+        }
+
+        if (_policyCache.Count > _options.PolicyCacheMaxEntries)
+        {
+            var eldest = _policyCache
+                .OrderBy(kvp => kvp.Value.CachedAtUtc)
+                .FirstOrDefault();
+            if (eldest.Key is not null)
+            {
+                _policyCache.TryRemove(eldest.Key, out _);
+            }
+        }
+    }
 
     private static AdaptiveRetrievalPolicy ComputePolicy(
         string signature,

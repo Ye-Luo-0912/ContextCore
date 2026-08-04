@@ -294,6 +294,82 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     }
 
     // =========================================================================
+    // Part 4c: 签名 TTL 缓存（避免每轮规划重新读取近期反馈）
+    // =========================================================================
+
+    /// <summary>验证：TTL 内同一签名重复规划命中策略缓存，不重复读取近期反馈（1 次 ListRecentAsync）。</summary>
+    [TestMethod]
+    public async Task Plan_PolicyCacheHit_AvoidsReloadingRecentFeedback()
+    {
+        var store = new RecordingFeedbackStore();
+        var planner = new AdaptiveRetrievalPlanner(
+            new DefaultAgentRetrievalQueryPlanner(), store,
+            new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active, PolicyCacheTtl = TimeSpan.FromMinutes(5) });
+        var input = Input();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
+        for (var i = 0; i < 10; i++)
+        {
+            await planner.RecordOutcomeAsync(Feedback(signature, hits: 4, budgetExceeded: true));
+        }
+
+        var plan1 = await planner.PlanAsync(input);
+        var plan2 = await planner.PlanAsync(input);
+
+        Assert.AreEqual(plan1.TokenBudget, plan2.TokenBudget);
+        Assert.AreEqual(1, store.ListRecentCalls,
+            "TTL 内第二次规划应命中缓存，不再读取近期反馈。");
+    }
+
+    /// <summary>验证：记录新反馈立即失效缓存，下次读取重新计算（策略不滞后于新学习信号）。</summary>
+    [TestMethod]
+    public async Task RecordOutcome_InvalidatesCache_NextPlanRecomputes()
+    {
+        var store = new RecordingFeedbackStore();
+        var planner = new AdaptiveRetrievalPlanner(
+            new DefaultAgentRetrievalQueryPlanner(), store,
+            new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active, PolicyCacheTtl = TimeSpan.FromMinutes(5) });
+        var input = Input();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
+        for (var i = 0; i < 10; i++)
+        {
+            await planner.RecordOutcomeAsync(Feedback(signature, hits: 4, budgetExceeded: true));
+        }
+
+        var policy1 = await planner.GetPolicyForSignatureAsync(signature);
+        Assert.AreEqual(10, policy1.FeedbackSampleCount, "10 条反馈样本参与首轮策略计算。");
+
+        // 新反馈应立即失效缓存——下次读取必须重算并包含新样本。
+        await planner.RecordOutcomeAsync(Feedback(signature, hits: 0, budgetExceeded: false));
+        var policy2 = await planner.GetPolicyForSignatureAsync(signature);
+
+        Assert.AreEqual(2, store.ListRecentCalls, "新反馈应失效缓存，下次读取重新读取反馈。");
+        Assert.AreEqual(11, policy2.FeedbackSampleCount, "重算后的策略应包含新增反馈样本。");
+    }
+
+    /// <summary>验证：TTL 过期后重新读取反馈重算（缓存不无限陈旧）。</summary>
+    [TestMethod]
+    public async Task PolicyCache_ExpiresAfterTtl_Recomputes()
+    {
+        var store = new RecordingFeedbackStore();
+        var planner = new AdaptiveRetrievalPlanner(
+            new DefaultAgentRetrievalQueryPlanner(), store,
+            new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active, PolicyCacheTtl = TimeSpan.FromMilliseconds(50) });
+        var input = Input();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
+        for (var i = 0; i < 10; i++)
+        {
+            await planner.RecordOutcomeAsync(Feedback(signature, hits: 4, budgetExceeded: true));
+        }
+
+        await planner.PlanAsync(input);
+        Assert.AreEqual(1, store.ListRecentCalls);
+        await Task.Delay(120); // 等待 TTL 过期
+        await planner.PlanAsync(input);
+
+        Assert.AreEqual(2, store.ListRecentCalls, "TTL 过期后应重新读取反馈重算。");
+    }
+
+    // =========================================================================
     // Part 4b: P0-16 加固（租户隔离签名 / 模式 / 清洗 / 幂等 / 可信度加权）
     // =========================================================================
 
@@ -666,6 +742,28 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var store = new InMemoryRetrievalPlanFeedbackStore();
         var planner = new AdaptiveRetrievalPlanner(new DefaultAgentRetrievalQueryPlanner(), store, options);
         return (planner, store);
+    }
+
+    /// <summary>IRetrievalPlanFeedbackStore 包装器：录制 ListRecentAsync 调用次数（验证策略缓存命中）。</summary>
+    private sealed class RecordingFeedbackStore : IRetrievalPlanFeedbackStore
+    {
+        private readonly InMemoryRetrievalPlanFeedbackStore _inner = new();
+        private int _listRecentCalls;
+
+        public int ListRecentCalls => Volatile.Read(ref _listRecentCalls);
+
+        public ValueTask RecordAsync(RetrievalPlanFeedback feedback, CancellationToken ct = default)
+            => _inner.RecordAsync(feedback, ct);
+
+        public ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListRecentAsync(
+            string planSignature, int limit = 20, CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _listRecentCalls);
+            return _inner.ListRecentAsync(planSignature, limit, ct);
+        }
+
+        public ValueTask<int> ClearAsync(string? planSignature = null, CancellationToken ct = default)
+            => _inner.ClearAsync(planSignature, ct);
     }
 
     private static AgentRetrievalPlannerInput Input(
