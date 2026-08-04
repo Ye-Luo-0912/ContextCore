@@ -779,6 +779,64 @@ public sealed class PostgresIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("Postgres")]
+    public async Task JobQueue_RenewHeartbeatBatch_OnlyRenewsMatchingOwner()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("jqhb_");
+        try
+        {
+            var queue = new PostgresContextJobQueue(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+            for (var i = 0; i < 3; i++)
+            {
+                await queue.EnqueueAsync(new ContextJob
+                {
+                    JobId = $"hb-{i}", WorkspaceId = "ws", CollectionId = "col",
+                    Kind = ContextJobKind.Compression, State = ContextJobState.Queued,
+                    CreatedAt = now.AddMilliseconds(i)
+                });
+            }
+
+            var claimed = await queue.AcquireLeaseBatchAsync("worker-1", TimeSpan.FromSeconds(30), take: 3, perWorkspace: 3);
+            Assert.AreEqual(3, claimed.Count);
+
+            // 全部以正确 owner 批量续约 → 全部成功（无失败）
+            var success = await queue.RenewHeartbeatBatchAsync(
+                claimed.Select(j => new JobLeaseRenewal { JobId = j.JobId, Owner = "worker-1" }).ToList(),
+                TimeSpan.FromMinutes(1));
+            Assert.AreEqual(0, success.Count, "匹配 owner 的批量续约应全部成功");
+
+            // 混入一个错误 owner → 仅该作业续约失败
+            var mixed = new List<JobLeaseRenewal>
+            {
+                new() { JobId = claimed[0].JobId, Owner = "worker-1" },
+                new() { JobId = claimed[1].JobId, Owner = "intruder" }
+            };
+            var failed = await queue.RenewHeartbeatBatchAsync(mixed, TimeSpan.FromMinutes(1));
+            Assert.AreEqual(1, failed.Count, "错误 owner 的作业应续约失败");
+            Assert.AreEqual(claimed[1].JobId, failed[0]);
+
+            // 已 Ack（state 非 Running）的作业批量续约应失败
+            await queue.AckAsync(claimed[0].JobId);
+            var afterAck = await queue.RenewHeartbeatBatchAsync(
+                new List<JobLeaseRenewal> { new() { JobId = claimed[0].JobId, Owner = "worker-1" } },
+                TimeSpan.FromMinutes(1));
+            Assert.AreEqual(1, afterAck.Count, "非 Running 状态的作业不应被续约");
+
+            // 空输入返回空失败集
+            var empty = await queue.RenewHeartbeatBatchAsync([], TimeSpan.FromMinutes(1));
+            Assert.AreEqual(0, empty.Count);
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
     public async Task PackageBuildTraceStore_SaveAndQuery_ShouldRoundtrip()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }

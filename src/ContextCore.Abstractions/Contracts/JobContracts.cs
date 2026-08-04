@@ -117,6 +117,16 @@ public interface IContextJobQueue
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>批量续约的作业条目（jobId + owner）。由 <see cref="ILeasedJobQueue.RenewHeartbeatBatchAsync"/> 使用。</summary>
+public sealed record JobLeaseRenewal
+{
+    /// <summary>作业 ID。</summary>
+    public required string JobId { get; init; }
+
+    /// <summary>租约持有者标识（必须与 <see cref="ILeasedJobQueue.AcquireLeaseAsync"/> 一致）。</summary>
+    public required string Owner { get; init; }
+}
+
 /// <summary>
 /// 支持租约（lease）的作业队列扩展契约。
 /// 实现此接口的队列（如 Postgres）提供带租约的获取与心跳续约，
@@ -167,6 +177,22 @@ public interface ILeasedJobQueue
     Task<bool> RenewHeartbeatAsync(
         string jobId,
         string owner,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 批量续约多个作业的租约（心跳）：单次调用续约整批作业，
+    /// 由 worker 的共享心跳循环每周期调用一次，替代每个作业一个独立心跳任务（N 次往返 → 1 次）。
+    /// </summary>
+    /// <param name="heartbeats">待续约的作业条目（jobId + owner）。</param>
+    /// <param name="leaseDuration">续约后的新有效期。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 续约失败的作业 ID 集合（lease_owner 不匹配或 state 非 Running）。
+    /// 返回集合中的每个作业，调用方应中止处理。
+    /// </returns>
+    Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+        IReadOnlyList<JobLeaseRenewal> heartbeats,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
 

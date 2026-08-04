@@ -2473,6 +2473,7 @@ M:ContextCore.Abstractions.ILearningPipelineSink.EnqueueAsync(ContextCore.Abstra
 M:ContextCore.Abstractions.ILeasedJobQueue.AcquireLeaseAsync(System.String, System.TimeSpan, System.Nullable<ContextCore.Abstractions.ContextJobKind>, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedJobQueue.AcquireLeaseBatchAsync(System.String, System.TimeSpan, System.Int32, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedJobQueue.RenewHeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.ILeasedJobQueue.RenewHeartbeatBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.JobLeaseRenewal>, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedWorkStore<>.AckAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedWorkStore<>.HeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedWorkStore<>.NackAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
@@ -2751,6 +2752,13 @@ M:ContextCore.Abstractions.IsotonicPoint.Equals(System.Object)
 M:ContextCore.Abstractions.IsotonicPoint.GetHashCode()
 M:ContextCore.Abstractions.IsotonicPoint.GetType()
 M:ContextCore.Abstractions.IsotonicPoint.ToString()
+M:ContextCore.Abstractions.JobLeaseRenewal.#ctor()
+M:ContextCore.Abstractions.JobLeaseRenewal.<Clone>$()
+M:ContextCore.Abstractions.JobLeaseRenewal.Equals(ContextCore.Abstractions.JobLeaseRenewal)
+M:ContextCore.Abstractions.JobLeaseRenewal.Equals(System.Object)
+M:ContextCore.Abstractions.JobLeaseRenewal.GetHashCode()
+M:ContextCore.Abstractions.JobLeaseRenewal.GetType()
+M:ContextCore.Abstractions.JobLeaseRenewal.ToString()
 M:ContextCore.Abstractions.LabelQualityReport.#ctor()
 M:ContextCore.Abstractions.LabelQualityReport.<Clone>$()
 M:ContextCore.Abstractions.LabelQualityReport.Equals(ContextCore.Abstractions.LabelQualityReport)
@@ -6859,6 +6867,8 @@ P:ContextCore.Abstractions.InferenceValidationResult.IsValid (get|init)
 P:ContextCore.Abstractions.InferenceValidationResult.Violations (get|init)
 P:ContextCore.Abstractions.IsotonicPoint.Input (get|init)
 P:ContextCore.Abstractions.IsotonicPoint.Output (get|init)
+P:ContextCore.Abstractions.JobLeaseRenewal.JobId (get|init)
+P:ContextCore.Abstractions.JobLeaseRenewal.Owner (get|init)
 P:ContextCore.Abstractions.LabelQualityReport.AverageConfidence (get|init)
 P:ContextCore.Abstractions.LabelQualityReport.CollectionId (get|init)
 P:ContextCore.Abstractions.LabelQualityReport.ConsistencyScore (get|init)
@@ -11978,6 +11988,7 @@ T:ContextCore.Abstractions.InferenceEngineKind (Enum)
 T:ContextCore.Abstractions.InferenceOutput
 T:ContextCore.Abstractions.InferenceValidationResult
 T:ContextCore.Abstractions.IsotonicPoint
+T:ContextCore.Abstractions.JobLeaseRenewal
 T:ContextCore.Abstractions.LabelQualityReport
 T:ContextCore.Abstractions.LeakageFinding
 T:ContextCore.Abstractions.LeakageKind (Enum)

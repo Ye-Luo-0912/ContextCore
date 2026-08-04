@@ -365,6 +365,20 @@ public class ContextJobWorkerTests
             return Task.FromResult(_renewResult);
         }
 
+        public Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+            IReadOnlyList<JobLeaseRenewal> heartbeats, TimeSpan leaseDuration,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref RenewHeartbeatCalls);
+            RenewHeartbeatCalled.TrySetResult(true);
+            if (!_renewResult)
+            {
+                return Task.FromResult<IReadOnlyList<string>>(
+                    heartbeats.Select(h => h.JobId).ToList());
+            }
+            return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        }
+
         public Task EnqueueAsync(ContextJob job, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
@@ -475,6 +489,11 @@ public class ContextJobWorkerTests
             string jobId, string owner, TimeSpan leaseDuration,
             CancellationToken cancellationToken = default)
             => Task.FromResult(true);
+
+        public Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+            IReadOnlyList<JobLeaseRenewal> heartbeats, TimeSpan leaseDuration,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
 
         public Task EnqueueAsync(ContextJob job, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
