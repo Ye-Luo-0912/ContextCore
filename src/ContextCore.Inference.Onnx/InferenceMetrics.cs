@@ -18,18 +18,20 @@ public static class InferenceMetrics
     public static readonly string NodeId = Environment.MachineName;
 
     /// <summary>
-    /// 构建 (model, node) 标签对。模型与节点在实例生命周期内固定，
+    /// 构建 (model, node, ep) 标签组。模型、节点与执行提供方（EP）在实例生命周期内固定，
     /// 调用方应预计算复用，避免热路径重复分配。
+    /// 按 EP 归因可区分 CPU / CUDA / TensorRT 等提供方的会话竞争、排队与延迟表现。
     /// </summary>
-    public static KeyValuePair<string, object?>[] ModelNodeTags(string modelId)
-        => [new("model", modelId), new("node", NodeId)];
+    public static KeyValuePair<string, object?>[] ModelNodeTags(string modelId, OnnxExecutionProvider executionProvider)
+        => [new("model", modelId), new("node", NodeId), new("ep", executionProvider.ToString())];
 
     /// <summary>
-    /// 构建 (model, node, batch) 标签组。batch 为本次指标事件涉及的批次行数，
+    /// 构建 (model, node, ep, batch) 标签组。batch 为本次指标事件涉及的批次行数，
     /// 供批次类指标（排队等待 / 填充率 / 分片）按批次大小维度聚合。
     /// </summary>
-    public static KeyValuePair<string, object?>[] ModelNodeBatchTags(string modelId, int batchRows)
-        => [new("model", modelId), new("node", NodeId), new("batch", batchRows)];
+    public static KeyValuePair<string, object?>[] ModelNodeBatchTags(
+        string modelId, int batchRows, OnnxExecutionProvider executionProvider)
+        => [new("model", modelId), new("node", NodeId), new("ep", executionProvider.ToString()), new("batch", batchRows)];
 
     /// <summary>
     /// 会话竞争次数：请求到达推理引擎时所有并发槽位均被占用（需排队等待槽位）。
@@ -84,4 +86,14 @@ public static class InferenceMetrics
             "contextcore.inference.cancellation_waste",
             unit: "{requests}",
             description: "调用方取消但已入队/已攒批、未执行推理的请求数（浪费的调度容量），按 model/node 维度标注");
+
+    /// <summary>
+    /// 单批推理延迟（毫秒）：引擎从获取执行槽到完成一次 session 推理的耗时
+    /// （含 Copy / Run / Parse 阶段）。维度：model（模型版本）、node（节点）、ep（执行提供方）。
+    /// </summary>
+    public static readonly Histogram<double> InferenceLatency =
+        _meter.CreateHistogram<double>(
+            "contextcore.inference.latency.duration",
+            unit: "ms",
+            description: "单批推理延迟（槽位获取到结果返回），按 model/node/ep 维度标注");
 }

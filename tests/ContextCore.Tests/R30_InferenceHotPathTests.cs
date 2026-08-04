@@ -274,12 +274,18 @@ public sealed class R30_InferenceHotPathTests
         var cancellationWaste = capture.ValuesOf("contextcore.inference.cancellation_waste");
         Assert.IsTrue(cancellationWaste.Sum() >= 1, "已取消请求应记录取消浪费");
 
-        // ── 维度断言：指标携带 model / node（批次类指标额外携带 batch）──
+        // ── 延迟直方图：成功推理应记录单批延迟 ──
+        var latencies = capture.ValuesOf("contextcore.inference.latency.duration");
+        Assert.IsTrue(latencies.Count >= 1, "成功推理应记录延迟直方图");
+        Assert.IsTrue(latencies.All(v => v >= 0), "推理延迟不应为负");
+
+        // ── 维度断言：指标携带 model / node / ep（批次类指标额外携带 batch）──
         var fillWithTags = capture.TaggedValuesOf("contextcore.inference.batch_fill_ratio");
         Assert.IsTrue(fillWithTags.Count >= 1, "填充率指标应携带维度标签");
         var fillTags = fillWithTags[0].Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.AreEqual("1.0.0", fillTags["model"], "model 维度应为引擎模型版本");
         Assert.AreEqual(Environment.MachineName, fillTags["node"], "node 维度应为当前节点标识");
+        Assert.AreEqual("CPU", fillTags["ep"], "指标应携带执行提供方（EP）维度");
         Assert.IsTrue(fillTags.TryGetValue("batch", out var fillBatch) && Convert.ToInt32(fillBatch) > 0,
             "填充率指标应携带正数 batch 行数维度");
 
@@ -288,7 +294,14 @@ public sealed class R30_InferenceHotPathTests
         var contentionTags = contentionWithTags[0].Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.AreEqual("1.0.0", contentionTags["model"], "会话竞争 model 维度应为引擎模型版本");
         Assert.AreEqual(Environment.MachineName, contentionTags["node"], "会话竞争 node 维度应为当前节点标识");
+        Assert.AreEqual("CPU", contentionTags["ep"], "会话竞争指标应携带执行提供方（EP）维度");
         Assert.IsFalse(contentionTags.ContainsKey("batch"), "会话竞争指标不应携带 batch 维度");
+
+        var latencyWithTags = capture.TaggedValuesOf("contextcore.inference.latency.duration");
+        Assert.IsTrue(latencyWithTags.Count >= 1, "延迟指标应携带维度标签");
+        var latencyTags = latencyWithTags[0].Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.AreEqual("1.0.0", latencyTags["model"], "延迟 model 维度应为引擎模型版本");
+        Assert.AreEqual("CPU", latencyTags["ep"], "延迟指标应携带执行提供方（EP）维度");
     }
 
     /// <summary>

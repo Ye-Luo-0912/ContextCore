@@ -213,7 +213,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         _inner = inner;
         _options = options;
         _metricModelId = ModelVersion;
-        _metricTags = InferenceMetrics.ModelNodeTags(_metricModelId);
+        _metricTags = InferenceMetrics.ModelNodeTags(_metricModelId, options.ExecutionProvider);
         _stopCts = new CancellationTokenSource();
 
         // 构建 bounded channel。MaxQueueLength=0 时使用 Unbounded（向后兼容）。
@@ -687,7 +687,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         {
             InferenceMetrics.QueueWaitDuration.Record(
                 Stopwatch.GetElapsedTime(group[i].EnqueueTimestamp, dispatchAt).TotalMilliseconds,
-                InferenceMetrics.ModelNodeBatchTags(_metricModelId, group[i].Batch.RowCount));
+                InferenceMetrics.ModelNodeBatchTags(_metricModelId, group[i].Batch.RowCount, _options.ExecutionProvider));
         }
 
         // 二次检查 deadline：在等待并发槽位期间可能已有请求过期；同时丢弃已被外部 ct 取消的请求。
@@ -733,7 +733,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         {
             InferenceMetrics.BatchFillRatio.Record(
                 totalRows / (double)_options.MaxBatchSize,
-                InferenceMetrics.ModelNodeBatchTags(_metricModelId, totalRows));
+                InferenceMetrics.ModelNodeBatchTags(_metricModelId, totalRows, _options.ExecutionProvider));
         }
 
         var requiredLength = totalRows * featureCount;
@@ -912,7 +912,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         // 分片计数：一次 Add 汇总本次微批产生的 shard 总数（诊断指标）。
         InferenceMetrics.ShardsExecuted.Add(
             (totalRows + maxBatchSize - 1) / maxBatchSize,
-            InferenceMetrics.ModelNodeBatchTags(_metricModelId, totalRows));
+            InferenceMetrics.ModelNodeBatchTags(_metricModelId, totalRows, _options.ExecutionProvider));
 
         for (var rowStart = 0; rowStart < totalRows; rowStart += maxBatchSize)
         {

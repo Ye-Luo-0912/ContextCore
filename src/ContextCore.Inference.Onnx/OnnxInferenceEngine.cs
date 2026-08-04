@@ -108,7 +108,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
         _calibrationVersion = string.IsNullOrWhiteSpace(calibrationVersion)
             ? "default-v1"
             : calibrationVersion;
-        _metricTags = InferenceMetrics.ModelNodeTags(ModelVersion);
+        _metricTags = InferenceMetrics.ModelNodeTags(ModelVersion, options.ExecutionProvider);
 
         // 初始化并发槽位。MaxConcurrentInferences <= 0 时按 Execution Provider profile 取默认：
         // CPU 用 ProcessorCount；单 GPU（CUDA/TensorRT/DirectML）会话内 session.Run 串行执行，
@@ -450,6 +450,11 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             // 阶段计时 — Parse 阶段（结果处理；通常极短）
             var parseCompletedAt = Stopwatch.GetTimestamp();
             ReportPhaseTiming(InferencePhase.Parse, runCompletedAt, parseCompletedAt);
+
+            // 单批推理延迟直方图（成功路径：槽位获取到结果返回，含 Copy/Run/Parse）。
+            InferenceMetrics.InferenceLatency.Record(
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+                _metricTags);
             return result;
         }
         finally
@@ -637,7 +642,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
 
         // 分片计数：一次 Add 汇总本次大 batch 产生的 shard 总数（诊断指标）。
         var shardCount = (totalRows + maxBatchSize - 1) / maxBatchSize;
-        InferenceMetrics.ShardsExecuted.Add(shardCount, InferenceMetrics.ModelNodeBatchTags(ModelVersion, totalRows));
+        InferenceMetrics.ShardsExecuted.Add(shardCount, InferenceMetrics.ModelNodeBatchTags(ModelVersion, totalRows, _options.ExecutionProvider));
 
         for (var rowOffset = 0; rowOffset < totalRows; rowOffset += maxBatchSize)
         {
