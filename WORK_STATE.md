@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `a54869dd`（WP-G5 已推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G6 已完成；WP-G7、WP-G8 依次推进。
-- **最近完成**：WP-G6（P1-9 迁移分阶段 DDL 修复迁移顺序 + 陈旧断言 + 共享异步迁移缓存，详见下方条目）。
+- **基线**：main @ `57ab3224`（WP-G6 已推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G7 已完成；WP-G8 待推进。
+- **最近完成**：WP-G7（P1-10 推理指标模型/节点/批次维度，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -101,6 +101,15 @@
   - 最终全量验证（12 个 WP 全部完成后统一跑一次）：解决方案构建 0 错误（7 个警告全部为既有，无 WP 引入）；ContextCore.Tests **3523 总数 / 20 失败 / 3489 通过 / 14 跳过**——20 个失败 = 既有 11 项中的 10 项（PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 本次通过，纯 SQL 断言波动非回归）+ 10 个 Docker 不可用环境下的 Postgres 集成测试（42P01 迁移顺序 bug，已在 HEAD 工作树对照证实预存在），**与 HEAD 逐一对比无任何 WP 新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）。OpenAPI 快照再生成（`service/openapi/service-api.openapi.json`，纯新增 160 行）：GetPolicy 新增 5 个租户查询参数、RecordAdaptiveRetrievalFeedbackRequest / RetrievalPlanFeedback 各 6 个反馈字段、`RetrievalFeedbackSource` 枚举 schema、ToolReconciliation 记录 7 个租约字段（WP-A2 P0-4 契约，此前仅比较 schema 名称集未触发漂移）——全部为 WP-A2/F1 契约新增，无意外变更。
 
 ### P1 完善项进度
+
+- **WP-G7 已完成**（P1-10）：推理指标按模型 / 节点 / 批次维度标注。
+  - 维度设计：五项推理指标统一携带维度——model（模型版本）、node（节点标识 = Environment.MachineName，与 ModelStateReconcilerWorker 的节点标识约定一致）；批次类指标（排队等待 / 填充率 / 分片）额外携带 batch（该指标事件涉及的批次行数）。
+  - InferenceMetrics：新增 `NodeId` 静态字段 + `ModelNodeTags(modelId)`（(model, node) 标签对）+ `ModelNodeBatchTags(modelId, batchRows)`（(model, node, batch) 标签组）；五项指标 XML 描述补充维度说明。
+  - OnnxInferenceEngine：构造时预计算 (model, node) 标签对（实例字段，热路径复用避免分配）；SessionContention.Add 带标签；ShardsExecuted.Add 带 (model, node, batch) 标签。
+  - InferenceScheduler：预计算模型维度标识 _metricModelId（= 调度器对外模型版本，与引擎层同一标识，可按模型聚合对比两层指标）与 _metricTags；CancellationWaste（两处）、QueueWaitDuration、BatchFillRatio、ShardsExecuted 全部带维度标签。
+  - model 维度值 = 模型版本（引擎 _session.ModelVersion；调度器 _options.ModelVersion ?? _inner.ModelVersion）——两层一致；不引入 ModelArtifactId 维度（IBatchInferenceEngine 未暴露，避免过度工程化与 PublicApi 变更）。
+  - 测试：R30 指标捕获器扩展为记录 (名称, 值, 标签) 三元组，新增 TaggedValuesOf 断言辅助；维度断言——填充率携带 model="1.0.0" / node=MachineName / batch>0，会话竞争携带 model/node 且不携带 batch。
+  - 验证：build 0 错误；定向 6/6 通过（R30_InferenceHotPathTests）；注释核验无任务标签。
 
 - **WP-G6 已完成**（P1-9）：迁移 DDL 分阶段修复迁移顺序 + 陈旧断言修复 + 共享异步迁移缓存。
   - 顺序修复 + DDL 分阶段（PostgresMigrationRunner）：MigrateAsync 改为三阶段——阶段一先建迁移追踪表（context_schema_migrations / schema_versions，`EnsureTrackingTablesAsync` 与基线 DDL 同一套 SQL），阶段二执行版本化迁移步骤，阶段三执行基线累计批次。此前版本化步骤先于基线执行，步骤成功后的应用记录写入（RecordMigrationStepAsync → INSERT INTO context_schema_migrations）因追踪表尚不存在而失败（Docker Postgres 集成测试 42P01）——修复后 9 个该环境性失败全部消失。

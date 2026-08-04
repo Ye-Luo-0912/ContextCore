@@ -15,7 +15,7 @@ namespace ContextCore.Tests;
 // - 显式 MaxConcurrentInferences 覆盖 profile 默认
 // - InferencePhaseTimingCallback 阶段耗时回调（Queue/Copy/Run/Parse）
 // - InferenceMetrics 指标记录（session contention / shards / fill ratio /
-//   queue wait / cancellation waste）
+//   queue wait / cancellation waste，含 model / node / batch 维度）
 //
 // 设计：
 // 复用 R29_OnnxInferenceEngineTests 的 MockOnnxInferenceSession /
@@ -273,6 +273,22 @@ public sealed class R30_InferenceHotPathTests
 
         var cancellationWaste = capture.ValuesOf("contextcore.inference.cancellation_waste");
         Assert.IsTrue(cancellationWaste.Sum() >= 1, "已取消请求应记录取消浪费");
+
+        // ── 维度断言：指标携带 model / node（批次类指标额外携带 batch）──
+        var fillWithTags = capture.TaggedValuesOf("contextcore.inference.batch_fill_ratio");
+        Assert.IsTrue(fillWithTags.Count >= 1, "填充率指标应携带维度标签");
+        var fillTags = fillWithTags[0].Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.AreEqual("1.0.0", fillTags["model"], "model 维度应为引擎模型版本");
+        Assert.AreEqual(Environment.MachineName, fillTags["node"], "node 维度应为当前节点标识");
+        Assert.IsTrue(fillTags.TryGetValue("batch", out var fillBatch) && Convert.ToInt32(fillBatch) > 0,
+            "填充率指标应携带正数 batch 行数维度");
+
+        var contentionWithTags = capture.TaggedValuesOf("contextcore.inference.session_contention");
+        Assert.IsTrue(contentionWithTags.Count >= 1, "会话竞争指标应携带维度标签");
+        var contentionTags = contentionWithTags[0].Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.AreEqual("1.0.0", contentionTags["model"], "会话竞争 model 维度应为引擎模型版本");
+        Assert.AreEqual(Environment.MachineName, contentionTags["node"], "会话竞争 node 维度应为当前节点标识");
+        Assert.IsFalse(contentionTags.ContainsKey("batch"), "会话竞争指标不应携带 batch 维度");
     }
 
     /// <summary>
@@ -283,7 +299,7 @@ public sealed class R30_InferenceHotPathTests
     private sealed class InferenceMetricCapture : IDisposable
     {
         private readonly MeterListener _listener = new();
-        private readonly ConcurrentQueue<(string Name, double Value)> _values = new();
+        private readonly ConcurrentQueue<(string Name, double Value, KeyValuePair<string, object?>[] Tags)> _values = new();
 
         public InferenceMetricCapture()
         {
@@ -294,21 +310,35 @@ public sealed class R30_InferenceHotPathTests
                     listener.EnableMeasurementEvents(instrument);
                 }
             };
-            _listener.SetMeasurementEventCallback<double>((instrument, value, _, _) =>
-                _values.Enqueue((instrument.Name, value)));
-            _listener.SetMeasurementEventCallback<long>((instrument, value, _, _) =>
-                _values.Enqueue((instrument.Name, value)));
+            _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
+                _values.Enqueue((instrument.Name, value, tags.ToArray())));
+            _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+                _values.Enqueue((instrument.Name, value, tags.ToArray())));
             _listener.Start();
         }
 
         public IReadOnlyList<double> ValuesOf(string instrumentName)
         {
             var result = new List<double>();
-            foreach (var (name, value) in _values)
+            foreach (var (name, value, _) in _values)
             {
                 if (string.Equals(name, instrumentName, StringComparison.Ordinal))
                 {
                     result.Add(value);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>返回指定仪表的所有测量 (值, 标签) 对，供维度断言。</summary>
+        public IReadOnlyList<(double Value, IReadOnlyList<KeyValuePair<string, object?>> Tags)> TaggedValuesOf(string instrumentName)
+        {
+            var result = new List<(double, IReadOnlyList<KeyValuePair<string, object?>>)>();
+            foreach (var (name, value, tags) in _values)
+            {
+                if (string.Equals(name, instrumentName, StringComparison.Ordinal))
+                {
+                    result.Add((value, tags));
                 }
             }
             return result;

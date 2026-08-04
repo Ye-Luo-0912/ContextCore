@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using ContextCore.Abstractions;
 
@@ -47,6 +48,10 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
     private readonly OnnxInferenceEngineOptions _options;
     private readonly string _calibrationVersion;
     private int _disposed;
+
+    // 推理指标的 (model, node) 维度标签（实例生命周期内固定，预计算复用避免热路径分配）。
+    // model = 模型版本（与调度器层同一标识，可按模型聚合对比两层指标）。
+    private readonly KeyValuePair<string, object?>[] _metricTags;
 
     // warmup 状态标志。
     // 0 = 未 warmup；1 = 已 warmup。
@@ -103,6 +108,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
         _calibrationVersion = string.IsNullOrWhiteSpace(calibrationVersion)
             ? "default-v1"
             : calibrationVersion;
+        _metricTags = InferenceMetrics.ModelNodeTags(ModelVersion);
 
         // 初始化并发槽位。MaxConcurrentInferences <= 0 时按 Execution Provider profile 取默认：
         // CPU 用 ProcessorCount；单 GPU（CUDA/TensorRT/DirectML）会话内 session.Run 串行执行，
@@ -336,7 +342,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
             // 与 Queue 阶段耗时（InferencePhaseTimingCallback）配合归因并发压力来源。
             if (_inferenceSlots.CurrentCount == 0)
             {
-                InferenceMetrics.SessionContention.Add(1);
+                InferenceMetrics.SessionContention.Add(1, _metricTags);
             }
 
             await _inferenceSlots.WaitAsync(ct).ConfigureAwait(false);
@@ -631,7 +637,7 @@ public sealed class OnnxInferenceEngine : IBatchInferenceEngine, IAsyncDisposabl
 
         // 分片计数：一次 Add 汇总本次大 batch 产生的 shard 总数（诊断指标）。
         var shardCount = (totalRows + maxBatchSize - 1) / maxBatchSize;
-        InferenceMetrics.ShardsExecuted.Add(shardCount);
+        InferenceMetrics.ShardsExecuted.Add(shardCount, InferenceMetrics.ModelNodeBatchTags(ModelVersion, totalRows));
 
         for (var rowOffset = 0; rowOffset < totalRows; rowOffset += maxBatchSize)
         {

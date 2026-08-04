@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Channels;
 using ContextCore.Abstractions;
@@ -160,6 +161,11 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
     private readonly IBatchInferenceEngine _inner;
     private readonly InferenceSchedulerOptions _options;
 
+    // 推理指标的模型维度标识与 (model, node) 标签对（实例生命周期内固定，预计算复用）。
+    // 模型标识 = 调度器对外模型版本（与引擎层同一标识，可按模型聚合对比两层指标）。
+    private readonly string _metricModelId;
+    private readonly KeyValuePair<string, object?>[] _metricTags;
+
     // bounded queue：MaxQueueLength=0 时退化为无界（不推荐）。
     private readonly Channel<InferenceRequest> _channel;
 
@@ -206,6 +212,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
 
         _inner = inner;
         _options = options;
+        _metricModelId = ModelVersion;
+        _metricTags = InferenceMetrics.ModelNodeTags(_metricModelId);
         _stopCts = new CancellationTokenSource();
 
         // 构建 bounded channel。MaxQueueLength=0 时使用 Unbounded（向后兼容）。
@@ -508,7 +516,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         // 已入队但未进入批次即被取消 → 浪费的队列容量（诊断指标）。
         if (req.Completion.Task.IsCompleted)
         {
-            InferenceMetrics.CancellationWaste.Add(1);
+            InferenceMetrics.CancellationWaste.Add(1, _metricTags);
             FinalizeRequest(req);
             return;
         }
@@ -678,7 +686,8 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         for (var i = 0; i < group.Count; i++)
         {
             InferenceMetrics.QueueWaitDuration.Record(
-                Stopwatch.GetElapsedTime(group[i].EnqueueTimestamp, dispatchAt).TotalMilliseconds);
+                Stopwatch.GetElapsedTime(group[i].EnqueueTimestamp, dispatchAt).TotalMilliseconds,
+                InferenceMetrics.ModelNodeBatchTags(_metricModelId, group[i].Batch.RowCount));
         }
 
         // 二次检查 deadline：在等待并发槽位期间可能已有请求过期；同时丢弃已被外部 ct 取消的请求。
@@ -697,7 +706,7 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
             {
                 // 已被外部 ct 取消（CallerCancelled）—— 已攒入批次但未执行，浪费了批次容量。
                 // 释放 lease，不参与合并，不调用引擎。
-                InferenceMetrics.CancellationWaste.Add(1);
+                InferenceMetrics.CancellationWaste.Add(1, _metricTags);
                 FinalizeRequest(req);
             }
             else
@@ -722,7 +731,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         // 微批填充率：实际行数 / MaxBatchSize（诊断指标，评估动态批处理收益）。
         if (_options.MaxBatchSize > 0)
         {
-            InferenceMetrics.BatchFillRatio.Record(totalRows / (double)_options.MaxBatchSize);
+            InferenceMetrics.BatchFillRatio.Record(
+                totalRows / (double)_options.MaxBatchSize,
+                InferenceMetrics.ModelNodeBatchTags(_metricModelId, totalRows));
         }
 
         var requiredLength = totalRows * featureCount;
@@ -899,7 +910,9 @@ public sealed class InferenceScheduler : IBatchInferenceEngine, IAsyncDisposable
         var totalDuration = TimeSpan.Zero;
 
         // 分片计数：一次 Add 汇总本次微批产生的 shard 总数（诊断指标）。
-        InferenceMetrics.ShardsExecuted.Add((totalRows + maxBatchSize - 1) / maxBatchSize);
+        InferenceMetrics.ShardsExecuted.Add(
+            (totalRows + maxBatchSize - 1) / maxBatchSize,
+            InferenceMetrics.ModelNodeBatchTags(_metricModelId, totalRows));
 
         for (var rowStart = 0; rowStart < totalRows; rowStart += maxBatchSize)
         {
