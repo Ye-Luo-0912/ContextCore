@@ -1,7 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Evolution;
-using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 
@@ -11,15 +10,13 @@ namespace ContextCore.Tests;
 // Recovery、Canary 与 Learning Durability — 验收测试
 //
 // 覆盖范围：
-// 1. 迁移 SQL：pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列，
-// learning_leases 表创建 + 必需表后缀注册。
+// 1. 迁移 SQL：pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch 列。
 // 2. IPipelineRunStore.UpdateCanaryStateAsync：单真相源 CAS 写入
 // （成功推进 / revision 不匹配返回 null / run 不存在返回 null）。
 // 3. CanaryProgressionService 单真相源写入：Advance/Rollback 后将 canary 状态并入
 // pipeline run snapshot（CanaryPercentage / CanaryRevision / CanaryEpoch）。
 // 4. RecoverFromStoreAsync：snapshot 优先恢复（单一真相源），legacy canary_pipelines
 // 仅作为 CanaryRevision == 0 时的回退路径。
-// 5. ILearningLeaseStore（InMemory）：获取排他 / token CAS 续约 / 释放 / 过期清理。
 //
 // 设计原则：
 // - 复用既有测试的 InMemoryPipelineRunStore + FakeTimeProvider 模式，不 stub 决策内核。
@@ -73,22 +70,6 @@ public sealed class R30D_CanaryLearningDurabilityTests
             "baseline pipeline_runs 必须包含 canary_epoch 列。");
         Assert.IsTrue(sql.Contains("ADD COLUMN IF NOT EXISTS canary_percentage integer NOT NULL DEFAULT 0", StringComparison.Ordinal),
             "升级路径必须包含 canary_percentage 幂等 ADD COLUMN。");
-    }
-
-    [TestMethod]
-    public void MigrationSql_CreatesLearningLeasesTable()
-    {
-        var sql = BuildSql();
-
-        Assert.IsTrue(sql.Contains("CREATE TABLE IF NOT EXISTS cc_learning_leases", StringComparison.Ordinal),
-            "baseline 必须创建 learning_leases 表。");
-        Assert.IsTrue(sql.Contains("lease_token text NOT NULL", StringComparison.Ordinal),
-            "learning_leases 必须包含 lease_token 列（CAS 校验）。");
-        Assert.IsTrue(sql.Contains("lease_expires_at timestamptz NOT NULL", StringComparison.Ordinal),
-            "learning_leases 必须包含 lease_expires_at 列（过期抢占）。");
-        CollectionAssert.Contains(
-            PostgresMigrationRunner.RequiredOperationalTableSuffixes.ToList(),
-            "learning_leases");
     }
 
     // ===========================================================================
@@ -229,74 +210,6 @@ public sealed class R30D_CanaryLearningDurabilityTests
         Assert.AreEqual(1, recovered);
         Assert.AreEqual(60, service.GetCurrentPercentage(runId), "legacy run 应按 canary_pipelines 百分比恢复。");
         Assert.AreEqual(CanaryLocalState.Consistent, service.GetLocalState(runId));
-    }
-
-    // ===========================================================================
-    // 4. ILearningLeaseStore（InMemory）：worker 池级租约
-    // ===========================================================================
-
-    [TestMethod]
-    public async Task LearningLease_TryAcquire_ExclusiveUntilExpiry()
-    {
-        var store = new InMemoryLearningLeaseStore();
-
-        var first = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMinutes(5), "node-a");
-        Assert.IsNotNull(first, "无现有租约时应获取成功。");
-
-        var second = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMinutes(5), "node-b");
-        Assert.IsNull(second, "现有租约未过期时其他实例不得抢占。");
-
-        Assert.IsTrue(await store.HasActiveLeaseAsync("learning-materialization"), "未过期租约应处于活跃状态。");
-        Assert.IsTrue(await store.RenewAsync("learning-materialization", first!.LeaseToken, TimeSpan.FromMinutes(5)),
-            "持有者可续约。");
-    }
-
-    [TestMethod]
-    public async Task LearningLease_TokenCas_RejectsNonOwner()
-    {
-        var store = new InMemoryLearningLeaseStore();
-        var lease = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMinutes(5), "node-a");
-        Assert.IsNotNull(lease);
-
-        Assert.IsFalse(await store.RenewAsync("learning-materialization", "wrong-token", TimeSpan.FromMinutes(5)),
-            "非持有者不得续约（token CAS 拒绝）。");
-        Assert.IsFalse(await store.ReleaseAsync("learning-materialization", "wrong-token"),
-            "非持有者不得释放（token CAS 拒绝）。");
-        Assert.IsTrue(await store.HasActiveLeaseAsync("learning-materialization"),
-            "被拒绝的操作不得破坏既有租约。");
-    }
-
-    [TestMethod]
-    public async Task LearningLease_Release_InvalidatesLease()
-    {
-        var store = new InMemoryLearningLeaseStore();
-        var lease = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMinutes(5), "node-a");
-        Assert.IsNotNull(lease);
-
-        Assert.IsTrue(await store.ReleaseAsync("learning-materialization", lease!.LeaseToken), "持有者可释放。");
-        Assert.IsFalse(await store.HasActiveLeaseAsync("learning-materialization"), "释放后租约不再活跃。");
-
-        var reacquired = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMinutes(5), "node-b");
-        Assert.IsNotNull(reacquired, "释放后其他实例可重新获取。");
-    }
-
-    [TestMethod]
-    public async Task LearningLease_ReapExpired_ClearsExpiredLeases()
-    {
-        var store = new InMemoryLearningLeaseStore();
-        var lease = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMilliseconds(1), "node-a");
-        Assert.IsNotNull(lease);
-
-        await Task.Delay(50);
-        Assert.IsFalse(await store.HasActiveLeaseAsync("learning-materialization"), "租约应已过期。");
-        Assert.IsFalse(await store.RenewAsync("learning-materialization", lease!.LeaseToken, TimeSpan.FromMinutes(5)),
-            "过期租约不得续约（fencing 安全边界）。");
-
-        var reaped = await store.ReapExpiredAsync();
-        Assert.AreEqual(1, reaped, "过期租约应被清理。");
-
-        var reacquired = await store.TryAcquireAsync("learning-materialization", TimeSpan.FromMinutes(5), "node-b");
-        Assert.IsNotNull(reacquired, "过期租约清理后其他实例可获取。");
     }
 
     // ===========================================================================

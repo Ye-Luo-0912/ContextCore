@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `f44ebec5`（WP-G3 已推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G4 已完成；WP-G5..G8 依次推进。
-- **最近完成**：WP-G4（P1-6 Compaction 数据库侧 + P1-7 Raw/SSE Archive 统一视图，详见下方条目）。
+- **基线**：main @ `efbfb474`（WP-G4 已推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G5 已完成；WP-G6..G8 依次推进。
+- **最近完成**：WP-G5（P1-8 移除未消费的 ILearningLeaseStore 抽象，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -101,6 +101,13 @@
   - 最终全量验证（12 个 WP 全部完成后统一跑一次）：解决方案构建 0 错误（7 个警告全部为既有，无 WP 引入）；ContextCore.Tests **3523 总数 / 20 失败 / 3489 通过 / 14 跳过**——20 个失败 = 既有 11 项中的 10 项（PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 本次通过，纯 SQL 断言波动非回归）+ 10 个 Docker 不可用环境下的 Postgres 集成测试（42P01 迁移顺序 bug，已在 HEAD 工作树对照证实预存在），**与 HEAD 逐一对比无任何 WP 新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）。OpenAPI 快照再生成（`service/openapi/service-api.openapi.json`，纯新增 160 行）：GetPolicy 新增 5 个租户查询参数、RecordAdaptiveRetrievalFeedbackRequest / RetrievalPlanFeedback 各 6 个反馈字段、`RetrievalFeedbackSource` 枚举 schema、ToolReconciliation 记录 7 个租约字段（WP-A2 P0-4 契约，此前仅比较 schema 名称集未触发漂移）——全部为 WP-A2/F1 契约新增，无意外变更。
 
 ### P1 完善项进度
+
+- **WP-G5 已完成**（P1-8）：移除未消费的 ILearningLeaseStore 抽象。
+  - 现状核实：ILearningLeaseStore（worker 池级租约）只存在于契约、InMemory/Postgres 两个实现与 DI 注册中，无任何生产消费者——LearningMaterializationWorker 使用记录级租约（ILearningEventOutboxStore），池级租约从未接线，整条死抽象移除。
+  - 移除：Abstractions `LearningLease` + `ILearningLeaseStore`（删除 LearningLeaseContracts.cs）；Core `InMemoryLearningLeaseStore`；Storage.Postgres `PostgresLearningLeaseStore`；两处 DI 注册（CoreExtensions TryAddSingleton + PostgresServiceCollectionExtensions AddSingleton）。
+  - 死 schema 清理：`learning_leases` 表从迁移 0005、基线 DDL、RequiredOperationalTableSuffixes 移除（迁移版本号不变，0005 仍执行 canary 列 ADD）。
+  - 测试：R30D 删除 4 项租约测试与 learning_leases SQL 断言；PublicApi baseline 重新生成（-19 项：LearningLease/ILearningLeaseStore）。
+  - 验证：build 0 错误；定向 27/27 通过（R30D 8 + PublicApi 1 + R29N 3 + R30I 15，1 跳过为 [Ignore] 再生成）；R29H 套件 282 通过 / 11 失败全部命中既有（Benchmark + ReadinessService 2 项既有 + 9 项 Docker 42P01 环境性）；Service.Tests 64 通过 0 失败。
 
 - **WP-G4 已完成**（P1-6 + P1-7）：Compaction 数据库侧归档 + Raw/SSE Archive 统一视图。
   - P1-6 修复（PostgresAgentRunEventCompactor）：归档改为数据库侧 `INSERT INTO archive SELECT ... FROM 热表 WHERE sequence < 锚点 ON CONFLICT DO NOTHING RETURNING sequence` + DELETE——热表 data 原样拷贝，不再应用层反序列化/再序列化（消除大批量事件的应用层读取与重建开销）；同时修复重复压缩丢已归档前缀状态的潜在缺陷——快照增量重建 `RebuildSnapshotIncrementally`：以既有快照为基准只重放热表增量 [既有.Sequence+1 .. 锚点]（RebuildFromEvent 追加对话/工具观察、ExecutionModelTurn 取 max + legacy 计数、PendingToolCommands 增量提取 ?? 沿用既有），无既有快照/旧格式/损坏快照时从归档 + 热表统一读取 [0..锚点] 全量重建（已归档前缀不丢）；压缩期间对 agent_runs 行 FOR UPDATE 串行化同 Run 并发压缩（防并发折叠产生缺失中间事件的快照）；锚点不晚于既有快照幂等返回；归档/热表区间读取与归并辅助（ReadSequenceRangeAsync / ReadArchivedRangeAsync / ReadFullPrefixAsync / MergeSortedBySequence）。

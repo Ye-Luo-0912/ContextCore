@@ -937,10 +937,6 @@ internal static class CoreExtensions
 		// 子问题 9：IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
 		services.TryAddSingleton<IAgentRunLease, InMemoryAgentRunLease>();
 
-		// ILearningLeaseStore（Learning Materialization worker 池级租约；进程内默认实现，
-		// Postgres provider 可覆盖为持久化实现）。
-		services.TryAddSingleton<ILearningLeaseStore, InMemoryLearningLeaseStore>();
-
 		// 子问题 9：AgentHostOptions 配置（默认单节点模式；生产部署通过配置覆盖）。
 		services.TryAddSingleton(AgentHostOptionsDefaultFactory);
 

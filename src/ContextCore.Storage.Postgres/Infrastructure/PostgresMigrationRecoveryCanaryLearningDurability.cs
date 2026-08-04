@@ -8,9 +8,7 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 /// Canary 状态并入 PipelineRunSnapshot（单一真相源），由
 /// <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> CAS 维护；
 /// 重启后可从 run snapshot 直接恢复 canary 状态，不再依赖 canary_pipelines 表恢复。
-/// 2. 新建 learning_leases 表：Learning Materialization worker 池级租约
-/// （ILearningLeaseStore），与 learning_event_outbox 记录级租约互补。
-/// 单 Online 阶段幂等执行（ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS），
+/// 单 Online 阶段幂等执行（ADD COLUMN IF NOT EXISTS），
 /// 与基线 DDL 保持同一套 SQL；新数据库由基线 DDL 直接建好，PreCheck 跳过。
 /// </summary>
 public sealed class PostgresMigrationRecoveryCanaryLearningDurability : IPostgresMigrationStep
@@ -23,7 +21,7 @@ public sealed class PostgresMigrationRecoveryCanaryLearningDurability : IPostgre
 
     public string Description =>
         "pipeline_runs 追加 canary_percentage / canary_revision / canary_epoch（Canary 单一真相源并入"
-        + " PipelineRunSnapshot）+ 新建 learning_leases（Learning Materialization worker 池级租约）。";
+        + " PipelineRunSnapshot）。";
 
     public IReadOnlyList<PostgresMigrationStage> Stages { get; } =
     [
@@ -70,21 +68,11 @@ public sealed class PostgresMigrationRecoveryCanaryLearningDurability : IPostgre
         CancellationToken cancellationToken)
     {
         var pipelineRuns = PostgresNames.Table(options, "pipeline_runs");
-        var learningLeases = PostgresNames.Table(options, "learning_leases");
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS canary_percentage integer NOT NULL DEFAULT 0;
             ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS canary_revision bigint NOT NULL DEFAULT 0;
             ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS canary_epoch bigint NOT NULL DEFAULT 0;
-
-            CREATE TABLE IF NOT EXISTS {learningLeases} (
-                lease_id text NOT NULL,
-                lease_owner text NOT NULL,
-                lease_token text NOT NULL,
-                acquired_at timestamptz NOT NULL DEFAULT now(),
-                lease_expires_at timestamptz NOT NULL,
-                PRIMARY KEY (lease_id)
-            );
             """;
         command.CommandTimeout = options.CommandTimeoutSeconds;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

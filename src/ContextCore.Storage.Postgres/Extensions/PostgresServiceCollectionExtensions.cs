@@ -299,12 +299,6 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunLease>();
         services.AddSingleton<IAgentRunLease>(sp => sp.GetRequiredService<PostgresAgentRunLease>());
 
-        // Learning Materialization worker 池级租约（ILearningLeaseStore）。
-        // 与 learning_event_outbox 记录级租约互补；先于 CoreExtensions 的
-        // TryAddSingleton 默认实现注册 → Postgres 实现胜出。
-        services.AddSingleton<PostgresLearningLeaseStore>();
-        services.AddSingleton<ILearningLeaseStore>(sp => sp.GetRequiredService<PostgresLearningLeaseStore>());
-
         // Tool Reconciliation Control Plane（-B1）：对账记录 PostgreSQL 持久化。
         // 替代 InMemoryToolReconciliationStore 成为 ProductionHA 组合根下的真相源：
         // 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一数据库，
