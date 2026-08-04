@@ -30,7 +30,7 @@ public static partial class ServiceOperationalRenderer
         builder.AppendLine("Coverage Summary");
         builder.AppendLine($"- source items : {snapshot.Coverage.TotalSourceItems}");
         builder.AppendLine($"- indexed      : {snapshot.Coverage.IndexedItems}");
-        builder.AppendLine($"- coverage     : {snapshot.Coverage.CoverageRate:P2}");
+        builder.AppendLine($"- coverage     : {snapshot.Coverage.CoverageRate.ToString("0.00%", System.Globalization.CultureInfo.InvariantCulture)}");
         builder.AppendLine($"- missing      : {snapshot.Coverage.MissingByLayer.Values.Sum()}");
         builder.AppendLine($"- stale        : {snapshot.Coverage.StaleByLayer.Values.Sum()}");
         builder.AppendLine($"- duplicate    : {snapshot.Coverage.DuplicateCount}");

@@ -110,9 +110,9 @@ jobs:
         run: >
           dotnet test ContextCore.sln -c Release --no-build --no-restore
           --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
-          -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=unit-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
 
       - name: Upload test results
         if: always()
@@ -175,9 +175,9 @@ jobs:
         run: >
           dotnet test ContextCore.sln -c Release --no-build --no-restore
           --filter "TestCategory=Integration"
-          -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=integration-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
 
       - name: Upload test results
         if: always()
@@ -219,9 +219,9 @@ jobs:
         run: >
           dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
           --filter "TestCategory=Architecture"
-          -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=architecture-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
 
       - name: Upload test results
         if: always()
@@ -263,9 +263,9 @@ jobs:
         run: >
           dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
           --filter "FullyQualifiedName~PublicApiBaselineTests"
-          -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=public-api-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
 
       - name: Upload test results
         if: always()
@@ -307,9 +307,9 @@ jobs:
         run: >
           dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-build --no-restore
           --filter "FullyQualifiedName~OpenApiSnapshotDriftTests"
-          -- RunConfiguration.TreatNoTestsAsError=true
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=openapi-snapshot-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
 
       - name: Upload test results
         if: always()

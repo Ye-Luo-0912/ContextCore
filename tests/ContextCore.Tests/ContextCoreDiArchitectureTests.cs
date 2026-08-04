@@ -485,10 +485,10 @@ public sealed class ContextCoreDiArchitectureTests
         // 若未来引入 Scoped 服务，必须先评估是否被 Singleton 工厂委托捕获（captive dependency）
         var extensionFiles = new[]
         {
-            "src\\ContextCore.Service\\Extensions\\CoreExtensions.cs",
-            "src\\ContextCore.Service\\Extensions\\StorageExtensions.cs",
-            "src\\ContextCore.Storage.Postgres\\Extensions\\PostgresServiceCollectionExtensions.cs",
-            "src\\ContextCore.Client\\Extensions\\ContextCoreClientServiceCollectionExtensions.cs",
+            Path.Combine("src", "ContextCore.Service", "Extensions", "CoreExtensions.cs"),
+            Path.Combine("src", "ContextCore.Service", "Extensions", "StorageExtensions.cs"),
+            Path.Combine("src", "ContextCore.Storage.Postgres", "Extensions", "PostgresServiceCollectionExtensions.cs"),
+            Path.Combine("src", "ContextCore.Client", "Extensions", "ContextCoreClientServiceCollectionExtensions.cs"),
         };
 
         var repoRoot = FindRepoRoot();

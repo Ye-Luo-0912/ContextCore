@@ -71,6 +71,9 @@ public sealed class FileSystemInstanceGuardTests
         // sentinel 以 FileShare.Read 共享（他进程不可写/独占），
         // 持有期间 Directory.Delete(recursive) 会被锁文件阻塞。
         // ResetCacheForTests 释放句柄后目录才可递归删除——验证清理契约。
+        // 该行为依赖 Windows 文件锁语义；Unix 允许删除打开中的文件，跳过。
+        if (!OperatingSystem.IsWindows()) return;
+
         var guard = FileSystemInstanceGuard.GetOrCreate(_root);
         Assert.IsFalse(guard.IsMultiProcessDetected);
 
