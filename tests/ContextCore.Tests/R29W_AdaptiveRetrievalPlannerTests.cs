@@ -137,7 +137,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     {
         var (planner, store) = CreatePlanner();
         var signature = AdaptiveRetrievalPlanSignature.Compute(Input());
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true));
         }
@@ -154,7 +154,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     {
         var (planner, store) = CreatePlanner();
         var signature = AdaptiveRetrievalPlanSignature.Compute(Input());
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await store.RecordAsync(Feedback(signature, hits: 0));
         }
@@ -176,7 +176,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
 
         var policy = await planner.GetPolicyForSignatureAsync(signature);
 
-        Assert.AreEqual(1.0, policy.TokenBudgetMultiplier, "样本数 < 3 时不应触发收敛。");
+        Assert.AreEqual(1.0, policy.TokenBudgetMultiplier, "样本数 < 10 时不应触发收敛。");
         Assert.AreEqual(2, policy.FeedbackSampleCount);
     }
 
@@ -200,10 +200,10 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task Plan_BudgetExceeded_ReducesBudgetAndConvergesQueries()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var input = Input();
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true));
         }
@@ -220,10 +220,10 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task Plan_BudgetClamped_AtMinTokenBudget()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var input = Input(remainingTurns: 1);
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true));
         }
@@ -238,10 +238,10 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task Plan_LowHits_BoostsQueryWeights()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var input = Input();
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await store.RecordAsync(Feedback(signature, hits: 0));
         }
@@ -255,10 +255,10 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task Plan_Deterministic_GivenSameFeedbackState()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var input = Input();
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true));
         }
@@ -276,21 +276,197 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task Plan_FeedbackAccumulates_ThenPolicyApplies()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var input = Input();
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
 
         var before = await planner.PlanAsync(input);
         Assert.AreEqual(4096, before.TokenBudget);
 
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 10; i++)
         {
             await planner.RecordOutcomeAsync(Feedback(signature, hits: 4, budgetExceeded: true));
         }
 
         var after = await planner.PlanAsync(input);
-        Assert.AreEqual(3072, after.TokenBudget, "反馈累积 3 条后策略应生效。");
-        Assert.AreEqual(3, (await store.ListRecentAsync(signature)).Count);
+        Assert.AreEqual(3072, after.TokenBudget, "反馈累积 10 条后策略应生效。");
+        Assert.AreEqual(10, (await store.ListRecentAsync(signature)).Count);
+    }
+
+    // =========================================================================
+    // Part 4b: P0-16 加固（租户隔离签名 / 模式 / 清洗 / 幂等 / 可信度加权）
+    // =========================================================================
+
+    [TestMethod]
+    public void Signature_IsSha256_AndIsolatesWorkspaces()
+    {
+        var sA = AdaptiveRetrievalPlanSignature.Compute(Input(workspaceId: "ws-1"));
+        var sB = AdaptiveRetrievalPlanSignature.Compute(Input(workspaceId: "ws-2"));
+
+        Assert.AreEqual(4 + 64, sA.Length, "SHA-256 输出应为 sig: + 64 位小写十六进制。");
+        StringAssert.StartsWith(sA, "sig:");
+        Assert.AreNotEqual(sA, sB, "相同任务文本、不同 Workspace 必须产生不同签名（跨租户隔离）。");
+    }
+
+    [TestMethod]
+    public void Signature_AllTenantDimensions_AreIncluded()
+    {
+        // 每个租户维度单独变化都应改变签名。
+        Assert.AreNotEqual(
+            AdaptiveRetrievalPlanSignature.Compute(Input(collectionId: "col-1")),
+            AdaptiveRetrievalPlanSignature.Compute(Input(collectionId: "col-2")));
+        Assert.AreNotEqual(
+            AdaptiveRetrievalPlanSignature.Compute(Input(purpose: "p1")),
+            AdaptiveRetrievalPlanSignature.Compute(Input(purpose: "p2")));
+        Assert.AreNotEqual(
+            AdaptiveRetrievalPlanSignature.Compute(Input(policyVersion: "v1")),
+            AdaptiveRetrievalPlanSignature.Compute(Input(policyVersion: "v2")));
+        Assert.AreNotEqual(
+            AdaptiveRetrievalPlanSignature.Compute(Input(retrievalProfile: "r1")),
+            AdaptiveRetrievalPlanSignature.Compute(Input(retrievalProfile: "r2")));
+        Assert.AreNotEqual(
+            AdaptiveRetrievalPlanSignature.Compute(Input(taskClass: "t1")),
+            AdaptiveRetrievalPlanSignature.Compute(Input(taskClass: "t2")));
+    }
+
+    [TestMethod]
+    public async Task Plan_DisabledMode_ReturnsBasePlan_IgnoringFeedback()
+    {
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Disabled });
+        var input = Input();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
+        for (var i = 0; i < 10; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true));
+        }
+
+        var plan = await planner.PlanAsync(input);
+
+        Assert.AreEqual(4096, plan.TokenBudget, "Disabled 模式（默认 fail-closed）不应应用自适应策略。");
+        Assert.AreEqual(4, plan.ControlledQueries.Count);
+        Assert.IsFalse(plan.Reason.Contains("[自适应]", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task Plan_ShadowMode_ComputesPolicyButDoesNotApply()
+    {
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Shadow });
+        var input = Input();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
+        for (var i = 0; i < 10; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true));
+        }
+
+        var plan = await planner.PlanAsync(input);
+        var policy = await planner.GetPolicyForSignatureAsync(signature);
+
+        Assert.AreEqual(4096, plan.TokenBudget, "Shadow 模式只观察，不应用策略。");
+        Assert.AreEqual(4, plan.ControlledQueries.Count);
+        Assert.AreEqual(0.75, policy.TokenBudgetMultiplier, "Shadow 模式仍应计算策略（观察学习信号）。");
+    }
+
+    [TestMethod]
+    public async Task Planner_SanitizesFeedback_OnRecord()
+    {
+        var (planner, store) = CreatePlanner();
+        const string signature = "sig:sanitize";
+
+        await planner.RecordOutcomeAsync(new RetrievalPlanFeedback
+        {
+            PlanSignature = signature,
+            HitsReturned = 100000,
+            BudgetExceeded = true,
+            Effective = true,
+            RecordedAtUtc = DateTimeOffset.UtcNow,
+            Confidence = 5.0,
+            OutcomeQuality = -2.0,
+            Source = (RetrievalFeedbackSource)999
+        });
+
+        var stored = await store.ListRecentAsync(signature);
+        Assert.AreEqual(1, stored.Count);
+        Assert.AreEqual(100, stored[0].HitsReturned, "命中数应钳制到 MaxHitsClamp=100。");
+        Assert.AreEqual(1.0, stored[0].Confidence, "置信度应钳制到 [0,1]。");
+        Assert.AreEqual(0.0, stored[0].OutcomeQuality, "结果质量应钳制到 [0,1]。");
+        Assert.AreEqual(RetrievalFeedbackSource.Runtime, stored[0].Source, "非法 Source 应回退 Runtime。");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(stored[0].FeedbackId), "缺省 FeedbackId 应由规划器生成。");
+    }
+
+    [TestMethod]
+    public async Task Store_Dedupe_ByIdempotencyKey_KeepsFirst()
+    {
+        var store = new InMemoryRetrievalPlanFeedbackStore();
+        const string signature = "sig:dedupe";
+        await store.RecordAsync(Feedback(signature, hits: 3, idempotencyKey: "op-1", recordedAt: DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await store.RecordAsync(Feedback(signature, hits: 9, idempotencyKey: "op-1", recordedAt: DateTimeOffset.UtcNow));
+
+        var entries = await store.ListRecentAsync(signature);
+
+        Assert.AreEqual(1, entries.Count, "相同 (PlanSignature, IdempotencyKey) 只保留首条（重放无副作用）。");
+        Assert.AreEqual(3, entries[0].HitsReturned);
+    }
+
+    [TestMethod]
+    public async Task Policy_EffectiveOnly_IgnoresIneffectiveSamples()
+    {
+        var (planner, store) = CreatePlanner();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(Input());
+        for (var i = 0; i < 10; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true, effective: false));
+        }
+        for (var i = 0; i < 3; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 5));
+        }
+
+        var policy = await planner.GetPolicyForSignatureAsync(signature);
+
+        Assert.AreEqual(1.0, policy.TokenBudgetMultiplier, "Ineffective 样本不得参与策略计算。");
+        Assert.AreEqual(3, policy.FeedbackSampleCount, "只有 Effective 样本计入样本数。");
+    }
+
+    [TestMethod]
+    public async Task Policy_TimeDecay_DampensOldSamples()
+    {
+        var (planner, store) = CreatePlanner();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(Input());
+        var now = DateTimeOffset.UtcNow;
+        // 10 条 10 天前的超限样本（衰减 0.5^10 ≈ 0.001）+ 1 条最新的健康样本。
+        for (var i = 0; i < 10; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true, recordedAt: now.AddDays(-10)));
+        }
+        await store.RecordAsync(Feedback(signature, hits: 5, recordedAt: now));
+
+        var policy = await planner.GetPolicyForSignatureAsync(signature);
+
+        Assert.AreEqual(1.0, policy.TokenBudgetMultiplier, "陈旧超限样本经时间衰减后不应触发收敛。");
+        Assert.AreEqual(11, policy.FeedbackSampleCount);
+    }
+
+    [TestMethod]
+    public async Task Policy_PerSubjectCap_LimitsSingleSourceContribution()
+    {
+        var (planner, store) = CreatePlanner();
+        var signature = AdaptiveRetrievalPlanSignature.Compute(Input());
+        // 单一攻击者主体：10 条超限样本（无封顶时主导策略）。
+        for (var i = 0; i < 10; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 4, budgetExceeded: true, subject: "attacker"));
+        }
+        // 6 条健康样本（不同主体）。
+        for (var i = 0; i < 6; i++)
+        {
+            await store.RecordAsync(Feedback(signature, hits: 5, subject: "worker-" + i));
+        }
+
+        var policy = await planner.GetPolicyForSignatureAsync(signature);
+
+        // 封顶后：attacker 5 条 + 健康 6 条 = 11 ≥ 10；超限率 = 5/11 ≈ 0.45 < 0.5 → 中性。
+        Assert.AreEqual(1.0, policy.TokenBudgetMultiplier, "单主体贡献封顶后，攻击者不应主导策略。");
+        Assert.AreEqual(11, policy.FeedbackSampleCount);
     }
 
     // =========================================================================
@@ -307,6 +483,30 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         StringAssert.Contains(sql, "hits_returned integer NOT NULL DEFAULT 0");
         StringAssert.Contains(sql, "budget_exceeded boolean NOT NULL DEFAULT false");
         StringAssert.Contains(sql, "retrieval_plan_feedback_signature");
+        // P0-16 加固列与幂等唯一索引。
+        StringAssert.Contains(sql, "feedback_id text NULL");
+        StringAssert.Contains(sql, "idempotency_key text NULL");
+        StringAssert.Contains(sql, "source smallint NOT NULL DEFAULT 0");
+        StringAssert.Contains(sql, "confidence double precision NOT NULL DEFAULT 1.0");
+        StringAssert.Contains(sql, "outcome_quality double precision NOT NULL DEFAULT 1.0");
+        StringAssert.Contains(sql, "subject text NULL");
+        StringAssert.Contains(sql, "cc_retrieval_plan_feedback_idempotency");
+        StringAssert.Contains(sql, "WHERE idempotency_key IS NOT NULL");
+    }
+
+    [TestMethod]
+    public void Migration_0008_RetrievalPlanFeedbackHardening_Contract()
+    {
+        var step = PostgresMigrationStepRegistry.Steps
+            .Single(s => s.MigrationId == "0008_retrieval_plan_feedback_hardening");
+
+        Assert.AreEqual("cc-schema-v60", step.FromSchemaVersion);
+        Assert.AreEqual("cc-schema-v61", step.ToSchemaVersion);
+        CollectionAssert.AreEqual(
+            new[] { PostgresMigrationStage.Online },
+            step.Stages.ToArray(),
+            "v60→v61 应为单 Online 阶段（ADD COLUMN IF NOT EXISTS / CREATE UNIQUE INDEX IF NOT EXISTS，幂等）。");
+        StringAssert.Contains(step.Description, "idempotency_key");
     }
 
     [TestMethod]
@@ -325,7 +525,9 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     public async Task PolicyEndpoint_NoPlanner_Returns503()
     {
         var (status, _) = await ExecuteAsync(await AdaptiveRetrievalEndpoints.GetPolicyAsync(
-            planner: null, signature: "sig:x", originalTask: null, latestAssistantIntent: null, goals: null, Http(), CancellationToken.None));
+            planner: null, signature: "sig:x", originalTask: null, latestAssistantIntent: null, goals: null,
+            collectionId: null, purpose: null, policyVersion: null, retrievalProfile: null, taskClass: null,
+            Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, status);
     }
@@ -336,12 +538,34 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var (planner, _) = CreatePlanner();
 
         var (status, body) = await ExecuteAsync(await AdaptiveRetrievalEndpoints.GetPolicyAsync(
-            planner, signature: null, originalTask: TaskText, latestAssistantIntent: IntentText, goals: null, Http(), CancellationToken.None));
+            planner, signature: null, originalTask: TaskText, latestAssistantIntent: IntentText, goals: null,
+            collectionId: null, purpose: null, policyVersion: null, retrievalProfile: null, taskClass: null,
+            Http(), CancellationToken.None));
 
         Assert.AreEqual(StatusCodes.Status200OK, status);
         var policy = JsonSerializer.Deserialize<AdaptiveRetrievalPolicy>(body, JsonWeb);
         Assert.IsNotNull(policy);
         Assert.AreEqual(1.0, policy!.TokenBudgetMultiplier);
+    }
+
+    [TestMethod]
+    public async Task PolicyEndpoint_ResolvesWorkspaceFromContext_IntoSignature()
+    {
+        var (planner, _) = CreatePlanner();
+        var httpContext = HttpWithWorkspace("ws-from-context");
+
+        var (status, body) = await ExecuteAsync(httpContext, await AdaptiveRetrievalEndpoints.GetPolicyAsync(
+            planner, signature: null, originalTask: TaskText, latestAssistantIntent: IntentText, goals: "确认 AlphaProtocol 是否已部署",
+            collectionId: null, purpose: null, policyVersion: null, retrievalProfile: null, taskClass: null,
+            httpContext, CancellationToken.None));
+
+        Assert.AreEqual(StatusCodes.Status200OK, status);
+        var policy = JsonSerializer.Deserialize<AdaptiveRetrievalPolicy>(body, JsonWeb);
+        Assert.IsNotNull(policy);
+        // 签名必须包含请求上下文中的 Workspace（P0-16 跨租户隔离）。
+        Assert.AreEqual(
+            AdaptiveRetrievalPlanSignature.Compute(Input(workspaceId: "ws-from-context")),
+            policy!.PlanSignature);
     }
 
     [TestMethod]
@@ -436,22 +660,35 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     // 辅助
     // =========================================================================
 
-    private static (AdaptiveRetrievalPlanner Planner, InMemoryRetrievalPlanFeedbackStore Store) CreatePlanner()
+    private static (AdaptiveRetrievalPlanner Planner, InMemoryRetrievalPlanFeedbackStore Store) CreatePlanner(
+        AdaptiveRetrievalOptions? options = null)
     {
         var store = new InMemoryRetrievalPlanFeedbackStore();
-        var planner = new AdaptiveRetrievalPlanner(new DefaultAgentRetrievalQueryPlanner(), store);
+        var planner = new AdaptiveRetrievalPlanner(new DefaultAgentRetrievalQueryPlanner(), store, options);
         return (planner, store);
     }
 
     private static AgentRetrievalPlannerInput Input(
         string? originalTask = null,
-        int? remainingTurns = null)
+        int? remainingTurns = null,
+        string? workspaceId = null,
+        string? collectionId = null,
+        string? purpose = null,
+        string? policyVersion = null,
+        string? retrievalProfile = null,
+        string? taskClass = null)
     {
         var input = new AgentRetrievalPlannerInput
         {
             OriginalTask = originalTask ?? TaskText,
             LatestAssistantIntent = IntentText,
-            UnresolvedGoals = new[] { "确认 AlphaProtocol 是否已部署" }
+            UnresolvedGoals = new[] { "确认 AlphaProtocol 是否已部署" },
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            Purpose = purpose,
+            PolicyVersion = policyVersion,
+            RetrievalProfile = retrievalProfile,
+            TaskClass = taskClass
         };
         if (remainingTurns is not null)
         {
@@ -464,14 +701,23 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         string signature,
         int hits,
         bool budgetExceeded = false,
-        DateTimeOffset? recordedAt = null) => new()
+        bool effective = true,
+        DateTimeOffset? recordedAt = null,
+        string? idempotencyKey = null,
+        string? subject = null,
+        double confidence = 1.0,
+        double outcomeQuality = 1.0) => new()
     {
         PlanSignature = signature,
         QueryText = "查询文本",
         HitsReturned = hits,
         BudgetExceeded = budgetExceeded,
-        Effective = true,
-        RecordedAtUtc = recordedAt ?? DateTimeOffset.UtcNow
+        Effective = effective,
+        RecordedAtUtc = recordedAt ?? DateTimeOffset.UtcNow,
+        IdempotencyKey = idempotencyKey,
+        Subject = subject,
+        Confidence = confidence,
+        OutcomeQuality = outcomeQuality
     };
 
     private static string BuildSql() => PostgresMigrationRunner.BuildMigrationSql(new PostgresOptions
@@ -491,13 +737,38 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         return httpContext;
     }
 
-    private static async Task<(int Status, string Body)> ExecuteAsync(IResult result)
+    /// <summary>带 Workspace 上下文访问器的 HttpContext（模拟 WorkspaceContextMiddleware 已填充）。</summary>
+    private static DefaultHttpContext HttpWithWorkspace(string workspaceId)
     {
         var httpContext = Http();
+        var accessor = new FixedWorkspaceContextAccessor();
+        accessor.Set(new WorkspaceContext { WorkspaceId = workspaceId, Source = "test" });
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IWorkspaceContextAccessor>(accessor);
+        httpContext.RequestServices = services.BuildServiceProvider();
+        return httpContext;
+    }
+
+    private static async Task<(int Status, string Body)> ExecuteAsync(IResult result)
+        => await ExecuteAsync(Http(), result);
+
+    private static async Task<(int Status, string Body)> ExecuteAsync(DefaultHttpContext httpContext, IResult result)
+    {
         await result.ExecuteAsync(httpContext);
         httpContext.Response.Body.Position = 0;
         using var reader = new StreamReader(httpContext.Response.Body);
         var body = await reader.ReadToEndAsync();
         return ((int)httpContext.Response.StatusCode, body);
+    }
+
+    /// <summary>固定 Workspace 上下文访问器（测试桩）。</summary>
+    private sealed class FixedWorkspaceContextAccessor : IWorkspaceContextAccessor
+    {
+        public WorkspaceContext? Current { get; private set; }
+
+        public void Set(WorkspaceContext context) => Current = context;
+
+        public void Clear() => Current = null;
     }
 }

@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `afeb7559`（WP-E1 已推送；R30.1 实施中）。
+- **基线**：main @ `c1c1bf99`（WP-E2 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-E2 节点成员资格租约（P0-15，model_node_membership + stale cutoff + Isolated 停止接流量）。
+- **最近完成**：WP-F1 自适应反馈加固（P0-16，租户隔离 SHA-256 签名 + 反馈幂等/可信度 + Disabled 默认）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -88,6 +88,16 @@
   - Reconciler（ModelStateReconcilerWorker）：每轮先 `HeartbeatMembershipAsync`（领取/续租 + 刷新 serving_enabled，失败或被其他实例持有 → 本轮失败退避，fail-closed）；漂移隔离分支 `_servingEnabled=false` + `DisableServingAsync`（best-effort 同步到成员租约）；成功应用期望模型后 `EnableServingAsync`（SetServingEnabled 返回 false 抛 InvalidOperationException → 本轮失败）再 `RecordAppliedStateAsync`——**写 Applied State 失败不再吞异常**（best-effort 移除，失败传播 → 本轮失败退避；AppliedClusterSlotRevision 只在写入成功后赋值，"实际换模后仍返回成功" 消除）。`MembershipLeaseDuration` 默认 60s。
   - Admission（ProductionAdmissionController.VerifyNodeModelAppliedAsync）：成员资格纳入准入——`IModelNodeMembershipStore` 缺失 Fail-closed（与 AppliedStateStore 同语义：已启用模型激活的集群必须能校验成员资格）；节点无租约或租约过期（stale cutoff）→ "无活跃成员租约" Fail；`ServingEnabled=false`（漂移隔离）→ "已被标记停止服务" Fail。中间件 503 是流量闸：Isolated 节点由 Reconciler 置 serving_enabled=false，Admission/Middleware 真正停止接收模型流量（不能只写 Applied State 数据库标志）。
   - 测试：新增 `R30I_ModelNodeMembershipTests`（15 项：InMemory 租约 8 项——首领取/同实例续租保令牌/活跃冲突返回 null/过期接管新令牌 fencing/serving 翻转/错令牌拒绝/过期令牌拒绝/活跃成员过滤+排序；注册表 4 项——离线节点记录不阻止收敛、未上报应用成员计入 NodeCount 且阻止就绪、活跃成员漂移阻止 RolloutReady、离线漂移记录不计数；迁移 3 项——0007 v59→v60 声明、基线 DDL 含建表+6 列、RequiredOperationalTableSuffixes）；`R30H_AdmissionNodeAppliedStateTests` 新增 4 项（MembershipStore 缺失 Fail-closed、无租约 Fail、租约过期 Fail、serving_enabled=false Fail）+ harness 预置成员租约；R29S `SchemaVersion_IsV59`→`SchemaVersion_IsV60`；ContextCorePostgresStorageTests schema 断言 v59→v60；PublicApi baseline 重新生成（+19 项）。验证：build 0 错误；定向 63/63 通过（R30H+R29R+R29U+R30I+R29S）；关联套件 91 项 89 通过 / 2 失败全部命中既有 11 项（ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates、ReadinessService_Development_GetRegisteredWorkers）。
+- **WP-F1 已完成**（P0-16）：自适应检索反馈加固——租户隔离签名 + 反馈幂等/可信度 + 默认 Disabled。
+  - 问题：计划签名只含（任务+意图+未解决目标）且用 FNV-1a 64 位——不同租户输入相同任务共享同一反馈状态，一个 Workspace 可通过低质量/恶意反馈改变另一个 Workspace 的 Token Budget 与检索权重；无 Effective 参与策略、最低样本仅 3、无异常值抑制、无反馈幂等键。
+  - 签名（AdaptiveRetrievalPlanSignature.Compute 重写为 SHA-256）：输入含 6 个租户维度字段（`AgentRetrievalPlannerInput` 新增 WorkspaceId / CollectionId / Purpose / PolicyVersion / RetrievalProfile / TaskClass，均可选不破坏既有构造）；带标签字段 `label=value` 以 `\u001F`（Unit Separator）拼接（task/intent/goals/ws/col/purpose/policy/profile/taskClass）后对 UTF-8 做 SHA-256，输出 `sig:` + 64 位小写十六进制——任一租户维度不同即不同签名，跨 Workspace 相同任务文本绝不共享反馈；旧 FNV-1a 签名不再产生（历史持久化签名成为孤立数据，不参与新策略，可接受）。
+  - 反馈契约（Abstractions，PublicApi baseline 重新生成 +~32 项）：`RetrievalPlanFeedback` 新增 FeedbackId（缺省规划器生成，审计追溯）/ IdempotencyKey（(PlanSignature, IdempotencyKey) 幂等去重，重放无副作用）/ Source（新枚举 `RetrievalFeedbackSource`：Runtime/Operator/AutomatedEvaluation）/ Confidence=1.0 / OutcomeQuality=1.0 / Subject（主体标识，策略按主体封顶贡献）；新枚举 `AdaptiveRetrievalMode`（Disabled=0 默认 fail-closed / Shadow / Active）；新选项类 `AdaptiveRetrievalOptions`（绑定 "AdaptiveRetrieval" 配置节：Mode=Disabled、MinFeedbackSamples 默认引用接口常量、FeedbackLookbackLimit=20、DecayHalfLife=24h、MaxSamplesPerSubject=5、MaxHitsClamp=100）；`IAdaptiveRetrievalPlanner.MinFeedbackSamples` 3→10。
+  - 规划器（AdaptiveRetrievalPlanner）：ctor 可选 `AdaptiveRetrievalOptions?`（默认 Disabled）；PlanAsync——Disabled 完全透传底层计划不读写反馈存储（fail-closed 默认）、Shadow 计算策略但不应用（观察学习信号）、Active 计算并应用；RecordOutcomeAsync 清洗（生成 FeedbackId、HitsReturned 钳制 [0,MaxHitsClamp]、Confidence/OutcomeQuality 钳制 [0,1]、非法 Source 回退 Runtime）；ComputePolicy——只采用 Effective 样本、单主体（Subject）贡献封顶（匿名样本各自独立不封顶，向后兼容）、权重 = Confidence × OutcomeQuality × 时间衰减（0.5^(age/半衰期)）、加权超限率 ≥0.5 收敛 / 加权平均命中 <1.0 召回增强。
+  - 存储（InMemory + Postgres 同契约）：`InMemoryRetrievalPlanFeedbackStore` 重构为 SignatureBucket（有序 List + IdempotencyKey HashSet 去重，与 Postgres 语义一致）；`PostgresRetrievalPlanFeedbackStore` INSERT 增加 6 新列 + `ON CONFLICT (plan_signature, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`，SELECT/ReadFeedback 读全部新列。
+  - Schema v61：迁移 `PostgresMigrationRetrievalPlanFeedbackHardening` 0008（v60→v61，单 Online 阶段：ADD COLUMN IF NOT EXISTS 6 列 + CREATE UNIQUE INDEX IF NOT EXISTS 部分唯一索引；PreCheck 检测 idempotency_key 列存在即跳过）；基线 DDL 同步新增列与唯一索引；`PostgresMigrationStepRegistry` 注册 0008。
+  - 端点（AdaptiveRetrievalEndpoints）：GetPolicyAsync 工作区取自请求上下文（`IWorkspaceContextAccessor.Current.WorkspaceId`，中间件已填充）进入签名，其余租户维度经查询参数显式指定；RecordFeedbackAsync 请求新增 FeedbackId / IdempotencyKey / Source / Confidence / OutcomeQuality / Subject 透传。
+  - DI（CoreExtensions）：IAdaptiveRetrievalPlanner 工厂绑定 "AdaptiveRetrieval" 配置节（IOptions 优先，无则 GetSection().Bind 回退）传入规划器——默认 Disabled，运维显式开启 Shadow/Active。
+  - 测试：R29W 全量更新（3→10 样本、5 个 Plan 自适应测试改 Active 模式、GetPolicyAsync 新参数）+ 新增 10 项加固测试（SHA-256 长度与租户隔离、5 个租户维度逐一隔离、Disabled 透传、Shadow 计算不应用、清洗（钳制+Source 回退+FeedbackId 生成）、InMemory 幂等去重、Effective-only、时间衰减、单主体封顶）；R29S `SchemaVersion_IsV60`→`SchemaVersion_IsV61`；ContextCorePostgresStorageTests schema 断言 v60→v61；PublicApi baseline 重新生成。验证：build 0 错误（Service.Tests 也 0 错误）；定向 100 通过 / 1 跳过（R29W+PublicApi+R29S+R30I+PostgresStorage）；R29/R30 全扫 878 项 858 通过 / 16 失败与 HEAD（WP-F1 前）**逐一相同**——6 个既有 11 项 + 10 个 Docker/Postgres 集成（42P01 迁移顺序 bug：版本化步骤先于基线建 context_schema_migrations，WP-A2 起即存在，与本次无关，工作树验证）。
 
 ### 性能优化工作包进度
 

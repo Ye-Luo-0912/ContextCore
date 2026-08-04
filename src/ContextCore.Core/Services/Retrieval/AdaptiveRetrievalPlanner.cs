@@ -10,11 +10,19 @@ namespace ContextCore.Core.Services.Retrieval;
 // 按计划签名聚合近期检索结果（命中数 / 预算超限 / 有效性），计算自适应策略
 // （Token 预算乘数 / 查询收敛乘数 / 召回增强乘数），后续规划时应用该策略。
 //
-// 自适应语义（样本数 ≥ IAdaptiveRetrievalPlanner.MinFeedbackSamples 才生效）：
-// 1. 预算超限率 ≥ 0.5 → TokenBudgetMultiplier=0.75 + QueryConvergenceMultiplier=0.75
+// 自适应语义（Effective 样本数 ≥ MinFeedbackSamples 才生效；P0-16 加固）：
+// 1. 只采用 Effective 样本（未被实际采用的结果不参与学习）。
+// 2. 加权指标：权重 = 置信度 × 结果质量 × 时间衰减（0.5^(age/半衰期)），
+// 单主体（Subject）贡献封顶（默认 5 条），防止单源低质量 / 恶意反馈主导策略。
+// 3. 加权预算超限率 ≥ 0.5 → TokenBudgetMultiplier=0.75 + QueryConvergenceMultiplier=0.75
 // （收敛预算与查询集，避免反复撞墙）。
-// 2. 平均命中数 < 1.0 → RecallBoostMultiplier=1.25（增强查询权重扩大召回）。
-// 3. 样本不足或指标未达阈值 → 中性默认（1.0 / 1.0 / 1.0）。
+// 4. 加权平均命中数 < 1.0 → RecallBoostMultiplier=1.25（增强查询权重扩大召回）。
+// 5. 样本不足或指标未达阈值 → 中性默认（1.0 / 1.0 / 1.0）。
+//
+// 运行模式（AdaptiveRetrievalOptions.Mode）：
+// - Disabled（默认，fail-closed）：PlanAsync 完全透传底层计划，不读写反馈存储。
+// - Shadow：计算策略但不应用，仅观察学习信号（验证无副作用后再启用）。
+// - Active：计算并应用策略。
 //
 // 设计原则：
 // - 底层规划器保持确定性 / 幂等：自适应仅调整规划参数；给定相同输入 +
@@ -29,7 +37,7 @@ namespace ContextCore.Core.Services.Retrieval;
 /// </summary>
 public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
 {
-    /// <summary>策略聚合时读取的近期反馈条数上限。</summary>
+    /// <summary>策略聚合时读取的近期反馈条数上限（默认值；可经 AdaptiveRetrievalOptions 覆盖）。</summary>
     public const int FeedbackLookbackLimit = 20;
 
     /// <summary>预算超限率阈值（≥ 时触发收敛策略）。</summary>
@@ -52,13 +60,16 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
 
     private readonly IAgentRetrievalQueryPlanner _inner;
     private readonly IRetrievalPlanFeedbackStore _feedbackStore;
+    private readonly AdaptiveRetrievalOptions _options;
 
     public AdaptiveRetrievalPlanner(
         IAgentRetrievalQueryPlanner inner,
-        IRetrievalPlanFeedbackStore feedbackStore)
+        IRetrievalPlanFeedbackStore feedbackStore,
+        AdaptiveRetrievalOptions? options = null)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _feedbackStore = feedbackStore ?? throw new ArgumentNullException(nameof(feedbackStore));
+        _options = options ?? new AdaptiveRetrievalOptions();
     }
 
     /// <inheritdoc />
@@ -67,19 +78,47 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         ArgumentNullException.ThrowIfNull(input);
         ct.ThrowIfCancellationRequested();
 
-        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
         var basePlan = _inner.Plan(input, ct);
-        var recent = await _feedbackStore.ListRecentAsync(signature, FeedbackLookbackLimit, ct).ConfigureAwait(false);
-        var policy = ComputePolicy(signature, recent);
+
+        // Disabled（默认，fail-closed）：自适应层完全不读写反馈存储，透传底层计划。
+        if (_options.Mode == AdaptiveRetrievalMode.Disabled)
+        {
+            return basePlan;
+        }
+
+        var signature = AdaptiveRetrievalPlanSignature.Compute(input);
+        var recent = await _feedbackStore.ListRecentAsync(signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
+        var policy = ComputePolicy(signature, recent, _options);
+
+        // Shadow：计算策略但不应用（观察学习信号，验证无副作用后再启用）。
+        if (_options.Mode == AdaptiveRetrievalMode.Shadow)
+        {
+            return basePlan;
+        }
 
         return ApplyPolicy(basePlan, policy);
     }
 
     /// <inheritdoc />
-    public ValueTask RecordOutcomeAsync(RetrievalPlanFeedback feedback, CancellationToken ct = default)
+    public async ValueTask RecordOutcomeAsync(RetrievalPlanFeedback feedback, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(feedback);
-        return _feedbackStore.RecordAsync(feedback, ct);
+        ct.ThrowIfCancellationRequested();
+
+        // P0-16 清洗：保证 FeedbackId / 数值字段在合法范围内、Source 为合法枚举值，
+        // 防止脏数据 / 恶意大值扭曲加权策略。
+        var sanitized = feedback with
+        {
+            FeedbackId = string.IsNullOrWhiteSpace(feedback.FeedbackId)
+                ? Guid.NewGuid().ToString("N")
+                : feedback.FeedbackId,
+            HitsReturned = Math.Clamp(feedback.HitsReturned, 0, Math.Max(0, _options.MaxHitsClamp)),
+            Confidence = Math.Clamp(feedback.Confidence, 0.0, 1.0),
+            OutcomeQuality = Math.Clamp(feedback.OutcomeQuality, 0.0, 1.0),
+            Source = Enum.IsDefined(feedback.Source) ? feedback.Source : RetrievalFeedbackSource.Runtime
+        };
+
+        await _feedbackStore.RecordAsync(sanitized, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -87,16 +126,16 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
     {
         ArgumentNullException.ThrowIfNull(input);
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        var recent = await _feedbackStore.ListRecentAsync(signature, FeedbackLookbackLimit, ct).ConfigureAwait(false);
-        return ComputePolicy(signature, recent);
+        var recent = await _feedbackStore.ListRecentAsync(signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
+        return ComputePolicy(signature, recent, _options);
     }
 
     /// <inheritdoc />
     public async ValueTask<AdaptiveRetrievalPolicy> GetPolicyForSignatureAsync(string planSignature, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planSignature);
-        var recent = await _feedbackStore.ListRecentAsync(planSignature, FeedbackLookbackLimit, ct).ConfigureAwait(false);
-        return ComputePolicy(planSignature, recent);
+        var recent = await _feedbackStore.ListRecentAsync(planSignature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
+        return ComputePolicy(planSignature, recent, _options);
     }
 
     /// <inheritdoc />
@@ -109,9 +148,22 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
 
     // ── 策略计算 ─────────────────────────────────────────────────────────────
 
-    private static AdaptiveRetrievalPolicy ComputePolicy(string signature, IReadOnlyList<RetrievalPlanFeedback> recent)
+    private static AdaptiveRetrievalPolicy ComputePolicy(
+        string signature,
+        IReadOnlyList<RetrievalPlanFeedback> recent,
+        AdaptiveRetrievalOptions options)
     {
-        if (recent.Count < IAdaptiveRetrievalPlanner.MinFeedbackSamples)
+        var now = DateTimeOffset.UtcNow;
+        var minSamples = Math.Max(1, options.MinFeedbackSamples);
+
+        // 1. 只采用 Effective 样本（未被实际采用的结果不参与策略学习）。
+        var effective = recent.Where(f => f.Effective).ToArray();
+
+        // 2. 单主体贡献封顶：Subject 相同者只保留最近 MaxSamplesPerSubject 条；
+        // 未归属主体（匿名）的样本各自独立，不封顶（无法归因，向后兼容匿名记录）。
+        var capped = CapPerSubject(effective, options.MaxSamplesPerSubject);
+
+        if (capped.Count < minSamples)
         {
             return new AdaptiveRetrievalPolicy
             {
@@ -119,14 +171,54 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
                 TokenBudgetMultiplier = 1.0,
                 QueryConvergenceMultiplier = 1.0,
                 RecallBoostMultiplier = 1.0,
-                FeedbackSampleCount = recent.Count,
-                ComputedAtUtc = DateTimeOffset.UtcNow,
-                Note = $"反馈样本不足（{recent.Count}/{IAdaptiveRetrievalPlanner.MinFeedbackSamples}），策略为中性默认。"
+                FeedbackSampleCount = capped.Count,
+                ComputedAtUtc = now,
+                Note = $"有效反馈样本不足（{capped.Count}/{minSamples}），策略为中性默认。"
             };
         }
 
-        var exceededRate = (double)recent.Count(f => f.BudgetExceeded) / recent.Count;
-        var avgHits = recent.Average(f => f.HitsReturned);
+        // 3. 加权指标：weight = Confidence × OutcomeQuality × 时间衰减（0.5^(age/半衰期)）。
+        var halfLife = options.DecayHalfLife;
+        double totalWeight = 0.0, exceededWeight = 0.0, hitsWeight = 0.0;
+        foreach (var f in capped)
+        {
+            var age = now - f.RecordedAtUtc;
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+            var decay = halfLife > TimeSpan.Zero
+                ? Math.Pow(0.5, age.TotalHours / halfLife.TotalHours)
+                : 1.0;
+            var w = f.Confidence * f.OutcomeQuality * decay;
+            if (w <= 0.0)
+            {
+                continue; // 零权重样本不参与（等价于被抑制）
+            }
+            totalWeight += w;
+            if (f.BudgetExceeded)
+            {
+                exceededWeight += w;
+            }
+            hitsWeight += w * f.HitsReturned;
+        }
+
+        if (totalWeight <= 0.0)
+        {
+            return new AdaptiveRetrievalPolicy
+            {
+                PlanSignature = signature,
+                TokenBudgetMultiplier = 1.0,
+                QueryConvergenceMultiplier = 1.0,
+                RecallBoostMultiplier = 1.0,
+                FeedbackSampleCount = capped.Count,
+                ComputedAtUtc = now,
+                Note = "有效反馈加权权重为零（置信度 / 质量 / 时间衰减），策略为中性默认。"
+            };
+        }
+
+        var exceededRate = exceededWeight / totalWeight;
+        var avgHits = hitsWeight / totalWeight;
 
         var tokenMultiplier = exceededRate >= BudgetExceededRateThreshold ? BudgetConvergeTokenMultiplier : 1.0;
         var queryMultiplier = exceededRate >= BudgetExceededRateThreshold ? BudgetConvergeQueryMultiplier : 1.0;
@@ -152,10 +244,29 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
             TokenBudgetMultiplier = tokenMultiplier,
             QueryConvergenceMultiplier = queryMultiplier,
             RecallBoostMultiplier = recallBoost,
-            FeedbackSampleCount = recent.Count,
-            ComputedAtUtc = DateTimeOffset.UtcNow,
+            FeedbackSampleCount = capped.Count,
+            ComputedAtUtc = now,
             Note = string.Join("；", noteParts) + "。"
         };
+    }
+
+    /// <summary>单主体贡献封顶：每个 Subject 只保留最近 maxPerSubject 条（按记录时间倒序）。</summary>
+    private static List<RetrievalPlanFeedback> CapPerSubject(IReadOnlyList<RetrievalPlanFeedback> samples, int maxPerSubject)
+    {
+        if (maxPerSubject <= 0)
+        {
+            return samples.ToList(); // 未配置上限：不截断
+        }
+
+        return samples
+            .Select((f, index) => (
+                Feedback: f,
+                // 匿名（无 Subject）样本各用唯一键，视为独立主体，不参与封顶。
+                Key: string.IsNullOrWhiteSpace(f.Subject) ? "\u0000" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) : f.Subject))
+            .OrderByDescending(t => t.Feedback.RecordedAtUtc)
+            .GroupBy(t => t.Key, StringComparer.Ordinal)
+            .SelectMany(g => g.Take(maxPerSubject).Select(t => t.Feedback))
+            .ToList();
     }
 
     // ── 策略应用 ─────────────────────────────────────────────────────────────

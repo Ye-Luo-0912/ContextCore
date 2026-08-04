@@ -98,6 +98,26 @@ public sealed record AgentRetrievalPlannerInput
 
     /// <summary>Turn 预算（剩余轮次决定 Token 预算上限；null = 未配置）。</summary>
     public AgentTurnBudget? TurnBudget { get; init; }
+
+    // ── 租户隔离维度（P0-16：自适应计划签名必须包含以下维度，防止跨 Workspace 污染）──
+
+    /// <summary>工作区标识（P0-16：签名必须包含 workspace，跨租户相同任务文本不得共享反馈状态）。</summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>集合标识（P0-16：签名必须包含 collection）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>检索用途（P0-16：签名必须包含 purpose）。</summary>
+    public string? Purpose { get; init; }
+
+    /// <summary>策略版本（P0-16：签名必须包含 policy version，策略演进即隔离）。</summary>
+    public string? PolicyVersion { get; init; }
+
+    /// <summary>检索画像 / Provider profile（P0-16：签名必须包含 retrieval profile）。</summary>
+    public string? RetrievalProfile { get; init; }
+
+    /// <summary>任务类别（P0-16：签名必须包含 task class）。</summary>
+    public string? TaskClass { get; init; }
 }
 
 /// <summary>

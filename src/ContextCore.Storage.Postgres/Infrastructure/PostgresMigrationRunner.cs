@@ -153,7 +153,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// - serving_enabled：Isolated 节点由 Reconciler 置 false，Admission/Middleware 据此
     ///   真正停止接收模型流量（不能只写 Applied State 数据库标志）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v60";
+    public const string SchemaVersion = "cc-schema-v61";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2342,20 +2342,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "
     ON {canaryEmergencyOverrides} (run_id) WHERE cleared_at IS NULL;
 
 -- 自适应检索规划器反馈持久化表。
--- retrieval_plan_feedback：记录每轮检索结果（命中数 / 预算是否超限 / 是否有效），
--- 按计划签名聚合自适应策略（预算收敛 / 召回增强），跨进程重启保留；
--- ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持按签名或全量重置。
+-- retrieval_plan_feedback：记录每轮检索结果（命中数 / 预算是否超限 / 是否有效 /
+-- 来源 / 置信度 / 结果质量 / 主体），按计划签名聚合自适应策略（预算收敛 / 召回增强），
+-- 跨进程重启保留；ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持按签名或全量重置。
+-- P0-16 加固：(plan_signature, idempotency_key) 部分唯一索引实现反馈幂等去重，
+-- 配合 INSERT ... ON CONFLICT DO NOTHING；source / confidence / outcome_quality / subject
+-- 支撑可信度加权与单主体贡献封顶，防跨 Workspace 污染与单源投毒。
 CREATE TABLE IF NOT EXISTS {retrievalPlanFeedback} (
     plan_signature text NOT NULL,
     query_text text NOT NULL DEFAULT '',
     hits_returned integer NOT NULL DEFAULT 0,
     budget_exceeded boolean NOT NULL DEFAULT false,
     effective boolean NOT NULL DEFAULT true,
-    recorded_at timestamptz NOT NULL DEFAULT now()
+    recorded_at timestamptz NOT NULL DEFAULT now(),
+    feedback_id text NULL,
+    idempotency_key text NULL,
+    source smallint NOT NULL DEFAULT 0,
+    confidence double precision NOT NULL DEFAULT 1.0,
+    outcome_quality double precision NOT NULL DEFAULT 1.0,
+    subject text NULL
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_plan_feedback", "signature")}
     ON {retrievalPlanFeedback} (plan_signature, recorded_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_plan_feedback", "idempotency")}
+    ON {retrievalPlanFeedback} (plan_signature, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- Learning Loop Durable Outbox：Decision 物化事件持久化表。
 -- 替代 fire-and-forget Task.Run → MaterializeAsync → catch-all 模式，消除进程崩溃时静默丢训练数据。

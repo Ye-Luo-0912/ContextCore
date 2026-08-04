@@ -73,6 +73,7 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationRecoveryCanaryLearningDurability(),
         new PostgresMigrationToolReconciliationLease(),
         new PostgresMigrationAgentRunClaimLease(),
-        new PostgresMigrationModelNodeMembership()
+        new PostgresMigrationModelNodeMembership(),
+        new PostgresMigrationRetrievalPlanFeedbackHardening()
     ];
 }

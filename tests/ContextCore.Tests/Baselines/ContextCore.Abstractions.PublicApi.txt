@@ -8,6 +8,9 @@
 #   E:<FullTypeName>.<EventName>
 # Entries are sorted alphabetically; re-running the test will produce identical output.
 
+F:ContextCore.Abstractions.AdaptiveRetrievalMode.Active
+F:ContextCore.Abstractions.AdaptiveRetrievalMode.Disabled
+F:ContextCore.Abstractions.AdaptiveRetrievalMode.Shadow
 F:ContextCore.Abstractions.AgentApprovalStatus.Approved
 F:ContextCore.Abstractions.AgentApprovalStatus.Pending
 F:ContextCore.Abstractions.AgentApprovalStatus.Rejected
@@ -990,6 +993,9 @@ F:ContextCore.Abstractions.RetrievalExpertMask.RecencyBit
 F:ContextCore.Abstractions.RetrievalExpertMask.SemanticBit
 F:ContextCore.Abstractions.RetrievalExpertMask.StableMemoryBit
 F:ContextCore.Abstractions.RetrievalExpertMask.WorkingMemoryBit
+F:ContextCore.Abstractions.RetrievalFeedbackSource.AutomatedEvaluation
+F:ContextCore.Abstractions.RetrievalFeedbackSource.Operator
+F:ContextCore.Abstractions.RetrievalFeedbackSource.Runtime
 F:ContextCore.Abstractions.RiskSeverity.Critical
 F:ContextCore.Abstractions.RiskSeverity.High
 F:ContextCore.Abstractions.RiskSeverity.Low
@@ -1082,6 +1088,11 @@ F:ContextCore.Abstractions.WorkspaceRolePermissions.Admin
 F:ContextCore.Abstractions.WorkspaceRolePermissions.Developer
 F:ContextCore.Abstractions.WorkspaceRolePermissions.Operator
 F:ContextCore.Abstractions.WorkspaceRolePermissions.Viewer
+M:ContextCore.Abstractions.AdaptiveRetrievalOptions.#ctor()
+M:ContextCore.Abstractions.AdaptiveRetrievalOptions.Equals(System.Object)
+M:ContextCore.Abstractions.AdaptiveRetrievalOptions.GetHashCode()
+M:ContextCore.Abstractions.AdaptiveRetrievalOptions.GetType()
+M:ContextCore.Abstractions.AdaptiveRetrievalOptions.ToString()
 M:ContextCore.Abstractions.AdaptiveRetrievalPlanSignature.Equals(System.Object)
 M:ContextCore.Abstractions.AdaptiveRetrievalPlanSignature.GetHashCode()
 M:ContextCore.Abstractions.AdaptiveRetrievalPlanSignature.GetType()
@@ -5709,6 +5720,12 @@ M:ContextCore.Abstractions.WorkspaceRolePermissions.GetHashCode()
 M:ContextCore.Abstractions.WorkspaceRolePermissions.GetType()
 M:ContextCore.Abstractions.WorkspaceRolePermissions.ToString()
 M:ContextCore.Abstractions.WorkspaceRolePermissions.static Resolve(ContextCore.Abstractions.WorkspaceRole)
+P:ContextCore.Abstractions.AdaptiveRetrievalOptions.DecayHalfLife (get|set)
+P:ContextCore.Abstractions.AdaptiveRetrievalOptions.FeedbackLookbackLimit (get|set)
+P:ContextCore.Abstractions.AdaptiveRetrievalOptions.MaxHitsClamp (get|set)
+P:ContextCore.Abstractions.AdaptiveRetrievalOptions.MaxSamplesPerSubject (get|set)
+P:ContextCore.Abstractions.AdaptiveRetrievalOptions.MinFeedbackSamples (get|set)
+P:ContextCore.Abstractions.AdaptiveRetrievalOptions.Mode (get|set)
 P:ContextCore.Abstractions.AdaptiveRetrievalPolicy.ComputedAtUtc (get|init)
 P:ContextCore.Abstractions.AdaptiveRetrievalPolicy.FeedbackSampleCount (get|init)
 P:ContextCore.Abstractions.AdaptiveRetrievalPolicy.Note (get|init)
@@ -5910,12 +5927,18 @@ P:ContextCore.Abstractions.AgentRetrievalPlan.GraphSeeds (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlan.Reason (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlan.RequiredIds (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlan.TokenBudget (get|init)
+P:ContextCore.Abstractions.AgentRetrievalPlannerInput.CollectionId (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlannerInput.LatestAssistantIntent (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlannerInput.OriginalTask (get|init)
+P:ContextCore.Abstractions.AgentRetrievalPlannerInput.PolicyVersion (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlannerInput.PreviousRetrievalDiagnostics (get|init)
+P:ContextCore.Abstractions.AgentRetrievalPlannerInput.Purpose (get|init)
+P:ContextCore.Abstractions.AgentRetrievalPlannerInput.RetrievalProfile (get|init)
+P:ContextCore.Abstractions.AgentRetrievalPlannerInput.TaskClass (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlannerInput.ToolObservations (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlannerInput.TurnBudget (get|init)
 P:ContextCore.Abstractions.AgentRetrievalPlannerInput.UnresolvedGoals (get|init)
+P:ContextCore.Abstractions.AgentRetrievalPlannerInput.WorkspaceId (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Reason (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Text (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Type (get|init)
@@ -11165,11 +11188,17 @@ P:ContextCore.Abstractions.RetrievalInput.RequiredTypes (get|init)
 P:ContextCore.Abstractions.RetrievalInput.RewrittenQueryText (get|init)
 P:ContextCore.Abstractions.RetrievalInput.VectorTopK (get|init)
 P:ContextCore.Abstractions.RetrievalPlanFeedback.BudgetExceeded (get|init)
+P:ContextCore.Abstractions.RetrievalPlanFeedback.Confidence (get|init)
 P:ContextCore.Abstractions.RetrievalPlanFeedback.Effective (get|init)
+P:ContextCore.Abstractions.RetrievalPlanFeedback.FeedbackId (get|init)
 P:ContextCore.Abstractions.RetrievalPlanFeedback.HitsReturned (get|init)
+P:ContextCore.Abstractions.RetrievalPlanFeedback.IdempotencyKey (get|init)
+P:ContextCore.Abstractions.RetrievalPlanFeedback.OutcomeQuality (get|init)
 P:ContextCore.Abstractions.RetrievalPlanFeedback.PlanSignature (get|init)
 P:ContextCore.Abstractions.RetrievalPlanFeedback.QueryText (get|init)
 P:ContextCore.Abstractions.RetrievalPlanFeedback.RecordedAtUtc (get|init)
+P:ContextCore.Abstractions.RetrievalPlanFeedback.Source (get|init)
+P:ContextCore.Abstractions.RetrievalPlanFeedback.Subject (get|init)
 P:ContextCore.Abstractions.RiskAssessment.Description (get)
 P:ContextCore.Abstractions.RiskAssessment.Mitigations (get)
 P:ContextCore.Abstractions.RiskAssessment.RiskId (get)
@@ -11528,6 +11557,8 @@ P:ContextCore.Abstractions.WorkspaceQuota.RemainingCostUsd (get)
 P:ContextCore.Abstractions.WorkspaceQuota.RemainingTokens (get)
 P:ContextCore.Abstractions.WorkspaceQuota.TokensUsed (get|init)
 P:ContextCore.Abstractions.WorkspaceQuota.WorkspaceId (get|init)
+T:ContextCore.Abstractions.AdaptiveRetrievalMode (Enum)
+T:ContextCore.Abstractions.AdaptiveRetrievalOptions
 T:ContextCore.Abstractions.AdaptiveRetrievalPlanSignature
 T:ContextCore.Abstractions.AdaptiveRetrievalPolicy
 T:ContextCore.Abstractions.AdmissionPartition
@@ -12493,6 +12524,7 @@ T:ContextCore.Abstractions.RetrievalAdapterResult
 T:ContextCore.Abstractions.RetrievalExpert (Enum)
 T:ContextCore.Abstractions.RetrievalExpertChannels
 T:ContextCore.Abstractions.RetrievalExpertMask (Struct)
+T:ContextCore.Abstractions.RetrievalFeedbackSource (Enum)
 T:ContextCore.Abstractions.RetrievalInput
 T:ContextCore.Abstractions.RetrievalPlanFeedback
 T:ContextCore.Abstractions.RiskAssessment

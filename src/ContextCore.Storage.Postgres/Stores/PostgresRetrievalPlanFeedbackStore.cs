@@ -9,8 +9,12 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 跨进程重启保留，供规划器按计划签名聚合自适应策略。
 /// </summary>
 /// <remarks>
-/// 单条记录为 (plan_signature, query_text, hits_returned, budget_exceeded, effective, recorded_at)；
+/// 单条记录为 (plan_signature, query_text, hits_returned, budget_exceeded, effective,
+/// recorded_at, feedback_id, idempotency_key, source, confidence, outcome_quality, subject)；
 /// 查询按 recorded_at 倒序返回最新条目，配合 <see cref="ClearAsync"/> 支持自适应状态重置。
+/// 幂等（P0-16）：<c>(plan_signature, idempotency_key)</c> 部分唯一索引
+/// （WHERE idempotency_key IS NOT NULL）+ INSERT ... ON CONFLICT DO NOTHING——
+/// 重放 / 重复提交不产生重复反馈。
 /// </remarks>
 public sealed class PostgresRetrievalPlanFeedbackStore : PostgresStoreBase, IRetrievalPlanFeedbackStore
 {
@@ -32,8 +36,11 @@ public sealed class PostgresRetrievalPlanFeedbackStore : PostgresStoreBase, IRet
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 INSERT INTO {Table("retrieval_plan_feedback")}
-    (plan_signature, query_text, hits_returned, budget_exceeded, effective, recorded_at)
-VALUES (@plan_signature, @query_text, @hits_returned, @budget_exceeded, @effective, @recorded_at);
+    (plan_signature, query_text, hits_returned, budget_exceeded, effective, recorded_at,
+     feedback_id, idempotency_key, source, confidence, outcome_quality, subject)
+VALUES (@plan_signature, @query_text, @hits_returned, @budget_exceeded, @effective, @recorded_at,
+        @feedback_id, @idempotency_key, @source, @confidence, @outcome_quality, @subject)
+ON CONFLICT (plan_signature, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING;
 """;
         command.Parameters.AddWithValue("plan_signature", feedback.PlanSignature);
         command.Parameters.AddWithValue("query_text", (object?)feedback.QueryText ?? string.Empty);
@@ -41,6 +48,12 @@ VALUES (@plan_signature, @query_text, @hits_returned, @budget_exceeded, @effecti
         command.Parameters.AddWithValue("budget_exceeded", feedback.BudgetExceeded);
         command.Parameters.AddWithValue("effective", feedback.Effective);
         command.Parameters.AddWithValue("recorded_at", feedback.RecordedAtUtc);
+        command.Parameters.AddWithValue("feedback_id", (object?)feedback.FeedbackId ?? DBNull.Value);
+        command.Parameters.AddWithValue("idempotency_key", (object?)feedback.IdempotencyKey ?? DBNull.Value);
+        command.Parameters.AddWithValue("source", (int)feedback.Source);
+        command.Parameters.AddWithValue("confidence", feedback.Confidence);
+        command.Parameters.AddWithValue("outcome_quality", feedback.OutcomeQuality);
+        command.Parameters.AddWithValue("subject", (object?)feedback.Subject ?? DBNull.Value);
 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
@@ -60,7 +73,8 @@ VALUES (@plan_signature, @query_text, @hits_returned, @budget_exceeded, @effecti
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
-SELECT plan_signature, query_text, hits_returned, budget_exceeded, effective, recorded_at
+SELECT plan_signature, query_text, hits_returned, budget_exceeded, effective, recorded_at,
+       feedback_id, idempotency_key, source, confidence, outcome_quality, subject
 FROM {Table("retrieval_plan_feedback")}
 WHERE plan_signature = @plan_signature
 ORDER BY recorded_at DESC
@@ -99,21 +113,26 @@ LIMIT @limit;
 
     private static RetrievalPlanFeedback ReadFeedback(System.Data.Common.DbDataReader reader)
     {
-        var signatureOrdinal = reader.GetOrdinal("plan_signature");
-        var queryTextOrdinal = reader.GetOrdinal("query_text");
-        var hitsOrdinal = reader.GetOrdinal("hits_returned");
-        var budgetOrdinal = reader.GetOrdinal("budget_exceeded");
-        var effectiveOrdinal = reader.GetOrdinal("effective");
-        var recordedAtOrdinal = reader.GetOrdinal("recorded_at");
-
         return new RetrievalPlanFeedback
         {
-            PlanSignature = reader.GetString(signatureOrdinal),
-            QueryText = reader.GetString(queryTextOrdinal),
-            HitsReturned = reader.GetInt32(hitsOrdinal),
-            BudgetExceeded = reader.GetBoolean(budgetOrdinal),
-            Effective = reader.GetBoolean(effectiveOrdinal),
-            RecordedAtUtc = reader.GetFieldValue<DateTimeOffset>(recordedAtOrdinal)
+            PlanSignature = reader.GetString(reader.GetOrdinal("plan_signature")),
+            QueryText = reader.GetString(reader.GetOrdinal("query_text")),
+            HitsReturned = reader.GetInt32(reader.GetOrdinal("hits_returned")),
+            BudgetExceeded = reader.GetBoolean(reader.GetOrdinal("budget_exceeded")),
+            Effective = reader.GetBoolean(reader.GetOrdinal("effective")),
+            RecordedAtUtc = reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("recorded_at")),
+            FeedbackId = ReadNullableString(reader, "feedback_id"),
+            IdempotencyKey = ReadNullableString(reader, "idempotency_key"),
+            Source = (RetrievalFeedbackSource)reader.GetInt32(reader.GetOrdinal("source")),
+            Confidence = reader.GetDouble(reader.GetOrdinal("confidence")),
+            OutcomeQuality = reader.GetDouble(reader.GetOrdinal("outcome_quality")),
+            Subject = ReadNullableString(reader, "subject")
         };
+    }
+
+    private static string? ReadNullableString(System.Data.Common.DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     }
 }

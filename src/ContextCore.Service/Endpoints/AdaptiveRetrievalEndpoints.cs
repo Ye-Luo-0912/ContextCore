@@ -75,13 +75,20 @@ internal static class AdaptiveRetrievalEndpoints
         return app;
     }
 
-    /// <summary>查询当前自适应策略：优先使用 signature 参数，缺省时从规划输入字段派生签名。</summary>
+    /// <summary>查询当前自适应策略：优先使用 signature 参数，缺省时从规划输入字段派生签名。
+    /// 工作区取自请求上下文（IWorkspaceContextAccessor），其余租户维度可经查询参数显式指定
+    /// （P0-16：签名必须包含 workspace / collection / purpose / policy / profile / taskClass）。</summary>
     internal static async Task<IResult> GetPolicyAsync(
         [FromServices] IAdaptiveRetrievalPlanner? planner,
         string? signature,
         string? originalTask,
         string? latestAssistantIntent,
         string? goals,
+        string? collectionId,
+        string? purpose,
+        string? policyVersion,
+        string? retrievalProfile,
+        string? taskClass,
         HttpContext httpContext,
         CancellationToken ct)
     {
@@ -92,7 +99,9 @@ internal static class AdaptiveRetrievalEndpoints
                 "IAdaptiveRetrievalPlanner 未注册。");
         }
 
-        var resolvedSignature = ResolveSignature(signature, originalTask, latestAssistantIntent, goals);
+        var workspaceId = httpContext.RequestServices.GetService<IWorkspaceContextAccessor>()?.Current?.WorkspaceId;
+        var resolvedSignature = ResolveSignature(signature, originalTask, latestAssistantIntent, goals,
+            workspaceId, collectionId, purpose, policyVersion, retrievalProfile, taskClass);
         var policy = await planner.GetPolicyForSignatureAsync(resolvedSignature, ct).ConfigureAwait(false);
         return Results.Ok(policy);
     }
@@ -154,7 +163,13 @@ internal static class AdaptiveRetrievalEndpoints
             HitsReturned = Math.Max(0, request.HitsReturned),
             BudgetExceeded = request.BudgetExceeded,
             Effective = request.Effective,
-            RecordedAtUtc = DateTimeOffset.UtcNow
+            RecordedAtUtc = DateTimeOffset.UtcNow,
+            FeedbackId = string.IsNullOrWhiteSpace(request.FeedbackId) ? null : request.FeedbackId,
+            IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey,
+            Source = request.Source,
+            Confidence = request.Confidence,
+            OutcomeQuality = request.OutcomeQuality,
+            Subject = string.IsNullOrWhiteSpace(request.Subject) ? null : request.Subject
         }, ct).ConfigureAwait(false);
 
         return Results.Ok(new AdaptiveRetrievalFeedbackRecordResponse
@@ -186,7 +201,17 @@ internal static class AdaptiveRetrievalEndpoints
         });
     }
 
-    private static string ResolveSignature(string? signature, string? originalTask, string? latestAssistantIntent, string? goals)
+    private static string ResolveSignature(
+        string? signature,
+        string? originalTask,
+        string? latestAssistantIntent,
+        string? goals,
+        string? workspaceId = null,
+        string? collectionId = null,
+        string? purpose = null,
+        string? policyVersion = null,
+        string? retrievalProfile = null,
+        string? taskClass = null)
     {
         if (!string.IsNullOrWhiteSpace(signature))
         {
@@ -199,7 +224,13 @@ internal static class AdaptiveRetrievalEndpoints
             LatestAssistantIntent = latestAssistantIntent,
             UnresolvedGoals = string.IsNullOrWhiteSpace(goals)
                 ? Array.Empty<string>()
-                : goals.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : goals.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            Purpose = purpose,
+            PolicyVersion = policyVersion,
+            RetrievalProfile = retrievalProfile,
+            TaskClass = taskClass
         };
         return AdaptiveRetrievalPlanSignature.Compute(input);
     }
@@ -222,6 +253,24 @@ public sealed class RecordAdaptiveRetrievalFeedbackRequest
 
     /// <summary>本轮检索结果是否被实际采用（缺省 true）。</summary>
     public bool Effective { get; init; } = true;
+
+    /// <summary>反馈唯一标识（可选；缺省由规划器生成，用于审计追溯）。</summary>
+    public string? FeedbackId { get; init; }
+
+    /// <summary>幂等键（可选）：相同 (PlanSignature, IdempotencyKey) 只保留首条（P0-16）。</summary>
+    public string? IdempotencyKey { get; init; }
+
+    /// <summary>反馈来源（缺省 Runtime）。</summary>
+    public RetrievalFeedbackSource Source { get; init; } = RetrievalFeedbackSource.Runtime;
+
+    /// <summary>置信度（0–1，记录时钳制；缺省 1.0）。</summary>
+    public double Confidence { get; init; } = 1.0;
+
+    /// <summary>结果质量（0–1，记录时钳制；缺省 1.0）。</summary>
+    public double OutcomeQuality { get; init; } = 1.0;
+
+    /// <summary>主体标识（可选：Workspace / 用户 / 评测用例等；策略计算按主体封顶贡献）。</summary>
+    public string? Subject { get; init; }
 }
 
 /// <summary>近期反馈列表响应。</summary>

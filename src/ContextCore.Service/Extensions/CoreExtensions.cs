@@ -894,10 +894,22 @@ internal static class CoreExtensions
 
 		// 自适应检索规划器（装饰确定性受控规划器）：按计划签名聚合近期检索反馈，
 		// 计算自适应策略（Token 预算乘数 / 查询收敛乘数 / 召回增强乘数）并应用于后续规划。
-		// 供检索执行方（AgentRunActor ContextBuilding）选用；运维端点查询策略与反馈。
-		services.AddSingleton<IAdaptiveRetrievalPlanner>(sp => new AdaptiveRetrievalPlanner(
-			sp.GetRequiredService<IAgentRetrievalQueryPlanner>(),
-			sp.GetRequiredService<IRetrievalPlanFeedbackStore>()));
+		// P0-16 加固：默认 Disabled（fail-closed，自适应不生效），运维经 "AdaptiveRetrieval"
+		// 配置节显式开启 Shadow / Active；签名含租户维度（workspace/collection/purpose/
+		// policy/profile/taskClass），反馈带幂等键与可信度字段，杜绝跨 Workspace 污染与单源投毒。
+		services.AddSingleton<IAdaptiveRetrievalPlanner>(sp =>
+		{
+			var options = sp.GetService<Microsoft.Extensions.Options.IOptions<AdaptiveRetrievalOptions>>()?.Value;
+			if (options is null)
+			{
+				options = new AdaptiveRetrievalOptions();
+				sp.GetService<IConfiguration>()?.GetSection("AdaptiveRetrieval").Bind(options);
+			}
+			return new AdaptiveRetrievalPlanner(
+				sp.GetRequiredService<IAgentRetrievalQueryPlanner>(),
+				sp.GetRequiredService<IRetrievalPlanFeedbackStore>(),
+				options);
+		});
 
 		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
 		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。
