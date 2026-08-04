@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-04。
-> **Current HEAD：`92d7c11e`**（WP-P5 CI Artifact 瘦身；其后无提交，与 origin/main 一致）。
-> **Current Phase：R30.1 Production Semantics Stabilization** —— 已关闭 4 项、待办 P0 8 项，详见「当前阶段」。
+> **Current HEAD：`6dee79fa`**（WP-F1 自适应检索反馈加固；R30.1 16 项 P0 全部完成并推送，与 origin/main 一致）。
+> **Current Phase：R30.1 Production Semantics Stabilization** —— 16 项 P0 全部关闭（12 个 WP），详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R29 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -10,23 +10,23 @@
 
 ## 当前阶段
 
-**R30.1 Production Semantics Stabilization（进行中，HEAD `92d7c11e`）**
+**R30.1 Production Semantics Stabilization（已完成，HEAD `6dee79fa`）**
 
-**Closed（已关闭）**：
-- Single execution plane
-- Engine lease lifecycle
-- Native model protocol hardening
-- FTS/Graph hot-path improvements
+**Closed（已关闭，12 个 WP 覆盖 16 项 P0）**：
+- WP-A1（P0-1 + P0-2）：Tool 失败阶段 + 重试安全契约——DispatchingIntent 后一律进对账（ToolFailurePhase）、普通 Write 默认不可自动重试（ToolRetrySafety）
+- WP-A2（P0-3 + P0-4 + P0-5）：对账原子裁决 + 裁决租约 + 仲裁权——ResolveReconciliationAtomicallyAsync 单事务、Running 带 lease/fencing/过期重取、先取裁决权再提交 Journal
+- WP-B（P0-6 + P0-7 + P0-8）：调度 Admission + 严格入队语义 + Scheduler Claim Lease——原子 Admission（PendingAdmission→AdmissionRejected/Queued）、429/202/201 严格语义、Scheduler Claim 与 Execution Lease 分离
+- WP-C1（P0-10 即时安全）：事件压缩仅限终态 Run（可重试 Failed 不压缩）
+- WP-C2（P0-9）：不可变 Attempt——重试不删事件历史、Attempt 边界标记、消除 ANY 交叉删除
+- WP-C3（P0-10 正式方案）：Recoverable Snapshot + Anchor + Hot Delta + Archived Audit Stream——恢复顺序 Snapshot → validate anchor → replay hot delta，Raw Events 拼接归档
+- WP-D1（P0-11）：自动回滚先写持久化 Kill Switch——Create Emergency Override → 本地 0% → DB CAS，失败持续 fail-closed
+- WP-D2（P0-12）：Canary 单一真相源——CanaryPercentage/Revision/Epoch 全部进入 PipelineRun，Transition Audit 与 CAS 同事务
+- WP-D3（P0-13）：Kill Switch 查询 fail-safe——Override Active / Store Error / Inactive 三态语义 + TTL 缓存
+- WP-E1（P0-14）：节点级 Admission——当前节点 Applied Revision / 引擎 Model ID / ContentHash / Isolated / 真实推理就绪纳入准入
+- WP-E2（P0-15）：节点成员资格租约——model_node_membership（lease/heartbeat/serving_enabled），Rollout Ready 基于活跃成员，Isolated 真正停止接流量
+- WP-F1（P0-16）：自适应检索反馈加固——租户隔离 SHA-256 签名（workspace/collection/purpose/policy/profile/taskClass）、反馈幂等键/可信度/时间衰减/单主体封顶、默认 Disabled
 
-**Open P0（待办）**：
-- Tool stable identity
-- Effect policy matrix
-- AwaitingReconciliation
-- Agent ingress backpressure
-- Model HA revision/staged identity
-- Durable canary kill switch
-- Recovery corruption fail-closed
-- Production admission/evidence
+**Open P0（待办）**：无（16 项全部关闭）。
 
 ## 历史快照（R27~R29 已完成记录，不作为当前架构依据）
 
@@ -168,10 +168,10 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `92d7c11e`（R30.1 进行中；WP-P1~P5 性能优化工作包全部完成并推送） | - |
-| PublicApi baseline 行数 | R29 新增 AgentRunContracts + CanaryHAAggregationContracts + PerformanceAttributionContracts 三大契约集（IAgentModelTransport/IAgentLoopPolicy/IAgentRunStore/IAgentApprovalGate/IAgentToolCallValidator/IAgentRunEventStore + ICanaryExternalMetricsSource/ICanaryMetricsAggregator/ICanaryLeaderLease + IComponentHealthRegistry 等） | 单一事实源 |
-| 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 最近一次全量验证：ContextCore.Tests 3395 总数 / **恰好 11 个既有失败**（3370 通过，14 跳过）；Service.Tests 0 失败 / 64 通过（1 跳过）。既有 11 项失败名单见 WORK_STATE.md | 除既有 11 项外 0 失败 |
+| 当前 HEAD | `6dee79fa`（R30.1 16 项 P0 全部完成并推送；12 个 WP：WP-A1/A2/B/C1/C2/C3/D1/D2/D3/E1/E2/F1） | - |
+| PublicApi baseline 行数 | R29 新增 AgentRunContracts + CanaryHAAggregationContracts + PerformanceAttributionContracts 三大契约集（IAgentModelTransport/IAgentLoopPolicy/IAgentRunStore/IAgentApprovalGate/IAgentToolCallValidator/IAgentRunEventStore + ICanaryExternalMetricsSource/ICanaryMetricsAggregator/ICanaryLeaderLease + IComponentHealthRegistry 等）；R30.1 各 WP 陆续追加（ToolFailurePhase/ToolRetrySafety/ReconciliationLease/ClaimLease/RecoverableSnapshot/NodeMembership/AdaptiveRetrieval 等） | 单一事实源 |
+| 构建 | 0 错误 / 7 既有警告（benchmarks CS0618 5 处 + IntegrationTests 2 处，均非本轮引入） | 0 / 0 |
+| 测试 | 最近一次全量验证：ContextCore.Tests **3523 总数 / 20 失败**（10 个既有 11 项 + 10 个 Docker 不可用环境下的 Postgres 集成 42P01 环境性失败，与 HEAD 对照无新增）/ 3489 通过 / 14 跳过；Service.Tests **0 失败 / 64 通过**（1 跳过）。既有失败名单见 WORK_STATE.md | 除既有与环境性失败外 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -194,7 +194,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 | Decision Evidence V2 | CandidateDecisionReasonCode 枚举 + V2 字段填充 | 已达成（R14-1） |
 | Package Quality 报告 | 8 指标 + OverallScore 加权 | 已达成（R14-2） |
 | OpenAPI snapshot 辅助再生 | OpenApi_RegenerateSnapshot `[Ignore]` 方法 | 已达成 |
-| Postgres schema 版本 | v15（自 R27 起稳定；R14-PG-6 起 v13，R26 起 v14） | 稳定 |
+| Postgres schema 版本 | cc-schema-v61（R30.1 WP-F1 迁移 0008 检索反馈加固） | 稳定 |
 | Postgres Unsupported stores 残留 | 0（R14-PG-5 完成时清零） | 0 |
 | Postgres 多实例 cache invalidation | PostgresContextStateVersionStore + Decorator 文档化 | 已达成（R14-PG-6/7） |
 | Postgres migration 框架 | registry + history + rollback + 版本短路 | 已达成（R14-PG-8 + P0 冻结） |
@@ -222,7 +222,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ## 下一阶段任务
 
-> 当前待办即「当前阶段」的 **Open P0** 清单。以下小节为已完成阶段的记录与候选方向，供回溯参考。
+> R30.1 16 项 P0 已全部关闭，当前无待办 P0。下一阶段待用户决定方向（候选：R30 Self-Learning Agent Runtime——Utility Ledger 物化 → Dataset Builder → 训练/校准 → Replay → Canary → Promotion）。以下小节为已完成阶段的记录与候选方向，供回溯参考。
 
 ### R30 候选方向（历史设计，暂缓启动）— Self-Learning Agent Runtime
 

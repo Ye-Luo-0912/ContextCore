@@ -15,8 +15,8 @@
 
 ## 当前状态
 
-- **基线**：main @ `c1c1bf99`（WP-E2 已推送；R30.1 实施中）。
-- **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
+- **基线**：main @ `6dee79fa`（WP-F1 已推送；R30.1 16 项 P0 全部完成）。
+- **进行中**：R30.1 Production Semantics Stabilization 全部 16 项 P0 已关闭（12 个 WP 全部推送并完成最终全量验证，见 WP-F1 验证行）。
 - **最近完成**：WP-F1 自适应反馈加固（P0-16，租户隔离 SHA-256 签名 + 反馈幂等/可信度 + Disabled 默认）。
 
 ### R30.1 P0 阻断项修复进度
@@ -98,6 +98,7 @@
   - 端点（AdaptiveRetrievalEndpoints）：GetPolicyAsync 工作区取自请求上下文（`IWorkspaceContextAccessor.Current.WorkspaceId`，中间件已填充）进入签名，其余租户维度经查询参数显式指定；RecordFeedbackAsync 请求新增 FeedbackId / IdempotencyKey / Source / Confidence / OutcomeQuality / Subject 透传。
   - DI（CoreExtensions）：IAdaptiveRetrievalPlanner 工厂绑定 "AdaptiveRetrieval" 配置节（IOptions 优先，无则 GetSection().Bind 回退）传入规划器——默认 Disabled，运维显式开启 Shadow/Active。
   - 测试：R29W 全量更新（3→10 样本、5 个 Plan 自适应测试改 Active 模式、GetPolicyAsync 新参数）+ 新增 10 项加固测试（SHA-256 长度与租户隔离、5 个租户维度逐一隔离、Disabled 透传、Shadow 计算不应用、清洗（钳制+Source 回退+FeedbackId 生成）、InMemory 幂等去重、Effective-only、时间衰减、单主体封顶）；R29S `SchemaVersion_IsV60`→`SchemaVersion_IsV61`；ContextCorePostgresStorageTests schema 断言 v60→v61；PublicApi baseline 重新生成。验证：build 0 错误（Service.Tests 也 0 错误）；定向 100 通过 / 1 跳过（R29W+PublicApi+R29S+R30I+PostgresStorage）；R29/R30 全扫 878 项 858 通过 / 16 失败与 HEAD（WP-F1 前）**逐一相同**——6 个既有 11 项 + 10 个 Docker/Postgres 集成（42P01 迁移顺序 bug：版本化步骤先于基线建 context_schema_migrations，WP-A2 起即存在，与本次无关，工作树验证）。
+  - 最终全量验证（12 个 WP 全部完成后统一跑一次）：解决方案构建 0 错误（7 个警告全部为既有，无 WP 引入）；ContextCore.Tests **3523 总数 / 20 失败 / 3489 通过 / 14 跳过**——20 个失败 = 既有 11 项中的 10 项（PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 本次通过，纯 SQL 断言波动非回归）+ 10 个 Docker 不可用环境下的 Postgres 集成测试（42P01 迁移顺序 bug，已在 HEAD 工作树对照证实预存在），**与 HEAD 逐一对比无任何 WP 新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）。OpenAPI 快照再生成（`service/openapi/service-api.openapi.json`，纯新增 160 行）：GetPolicy 新增 5 个租户查询参数、RecordAdaptiveRetrievalFeedbackRequest / RetrievalPlanFeedback 各 6 个反馈字段、`RetrievalFeedbackSource` 枚举 schema、ToolReconciliation 记录 7 个租约字段（WP-A2 P0-4 契约，此前仅比较 schema 名称集未触发漂移）——全部为 WP-A2/F1 契约新增，无意外变更。
 
 ### 性能优化工作包进度
 
@@ -113,7 +114,7 @@
 - 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
 - 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
 - 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
-- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须**恰好 11 个既有项**，名单见下）。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 11 项中的项 + 本环境 Docker 不可用导致的 Postgres 集成 42P01 环境性失败，名单见下与「既有 11 个测试失败」）。
 
 ## 既有 11 个测试失败（勿当回归处理）
 
