@@ -359,6 +359,7 @@ public sealed class R29O_ProductionAdmissionValidatorTests
     {
         var registry = new ProductionRuntimeWorkerRegistry();
         registry.Add<AgentRunRecoveryWorker>();
+        registry.Add<PostgresPendingRunClaimer>();
         registry.Add<LearningMaterializationWorker>();
         registry.Add<ToolReconciliationWorker>();
         registry.Add<CanaryLeaderHostedService>();

@@ -1,7 +1,9 @@
-using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.AgentRunRuntime;
+using ContextCore.ModelGateway;
+using ContextCore.ModelGateway.Adapters;
+using ContextCore.ModelGateway.Infrastructure;
 using ContextCore.Service.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -53,20 +55,33 @@ public sealed class ProductionAdmissionValidator
     private readonly ProductionRuntimeWorkerRegistry _workerRegistry;
     private readonly SecurityOptions _securityOptions;
     private readonly ILogger<ProductionAdmissionValidator> _logger;
+    private readonly TimeSpan _workerHeartbeatWindow;
 
     /// <summary>构造函数。</summary>
+    /// <param name="services">DI 根容器。</param>
+    /// <param name="runtimeOptions">运行时选项（含 Profile）。</param>
+    /// <param name="workerRegistry">Worker 注册表（含集群心跳）。</param>
+    /// <param name="securityOptions">安全选项。</param>
+    /// <param name="logger">日志记录器。</param>
+    /// <param name="workerHeartbeatWindow">
+    /// Worker 集群心跳新鲜度窗口；null 时使用
+    /// <see cref="ProductionRuntimeWorkerRegistry.FleetHeartbeatFreshnessWindow"/>。
+    /// </param>
     public ProductionAdmissionValidator(
         IServiceProvider services,
         ContextCoreRuntimeOptions runtimeOptions,
         ProductionRuntimeWorkerRegistry workerRegistry,
         SecurityOptions securityOptions,
-        ILogger<ProductionAdmissionValidator> logger)
+        ILogger<ProductionAdmissionValidator> logger,
+        TimeSpan? workerHeartbeatWindow = null)
     {
         _services = services;
         _runtimeOptions = runtimeOptions;
         _workerRegistry = workerRegistry;
         _securityOptions = securityOptions;
         _logger = logger;
+        _workerHeartbeatWindow = workerHeartbeatWindow
+            ?? ProductionRuntimeWorkerRegistry.FleetHeartbeatFreshnessWindow;
     }
 
     /// <summary>是否需要进行生产准入校验（仅 ProductionHA profile）。</summary>
@@ -223,22 +238,16 @@ public sealed class ProductionAdmissionValidator
                 continue;
             }
 
-            try
+            // 复用运行时实际校验器（模型调用前发送 Tool Schema 时执行的同一校验），
+            // 避免准入侧出现与运行时不一致的 Schema 判定（如未强制 type=object）。
+            if (!HttpChatCompletionAdapterBase.IsValidJsonSchema(definition.ParametersJsonSchema, out var schemaError))
             {
-                using var document = JsonDocument.Parse(definition.ParametersJsonSchema);
-                if (document.RootElement.ValueKind != JsonValueKind.Object)
-                {
-                    invalid.Add($"{definition.Name}: Schema 不是 JSON 对象");
-                }
-            }
-            catch (JsonException)
-            {
-                invalid.Add($"{definition.Name}: Schema 非法 JSON");
+                invalid.Add($"{definition.Name}: {schemaError}");
             }
         }
 
         checks.Add(invalid.Count == 0
-            ? Pass("tool-schema-valid", $"全部 {definitions.Count} 个工具 Schema 合法（名称 + JSON Schema 解析通过）。")
+            ? Pass("tool-schema-valid", $"全部 {definitions.Count} 个工具 Schema 合法（名称 + JSON Schema 通过运行时校验器）。")
             : Fail("tool-schema-valid", $"以下工具 Schema 非法：{string.Join("；", invalid)}。"));
     }
 
@@ -258,17 +267,95 @@ public sealed class ProductionAdmissionValidator
         var transportIsReal = transport is not null
             && !transport.GetType().Name.Equals(nameof(DeterministicAgentModelTransport), StringComparison.Ordinal);
 
-        var gatewayOptions = _services.GetService<ModelGatewayOptions>();
-        var enabledModels = gatewayOptions?.Models
-            .Where(m => m.Enabled && !string.IsNullOrWhiteSpace(m.Name))
-            .ToList() ?? [];
-        var routeCount = gatewayOptions?.Routes.Count ?? 0;
-
         var gaps = new List<string>();
         if (!transportIsReal)
         {
             gaps.Add("Agent 模型 transport 未注册或仍为 Deterministic 回退（ProductionHA 强制 AgentModelMode=RealModel）");
         }
+
+        // ConfigurableModelGateway（真实部署）：深度能力探针——
+        // Resolved（路由解析出模型）→ Reachable（模型启用 + API 密钥可解析）→
+        // Applied（适配器已注册且支持原生 Tool Calling）。
+        var gatewayOptions = _services.GetService<ModelGatewayOptions>();
+        var detail = gateway is ConfigurableModelGateway configurable && gatewayOptions is not null
+            ? ProbeConfigurableGatewayRoute(configurable, gatewayOptions, gaps)
+            : ProbeGatewayConfigurationShallow(gatewayOptions, gaps);
+
+        checks.Add(gaps.Count == 0
+            ? Pass("native-tool-calling-route",
+                $"原生 Tool Calling 路由就绪：{transport!.GetType().Name}，{detail}。")
+            : Fail("native-tool-calling-route", string.Join("；", gaps) + "。"));
+    }
+
+    /// <summary>对可配置网关做深度能力探测（路由解析 + 密钥 + 适配器原生能力）。</summary>
+    private static string ProbeConfigurableGatewayRoute(
+        ConfigurableModelGateway gateway,
+        ModelGatewayOptions options,
+        List<string> gaps)
+    {
+        var effectiveOptions = ModelGatewayOptionsMaterializer.Materialize(options);
+        var enabledCount = effectiveOptions.Models.Count(m => m.Enabled && !string.IsNullOrWhiteSpace(m.Name));
+        if (enabledCount == 0)
+        {
+            gaps.Add("ModelGateway 未配置任何启用模型端点");
+            return "启用模型 0 个";
+        }
+
+        // Resolved：按 Agent 默认角色解析一条路由（与 ModelGatewayAgentModelTransport 的角色一致）。
+        var resolution = ModelRouteResolver.Resolve(
+            effectiveOptions,
+            new ModelRequest { Role = ModelRole.Fallback });
+        if (!resolution.Primary.Found || string.IsNullOrWhiteSpace(resolution.Primary.ModelName))
+        {
+            gaps.Add($"模型路由解析失败：{resolution.Primary.Reason}");
+            return $"启用模型 {enabledCount} 个，路由 {effectiveOptions.Routes.Count} 条";
+        }
+
+        var modelName = resolution.Primary.ModelName!;
+        var modelOptions = effectiveOptions.Models.FirstOrDefault(m =>
+            string.Equals(m.Name, modelName, StringComparison.OrdinalIgnoreCase));
+        if (modelOptions is null)
+        {
+            gaps.Add($"路由解析到的模型 '{modelName}' 未在配置中找到");
+            return $"启用模型 {enabledCount} 个，路由 {effectiveOptions.Routes.Count} 条";
+        }
+
+        // Reachable：模型启用 + API 密钥可解析（与 ModelHealthService 预检口径一致，不发起网络请求）。
+        if (!modelOptions.Enabled)
+        {
+            gaps.Add($"路由解析到的模型 '{modelName}' 已禁用");
+        }
+        var apiKey = new ApiKeyResolver().Resolve(modelOptions);
+        if (apiKey.Required && !apiKey.Configured)
+        {
+            var source = string.IsNullOrWhiteSpace(apiKey.EnvironmentVariableName)
+                ? "ApiKey"
+                : $"环境变量 '{apiKey.EnvironmentVariableName}'";
+            gaps.Add($"模型 '{modelName}' 需要 API 密钥但未配置（{source}）");
+        }
+
+        // 能力：适配器已注册且支持原生 Tool Calling（IChatCompletionAdapter）。
+        if (!gateway.HasAdapter(modelName))
+        {
+            gaps.Add($"模型 '{modelName}' 无对应适配器");
+        }
+        else if (!gateway.SupportsNativeToolCalling(modelName))
+        {
+            gaps.Add($"模型 '{modelName}' 的适配器不支持原生 Tool Calling");
+        }
+
+        return $"解析模型 '{modelName}'（{effectiveOptions.Routes.Count} 条路由，{enabledCount} 个启用模型）";
+    }
+
+    /// <summary>非可配置网关（测试/扩展实现）：退化为配置级浅探针。</summary>
+    private static string ProbeGatewayConfigurationShallow(
+        ModelGatewayOptions? gatewayOptions,
+        List<string> gaps)
+    {
+        var enabledModels = gatewayOptions?.Models
+            .Where(m => m.Enabled && !string.IsNullOrWhiteSpace(m.Name))
+            .ToList() ?? [];
+        var routeCount = gatewayOptions?.Routes.Count ?? 0;
         if (enabledModels.Count == 0)
         {
             gaps.Add("ModelGateway 未配置任何启用模型端点");
@@ -277,11 +364,7 @@ public sealed class ProductionAdmissionValidator
         {
             gaps.Add("ModelGateway 未配置任何角色路由");
         }
-
-        checks.Add(gaps.Count == 0
-            ? Pass("native-tool-calling-route",
-                $"原生 Tool Calling 路由就绪：{transport!.GetType().Name}，{enabledModels.Count} 个启用模型，{routeCount} 条路由。")
-            : Fail("native-tool-calling-route", string.Join("；", gaps) + "。"));
+        return $"启用模型 {enabledModels.Count} 个，路由 {routeCount} 条";
     }
 
     // ── 强制项 7：Cluster Model Slot 已应用模型 ─────────────────────
@@ -375,11 +458,37 @@ public sealed class ProductionAdmissionValidator
 
         var registered = _workerRegistry.WorkerTypeNames;
         var missing = expected.Where(name => !registered.Contains(name, StringComparer.Ordinal)).ToList();
-        checks.Add(missing.Count == 0
-            ? Pass("worker-fleet-started",
-                $"ProductionHA Worker 集群已注册并随应用启动（{expected.Count} 个预期 Worker 全部就位，ApplicationStarted 已触发）。")
-            : Fail("worker-fleet-started",
+        if (missing.Count > 0)
+        {
+            checks.Add(Fail("worker-fleet-started",
                 $"以下预期 Worker 未注册：{string.Join("，", missing)}。"));
+            return;
+        }
+
+        // 最近心跳：仅注册类型名不足以证明集群存活——后台心跳服务必须仍在周期
+        // 报告存活（应用挂起/Worker 未随应用启动/托管服务停止时心跳过期即 Fail）。
+        if (!_workerRegistry.IsFleetHeartbeatFresh(_workerHeartbeatWindow))
+        {
+            checks.Add(Fail("worker-fleet-started",
+                $"ProductionHA Worker 集群已注册但心跳已过期（最近心跳 {DescribeHeartbeatAge()}）"
+                + "——后台服务未在窗口内报告存活，集群可能挂起或未随应用启动，拒绝上线。"));
+            return;
+        }
+
+        checks.Add(Pass("worker-fleet-started",
+            $"ProductionHA Worker 集群已注册并随应用启动（{expected.Count} 个预期 Worker 全部就位，"
+            + $"心跳在 {_workerHeartbeatWindow.TotalMinutes:0.#} 分钟窗口内）。"));
+    }
+
+    private string DescribeHeartbeatAge()
+    {
+        var last = _workerRegistry.LastHeartbeatUtc;
+        if (last == DateTimeOffset.MinValue)
+        {
+            return "从未";
+        }
+        var age = DateTimeOffset.UtcNow - last;
+        return age.TotalSeconds < 60 ? $"{age.TotalSeconds:0.#} 秒前" : $"{age.TotalMinutes:0.#} 分钟前";
     }
 
     // ── 结果构造辅助 ────────────────────────────────────────────────

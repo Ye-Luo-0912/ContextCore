@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `ae56f3f0`（WP-G1 已推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1、WP-G2 已完成待推送；WP-G3..G8 依次推进。
-- **最近完成**：WP-G2（P1-3 本地队列 Workspace 公平性，详见下方条目）。
+- **基线**：main @ `dc63ad89`（WP-G2 已推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1、WP-G2、WP-G3 已完成待推送；WP-G4..G8 依次推进。
+- **最近完成**：WP-G3（P1-4 能力探针深度化 + P1-5 节点级检查核实，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -102,6 +102,14 @@
 
 ### P1 完善项进度
 
+- **WP-G3 已完成**（P1-4 + P1-5）：生产准入能力探针深度化 + 节点级检查核实。
+  - 原生 Tool Calling 路由（native-tool-calling-route）深度探针：真实部署（ConfigurableModelGateway）下由配置级浅检查升级为 Resolved → Reachable → 能力三级——ModelRouteResolver 按 Agent 默认角色（Fallback）解析主模型（解析失败即 Fail）；模型启用 + ApiKeyResolver 解析密钥（openai-compatible 等必填提供商未配置密钥即 Fail）；网关 HasAdapter + SupportsNativeToolCalling（IChatCompletionAdapter）验证适配器已注册且支持原生 Tool Calling。ConfigurableModelGateway 新增公共 HasAdapter / SupportsNativeToolCalling（原私有方法提升）；非可配置网关（测试/扩展实现）保留浅探针回退。
+  - Tool Schema（tool-schema-valid）复用运行时校验器：改调 HttpChatCompletionAdapterBase.IsValidJsonSchema（模型调用前发送 Tool Schema 的同一校验，强制 JSON 对象 + type=object），消除准入侧与运行时不一致的 Schema 判定（原自实现只查可解析 + Object）。
+  - Worker 集群（worker-fleet-started）最近心跳：ProductionRuntimeWorkerRegistry 增加集群心跳（注册即初次心跳 + MarkFleetHeartbeat + LastHeartbeatUtc + IsFleetHeartbeatFresh(window)，Lock 保护）；新增 ProductionWorkerFleetHeartbeatService（BackgroundService，30s 心跳，AddContextCoreRuntime 注册）；准入校验在类型名齐全之外再校验心跳在窗口内（默认 10 分钟，构造参数可覆盖），应用挂起/托管服务停止导致心跳过期即 Fail——防"已注册但未真正存活"的集群接流量。
+  - P1-5 核实：节点级 Applied/Engine 检查已由 WP-E1/E2 完整实现（ProductionAdmissionController.VerifyNodeModelAppliedAsync：IModelNodeAppliedStateStore 记录 + Isolated + AppliedRevision==期望 Revision + IModelNodeMembershipStore 活跃租约 + serving_enabled + IModelActivationManager.ActiveEngine/ModelArtifactId/ContentHash），无真实缺口，本次仅核实不改动。
+  - 测试：新增 `R31B_CapabilityProbeTests`（7 项：深探针通过 / 密钥缺失 / 适配器非原生 / 模型禁用 / 路由指向未知模型 / 心跳过期 Fail / 心跳新鲜 Pass）；修复 R29O 陈旧 harness（FullWorkerRegistry 补 PostgresPendingRunClaimer，与组合根注册一致），`ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured` 从既有失败名单移除。
+  - 验证：build 0 错误；定向 56/56 通过（R31B + R29O + R29R + R30H）；模型网关 + Runtime Profile 套件 37/38（唯一失败 = 既有 ReadinessService_Development_GetRegisteredWorkers，HEAD 对照确认预存在）；Service.Tests 64 通过 0 失败。
+
 - **WP-G2 已完成**（P1-3）：Agent 本地调度队列 Workspace 公平性。
   - 队列重写（AgentKernelHost）：全局单 PriorityQueue → per-workspace 分桶加权公平队列——(1) per-workspace 排队上限 `MaxQueuedPerWorkspace`（默认 64，快路径预检 + 锁内权威判定，超限 QueueFull 且 detail 指明上限，其他 Workspace 不受影响）；(2) 加权公平出队 `DequeueFair`——出队选 `min(ServiceCount/Weight)` 的 Workspace（交叉相乘避免浮点，平局按 WorkspaceId），等权重 = 严格轮转，ServiceCount 跨空桶持续（公平性记忆），字典超 `WorkspaceQueueMaxEntries`(256) 时淘汰空闲条目；(3) 优先级老化——桶内线性扫描 `(reverse aged priority, 入队时间)`，aged = 原始优先级 + 排队时长/`PriorityAgingInterval` × `PriorityAgingStep`，等待越久提升越多，防低优先级饿死；(4) 保留容量——`ReservedQueueCapacity`（默认自动 = clamp(max(8, 容量/16), 0, 容量/2)）为 `Priority >= ReservedPriorityThreshold`(1000) 的 Run 提供独立槽位，饱和时高优先级仍 Accepted、普通 Run QueueFull；(5) 排队 SLO——出队记录 `CoreMetrics` 排队等待直方图 + 超 `QueueWaitSlo`(30s) 计数。常规池/保留池双 SemaphoreSlim 表达背压；ReleasePoolSlot 按来源池释放。
   - 契约（Abstractions，PublicApi baseline 已更新 +7）：AgentHostOptions 新增 MaxQueuedPerWorkspace / ReservedQueueCapacity / ReservedPriorityThreshold / WorkspaceQueueWeight / PriorityAgingInterval / PriorityAgingStep / QueueWaitSlo；CoreExtensions 配置绑定同步。
@@ -128,8 +136,8 @@
 - 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
 - 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
 - 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
-- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 10 项中的项 + 本环境 Docker 不可用导致的 Postgres 集成 42P01 环境性失败，名单见下与「既有 10 个测试失败」）。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 9 项中的项 + 本环境 Docker 不可用导致的 Postgres 集成 42P01 环境性失败，名单见下与「既有 9 个测试失败」）。
 
-## 既有 10 个测试失败（勿当回归处理）
+## 既有 9 个测试失败（勿当回归处理）
 
-`Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`、`ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured`、`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList`、`RequiredIndexes_IncludeUtilityLedgerIndexes`
+`Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`、`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList`、`RequiredIndexes_IncludeUtilityLedgerIndexes`

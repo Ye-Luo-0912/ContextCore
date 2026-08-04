@@ -414,10 +414,13 @@ public abstract class HttpChatCompletionAdapterBase : IChatCompletionAdapter
     }
 
     /// <summary>
-    /// 校验 Tool 的 ParametersJsonSchema 是否为合法 JSON Schema。
+    /// 校验 Tool 的 ParametersJsonSchema 是否为合法 JSON Schema（运行时调用前使用的同一校验器）。
     /// 空/空白视为合法（默认 "{}"）；非空时必须可解析为 JSON 对象且 type 为 object（或未指定 type）。
     /// </summary>
-    private static bool IsValidJsonSchema(string? schema, out string error)
+    /// <param name="schema">Tool 参数 JSON Schema 文本。</param>
+    /// <param name="error">校验失败原因（成功时为空字符串）。</param>
+    /// <returns>true 表示 Schema 合法。</returns>
+    public static bool IsValidJsonSchema(string? schema, out string error)
     {
         if (string.IsNullOrWhiteSpace(schema))
         {

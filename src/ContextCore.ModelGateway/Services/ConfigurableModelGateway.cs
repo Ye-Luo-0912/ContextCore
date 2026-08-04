@@ -179,9 +179,9 @@ public sealed class ConfigurableModelGateway : IModelGateway
         var primaryModelName = resolution.Primary.ModelName;
         var maxRetry = route.MaxRetryCount;
         var fallbackModelName = resolution.Fallback?.ModelName;
-        var primarySupportsNative = AdapterSupportsNativeToolCalling(primaryModelName);
+        var primarySupportsNative = SupportsNativeToolCalling(primaryModelName);
         var fallbackSupportsNative = !string.IsNullOrWhiteSpace(fallbackModelName)
-            && AdapterSupportsNativeToolCalling(fallbackModelName!);
+            && SupportsNativeToolCalling(fallbackModelName!);
 
         if (route.HighRiskTask && !primarySupportsNative && !fallbackSupportsNative)
         {
@@ -292,7 +292,16 @@ public sealed class ConfigurableModelGateway : IModelGateway
         return await ChatWithToolsFallbackHelper.ExecuteViaCompleteAsync(this, request, cancellationToken).ConfigureAwait(false);
     }
 
-    private bool AdapterSupportsNativeToolCalling(string modelName)
+    /// <summary>查询指定模型端点是否已注册适配器。</summary>
+    /// <param name="modelName">模型端点名称。</param>
+    public bool HasAdapter(string modelName)
+    {
+        return _adapters.ContainsKey(modelName);
+    }
+
+    /// <summary>查询指定模型端点的适配器是否支持原生 Tool Calling。</summary>
+    /// <param name="modelName">模型端点名称。</param>
+    public bool SupportsNativeToolCalling(string modelName)
     {
         return _adapters.TryGetValue(modelName, out var adapter) && adapter is IChatCompletionAdapter;
     }

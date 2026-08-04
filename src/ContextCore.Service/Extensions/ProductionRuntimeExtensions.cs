@@ -178,6 +178,9 @@ internal static class ProductionRuntimeExtensions
         services.AddSingleton(workerRegistry);
         services.TryAddSingleton<ProductionRuntimeReadinessService>();
 
+        // Worker 集群心跳：后台周期标记集群存活，供生产准入「最近心跳」检查消费。
+        services.AddHostedService<ProductionWorkerFleetHeartbeatService>();
+
         // 注册生产准入校验器（ProductionHA 强制项从 warning 升为 error）。
         // SecurityOptions 在 Program.cs 注册为具体类型单例；测试容器未注册时回退到默认值。
         services.TryAddSingleton<ProductionAdmissionValidator>(sp =>

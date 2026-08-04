@@ -28,20 +28,74 @@ namespace ContextCore.Service.Infrastructure;
 // ===========================================================================
 
 /// <summary>
-/// 注册阶段捕获的 Worker 类型名列表。
-/// 在 AddContextCoreRuntime 中由各 Add*Services 方法填充。
-/// 供 ProductionRuntimeReadinessService 在运行时查询已注册的 Worker。
+/// 注册阶段捕获的 Worker 类型名列表 + 集群心跳。
+/// 在 AddContextCoreRuntime 中由各 Add*Services 方法填充，并随应用启动由
+/// <see cref="ContextCore.Service.Hosting.ProductionWorkerFleetHeartbeatService"/> 周期标记存活。
+/// 供 ProductionRuntimeReadinessService 与生产准入校验查询已注册的 Worker 及心跳新鲜度。
 /// </summary>
 public sealed class ProductionRuntimeWorkerRegistry
 {
+    /// <summary>准入校验认为集群心跳「最近」的窗口（默认 10 分钟）。</summary>
+    public static readonly TimeSpan FleetHeartbeatFreshnessWindow = TimeSpan.FromMinutes(10);
+
     private readonly List<string> _workerTypeNames = new();
+    private readonly Lock _gate = new();
+    private DateTimeOffset _lastHeartbeatUtc = DateTimeOffset.MinValue;
 
     /// <summary>已注册的 Worker 实现类型全名列表。</summary>
-    public IReadOnlyList<string> WorkerTypeNames => _workerTypeNames;
+    public IReadOnlyList<string> WorkerTypeNames
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _workerTypeNames.ToArray();
+            }
+        }
+    }
 
-    /// <summary>注册一个 Worker 类型。</summary>
+    /// <summary>最近一次集群心跳时间（未注册任何 Worker 时为 MinValue）。</summary>
+    public DateTimeOffset LastHeartbeatUtc
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _lastHeartbeatUtc;
+            }
+        }
+    }
+
+    /// <summary>注册一个 Worker 类型（注册即视为初次心跳）。</summary>
     /// <typeparam name="TWorker">Worker 类型。</typeparam>
-    internal void Add<TWorker>() where TWorker : class => _workerTypeNames.Add(typeof(TWorker).Name);
+    internal void Add<TWorker>() where TWorker : class
+    {
+        lock (_gate)
+        {
+            _workerTypeNames.Add(typeof(TWorker).Name);
+            _lastHeartbeatUtc = DateTimeOffset.UtcNow;
+        }
+    }
+
+    /// <summary>标记 Worker 集群存活（由后台心跳服务周期调用）。</summary>
+    public void MarkFleetHeartbeat()
+    {
+        lock (_gate)
+        {
+            _lastHeartbeatUtc = DateTimeOffset.UtcNow;
+        }
+    }
+
+    /// <summary>集群心跳是否在指定窗口内（有注册且最近一次心跳未过期）。</summary>
+    /// <param name="window">新鲜度窗口；小于等于零时仅当心跳恰好刚刚发生才视为新鲜。</param>
+    public bool IsFleetHeartbeatFresh(TimeSpan window)
+    {
+        lock (_gate)
+        {
+            return _lastHeartbeatUtc != DateTimeOffset.MinValue
+                && DateTimeOffset.UtcNow - _lastHeartbeatUtc <= window;
+        }
+    }
 }
 
 /// <summary>
