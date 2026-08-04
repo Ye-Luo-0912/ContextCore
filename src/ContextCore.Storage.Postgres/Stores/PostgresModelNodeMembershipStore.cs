@@ -154,6 +154,91 @@ RETURNING node_id;
         return result is not null;
     }
 
+    /// <inheritdoc />
+    public async ValueTask<bool> SetServingAndAppliedStateAsync(
+        string nodeId,
+        string instanceId,
+        string leaseToken,
+        bool servingEnabled,
+        ModelNodeAppliedState? appliedState,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
+
+        await EnsureMigratedAsync(ct).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        if (appliedState is null)
+        {
+            // 仅更新 serving 开关：与 SetServingEnabledAsync 同 SQL（fencing 校验）。
+            command.CommandText = $"""
+UPDATE {Table("model_node_membership")}
+SET serving_enabled = @serving_enabled, last_heartbeat = now()
+WHERE node_id = @node_id
+  AND instance_id = @instance_id
+  AND lease_token = @lease_token
+  AND lease_expires_at > clock_timestamp()
+RETURNING node_id;
+""";
+            command.Parameters.AddWithValue("node_id", nodeId);
+            command.Parameters.AddWithValue("instance_id", instanceId);
+            command.Parameters.AddWithValue("lease_token", leaseToken);
+            command.Parameters.AddWithValue("serving_enabled", servingEnabled);
+
+            var servingOnlyResult = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            return servingOnlyResult is not null;
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(appliedState.NodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(appliedState.SlotName);
+
+        // 合并写（单次往返）：serving 开关 UPDATE + applied state UPSERT 一条语句完成。
+        // serving UPDATE 以 CTE 形式先执行，INSERT ... SELECT FROM serving 门控 applied state 写入——
+        // 租约失效/被接管（UPDATE 0 行）时 applied state 也不写入（fail-closed，与旧顺序
+        // 先 SetServingEnabled 后 Upsert 的语义一致）。
+        command.CommandText = $"""
+WITH serving AS (
+    UPDATE {Table("model_node_membership")}
+    SET serving_enabled = @serving_enabled, last_heartbeat = now()
+    WHERE node_id = @node_id
+      AND instance_id = @instance_id
+      AND lease_token = @lease_token
+      AND lease_expires_at > clock_timestamp()
+    RETURNING node_id
+)
+INSERT INTO {Table("model_node_applied_state")} (node_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at)
+SELECT @applied_node_id, @slot_name, @applied_revision, @model_artifact_id, @content_hash, @engine_generation, false, NULL, NULL, now()
+FROM serving
+ON CONFLICT (node_id, slot_name) DO UPDATE
+SET applied_revision = EXCLUDED.applied_revision,
+    model_artifact_id = EXCLUDED.model_artifact_id,
+    content_hash = EXCLUDED.content_hash,
+    engine_generation = EXCLUDED.engine_generation,
+    is_isolated = false,
+    drift_reported_at = NULL,
+    isolation_reason = NULL,
+    applied_at = EXCLUDED.applied_at
+RETURNING node_id;
+""";
+        command.Parameters.AddWithValue("node_id", nodeId);
+        command.Parameters.AddWithValue("instance_id", instanceId);
+        command.Parameters.AddWithValue("lease_token", leaseToken);
+        command.Parameters.AddWithValue("serving_enabled", servingEnabled);
+        command.Parameters.AddWithValue("applied_node_id", appliedState.NodeId);
+        command.Parameters.AddWithValue("slot_name", appliedState.SlotName);
+        command.Parameters.AddWithValue("applied_revision", appliedState.AppliedRevision);
+        command.Parameters.AddWithValue("model_artifact_id", (object?)appliedState.ModelArtifactId ?? DBNull.Value);
+        command.Parameters.AddWithValue("content_hash", (object?)appliedState.ContentHash ?? DBNull.Value);
+        command.Parameters.AddWithValue("engine_generation", (object?)appliedState.EngineGeneration ?? DBNull.Value);
+
+        var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return result is not null;
+    }
+
     private static ModelNodeMembership ReadMembership(System.Data.Common.DbDataReader reader)
     {
         var nodeIdOrdinal = reader.GetOrdinal("node_id");

@@ -476,4 +476,19 @@ public interface IModelNodeMembershipStore
         string leaseToken,
         bool servingEnabled,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// 更新 serving 开关并（可选）同步节点已应用模型状态——单次往返完成两处写入，
+    /// 供 Reconciler 在成员心跳轮内合并写（成功应用期望模型后：serving 恢复 + applied state 落库）。
+    /// 仅当 lease_token 匹配且租约未过期时生效（fencing 与 <see cref="SetServingEnabledAsync"/> 一致）；
+    /// appliedState 为 null 时仅更新 serving 开关。
+    /// 返回是否更新成功（租约失效/被接管 → false，两处写入均不生效）。
+    /// </summary>
+    ValueTask<bool> SetServingAndAppliedStateAsync(
+        string nodeId,
+        string instanceId,
+        string leaseToken,
+        bool servingEnabled,
+        ModelNodeAppliedState? appliedState,
+        CancellationToken ct = default);
 }

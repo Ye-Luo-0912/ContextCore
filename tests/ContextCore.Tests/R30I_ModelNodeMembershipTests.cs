@@ -2,7 +2,11 @@ using ContextCore.Abstractions;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.InMemory.Stores;
 using ContextCore.Storage.Postgres;
+using ContextCore.Storage.Postgres.Extensions;
 using ContextCore.Storage.Postgres.Infrastructure;
+using ContextCore.Storage.Postgres.Stores;
+using Microsoft.Extensions.DependencyInjection;
+using Testcontainers.PostgreSql;
 
 namespace ContextCore.Tests;
 
@@ -29,6 +33,7 @@ namespace ContextCore.Tests;
 //            活跃成员漂移阻止 RolloutReady）；
 //   Part 3 — 迁移契约（0007 v59→v60 + 基线 DDL + RequiredOperationalTableSuffixes）；
 //   Part 4 — 迁移后 SchemaVersion（R29S 已更新为 v60，此处验证步骤注册表接线）。
+//   Part 5 — Postgres 合并写集成（serving + applied state 单往返，fail-closed）。
 // ===========================================================================
 
 [TestClass]
@@ -148,6 +153,60 @@ public sealed class R30I_ModelNodeMembershipTests
             "node-a", "instance-1", membership!.LeaseToken, servingEnabled: false);
 
         Assert.IsFalse(updated, "租约过期后即使令牌匹配也不得更新。");
+    }
+
+    [TestMethod]
+    public async Task SetServingAndAppliedState_ValidLease_WritesBoth()
+    {
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        var store = new InMemoryModelNodeMembershipStore(appliedStore);
+        var membership = await store.TryAcquireOrRenewLeaseAsync(
+            "node-a", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: false);
+
+        var updated = await store.SetServingAndAppliedStateAsync(
+            "node-a", "instance-1", membership!.LeaseToken, servingEnabled: true,
+            new ModelNodeAppliedState
+            {
+                NodeId = "node-a",
+                SlotName = SlotName,
+                AppliedRevision = 7,
+                ModelArtifactId = "model-a",
+                ContentHash = "sha256:a",
+                EngineGeneration = 3,
+                AppliedAt = DateTimeOffset.UtcNow
+            });
+
+        Assert.IsTrue(updated, "有效令牌 + 未过期租约应合并写成功。");
+        var current = await store.GetAsync("node-a");
+        Assert.IsTrue(current!.ServingEnabled, "serving 开关应被置 true。");
+        var applied = await appliedStore.GetAsync("node-a", SlotName);
+        Assert.IsNotNull(applied, "已应用状态应一并写入。");
+        Assert.AreEqual(7, applied!.AppliedRevision);
+        Assert.AreEqual("model-a", applied.ModelArtifactId);
+    }
+
+    [TestMethod]
+    public async Task SetServingAndAppliedState_WrongToken_ReturnsFalse_WritesNothing()
+    {
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        var store = new InMemoryModelNodeMembershipStore(appliedStore);
+        var membership = await store.TryAcquireOrRenewLeaseAsync(
+            "node-a", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: false);
+
+        var updated = await store.SetServingAndAppliedStateAsync(
+            "node-a", "instance-1", "forged-token", servingEnabled: true,
+            new ModelNodeAppliedState
+            {
+                NodeId = "node-a",
+                SlotName = SlotName,
+                AppliedRevision = 7,
+                AppliedAt = DateTimeOffset.UtcNow
+            });
+
+        Assert.IsFalse(updated, "lease_token 不匹配时合并写必须整体失败（fail-closed）。");
+        var current = await store.GetAsync("node-a");
+        Assert.IsFalse(current!.ServingEnabled, "失败写入不得改变既有 serving 状态。");
+        Assert.IsNull(await appliedStore.GetAsync("node-a", SlotName), "serving 更新失败时已应用状态不得写入。");
     }
 
     [TestMethod]
@@ -289,6 +348,139 @@ public sealed class R30I_ModelNodeMembershipTests
     }
 
     // =========================================================================
+    // Part 5: Postgres 合并写集成（SetServingAndAppliedStateAsync 单往返）
+    // =========================================================================
+
+    /// <summary>
+    /// 验证：Postgres 合并写单次往返完成 serving 开关 + 已应用状态两处写入；
+    /// 租约失效（令牌不匹配）时整体失败（fail-closed，两处均不写入）。
+    /// </summary>
+    [TestMethod]
+    public async Task Postgres_SetServingAndAppliedState_ValidLease_WritesBoth()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — Postgres 成员合并写测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, membershipStore, appliedStore) = await ResolveStoresAsync(container, "mb_hb_");
+            await using (provider)
+            {
+                var lease = await membershipStore.TryAcquireOrRenewLeaseAsync(
+                    "node-pg", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: false);
+                Assert.IsNotNull(lease, "领取成员租约成功。");
+
+                var updated = await membershipStore.SetServingAndAppliedStateAsync(
+                    "node-pg", "instance-1", lease!.LeaseToken, servingEnabled: true,
+                    new ModelNodeAppliedState
+                    {
+                        NodeId = "node-pg",
+                        SlotName = SlotName,
+                        AppliedRevision = 9,
+                        ModelArtifactId = "model-pg",
+                        ContentHash = "sha256:pg",
+                        EngineGeneration = 4,
+                        AppliedAt = DateTimeOffset.UtcNow
+                    });
+
+                Assert.IsTrue(updated, "有效令牌 + 未过期租约应合并写成功。");
+                var current = await membershipStore.GetAsync("node-pg");
+                Assert.IsTrue(current!.ServingEnabled, "serving 开关应被置 true。");
+                var applied = await appliedStore.GetAsync("node-pg", SlotName);
+                Assert.IsNotNull(applied, "已应用状态应一并写入。");
+                Assert.AreEqual(9, applied!.AppliedRevision);
+                Assert.AreEqual("model-pg", applied.ModelArtifactId);
+            }
+        }
+    }
+
+    /// <summary>验证：令牌不匹配时合并写整体失败，已应用状态不得写入（fail-closed）。</summary>
+    [TestMethod]
+    public async Task Postgres_SetServingAndAppliedState_WrongToken_WritesNothing()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — Postgres 成员合并写测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, membershipStore, appliedStore) = await ResolveStoresAsync(container, "mb_hb2_");
+            await using (provider)
+            {
+                var lease = await membershipStore.TryAcquireOrRenewLeaseAsync(
+                    "node-pg", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: false);
+                Assert.IsNotNull(lease);
+
+                var updated = await membershipStore.SetServingAndAppliedStateAsync(
+                    "node-pg", "instance-1", "forged-token", servingEnabled: true,
+                    new ModelNodeAppliedState
+                    {
+                        NodeId = "node-pg",
+                        SlotName = SlotName,
+                        AppliedRevision = 9,
+                        AppliedAt = DateTimeOffset.UtcNow
+                    });
+
+                Assert.IsFalse(updated, "令牌不匹配时合并写必须整体失败。");
+                var current = await membershipStore.GetAsync("node-pg");
+                Assert.IsFalse(current!.ServingEnabled, "失败写入不得改变既有 serving 状态。");
+                Assert.IsNull(await appliedStore.GetAsync("node-pg", SlotName),
+                    "serving 更新失败时已应用状态不得写入。");
+            }
+        }
+    }
+
+    /// <summary>最小 DI 注册（AddContextCorePostgresStorage），解析成员与已应用状态两个 store。</summary>
+    private static async Task<(ServiceProvider Provider, IModelNodeMembershipStore Membership, IModelNodeAppliedStateStore Applied)> ResolveStoresAsync(
+        PostgreSqlContainer container, string tablePrefix)
+    {
+        var services = new ServiceCollection();
+        services.AddContextCorePostgresStorage(new PostgresOptions
+        {
+            ConnectionString = container.GetConnectionString(),
+            AutoMigrate = true,
+            EnablePgVectorExtension = true,
+            TablePrefix = tablePrefix
+        });
+        var provider = services.BuildServiceProvider();
+        var membership = provider.GetRequiredService<IModelNodeMembershipStore>();
+        var applied = provider.GetRequiredService<IModelNodeAppliedStateStore>();
+        Assert.IsInstanceOfType(membership, typeof(PostgresModelNodeMembershipStore),
+            "AddContextCorePostgresStorage 必须把 IModelNodeMembershipStore 解析为 Postgres 实现。");
+        Assert.IsInstanceOfType(applied, typeof(PostgresModelNodeAppliedStateStore),
+            "AddContextCorePostgresStorage 必须把 IModelNodeAppliedStateStore 解析为 Postgres 实现。");
+        return (provider, membership, applied);
+    }
+
+    private static async Task<PostgreSqlContainer?> TryStartPostgresAsync()
+    {
+        const string pgVectorImage = "pgvector/pgvector:pg17";
+        try
+        {
+            var container = new PostgreSqlBuilder(pgVectorImage)
+                .WithDatabase("cctest")
+                .WithUsername("cctest")
+                .WithPassword("cctest")
+                .Build();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await container.StartAsync(cts.Token);
+            return container;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[R30I_ModelNodeMembershipTests] Docker/Postgres 不可用：{ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    // =========================================================================
     // 辅助
     // =========================================================================
 
@@ -370,6 +562,15 @@ public sealed class R30I_ModelNodeMembershipTests
             string instanceId,
             string leaseToken,
             bool servingEnabled,
+            CancellationToken ct = default)
+            => throw new NotImplementedException("注册表聚合测试不更新 serving。");
+
+        public ValueTask<bool> SetServingAndAppliedStateAsync(
+            string nodeId,
+            string instanceId,
+            string leaseToken,
+            bool servingEnabled,
+            ModelNodeAppliedState? appliedState,
             CancellationToken ct = default)
             => throw new NotImplementedException("注册表聚合测试不更新 serving。");
     }

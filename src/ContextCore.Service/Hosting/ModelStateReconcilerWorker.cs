@@ -309,14 +309,13 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                 }
             }
 
-            // P0-15：成功应用期望模型后恢复服务——本地 serving 置 true 并立即同步到成员租约
+            // 成功应用期望模型后恢复服务——本地 serving 置 true 并立即同步到成员租约
             // （不等下一个心跳周期，漂移隔离的节点恢复后尽快重新接流量）。
+            // serving 开关与节点已应用状态在成员心跳轮内合并写（单次往返）；
+            // 写失败必须让本轮失败（fail-closed）——"实际换模后仍返回成功"
+            // 会让 Applied State 永远落后于实际，集群收敛/上线就绪静默失真。
             _servingEnabled = true;
-            await EnableServingAsync(ct).ConfigureAwait(false);
-
-            // 记录节点已应用状态。写失败必须让本轮失败（fail-closed）——"实际换模后仍返回成功"
-            // 会让 Applied State 永远落后于实际，集群收敛/上线就绪静默失真（P0-15）。
-            await RecordAppliedStateAsync(slot, ct).ConfigureAwait(false);
+            await RecordServingAndAppliedStateAsync(slot, ct).ConfigureAwait(false);
             _appliedClusterSlotRevision = slot.Revision;
             return true;
         }
@@ -391,24 +390,32 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         }
     }
 
-    /// <summary>成功应用期望模型后恢复 serving；失败传播（本轮失败重试，直至成员租约反映可服务）。</summary>
-    private async Task EnableServingAsync(CancellationToken ct)
+    /// <summary>
+    /// 成功应用期望模型后，在成员心跳轮内合并写 serving 开关与节点已应用状态（单次往返）：
+    /// 先校验成员租约有效（fencing），再一并写入 serving_enabled=true 与 applied state。
+    /// 无成员存储（单节点 InMemory/FileSystem）时退化为仅记录已应用状态。
+    /// 失败传播（本轮失败重试，直至成员租约反映可服务且已应用状态落库）。
+    /// </summary>
+    private async Task RecordServingAndAppliedStateAsync(ClusterModelSlot slot, CancellationToken ct)
     {
         if (_membershipStore is null || _membership is null)
         {
+            await RecordAppliedStateAsync(slot, ct).ConfigureAwait(false);
             return;
         }
 
-        var updated = await _membershipStore.SetServingEnabledAsync(_nodeId, _instanceId, _membership.LeaseToken, true, ct).ConfigureAwait(false);
+        var applied = _appliedStateStore is null ? null : BuildAppliedState(slot);
+        var updated = await _membershipStore.SetServingAndAppliedStateAsync(
+            _nodeId, _instanceId, _membership.LeaseToken, true, applied, ct).ConfigureAwait(false);
         if (!updated)
         {
             throw new InvalidOperationException(
-                $"节点 {_nodeId} 恢复 serving 失败：成员租约令牌失效或已过期（可能已被其他实例接管）。");
+                $"节点 {_nodeId} 恢复 serving / 写入已应用状态失败：成员租约令牌失效或已过期（可能已被其他实例接管）。");
         }
     }
 
     /// <summary>
-    /// 记录节点已应用状态（P0-15：不再 best-effort）——写入本节点对当前 slot 最后成功应用的
+    /// 记录节点已应用状态（不再 best-effort）——写入本节点对当前 slot 最后成功应用的
     /// Revision 与本地引擎实际生效的模型内容。写入失败向上传播，本轮 reconcile 失败退避重试：
     /// "实际换模后仍返回成功" 会让 Applied State 永远落后于实际，集群收敛/上线就绪静默失真。
     /// </summary>
@@ -419,19 +426,21 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             return;
         }
 
-        var applied = new ModelNodeAppliedState
-        {
-            NodeId = _nodeId,
-            SlotName = slot.SlotName,
-            AppliedRevision = slot.Revision,
-            ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,
-            ContentHash = _activationManager.ContentHash,
-            // 应用时刻本地引擎代次：与集群槽位 Revision 分离（Slot=A、Engine=B 错位可审计）。
-            EngineGeneration = _activationManager.ActiveGeneration,
-            AppliedAt = DateTimeOffset.UtcNow
-        };
-        await _appliedStateStore.UpsertAsync(applied, ct).ConfigureAwait(false);
+        await _appliedStateStore.UpsertAsync(BuildAppliedState(slot), ct).ConfigureAwait(false);
     }
+
+    /// <summary>构造本节点对当前 slot 的已应用状态快照（本地引擎实际生效内容）。</summary>
+    private ModelNodeAppliedState BuildAppliedState(ClusterModelSlot slot) => new()
+    {
+        NodeId = _nodeId,
+        SlotName = slot.SlotName,
+        AppliedRevision = slot.Revision,
+        ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,
+        ContentHash = _activationManager.ContentHash,
+        // 应用时刻本地引擎代次：与集群槽位 Revision 分离（Slot=A、Engine=B 错位可审计）。
+        EngineGeneration = _activationManager.ActiveGeneration,
+        AppliedAt = DateTimeOffset.UtcNow
+    };
 
     /// <summary>
     /// 从 IConfiguration 读取默认 tensor 名，避免硬编码（与 ModelControlPlaneEndpoints 一致）。

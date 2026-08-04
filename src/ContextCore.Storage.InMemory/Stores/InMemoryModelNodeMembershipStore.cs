@@ -16,6 +16,15 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
 {
     private readonly ConcurrentDictionary<string, ModelNodeMembership> _memberships = new(StringComparer.Ordinal);
 
+    // 合并写（SetServingAndAppliedStateAsync）需要的已应用状态存储——DI 注册时注入
+    // （InMemory provider 下与 InMemoryModelNodeAppliedStateStore 同驻）；直接构造（测试）可为 null。
+    private readonly IModelNodeAppliedStateStore? _appliedStateStore;
+
+    public InMemoryModelNodeMembershipStore(IModelNodeAppliedStateStore? appliedStateStore = null)
+    {
+        _appliedStateStore = appliedStateStore;
+    }
+
     /// <inheritdoc />
     public ValueTask<ModelNodeMembership?> TryAcquireOrRenewLeaseAsync(
         string nodeId,
@@ -139,6 +148,32 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
             }
             // CAS 失败（并发写入）：重试。
         }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<bool> SetServingAndAppliedStateAsync(
+        string nodeId,
+        string instanceId,
+        string leaseToken,
+        bool servingEnabled,
+        ModelNodeAppliedState? appliedState,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // 先更新 serving 开关（fencing 校验）——失败则整体返回 false（fail-closed）。
+        var servingUpdated = await SetServingEnabledAsync(nodeId, instanceId, leaseToken, servingEnabled, ct).ConfigureAwait(false);
+        if (!servingUpdated)
+        {
+            return false;
+        }
+
+        // serving 更新成功后一并写入已应用状态（若提供且已注入 applied state store）。
+        if (appliedState is not null && _appliedStateStore is not null)
+        {
+            await _appliedStateStore.UpsertAsync(appliedState, ct).ConfigureAwait(false);
+        }
+        return true;
     }
 
     private static string NewToken() => Guid.NewGuid().ToString("N");
