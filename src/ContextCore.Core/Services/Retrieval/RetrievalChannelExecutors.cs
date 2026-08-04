@@ -114,6 +114,10 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
 
     /// <summary>
     /// 批量查询路径：先批量查 ContextStore，对 miss 的 id 再批量查 MemoryStore（若支持）或并行单条查。
+    /// 元数据投影与向量通道一致：store 实现 <see cref="IContextStoreMetadataLookup"/> /
+    /// <see cref="IMemoryStoreMetadataLookup"/> 时只取元数据（Content 为空），未选中候选不读正文 jsonb；
+    /// 正文由 Selected 水合阶段按需批量读取（<see cref="SelectedCandidateContentHydrator"/>）。
+    /// Mandatory 候选评分固定 1000（不依赖正文），投影不改变决策。
     /// </summary>
     private async Task<RetrievalChannelResult> ResolveMandatoryWithBatchLookupAsync(
         RetrievalChannelContext context,
@@ -124,11 +128,25 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
         var channelCandidates = new List<RetrievalChannelCandidate>(requiredIds.Length);
         var foundIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var items = await batchContextStore.BatchGetAsync(
-            context.Request.WorkspaceId,
-            context.Request.CollectionId,
-            requiredIds,
-            cancellationToken).ConfigureAwait(false);
+        // Context hits：优先元数据投影，其次全量批量。
+        var metadataContextStore = _contextStore as IContextStoreMetadataLookup;
+        IReadOnlyList<ContextItem> items;
+        if (metadataContextStore is not null)
+        {
+            items = await metadataContextStore.BatchGetMetadataAsync(
+                context.Request.WorkspaceId,
+                context.Request.CollectionId,
+                requiredIds,
+                cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            items = await batchContextStore.BatchGetAsync(
+                context.Request.WorkspaceId,
+                context.Request.CollectionId,
+                requiredIds,
+                cancellationToken).ConfigureAwait(false);
+        }
 
         foreach (var item in items)
         {
@@ -146,7 +164,27 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
         var missedIds = requiredIds.Where(id => !foundIds.Contains(id)).ToArray();
         if (missedIds.Length > 0 && _memoryStore is not null)
         {
-            if (_memoryStore is IMemoryStoreBatchLookup batchMemoryStore)
+            // Memory hits：优先元数据投影，其次全量批量，最后带节流的并行回退。
+            if (_memoryStore is IMemoryStoreMetadataLookup metadataMemoryStore)
+            {
+                var memories = await metadataMemoryStore.BatchGetMetadataAsync(
+                    context.Request.WorkspaceId,
+                    context.Request.CollectionId,
+                    missedIds,
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var memory in memories)
+                {
+                    channelCandidates.Add(RetrievalChannelCandidate.FromMemoryItem(
+                        channelSource: "mandatory",
+                        memory,
+                        score: 1000,
+                        reason: "强制注入",
+                        mandatory: true,
+                        scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
+                }
+            }
+            else if (_memoryStore is IMemoryStoreBatchLookup batchMemoryStore)
             {
                 var memories = await batchMemoryStore.BatchGetAsync(
                     context.Request.WorkspaceId,

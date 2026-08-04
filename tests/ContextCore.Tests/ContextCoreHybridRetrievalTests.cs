@@ -1126,6 +1126,96 @@ public sealed class ContextCoreHybridRetrievalTests
             && item.Reason == "超过 token 预算"));
     }
 
+    /// <summary>
+    /// 验证：Mandatory 通道在 store 支持 <see cref="IContextStoreMetadataLookup"/> 时走元数据投影
+    /// （Content 为空，不读正文 jsonb），正文由 Selected 水合阶段按需读取——与向量通道一致。
+    /// </summary>
+    [TestMethod]
+    public async Task MandatoryRecallChannelExecutor_WithMetadataLookupStore_ProjectsMetadataOnly()
+    {
+        var store = new MetadataAwareInMemoryContextStore();
+        var executor = new MandatoryRecallChannelExecutor(
+            store, memoryStore: null, RetrievalFanoutOptions.Default);
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveAsync(new ContextItem
+        {
+            Id = "required-meta",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Type = "note",
+            Title = "强制项",
+            Content = "完整正文（投影阶段不应读取）",
+            Tags = [],
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+
+        var result = await executor.ExecuteAsync(RetrievalChannelContext.Create(
+            new ContextRetrievalRequest
+            {
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                RequiredIds = ["required-meta"],
+                CandidateTake = 10
+            },
+            new RetrievalPlan(),
+            new Dictionary<string, string>()));
+
+        Assert.IsTrue(store.MetadataBatchCalls >= 1, "支持元数据投影的 store 应走 BatchGetMetadataAsync。");
+        Assert.AreEqual(0, store.FullBatchCalls, "不应调用全量 BatchGetAsync（正文由 Selected 水合）。");
+        Assert.AreEqual(1, result.Candidates.Count);
+        Assert.AreEqual("required-meta", result.Candidates[0].SourceId);
+        Assert.IsTrue(string.IsNullOrEmpty(result.Candidates[0].Content),
+            "投影后候选正文应为空（未选中不读正文）。");
+    }
+
+    /// <summary>
+    /// 验证：元数据投影的 Mandatory 候选被选中后，正文由 SelectedCandidateContentHydrator 批量水合——
+    /// 最终结果正文完整，与全量召回路径输出一致。
+    /// </summary>
+    [TestMethod]
+    public async Task HybridContextRetriever_WithMetadataStore_MandatoryItem_HydratedWhenSelected()
+    {
+        var store = new MetadataAwareInMemoryContextStore();
+        var retriever = new HybridContextRetriever(
+            store, memoryStore: null, relationStore: null,
+            embeddingProvider: null, vectorStore: null, traceStore: null);
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveAsync(new ContextItem
+        {
+            Id = "required-hydrate",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Type = "note",
+            Title = "必须保留",
+            Content = "强制候选的完整正文，选中后必须水合回来。",
+            Tags = [],
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+
+        var result = await retriever.RetrieveAsync(new ContextRetrievalRequest
+        {
+            OperationId = "hybrid-mandatory-hydrate",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = "强制候选",
+            RequiredIds = ["required-hydrate"],
+            IncludeVectorRecall = false,
+            IncludeWorkingMemory = false,
+            IncludeStableMemory = false,
+            TopK = 5,
+            CandidateTake = 10,
+            TokenBudget = 1000
+        });
+
+        var selected = result.SelectedItems.Single(item => item.SourceId == "required-hydrate");
+        Assert.IsFalse(string.IsNullOrEmpty(selected.Content),
+            "选中的强制候选应被水合完整正文。");
+        Assert.AreEqual("强制候选的完整正文，选中后必须水合回来。", selected.Content);
+        Assert.IsTrue(store.MetadataBatchCalls >= 1, "召回阶段应走元数据投影。");
+    }
+
     [TestMethod]
     public async Task FileVectorStore_ShouldPersistSearchAndRetrievalTrace()
     {
@@ -1613,6 +1703,73 @@ public sealed class ContextCoreHybridRetrievalTests
             CandidateTake = 10,
             TokenBudget = 1000
         });
+    }
+
+    /// <summary>
+    /// InMemoryContextStore 包装器：额外实现 <see cref="IContextStoreMetadataLookup"/>（投影正文），
+    /// 并录制批量调用路径（验证 Mandatory 通道的元数据投影行为）。
+    /// </summary>
+    private sealed class MetadataAwareInMemoryContextStore : IContextStore, IContextStoreBatchLookup, IContextStoreMetadataLookup
+    {
+        private readonly InMemoryContextStore _inner = new();
+
+        public int MetadataBatchCalls;
+        public int FullBatchCalls;
+
+        public Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default)
+            => _inner.SaveAsync(item, cancellationToken);
+
+        public Task<ContextItem?> GetAsync(
+            string workspaceId, string collectionId, string id,
+            CancellationToken cancellationToken = default)
+            => _inner.GetAsync(workspaceId, collectionId, id, cancellationToken);
+
+        public Task<IReadOnlyList<ContextItem>> QueryAsync(
+            ContextQuery query, CancellationToken cancellationToken = default)
+            => _inner.QueryAsync(query, cancellationToken);
+
+        public Task DeleteAsync(
+            string workspaceId, string collectionId, string id,
+            CancellationToken cancellationToken = default)
+            => _inner.DeleteAsync(workspaceId, collectionId, id, cancellationToken);
+
+        public Task<IReadOnlyList<ContextItem>> BatchGetAsync(
+            string workspaceId, string collectionId, IReadOnlyList<string> ids,
+            CancellationToken cancellationToken = default)
+        {
+            FullBatchCalls++;
+            return _inner.BatchGetAsync(workspaceId, collectionId, ids, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<ContextItem>> BatchGetMetadataAsync(
+            string workspaceId, string collectionId, IReadOnlyList<string> ids,
+            CancellationToken cancellationToken = default)
+        {
+            MetadataBatchCalls++;
+            var items = await _inner.BatchGetAsync(workspaceId, collectionId, ids, cancellationToken).ConfigureAwait(false);
+            // 模拟 PostgresContextStore：只投影元数据列，Content 恒为空。
+            return items.Select(item => new ContextItem
+            {
+                Id = item.Id,
+                WorkspaceId = item.WorkspaceId,
+                CollectionId = item.CollectionId,
+                Type = item.Type,
+                Title = item.Title,
+                Content = string.Empty,
+                ContentFormat = item.ContentFormat,
+                Tags = item.Tags,
+                Refs = item.Refs,
+                SourceRefs = item.SourceRefs,
+                Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase),
+                Importance = item.Importance,
+                SourceOrder = item.SourceOrder,
+                SearchRank = item.SearchRank,
+                Version = item.Version,
+                Checksum = item.Checksum,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt
+            }).ToArray();
+        }
     }
 
 }
