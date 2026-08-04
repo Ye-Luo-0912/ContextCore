@@ -774,6 +774,12 @@ internal static class CoreExtensions
 		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，Postgres 持久化实现生效。
 		services.TryAddSingleton<IModelNodeAppliedStateStore, InMemoryModelNodeAppliedStateStore>();
 
+		// IModelNodeMembershipStore 默认实现（InMemory）—— 节点成员资格租约（P0-15）。
+		// 供 ModelStateReconcilerWorker 心跳续租/标记 serving_enabled，
+		// 供 Admission 校验节点是否仍是活跃成员（租约未过期且未被隔离）。
+		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，Postgres 持久化实现生效。
+		services.TryAddSingleton<IModelNodeMembershipStore, InMemoryModelNodeMembershipStore>();
+
 		// IClusterModelAppliedStateRegistry —— 集群模型已应用状态注册表（只读聚合）。
 		// 聚合控制面期望状态（IClusterModelSlotStore）与各节点已应用状态
 		// （IModelNodeAppliedStateStore.ListBySlotAsync）为集群收敛视图；

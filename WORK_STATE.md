@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `45bcceed`（WP-D3 已推送；R30.1 实施中）。
+- **基线**：main @ `afeb7559`（WP-E1 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-E1 节点级 Admission（P0-14，Applied State + 真实 IModelActivationManager 纳入准入）。
+- **最近完成**：WP-E2 节点成员资格租约（P0-15，model_node_membership + stale cutoff + Isolated 停止接流量）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -79,6 +79,15 @@
   - 修复（ProductionAdmissionController 实时探针 model-slot-live）：集群 Desired 正常之后追加 `VerifyNodeModelAppliedAsync` 节点级校验——(1) IModelActivationManager 未注册（ModelMode=Deterministic）保持集群 Desired 语义 Pass（向后兼容，R29R 既有测试不受影响）；(2) 已启用模型激活时要求 IModelNodeAppliedStateStore 已注册（缺失 Fail-closed）；(3) 节点已上报 Applied State（无记录 = Fail，"模型可能仍在加载"）；(4) 节点未隔离（Isolated = Fail，含隔离原因）；(5) 节点 AppliedRevision 与集群期望 Revision 一致（`!=` 比较 fail-closed，落后/超前均拒绝）；(6) 本地引擎 ActiveEngine 非空（可推理）；(7) 引擎 ActiveDescriptor.ModelArtifactId 与集群期望一致；(8) 集群 ContentHash 非空时引擎 ContentHash 必须一致（期望为空=旧数据时跳过哈希比对，其余项仍强制）。任一不满足 → model-slot-live Fail → 中间件 503，节点不接流量。
   - 设计边界：节点级检查放在**请求阶段实时探针**而非启动期静态校验器——静态校验器在 ApplicationStarted 后运行且 Fail 即中止进程，冷启动节点合法地需要时间加载 ONNX 模型（load+warmup 秒级），中止会破坏冷启动；中间件 503 是"节点开始接流量"的正确控制面，Reconciler 持续重试激活直到探针通过。节点标识 = Environment.MachineName（与 ModelStateReconcilerWorker._nodeId 约定一致，跨进程重启稳定）。
   - 测试：新增 `R30H_AdmissionNodeAppliedStateTests`（13 项：未注册激活管理器跳过节点检查 Pass（向后兼容）、节点已应用+引擎就绪 AllPassed、无 Applied State 记录 Fail、AppliedRevision 落后 Fail、AppliedRevision 超前 Fail（fail-closed）、节点 Isolated Fail、ActiveEngine=null Fail、引擎 ModelArtifactId 不匹配 Fail、引擎 ContentHash 漂移 Fail、AppliedStateStore 缺失 Fail-closed、中间件节点就绪 200、中间件节点未就绪 503 JSON 且 failedChecks 含 model-slot-live）。验证：build 0 错误（Service + Tests 全绿）；R30H 13/13 + R29R 12/12 通过；关联套件 72 项 3 失败全部命中既有 11 项（ReadinessService_Development_GetRegisteredWorkers、ProductionHA_AllNineMandatoryChecksPass、MemoryOnlyBatchLookup_SatisfiesHydrationPipeline）。
+- **WP-E2 已完成**（P0-15）：Model Applied-State 集群成员资格 + TTL 租约——Rollout Ready 基于活跃成员，Isolated 真正停止接流量。
+  - 问题：Applied-State Registry 把数据库中所有节点记录视为当前节点——已下线节点记录永久阻止 Converged；新启动但尚未写 Applied State 的节点不计入 NodeCount；AppliedAt 没有 stale cutoff；没有 node membership lease；Reconciler 写 Applied State 失败被视为 best-effort（实际换模后仍返回成功）；节点被标记 Isolated 后没有真正停止接收模型流量（只写数据库标志）。
+  - 契约（Abstractions，PublicApi baseline 已重新生成 +19 项）：`ModelNodeMembership`（NodeId / InstanceId / LeaseToken / LeaseExpiresAt / LastHeartbeat / ServingEnabled）+ `IModelNodeMembershipStore`——`TryAcquireOrRenewLeaseAsync(nodeId, instanceId, leaseDuration, servingEnabled)`（被其他活跃实例持有返回 null，调用方退避重试；过期接管生成新令牌 fencing 旧持有者）、`GetAsync`、`GetActiveMembersAsync`（租约未过期，按 NodeId 排序）、`SetServingEnabledAsync`（校验 lease_token + 租约未过期才生效）。
+  - 存储（InMemory + Postgres 同契约）：`InMemoryModelNodeMembershipStore`（ConcurrentDictionary CAS 循环；同实例续租保持令牌；过期接管新令牌）；`PostgresModelNodeMembershipStore`（领取/续租单语句 `INSERT ... ON CONFLICT DO UPDATE ... WHERE lease_expires_at <= now() OR instance_id = EXCLUDED.instance_id RETURNING`，0 行 = 被活跃实例持有；GetActiveMembers 用 `lease_expires_at > clock_timestamp()`；SetServingEnabled 校验 `lease_token = @token AND instance_id = @instance_id AND lease_expires_at > clock_timestamp()`）。CoreExtensions 默认注册 InMemory（TryAddSingleton，Postgres 优先）。
+  - Schema v60：迁移 `PostgresMigrationModelNodeMembership` 0007（v59→v60，单 Online 阶段 CREATE TABLE IF NOT EXISTS：node_id / instance_id / lease_token / lease_expires_at / last_heartbeat / serving_enabled，PK node_id）；基线 DDL 同步新增；`RequiredOperationalTableSuffixes` 增加 model_node_membership。
+  - Registry（ClusterModelAppliedStateRegistry）：可选注入 `IModelNodeMembershipStore`——活跃成员集合（租约未过期）作为当前节点集合：NodeCount = 活跃成员数（新启动未写 Applied State 的成员计入且视为未就绪，修复"不计入 NodeCount"）；Converged/NodesBehind 按成员判定（`ComputeConvergenceByMembership`，无记录成员 = behind；修复"已下线记录永久阻止 Converged"）；DriftedNodeCount 只评估活跃成员的 Applied 记录（已下线漂移记录不再阻止就绪）；IsRolloutReady = 收敛 && 无漂移，基于当前活跃成员而非历史行。未注册成员存储保持旧语义（R29U 既有测试不受影响）。ListNodeStatesAsync 保留全量历史行（运维审计）。
+  - Reconciler（ModelStateReconcilerWorker）：每轮先 `HeartbeatMembershipAsync`（领取/续租 + 刷新 serving_enabled，失败或被其他实例持有 → 本轮失败退避，fail-closed）；漂移隔离分支 `_servingEnabled=false` + `DisableServingAsync`（best-effort 同步到成员租约）；成功应用期望模型后 `EnableServingAsync`（SetServingEnabled 返回 false 抛 InvalidOperationException → 本轮失败）再 `RecordAppliedStateAsync`——**写 Applied State 失败不再吞异常**（best-effort 移除，失败传播 → 本轮失败退避；AppliedClusterSlotRevision 只在写入成功后赋值，"实际换模后仍返回成功" 消除）。`MembershipLeaseDuration` 默认 60s。
+  - Admission（ProductionAdmissionController.VerifyNodeModelAppliedAsync）：成员资格纳入准入——`IModelNodeMembershipStore` 缺失 Fail-closed（与 AppliedStateStore 同语义：已启用模型激活的集群必须能校验成员资格）；节点无租约或租约过期（stale cutoff）→ "无活跃成员租约" Fail；`ServingEnabled=false`（漂移隔离）→ "已被标记停止服务" Fail。中间件 503 是流量闸：Isolated 节点由 Reconciler 置 serving_enabled=false，Admission/Middleware 真正停止接收模型流量（不能只写 Applied State 数据库标志）。
+  - 测试：新增 `R30I_ModelNodeMembershipTests`（15 项：InMemory 租约 8 项——首领取/同实例续租保令牌/活跃冲突返回 null/过期接管新令牌 fencing/serving 翻转/错令牌拒绝/过期令牌拒绝/活跃成员过滤+排序；注册表 4 项——离线节点记录不阻止收敛、未上报应用成员计入 NodeCount 且阻止就绪、活跃成员漂移阻止 RolloutReady、离线漂移记录不计数；迁移 3 项——0007 v59→v60 声明、基线 DDL 含建表+6 列、RequiredOperationalTableSuffixes）；`R30H_AdmissionNodeAppliedStateTests` 新增 4 项（MembershipStore 缺失 Fail-closed、无租约 Fail、租约过期 Fail、serving_enabled=false Fail）+ harness 预置成员租约；R29S `SchemaVersion_IsV59`→`SchemaVersion_IsV60`；ContextCorePostgresStorageTests schema 断言 v59→v60；PublicApi baseline 重新生成（+19 项）。验证：build 0 错误；定向 63/63 通过（R30H+R29R+R29U+R30I+R29S）；关联套件 91 项 89 通过 / 2 失败全部命中既有 11 项（ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates、ReadinessService_Development_GetRegisteredWorkers）。
 
 ### 性能优化工作包进度
 

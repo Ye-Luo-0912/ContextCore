@@ -9,17 +9,30 @@ namespace ContextCore.Service.Infrastructure;
 /// 聚合为集群级收敛视图（摘要 + 节点条目）。
 /// 纯计算逻辑，不执行任何写入；对存储实现无 Postgres 特化要求，任何 provider 均可。
 /// </summary>
+/// <remarks>
+/// P0-15：当注册了 <see cref="IModelNodeMembershipStore"/> 时，集群当前节点集合 =
+/// 活跃成员（租约未过期），而非 Applied State 历史行——
+/// <list type="bullet">
+/// <item>已下线节点记录不再永久阻止 Converged（租约过期即退出集群）；</item>
+/// <item>新启动但尚未写 Applied State 的节点计入 NodeCount（未就绪 → 阻止 Rollout Ready）；</item>
+/// <item>租约过期即 stale cutoff，Rollout Ready 只基于当前活跃成员。</item>
+/// </list>
+/// 未注册成员存储（单节点 / InMemory 部署）时保持旧语义：全部已上报记录视为节点。
+/// </remarks>
 public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedStateRegistry
 {
     private readonly IClusterModelSlotStore _slotStore;
     private readonly IModelNodeAppliedStateStore _appliedStateStore;
+    private readonly IModelNodeMembershipStore? _membershipStore;
 
     public ClusterModelAppliedStateRegistry(
         IClusterModelSlotStore slotStore,
-        IModelNodeAppliedStateStore appliedStateStore)
+        IModelNodeAppliedStateStore appliedStateStore,
+        IModelNodeMembershipStore? membershipStore = null)
     {
         _slotStore = slotStore;
         _appliedStateStore = appliedStateStore;
+        _membershipStore = membershipStore;
     }
 
     /// <inheritdoc />
@@ -31,13 +44,32 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
         var slot = await _slotStore.GetAsync(slotName, ct).ConfigureAwait(false);
         var nodes = await _appliedStateStore.ListBySlotAsync(slotName, ct).ConfigureAwait(false);
 
+        // P0-15：活跃成员集合（租约未过期）。无成员存储 → 全部已上报记录视为节点（旧语义）。
+        var activeMembers = _membershipStore is null
+            ? null
+            : await _membershipStore.GetActiveMembersAsync(ct).ConfigureAwait(false);
+        var memberNodeIds = activeMembers is null
+            ? null
+            : new HashSet<string>(activeMembers.Select(m => m.NodeId), StringComparer.Ordinal);
+
+        // 相关节点 = 活跃成员的已应用记录（无成员存储时 = 全部记录）。
+        var relevantNodes = memberNodeIds is null
+            ? nodes
+            : nodes.Where(n => memberNodeIds.Contains(n.NodeId)).ToArray();
+
         var desiredRevision = slot?.Revision ?? 0;
         var desiredStatus = slot?.DesiredStatus ?? ClusterModelSlotDesiredStatus.Inactive;
         var desiredModelId = slot?.ActiveModelArtifactId;
         var desiredHash = slot?.ContentHash;
 
-        var driftedCount = ComputeDriftedNodeCount(nodes, desiredRevision, desiredModelId, desiredHash);
-        var converged = nodes.Count > 0 && nodes.All(n => n.AppliedRevision == desiredRevision);
+        // NodeCount：活跃成员数（含尚未上报 Applied State 的新节点）；无成员存储时回退到已上报记录数。
+        var nodeCount = activeMembers is not null ? activeMembers.Count : relevantNodes.Count;
+
+        var (converged, nodesBehind) = memberNodeIds is null
+            ? ComputeConvergenceLegacy(relevantNodes, desiredRevision)
+            : ComputeConvergenceByMembership(activeMembers!, relevantNodes, desiredRevision);
+
+        var driftedCount = ComputeDriftedNodeCount(relevantNodes, desiredRevision, desiredModelId, desiredHash);
 
         return new ClusterSlotAppliedSummary
         {
@@ -46,21 +78,26 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
             DesiredStatus = desiredStatus,
             DesiredModelArtifactId = desiredModelId,
             DesiredContentHash = desiredHash,
-            NodeCount = nodes.Count,
-            MinAppliedRevision = nodes.Count == 0 ? 0 : nodes.Min(n => n.AppliedRevision),
-            MaxAppliedRevision = nodes.Count == 0 ? 0 : nodes.Max(n => n.AppliedRevision),
+            NodeCount = nodeCount,
+            MinAppliedRevision = relevantNodes.Count == 0 ? 0 : relevantNodes.Min(n => n.AppliedRevision),
+            MaxAppliedRevision = relevantNodes.Count == 0 ? 0 : relevantNodes.Max(n => n.AppliedRevision),
             Converged = converged,
-            NodesBehind = nodes.Count(n => n.AppliedRevision < desiredRevision),
-            ContentHashConflictCount = ComputeContentHashConflictCount(nodes),
+            NodesBehind = nodesBehind,
+            ContentHashConflictCount = ComputeContentHashConflictCount(relevantNodes),
             DriftedNodeCount = driftedCount,
-            // 上线就绪：至少一个节点、全部收敛、无漂移/隔离节点。
+            // 上线就绪：至少一个节点、全部收敛、无漂移/隔离节点（基于当前活跃成员）。
             IsRolloutReady = converged && driftedCount == 0,
-            LatestAppliedAtUtc = nodes.Count == 0 ? null : nodes.Max(n => n.AppliedAt),
+            LatestAppliedAtUtc = relevantNodes.Count == 0 ? null : relevantNodes.Max(n => n.AppliedAt),
             ComputedAtUtc = DateTimeOffset.UtcNow
         };
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// 展开视图保留全部 Applied State 记录（含已下线节点的历史行），供运维审计"谁曾经/现在
+    /// 在集群中、应用过什么"；集群当前规模与收敛判定以 <see cref="GetSlotSummaryAsync"/>
+    /// 的活跃成员口径为准（P0-15）。
+    /// </remarks>
     public async ValueTask<IReadOnlyList<ClusterNodeAppliedEntry>> ListNodeStatesAsync(string slotName = "primary", CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
@@ -93,9 +130,37 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
         return entries;
     }
 
+    /// <summary>无成员存储（旧语义）：全部已上报记录视为节点。</summary>
+    private static (bool Converged, int NodesBehind) ComputeConvergenceLegacy(
+        IReadOnlyList<ModelNodeAppliedState> nodes,
+        long desiredRevision)
+        => (
+            nodes.Count > 0 && nodes.All(n => n.AppliedRevision == desiredRevision),
+            nodes.Count(n => n.AppliedRevision < desiredRevision));
+
+    /// <summary>
+    /// 基于活跃成员的收敛判定（P0-15）：
+    /// 每个活跃成员都必须已有 Applied State 记录且 AppliedRevision == 期望（尚未上报应用的
+    /// 新节点视为未就绪 → 不收敛）；NodesBehind 含"无记录"与"记录落后"两类成员。
+    /// </summary>
+    private static (bool Converged, int NodesBehind) ComputeConvergenceByMembership(
+        IReadOnlyList<ModelNodeMembership> members,
+        IReadOnlyList<ModelNodeAppliedState> nodes,
+        long desiredRevision)
+    {
+        var appliedByNode = nodes.ToDictionary(n => n.NodeId, StringComparer.Ordinal);
+        var converged = members.Count > 0 && members.All(m =>
+            appliedByNode.TryGetValue(m.NodeId, out var state)
+            && state.AppliedRevision == desiredRevision);
+        var nodesBehind = members.Count(m =>
+            !appliedByNode.TryGetValue(m.NodeId, out var state)
+            || state.AppliedRevision < desiredRevision);
+        return (converged, nodesBehind);
+    }
+
     /// <summary>
     /// 漂移节点数：已隔离节点 + 已上报 Revision 与期望一致但模型内容与期望不一致的节点。
-    /// 漂移意味着节点实际加载的模型内容与集群期望不一致（Slot=A、Engine=B 类错位）。
+    /// 漂移意味着节点实际加载的模型内容与集群期望不一致（Slot=A、Engine=B 错位）。
     /// </summary>
     private static int ComputeDriftedNodeCount(
         IReadOnlyList<ModelNodeAppliedState> nodes,

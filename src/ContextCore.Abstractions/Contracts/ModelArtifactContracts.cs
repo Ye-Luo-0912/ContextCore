@@ -397,3 +397,83 @@ public interface IModelNodeAppliedStateStore
     /// </summary>
     ValueTask<IReadOnlyList<ModelNodeAppliedState>> ListBySlotAsync(string slotName, CancellationToken ct = default);
 }
+
+/// <summary>
+/// 节点成员资格租约（P0-15）：节点在集群中的活跃成员身份。
+/// </summary>
+/// <remarks>
+/// 解决 Applied-State Registry 把"数据库中所有历史行"当作当前节点的问题：
+/// <list type="bullet">
+/// <item>已下线节点的 Applied State 记录会永久阻止 Converged——成员租约过期后该节点不再计入集群。</item>
+/// <item>新启动但尚未写 Applied State 的节点不计入 NodeCount——成员租约让"当前集群规模"独立于
+/// 已应用记录，NodeCount 反映活跃成员数（含尚未上报应用的节点）。</item>
+/// <item>AppliedAt 没有 stale cutoff——租约过期即 stale cutoff：过期成员视为下线，Rollout Ready
+/// 只基于当前活跃成员。</item>
+/// </list>
+/// 节点被标记 Isolated（漂移隔离）后由 Reconciler 把 <see cref="ServingEnabled"/> 置 false，
+/// Admission/Middleware 据此刻断模型流量（不能只写数据库标志）。
+/// </remarks>
+public sealed record ModelNodeMembership
+{
+    /// <summary>节点 Id（稳定节点标识，如机器名；跨进程重启保持同一身份）。</summary>
+    public required string NodeId { get; init; }
+
+    /// <summary>实例 Id（同一节点上的具体进程实例；区分同一机器的多个进程）。</summary>
+    public required string InstanceId { get; init; }
+
+    /// <summary>租约令牌：SetServingEnabled 等写操作必须携带当前令牌（fencing，隔离过期持有者）。</summary>
+    public required string LeaseToken { get; init; }
+
+    /// <summary>租约过期时间（UTC）。过期即视为节点下线（stale cutoff）。</summary>
+    public required DateTimeOffset LeaseExpiresAt { get; init; }
+
+    /// <summary>最后心跳时间（UTC）。</summary>
+    public required DateTimeOffset LastHeartbeat { get; init; }
+
+    /// <summary>是否允许承接模型流量（Isolated 节点由 Reconciler 置 false，Admission 据此阻断）。</summary>
+    public bool ServingEnabled { get; init; }
+}
+
+/// <summary>
+/// 节点成员资格存储：维护每个节点的活跃成员租约（P0-15）。
+/// </summary>
+/// <remarks>
+/// 租约语义：
+/// <list type="bullet">
+/// <item>领取/续租是原子的：同一 node_id 在同一时刻只允许一个活跃实例持有（租约未过期且 instance_id
+/// 不同时拒绝新实例，待旧租约过期后接管——接管时生成新令牌 fencing 旧持有者）。</item>
+/// <item>过期即 stale cutoff：<see cref="GetActiveMembersAsync"/> 只返回租约未过期的成员，
+/// 集群 Rollout Ready 基于活跃成员而非历史行。</item>
+/// <item><see cref="SetServingEnabledAsync"/> 校验 lease_token 且租约未过期，防止过期持有者篡改状态。</item>
+/// </list>
+/// </remarks>
+public interface IModelNodeMembershipStore
+{
+    /// <summary>
+    /// 领取或续租节点成员租约。成功返回最新成员资格；被其他活跃实例持有
+    /// （租约未过期且 instance_id 不同）时返回 null（调用方应退避重试，待旧租约过期接管）。
+    /// </summary>
+    ValueTask<ModelNodeMembership?> TryAcquireOrRenewLeaseAsync(
+        string nodeId,
+        string instanceId,
+        TimeSpan leaseDuration,
+        bool servingEnabled,
+        CancellationToken ct = default);
+
+    /// <summary>读取节点成员资格（无记录返回 null）。</summary>
+    ValueTask<ModelNodeMembership?> GetAsync(string nodeId, CancellationToken ct = default);
+
+    /// <summary>列出当前活跃成员（租约未过期），按 NodeId 字典序排序。</summary>
+    ValueTask<IReadOnlyList<ModelNodeMembership>> GetActiveMembersAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 更新 serving 开关（Isolated 节点置 false 停止接流量，恢复后置 true）。
+    /// 仅当 lease_token 匹配且租约未过期时生效；返回是否更新成功。
+    /// </summary>
+    ValueTask<bool> SetServingEnabledAsync(
+        string nodeId,
+        string instanceId,
+        string leaseToken,
+        bool servingEnabled,
+        CancellationToken ct = default);
+}

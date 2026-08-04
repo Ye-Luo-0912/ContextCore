@@ -32,6 +32,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private readonly IClusterModelSlotStore _clusterSlotStore;
     private readonly IModelActivationManager _activationManager;
     private readonly IModelNodeAppliedStateStore? _appliedStateStore;
+    private readonly IModelNodeMembershipStore? _membershipStore;
     private readonly IOptionsMonitor<ModelStateReconcilerOptions> _options;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModelStateReconcilerWorker> _logger;
@@ -49,6 +50,12 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private long _appliedClusterSlotRevision = -1;
     private int _initialSyncDone;
 
+    // P0-15：节点成员资格租约（最近一次成功心跳的成员资格，含 LeaseToken 供 serving 开关写操作）；
+    // _servingEnabled 反映本地健康状态——漂移隔离时置 false（Admission 据此阻断流量），
+    // 成功应用期望模型后置 true（恢复服务）。心跳以该状态刷新成员租约的 serving_enabled。
+    private ModelNodeMembership? _membership;
+    private bool _servingEnabled = true;
+
     public ModelStateReconcilerWorker(
         IClusterModelSlotStore clusterSlotStore,
         IModelActivationManager activationManager,
@@ -56,11 +63,13 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         IConfiguration configuration,
         ILogger<ModelStateReconcilerWorker> logger,
         IModelNodeAppliedStateStore? appliedStateStore = null,
+        IModelNodeMembershipStore? membershipStore = null,
         DefaultComponentHealthRegistry? healthRegistry = null)
     {
         _clusterSlotStore = clusterSlotStore;
         _activationManager = activationManager;
         _appliedStateStore = appliedStateStore;
+        _membershipStore = membershipStore;
         _options = options;
         _configuration = configuration;
         _logger = logger;
@@ -155,6 +164,14 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     /// </summary>
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
+        // P0-15：先心跳节点成员租约（领取/续租 + 刷新 serving_enabled）。
+        // 心跳失败（存储异常 / 被其他活跃实例持有）→ 本轮失败退避重试：无法维持成员资格的
+        // 节点不应报告收敛成功（fail-closed，避免"节点已下线但仍计入集群"）。
+        if (!await HeartbeatMembershipAsync(ct).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         // 从单一 Champion 槽位（"primary"）读取期望状态。
         var slot = await _clusterSlotStore.GetAsync("primary", ct).ConfigureAwait(false);
 
@@ -234,6 +251,12 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                             _nodeId, slot.Revision);
                     }
                 }
+
+                // P0-15：隔离节点必须真正停止接流量——本地 serving 关闭并同步到成员租约
+                // （Admission/Middleware 校验 serving_enabled=false 阻断；Applied State 的
+                // Isolated 标志只是数据库事实，不能单独作为流量阻断依据）。
+                _servingEnabled = false;
+                await DisableServingAsync(ct).ConfigureAwait(false);
             }
             return true;
         }
@@ -286,8 +309,15 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                 }
             }
 
-            _appliedClusterSlotRevision = slot.Revision;
+            // P0-15：成功应用期望模型后恢复服务——本地 serving 置 true 并立即同步到成员租约
+            // （不等下一个心跳周期，漂移隔离的节点恢复后尽快重新接流量）。
+            _servingEnabled = true;
+            await EnableServingAsync(ct).ConfigureAwait(false);
+
+            // 记录节点已应用状态。写失败必须让本轮失败（fail-closed）——"实际换模后仍返回成功"
+            // 会让 Applied State 永远落后于实际，集群收敛/上线就绪静默失真（P0-15）。
             await RecordAppliedStateAsync(slot, ct).ConfigureAwait(false);
+            _appliedClusterSlotRevision = slot.Revision;
             return true;
         }
         catch (Exception ex)
@@ -300,8 +330,87 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     }
 
     /// <summary>
-    /// 记录节点已应用状态（最佳努力持久化）：写入本节点对当前 slot 最后成功应用的 Revision
-    /// 与本地引擎实际生效的模型内容。记录失败不影响已应用的期望状态。
+    /// 心跳节点成员租约（P0-15）：领取/续租并刷新 serving_enabled。
+    /// 返回 true = 租约已持有（或未配置成员存储）；false = 被其他活跃实例持有或心跳异常
+    /// （调用方应退避重试）。
+    /// </summary>
+    private async Task<bool> HeartbeatMembershipAsync(CancellationToken ct)
+    {
+        if (_membershipStore is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            var membership = await _membershipStore.TryAcquireOrRenewLeaseAsync(
+                _nodeId,
+                _instanceId,
+                _options.CurrentValue.MembershipLeaseDuration,
+                _servingEnabled,
+                ct).ConfigureAwait(false);
+            if (membership is null)
+            {
+                _logger.LogWarning(
+                    "节点 {NodeId} 成员租约被其他活跃实例持有（实例 {InstanceId} 无法领取），本轮失败退避。",
+                    _nodeId, _instanceId);
+                return false;
+            }
+
+            _membership = membership;
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "节点 {NodeId} 成员租约心跳失败（本轮失败退避）。", _nodeId);
+            return false;
+        }
+    }
+
+    /// <summary>漂移隔离后关闭 serving（best-effort：Applied State 的 Isolated 标志已阻断流量，此处为成员租约同步）。</summary>
+    private async Task DisableServingAsync(CancellationToken ct)
+    {
+        if (_membershipStore is null || _membership is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _membershipStore.SetServingEnabledAsync(_nodeId, _instanceId, _membership.LeaseToken, false, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "关闭节点 {NodeId} serving 失败（隔离已标记，准入仍会阻断流量）：Revision {Revision}",
+                _nodeId, _appliedClusterSlotRevision);
+        }
+    }
+
+    /// <summary>成功应用期望模型后恢复 serving；失败传播（本轮失败重试，直至成员租约反映可服务）。</summary>
+    private async Task EnableServingAsync(CancellationToken ct)
+    {
+        if (_membershipStore is null || _membership is null)
+        {
+            return;
+        }
+
+        var updated = await _membershipStore.SetServingEnabledAsync(_nodeId, _instanceId, _membership.LeaseToken, true, ct).ConfigureAwait(false);
+        if (!updated)
+        {
+            throw new InvalidOperationException(
+                $"节点 {_nodeId} 恢复 serving 失败：成员租约令牌失效或已过期（可能已被其他实例接管）。");
+        }
+    }
+
+    /// <summary>
+    /// 记录节点已应用状态（P0-15：不再 best-effort）——写入本节点对当前 slot 最后成功应用的
+    /// Revision 与本地引擎实际生效的模型内容。写入失败向上传播，本轮 reconcile 失败退避重试：
+    /// "实际换模后仍返回成功" 会让 Applied State 永远落后于实际，集群收敛/上线就绪静默失真。
     /// </summary>
     private async ValueTask RecordAppliedStateAsync(ClusterModelSlot slot, CancellationToken ct)
     {
@@ -310,27 +419,18 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             return;
         }
 
-        try
+        var applied = new ModelNodeAppliedState
         {
-            var applied = new ModelNodeAppliedState
-            {
-                NodeId = _nodeId,
-                SlotName = slot.SlotName,
-                AppliedRevision = slot.Revision,
-                ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,
-                ContentHash = _activationManager.ContentHash,
-                // 应用时刻本地引擎代次：与集群槽位 Revision 分离（Slot=A、Engine=B 错位可审计）。
-                EngineGeneration = _activationManager.ActiveGeneration,
-                AppliedAt = DateTimeOffset.UtcNow
-            };
-            await _appliedStateStore.UpsertAsync(applied, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "记录节点已应用状态失败（不影响已应用的期望状态）：Revision {Revision}",
-                slot.Revision);
-        }
+            NodeId = _nodeId,
+            SlotName = slot.SlotName,
+            AppliedRevision = slot.Revision,
+            ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,
+            ContentHash = _activationManager.ContentHash,
+            // 应用时刻本地引擎代次：与集群槽位 Revision 分离（Slot=A、Engine=B 错位可审计）。
+            EngineGeneration = _activationManager.ActiveGeneration,
+            AppliedAt = DateTimeOffset.UtcNow
+        };
+        await _appliedStateStore.UpsertAsync(applied, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -385,6 +485,13 @@ public sealed class ModelStateReconcilerOptions
 
     /// <summary>轮询间隔（成功轮询后的正常等待时间）。</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// 节点成员租约时长（P0-15）：每轮心跳领取/续租，租约过期即 stale cutoff——
+    /// 超过该时长未心跳的节点被集群视为下线（不再计入 Rollout Ready）。
+    /// 默认 60 秒（≈ 6 个心跳周期），应大于 PollInterval 的数倍以容忍瞬时抖动。
+    /// </summary>
+    public TimeSpan MembershipLeaseDuration { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>失败退避基准延迟（连续失败时第 1 次重试的等待时间）。</summary>
     public TimeSpan BackoffBaseDelay { get; set; } = TimeSpan.FromSeconds(1);

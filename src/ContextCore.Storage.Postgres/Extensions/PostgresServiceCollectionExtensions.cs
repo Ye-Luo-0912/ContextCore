@@ -197,6 +197,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresModelNodeAppliedStateStore>();
         services.AddSingleton<IModelNodeAppliedStateStore>(sp => sp.GetRequiredService<PostgresModelNodeAppliedStateStore>());
 
+        // Model Node Membership 持久化（PostgreSQL，P0-15）。
+        // 节点成员资格租约：租约过期即 stale cutoff，集群 Rollout Ready 基于活跃成员
+        // 而非历史 Applied State 行；serving_enabled 供 Admission/Middleware 阻断 Isolated 节点流量。
+        services.AddSingleton<PostgresModelNodeMembershipStore>();
+        services.AddSingleton<IModelNodeMembershipStore>(sp => sp.GetRequiredService<PostgresModelNodeMembershipStore>());
+
         // Model Activation Audit 持久化（PostgreSQL）。
         // 替代 FileSystem / InMemory provider 下的 InMemory 默认实现，让 HA 场景下
         // 模型生命周期审计记录（Activate / Rollback / Retire / Shadow 等）可跨进程持久化与查询。

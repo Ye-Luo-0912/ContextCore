@@ -209,14 +209,15 @@ public sealed class ProductionAdmissionController
     }
 
     /// <summary>
-    /// P0-14：校验当前节点是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
+    /// P0-14/P0-15：校验当前节点是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
     /// </summary>
     /// <remarks>
     /// 原实现只验证 Cluster Slot 的 DesiredStatus==Active 与 ActiveModelArtifactId 非空——
     /// "集群期望 A、本节点尚未加载模型或仍运行 B" 的节点会通过准入并开始接流量。
-    /// 此处把当前节点的 Applied State（<see cref="IModelNodeAppliedStateStore"/>）与
-    /// 真实 <see cref="IModelActivationManager"/>（引擎 Model ID / ContentHash / ActiveEngine
-    /// 可推理）纳入请求阶段准入：任一不满足即 Fail（中间件 503，节点不接流量）。
+    /// 此处把当前节点的 Applied State（<see cref="IModelNodeAppliedStateStore"/>）、真实
+    /// <see cref="IModelActivationManager"/>（引擎 Model ID / ContentHash / ActiveEngine
+    /// 可推理）与成员资格租约（<see cref="IModelNodeMembershipStore"/>：活跃成员 + serving
+    /// 开关）纳入请求阶段准入：任一不满足即 Fail（中间件 503，节点不接流量）。
     /// 节点标识与 <see cref="ModelStateReconcilerWorker"/> 的 node_id 约定一致
     /// （机器名跨进程重启稳定）。未启用模型激活（IModelActivationManager 未注册，
     /// ModelMode=Deterministic）时保持集群 Desired 语义（无节点级引擎可校验）。
@@ -259,6 +260,29 @@ public sealed class ProductionAdmissionController
             {
                 failures.Add($"节点 {nodeId} 已应用 Revision={applied.AppliedRevision}，落后于期望 Revision={slot.Revision}");
             }
+        }
+
+        // P0-15：节点必须是活跃成员（成员租约未过期）且 serving_enabled=true 才可接流量。
+        // 租约过期即 stale cutoff（节点已下线）；serving_enabled=false 由漂移隔离触发
+        // （Reconciler 置位）——不能只写 Applied State 的 Isolated 标志，成员租约是流量的第二道闸。
+        // 与 IModelNodeAppliedStateStore 一致 fail-closed：已启用模型激活的集群必须能校验
+        // 节点成员资格，缺失成员存储 = 无法证明节点是活跃成员 → 拒绝接流量。
+        var membershipStore = _services.GetService<IModelNodeMembershipStore>();
+        if (membershipStore is null)
+        {
+            return Fail("model-slot-live",
+                $"IModelNodeMembershipStore 未注册——已启用模型激活但缺少节点成员资格存储，"
+                + $"无法校验节点 {nodeId} 的活跃成员租约。");
+        }
+
+        var membership = await membershipStore.GetAsync(nodeId, cancellationToken).ConfigureAwait(false);
+        if (membership is null || membership.LeaseExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            failures.Add($"节点 {nodeId} 无活跃成员租约（未心跳或已下线）——不可接流量");
+        }
+        else if (!membership.ServingEnabled)
+        {
+            failures.Add($"节点 {nodeId} 已被标记停止服务（serving_enabled=false，如漂移隔离）——不可接流量");
         }
 
         if (activationManager.ActiveEngine is null)

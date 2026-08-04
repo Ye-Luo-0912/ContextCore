@@ -188,6 +188,61 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
         StringAssert.Contains(live.Message, "IModelNodeAppliedStateStore 未注册");
     }
 
+    [TestMethod]
+    public async Task MembershipStoreMissing_AdmissionDenied()
+    {
+        // P0-15：已启用模型激活但 IModelNodeMembershipStore 未注册 → 无法校验成员资格，Fail-closed。
+        var harness = await BuildControllerHarnessAsync(registerMembershipStore: false);
+        var report = await harness.Controller.GetOrRefreshAsync();
+
+        Assert.IsFalse(report.AllPassed);
+        var live = GetCheck(report, "model-slot-live");
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Fail, live.Status);
+        StringAssert.Contains(live.Message, "IModelNodeMembershipStore 未注册");
+    }
+
+    [TestMethod]
+    public async Task MembershipLeaseMissing_AdmissionDenied()
+    {
+        // P0-15：节点从未心跳（无成员租约记录）→ 不是活跃成员，拒绝接流量。
+        var harness = await BuildControllerHarnessAsync(seedMembership: false);
+        var report = await harness.Controller.GetOrRefreshAsync();
+
+        Assert.IsFalse(report.AllPassed);
+        var live = GetCheck(report, "model-slot-live");
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Fail, live.Status);
+        StringAssert.Contains(live.Message, "无活跃成员租约");
+    }
+
+    [TestMethod]
+    public async Task MembershipLeaseExpired_AdmissionDenied()
+    {
+        // P0-15：成员租约已过期（stale cutoff）→ 节点视为已下线，拒绝接流量。
+        var harness = await BuildControllerHarnessAsync(
+            seedMembership: true,
+            membershipLeaseDuration: TimeSpan.Zero);
+        var report = await harness.Controller.GetOrRefreshAsync();
+
+        Assert.IsFalse(report.AllPassed);
+        var live = GetCheck(report, "model-slot-live");
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Fail, live.Status);
+        StringAssert.Contains(live.Message, "无活跃成员租约");
+    }
+
+    [TestMethod]
+    public async Task MembershipServingDisabled_AdmissionDenied()
+    {
+        // P0-15：节点被漂移隔离（Reconciler 置 serving_enabled=false）→ 停止接流量，
+        // 不能只写 Applied State 的 Isolated 标志。
+        var harness = await BuildControllerHarnessAsync(membershipServingEnabled: false);
+        var report = await harness.Controller.GetOrRefreshAsync();
+
+        Assert.IsFalse(report.AllPassed);
+        var live = GetCheck(report, "model-slot-live");
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Fail, live.Status);
+        StringAssert.Contains(live.Message, "已被标记停止服务");
+    }
+
     // ── 请求阶段中间件测试（节点未就绪 → 503，不接流量） ────────────────
 
     [TestMethod]
@@ -240,6 +295,7 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
         public required ProductionAdmissionController Controller { get; init; }
         public required CountingClusterModelSlotStore SlotStore { get; init; }
         public required InMemoryModelNodeAppliedStateStore AppliedStateStore { get; init; }
+        public required InMemoryModelNodeMembershipStore MembershipStore { get; init; }
         public required FakeModelActivationManager ActivationManager { get; init; }
         public required FakeApplicationLifetime Lifetime { get; init; }
     }
@@ -259,7 +315,11 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
         string? isolationReason = null,
         bool activeEngineNull = false,
         string engineModelArtifactId = "artifact-7f3a",
-        string engineContentHash = "sha256:expected")
+        string engineContentHash = "sha256:expected",
+        bool registerMembershipStore = true,
+        bool seedMembership = true,
+        TimeSpan? membershipLeaseDuration = null,
+        bool membershipServingEnabled = true)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -288,6 +348,22 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
                     isolationReason: isolationReason)).ConfigureAwait(false);
             }
             services.AddSingleton<IModelNodeAppliedStateStore>(appliedStateStore);
+        }
+
+        // P0-15：成员资格存储（默认注册并预置本节点租约；缺失/无租约/serving=false → Fail-closed）。
+        var membershipStore = new InMemoryModelNodeMembershipStore();
+        if (registerMembershipStore)
+        {
+            if (seedMembership)
+            {
+                var lease = membershipLeaseDuration ?? TimeSpan.FromMinutes(5);
+                await membershipStore.TryAcquireOrRenewLeaseAsync(
+                    Environment.MachineName,
+                    "test-instance",
+                    lease,
+                    membershipServingEnabled).ConfigureAwait(false);
+            }
+            services.AddSingleton<IModelNodeMembershipStore>(membershipStore);
         }
 
         var activationManager = new FakeModelActivationManager
@@ -328,6 +404,7 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
             Controller = controller,
             SlotStore = slotStore,
             AppliedStateStore = appliedStateStore,
+            MembershipStore = membershipStore,
             ActivationManager = activationManager,
             Lifetime = lifetime
         };
@@ -368,6 +445,15 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
             ActiveGeneration = 1,
             ContentHash = "sha256:expected"
         });
+
+        // P0-15：成员资格租约（中间件场景恒注册；nodeReady 只影响 Applied State，租约恒有效）。
+        var membershipStore = new InMemoryModelNodeMembershipStore();
+        await membershipStore.TryAcquireOrRenewLeaseAsync(
+            Environment.MachineName,
+            "test-instance",
+            TimeSpan.FromMinutes(5),
+            servingEnabled: true).ConfigureAwait(false);
+        builder.Services.AddSingleton<IModelNodeMembershipStore>(membershipStore);
 
         builder.Services.AddSingleton<ProductionAdmissionOptions>();
         builder.Services.AddSingleton<ProductionAdmissionValidator>(sp =>

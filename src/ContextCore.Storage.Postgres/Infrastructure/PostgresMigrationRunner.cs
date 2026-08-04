@@ -144,8 +144,16 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// - 既有 Created（state=0）Run 批量转换为 Queued（state=21）：新语义下 Created 只属于
     ///   InMemory/FileSystem provider，持久化待调度 Run 必须处于 Queued（Admission 已通过），
     ///   否则 Durable Scheduler 永不领取（P0-6：配额失败的 Run 不得进入可调度状态）。
+    /// v59 → v60，model_node_membership 节点成员资格租约（P0-15）：
+    /// - 新增 model_node_membership 表（node_id / instance_id / lease_token /
+    ///   lease_expires_at / last_heartbeat / serving_enabled）：节点在集群中的活跃成员身份。
+    /// - 租约过期即 stale cutoff——Applied-State Registry 的 NodeCount / Converged /
+    ///   RolloutReady 只基于当前活跃成员，不再被历史 Applied State 行永久阻止收敛；
+    ///   新启动但尚未写 Applied State 的节点计入 NodeCount（未就绪，阻止 Rollout Ready）。
+    /// - serving_enabled：Isolated 节点由 Reconciler 置 false，Admission/Middleware 据此
+    ///   真正停止接收模型流量（不能只写 Applied State 数据库标志）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v59";
+    public const string SchemaVersion = "cc-schema-v60";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -257,6 +265,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "cluster_model_slots",
         // Model Node Applied State（节点已应用状态：每节点记录最后成功应用的集群槽位 Revision 与模型内容）
         "model_node_applied_state",
+        // Model Node Membership（P0-15 节点成员资格租约：活跃成员 + stale cutoff + serving 开关）
+        "model_node_membership",
         // Tool Reconciliation Control Plane（对账记录跨进程持久化 + ExternalOperationId 反查 + deadline 高亮）
         "tool_reconciliation_entries"
     ];
@@ -583,6 +593,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var clusterModelSlots = Infrastructure.PostgresNames.Table(options, "cluster_model_slots");
         // Model Node Applied State（节点已应用状态）
         var modelNodeAppliedStates = Infrastructure.PostgresNames.Table(options, "model_node_applied_state");
+        // Model Node Membership（P0-15 节点成员资格租约）
+        var modelNodeMemberships = Infrastructure.PostgresNames.Table(options, "model_node_membership");
         // Tool Reconciliation Control Plane（对账记录持久化表）
         var toolReconciliationEntries = Infrastructure.PostgresNames.Table(options, "tool_reconciliation_entries");
         // 自适应检索规划器反馈持久化表
@@ -2515,6 +2527,22 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
     isolation_reason text NULL,
     applied_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (node_id, slot_name)
+);
+
+-- Model Node Membership（节点成员资格租约，P0-15）
+-- 每 node_id 一行：节点在集群中的活跃成员身份。租约过期即 stale cutoff——
+-- Applied-State Registry 的 NodeCount / Converged / RolloutReady 只基于活跃成员，
+-- 不再被历史 Applied State 行永久阻止收敛；新启动但尚未写 Applied State 的节点
+-- 计入 NodeCount（未就绪，阻止 Rollout Ready）。serving_enabled：Isolated 节点由
+-- Reconciler 置 false，Admission/Middleware 据此真正停止接收模型流量（不能只写标志）。
+CREATE TABLE IF NOT EXISTS {modelNodeMemberships} (
+    node_id text NOT NULL,
+    instance_id text NOT NULL,
+    lease_token text NOT NULL,
+    lease_expires_at timestamptz NOT NULL,
+    last_heartbeat timestamptz NOT NULL,
+    serving_enabled boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (node_id)
 );
 
 -- Tool Reconciliation Control Plane（对账记录持久化表）
