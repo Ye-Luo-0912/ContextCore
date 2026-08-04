@@ -223,8 +223,12 @@ public sealed class R29H_ProductionEvidenceRealHttpE2ETests : IAsyncDisposable
                     hasToolMessage = true;
                     Assert.IsTrue(messages[i].TryGetProperty("tool_call_id", out var tcid),
                         "Tool 消息应包含 tool_call_id 字段。");
-                    Assert.AreEqual("call_test_001", tcid.GetString(),
-                        $"tool_call_id 应为 call_test_001，实际 {tcid.GetString()}。");
+                    // Tool 消息的 tool_call_id 使用 NormalizedToolCall.InvocationId
+                    // （{runId}_{turn}_{ordinal}，与 Assistant 消息 tool_calls[].id 一致；
+                    // 确定性可重建，崩溃恢复后能命中同一 journal 条目），而非模型返回的
+                    // 原始 call_test_001（该 ID 在恢复重放后不可重建）。
+                    Assert.AreEqual($"{run.RunId}_1_0", tcid.GetString(),
+                        $"tool_call_id 应为 InvocationId {run.RunId}_1_0，实际 {tcid.GetString()}。");
                     break;
                 }
             }

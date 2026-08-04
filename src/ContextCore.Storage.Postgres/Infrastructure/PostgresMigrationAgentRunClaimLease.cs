@@ -91,7 +91,7 @@ public sealed class PostgresMigrationAgentRunClaimLease : IPostgresMigrationStep
                 UPDATE {table}
                 SET state = 21,
                     updated_at = clock_timestamp(),
-                    data = data || jsonb_build_object('State', to_jsonb('Queued'), 'UpdatedAt', to_jsonb(clock_timestamp()))
+                    data = data || jsonb_build_object('State', to_jsonb('Queued'::text), 'UpdatedAt', to_jsonb(clock_timestamp()))
                 WHERE state = 0;
                 """;
         }

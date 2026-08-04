@@ -244,7 +244,7 @@ updated AS (
         last_heartbeat_at = @now,
         updated_at = @now,
         data = data || jsonb_build_object(
-            'State', to_jsonb('Running'),
+            'State', to_jsonb('Running'::text),
             'StartedAt', to_jsonb(CASE WHEN data->>'StartedAt' IS NULL THEN @now ELSE (data->>'StartedAt')::timestamptz END))
     FROM eligible e
     WHERE cj.workspace_id = e.workspace_id AND cj.job_id = e.job_id

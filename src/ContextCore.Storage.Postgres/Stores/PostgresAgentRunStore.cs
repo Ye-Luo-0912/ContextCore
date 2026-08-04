@@ -491,7 +491,7 @@ LIMIT @take;
                 SET state = 24,
                     updated_at = clock_timestamp(),
                     data = data || jsonb_build_object(
-                        'State', to_jsonb('ClaimExpired'),
+                        'State', to_jsonb('ClaimExpired'::text),
                         'UpdatedAt', to_jsonb(clock_timestamp()))
                 WHERE state = 22
                   AND (claim_expires_at IS NULL OR claim_expires_at <= clock_timestamp());
@@ -572,7 +572,7 @@ updated AS (
         last_checkpoint_sequence = CASE WHEN ar.state = 8 THEN NULL ELSE ar.last_checkpoint_sequence END,
         data = CASE WHEN ar.state = 8
             THEN data || jsonb_build_object(
-                'State', to_jsonb('Claimed'),
+                'State', to_jsonb('Claimed'::text),
                 'UpdatedAt', to_jsonb(clock_timestamp()),
                 'ClaimOwner', to_jsonb(@claim_owner),
                 'ClaimToken', to_jsonb(t.claim_token),
@@ -584,7 +584,7 @@ updated AS (
                 'FailureReason', to_jsonb(NULL::text),
                 'FinalAnswer', to_jsonb(NULL::text))
             ELSE data || jsonb_build_object(
-                'State', to_jsonb('Claimed'),
+                'State', to_jsonb('Claimed'::text),
                 'UpdatedAt', to_jsonb(clock_timestamp()),
                 'ClaimOwner', to_jsonb(@claim_owner),
                 'ClaimToken', to_jsonb(t.claim_token),
@@ -646,7 +646,7 @@ SET state = 22,
     claim_attempt = ar.claim_attempt + 1,
     updated_at = clock_timestamp(),
     data = data || jsonb_build_object(
-        'State', to_jsonb('Claimed'),
+        'State', to_jsonb('Claimed'::text),
         'UpdatedAt', to_jsonb(clock_timestamp()),
         'ClaimOwner', to_jsonb(@claim_owner),
         'ClaimToken', to_jsonb(claim.token),
@@ -709,7 +709,7 @@ SET state = 21,
     claim_expires_at = NULL,
     updated_at = clock_timestamp(),
     data = data || jsonb_build_object(
-        'State', to_jsonb('Queued'),
+        'State', to_jsonb('Queued'::text),
         'UpdatedAt', to_jsonb(clock_timestamp()),
         'ClaimOwner', to_jsonb(NULL::text),
         'ClaimToken', to_jsonb(NULL::text),
@@ -752,7 +752,7 @@ SET state = 18,
     updated_at = clock_timestamp(),
     finished_at = COALESCE(finished_at, clock_timestamp()),
     data = data || jsonb_build_object(
-        'State', to_jsonb('DeadLettered'),
+        'State', to_jsonb('DeadLettered'::text),
         'UpdatedAt', to_jsonb(clock_timestamp()),
         'FinishedAt', to_jsonb(COALESCE(finished_at, clock_timestamp())))
 WHERE state = 8

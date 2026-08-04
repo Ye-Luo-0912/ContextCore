@@ -972,6 +972,7 @@ internal static class CoreExtensions
 		if (section.Exists())
 		{
 			opts.LeaseEnabled = section.GetValue("LeaseEnabled", opts.LeaseEnabled);
+			opts.WorkersEnabled = section.GetValue("WorkersEnabled", opts.WorkersEnabled);
 			opts.MaxGlobalRuns = section.GetValue("MaxGlobalRuns", opts.MaxGlobalRuns);
 			opts.MaxWorkspaceRuns = section.GetValue("MaxWorkspaceRuns", opts.MaxWorkspaceRuns);
 			// 调度队列参数绑定（队列深度 / worker 池 / 优雅 drain 超时 / 公平性）。

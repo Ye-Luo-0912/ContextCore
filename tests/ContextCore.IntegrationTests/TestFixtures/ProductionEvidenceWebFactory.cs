@@ -75,6 +75,9 @@ public sealed class ProductionEvidenceWebFactory : WebApplicationFactory<Program
         builder.UseSetting("ContextCoreRuntime:EnableAgentRunRecovery", "false");
         builder.UseSetting("RelationReconciliation:Enabled", "false");
         builder.UseSetting("ShortTermMaintenance:Enabled", "false");
+        // AgentKernelHost 的 worker 在构造函数中启动（非 IHostedService，移除注册挡不住）——
+        // 显式关闭：run 创建后仅持久化，不被后台 worker 并发执行（避免与测试的事件预置竞争）。
+        builder.UseSetting("AgentHost:WorkersEnabled", "false");
 
         // 关闭 API Key 认证（E2E 测试内部网络，无需鉴权；通过 RequireWorkspacePermission 的端点仍生效）
         builder.UseSetting("Security:RequireApiKey", "false");

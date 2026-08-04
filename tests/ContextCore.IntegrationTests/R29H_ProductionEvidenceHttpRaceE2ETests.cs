@@ -182,8 +182,17 @@ public sealed class R29H_ProductionEvidenceHttpRaceE2ETests : IAsyncDisposable
     private static async Task AppendEventsAsync(
         IAgentRunEventStore eventStore, string workspaceId, string runId, int startSequence, int count)
     {
-        var batch = new List<AgentRunEvent>(count);
+        // 跨批次哈希链：起始 prevHash 必须链接到 store 中既有尾部事件的 ContentHash，
+        // 否则 AppendBatchAsync 校验 PrevChainHash 不匹配（哈希链断裂）。
+        var lastSeq = await eventStore.GetLastSequenceAsync(workspaceId, runId, CancellationToken.None);
         string? prevHash = null;
+        if (lastSeq >= 0)
+        {
+            var tail = await eventStore.ReadAsync(workspaceId, runId, lastSeq, 1, CancellationToken.None);
+            prevHash = tail.Count > 0 ? tail[0].ContentHash : null;
+        }
+
+        var batch = new List<AgentRunEvent>(count);
         for (var i = 0; i < count; i++)
         {
             var seq = startSequence + i;

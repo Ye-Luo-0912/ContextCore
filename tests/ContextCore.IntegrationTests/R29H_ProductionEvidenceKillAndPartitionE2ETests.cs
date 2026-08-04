@@ -147,6 +147,21 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
 
             // ── 等待 Tool 开始执行（Kill Point marker）──
             var started = await WaitForFileAsync(startedMarker, TimeSpan.FromSeconds(60));
+            if (!started)
+            {
+                // 诊断：harness 未到达 Kill Point 时输出其 stdout/stderr，便于定位启动失败原因。
+                try
+                {
+                    var stdout = await stdoutTask.WaitAsync(TimeSpan.FromSeconds(5));
+                    var stderr = await stderrTask.WaitAsync(TimeSpan.FromSeconds(5));
+                    Console.WriteLine($"[KillAndPartition] harness stdout: {stdout}");
+                    Console.WriteLine($"[KillAndPartition] harness stderr: {stderr}");
+                }
+                catch
+                {
+                    // 诊断输出失败不影响主断言结论
+                }
+            }
             Assert.IsTrue(started,
                 "harness 应在 60s 内开始执行 Tool（未出现 tool-started.marker）。");
             Assert.IsTrue(File.Exists(effectFile),
@@ -219,8 +234,10 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
             var recoveryDispatcher = new RealToolDispatcher(new IToolHandler[] { recoveryHandler });
             recoveryDispatcher.Freeze();
             var recoveryExecutor = new DefaultDurableToolExecutor(recoveryDispatcher, journal);
+            // 恢复节点先重放原 Tool（ToolCallStarted 事件重建，原始轮次 → journal 命中 → 对账，
+            // 不重复执行外部副作用），随后模型重调时直接给出最终答案——脚本化模型不需要再
+            // 返回 Tool 调用（那会是新一轮合法调用，而非对账语义）。
             var recoveryTransport = new ScriptedModelTransport(
-                Harness.BuildToolCallResponse(),
                 Harness.BuildFinalAnswerResponse("恢复节点完成。"));
 
             var recoveryActor = new AgentRunActor(
@@ -281,12 +298,12 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明生产证据通过。"); return; }
 
         const string prefix = "part_";
-        var (factory, migrationRunner, serializer) = CreateInfrastructure(prefix);
+        (PostgresConnectionFactory factory, PostgresMigrationRunner migrationRunner, PostgresJsonSerializer serializer) = CreateInfrastructure(prefix);
         try
         {
             await migrationRunner.MigrateAsync();
-            var runStore = new PostgresAgentRunStore(factory, serializer, migrationRunner);
-            var leaseStore = new PostgresAgentRunLease(factory, serializer, migrationRunner);
+            PostgresAgentRunStore runStore = new(factory, serializer, migrationRunner);
+            PostgresAgentRunLease leaseStore = new(factory, serializer, migrationRunner);
 
             var run = BuildRun("DB 网络分区测试");
             await runStore.CreateAsync(run);
@@ -311,8 +328,31 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
                 NpgsqlConnection.ClearAllPools();
             }
 
+            // 重启后 Testcontainers 会重新分配宿主端口（旧连接串端口已失效）：
+            // 刷新连接字符串并重建基础设施，否则后续 Npgsql 调用命中旧端口 → 连接拒绝。
+            await factory.DisposeAsync();
+            _connectionString = _container.GetConnectionString();
+            (factory, migrationRunner, serializer) = CreateInfrastructure(prefix);
+            runStore = new PostgresAgentRunStore(factory, serializer, migrationRunner);
+            leaseStore = new PostgresAgentRunLease(factory, serializer, migrationRunner);
+
             // ── 断言 1：旧 owner 的续约必须失败（租约已真实过期 + token 校验）──
-            var renewed = await leaseStore.RenewAsync(run.RunId, leaseA.LeaseToken, TimeSpan.FromMinutes(2));
+            // 容器重启后端口映射/连接池需要时间就绪，首个 Npgsql 调用可能命中
+            // 已失效的池化连接或端口未监听（传输层异常）；在宽窗口内重试以建立新连接。
+            var renewed = false;
+            for (var attempt = 0; attempt < 10; attempt++)
+            {
+                try
+                {
+                    renewed = await leaseStore.RenewAsync(run.RunId, leaseA.LeaseToken, TimeSpan.FromMinutes(2));
+                    break;
+                }
+                catch (NpgsqlException) when (attempt < 9)
+                {
+                    NpgsqlConnection.ClearAllPools();
+                    await Task.Delay(TimeSpan.FromSeconds(1));
+                }
+            }
             Assert.IsFalse(renewed, "分区后旧 owner 的续约必须失败（租约已真实过期）。");
 
             // ── 断言 2：新 owner 抢占，fencing token 递增 ──

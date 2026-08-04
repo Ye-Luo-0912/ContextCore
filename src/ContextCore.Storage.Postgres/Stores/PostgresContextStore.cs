@@ -273,7 +273,11 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         {
             if (after!.SourceOrder == 0)
             {
-                ftsAfterSql = "AND (" + BuildAfterPredicate(FtsAfterColumns) + ")";
+                // WHERE 不能引用同层 SELECT 的输出别名（ts_rank 是表达式别名而非真实列），
+                // FTS 路径用实际排序表达式替换首列后作为谓词；其余列（importance/updated_at/id）为真实列。
+                ftsAfterSql = hasQueryText && rankExpression is not null
+                    ? "AND (" + BuildFtsAfterPredicate(rankExpression) + ")"
+                    : "AND (" + BuildAfterPredicate(FtsAfterColumns) + ")";
             }
             else
             {
@@ -502,6 +506,19 @@ ORDER BY importance DESC, updated_at DESC, id DESC
             clauses[i] = "(" + string.Join(" AND ", prefix.Append($"{columns[i]} < @after_{columns[i]}")) + ")";
         }
         return string.Join(" OR ", clauses);
+    }
+
+    /// <summary>
+    /// 生成 FTS 命中源的 keyset 续取谓词：与 <see cref="BuildAfterPredicate"/> 同构，
+    /// 但首列 ts_rank（输出别名）用实际排序表达式替换——PostgreSQL 的 WHERE 子句
+    /// 不能引用同层 SELECT 的输出别名。其余列（importance/updated_at/id）为真实列，无需替换。
+    /// </summary>
+    internal static string BuildFtsAfterPredicate(string rankExpression)
+    {
+        var predicate = BuildAfterPredicate(FtsAfterColumns);
+        return predicate
+            .Replace("ts_rank <", $"({rankExpression}) <")
+            .Replace("ts_rank =", $"({rankExpression}) =");
     }
 
     /// <summary>

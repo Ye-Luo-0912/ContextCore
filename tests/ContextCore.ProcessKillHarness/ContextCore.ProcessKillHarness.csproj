@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
     <NuGetAudit>false</NuGetAudit>
     <IsPackable>false</IsPackable>
+    <!-- 独立控制台进程：必须把所有 NuGet 依赖（含 Microsoft.Extensions.*）复制到输出目录。
+         集成测试从测试输出目录启动本 harness（dotnet <dll>），若依赖缺失会在启动时
+         FileNotFoundException（测试输出因 ASP.NET 共享框架引用而排除这些程序集）。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>

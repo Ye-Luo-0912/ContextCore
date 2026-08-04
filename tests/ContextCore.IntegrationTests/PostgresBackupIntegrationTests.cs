@@ -92,7 +92,9 @@ public sealed class PostgresBackupIntegrationTests
         {
             ConnectionString = sourceCs,
             AutoMigrate = true,
-            EnablePgVectorExtension = false,
+            // 基线 DDL 无条件创建 vector 类型列（vectors 表），迁移必须启用该扩展，
+            // 否则 42704 type "vector" does not exist；备份测试验证的是 dump→restore 往返。
+            EnablePgVectorExtension = true,
             SchemaName = "public",
             TablePrefix = "cc_"
         };
@@ -103,17 +105,17 @@ public sealed class PostgresBackupIntegrationTests
         // 再次迁移以验证幂等
         await migrationRunner.MigrateAsync();
 
-        // 插入测试数据到 cc_contexts 表（schema 迁移创建的表）
+        // 插入测试数据到 cc_context_items 表（schema 迁移创建的表；列为当前 schema：data jsonb 存正文）
         await using (sourceFactory)
         {
             await using var conn = await sourceFactory.OpenConnectionAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
-                INSERT INTO cc_contexts (id, workspace_id, collection_id, type, content, created_at, updated_at)
+                INSERT INTO cc_context_items (workspace_id, collection_id, id, type, title, importance, version, created_at, updated_at, data)
                 VALUES
-                    ('ctx-bk-1', 'ws-bk', 'col-bk', 'note', '备份测试条目 1', now(), now()),
-                    ('ctx-bk-2', 'ws-bk', 'col-bk', 'note', '备份测试条目 2', now(), now()),
-                    ('ctx-bk-3', 'ws-bk', 'col-bk', 'note', '备份测试条目 3', now(), now());
+                    ('ws-bk', 'col-bk', 'ctx-bk-1', 'note', '备份测试条目 1', 1.0, 1, now(), now(), '{"Title":"备份测试条目 1","Content":"备份测试条目 1"}'::jsonb),
+                    ('ws-bk', 'col-bk', 'ctx-bk-2', 'note', '备份测试条目 2', 1.0, 1, now(), now(), '{"Title":"备份测试条目 2","Content":"备份测试条目 2"}'::jsonb),
+                    ('ws-bk', 'col-bk', 'ctx-bk-3', 'note', '备份测试条目 3', 1.0, 1, now(), now(), '{"Title":"备份测试条目 3","Content":"备份测试条目 3"}'::jsonb);
                 """;
             await cmd.ExecuteNonQueryAsync();
         }
@@ -164,7 +166,8 @@ public sealed class PostgresBackupIntegrationTests
             {
                 ConnectionString = stagingCs,
                 AutoMigrate = false,
-                EnablePgVectorExtension = false,
+                // 与源库一致：dump 含 vector 类型 DDL，staging 需具备同款扩展能力。
+                EnablePgVectorExtension = true,
                 SchemaName = "public",
                 TablePrefix = "cc_"
             };
@@ -178,8 +181,8 @@ public sealed class PostgresBackupIntegrationTests
                 var stagingTables = await restorer.ListTablesAsync();
                 Assert.IsTrue(stagingTables.Count > 0, "staging 数据库应至少有一张表");
                 Assert.IsTrue(
-                    stagingTables.Any(t => t.Name == "cc_contexts"),
-                    "staging 数据库应包含 cc_contexts 表");
+                    stagingTables.Any(t => t.Name == "cc_context_items"),
+                    "staging 数据库应包含 cc_context_items 表");
 
                 // 校验行数
                 var stagingFactory = new PostgresConnectionFactory(stagingOptions);
@@ -187,7 +190,7 @@ public sealed class PostgresBackupIntegrationTests
                 {
                     await using var conn = await stagingFactory.OpenConnectionAsync();
                     await using var cmd = conn.CreateCommand();
-                    cmd.CommandText = "SELECT count(*) FROM cc_contexts WHERE workspace_id = 'ws-bk' AND collection_id = 'col-bk';";
+                    cmd.CommandText = "SELECT count(*) FROM cc_context_items WHERE workspace_id = 'ws-bk' AND collection_id = 'col-bk';";
                     var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     Assert.AreEqual(3, count, "staging 数据库应恢复出 3 行测试数据");
                 }

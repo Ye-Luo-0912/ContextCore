@@ -128,11 +128,20 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         // 固定 worker 池：默认 = MaxGlobalRuns（worker 阻塞在 SemaphoreSlim 等待槽位，不成为瓶颈）。
         _workerCount = _options.WorkerCount > 0 ? _options.WorkerCount : globalMax;
         _workerCts = new CancellationTokenSource();
-        _workers = new Task[_workerCount];
-        for (var i = 0; i < _workerCount; i++)
+        // WorkersEnabled=false 时不启动 worker（宿主仅登记入队状态，不执行 Run）——
+        // 供仅验证 HTTP 链路/持久化的宿主场景使用（如集成测试）。
+        if (_options.WorkersEnabled)
         {
-            var workerId = i;
-            _workers[i] = RunWorkerLoopAsync(workerId, _workerCts.Token);
+            _workers = new Task[_workerCount];
+            for (var i = 0; i < _workerCount; i++)
+            {
+                var workerId = i;
+                _workers[i] = RunWorkerLoopAsync(workerId, _workerCts.Token);
+            }
+        }
+        else
+        {
+            _workers = Array.Empty<Task>();
         }
     }
 
@@ -206,6 +215,15 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             return BuildEnqueueResult(
                 AgentRunEnqueueStatus.Closed, run.RunId, capacity,
                 "AgentKernelHost 已关闭，无法入队新的 Run。");
+        }
+
+        // WorkersEnabled=false：Host 不执行 Run（worker 未启动），入队无意义 → 直接返回 Closed，
+        // 由调用方（端点）释放 Scheduler Claim 并返回 202（Run 已持久化，等待其他节点/调度接管）。
+        if (!_options.WorkersEnabled)
+        {
+            return BuildEnqueueResult(
+                AgentRunEnqueueStatus.Closed, run.RunId, capacity,
+                "AgentKernelHost 未启用后台 worker，无法执行 Run（Run 已持久化，等待外部调度）。");
         }
 
         // 方案 A：入队前不获取 lease；Worker 从队列取到 Run + 获得执行槽之后再 Acquire Lease。

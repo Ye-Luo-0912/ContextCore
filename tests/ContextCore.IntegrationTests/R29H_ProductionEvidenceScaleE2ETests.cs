@@ -44,7 +44,8 @@ public sealed class R29H_ProductionEvidenceScaleE2ETests : IAsyncDisposable
     {
         if (_pg.ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明生产证据通过。"); return; }
 
-        var (factory, migrationRunner, serializer) = _pg.CreateInfrastructure("10k_");
+        // 表前缀必须以字母或下划线开头（PostgresNames 标识符校验），不能用数字开头。
+        var (factory, migrationRunner, serializer) = _pg.CreateInfrastructure("t10k_");
         try
         {
             await migrationRunner.MigrateAsync();

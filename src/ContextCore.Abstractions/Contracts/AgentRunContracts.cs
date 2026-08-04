@@ -2220,6 +2220,13 @@ public sealed class AgentHostOptions
     /// </summary>
     public bool LeaseEnabled { get; set; } = false;
 
+    /// <summary>
+    /// 是否启动后台 worker 执行入队的 Run。
+    /// 默认 true；设为 false 时 Host 仅登记入队状态（TryEnqueueAsync 返回 Closed），
+    /// 不启动 worker 循环——用于仅验证 HTTP 链路/持久化的宿主场景（如集成测试）。
+    /// </summary>
+    public bool WorkersEnabled { get; set; } = true;
+
     /// <summary>全局最大并发 Run 数（SemaphoreSlim 控制上限）。</summary>
     public int MaxGlobalRuns { get; set; } = 100;
 

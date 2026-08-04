@@ -34,4 +34,17 @@
     <ProjectReference Include="..\ContextCore.ProcessKillHarness\ContextCore.ProcessKillHarness.csproj" />
   </ItemGroup>
 
+  <Target Name="CopyKillHarnessRuntimeToTestOutput" AfterTargets="Build">
+    <!-- harness 是独立控制台进程，测试从测试输出目录以 dotnet &lt;dll&gt; 启动它。
+         harness 的 NuGet 依赖（Microsoft.Extensions.* 等）在测试输出中会被 ASP.NET
+         共享框架引用排除（不复制到本地），导致 harness 启动即 FileNotFoundException。
+         这里把 harness 自身输出目录（已 CopyLocalLockFileAssemblies 自包含）整体复制过来。 -->
+    <ItemGroup>
+      <HarnessRuntimeFiles Include="$(MSBuildThisFileDirectory)..\ContextCore.ProcessKillHarness\bin\$(Configuration)\net10.0\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(HarnessRuntimeFiles)"
+          DestinationFiles="@(HarnessRuntimeFiles->'$(OutputPath)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

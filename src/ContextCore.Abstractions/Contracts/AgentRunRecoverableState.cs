@@ -349,6 +349,73 @@ public static class AgentRunEventStateRebuilder
     }
 
     /// <summary>
+    /// 从事件流中提取仍未完成的 Tool 调用（作为 PendingToolCommand 列表）。
+    /// 非审批路径的 Tool 分派被进程 Kill 打断时（Run 停留在 ToolDispatching），
+    /// 没有 ApprovalRequested 事件可提取；此时以最后一个 ToolCallCompleted 之后的
+    /// 全部 ToolCallStarted 事件为准——它们携带 arguments + modelTurnRevision，
+    /// 恢复节点据此重放原 Tool（原始轮次 → RequestId 与 journal 条目一致，
+    /// durable 去重生效，不会重复执行外部副作用）。
+    /// </summary>
+    /// <param name="events">Run 的事件流（按 Sequence 升序）。</param>
+    /// <returns>提取的 PendingToolCommands 列表；无可恢复的 ToolCallStarted 时返回 null。</returns>
+    public static List<PendingToolCommand>? ExtractPendingCommandsFromToolCallStarted(IReadOnlyList<AgentRunEvent> events)
+    {
+        // 找到最后一个 ToolCallCompleted 的位置：其后所有 ToolCallStarted 都是未完成的调用。
+        var lastCompletedIndex = -1;
+        for (var i = events.Count - 1; i >= 0; i--)
+        {
+            if (events[i].EventType == AgentRunEventType.ToolCallCompleted)
+            {
+                lastCompletedIndex = i;
+                break;
+            }
+        }
+
+        var result = new List<PendingToolCommand>();
+        for (var i = lastCompletedIndex + 1; i < events.Count; i++)
+        {
+            var evt = events[i];
+            if (evt.EventType != AgentRunEventType.ToolCallStarted)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(evt.Payload);
+                var root = doc.RootElement;
+                var toolCallId = root.TryGetProperty("toolCallId", out var tciProp) ? tciProp.GetString() ?? string.Empty : string.Empty;
+                var toolName = root.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
+                var arguments = root.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() ?? string.Empty : string.Empty;
+                var idempotencyKey = root.TryGetProperty("idempotencyKey", out var ikProp) ? ikProp.GetString() : null;
+                var modelTurnRevision = root.TryGetProperty("modelTurnRevision", out var mtrProp) && mtrProp.ValueKind == JsonValueKind.Number
+                    ? mtrProp.GetInt32()
+                    : 0;
+
+                if (string.IsNullOrEmpty(toolCallId) && string.IsNullOrEmpty(toolName))
+                {
+                    continue;
+                }
+
+                result.Add(new PendingToolCommand
+                {
+                    ToolCallId = toolCallId,
+                    ToolName = toolName,
+                    ArgumentsJson = arguments,
+                    IdempotencyKey = idempotencyKey,
+                    ModelTurnRevision = modelTurnRevision
+                });
+            }
+            catch
+            {
+                // 单个事件解析失败不影响其他 ToolCallStarted
+            }
+        }
+
+        return result.Count > 0 ? result : null;
+    }
+
+    /// <summary>
     /// 从 JSON 元素解析单个 PendingToolCommand。
     /// </summary>
     public static PendingToolCommand? ParsePendingToolCommand(JsonElement ptc)

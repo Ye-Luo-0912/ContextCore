@@ -932,7 +932,9 @@ public sealed class PostgresIntegrationTests
             var testContainer = new PostgreSqlBuilder(PgVectorImage)
                 .Build();
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            // 容器冷启动（含 ryuk 资源回收器 + 就绪检查）可能超过 3 秒，
+            // 超时过短会把可用 Docker 误判为不可用（测试被跳过而非执行）。
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await testContainer.StartAsync(cts.Token);
             await testContainer.DisposeAsync();
             return true;

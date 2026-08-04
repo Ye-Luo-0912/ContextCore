@@ -581,6 +581,44 @@ LIMIT @take OFFSET @skip;
             }
         }
 
+        // 边界探测（独立查询，不占主读取预算）：判断每个种子在总窗口（maxScan）之外
+        // 是否仍有候选。per-seed LIMIT 无法区分"候选数恰好等于窗口"与"候选数超过窗口"，
+        // 探测查询用 OFFSET 窗口 + LIMIT 1 精确判定——候选数 == 窗口时不标记截断（契约边界），
+        // 候选数 > 窗口时标记截断。此查询与全局预算解耦，不会因探测行消耗 LIMIT 而误判。
+        var beyondWindowSeeds = new HashSet<string>(seeds.Count, StringComparer.OrdinalIgnoreCase);
+        for (var batchStart = 0; batchStart < seeds.Count; batchStart += SeedBatchSize)
+        {
+            var batchSize = Math.Min(SeedBatchSize, seeds.Count - batchStart);
+            var batchSeeds = seeds.Skip(batchStart).Take(batchSize).ToArray();
+            await using var probeCommand = connection.CreateCommand();
+            probeCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            foreach (var (name, value) in filterParams)
+            {
+                probeCommand.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            }
+            probeCommand.Parameters.AddWithValue("window", maxScan);
+            probeCommand.Parameters.AddWithValue("item_ids", batchSeeds);
+            probeCommand.CommandText = $"""
+SELECT seed.id
+FROM unnest(@item_ids) AS seed(id)
+WHERE EXISTS (
+    SELECT 1
+    FROM {Table("relations")} r
+    WHERE {string.Join(" AND ", filterSql)}
+    ORDER BY weight DESC, confidence DESC, created_at DESC
+    OFFSET @window
+    LIMIT 1
+);
+""";
+            await using (var probeReader = await probeCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (await probeReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    beyondWindowSeeds.Add(probeReader.GetString(0));
+                }
+            }
+        }
+
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         for (var ordinal = 0; ordinal < seeds.Count; ordinal++)
         {
@@ -601,11 +639,14 @@ LIMIT @take OFFSET @skip;
             // 全局预算恰好在该种子的阶段 2 交付过程中耗尽（外层 LIMIT 命中，余量未读完）。
             var phase2CutHere = globalCapHit && ordinal == phase2LastReadSeedOrdinal;
 
-            // 完整交付判定：阶段 1 未达到配额上限（窗口已尽），
-            // 或阶段 2 扫描过该种子且余量未用尽且未被全局预算截断。
-            // 其余情形保守标记 truncated——Postgres 无法区分 bucket == limit 与 bucket > limit。
+            // 完整交付判定：窗口未填满（候选已尽）、阶段 2 扫描过且余量未用尽且未被全局预算截断、
+            // 或窗口恰好填满且探测确认窗口之外无候选（候选数 == maxScan 边界，不截断）。
+            // 其余情形保守标记 truncated。
+            var windowFilled = phase1Rows == phase1Cap
+                && (phase2Extra == 0 || (phase2Scanned && phase2Rows == phase2Extra));
             var complete = phase1Rows < phase1Cap
-                || (phase2Extra > 0 && phase2Scanned && phase2Rows < phase2Extra && !phase2CutHere);
+                || (phase2Extra > 0 && phase2Scanned && phase2Rows < phase2Extra && !phase2CutHere)
+                || (windowFilled && !beyondWindowSeeds.Contains(seed));
 
             var truncated = !complete || skipped;
 

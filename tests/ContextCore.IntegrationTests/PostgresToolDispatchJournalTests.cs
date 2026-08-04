@@ -150,7 +150,7 @@ public sealed class PostgresToolDispatchJournalTests
     }
 
     [TestMethod]
-    public async Task BackwardTransition_ThrowsInvalidOperationException()
+    public async Task BackwardTransition_IsIdempotent_StateNotRegressed()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
 
@@ -171,13 +171,14 @@ public sealed class PostgresToolDispatchJournalTests
             await journal.MarkCommittedAsync(requestId);
             await journal.MarkResultDeliveredAsync(requestId);
 
-            // 逆退：ResultDelivered → Committed 应抛异常（MarkCommitted 目标 = Committed < ResultDelivered）
-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkCommittedAsync(requestId));
+            // 幂等契约：状态已越过目标（ResultDelivered > Committed/Dispatched）时
+            // 逆退调用视为 AlreadyAdvanced，幂等成功、不报错，且状态不倒退。
+            await journal.MarkCommittedAsync(requestId);
+            await journal.MarkDispatchedAsync(requestId);
 
-            // 逆退：ResultDelivered → Dispatched 应抛异常（MarkDispatched 目标 = Dispatched < ResultDelivered）
-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkDispatchedAsync(requestId));
+            var fetched = await journal.GetEntryAsync(requestId);
+            Assert.AreEqual(ToolDispatchState.ResultDelivered, fetched!.State,
+                "逆退调用不应使状态倒退（幂等契约：AlreadyAdvanced）。");
         }
         finally
         {
@@ -186,7 +187,7 @@ public sealed class PostgresToolDispatchJournalTests
     }
 
     [TestMethod]
-    public async Task MarkCommitted_OnCommittedState_ThrowsInvalidOperationException()
+    public async Task MarkDispatched_OnCommittedState_IsIdempotent_StateNotRegressed()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
 
@@ -206,9 +207,12 @@ public sealed class PostgresToolDispatchJournalTests
             await journal.MarkDispatchedAsync(requestId);
             await journal.MarkCommittedAsync(requestId);
 
-            // 逆退：Committed → Dispatched 应抛异常（MarkDispatched 目标 = Dispatched < Committed）
-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkDispatchedAsync(requestId));
+            // 幂等契约：Committed 已越过 Dispatched，重复 MarkDispatched 幂等成功、状态不倒退。
+            await journal.MarkDispatchedAsync(requestId);
+
+            var fetched = await journal.GetEntryAsync(requestId);
+            Assert.AreEqual(ToolDispatchState.Committed, fetched!.State,
+                "Committed 状态下重复 MarkDispatched 不应使状态倒退（幂等契约：AlreadyAdvanced）。");
         }
         finally
         {
@@ -236,11 +240,13 @@ public sealed class PostgresToolDispatchJournalTests
             });
             await journal.MarkDispatchedAsync(requestId, "ext-1");
 
-            // 重复 Prepare（ON CONFLICT DO NOTHING，不应覆盖已推进的 Dispatched 状态）
+            // 重复 Prepare（同一操作的幂等重放，语义字段一致）：不应覆盖已推进的 Dispatched 状态。
+            // 注意：语义字段（ToolName/IdempotencyKey/WorkspaceId/RunId）必须与首次一致，
+            // 否则视为 RequestId 复用为另一项操作，抛 RequestIdReuseDetected（审计链保护）。
             await journal.PrepareAsync(new ToolDispatchJournalEntry
             {
                 RequestId = requestId,
-                ToolName = "duplicate_tool",
+                ToolName = "original_tool",
                 State = ToolDispatchState.Prepared,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
@@ -505,14 +511,13 @@ public sealed class PostgresToolDispatchJournalTests
             // 首次 MarkDispatched 带 externalOperationId
             await journal.MarkDispatchedAsync(requestId, "ext-original");
 
-            // 此时已 Dispatched；再次调用 MarkDispatched（null externalOperationId）应抛逆退异常
-            // （因为 Dispatched → Dispatched 不是前向推进）
-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkDispatchedAsync(requestId, externalOperationId: null));
+            // 幂等重放：再次 MarkDispatched（null externalOperationId）幂等成功（AlreadyApplied），
+            // 不应把已有 externalOperationId 覆盖为 null（CAS 未命中时 COALESCE 语义）。
+            await journal.MarkDispatchedAsync(requestId, externalOperationId: null);
 
             // 验证 externalOperationId 未被覆盖
             var fetched = await journal.GetEntryAsync(requestId);
-            Assert.AreEqual("ext-original", fetched!.ExternalOperationId, "externalOperationId 不应被逆退调用覆盖。");
+            Assert.AreEqual("ext-original", fetched!.ExternalOperationId, "externalOperationId 不应被幂等重放覆盖。");
         }
         finally
         {

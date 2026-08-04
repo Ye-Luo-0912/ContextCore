@@ -822,13 +822,16 @@ public sealed class AgentRunActor
         // 避免恢复后从 0 重新计数导致 RequestId 改变（Journal 无法识别原调用）。
         _executionModelTurn = AgentRunEventStateRebuilder.RebuildExecutionModelTurn(events);
 
-        // 审批通过后从 PendingToolExecution 状态恢复——不规范化为 ContextBuilding，
-        // 而是从最后一个 ApprovalRequested 事件提取 PendingToolCommands，让主循环直接执行原 Tool。
+        // 从 PendingToolExecution / ToolDispatching 状态恢复——不重新调用模型，
+        // 而是重放原 Tool（审批路径从 ApprovalRequested 提取；Kill 中断路径从
+        // ToolCallStarted 提取，原始 ModelTurnRevision 保证 RequestId 与 journal 一致）。
         // 审批 API 在裁决时将 Run 状态推进到 PendingToolExecution（批准）或 Failed（拒绝）；
-        // 此处仅处理 PendingToolExecution（Failed 已是终态，不会进入 resume）。
-        if (state.Run.State == AgentRunState.PendingToolExecution)
+        // ToolDispatching 是 Tool 执行中途被 Kill 时持久化的状态。
+        // 此处仅处理 PendingToolExecution/ToolDispatching（Failed 已是终态，不会进入 resume）。
+        if (state.Run.State == AgentRunState.PendingToolExecution || state.Run.State == AgentRunState.ToolDispatching)
         {
-            var pendingCommands = AgentRunEventStateRebuilder.ExtractPendingToolCommands(events);
+            var pendingCommands = AgentRunEventStateRebuilder.ExtractPendingToolCommands(events)
+                ?? AgentRunEventStateRebuilder.ExtractPendingCommandsFromToolCallStarted(events);
             if (pendingCommands is { Count: > 0 })
             {
                 // 保持 PendingToolExecution 状态（主循环检测后直接执行原 Tool）
@@ -1194,12 +1197,14 @@ public sealed class AgentRunActor
         // 最后事件：有新事件取最后一个；否则取锚点事件（无增量时即最后事件）
         var lastEvent = deltaEvents.Count > 0 ? deltaEvents[^1] : boundaryEvent;
 
-        // 审批恢复：PendingToolExecution 状态时优先从增量事件提取（更新的 ApprovalRequested），
-        // 增量无审批事件时回退到快照中保存的 PendingToolCommands（折叠前缀已归档）。
-        if (state.Run.State == AgentRunState.PendingToolExecution)
+        // 审批/执行中断恢复：PendingToolExecution/ToolDispatching 状态时优先从增量事件提取
+        // （更新的 ApprovalRequested / ToolCallStarted），增量无结果时回退到快照中保存的
+        // PendingToolCommands（折叠前缀已归档）。
+        if (state.Run.State == AgentRunState.PendingToolExecution || state.Run.State == AgentRunState.ToolDispatching)
         {
             var pendingCommands = AgentRunEventStateRebuilder.ExtractPendingToolCommands(deltaEvents)
-                ?? recoverable.PendingToolCommands;
+                ?? recoverable.PendingToolCommands
+                ?? AgentRunEventStateRebuilder.ExtractPendingCommandsFromToolCallStarted(deltaEvents);
             if (pendingCommands is { Count: > 0 })
             {
                 // 保持 PendingToolExecution 状态（主循环检测后直接执行原 Tool）
@@ -1392,12 +1397,17 @@ public sealed class AgentRunActor
                 ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
                 : pendingCommand.ToolCallId;
 
+            // ToolCallStarted 携带 arguments + modelTurnRevision：
+            // 进程在 Tool 执行中被 Kill 时，恢复节点据此重建原 PendingToolCommand（原始轮次），
+            // RequestId 与 journal 条目一致 → durable 去重生效，不重复执行外部副作用。
             state = BufferEvent(state, AgentRunEventType.ToolCallStarted, JsonSerializer.Serialize(new
             {
                 toolName = pendingCommand.ToolName,
                 toolCallId = pendingCommand.ToolCallId,
                 requestId = requestId,
                 idempotencyKey = pendingCommand.IdempotencyKey,
+                arguments = pendingCommand.ArgumentsJson,
+                modelTurnRevision = pendingCommand.ModelTurnRevision,
                 resumedFromApproval = cmdIndex == 0
             }));
 
@@ -2078,16 +2088,26 @@ public sealed class AgentRunActor
 
             // 先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
             // 旧路径在执行后才缓冲 ToolCallStarted，崩溃时无法审计已发起的调用。
+            // RequestId 以 NormalizedToolCall.InvocationId 为基准（与审批恢复路径、
+            // ToolCallStarted 事件一致）：模型返回的原始 ToolCallId（如 call_xxx）在
+            // 崩溃恢复后不可重建，而 InvocationId 由 (runId, turn, ordinal) 确定性生成，
+            // 恢复节点重放原 Tool 时能命中同一 journal 条目（durable 去重）。
+            var effectiveToolCall = toolCall with { ToolCallId = toolCallId };
             var requestIdForStart = (_durableToolExecutor is not null)
-                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, toolCall, _executionModelTurn)
+                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, effectiveToolCall, _executionModelTurn)
                 : toolCallId;
 
+            // ToolCallStarted 携带 arguments + modelTurnRevision：
+            // 进程在 Tool 执行中被 Kill 时，恢复节点据此重建原 PendingToolCommand（原始轮次），
+            // RequestId 与 journal 条目一致 → durable 去重生效，不重复执行外部副作用。
             state = BufferEvent(state, AgentRunEventType.ToolCallStarted, JsonSerializer.Serialize(new
             {
                 toolName = toolCall.ToolName,
                 toolCallId = toolCallId,
                 requestId = requestIdForStart,
-                idempotencyKey = toolCall.IdempotencyKey
+                idempotencyKey = toolCall.IdempotencyKey,
+                arguments = toolCall.Arguments,
+                modelTurnRevision = _executionModelTurn
             }));
 
             // flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
@@ -2108,7 +2128,7 @@ public sealed class AgentRunActor
                       }
                     : null;
                 toolResult = await _durableToolExecutor.ExecuteAsync(
-                    state.Run.RunId, state.Run.WorkspaceId, toolCall, _executionModelTurn,
+                    state.Run.RunId, state.Run.WorkspaceId, effectiveToolCall, _executionModelTurn,
                     cancellationToken, leaseFence2, state.Run.DeadlineAt,
                     approvalGranted: true).ConfigureAwait(false);
             }
