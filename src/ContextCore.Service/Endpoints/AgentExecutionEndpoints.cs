@@ -58,6 +58,9 @@ internal static class AgentExecutionEndpoints
     /// <summary>管理员 raw 事件分页服务端页大小上限（clamp 用户 limit，防止无界读取）。</summary>
     private const int MaxRawEventsPageSize = 500;
 
+    /// <summary>SSE 单轮补读事件数上限（统一视图：归档 + 热表合并后按 sequence 取前 N 条）。</summary>
+    private const int SseReadBatchSize = 100;
+
     public static IEndpointRouteBuilder MapAgentExecutionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/agents/runs").WithTags(Tag);
@@ -189,6 +192,7 @@ internal static class AgentExecutionEndpoints
             IAgentRunEventStore eventStore,
             IWorkspaceContextAccessor workspaceContextAccessor,
             [FromServices] IAgentRunEventNotifier? eventNotifier,
+            [FromServices] IAgentRunEventCompactor? compactor,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
@@ -242,7 +246,7 @@ internal static class AgentExecutionEndpoints
                 try
                 {
                     lastSentSequence = await StreamNewEventsAsync(
-                        writer, eventStore, workspaceId, id,
+                        writer, eventStore, compactor, workspaceId, id,
                         lastEventSequence, streamCt).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (streamCt.IsCancellationRequested)
@@ -277,7 +281,7 @@ internal static class AgentExecutionEndpoints
                         try
                         {
                             drained = await StreamNewEventsAsync(
-                                writer, eventStore, workspaceId, id,
+                                writer, eventStore, compactor, workspaceId, id,
                                 lastEventSequence, streamCt).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException) when (streamCt.IsCancellationRequested)
@@ -383,20 +387,8 @@ internal static class AgentExecutionEndpoints
             // 审计拼接：归档（折叠前缀，sequence < 锚点）+ 热表（锚点 + 增量）按 Sequence 合并，
             // 保证压缩后管理员仍能看到完整事件历史（P0-10 审计缺口修复）。
             // 非 Postgres provider 未注册 compactor → 仅读热表（与压缩不可用的部署一致）。
-            var merged = new List<AgentRunEvent>(pageSize + 1);
-            if (compactor is not null)
-            {
-                var archived = await compactor.GetArchivedEventsAsync(
-                    workspaceId, id, fromSequence, pageSize + 1, ct).ConfigureAwait(false);
-                var hot = await eventStore.ReadAsync(workspaceId, id, fromSequence, pageSize + 1, ct)
-                    .ConfigureAwait(false);
-                MergeRawEventStreams(archived, hot, pageSize + 1, merged);
-            }
-            else
-            {
-                merged.AddRange(await eventStore.ReadAsync(workspaceId, id, fromSequence, pageSize + 1, ct)
-                    .ConfigureAwait(false));
-            }
+            var merged = await ReadUnifiedEventsAsync(
+                compactor, eventStore, workspaceId, id, fromSequence, pageSize + 1, ct).ConfigureAwait(false);
 
             var hasMore = merged.Count > pageSize;
             var items = hasMore ? merged.Take(pageSize).ToArray() : merged.ToArray();
@@ -946,6 +938,35 @@ internal static class AgentExecutionEndpoints
     }
 
     /// <summary>
+    /// 统一视图读取：归档（折叠前缀）+ 热表（锚点 + 增量）按 Sequence 合并的单条读取路径。
+    /// raw 审计端点与 SSE 补读共用，保证压缩后完整历史一致可见；
+    /// 未注册压缩器（非 Postgres provider）时仅读热表。
+    /// </summary>
+    private static async Task<IReadOnlyList<AgentRunEvent>> ReadUnifiedEventsAsync(
+        IAgentRunEventCompactor? compactor,
+        IAgentRunEventStore eventStore,
+        string workspaceId,
+        string runId,
+        int fromSequence,
+        int take,
+        CancellationToken ct)
+    {
+        if (compactor is null)
+        {
+            return await eventStore.ReadAsync(workspaceId, runId, fromSequence, take, ct)
+                .ConfigureAwait(false);
+        }
+
+        var archived = await compactor.GetArchivedEventsAsync(
+            workspaceId, runId, fromSequence, take, ct).ConfigureAwait(false);
+        var hot = await eventStore.ReadAsync(workspaceId, runId, fromSequence, take, ct)
+            .ConfigureAwait(false);
+        var merged = new List<AgentRunEvent>(take);
+        MergeRawEventStreams(archived, hot, take, merged);
+        return merged;
+    }
+
+    /// <summary>
     /// 裁决成功后返回 202，并在 Run 无未裁决记录时立即重新入队（缩短对账完成到恢复执行的延迟）。
     /// </summary>
     private static async Task<IResult> ResolveAccepted(
@@ -1028,13 +1049,17 @@ internal static class AgentExecutionEndpoints
     private static async Task<int> StreamNewEventsAsync(
         StreamWriter writer,
         IAgentRunEventStore eventStore,
+        IAgentRunEventCompactor? compactor,
         string workspaceId,
         string runId,
         int lastSequence,
         CancellationToken ct)
     {
         var fromSequence = lastSequence + 1;
-        var events = await eventStore.ReadAsync(workspaceId, runId, fromSequence, 100, ct)
+        // 统一视图补读：归档（折叠前缀）+ 热表（锚点 + 增量）按 Sequence 合并，
+        // 保证断线重连（Last-Event-ID 落在压缩锚点之前）时已归档事件不丢失。
+        var events = await ReadUnifiedEventsAsync(
+            compactor, eventStore, workspaceId, runId, fromSequence, SseReadBatchSize, ct)
             .ConfigureAwait(false);
 
         // 本轮最后一条事件 Sequence（用于推进 cursor，而非 DB 最新 sequence）

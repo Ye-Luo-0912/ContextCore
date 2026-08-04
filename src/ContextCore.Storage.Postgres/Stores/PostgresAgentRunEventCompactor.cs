@@ -16,12 +16,17 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// （后续 AppendAsync 的 prev_chain_hash 校验基准 = 锚点 content_hash）。
 /// 2. 快照写入 <c>agent_run_event_snapshots</c>（per-run 单行，UPSERT 幂等）。
 /// 3. 压缩幂等：重复调用同一 upToSequence 返回相同结果；upToSequence 超过当前最后
-/// sequence 时自动钳制到最后事件。
-/// 4. 归档表 ON CONFLICT DO NOTHING：重复压缩同一前缀不产生重复归档行。
-/// 5. 快照 state_json 存 <see cref="ContextCore.Abstractions.AgentRunRecoverableState"/>
-/// （<see cref="AgentRunEventStateRebuilder.Rebuild"/> 从折叠前缀重建的完整可恢复状态），
-/// Recovery 按 "Snapshot → validate anchor → replay hot delta" 恢复（P0-10 正式方案）。
-/// 6. <b>自动压缩仍仅限终态 Run（R30.1 保守策略）</b>：<see cref="FindCandidatesAsync"/>
+/// sequence 时自动钳制到最后事件；锚点不晚于既有快照时无新事件可折叠，直接返回。
+/// 4. 归档在数据库侧完成（<c>INSERT INTO archive SELECT ... WHERE sequence &lt; anchor
+/// ON CONFLICT DO NOTHING</c> + DELETE），不经过应用层反序列化——热表 <c>data</c> 列
+/// 原样拷贝到归档表，避免大批量事件的应用层读取与再序列化。
+/// 5. 快照增量重建：以既有快照为基准，只重放热表新增增量事件
+/// （<see cref="AgentRunEventStateRebuilder.RebuildFromEvent"/>），无快照时全量重建；
+/// 避免重复压缩同一 Run 时对折叠前缀的重复全量读取，并保证增量折叠不丢已归档前缀
+/// 的状态。压缩期间对 agent_runs 行加 <c>FOR UPDATE</c>，串行化同 Run 的并发压缩。
+/// 6. 快照 state_json 存 <see cref="ContextCore.Abstractions.AgentRunRecoverableState"/>
+/// （完整可恢复状态），Recovery 按 "Snapshot → validate anchor → replay hot delta" 恢复。
+/// 7. <b>自动压缩仍仅限终态 Run（R30.1 保守策略）</b>：<see cref="FindCandidatesAsync"/>
 /// 只选取终态（或重试已耗尽）的 Run。可恢复快照已支持非终态 Run 的崩溃恢复，但保留
 /// 终态限制避免意外压缩活跃 Run；操作员端点同样仅允许终态 Run 压缩。
 /// </remarks>
@@ -67,7 +72,9 @@ public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRu
 
     /// <inheritdoc />
     /// <remarks>
-    /// 单事务原子执行：读前缀事件 → 归档 → 删除热表折叠前缀 → UPSERT 快照 → COMMIT。
+    /// 单事务原子执行：钳制锚点 → 锁定 run 行 → 读既有快照 → 数据库侧归档折叠前缀
+    /// （INSERT...SELECT）→ 读热表增量 → 删除折叠前缀 → 增量重建快照 UPSERT → COMMIT。
+    /// 归档不经过应用层反序列化；快照以既有快照为基准增量重建（无快照时全量重建）。
     /// </remarks>
     public async Task<AgentRunCompactionResult> CompactAsync(
         string workspaceId,
@@ -96,34 +103,65 @@ public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRu
 
             var anchorSequence = Math.Min(Math.Max(upToSequence, 0), lastSequence);
 
-            // 2. 读取折叠前缀 [0..anchorSequence]（含锚点）。
-            var events = await ReadPrefixAsync(connection, transaction, workspaceId, runId, anchorSequence, cancellationToken)
+            // 2. 锁定 run 行：串行化同 Run 并发压缩，保证快照增量重建读到一致基线与增量
+            //    （否则并发折叠时后提交者可能缺失已被先提交者删除的中间事件）。
+            await LockRunRowAsync(connection, transaction, workspaceId, runId, cancellationToken)
                 .ConfigureAwait(false);
+
+            // 3. 读既有快照（增量重建基准）。
+            var existingSnapshot = await ReadSnapshotCoreAsync(
+                connection, transaction, workspaceId, runId, cancellationToken).ConfigureAwait(false);
+
+            // 锚点不晚于既有快照 → 无新事件可折叠，幂等返回。
+            if (existingSnapshot is not null && anchorSequence <= existingSnapshot.Sequence)
+            {
+                return new AgentRunCompactionResult(
+                    workspaceId, runId, -1, 0, 0, null, DateTimeOffset.UtcNow);
+            }
+
+            // 4. 数据库侧归档折叠前缀（sequence < 锚点，锚点保留在热表作为新链头）。
+            //    不经过应用层反序列化：热表 data 列原样拷贝到归档表（ON CONFLICT DO
+            //    NOTHING 幂等——重复压缩同一前缀不产生重复归档行，RETURNING 计数实际新增行）。
+            var archivedRowCount = await ArchivePrefixAsync(
+                connection, transaction, workspaceId, runId, anchorSequence, cancellationToken).ConfigureAwait(false);
+
+            // 5. 读取用于快照重建的事件：
+            //    - 有可解析的既有快照 → 只读热表增量 [既有快照.Sequence+1 .. anchor]；
+            //    - 无既有快照或快照无法解析（旧格式/损坏）→ 从归档 + 热表统一读取
+            //      [0..anchor] 全量前缀重建（保证不丢已归档前缀的状态）。
+            var baseState = existingSnapshot is null
+                ? null
+                : AgentRunEventStateRebuilder.TryDeserialize(existingSnapshot.StateJson);
+            IReadOnlyList<AgentRunEvent> events;
+            if (baseState is null)
+            {
+                events = await ReadFullPrefixAsync(
+                    connection, transaction, workspaceId, runId, anchorSequence, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                events = await ReadSequenceRangeAsync(
+                    connection, transaction, workspaceId, runId,
+                    baseState.Sequence + 1, anchorSequence, cancellationToken).ConfigureAwait(false);
+            }
             if (events.Count == 0)
             {
                 return new AgentRunCompactionResult(
                     workspaceId, runId, -1, 0, 0, null, DateTimeOffset.UtcNow);
             }
 
-            var (anchor, archivedEvents, foldedEventCount) = ComputeFold(events, anchorSequence);
-
-            // 3. 归档折叠事件（幂等：ON CONFLICT DO NOTHING；重复压缩不产生重复行）。
-            var archivedRowCount = 0;
-            if (archivedEvents.Count > 0)
-            {
-                archivedRowCount = await ArchiveAsync(
-                    connection, transaction, workspaceId, runId, archivedEvents, cancellationToken).ConfigureAwait(false);
-            }
-
-            // 4. 从热表删除折叠前缀（锚点保留）。
+            // 6. 从热表删除折叠前缀（锚点保留）。
             await DeleteFoldedPrefixAsync(
                 connection, transaction, workspaceId, runId, anchorSequence, cancellationToken).ConfigureAwait(false);
 
-            // 5. UPSERT 快照（per-run 单行，幂等覆盖）。state_json = 折叠前缀
-            // [0..anchor] 重建的可恢复状态（P0-10 正式方案：Snapshot + Anchor + Hot Delta）。
+            // 7. 快照增量重建 + UPSERT（per-run 单行，幂等覆盖）。
+            var anchor = events[events.Count - 1];
+            var baseSequence = baseState?.Sequence ?? -1;
+            var foldedEventCount = anchorSequence - baseSequence;
             await UpsertSnapshotAsync(
-                connection, transaction, workspaceId, runId, events, foldedEventCount, archivedRowCount, cancellationToken)
-                .ConfigureAwait(false);
+                connection, transaction, workspaceId, runId, baseState, events,
+                foldedEventCount, archivedRowCount, cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -326,12 +364,13 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
         return result is long l ? (int)l : (result is int i ? i : -1);
     }
 
-    private async Task<IReadOnlyList<AgentRunEvent>> ReadPrefixAsync(
+    private async Task<IReadOnlyList<AgentRunEvent>> ReadSequenceRangeAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         string workspaceId,
         string runId,
-        int upToSequence,
+        int fromSequenceExclusive,
+        int upToSequenceInclusive,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -340,46 +379,120 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
         command.CommandText = $"""
 SELECT data
 FROM {Table("agent_run_events")}
-WHERE workspace_id = @workspace_id AND run_id = @run_id AND sequence <= @up_to_sequence
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+  AND sequence > @from_sequence AND sequence <= @up_to_sequence
 ORDER BY sequence ASC;
 """;
         command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
-        command.Parameters.AddWithValue("up_to_sequence", upToSequence);
+        command.Parameters.AddWithValue("from_sequence", fromSequenceExclusive);
+        command.Parameters.AddWithValue("up_to_sequence", upToSequenceInclusive);
         return await ExecuteReaderJsonAsync<AgentRunEvent>(command, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<int> ArchiveAsync(
+    /// <summary>
+    /// 从归档表读取 [from..upTo] 区间事件（按 sequence 升序），供全量前缀重建使用。
+    /// </summary>
+    private async Task<IReadOnlyList<AgentRunEvent>> ReadArchivedRangeAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         string workspaceId,
         string runId,
-        IReadOnlyList<AgentRunEvent> archivedEvents,
+        int fromSequenceInclusive,
+        int upToSequenceInclusive,
         CancellationToken cancellationToken)
     {
-        // 单条 SQL 批量归档（unnest）；ON CONFLICT DO NOTHING 幂等——重复压缩同一前缀不产生重复行。
-        var eventCount = archivedEvents.Count;
-        var eventIds = new string[eventCount];
-        var sequences = new int[eventCount];
-        var eventTypes = new short[eventCount];
-        var states = new short[eventCount];
-        var payloads = new string[eventCount];
-        var contentHashes = new string?[eventCount];
-        var occurredAts = new DateTimeOffset[eventCount];
-        var datas = new string[eventCount];
-        for (var i = 0; i < eventCount; i++)
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("agent_run_events_archive")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+  AND sequence >= @from_sequence AND sequence <= @up_to_sequence
+ORDER BY sequence ASC;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("from_sequence", fromSequenceInclusive);
+        command.Parameters.AddWithValue("up_to_sequence", upToSequenceInclusive);
+        return await ExecuteReaderJsonAsync<AgentRunEvent>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 统一读取 [0..upTo] 全量前缀：归档（折叠前缀）+ 热表（锚点 + 增量）按 sequence 归并。
+    /// 用于无有效既有快照（首次压缩或旧格式/损坏快照）时的全量重建——归档部分保证
+    /// 已折叠的历史事件不丢失。
+    /// </summary>
+    private async Task<IReadOnlyList<AgentRunEvent>> ReadFullPrefixAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        int upToSequence,
+        CancellationToken cancellationToken)
+    {
+        var archived = await ReadArchivedRangeAsync(
+            connection, transaction, workspaceId, runId, 0, upToSequence, cancellationToken).ConfigureAwait(false);
+        var hot = await ReadSequenceRangeAsync(
+            connection, transaction, workspaceId, runId, -1, upToSequence, cancellationToken).ConfigureAwait(false);
+
+        if (archived.Count == 0)
         {
-            var e = archivedEvents[i];
-            eventIds[i] = e.EventId;
-            sequences[i] = e.Sequence;
-            eventTypes[i] = (short)e.EventType;
-            states[i] = (short)e.State;
-            payloads[i] = e.Payload ?? string.Empty;
-            contentHashes[i] = e.ContentHash;
-            occurredAts[i] = e.OccurredAt;
-            datas[i] = Serializer.Serialize(e);
+            return hot;
+        }
+        if (hot.Count == 0)
+        {
+            return archived;
         }
 
+        var merged = new List<AgentRunEvent>(archived.Count + hot.Count);
+        MergeSortedBySequence(archived, hot, merged);
+        return merged;
+    }
+
+    /// <summary>按 sequence 升序归并两条有序事件流（事件在归档/热表间不重复）。</summary>
+    private static void MergeSortedBySequence(
+        IReadOnlyList<AgentRunEvent> left,
+        IReadOnlyList<AgentRunEvent> right,
+        List<AgentRunEvent> merged)
+    {
+        var i = 0;
+        var j = 0;
+        while (i < left.Count && j < right.Count)
+        {
+            if (left[i].Sequence <= right[j].Sequence)
+            {
+                merged.Add(left[i++]);
+            }
+            else
+            {
+                merged.Add(right[j++]);
+            }
+        }
+        while (i < left.Count)
+        {
+            merged.Add(left[i++]);
+        }
+        while (j < right.Count)
+        {
+            merged.Add(right[j++]);
+        }
+    }
+
+    /// <summary>
+    /// 数据库侧归档折叠前缀：把热表 sequence &lt; 锚点的行原样拷贝到归档表。
+    /// 不经过应用层反序列化；ON CONFLICT DO NOTHING 幂等（重复压缩不产生重复行），
+    /// RETURNING 只返回实际新增行数。
+    /// </summary>
+    private async Task<int> ArchivePrefixAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        int anchorSequence,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -388,33 +501,17 @@ INSERT INTO {Table("agent_run_events_archive")} (
     event_id, workspace_id, run_id, sequence,
     event_type, state, payload, content_hash,
     occurred_at, data)
-SELECT
-    evt_id, @workspace_id, @run_id, evt_seq,
-    evt_type, evt_state, evt_payload, evt_hash,
-    evt_occurred_at, evt_data::jsonb
-FROM unnest(
-    @event_ids::text[],
-    @sequences::integer[],
-    @event_types::smallint[],
-    @states::smallint[],
-    @payloads::text[],
-    @content_hashes::text[],
-    @occurred_ats::timestamptz[],
-    @datas::jsonb[]
-) AS t(evt_id, evt_seq, evt_type, evt_state, evt_payload, evt_hash, evt_occurred_at, evt_data)
+SELECT event_id, workspace_id, run_id, sequence,
+    event_type, state, payload, content_hash,
+    occurred_at, data
+FROM {Table("agent_run_events")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND sequence < @anchor_sequence
 ON CONFLICT (workspace_id, run_id, sequence) DO NOTHING
 RETURNING sequence;
 """;
         command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
-        AddTextArray(command, "event_ids", eventIds);
-        AddArrayParameter(command, "sequences", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer, sequences);
-        AddArrayParameter(command, "event_types", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Smallint, eventTypes);
-        AddArrayParameter(command, "states", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Smallint, states);
-        AddTextArray(command, "payloads", payloads);
-        AddNullableTextArray(command, "content_hashes", contentHashes);
-        AddArrayParameter(command, "occurred_ats", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.TimestampTz, occurredAts);
-        AddArrayParameter(command, "datas", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Jsonb, datas);
+        command.Parameters.AddWithValue("anchor_sequence", anchorSequence);
 
         var insertedCount = 0;
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -453,13 +550,18 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND sequence < @anchor_s
         NpgsqlTransaction transaction,
         string workspaceId,
         string runId,
-        IReadOnlyList<AgentRunEvent> prefixEvents,
+        AgentRunRecoverableState? baseState,
+        IReadOnlyList<AgentRunEvent> deltaEvents,
         int foldedEventCount,
         int archivedRowCount,
         CancellationToken cancellationToken)
     {
-        // 锚点 = 折叠前缀最后事件（按 Sequence 升序传入，与 ComputeFold 的锚点一致）。
-        var anchor = prefixEvents[prefixEvents.Count - 1];
+        // 锚点 = 增量最后事件（按 Sequence 升序传入）。
+        var anchor = deltaEvents[deltaEvents.Count - 1];
+        // state_json = 以既有快照为基准、重放热表增量重建的完整可恢复状态
+        // （Conversation / ToolObservations / ExecutionModelTurn / PendingToolCommands
+        // + Sequence/ChainHeadHash），供 Recovery 快照恢复使用。
+        var state = RebuildSnapshotIncrementally(baseState, deltaEvents);
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -483,15 +585,116 @@ ON CONFLICT (workspace_id, run_id) DO UPDATE SET
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("anchor_sequence", anchor.Sequence);
         command.Parameters.AddWithValue("chain_head_hash", (object?)anchor.ContentHash ?? DBNull.Value);
-        // P0-10 正式方案：state_json 不再是"锚点事件序列化"，而是折叠前缀 [0..anchor]
-        // 重建的完整可恢复状态（Conversation / ToolObservations / ExecutionModelTurn /
-        // PendingToolCommands + Sequence/ChainHeadHash），供 Recovery 快照恢复使用。
-        command.Parameters.AddWithValue(
-            "state_json",
-            AgentRunEventStateRebuilder.Serialize(AgentRunEventStateRebuilder.Rebuild(prefixEvents)));
+        command.Parameters.AddWithValue("state_json", AgentRunEventStateRebuilder.Serialize(state));
         command.Parameters.AddWithValue("folded_event_count", foldedEventCount);
         command.Parameters.AddWithValue("archived_row_count", archivedRowCount);
         command.Parameters.AddWithValue("compacted_at", DateTimeOffset.UtcNow);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 增量重建可恢复快照：以既有快照为基准，只重放热表新增增量事件。
+    /// 无既有快照时对增量事件全量重建（首次压缩）。
+    /// </summary>
+    /// <param name="baseState">既有快照（可为 null = 首次压缩，无基准）。</param>
+    /// <param name="deltaEvents">本次折叠新增的热表事件（按 Sequence 升序，非空）。</param>
+    /// <returns>覆盖到增量最后事件的完整可恢复状态。</returns>
+    internal static AgentRunRecoverableState RebuildSnapshotIncrementally(
+        AgentRunRecoverableState? baseState,
+        IReadOnlyList<AgentRunEvent> deltaEvents)
+    {
+        ArgumentNullException.ThrowIfNull(deltaEvents);
+        if (deltaEvents.Count == 0)
+        {
+            throw new ArgumentException("增量事件为空，无法重建快照。", nameof(deltaEvents));
+        }
+
+        var last = deltaEvents[deltaEvents.Count - 1];
+        if (baseState is null)
+        {
+            return AgentRunEventStateRebuilder.Rebuild(deltaEvents);
+        }
+
+        // 拷贝既有快照的对话流 / 工具观察，再追加增量事件的重建贡献（不修改既有列表）。
+        var conversation = new List<AgentMessage>(baseState.Conversation);
+        var toolObservations = new List<ToolObservation>(baseState.ToolObservations);
+        foreach (var evt in deltaEvents)
+        {
+            AgentRunEventStateRebuilder.RebuildFromEvent(evt, conversation, toolObservations);
+        }
+
+        return new AgentRunRecoverableState
+        {
+            Sequence = last.Sequence,
+            ChainHeadHash = last.ContentHash,
+            Conversation = conversation,
+            ToolObservations = toolObservations,
+            ExecutionModelTurn = AgentRunEventStateRebuilder.RebuildExecutionModelTurn(
+                deltaEvents, baseState.ExecutionModelTurn),
+            // 增量内最后一个审批事件优先；增量无审批事件时沿用既有快照的 Pending 命令。
+            PendingToolCommands = AgentRunEventStateRebuilder.ExtractPendingToolCommands(deltaEvents)
+                ?? baseState.PendingToolCommands
+        };
+    }
+
+    private async Task LockRunRowAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT 1
+FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+FOR UPDATE;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<AgentRunEventSnapshot?> ReadSnapshotCoreAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT anchor_sequence, chain_head_hash, state_json, folded_event_count, compacted_at
+FROM {Table("agent_run_event_snapshots")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+        var anchorSequence = reader.GetInt32(0);
+        var chainHeadHash = reader.IsDBNull(1) ? null : reader.GetString(1);
+        var stateJson = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+        var foldedEventCount = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+        var compactedAt = reader.GetFieldValue<DateTimeOffset>(4);
+        return new AgentRunEventSnapshot
+        {
+            WorkspaceId = workspaceId,
+            RunId = runId,
+            Sequence = anchorSequence,
+            ChainHeadHash = chainHeadHash,
+            FoldedEventCount = foldedEventCount,
+            StateJson = stateJson,
+            CreatedAt = compactedAt
+        };
     }
 }

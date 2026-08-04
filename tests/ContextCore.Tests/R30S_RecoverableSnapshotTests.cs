@@ -4,6 +4,7 @@ using ContextCore.Core.Services.Agent;
 using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Service.Endpoints;
+using ContextCore.Storage.Postgres.Stores;
 
 namespace ContextCore.Tests;
 
@@ -174,6 +175,158 @@ public sealed class R30S_RecoverableSnapshotTests
         Assert.AreEqual(4, AgentRunEventStateRebuilder.RebuildExecutionModelTurn(chain, initialValue: 2));
         // initialValue = 5：内嵌 3 < 5 → 保持 5；旧事件计数 → 6
         Assert.AreEqual(6, AgentRunEventStateRebuilder.RebuildExecutionModelTurn(chain, initialValue: 5));
+    }
+
+    // ---------------------------------------------------------------------------
+    // 1b. 压缩器增量快照重建（既有快照 + 热表增量；无快照时全量）
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// 验证：无既有快照时（首次压缩），增量重建退化为对增量事件的全量 Rebuild
+    /// （与 AgentRunEventStateRebuilder.Rebuild 语义一致）。
+    /// </summary>
+    [TestMethod]
+    public void RebuildIncrementally_NullBase_FullRebuildsDelta()
+    {
+        var delta = BuildMixedChain("run-incr-null", "delta-content", includeTool: true);
+
+        var state = PostgresAgentRunEventCompactor.RebuildSnapshotIncrementally(null, delta);
+        var full = AgentRunEventStateRebuilder.Rebuild(delta);
+
+        Assert.AreEqual(full.Sequence, state.Sequence);
+        Assert.AreEqual(full.ChainHeadHash, state.ChainHeadHash);
+        Assert.AreEqual(full.Conversation.Count, state.Conversation.Count);
+        Assert.AreEqual(full.Conversation[1].Content, state.Conversation[1].Content);
+        Assert.AreEqual(full.ToolObservations.Count, state.ToolObservations.Count);
+        Assert.AreEqual(full.ExecutionModelTurn, state.ExecutionModelTurn);
+    }
+
+    /// <summary>
+    /// 验证：以既有快照为基准时，增量重建只追加增量事件的重建贡献——
+    /// 对话流 = 既有 + 增量新增、Sequence/ChainHeadHash = 增量最后事件、
+    /// 模型轮次取 max（快照轮次, 增量内嵌轮次）；既有快照列表不被修改（拷贝语义）。
+    /// </summary>
+    [TestMethod]
+    public void RebuildIncrementally_AppendsDeltaToBase()
+    {
+        var baseEvents = BuildMixedChain("run-incr-append", "base-content", includeTool: true);
+        var baseState = AgentRunEventStateRebuilder.Rebuild(baseEvents);
+        var baseConversationCount = baseState.Conversation.Count;
+
+        var delta = new List<AgentRunEvent>
+        {
+            AgentRunEventChain.BuildEvent("run-incr-append", WorkspaceId, 6,
+                AgentRunEventType.ModelCallCompleted, AgentRunState.ModelCalling,
+                JsonSerializer.Serialize(new
+                {
+                    content = "delta-content",
+                    toolCallCount = 0,
+                    isFinalAnswer = true,
+                    executionModelTurn = 2
+                }),
+                baseEvents[^1].ContentHash)
+        };
+
+        var state = PostgresAgentRunEventCompactor.RebuildSnapshotIncrementally(baseState, delta);
+
+        Assert.AreEqual(6, state.Sequence, "增量快照 Sequence 应为增量最后事件 sequence。");
+        Assert.AreEqual(delta[^1].ContentHash, state.ChainHeadHash);
+        Assert.AreEqual(baseConversationCount + 1, state.Conversation.Count,
+            "对话流应 = 既有快照 + 增量新增消息。");
+        Assert.AreEqual("delta-content", state.Conversation[^1].Content);
+        Assert.AreEqual(2, state.ExecutionModelTurn, "模型轮次应取 max(快照, 增量内嵌)。");
+        Assert.AreEqual(baseConversationCount, baseState.Conversation.Count,
+            "增量重建不得修改既有快照的对话流（拷贝语义）。");
+    }
+
+    /// <summary>
+    /// 验证：PendingToolCommands 的增量语义——增量含最后一个 ApprovalRequested 时用增量提取值；
+    /// 增量无审批事件时沿用既有快照的 Pending 命令（已归档前缀的审批不丢失）。
+    /// </summary>
+    [TestMethod]
+    public void RebuildIncrementally_PendingToolCommands_DeltaWinsElseKeepsBase()
+    {
+        var baseChain = new List<AgentRunEvent>();
+        baseChain.Add(AgentRunEventChain.BuildEvent("run-incr-ptc", WorkspaceId, 0,
+            AgentRunEventType.RunCreated, AgentRunState.Created, """{"runId":"seed"}""", null));
+        baseChain.Add(AgentRunEventChain.BuildEvent("run-incr-ptc", WorkspaceId, 1,
+            AgentRunEventType.ApprovalRequested, AgentRunState.AwaitingApproval,
+            JsonSerializer.Serialize(new
+            {
+                toolName = "echo",
+                reason = "needs-approval",
+                pendingToolCommands = new[]
+                {
+                    new { ToolCallId = "tc-1", ToolName = "echo", ArgumentsJson = "{}", IdempotencyKey = "ik-1", ModelTurnRevision = 1 }
+                }
+            }),
+            baseChain[^1].ContentHash));
+        var baseState = AgentRunEventStateRebuilder.Rebuild(baseChain);
+        Assert.IsNotNull(baseState.PendingToolCommands);
+
+        // 增量无审批事件 → 沿用既有快照的 Pending 命令。
+        var noApprovalDelta = new List<AgentRunEvent>
+        {
+            AgentRunEventChain.BuildEvent("run-incr-ptc", WorkspaceId, 2,
+                AgentRunEventType.StateTransition, AgentRunState.ContextBuilding,
+                """{"from":"AwaitingApproval","to":"ContextBuilding"}""", baseChain[^1].ContentHash)
+        };
+        var kept = PostgresAgentRunEventCompactor.RebuildSnapshotIncrementally(baseState, noApprovalDelta);
+        Assert.IsNotNull(kept.PendingToolCommands, "增量无审批事件时应沿用既有快照的 Pending 命令。");
+        Assert.AreEqual("tc-1", kept.PendingToolCommands![0].ToolCallId);
+
+        // 增量含 ApprovalRequested → 用增量提取值（最后一个审批优先）。
+        var approvalDelta = new List<AgentRunEvent>
+        {
+            AgentRunEventChain.BuildEvent("run-incr-ptc", WorkspaceId, 2,
+                AgentRunEventType.ApprovalRequested, AgentRunState.AwaitingApproval,
+                JsonSerializer.Serialize(new
+                {
+                    toolName = "echo",
+                    reason = "needs-approval-again",
+                    pendingToolCommands = new[]
+                    {
+                        new { ToolCallId = "tc-2", ToolName = "echo", ArgumentsJson = "{}", IdempotencyKey = "ik-2", ModelTurnRevision = 2 }
+                    }
+                }),
+                baseChain[^1].ContentHash)
+        };
+        var replaced = PostgresAgentRunEventCompactor.RebuildSnapshotIncrementally(baseState, approvalDelta);
+        Assert.IsNotNull(replaced.PendingToolCommands, "增量含审批事件时应提取增量的 Pending 命令。");
+        Assert.AreEqual("tc-2", replaced.PendingToolCommands![0].ToolCallId);
+    }
+
+    /// <summary>
+    /// 验证：增量重建的模型轮次语义——增量内嵌轮次取 max；旧事件（无内嵌字段）在快照轮次上计数递增。
+    /// </summary>
+    [TestMethod]
+    public void RebuildIncrementally_ExecutionModelTurn_TakesMaxAndCountsLegacy()
+    {
+        var baseState = new AgentRunRecoverableState
+        {
+            Sequence = 5,
+            ChainHeadHash = "base-hash",
+            Conversation = [],
+            ToolObservations = [],
+            ExecutionModelTurn = 3,
+            PendingToolCommands = null
+        };
+
+        // 增量内嵌轮次 1 < 快照 3 → 保持 3；随后旧事件（无内嵌字段）计数 → 4。
+        var delta = new List<AgentRunEvent>
+        {
+            AgentRunEventChain.BuildEvent("run-incr-turn", WorkspaceId, 6,
+                AgentRunEventType.ModelCallCompleted, AgentRunState.ModelCalling,
+                """{"content":"embedded-1","executionModelTurn":1}""", null),
+            AgentRunEventChain.BuildEvent("run-incr-turn", WorkspaceId, 7,
+                AgentRunEventType.ModelCallCompleted, AgentRunState.ModelCalling,
+                """{"content":"legacy"}""", null)
+        };
+
+        var state = PostgresAgentRunEventCompactor.RebuildSnapshotIncrementally(baseState, delta);
+
+        Assert.AreEqual(4, state.ExecutionModelTurn,
+            "内嵌轮次取 max(3,1)=3，旧事件计数 → 4。");
     }
 
     // ---------------------------------------------------------------------------
