@@ -3,6 +3,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.Retrieval;
+using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
@@ -271,6 +272,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     // 可选的集群级 Canary Kill Switch 存储。非空时在 canary 命中 V2 后检查活跃紧急覆盖，
     // 存在则强制回退 V1（Emergency Override 优先级高于 canary DB 百分比与 Cutover 配置）。
     private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
+    // P0-13：Kill Switch 查询故障告警日志（可选注入；测试可传 null）。
+    private readonly ILogger<AuthoritativeRetrievalRuntime>? _logger;
 
     /// <summary>构造 Retrieval 权威路径运行时。</summary>
     public AuthoritativeRetrievalRuntime(
@@ -283,7 +286,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         DecisionExperimentPlaneIntegration? experimentPlane = null,
         ICutoverControllerResolver? cutoverResolver = null,
         ICanaryMetricsCollector? canaryMetricsCollector = null,
-        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null)
+        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null,
+        ILogger<AuthoritativeRetrievalRuntime>? logger = null)
     {
         _legacyRetriever = legacyRetriever ?? throw new ArgumentNullException(nameof(legacyRetriever));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -295,12 +299,17 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         _cutoverResolver = cutoverResolver;
         _canaryMetricsCollector = canaryMetricsCollector;
         _emergencyOverrideStore = emergencyOverrideStore;
+        _logger = logger;
     }
 
     /// <summary>
     /// 检查请求所属 canary run 是否存在活跃紧急覆盖（Kill Switch）。
     /// 存储为 null 或请求未携带 canaryRunId 时返回 false（不拦截非 canary 流量）。
     /// </summary>
+    /// <remarks>
+    /// P0-13：Override Store 查询失败必须 fail-closed——按「覆盖活跃」处理强制回退 V1 并告警，
+    /// 绝不让在线请求因 Kill Switch 存储故障直接失败。取消异常仍原样传播。
+    /// </remarks>
     private async ValueTask<bool> IsEmergencyOverrideActiveAsync(
         IReadOnlyDictionary<string, string>? metadata,
         CancellationToken cancellationToken)
@@ -314,7 +323,21 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         {
             return false;
         }
-        return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
+        try
+        {
+            return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // 调用方取消应立即传播（与 RetrieveAsync 取消语义一致）
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex,
+                "P0-13：Canary run {RunId} 查询 Kill Switch（Emergency Override）失败，按覆盖活跃处理，安全回退 V1。",
+                runId);
+            return true;
+        }
     }
 
     /// <summary>
@@ -670,6 +693,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
     // 可选的集群级 Canary Kill Switch 存储（语义同 Retrieval 运行时）。
     private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
+    // P0-13：Kill Switch 查询故障告警日志（可选注入；测试可传 null）。
+    private readonly ILogger<AuthoritativePackageRuntime>? _logger;
 
     /// <summary>构造 Package 权威路径运行时。</summary>
     public AuthoritativePackageRuntime(
@@ -682,7 +707,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         DecisionExperimentPlaneIntegration? experimentPlane = null,
         ICutoverControllerResolver? cutoverResolver = null,
         ICanaryMetricsCollector? canaryMetricsCollector = null,
-        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null)
+        ICanaryEmergencyOverrideStore? emergencyOverrideStore = null,
+        ILogger<AuthoritativePackageRuntime>? logger = null)
     {
         _legacyPackageBuilder = legacyPackageBuilder ?? throw new ArgumentNullException(nameof(legacyPackageBuilder));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -694,11 +720,16 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         _cutoverResolver = cutoverResolver;
         _canaryMetricsCollector = canaryMetricsCollector;
         _emergencyOverrideStore = emergencyOverrideStore;
+        _logger = logger;
     }
 
     /// <summary>
     /// 检查请求所属 canary run 是否存在活跃紧急覆盖（Kill Switch，语义同 Retrieval 运行时）。
     /// </summary>
+    /// <remarks>
+    /// P0-13：Override Store 查询失败必须 fail-closed——按「覆盖活跃」处理强制回退 V1 并告警，
+    /// 绝不让在线请求因 Kill Switch 存储故障直接失败。取消异常仍原样传播。
+    /// </remarks>
     private async ValueTask<bool> IsEmergencyOverrideActiveAsync(
         IReadOnlyDictionary<string, string>? metadata,
         CancellationToken cancellationToken)
@@ -712,7 +743,21 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         {
             return false;
         }
-        return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
+        try
+        {
+            return await _emergencyOverrideStore.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false) is not null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // 调用方取消应立即传播（与 BuildDetailedAsync 取消语义一致）
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex,
+                "P0-13：Canary run {RunId} 查询 Kill Switch（Emergency Override）失败，按覆盖活跃处理，安全回退 V1。",
+                runId);
+            return true;
+        }
     }
 
     /// <summary>

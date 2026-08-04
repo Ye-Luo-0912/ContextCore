@@ -108,6 +108,12 @@ internal static class ProductionRuntimeExtensions
         ApplyAgentModelModeOverride(services, runtimeOptions.AgentModelMode);
         ApplyToolModeOverride(services, runtimeOptions.ToolMode);
 
+        // P0-13：Canary Kill Switch 查询加进程内 TTL 缓存装饰器。
+        // 在线请求路径（AuthoritativeRuntime.IsEmergencyOverrideActiveAsync）不再每请求访问
+        // Override Store；本地 TrySet/TryClear 写穿后立即失效；存储异常原样传播，
+        // 由运行时按「覆盖活跃」回退 V1 + 告警（fail-closed，请求不失败）。
+        ApplyCanaryOverrideCacheDecorator(services, configuration);
+
         return services;
     }
 
@@ -502,6 +508,60 @@ internal static class ProductionRuntimeExtensions
                     "如不需要模型激活，请将 EnableModelActivation 设为 false。");
             }
         }
+    }
+
+    /// <summary>
+    /// 用 TTL 缓存装饰器替换 <see cref="ICanaryEmergencyOverrideStore"/> 注册（P0-13）。
+    /// </summary>
+    /// <remarks>
+    /// 包装当前最后一个注册（Postgres 实现或 InMemory 默认实现）为装饰器的内层，并保持
+    /// <b>单注册</b>：移除全部原注册后仅注册装饰器，避免组合测试中的 enumerable 重复
+    /// （Microsoft DI 直接解析取最后一个注册，移除后再包装语义与之前等价）。
+    /// 未注册任何实现时跳过（运行时 store 为 null，不拦截 canary 流量，无需缓存）。
+    /// </remarks>
+    private static void ApplyCanaryOverrideCacheDecorator(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var descriptors = services
+            .Where(s => s.ServiceType == typeof(ICanaryEmergencyOverrideStore))
+            .ToList();
+        if (descriptors.Count == 0)
+        {
+            return;
+        }
+
+        var options = new CanaryOverrideCacheOptions();
+        configuration.GetSection(CanaryOverrideCacheOptions.SectionName).Bind(options);
+        services.AddSingleton(options);
+
+        var innerDescriptor = descriptors[^1];
+        RemoveService(services, typeof(ICanaryEmergencyOverrideStore));
+        services.AddSingleton<ICanaryEmergencyOverrideStore>(sp =>
+            new CachedCanaryEmergencyOverrideStore(
+                ResolveOverrideStoreInner(sp, innerDescriptor),
+                options));
+    }
+
+    /// <summary>从原始 ServiceDescriptor 构建内层 Override Store 实现（instance / type / factory 三种形态）。</summary>
+    private static ICanaryEmergencyOverrideStore ResolveOverrideStoreInner(
+        IServiceProvider sp,
+        ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationInstance is ICanaryEmergencyOverrideStore instance)
+        {
+            return instance;
+        }
+        if (descriptor.ImplementationType is not null)
+        {
+            return (ICanaryEmergencyOverrideStore)ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType);
+        }
+        if (descriptor.ImplementationFactory is not null)
+        {
+            return (ICanaryEmergencyOverrideStore)descriptor.ImplementationFactory(sp);
+        }
+        throw new InvalidOperationException(
+            "无法解析 ICanaryEmergencyOverrideStore 内层实现（ServiceDescriptor 无有效实现载体）。");
     }
 
     /// <summary>从 DI 容器中移除指定服务类型的所有注册。</summary>

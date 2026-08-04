@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `15688696`（WP-D1 已推送；R30.1 实施中）。
+- **基线**：main @ `9220eab5`（WP-D2 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-D2 迁移 Canary 单一真相源到 pipeline_runs snapshot（P0-12，applier 单事务原子写 + 删除 canary_pipelines 生产写入）。
+- **最近完成**：WP-D3 Canary Kill Switch 查询 fail-safe + TTL 缓存（P0-13，Override Store 故障回退 V1 而非请求失败）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -67,6 +67,13 @@
   - `GetCanaryPipelineStateAsync` 改读 pipeline_runs snapshot（Revision=(int)CanaryRevision / Percentage=CanaryPercentage / Status 由 PipelineRunStatus 映射 Active/Promoted/RolledBack）；`GetAllActivePipelineStatesAsync` 保留读 canary_pipelines（**legacy 一次性迁移读取**，仅 RecoverFromStoreAsync 对 snapshot CanaryRevision==0 的旧 run 兜底恢复）。migration 边界：旧 run 首次推进前 snapshot CanaryRevision==0 → 锚点 0，审计 from_percentage 可能一次性读 0（可接受，恢复路径仍以 canary_pipelines 兜底）。
   - CanaryProgressionService：`AdvanceAsync` / `RollbackAsync` 的 `_decisionApplier != null` 生产分支**移除 PersistCanaryStateToRunAsync 二次调用**（snapshot 由 applier 单事务原子写入，消除 revision 双计数器漂移）；回退路径（_decisionApplier==null，InMemory/测试）保留原样。CanaryLeaderHostedService HA 路径顺带修复：applier 现在原子写 snapshot，HA 模式 snapshot 不再恒 0。文档注释全面更新（class/接口/PersistCanaryStateToRunAsync/RecoverFromStoreAsync/CanaryLocalState 语义）。
   - 测试：新增 `R30F_CanarySingleTruthSourceTests`（5 项：Advance 生产路径 snapshot 只写一次（CanaryRevision 0→1 非 2）、连续两次推进 CAS 链 0→1→2 且 epoch 同步（无双计数器漂移）、Rollback 生产路径 snapshot 只写一次、迁移 SQL 保留 legacy canary 三表 + pipeline_runs canary 列、legacy 表仍注册为必需运维表）。验证：build 0 错误（Storage.Postgres / Core / Service / Abstractions / Tests 全绿）；R30D+R30E+R30F 25/25 通过；Canary 定向 206 通过 / 1 跳过（MultiInstance Postgres）/ 0 失败；PublicApi 1 通过 1 跳过（仅文档注释变更，无签名变更）。
+- **WP-D3 已完成**（P0-13）：Canary Kill Switch 查询 fail-safe + 进程内 TTL 缓存。
+  - 问题：Authoritative Runtime 决定是否走 V2 时同步查询 Emergency Override Store——位于在线请求路径、无本地缓存（每个 Canary 请求一次 DB 往返）、无异常降级（Store/DB 异常直接使 Retrieval/Package 请求失败，而非安全回退 V1）。
+  - 契约（Core 新增，无 Abstractions baseline 影响）：`CanaryOverrideCacheOptions`（配置节 `CanaryOverrideCache`，`Ttl` 默认 5 秒）+ `CachedCanaryEmergencyOverrideStore : ICanaryEmergencyOverrideStore`（进程内 per-runId TTL 缓存装饰器）。
+  - 缓存语义：`GetActiveAsync` TTL 内命中直接返回（含无覆盖负缓存——大多数 run 无活跃覆盖，命中率最高的路径），未命中/过期读内层存储后回填；`TrySetOverrideAsync` / `TryClearOverrideAsync` 写穿真实存储，无论返回 true/false 都立即失效该 runId 本地缓存（false 意味着真相已变化：已存在覆盖/覆盖已清除，缓存可能持有过期方向，必须作废重读）；`GetActiveOverridesAsync` 绕过缓存读全量（运维/对账路径，非热路径）。异常语义：内层存储异常**原样传播**——不吞、不以过期缓存充当「无覆盖」应答，fail-safe 由运行时承担。跨节点传播：本地写穿立即失效；其他节点 TTL 内可能持有旧值（最坏多走 TTL 时长 V2，fail-closed 方向安全），TTL 可配置缩短；后续如需即时跨节点失效可在内层叠加 PostgreSQL NOTIFY/版本号失效（装饰器接口不变）。
+  - 运行时 fail-safe（AuthoritativeRetrievalRuntime / AuthoritativePackageRuntime 的 `IsEmergencyOverrideActiveAsync`）：try/catch 包裹 `GetActiveAsync`——`OperationCanceledException` 原样传播（调用方取消应立即传播），其余异常 `LogError` 告警 + 返回 true（按「覆盖活跃」处理强制回退 V1），请求不失败。两个运行时新增可选 `ILogger<T>? logger` 构造参数（默认 null，测试/未注册日志时兼容）。
+  - 组合根（ProductionRuntimeExtensions.AddContextCoreRuntime 末尾 `ApplyCanaryOverrideCacheDecorator`）：收集现有 ICanaryEmergencyOverrideStore 注册（AddContextStorage 的 Postgres 实现或 CoreExtensions 的 InMemory 默认），`RemoveService` 移除全部原注册后**单注册**装饰器（避免 enumerable 重复，Microsoft DI 直接解析取最后一个注册，移除后包装语义与之前等价）；`CanaryOverrideCacheOptions` 从配置绑定为单例；未注册任何实现时跳过（运行时 store 为 null 不拦截 canary 流量）。`ResolveOverrideStoreInner` 支持 ServiceDescriptor 的 instance / ImplementationType / ImplementationFactory 三种形态（Postgres 注册为 factory，InMemory 为 ImplementationType）。
+  - 测试：新增 `R30G_CanaryOverrideCacheTests`（13 项：TTL 内命中不访问内层、TTL 过期重新读取、负缓存、内层异常原样传播、TrySet 成功/返回 false 均失效缓存、TryClear 成功失效缓存、GetActiveOverridesAsync 绕过缓存、Retrieval/Package 运行时存储故障回退 V1 请求不失败、缓存写穿端到端 Kill Switch 立即生效、组合根单注册 + TTL 配置绑定 + 代理到内层）。验证：build 0 错误（Core / Service / Tests 全绿）；R30G 13/13 + 关联套件（R29H CanaryOverride / R30E / R29H Profile）43/44 通过（唯一失败为既有 11 项之一 ReadinessService_Development_GetRegisteredWorkers）；Canary 定向 71 通过 / 1 跳过 / 0 失败；PublicApi 1 通过 1 跳过（无 Abstractions 变更）。
 
 ### 性能优化工作包进度
 
