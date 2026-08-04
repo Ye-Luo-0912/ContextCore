@@ -11,9 +11,6 @@ namespace ContextCore.Storage.Postgres;
 /// <summary>PostgreSQL store 共享基类，负责迁移、连接和 jsonb 参数。</summary>
 public abstract class PostgresStoreBase
 {
-    private readonly SemaphoreSlim _migrationGate = new(1, 1);
-    private bool _migrated;
-
     protected PostgresStoreBase(
         PostgresConnectionFactory connectionFactory,
         PostgresJsonSerializer serializer,
@@ -162,28 +159,16 @@ public abstract class PostgresStoreBase
         return result;
     }
 
-    /// <summary>首次访问时执行一次幂等迁移；关闭 AutoMigrate 时不执行。</summary>
-    protected async Task EnsureMigratedAsync(CancellationToken cancellationToken)
-    {
-        if (!Options.AutoMigrate || _migrated)
-        {
-            return;
-        }
-
-        await _migrationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (!_migrated)
-            {
-                await MigrationRunner.MigrateAsync(cancellationToken).ConfigureAwait(false);
-                _migrated = true;
-            }
-        }
-        finally
-        {
-            _migrationGate.Release();
-        }
-    }
+    /// <summary>
+    /// 首次访问时执行一次幂等迁移；关闭 AutoMigrate 时不执行。
+    /// 迁移完成状态由共享的 PostgresMigrationRunner 以异步任务缓存——
+    /// 进程内所有 store 实例共享同一次迁移（首个实例触发，其余等待/复用），
+    /// 不再每个实例各自持有同步状态并重复做 DB 版本往返。
+    /// </summary>
+    protected Task EnsureMigratedAsync(CancellationToken cancellationToken)
+        => Options.AutoMigrate
+            ? MigrationRunner.EnsureMigratedAsync(cancellationToken)
+            : Task.CompletedTask;
 
     protected string Table(string suffix) => Infrastructure.PostgresNames.Table(Options, suffix);
 

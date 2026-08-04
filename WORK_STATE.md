@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `efbfb474`（WP-G4 已推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G5 已完成；WP-G6..G8 依次推进。
-- **最近完成**：WP-G5（P1-8 移除未消费的 ILearningLeaseStore 抽象，详见下方条目）。
+- **基线**：main @ `a54869dd`（WP-G5 已推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G6 已完成；WP-G7、WP-G8 依次推进。
+- **最近完成**：WP-G6（P1-9 迁移分阶段 DDL 修复迁移顺序 + 陈旧断言 + 共享异步迁移缓存，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -102,6 +102,12 @@
 
 ### P1 完善项进度
 
+- **WP-G6 已完成**（P1-9）：迁移 DDL 分阶段修复迁移顺序 + 陈旧断言修复 + 共享异步迁移缓存。
+  - 顺序修复 + DDL 分阶段（PostgresMigrationRunner）：MigrateAsync 改为三阶段——阶段一先建迁移追踪表（context_schema_migrations / schema_versions，`EnsureTrackingTablesAsync` 与基线 DDL 同一套 SQL），阶段二执行版本化迁移步骤，阶段三执行基线累计批次。此前版本化步骤先于基线执行，步骤成功后的应用记录写入（RecordMigrationStepAsync → INSERT INTO context_schema_migrations）因追踪表尚不存在而失败（Docker Postgres 集成测试 42P01）——修复后 9 个该环境性失败全部消失。
+  - 异步状态缓存：迁移完成状态由 per-store 同步 bool 提升为 PostgresMigrationRunner 的进程内共享异步任务缓存（`EnsureMigratedAsync`：SemaphoreSlim 门 + Task 缓存，首个 store 触发一次真实迁移，其余 store 等待同一 in-flight 任务；成功后复用已完成任务无 DB 往返；失败清除缓存可重试）；PostgresStoreBase 删除 per-instance `_migrated`/`_migrationGate`，委托共享缓存（保留 AutoMigrate 门）。
+  - 陈旧断言修复：`RequiredIndexes_IncludeUtilityLedgerIndexes` 断言 4 索引 → 5（补 decision_candidate_kind）；`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList` 断言 4 Worker → 5（补 PendingRunClaimer，EnableAgentRunRecovery=true 时 Enabled/Registered）。
+  - 验证：build 0 错误；定向 7/7（2 个原 42P01 Docker 测试 + 2 个陈旧断言测试 + R29N 3 项）；R29H 套件 292 通过 / **1 失败**（仅剩既有 Benchmark 样本断言，原 11 失败中的 9 个 Docker 42P01 + 2 个陈旧断言全部消除）；Service.Tests 64 通过 0 失败。既有失败名单 9 → 7。
+
 - **WP-G5 已完成**（P1-8）：移除未消费的 ILearningLeaseStore 抽象。
   - 现状核实：ILearningLeaseStore（worker 池级租约）只存在于契约、InMemory/Postgres 两个实现与 DI 注册中，无任何生产消费者——LearningMaterializationWorker 使用记录级租约（ILearningEventOutboxStore），池级租约从未接线，整条死抽象移除。
   - 移除：Abstractions `LearningLease` + `ILearningLeaseStore`（删除 LearningLeaseContracts.cs）；Core `InMemoryLearningLeaseStore`；Storage.Postgres `PostgresLearningLeaseStore`；两处 DI 注册（CoreExtensions TryAddSingleton + PostgresServiceCollectionExtensions AddSingleton）。
@@ -149,8 +155,8 @@
 - 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
 - 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
 - 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
-- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 9 项中的项 + 本环境 Docker 不可用导致的 Postgres 集成 42P01 环境性失败，名单见下与「既有 9 个测试失败」）。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 7 项中的项，名单见下与「既有 7 个测试失败」；WP-G6 已修复迁移顺序，Docker Postgres 集成测试不再环境性失败）。
 
-## 既有 9 个测试失败（勿当回归处理）
+## 既有 7 个测试失败（勿当回归处理）
 
-`Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`、`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList`、`RequiredIndexes_IncludeUtilityLedgerIndexes`
+`Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`

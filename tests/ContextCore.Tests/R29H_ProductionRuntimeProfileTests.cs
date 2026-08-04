@@ -277,15 +277,21 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
         var workers = readinessService.GetRegisteredWorkers();
 
-        // 断言：返回 4 个预期 Worker 定义（旧平面 9 个 → 收敛后 4 个）
-        Assert.AreEqual(4, workers.Count,
-            "GetExpectedWorkerDefinitions 应返回 4 个 Worker。");
+        // 断言：返回 5 个预期 Worker 定义（旧平面 9 个 → 收敛后 5 个，含 PendingRunClaimer）
+        Assert.AreEqual(5, workers.Count,
+            "GetExpectedWorkerDefinitions 应返回 5 个 Worker。");
 
         // 断言：AgentRunRecovery — Enabled=true, Registered=true
         var recovery = workers.FirstOrDefault(w => w.Name == "AgentRunRecovery");
         Assert.IsNotNull(recovery, "应包含 AgentRunRecovery Worker。");
         Assert.IsTrue(recovery!.Enabled, "Development profile 下 AgentRunRecovery 应 Enabled=true。");
         Assert.IsTrue(recovery.Registered, "AgentRunRecovery 应已注册。");
+
+        // 断言：PendingRunClaimer — Enabled=true（EnableAgentRunRecovery 打开时随 Recovery 一起启用）, Registered=true
+        var pendingClaimer = workers.FirstOrDefault(w => w.Name == "PendingRunClaimer");
+        Assert.IsNotNull(pendingClaimer, "应包含 PendingRunClaimer Worker。");
+        Assert.IsTrue(pendingClaimer!.Enabled, "EnableAgentRunRecovery=true 时 PendingRunClaimer 应 Enabled=true。");
+        Assert.IsTrue(pendingClaimer.Registered, "PendingRunClaimer 应已注册。");
 
         // 断言：LearningMaterialization — Enabled=true, Registered=true
         var learning = workers.FirstOrDefault(w => w.Name == "LearningMaterialization");

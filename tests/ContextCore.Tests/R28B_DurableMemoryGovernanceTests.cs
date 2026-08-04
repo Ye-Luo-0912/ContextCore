@@ -848,7 +848,7 @@ public sealed class R28B_DurableMemoryGovernanceTests
             .ToList();
 
         CollectionAssert.AreEquivalent(
-            new[] { "workspace", "candidate", "decision", "materialized" },
+            new[] { "workspace", "candidate", "decision", "materialized", "decision_candidate_kind" },
             indexSuffixes);
     }
 

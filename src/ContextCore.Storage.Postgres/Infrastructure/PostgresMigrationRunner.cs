@@ -463,6 +463,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
 
     private readonly PostgresConnectionFactory _connectionFactory;
 
+    // 迁移完成状态的进程内异步缓存：所有 store 实例共享同一迁移任务，
+    // 首次访问触发一次迁移（含 DB 版本检查），成功后后续访问直接复用已完成任务，
+    // 避免每个 store 实例各自做一次 DB 往返；失败后清除缓存允许重试。
+    private readonly SemaphoreSlim _ensureGate = new(1, 1);
+    private Task? _ensureMigratedTask;
+
     public PostgresMigrationRunner(PostgresConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory;
@@ -2646,6 +2652,51 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
         };
     }
 
+    /// <summary>
+    /// 确保 schema 迁移已应用（进程内共享的异步完成缓存）。
+    /// 所有 store 实例共用同一个 PostgresMigrationRunner（生产 DI 单例），
+    /// 首次调用触发一次真实迁移（互斥锁 + DDL），并发调用方等待同一 in-flight 任务；
+    /// 成功后直接返回已完成任务（无 DB 往返），失败后清除缓存允许后续重试。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。取消只放弃当前调用方的等待；正在执行的迁移不被取消（共享计算）。</param>
+    public async Task EnsureMigratedAsync(CancellationToken cancellationToken = default)
+    {
+        var completed = Volatile.Read(ref _ensureMigratedTask);
+        if (completed is { IsCompletedSuccessfully: true })
+        {
+            await completed.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await _ensureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            completed = Volatile.Read(ref _ensureMigratedTask);
+            if (completed is { IsCompletedSuccessfully: true })
+            {
+                await completed.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            var task = MigrateAsync(CancellationToken.None);
+            Volatile.Write(ref _ensureMigratedTask, task);
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch
+            {
+                // 迁移失败不缓存失败状态——清除后后续调用可重试。
+                Volatile.Write(ref _ensureMigratedTask, null);
+                throw;
+            }
+        }
+        finally
+        {
+            _ensureGate.Release();
+        }
+    }
+
     /// <summary>执行建表迁移。该方法幂等，可在服务启动或首次访问存储时调用。</summary>
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
@@ -2672,10 +2723,17 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
                     return;
                 }
 
-                // 版本化迁移步骤（Online / Backfill / ConstraintValidate 三阶段，幂等可重入）。
+                // 分阶段 DDL：
+                // 阶段一：先建迁移追踪表（context_schema_migrations / schema_versions）——
+                // 版本化步骤成功执行后要写入 context_schema_migrations（RecordMigrationStepAsync），
+                // 表必须先于步骤存在，否则新库/旧库迁移时步骤的应用记录写入会因
+                // relation 不存在而失败。
+                await EnsureTrackingTablesAsync(connection, cancellationToken).ConfigureAwait(false);
+
+                // 阶段二：版本化迁移步骤（Online / Backfill / ConstraintValidate 三阶段，幂等可重入）。
                 await ApplyPendingMigrationStepsAsync(connection, cancellationToken).ConfigureAwait(false);
 
-                // 基线累计批次（幂等 CREATE TABLE IF NOT EXISTS），带 DDL 计时。
+                // 阶段三：基线累计批次（幂等 CREATE TABLE IF NOT EXISTS），带 DDL 计时。
                 var baselineStopwatch = Stopwatch.StartNew();
                 await using (var command = connection.CreateCommand())
                 {
@@ -2708,6 +2766,36 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
                 new KeyValuePair<string, object?>("version", SchemaVersion));
             throw;
         }
+    }
+
+    /// <summary>
+    /// 确保迁移追踪表存在（context_schema_migrations / schema_versions）。
+    /// 与基线 DDL 中对应建表语句保持同一套 SQL（幂等 CREATE TABLE IF NOT EXISTS）；
+    /// 版本化步骤执行前调用，保证步骤成功后的应用记录可写入。
+    /// </summary>
+    private async Task EnsureTrackingTablesAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
+        var migrationsTable = Infrastructure.PostgresNames.Table(_connectionFactory.Options, "context_schema_migrations");
+        var versionTable = Infrastructure.PostgresNames.Table(_connectionFactory.Options, "schema_versions");
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {migrationsTable} (
+                migration_id text NOT NULL,
+                schema_version text NOT NULL,
+                applied_at timestamptz NOT NULL,
+                checksum text NULL,
+                metadata jsonb NOT NULL DEFAULT jsonb_build_object(),
+                PRIMARY KEY (migration_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS {versionTable} (
+                version text NOT NULL,
+                applied_at timestamptz NOT NULL,
+                PRIMARY KEY (version)
+            );
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
