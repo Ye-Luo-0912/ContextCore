@@ -44,7 +44,8 @@ public sealed class PostgresToolReconciliationStore : PostgresStoreBase, IToolRe
         external_operation_id, reconciliation_handler, status,
         result, side_effect_occurred, reason,
         created_at, updated_at, resolved_at, deadline_utc,
-        lease_owner, lease_token, lease_expires_at, fencing_token, attempt_count, next_attempt_at, last_error
+        lease_owner, lease_token, lease_expires_at, fencing_token, attempt_count, next_attempt_at, last_error,
+        decision_request_id
         """;
 
     public PostgresToolReconciliationStore(
@@ -453,7 +454,8 @@ WHERE reconciliation_id = @reconciliation_id
         ToolReconciliationOutcome outcome,
         DurableToolResult durableResult,
         AgentRunState? targetRunState,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
@@ -495,6 +497,18 @@ FOR UPDATE;
             }
             if (record.Status is ToolReconciliationStatus.Resolved or ToolReconciliationStatus.Rejected)
             {
+                // 客户端决策幂等——相同 DecisionRequestId 重试：outcome 一致 → 幂等成功（不覆盖首次真相）；
+                // 相反 outcome → 决策冲突（客户端必须撤销或更换决策身份）；
+                // 无决策身份或身份不同 → AlreadyTerminal（重复提交被拒绝）。
+                if (!string.IsNullOrWhiteSpace(decisionRequestId)
+                    && string.Equals(record.DecisionRequestId, decisionRequestId, StringComparison.Ordinal))
+                {
+                    var resolutionStatus = record.SideEffectOccurred == outcome.SideEffectOccurred
+                        ? ToolReconciliationResolutionStatus.Resolved
+                        : ToolReconciliationResolutionStatus.DecisionConflict;
+                    await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    return new ToolReconciliationResolution { Status = resolutionStatus, Record = record };
+                }
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 return new ToolReconciliationResolution { Status = ToolReconciliationResolutionStatus.AlreadyTerminal };
             }
@@ -618,6 +632,7 @@ SET status = @target,
     result = @result,
     side_effect_occurred = @side_effect_occurred,
     reason = @reason,
+    decision_request_id = @decision_request_id,
     updated_at = @now,
     resolved_at = @now,
     lease_owner = NULL,
@@ -635,6 +650,7 @@ WHERE reconciliation_id = @reconciliation_id
                 terminalCmd.Parameters.AddWithValue("result", (object?)outcome.Result ?? DBNull.Value);
                 terminalCmd.Parameters.AddWithValue("side_effect_occurred", outcome.SideEffectOccurred);
                 terminalCmd.Parameters.AddWithValue("reason", (object?)outcome.Error ?? DBNull.Value);
+                terminalCmd.Parameters.AddWithValue("decision_request_id", (object?)decisionRequestId ?? DBNull.Value);
                 terminalCmd.Parameters.AddWithValue("lease_token", leaseToken);
                 terminalCmd.Parameters.AddWithValue("fencing_token", expectedReconciliationVersion);
                 terminalCmd.Parameters.AddWithValue("now", now);
@@ -690,6 +706,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id
                 SideEffectOccurred = outcome.SideEffectOccurred,
                 Result = outcome.Result,
                 Reason = outcome.Error,
+                DecisionRequestId = decisionRequestId,
                 UpdatedAt = now,
                 ResolvedAt = now,
                 LeaseOwner = null,
@@ -783,7 +800,8 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND request_id = @reques
             FencingToken = reader.GetInt64(18),
             AttemptCount = reader.GetInt32(19),
             NextAttemptAt = NullableTime(reader, 20),
-            LastError = NullableStr(reader, 21)
+            LastError = NullableStr(reader, 21),
+            DecisionRequestId = NullableStr(reader, 22)
         };
     }
 

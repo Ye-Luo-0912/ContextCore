@@ -310,7 +310,8 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         ToolReconciliationOutcome outcome,
         DurableToolResult durableResult,
         AgentRunState? targetRunState,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null)
     {
         ArgumentNullException.ThrowIfNull(outcome);
         ArgumentNullException.ThrowIfNull(durableResult);
@@ -331,6 +332,16 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             }
             if (record.Status is ToolReconciliationStatus.Resolved or ToolReconciliationStatus.Rejected)
             {
+                // 客户端决策幂等——相同 DecisionRequestId 重试：outcome 一致 → 幂等成功；
+                // 相反 outcome → 决策冲突；无/不同决策身份 → AlreadyTerminal。
+                if (!string.IsNullOrWhiteSpace(decisionRequestId)
+                    && string.Equals(record.DecisionRequestId, decisionRequestId, StringComparison.Ordinal))
+                {
+                    var resolutionStatus = record.SideEffectOccurred == outcome.SideEffectOccurred
+                        ? ToolReconciliationResolutionStatus.Resolved
+                        : ToolReconciliationResolutionStatus.DecisionConflict;
+                    return new ToolReconciliationResolution { Status = resolutionStatus, Record = record };
+                }
                 return new ToolReconciliationResolution { Status = ToolReconciliationResolutionStatus.AlreadyTerminal };
             }
 
@@ -375,6 +386,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 SideEffectOccurred = outcome.SideEffectOccurred,
                 Result = outcome.Result,
                 Reason = outcome.Error,
+                DecisionRequestId = decisionRequestId,
                 UpdatedAt = now,
                 ResolvedAt = now,
                 LeaseOwner = null,

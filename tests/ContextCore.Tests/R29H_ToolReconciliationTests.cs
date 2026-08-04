@@ -296,6 +296,58 @@ public sealed class R29H_ToolReconciliationTests
     }
 
     /// <summary>
+    /// 验证：相同 DecisionRequestId + 相同 outcome 重试 → 幂等成功（0），不重复提交。
+    /// </summary>
+    [TestMethod]
+    public async Task Coordinator_Resolve_SameDecisionRequestId_SameOutcome_ReturnsZero()
+    {
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, _) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-idem"), 0, cts.Token);
+        await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" };
+        Assert.AreEqual(0, await coordinator.ResolveAsync("rec:" + result.RequestId, outcome, cts.Token, "decision-1"),
+            "首次裁决成功。");
+        var retry = await coordinator.ResolveAsync("rec:" + result.RequestId, outcome, cts.Token, "decision-1");
+        Assert.AreEqual(0, retry, "相同决策身份 + 相同 outcome 重试 → 幂等成功。");
+
+        var record = await store.GetAsync("rec:" + result.RequestId, cts.Token);
+        Assert.AreEqual("txn-1", record!.Result, "幂等重试不覆盖首次裁决内容。");
+        Assert.AreEqual("decision-1", record.DecisionRequestId, "决策幂等身份随裁决持久化。");
+    }
+
+    /// <summary>
+    /// 验证：相同 DecisionRequestId 但相反 outcome 重试 → 决策冲突（4）。
+    /// </summary>
+    [TestMethod]
+    public async Task Coordinator_Resolve_SameDecisionRequestId_OppositeOutcome_ReturnsFour()
+    {
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, _) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-conflict"), 0, cts.Token);
+        await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
+
+        var occurred = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" };
+        Assert.AreEqual(0, await coordinator.ResolveAsync("rec:" + result.RequestId, occurred, cts.Token, "decision-1"));
+
+        var opposite = new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "确认未发生" };
+        var code = await coordinator.ResolveAsync("rec:" + result.RequestId, opposite, cts.Token, "decision-1");
+        Assert.AreEqual(4, code, "相同决策身份 + 相反 outcome → 决策冲突（4）。");
+
+        var record = await store.GetAsync("rec:" + result.RequestId, cts.Token);
+        Assert.AreEqual(true, record!.SideEffectOccurred, "首次裁决真相不被相反重试覆盖。");
+    }
+
+    /// <summary>
     /// 验证：裁决"副作用已发生"→ journal 显式进入 Reconciling 后提交真相结果
     /// （Dispatched → Reconciling → Committed，Succeeded=true + result）；
     /// 记录 → Resolved；重放同一 Tool 调用返回提交的真相且不重复执行外部调用。

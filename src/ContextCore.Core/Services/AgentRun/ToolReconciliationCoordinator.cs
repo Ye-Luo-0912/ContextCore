@@ -8,7 +8,8 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //
 // 集中封装对账记录裁决的唯一入口：
 // - ResolveAsync：人工/自动裁决（POST /runs/{runId}/reconciliations/{id}/resolve 与
-// ToolReconciliationWorker 共用），返回 0=成功 / 1=不存在 / 2=已裁决 / 3=仲裁权被占用；
+// ToolReconciliationWorker 共用），返回 0=成功（含幂等重试）/ 1=不存在 / 2=已裁决 /
+// 3=仲裁权被占用 / 4=决策冲突（相同 DecisionRequestId 但相反 outcome）；
 // - ReconcileRecordAsync：Worker 路径——TryBeginAsync 领取裁决租约（P0-4/P0-5）→
 // Handler 执行期间心跳续租 → 原子提交裁决；Handler 异常回退 Pending 重试；
 // - CommitOutcomeAsync：先原子取得裁决权（租约）再提交——调用
@@ -50,8 +51,13 @@ public sealed class ToolReconciliationCoordinator
     /// <summary>
     /// 人工/自动裁决对账记录（POST resolve 端点与 Worker 共用）。
     /// </summary>
-    /// <returns>0 = 成功裁决；1 = 记录不存在；2 = 已裁决（幂等冲突）；3 = 仲裁权被占用/租约失效。</returns>
-    public async Task<int> ResolveAsync(string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken ct)
+    /// <returns>0 = 成功裁决（含幂等重试）；1 = 记录不存在；2 = 已裁决（无决策身份或身份不同）；
+    /// 3 = 仲裁权被占用/租约失效；4 = 决策冲突（相同 DecisionRequestId 但相反 outcome）。</returns>
+    public async Task<int> ResolveAsync(
+        string reconciliationId,
+        ToolReconciliationOutcome outcome,
+        CancellationToken ct,
+        string? decisionRequestId = null)
     {
         var record = await _store.GetAsync(reconciliationId, ct).ConfigureAwait(false);
         if (record is null)
@@ -60,6 +66,13 @@ public sealed class ToolReconciliationCoordinator
         }
         if (record.Status is ToolReconciliationStatus.Resolved or ToolReconciliationStatus.Rejected)
         {
+            // 客户端决策幂等——相同决策身份 + 相同 outcome → 幂等成功（0）；
+            // 相同决策身份 + 相反 outcome → 决策冲突（4）；无/不同决策身份 → 2（重复提交被拒绝）。
+            if (!string.IsNullOrWhiteSpace(decisionRequestId)
+                && string.Equals(record.DecisionRequestId, decisionRequestId, StringComparison.Ordinal))
+            {
+                return record.SideEffectOccurred == outcome.SideEffectOccurred ? 0 : 4;
+            }
             return 2;
         }
 
@@ -73,7 +86,7 @@ public sealed class ToolReconciliationCoordinator
 
         try
         {
-            return await CommitOutcomeAsync(record, lease, outcome, ct).ConfigureAwait(false);
+            return await CommitOutcomeAsync(record, lease, outcome, ct, decisionRequestId).ConfigureAwait(false);
         }
         catch
         {
@@ -139,7 +152,8 @@ public sealed class ToolReconciliationCoordinator
         ToolReconciliationRecord record,
         ToolReconciliationLease lease,
         ToolReconciliationOutcome outcome,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? decisionRequestId = null)
     {
         var durableResult = new DurableToolResult
         {
@@ -167,13 +181,15 @@ public sealed class ToolReconciliationCoordinator
             outcome,
             durableResult,
             targetRunState: null,
-            ct).ConfigureAwait(false);
+            ct,
+            decisionRequestId).ConfigureAwait(false);
 
         return resolution.Status switch
         {
             ToolReconciliationResolutionStatus.Resolved => 0,
             ToolReconciliationResolutionStatus.NotFound => 1,
             ToolReconciliationResolutionStatus.AlreadyTerminal => 2,
+            ToolReconciliationResolutionStatus.DecisionConflict => 4,
             // ArbitrationLost / VersionMismatch：租约在提交前被接管/失效，裁决权已不属于本次调用。
             _ => 3
         };

@@ -820,16 +820,11 @@ public sealed class R28B_DurableMemoryGovernanceTests
     // =========================================================================
 
     [TestMethod]
-    public void SchemaVersion_IsV30()
+    public void SchemaVersion_IsV62()
     {
-        // v29 → v30，kernel_result_outbox 追加 lease_owner / lease_expires_at / lease_token 列与配套索引，
-        // 将 DequeueAsync 的 Dispatched 终态改为租约模型（Pending → Leased → Acked），
-        // 避免 consumer 崩溃后 Dispatched 行永久滞留。
-        // 历史：v28 → v29（kernel_transport_inbox/outbox 租约模型）；
-        // v27 → v28（tool_dispatch_journal_entries.idempotency_key UNIQUE partial index）；
-        // v26 → v27（user_feedback_entries 表）；
-        // v25 → v26（vw_utility_ledger_calibration_data 视图）。
-        Assert.AreEqual("cc-schema-v30", PostgresMigrationRunner.SchemaVersion);
+        // 当前 schema 版本：v61 → v62（tool_reconciliation_entries 追加 decision_request_id
+        // 客户端决策幂等身份列）。历史版本演进见 PostgresMigrationRunner.SchemaVersion 注释。
+        Assert.AreEqual("cc-schema-v62", PostgresMigrationRunner.SchemaVersion);
     }
 
     [TestMethod]

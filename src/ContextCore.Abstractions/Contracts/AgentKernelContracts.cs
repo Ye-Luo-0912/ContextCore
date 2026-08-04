@@ -531,6 +531,13 @@ public sealed record ToolReconciliationRecord
     /// <summary>对应 Tool 调用 RequestId（journal 主键；与 ToolCallStarted/Completed 事件一致）。</summary>
     public required string RequestId { get; init; }
 
+    /// <summary>
+    /// 客户端决策幂等身份（人工 resolve 请求携带的 DecisionRequestId；null = 非客户端幂等路径）。
+    /// 记录在裁决落终态时持久化：相同决策身份 + 相同 outcome 重试 → 幂等成功；
+    /// 相同决策身份 + 相反 outcome → 决策冲突（<see cref="ToolReconciliationResolutionStatus.DecisionConflict"/>）。
+    /// </summary>
+    public string? DecisionRequestId { get; init; }
+
     /// <summary>Tool 名称。</summary>
     public required string ToolName { get; init; }
 
@@ -647,7 +654,13 @@ public enum ToolReconciliationResolutionStatus : byte
     ArbitrationLost = 3,
 
     /// <summary>记录版本不匹配：fencing_token 已被并发接管递增（P0-5 双裁决竞争）。</summary>
-    VersionMismatch = 4
+    VersionMismatch = 4,
+
+    /// <summary>
+    /// 决策冲突：相同 DecisionRequestId 重试但携带相反 outcome——
+    /// 首次裁决已提交（Resolved/Rejected），重试决策与既有真相矛盾，客户端必须撤销或更换决策身份。
+    /// </summary>
+    DecisionConflict = 5
 }
 
 /// <summary>
@@ -800,12 +813,17 @@ public interface IToolReconciliationStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// P0-3：原子裁决。单事务内完成：锁定对账记录 → 验证唯一裁决者
+    /// 原子裁决。单事务内完成：锁定对账记录 → 验证唯一裁决者
     /// （lease_token 匹配 + 未过期 + fencing_token = expectedReconciliationVersion）→
     /// journal Reconciling → Committed → Durable Result UPSERT → 记录终态 →
     /// 可选 Run 状态推进（targetRunState 非空且 Run 处于停车状态时）→ 审计事件追加。
     /// 任意一步失败整体回滚；返回 <see cref="ToolReconciliationResolution"/> 描述结果。
     /// </summary>
+    /// <param name="decisionRequestId">
+    /// 客户端决策幂等身份（人工 resolve 携带）。已终态记录上：
+    /// 相同决策身份 + 相同 outcome → 幂等成功（Resolved）；相同决策身份 + 相反 outcome →
+    /// <see cref="ToolReconciliationResolutionStatus.DecisionConflict"/>；无决策身份或不同身份 → AlreadyTerminal。
+    /// </param>
     ValueTask<ToolReconciliationResolution> ResolveReconciliationAtomicallyAsync(
         string workspaceId,
         string runId,
@@ -815,7 +833,8 @@ public interface IToolReconciliationStore
         ToolReconciliationOutcome outcome,
         DurableToolResult durableResult,
         AgentRunState? targetRunState,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? decisionRequestId = null);
 }
 
 /// <summary>

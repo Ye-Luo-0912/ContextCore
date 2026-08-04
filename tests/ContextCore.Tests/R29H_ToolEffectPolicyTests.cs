@@ -176,7 +176,7 @@ public sealed class R29H_ToolEffectPolicyTests
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-C"), 0, cts.Token);
 
-        Assert.IsTrue(result.Succeeded, "外部调用本身成功。");
+        Assert.IsFalse(result.Succeeded, "P1-1：Journal 未 Commit（Dispatched 模糊态）→ 模型不得看到成功结果。");
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "非幂等写成功也不得自动提交（P0-2 严格矩阵）。");
 
@@ -197,7 +197,7 @@ public sealed class R29H_ToolEffectPolicyTests
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("legacy-write", "arg-D"), 0, cts.Token);
 
-        Assert.IsTrue(result.Succeeded);
+        Assert.IsFalse(result.Succeeded, "P1-1：RequiresReconciliation 未对账前 Journal 处于 Dispatched → 不得呈现成功。");
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "RequiresReconciliation 声明 → 必须经 Reconciliation Handler 确认后提交。");
 
@@ -217,7 +217,7 @@ public sealed class R29H_ToolEffectPolicyTests
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("mystery", "arg-E"), 0, cts.Token);
 
-        Assert.IsTrue(result.Succeeded);
+        Assert.IsFalse(result.Succeeded, "P1-1：副作用未知 → Journal 保持 Dispatched，未 Commit 前不得呈现成功。");
         Assert.AreEqual(ToolSideEffect.Unknown, result.SideEffect);
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "副作用未知 → 不自动提交（保守策略）。");
@@ -633,7 +633,7 @@ public sealed class R29H_ToolEffectPolicyTests
 
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("charge", "arg-A1"), 0, cts.Token);
 
-        Assert.IsTrue(result.Succeeded, "外部调用本身成功。");
+        Assert.IsFalse(result.Succeeded, "P1-1：审批未确认 → Journal 保持 Dispatched，未 Commit 前不得呈现成功。");
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "RequiresApproval 写副作用未确认审批 → 禁止自动提交（fail-safe）。");
         var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);

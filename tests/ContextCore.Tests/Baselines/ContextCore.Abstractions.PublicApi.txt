@@ -1038,6 +1038,7 @@ F:ContextCore.Abstractions.ToolFailurePhase.ProviderCallAmbiguous
 F:ContextCore.Abstractions.ToolFailurePhase.ProviderReturned
 F:ContextCore.Abstractions.ToolReconciliationResolutionStatus.AlreadyTerminal
 F:ContextCore.Abstractions.ToolReconciliationResolutionStatus.ArbitrationLost
+F:ContextCore.Abstractions.ToolReconciliationResolutionStatus.DecisionConflict
 F:ContextCore.Abstractions.ToolReconciliationResolutionStatus.NotFound
 F:ContextCore.Abstractions.ToolReconciliationResolutionStatus.Resolved
 F:ContextCore.Abstractions.ToolReconciliationResolutionStatus.VersionMismatch
@@ -2671,7 +2672,7 @@ M:ContextCore.Abstractions.IToolReconciliationStore.MarkRejectedAsync(System.Str
 M:ContextCore.Abstractions.IToolReconciliationStore.MarkResolvedAsync(System.String, System.String, ContextCore.Abstractions.ToolReconciliationOutcome, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.QueryByExternalOperationIdAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.RenewLeaseAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IToolReconciliationStore.ResolveReconciliationAtomicallyAsync(System.String, System.String, System.String, System.String, System.Int64, ContextCore.Abstractions.ToolReconciliationOutcome, ContextCore.Abstractions.DurableToolResult, System.Nullable<ContextCore.Abstractions.AgentRunState>, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.ResolveReconciliationAtomicallyAsync(System.String, System.String, System.String, System.String, System.Int64, ContextCore.Abstractions.ToolReconciliationOutcome, ContextCore.Abstractions.DurableToolResult, System.Nullable<ContextCore.Abstractions.AgentRunState>, System.Threading.CancellationToken, System.String)
 M:ContextCore.Abstractions.IToolReconciliationStore.TryBeginAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.TryResetToPendingAsync(System.String, System.String, System.String, System.Nullable<System.TimeSpan>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ITrainingDataExporter.ExportAsync(ContextCore.Abstractions.TrainingDataExportRequest, System.Threading.CancellationToken)
@@ -11392,6 +11393,7 @@ P:ContextCore.Abstractions.ToolReconciliationOutcome.SideEffectOccurred (get|ini
 P:ContextCore.Abstractions.ToolReconciliationRecord.AttemptCount (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.CreatedAt (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.DeadlineUtc (get|init)
+P:ContextCore.Abstractions.ToolReconciliationRecord.DecisionRequestId (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.ExternalOperationId (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.FencingToken (get|init)
 P:ContextCore.Abstractions.ToolReconciliationRecord.LastError (get|init)

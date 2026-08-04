@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `6dee79fa`（WP-F1 已推送；R30.1 16 项 P0 全部完成）。
-- **进行中**：R30.1 Production Semantics Stabilization 全部 16 项 P0 已关闭（12 个 WP 全部推送并完成最终全量验证，见 WP-F1 验证行）。
-- **最近完成**：WP-F1 自适应反馈加固（P0-16，租户隔离 SHA-256 签名 + 反馈幂等/可信度 + Disabled 默认）。
+- **基线**：main @ `6dee79fa`（R30.1 16 项 P0 全部完成并推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1（Tool 成功结果与 Journal 一致 + Reconciliation 决策幂等）已完成待推送；WP-G2..G8 依次推进。
+- **最近完成**：WP-G1（P1-1 + P1-2，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -100,6 +100,14 @@
   - 测试：R29W 全量更新（3→10 样本、5 个 Plan 自适应测试改 Active 模式、GetPolicyAsync 新参数）+ 新增 10 项加固测试（SHA-256 长度与租户隔离、5 个租户维度逐一隔离、Disabled 透传、Shadow 计算不应用、清洗（钳制+Source 回退+FeedbackId 生成）、InMemory 幂等去重、Effective-only、时间衰减、单主体封顶）；R29S `SchemaVersion_IsV60`→`SchemaVersion_IsV61`；ContextCorePostgresStorageTests schema 断言 v60→v61；PublicApi baseline 重新生成。验证：build 0 错误（Service.Tests 也 0 错误）；定向 100 通过 / 1 跳过（R29W+PublicApi+R29S+R30I+PostgresStorage）；R29/R30 全扫 878 项 858 通过 / 16 失败与 HEAD（WP-F1 前）**逐一相同**——6 个既有 11 项 + 10 个 Docker/Postgres 集成（42P01 迁移顺序 bug：版本化步骤先于基线建 context_schema_migrations，WP-A2 起即存在，与本次无关，工作树验证）。
   - 最终全量验证（12 个 WP 全部完成后统一跑一次）：解决方案构建 0 错误（7 个警告全部为既有，无 WP 引入）；ContextCore.Tests **3523 总数 / 20 失败 / 3489 通过 / 14 跳过**——20 个失败 = 既有 11 项中的 10 项（PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 本次通过，纯 SQL 断言波动非回归）+ 10 个 Docker 不可用环境下的 Postgres 集成测试（42P01 迁移顺序 bug，已在 HEAD 工作树对照证实预存在），**与 HEAD 逐一对比无任何 WP 新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）。OpenAPI 快照再生成（`service/openapi/service-api.openapi.json`，纯新增 160 行）：GetPolicy 新增 5 个租户查询参数、RecordAdaptiveRetrievalFeedbackRequest / RetrievalPlanFeedback 各 6 个反馈字段、`RetrievalFeedbackSource` 枚举 schema、ToolReconciliation 记录 7 个租约字段（WP-A2 P0-4 契约，此前仅比较 schema 名称集未触发漂移）——全部为 WP-A2/F1 契约新增，无意外变更。
 
+### P1 完善项进度
+
+- **WP-G1 已完成**（P1-1 + P1-2）：Tool 成功结果与 Journal 状态一致 + Reconciliation 决策幂等。
+  - P1-1 修复（DefaultDurableToolExecutor）：最终返回处按 Journal 真实状态收敛 Succeeded——finalJournalState 处于模糊态（DispatchingIntent/Dispatched/Reconciling）时，即使 Provider 调用成功也强制 Succeeded=false 并附待对账错误信息（FailurePhase=ProviderReturned，MarkCommitted 失败仍 JournalCommitFailed）；覆盖 MarkDispatched/MarkCommitted 失败与策略 HoldForReconciliation（非幂等写/RequiresReconciliation/Unknown/未审批）路径，模型不再看到成功 Tool 观察，直到真相已 Commit 或对账完成；对账提交后重放路径仍返回提交后结果。Actor 观察直接消费 toolResult.Succeeded，无需改动。更新 R29H_ToolEffectPolicyTests 4 项断言（模糊态 Succeeded=false）。
+  - P1-2 修复（决策幂等）：契约（Abstractions，PublicApi baseline 已更新）——`ToolReconciliationRecord.DecisionRequestId`（可空）、`ToolReconciliationResolutionStatus.DecisionConflict=5`、`ResolveReconciliationAtomicallyAsync` 追加可空 `decisionRequestId` 参数（默认 null，兼容既有调用）；Postgres/InMemory 原子裁决终态分支幂等判定：相同 DecisionRequestId + 相同 outcome → 幂等成功（Resolved，不覆盖首次真相）；相反 outcome → DecisionConflict；无/不同身份 → AlreadyTerminal；终态 UPDATE 持久化 decision_request_id；协调器 ResolveAsync 终态预检同步（同身份同 outcome→0，相反→4）；resolve 端点 DTO 新增 DecisionRequestId，code 4→409 决策冲突；schema v62（迁移 0009 `PostgresMigrationToolReconciliationDecisionRequestId`：ADD COLUMN decision_request_id，Online 幂等）+ 基线 DDL 同步。
+  - 测试：R30X 新增 3 项（同身份同 outcome 幂等/相反 outcome 冲突/不同身份 AlreadyTerminal）、R29H 新增 2 项（协调器幂等 0/冲突 4）；SchemaVersion 断言更新 v62（R29S SchemaVersion_IsV61→V62；R28B SchemaVersion_IsV30→V62，从既有失败名单移除 1 项）。
+  - 验证：build 0 错误（Core/Storage.Postgres/Service）；定向 149 项 148 通过 / 1 失败=既有 `RequiredIndexes_IncludeUtilityLedgerIndexes`（P1-9 修复）；Service.Tests 2 通过。
+
 ### 性能优化工作包进度
 
 - **WP-P1 已完成**：`ILeasedJobQueue.AcquireLeaseBatchAsync`（批量领取 + per-workspace 公平，两阶段 ROW_NUMBER）；`ContextJobWorker` 改为批量领取并按空闲槽位分派；新增 `PostgresJobQueueMetrics.QueueWait` 直方图（入队→领取等待时长）；`RealToolDispatcher.GetToolDefinitions` 冻结缓存；`JobWorkerOptions.MaxPerWorkspaceClaim`（默认 10）。验证：build 0 错误；ContextCore.Tests 11 既有失败不变（+2 新测试通过）；Service.Tests 64 通过；集成测试本地跳过（Docker 不可用，CI 覆盖）。
@@ -114,8 +122,8 @@
 - 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
 - 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
 - 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
-- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 11 项中的项 + 本环境 Docker 不可用导致的 Postgres 集成 42P01 环境性失败，名单见下与「既有 11 个测试失败」）。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 10 项中的项 + 本环境 Docker 不可用导致的 Postgres 集成 42P01 环境性失败，名单见下与「既有 10 个测试失败」）。
 
-## 既有 11 个测试失败（勿当回归处理）
+## 既有 10 个测试失败（勿当回归处理）
 
-`Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`、`ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured`、`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList`、`RequiredIndexes_IncludeUtilityLedgerIndexes`、`SchemaVersion_IsV30`
+`Benchmark_Baseline_Contains_AtLeast_15_Samples_PerCase`、`DI_Registration_EngineResolvesWithAllocatorV2_1`、`Journal_StateTransition_ThrowsOnRegression`、`MandatoryProvider_NoTokenizer_EmptyContent_Succeeds`、`MemoryOnlyBatchLookup_SatisfiesHydrationPipeline`、`PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema`、`ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates`、`ProductionHA_AllNineMandatoryChecksPass_WhenFullyConfigured`、`ReadinessService_Development_GetRegisteredWorkers_ReturnsExpectedList`、`RequiredIndexes_IncludeUtilityLedgerIndexes`

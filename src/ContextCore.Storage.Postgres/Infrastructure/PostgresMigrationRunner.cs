@@ -152,8 +152,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   新启动但尚未写 Applied State 的节点计入 NodeCount（未就绪，阻止 Rollout Ready）。
     /// - serving_enabled：Isolated 节点由 Reconciler 置 false，Admission/Middleware 据此
     ///   真正停止接收模型流量（不能只写 Applied State 数据库标志）。
+    /// v61 → v62，tool_reconciliation_entries 追加 decision_request_id：
+    /// - 客户端决策幂等身份：人工 resolve 携带的 DecisionRequestId 在裁决落终态时持久化，
+    ///   相同决策身份 + 相同 outcome 重试 → 幂等成功；相反 outcome → 决策冲突（409）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v61";
+    public const string SchemaVersion = "cc-schema-v62";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2587,6 +2590,7 @@ CREATE TABLE IF NOT EXISTS {toolReconciliationEntries} (
     attempt_count integer NOT NULL DEFAULT 0,
     next_attempt_at timestamptz NULL,
     last_error text NULL,
+    decision_request_id text NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (reconciliation_id),
     CONSTRAINT {Infrastructure.PostgresNames.Constraint(options, "tool_reconciliation_entries", "ws_run_request_unique")}

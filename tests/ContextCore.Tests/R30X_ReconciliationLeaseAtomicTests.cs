@@ -344,6 +344,87 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual("txn-first", record!.Result, "首次裁决内容不被重复提交覆盖。");
     }
 
+    /// <summary>验证：相同 DecisionRequestId + 相同 outcome 重试 → 幂等成功（Resolved），不覆盖首次真相。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_SameDecisionRequestId_SameOutcome_ReturnsResolvedIdempotent()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync("rec-1", "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
+        var first = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            decisionRequestId: "decision-1");
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
+
+        // 相同决策身份 + 相同 outcome 重试（租约已清除）→ 幂等成功，不覆盖首次真相
+        var retry = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            decisionRequestId: "decision-1");
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, retry.Status, "相同决策身份 + 相同 outcome → 幂等成功。");
+        Assert.AreEqual("txn-777", (await store.GetAsync("rec-1", cts.Token))!.Result, "重试不覆盖首次裁决内容。");
+    }
+
+    /// <summary>验证：相同 DecisionRequestId 但相反 outcome 重试 → 决策冲突（DecisionConflict）。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_SameDecisionRequestId_OppositeOutcome_ReturnsDecisionConflict()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync("rec-1", "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var occurred = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
+        var first = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, occurred,
+            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, occurred), null, cts.Token,
+            decisionRequestId: "decision-1");
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
+
+        // 相同决策身份 + 相反 outcome → 决策冲突
+        var opposite = new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "确认未发生" };
+        var conflict = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, opposite,
+            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, opposite), null, cts.Token,
+            decisionRequestId: "decision-1");
+        Assert.AreEqual(ToolReconciliationResolutionStatus.DecisionConflict, conflict.Status, "相同决策身份 + 相反 outcome → 决策冲突。");
+        Assert.AreEqual(true, (await store.GetAsync("rec-1", cts.Token))!.SideEffectOccurred, "首次裁决真相不被相反重试覆盖。");
+    }
+
+    /// <summary>验证：不同 DecisionRequestId 重复提交 → AlreadyTerminal（非幂等冲突）。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_DifferentDecisionRequestId_ReturnsAlreadyTerminal()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync("rec-1", "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
+        var first = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            decisionRequestId: "decision-1");
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
+
+        var otherDecision = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            decisionRequestId: "decision-2");
+        Assert.AreEqual(ToolReconciliationResolutionStatus.AlreadyTerminal, otherDecision.Status,
+            "不同决策身份 → 视为新的重复提交，拒绝（AlreadyTerminal）。");
+    }
+
     /// <summary>验证：租户键 (workspace_id, run_id, request_id) 不匹配 → NotFound。</summary>
     [TestMethod]
     public async Task AtomicResolve_NotFound_WhenTenantKeyMismatch()

@@ -74,6 +74,7 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationToolReconciliationLease(),
         new PostgresMigrationAgentRunClaimLease(),
         new PostgresMigrationModelNodeMembership(),
-        new PostgresMigrationRetrievalPlanFeedbackHardening()
+        new PostgresMigrationRetrievalPlanFeedbackHardening(),
+        new PostgresMigrationToolReconciliationDecisionRequestId()
     ];
 }

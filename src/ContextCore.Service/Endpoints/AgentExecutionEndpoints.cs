@@ -661,7 +661,7 @@ internal static class AgentExecutionEndpoints
             int code;
             if (coordinator is not null)
             {
-                code = await coordinator.ResolveAsync(reconciliationId, outcome, ct).ConfigureAwait(false);
+                code = await coordinator.ResolveAsync(reconciliationId, outcome, ct, request.DecisionRequestId).ConfigureAwait(false);
             }
             else if (reconciliationStore is not null)
             {
@@ -674,7 +674,17 @@ internal static class AgentExecutionEndpoints
                 }
                 else if (record.Status is ToolReconciliationStatus.Resolved or ToolReconciliationStatus.Rejected)
                 {
-                    code = 2;
+                    // 客户端决策幂等——相同决策身份 + 相同 outcome → 幂等成功（0）；
+                    // 相同决策身份 + 相反 outcome → 决策冲突（4）；无/不同决策身份 → 2。
+                    if (!string.IsNullOrWhiteSpace(request.DecisionRequestId)
+                        && string.Equals(record.DecisionRequestId, request.DecisionRequestId, StringComparison.Ordinal))
+                    {
+                        code = record.SideEffectOccurred == outcome.SideEffectOccurred ? 0 : 4;
+                    }
+                    else
+                    {
+                        code = 2;
+                    }
                 }
                 else
                 {
@@ -710,7 +720,11 @@ internal static class AgentExecutionEndpoints
                     $"未找到 reconciliationId='{reconciliationId}'。"),
                 2 => ContextCoreHttpResultMapper.InvalidRequest(
                     httpContext, string.Empty, "agents.runs.reconciliations",
-                    $"对账记录 '{reconciliationId}' 已裁决，重复提交被拒绝。",
+                    $"对账记录 '{reconciliationId}' 已裁决，重复提交被拒绝（请携带相同的 DecisionRequestId 以幂等重试）。",
+                    statusCode: StatusCodes.Status409Conflict),
+                4 => ContextCoreHttpResultMapper.InvalidRequest(
+                    httpContext, string.Empty, "agents.runs.reconciliations",
+                    $"对账记录 '{reconciliationId}' 已按相同的 DecisionRequestId 裁决为相反结果（决策冲突），请撤销或更换决策身份。",
                     statusCode: StatusCodes.Status409Conflict),
                 3 => ContextCoreHttpResultMapper.InvalidRequest(
                     httpContext, string.Empty, "agents.runs.reconciliations",
@@ -1600,6 +1614,13 @@ public sealed class ApprovalRequest
 /// <summary>裁决 Tool 对账记录请求（POST /runs/{runId}/reconciliations/{id}/resolve）。</summary>
 public sealed class ResolveReconciliationRequest
 {
+    /// <summary>
+    /// 客户端决策幂等身份（客户端生成的唯一决策请求 ID，重试时保持不变）。
+    /// 相同 DecisionRequestId + 相同 outcome 重试 → 幂等成功（202）；
+    /// 相同 DecisionRequestId + 相反 outcome → 409 决策冲突；不携带或不同身份重复提交 → 409 已裁决。
+    /// </summary>
+    public string? DecisionRequestId { get; init; }
+
     /// <summary>外部副作用是否确实发生（true=已发生并提交真相结果；false=未发生，提交 void 并拒绝重放）。</summary>
     public bool SideEffectOccurred { get; init; }
 

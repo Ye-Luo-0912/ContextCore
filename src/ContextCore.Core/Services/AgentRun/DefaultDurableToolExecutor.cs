@@ -615,6 +615,23 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
         stopwatch.Stop();
 
+        // 模型不得看到成功 Tool 结果，直到内部真相已 Commit 或对账完成。
+        // Journal 处于模糊态（DispatchingIntent/Dispatched/Reconciling）时，即使 Provider
+        // 调用本身成功（如非幂等写等待对账、MarkDispatched/MarkCommitted 失败），
+        // 也强制 Succeeded=false 并附待对账错误信息——Actor 据此构建失败观察并创建对账记录；
+        // 真相经对账提交后，重放路径返回提交后的结果。
+        var journalIsAmbiguous = finalJournalState is ToolDispatchState.DispatchingIntent
+            or ToolDispatchState.Dispatched
+            or ToolDispatchState.Reconciling;
+        var succeeded = dispatchResult.Succeeded && !journalIsAmbiguous;
+        var resultError = dispatchResult.Error;
+        if (!succeeded && resultError is null)
+        {
+            resultError = journalIsAmbiguous
+                ? $"Tool 执行结果待对账：Journal 处于 {finalJournalState}，内部真相尚未提交（外部副作用可能已发生）。"
+                : dispatchResult.Error;
+        }
+
         return new ToolExecutionResult
         {
             RequestId = requestId,
@@ -625,13 +642,13 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             ReconciliationHandler = descriptor?.ReconciliationHandler,
             ReconciliationDeadline = descriptor?.ReconciliationDeadline,
             Result = dispatchResult.Result,
-            Succeeded = dispatchResult.Succeeded,
-            Error = dispatchResult.Error,
+            Succeeded = succeeded,
+            Error = resultError,
             ErrorKind = dispatchResult.ErrorKind,
-            // P0-1：提交失败 → JournalCommitFailed（对账）；Provider 明确失败 → ProviderReturned；成功 → null。
+            // 提交失败 → JournalCommitFailed（对账）；结果未达成功（含模糊态收敛）→ ProviderReturned。
             FailurePhase = journalCommitFailed
                 ? ToolFailurePhase.JournalCommitFailed
-                : (dispatchResult.Succeeded ? null : ToolFailurePhase.ProviderReturned),
+                : (succeeded ? null : ToolFailurePhase.ProviderReturned),
             NoEffectConfirmed = dispatchResult.NoEffectConfirmed,
             Duration = stopwatch.Elapsed
         };
