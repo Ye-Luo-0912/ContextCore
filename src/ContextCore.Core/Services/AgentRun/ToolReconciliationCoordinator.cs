@@ -10,8 +10,9 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // - ResolveAsync：人工/自动裁决（POST /runs/{runId}/reconciliations/{id}/resolve 与
 // ToolReconciliationWorker 共用），返回 0=成功（含幂等重试）/ 1=不存在 / 2=已裁决 /
 // 3=仲裁权被占用 / 4=决策冲突（相同 DecisionRequestId 但相反 outcome）；
-// - ReconcileRecordAsync：Worker 路径——TryBeginAsync 领取裁决租约（P0-4/P0-5）→
-// Handler 执行期间心跳续租 → 原子提交裁决；Handler 异常回退 Pending 重试；
+// - ReconcileWithLeaseAsync：Worker 路径——调用方已领取裁决租约（P0-4/P0-5），
+// 本方法执行 Handler 确认外部副作用真相 → 原子提交裁决；Handler 异常回退 Pending 重试。
+// 心跳续租由 ToolReconciliationWorker 的共享批量心跳循环负责（单次往返续约整批记录）；
 // - CommitOutcomeAsync：先原子取得裁决权（租约）再提交——调用
 // IToolReconciliationStore.ResolveReconciliationAtomicallyAsync 单事务完成
 // journal 推进 + 结果 UPSERT + 记录终态 + 可选 Run 推进 + 审计事件（P0-3）。
@@ -30,9 +31,6 @@ public sealed class ToolReconciliationCoordinator
 {
     /// <summary>Worker / 端点领取的裁决租约时长（P0-4：过期后其他 Worker 可接管）。</summary>
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
-
-    /// <summary>心跳续租间隔：min(30s, LeaseDuration / 3)，远小于租约时长。</summary>
-    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>Handler 失败后的回退退避时长。</summary>
     private static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(30);
@@ -98,37 +96,22 @@ public sealed class ToolReconciliationCoordinator
     }
 
     /// <summary>
-    /// Worker 路径：领取裁决租约（Pending → Running + lease/fencing，P0-4）→
-    /// 调 Handler 确认外部副作用真相（期间心跳续租）→ 原子提交裁决。
+    /// Worker 路径：调用方已通过 <see cref="IToolReconciliationStore.TryBeginAsync"/> 领取裁决租约
+    /// （Pending → Running + lease/fencing），此处调 Handler 确认外部副作用真相 → 原子提交裁决。
+    /// 心跳续租由调用方负责（ToolReconciliationWorker 的共享批量心跳循环，单次往返续约整批记录）。
     /// Handler 抛异常时回退 Pending（携带 last_error + 退避，下次轮询重试），
     /// 异常向上传播由调用方记录日志。
     /// </summary>
-    public async Task ReconcileRecordAsync(
+    public async Task ReconcileWithLeaseAsync(
         ToolReconciliationRecord record,
+        ToolReconciliationLease lease,
         IToolReconciliationHandler handler,
         CancellationToken ct)
     {
-        var lease = await _store.TryBeginAsync(record.ReconciliationId, "worker:reconcile", LeaseDuration, ct).ConfigureAwait(false);
-        if (lease is null)
-        {
-            return; // 已被并发 Worker / resolve 端点接管（仲裁权被占用）
-        }
-
         ToolReconciliationOutcome outcome;
         try
         {
-            // Handler 执行期间心跳续租：防止长 Handler 租约过期被其他 Worker 接管。
-            using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var heartbeatTask = HeartbeatAsync(record.ReconciliationId, lease.LeaseToken, heartbeatCts.Token);
-            try
-            {
-                outcome = await handler.ReconcileAsync(record, ct).ConfigureAwait(false);
-            }
-            finally
-            {
-                heartbeatCts.Cancel();
-                await heartbeatTask.ConfigureAwait(false);
-            }
+            outcome = await handler.ReconcileAsync(record, ct).ConfigureAwait(false);
         }
         catch
         {
@@ -193,34 +176,5 @@ public sealed class ToolReconciliationCoordinator
             // ArbitrationLost / VersionMismatch：租约在提交前被接管/失效，裁决权已不属于本次调用。
             _ => 3
         };
-    }
-
-    /// <summary>心跳续租循环：周期性延长租约；租约失效（被接管）或取消时退出。</summary>
-    private async Task HeartbeatAsync(string reconciliationId, string leaseToken, CancellationToken ct)
-    {
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(HeartbeatInterval, ct).ConfigureAwait(false);
-                var renewed = await _store.RenewLeaseAsync(reconciliationId, leaseToken, LeaseDuration, ct).ConfigureAwait(false);
-                if (!renewed)
-                {
-                    // 租约已失效（被接管/过期）→ 停止续租；后续原子提交将返回 ArbitrationLost。
-                    _logger.LogWarning(
-                        "ToolReconciliationCoordinator: 对账记录 {Id} 续租失败（租约已失效），放弃心跳。",
-                        reconciliationId);
-                    return;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Handler 完成 / 取消 → 正常退出。
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "ToolReconciliationCoordinator: 对账记录 {Id} 续租心跳异常（忽略）。", reconciliationId);
-        }
     }
 }

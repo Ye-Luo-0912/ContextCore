@@ -241,6 +241,50 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
     }
 
     /// <inheritdoc />
+    public ValueTask<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+        IReadOnlyList<ToolReconciliationHeartbeat> heartbeats,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (heartbeats.Count == 0)
+        {
+            return ValueTask.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        }
+
+        // 与单条 RenewLeaseAsync 同语义：token 匹配 + Running + 未过期才续约。
+        var now = DateTimeOffset.UtcNow;
+        var failed = new List<string>(heartbeats.Count);
+        foreach (var heartbeat in heartbeats)
+        {
+            var renewed = false;
+            _records.AddOrUpdate(
+                heartbeat.ReconciliationId,
+                _ => throw new InvalidOperationException($"对账记录不存在：{heartbeat.ReconciliationId}"),
+                (_, existing) =>
+                {
+                    if (existing.Status != ToolReconciliationStatus.Running
+                        || !string.Equals(existing.LeaseToken, heartbeat.LeaseToken, StringComparison.Ordinal)
+                        || !existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now)
+                    {
+                        return existing;
+                    }
+                    renewed = true;
+                    return existing with
+                    {
+                        LeaseExpiresAt = now + leaseDuration,
+                        UpdatedAt = now
+                    };
+                });
+            if (!renewed)
+            {
+                failed.Add(heartbeat.ReconciliationId);
+            }
+        }
+        return ValueTask.FromResult<IReadOnlyList<string>>(failed);
+    }
+
+    /// <inheritdoc />
     public ValueTask<bool> TryResetToPendingAsync(
         string reconciliationId,
         string leaseToken,

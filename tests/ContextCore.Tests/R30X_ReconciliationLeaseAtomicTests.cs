@@ -149,6 +149,37 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             "过期租约续租失败。");
     }
 
+    /// <summary>验证：RenewHeartbeatBatchAsync 单次往返批量续约——仅 token 匹配且未过期的 Running 记录被续约。</summary>
+    [TestMethod]
+    public async Task Store_RenewHeartbeatBatch_OnlyRenewsMatchingToken()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        await store.CreateAsync(BuildRecord("rec-2", "req-2", "bank-transfer"), cts.Token);
+        await store.CreateAsync(BuildRecord("rec-3", "req-3", "bank-transfer"), cts.Token);
+        var lease1 = await store.TryBeginAsync("rec-1", "worker-a", TimeSpan.FromMinutes(5), cts.Token);
+        var lease2 = await store.TryBeginAsync("rec-2", "worker-b", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease1);
+        Assert.IsNotNull(lease2);
+
+        var failed = await store.RenewHeartbeatBatchAsync(
+            new[]
+            {
+                new ToolReconciliationHeartbeat { ReconciliationId = "rec-1", LeaseToken = lease1!.LeaseToken },
+                new ToolReconciliationHeartbeat { ReconciliationId = "rec-2", LeaseToken = "wrong-token" },
+                new ToolReconciliationHeartbeat { ReconciliationId = "rec-3", LeaseToken = "no-lease" }
+            },
+            TimeSpan.FromMinutes(5),
+            cts.Token);
+
+        CollectionAssert.AreEquivalent(new[] { "rec-2", "rec-3" }, failed.ToList(),
+            "仅 token 匹配且持有有效租约的记录被续约，其余返回失败。");
+        var expired1 = (await store.GetAsync("rec-1", cts.Token))!.LeaseExpiresAt!.Value;
+        Assert.IsTrue(expired1 > DateTimeOffset.UtcNow.AddMinutes(4), "rec-1 租约被延长。");
+    }
+
     /// <summary>验证：TryResetToPendingAsync 必须持有有效租约；成功后携带 last_error + 退避。</summary>
     [TestMethod]
     public async Task Store_TryResetToPending_RequiresValidLease_SetsBackoff()
@@ -506,7 +537,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var record = await store.CreateAsync(BuildRecord("rec-worker", result.RequestId, "bank-transfer", result), cts.Token);
 
         var reconHandler = new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-worker" });
-        await coordinator.ReconcileRecordAsync(record, reconHandler, cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker:test", TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsNotNull(lease, "Worker 领取裁决租约成功。");
+        await coordinator.ReconcileWithLeaseAsync(record, lease!, reconHandler, cts.Token);
 
         var stored = await store.GetAsync(record.ReconciliationId, cts.Token);
         Assert.AreEqual(ToolReconciliationStatus.Resolved, stored!.Status);

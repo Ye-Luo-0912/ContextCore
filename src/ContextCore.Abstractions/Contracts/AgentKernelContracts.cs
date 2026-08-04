@@ -730,6 +730,16 @@ public sealed record ReconciliationListResult
     public required int OverdueCount { get; init; }
 }
 
+/// <summary>批量心跳续约的对账记录条目（reconciliationId + leaseToken）。由 <see cref="IToolReconciliationStore.RenewHeartbeatBatchAsync"/> 使用。</summary>
+public sealed record ToolReconciliationHeartbeat
+{
+    /// <summary>对账记录 ID。</summary>
+    public required string ReconciliationId { get; init; }
+
+    /// <summary>租约令牌（必须与 <see cref="IToolReconciliationStore.TryBeginAsync"/> 领取的一致）。</summary>
+    public required string LeaseToken { get; init; }
+}
+
 /// <summary>
 /// Tool 对账记录存储：持久化 <see cref="ToolReconciliationRecord"/>，
 /// 支撑 Run 级"未裁决不完成"约束与 ToolReconciliationWorker 轮询。
@@ -784,6 +794,17 @@ public interface IToolReconciliationStore
     ValueTask<bool> RenewLeaseAsync(
         string reconciliationId,
         string leaseToken,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 批量续租（心跳）：单次往返续约多条记录，替代逐条 <see cref="RenewLeaseAsync"/>。
+    /// 每条按 <c>reconciliation_id + lease_token + Running + 未过期</c> CAS 校验，语义与单条路径一致。
+    /// 返回未续约成功的 reconciliation_id 列表（租约被抢占 / 已终态 / token 不匹配），
+    /// 调用方应停止处理对应记录。
+    /// </summary>
+    ValueTask<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+        IReadOnlyList<ToolReconciliationHeartbeat> heartbeats,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
 

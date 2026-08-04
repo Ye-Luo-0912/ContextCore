@@ -32,6 +32,12 @@ namespace ContextCore.Service.Hosting;
 /// </summary>
 public sealed class ToolReconciliationWorker : BackgroundService
 {
+    /// <summary>Worker 领取的裁决租约时长（与协调器常量一致：过期后其他 Worker 可接管）。</summary>
+    private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
+
+    /// <summary>共享批量心跳间隔：远小于租约时长，保证长 Handler 执行期间租约不失效。</summary>
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+
     private readonly ToolReconciliationCoordinator _coordinator;
     private readonly IToolReconciliationStore _store;
     private readonly IReadOnlyDictionary<string, IToolReconciliationHandler> _handlers;
@@ -39,6 +45,24 @@ public sealed class ToolReconciliationWorker : BackgroundService
     private readonly IAgentRunStore _runStore;
     private readonly ILogger<ToolReconciliationWorker> _logger;
     private readonly TimeSpan _interval;
+
+    /// <summary>活跃裁决租约注册表（reconciliationId → 条目），供共享批量心跳循环续约。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ReconciliationLeaseEntry> _leases =
+        new(System.StringComparer.Ordinal);
+
+    private readonly object _heartbeatLock = new();
+    private Task? _heartbeatLoopTask;
+    private CancellationTokenSource? _heartbeatLoopCts;
+
+    /// <summary>共享心跳注册表条目：reconciliationId + leaseToken + 记录取消源 + 最后确认过期时间（本地 watchdog）。</summary>
+    private sealed class ReconciliationLeaseEntry
+    {
+        public required string ReconciliationId { get; init; }
+        public required string LeaseToken { get; init; }
+        public required CancellationTokenSource LeaseCts { get; init; }
+        public long LastConfirmedExpiresTicks;
+        public int ConsecutiveFailures;
+    }
 
     public ToolReconciliationWorker(
         ToolReconciliationCoordinator coordinator,
@@ -65,29 +89,37 @@ public sealed class ToolReconciliationWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("ToolReconciliationWorker 启动：轮询间隔 {Interval}s。", _interval.TotalSeconds);
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await ReconcileOnceAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "ToolReconciliationWorker 轮询循环异常（不中断后续轮询）。");
-            }
+                try
+                {
+                    await ReconcileOnceAsync(stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ToolReconciliationWorker 轮询循环异常（不中断后续轮询）。");
+                }
 
-            try
-            {
-                await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                try
+                {
+                    await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
+        }
+        finally
+        {
+            // 停止共享批量心跳循环（worker 退出时不再续约）
+            await StopHeartbeatLoopAsync().ConfigureAwait(false);
         }
         _logger.LogInformation("ToolReconciliationWorker 已停止。");
     }
@@ -144,7 +176,26 @@ public sealed class ToolReconciliationWorker : BackgroundService
 
                 try
                 {
-                    await _coordinator.ReconcileRecordAsync(record, handler, ct).ConfigureAwait(false);
+                    // Worker 领取裁决租约（Pending → Running + lease/fencing）：
+                    // 已持有租约后注册到共享批量心跳，由心跳循环统一续约（单次往返续整批）。
+                    var lease = await _store.TryBeginAsync(
+                        record.ReconciliationId, "worker:reconcile", LeaseDuration, ct).ConfigureAwait(false);
+                    if (lease is null)
+                    {
+                        continue; // 已被并发 Worker / resolve 端点接管（仲裁权被占用）
+                    }
+
+                    using var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    RegisterReconciliationLease(record.ReconciliationId, lease.LeaseToken, leaseCts);
+                    try
+                    {
+                        await _coordinator.ReconcileWithLeaseAsync(record, lease, handler, leaseCts.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        UnregisterReconciliationLease(record.ReconciliationId);
+                        leaseCts.Cancel();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -213,5 +264,168 @@ public sealed class ToolReconciliationWorker : BackgroundService
         {
             _logger.LogDebug(ex, "ToolReconciliationWorker: Run {RunId} 状态推进 {From}→{To} 失败（best-effort）。", runId, from, to);
         }
+    }
+
+    /// <summary>
+    /// 将裁决租约注册到共享批量心跳注册表；懒启动共享心跳循环（首个注册时）。
+    /// 续约失败（租约被抢占）时由循环取消 <paramref name="leaseCts"/>。
+    /// </summary>
+    private void RegisterReconciliationLease(string reconciliationId, string leaseToken, CancellationTokenSource leaseCts)
+    {
+        _leases[reconciliationId] = new ReconciliationLeaseEntry
+        {
+            ReconciliationId = reconciliationId,
+            LeaseToken = leaseToken,
+            LeaseCts = leaseCts,
+            LastConfirmedExpiresTicks = DateTimeOffset.UtcNow.Add(LeaseDuration).UtcTicks
+        };
+
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatLoopTask is null || _heartbeatLoopTask.IsCompleted)
+            {
+                _heartbeatLoopCts?.Dispose();
+                _heartbeatLoopCts = new CancellationTokenSource();
+                _heartbeatLoopTask = RunBatchHeartbeatLoopAsync(_heartbeatLoopCts.Token);
+            }
+        }
+    }
+
+    /// <summary>从共享批量心跳注册表移除记录（记录处理结束后停止续约）。</summary>
+    private void UnregisterReconciliationLease(string reconciliationId)
+    {
+        _leases.TryRemove(reconciliationId, out _);
+    }
+
+    /// <summary>停止共享批量心跳循环（worker 退出时调用）。</summary>
+    private async Task StopHeartbeatLoopAsync()
+    {
+        lock (_heartbeatLock)
+        {
+            _heartbeatLoopCts?.Cancel();
+        }
+        if (_heartbeatLoopTask is not null)
+        {
+            try { await _heartbeatLoopTask.ConfigureAwait(false); }
+            catch { /* 循环异常已在内部记录，此处忽略 */ }
+        }
+        lock (_heartbeatLock)
+        {
+            _heartbeatLoopCts?.Dispose();
+            _heartbeatLoopCts = null;
+            _heartbeatLoopTask = null;
+        }
+    }
+
+    /// <summary>
+    /// 共享批量心跳循环：每 <see cref="HeartbeatInterval"/> 周期通过一次
+    /// <see cref="IToolReconciliationStore.RenewHeartbeatBatchAsync"/> 续约全部活跃租约，
+    /// 替代"每条记录一个独立续约任务 + 每次 DB 往返"的模式（N 次往返 → 1 次）。
+    /// 失败语义与旧逐条心跳一致：续约失败 → 取消对应记录；连续异常超过阈值 → 取消全部活跃记录。
+    /// </summary>
+    private async Task RunBatchHeartbeatLoopAsync(CancellationToken cancellationToken)
+    {
+        const int MaxConsecutiveFailures = 3;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(HeartbeatInterval, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            var entries = _leases.Values.ToList();
+            if (entries.Count == 0)
+            {
+                continue;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var cancelSet = new HashSet<string>(StringComparer.Ordinal);
+
+            // 本地 watchdog：最后一次确认的租约已过期 → 取消对应记录（不发起续约）
+            foreach (var entry in entries)
+            {
+                if (now.UtcTicks >= Interlocked.Read(ref entry.LastConfirmedExpiresTicks))
+                {
+                    _logger.LogWarning(
+                        "ToolReconciliationWorker: 对账记录 {Id} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消处理。",
+                        entry.ReconciliationId, new DateTimeOffset(entry.LastConfirmedExpiresTicks, TimeSpan.Zero));
+                    CancelReconciliationLease(entry);
+                    cancelSet.Add(entry.ReconciliationId);
+                }
+            }
+
+            var toRenew = entries
+                .Where(e => !cancelSet.Contains(e.ReconciliationId))
+                .Select(e => new ToolReconciliationHeartbeat
+                {
+                    ReconciliationId = e.ReconciliationId,
+                    LeaseToken = e.LeaseToken
+                })
+                .ToList();
+            if (toRenew.Count == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var failed = await _store.RenewHeartbeatBatchAsync(toRenew, LeaseDuration, cancellationToken)
+                    .ConfigureAwait(false);
+                foreach (var entry in entries)
+                {
+                    if (cancelSet.Contains(entry.ReconciliationId))
+                    {
+                        continue;
+                    }
+                    if (failed.Contains(entry.ReconciliationId, StringComparer.Ordinal))
+                    {
+                        // 租约丢失（被抢占 / 状态已改变）——取消当前记录处理，后续原子提交将返回 ArbitrationLost。
+                        _logger.LogWarning(
+                            "ToolReconciliationWorker: 对账记录 {Id} 租约续约失败（被抢占或状态已改变），中止处理。",
+                            entry.ReconciliationId);
+                        CancelReconciliationLease(entry);
+                    }
+                    else
+                    {
+                        Interlocked.Exchange(ref entry.ConsecutiveFailures, 0);
+                        Interlocked.Exchange(
+                            ref entry.LastConfirmedExpiresTicks,
+                            DateTimeOffset.UtcNow.Add(LeaseDuration).UtcTicks);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch
+            {
+                // 瞬时错误——不立即中止；连续异常超过阈值后取消全部活跃记录
+                foreach (var entry in entries)
+                {
+                    var failures = Interlocked.Increment(ref entry.ConsecutiveFailures);
+                    if (failures >= MaxConsecutiveFailures)
+                    {
+                        _logger.LogError(
+                            "ToolReconciliationWorker: 对账记录 {Id} 心跳续约连续失败 {Failures} 次，中止处理。",
+                            entry.ReconciliationId, failures);
+                        CancelReconciliationLease(entry);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>取消记录处理（租约丢失或本地 watchdog 触发）。</summary>
+    private void CancelReconciliationLease(ReconciliationLeaseEntry entry)
+    {
+        try { entry.LeaseCts.Cancel(); }
+        catch (ObjectDisposedException) { /* 记录已处理完毕并释放了 leaseCts，忽略 */ }
     }
 }

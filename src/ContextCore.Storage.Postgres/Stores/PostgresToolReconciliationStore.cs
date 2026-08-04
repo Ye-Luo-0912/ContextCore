@@ -355,6 +355,69 @@ WHERE reconciliation_id = @reconciliation_id
     }
 
     /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+        IReadOnlyList<ToolReconciliationHeartbeat> heartbeats,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(heartbeats);
+        if (heartbeats.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        var reconciliationIds = new string[heartbeats.Count];
+        var leaseTokens = new string[heartbeats.Count];
+        for (var i = 0; i < heartbeats.Count; i++)
+        {
+            var heartbeat = heartbeats[i];
+            ArgumentException.ThrowIfNullOrWhiteSpace(heartbeat.ReconciliationId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(heartbeat.LeaseToken);
+            reconciliationIds[i] = heartbeat.ReconciliationId;
+            leaseTokens[i] = heartbeat.LeaseToken;
+        }
+
+        // 单条 SQL 批量续约：与单条路径同校验（reconciliation_id + lease_token + Running + 未过期），
+        // RETURNING 返回成功续约的 reconciliation_id；未返回的即失败（租约被抢占或状态已改变）。
+        var renewedIds = new HashSet<string>(StringComparer.Ordinal);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+UPDATE {Table("tool_reconciliation_entries")} AS t
+SET lease_expires_at = @lease_expires_at, updated_at = @now
+FROM unnest(@reconciliation_ids, @lease_tokens) AS req(reconciliation_id, lease_token)
+WHERE t.reconciliation_id = req.reconciliation_id
+  AND t.status = @running
+  AND t.lease_token = req.lease_token
+  AND t.lease_expires_at > clock_timestamp()
+RETURNING t.reconciliation_id;
+""";
+        command.Parameters.AddWithValue("reconciliation_ids", reconciliationIds);
+        command.Parameters.AddWithValue("lease_tokens", leaseTokens);
+        command.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
+        command.Parameters.AddWithValue("lease_expires_at", DateTimeOffset.UtcNow + leaseDuration);
+        command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            renewedIds.Add(reader.GetString(0));
+        }
+
+        var failed = new List<string>(heartbeats.Count - renewedIds.Count);
+        foreach (var heartbeat in heartbeats)
+        {
+            if (!renewedIds.Contains(heartbeat.ReconciliationId))
+            {
+                failed.Add(heartbeat.ReconciliationId);
+            }
+        }
+        return failed;
+    }
+
+    /// <inheritdoc />
     public async ValueTask<bool> TryResetToPendingAsync(
         string reconciliationId,
         string leaseToken,

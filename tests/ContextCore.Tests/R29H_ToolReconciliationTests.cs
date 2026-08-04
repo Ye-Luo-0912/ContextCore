@@ -447,7 +447,9 @@ public sealed class R29H_ToolReconciliationTests
         var record = await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
 
         var reconHandler = new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-888" });
-        await coordinator.ReconcileRecordAsync(record, reconHandler, cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker:test", TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsNotNull(lease, "Worker 领取裁决租约成功。");
+        await coordinator.ReconcileWithLeaseAsync(record, lease!, reconHandler, cts.Token);
 
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
         var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
@@ -472,8 +474,10 @@ public sealed class R29H_ToolReconciliationTests
         var record = await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
 
         var reconHandler = new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true }, throwException: true);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker:test", TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsNotNull(lease, "Worker 领取裁决租约成功。");
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => coordinator.ReconcileRecordAsync(record, reconHandler, cts.Token));
+            () => coordinator.ReconcileWithLeaseAsync(record, lease!, reconHandler, cts.Token));
 
         Assert.AreEqual(ToolReconciliationStatus.Pending, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
             "Handler 异常 → 记录回退 Pending 等待重试。");

@@ -131,6 +131,50 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
         }
     }
 
+    /// <summary>验证：RenewHeartbeatBatchAsync 单次往返批量续约——仅 token 匹配且未过期的 Running 记录被续约。</summary>
+    [TestMethod]
+    public async Task Store_RenewHeartbeatBatch_OnlyRenewsMatchingToken()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — PostgresToolReconciliationStore 测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store) = await ResolveStoreAsync(container, "rec_store_hb_");
+            await using (provider)
+            {
+                await store.CreateAsync(BuildRecord("rec-hb-1", "req-hb-1", Deadline: null), default);
+                await store.CreateAsync(BuildRecord("rec-hb-2", "req-hb-2", Deadline: null), default);
+                await store.CreateAsync(BuildRecord("rec-hb-3", "req-hb-3", Deadline: null), default);
+                var lease1 = await store.TryBeginAsync("rec-hb-1", "worker-a", TimeSpan.FromMinutes(5), default);
+                var lease2 = await store.TryBeginAsync("rec-hb-2", "worker-b", TimeSpan.FromMinutes(1), default);
+                Assert.IsNotNull(lease1, "rec-hb-1 领取租约成功。");
+                Assert.IsNotNull(lease2, "rec-hb-2 领取租约成功。");
+
+                var failed = await store.RenewHeartbeatBatchAsync(
+                    new[]
+                    {
+                        new ToolReconciliationHeartbeat { ReconciliationId = "rec-hb-1", LeaseToken = lease1!.LeaseToken },
+                        new ToolReconciliationHeartbeat { ReconciliationId = "rec-hb-2", LeaseToken = "wrong-token" },
+                        new ToolReconciliationHeartbeat { ReconciliationId = "rec-hb-3", LeaseToken = "no-lease" }
+                    },
+                    TimeSpan.FromMinutes(5),
+                    default);
+
+                CollectionAssert.AreEquivalent(new[] { "rec-hb-2", "rec-hb-3" }, failed.ToList(),
+                    "仅 token 匹配且持有有效租约的记录被续约，其余返回失败。");
+                var renewed = await store.GetAsync("rec-hb-1", default);
+                Assert.IsNotNull(renewed!.LeaseExpiresAt, "rec-hb-1 租约应被延长。");
+                Assert.IsTrue(renewed.LeaseExpiresAt!.Value > DateTimeOffset.UtcNow.AddMinutes(4),
+                    "rec-hb-1 续约后过期时间在未来 5 分钟内。");
+            }
+        }
+    }
+
     // ── 3. ExternalOperationId 反查（跨 Run）────────────────────────────────
 
     /// <summary>

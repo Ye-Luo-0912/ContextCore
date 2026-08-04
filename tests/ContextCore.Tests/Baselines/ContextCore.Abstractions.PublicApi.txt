@@ -2670,6 +2670,7 @@ M:ContextCore.Abstractions.IToolReconciliationStore.ListPendingAsync(System.Int3
 M:ContextCore.Abstractions.IToolReconciliationStore.MarkRejectedAsync(System.String, System.String, ContextCore.Abstractions.ToolReconciliationOutcome, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.MarkResolvedAsync(System.String, System.String, ContextCore.Abstractions.ToolReconciliationOutcome, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.QueryByExternalOperationIdAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IToolReconciliationStore.RenewHeartbeatBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ToolReconciliationHeartbeat>, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.RenewLeaseAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IToolReconciliationStore.ResolveReconciliationAtomicallyAsync(System.String, System.String, System.String, System.String, System.Int64, ContextCore.Abstractions.ToolReconciliationOutcome, ContextCore.Abstractions.DurableToolResult, System.Nullable<ContextCore.Abstractions.AgentRunState>, System.Threading.CancellationToken, System.String)
 M:ContextCore.Abstractions.IToolReconciliationStore.TryBeginAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
@@ -5587,6 +5588,13 @@ M:ContextCore.Abstractions.ToolObservation.GetHashCode()
 M:ContextCore.Abstractions.ToolObservation.GetType()
 M:ContextCore.Abstractions.ToolObservation.ToAgentMessage()
 M:ContextCore.Abstractions.ToolObservation.ToString()
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.#ctor()
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.<Clone>$()
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.Equals(ContextCore.Abstractions.ToolReconciliationHeartbeat)
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.Equals(System.Object)
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.GetHashCode()
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.GetType()
+M:ContextCore.Abstractions.ToolReconciliationHeartbeat.ToString()
 M:ContextCore.Abstractions.ToolReconciliationLease.#ctor()
 M:ContextCore.Abstractions.ToolReconciliationLease.<Clone>$()
 M:ContextCore.Abstractions.ToolReconciliationLease.Equals(ContextCore.Abstractions.ToolReconciliationLease)
@@ -11411,6 +11419,8 @@ P:ContextCore.Abstractions.ToolObservation.Result (get|init)
 P:ContextCore.Abstractions.ToolObservation.Succeeded (get|init)
 P:ContextCore.Abstractions.ToolObservation.ToolCallId (get|init)
 P:ContextCore.Abstractions.ToolObservation.ToolName (get|init)
+P:ContextCore.Abstractions.ToolReconciliationHeartbeat.LeaseToken (get|init)
+P:ContextCore.Abstractions.ToolReconciliationHeartbeat.ReconciliationId (get|init)
 P:ContextCore.Abstractions.ToolReconciliationLease.ExpiresAt (get|init)
 P:ContextCore.Abstractions.ToolReconciliationLease.FencingToken (get|init)
 P:ContextCore.Abstractions.ToolReconciliationLease.LeaseToken (get|init)
@@ -12598,6 +12608,7 @@ T:ContextCore.Abstractions.ToolExecutionPolicy
 T:ContextCore.Abstractions.ToolExecutionResult
 T:ContextCore.Abstractions.ToolFailurePhase (Enum)
 T:ContextCore.Abstractions.ToolObservation
+T:ContextCore.Abstractions.ToolReconciliationHeartbeat
 T:ContextCore.Abstractions.ToolReconciliationLease
 T:ContextCore.Abstractions.ToolReconciliationOutcome
 T:ContextCore.Abstractions.ToolReconciliationRecord
