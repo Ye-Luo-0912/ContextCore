@@ -105,10 +105,17 @@ jobs:
         with:
           name: build-output
 
-      # 排除 Integration（需 Postgres）、Architecture（独立 job）、Contract（public-api / openapi-snapshot 独立 job）
+      # 排除 Integration（需 Postgres，独立 job）、Architecture（独立 job）、Contract（public-api / openapi-snapshot 独立 job）
+      # 两条命令分别跑两个非集成测试项目：ContextCore.IntegrationTests 在 unit 过滤器下
+      # 匹配 0 条用例，若随解决方案一起跑会因 TreatNoTestsAsError 使 job 误报失败。
       - name: Run unit tests (non-Integration / non-Architecture / non-Contract)
         run: >
-          dotnet test ContextCore.sln -c Release --no-build --no-restore
+          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
+          --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=unit-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true &&
+          dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-build --no-restore
           --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=unit-tests.trx"
