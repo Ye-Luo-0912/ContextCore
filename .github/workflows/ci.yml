@@ -112,12 +112,12 @@ jobs:
         run: >
           dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
           --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
-          --logger "console;verbosity=normal"
+          --logger "console;verbosity=minimal"
           --logger "trx;LogFileName=unit-tests.trx"
           -- RunConfiguration.TreatNoTestsAsError=true &&
           dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-build --no-restore
           --filter "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract"
-          --logger "console;verbosity=normal"
+          --logger "console;verbosity=minimal"
           --logger "trx;LogFileName=unit-tests.trx"
           -- RunConfiguration.TreatNoTestsAsError=true
 

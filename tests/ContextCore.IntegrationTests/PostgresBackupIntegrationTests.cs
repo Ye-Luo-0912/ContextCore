@@ -51,7 +51,9 @@ public sealed class PostgresBackupIntegrationTests
         _container = new PostgreSqlBuilder(PgVectorImage)
             .WithDatabase("cctest")
             .WithUsername("cctest")
-            .WithPassword("cctest")
+            // 密码须与用户名不同：清单脱敏保留 Username 字段，
+            // 若密码与用户名同值，断言"密码不出现在 SourceDescription"会产生假阳性
+            .WithPassword("cctest-pw-0f9a")
             .Build();
 
         await _container.StartAsync();

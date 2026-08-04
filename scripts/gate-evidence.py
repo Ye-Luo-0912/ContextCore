@@ -69,11 +69,18 @@ def parse_trx(path: str):
 
 
 def is_allowed(test_name: str, allowlist) -> bool:
-    """白名单匹配：精确相等或后缀匹配（容忍 namespace/类前缀差异）。"""
+    """白名单匹配：精确相等、后缀匹配或反向后缀匹配。
+
+    trx 中的 testName 为短名（仅方法名，如 "TraceSink_QueueFull_NotYetImplemented"），
+    而白名单条目为完整名（类.方法）。因此除 test_name 以条目结尾外，
+    还需支持条目以 test_name 结尾（反向），以容忍类前缀差异。
+    """
     for entry in allowlist:
         if test_name == entry:
             return True
         if test_name.endswith("." + entry) or test_name.endswith(entry):
+            return True
+        if entry.endswith("." + test_name) or entry.endswith(test_name):
             return True
     return False
 

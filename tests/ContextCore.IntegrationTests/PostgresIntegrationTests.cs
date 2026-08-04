@@ -903,6 +903,17 @@ public sealed class PostgresIntegrationTests
 
     internal static async Task<bool> IsDockerAvailableAsync()
     {
+        // CI/Linux 快速路径：DOCKER_HOST 指向 unix socket 时直接检查 socket 文件存在，
+        // 避免启动完整容器探测——首个 pgvector 镜像拉取可能超过探测超时，导致
+        // 把可用 Docker 误判为不可用（测试被跳过而非执行）。
+        var dockerHost = Environment.GetEnvironmentVariable("DOCKER_HOST");
+        if (!string.IsNullOrEmpty(dockerHost) &&
+            dockerHost.StartsWith("unix://", StringComparison.OrdinalIgnoreCase))
+        {
+            var socketPath = dockerHost.Substring("unix://".Length);
+            return File.Exists(socketPath);
+        }
+
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -932,9 +943,10 @@ public sealed class PostgresIntegrationTests
             var testContainer = new PostgreSqlBuilder(PgVectorImage)
                 .Build();
 
-            // 容器冷启动（含 ryuk 资源回收器 + 就绪检查）可能超过 3 秒，
+            // 容器冷启动（含 ryuk 资源回收器 + 就绪检查 + 首次镜像拉取）可能远超 15 秒：
+            // CI 上多测试类并发初始化时，首个 pgvector 镜像拉取可能持续 20-40 秒，
             // 超时过短会把可用 Docker 误判为不可用（测试被跳过而非执行）。
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             await testContainer.StartAsync(cts.Token);
             await testContainer.DisposeAsync();
             return true;
