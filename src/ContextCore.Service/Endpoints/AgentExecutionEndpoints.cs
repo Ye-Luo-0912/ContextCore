@@ -176,6 +176,13 @@ internal static class AgentExecutionEndpoints
                 }
             }
 
+            // Run 确定不再执行：释放创建时预留的配额（退回容量；未预留/服务未注册时无操作）
+            var quotaService = httpContext.RequestServices.GetService<IWorkspaceQuotaService>();
+            if (quotaService is not null)
+            {
+                await quotaService.ReleaseAsync(workspaceId, id, ct).ConfigureAwait(false);
+            }
+
             return Results.Accepted($"/api/agents/runs/{id}");
         })
         .WithName("CancelAgentRun")
@@ -1366,19 +1373,22 @@ internal static class AgentExecutionEndpoints
             return Results.Ok(ToRunResponse(createResult.Run));
         }
 
-        // Workspace 配额强制：仅新创建的 Run 预留配额（幂等重放不重复扣减）。
-        // 配额启用且服务已注册时，按 Run 预算（MaxTokens / MaxCostUsd）预留；
-        // 预留失败（workspace 配额已耗尽）→ 429（中间件已做耗尽快路径，此处为权威扣减点）。
+        // Workspace 配额强制：仅新创建的 Run 预留配额（幂等重放不重复预留）。
+        // 配额启用且服务已注册时，按 Run 预算（MaxTokens / MaxCostUsd）预留——reservationId 取 runId，
+        // 幂等：同一 run 重复创建不重复占容量。预留失败（workspace 配额已耗尽）→ 429（中间件已做
+        // 耗尽快路径，此处为权威预留点）。预留由 Run 取消时 Release（退回容量），实际执行后
+        // 由结算方 Actualize 转正（按实际用量多退少补）。
         var securityOptions = httpContext.RequestServices.GetService<SecurityOptions>();
         var quotaService = httpContext.RequestServices.GetService<IWorkspaceQuotaService>();
         if (securityOptions is not null && securityOptions.Quota.Enabled && quotaService is not null)
         {
-            var consumption = await quotaService.TryConsumeAsync(
+            var reservation = await quotaService.ReserveAsync(
                 workspaceId,
+                run.RunId,
                 run.CostBudget?.MaxTokens ?? 0,
                 run.CostBudget?.MaxCostUsd ?? 0,
                 ct).ConfigureAwait(false);
-            if (!consumption.Allowed)
+            if (!reservation.Allowed)
             {
                 // P0-6：配额判定失败 → 推进 AdmissionRejected（终态，持久化路径）。
                 // 429 语义 = 请求未持久化、不会执行：Run 行虽保留（审计），但处于 Claimer
@@ -1400,7 +1410,7 @@ internal static class AgentExecutionEndpoints
                     new
                     {
                         error = "workspace_quota_exhausted",
-                        message = consumption.FailureReason ?? "Workspace 配额已耗尽，无法创建新的 Agent Run。",
+                        message = reservation.FailureReason ?? "Workspace 配额已耗尽，无法创建新的 Agent Run。",
                         workspaceId
                     },
                     statusCode: StatusCodes.Status429TooManyRequests);

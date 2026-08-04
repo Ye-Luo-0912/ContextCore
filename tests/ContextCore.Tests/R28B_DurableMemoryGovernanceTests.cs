@@ -820,11 +820,11 @@ public sealed class R28B_DurableMemoryGovernanceTests
     // =========================================================================
 
     [TestMethod]
-    public void SchemaVersion_IsV62()
+    public void SchemaVersion_IsV63()
     {
-        // 当前 schema 版本：v61 → v62（tool_reconciliation_entries 追加 decision_request_id
-        // 客户端决策幂等身份列）。历史版本演进见 PostgresMigrationRunner.SchemaVersion 注释。
-        Assert.AreEqual("cc-schema-v62", PostgresMigrationRunner.SchemaVersion);
+        // 当前 schema 版本：v62 → v63（agent_runs 追加 claim_attempt
+        // Scheduler Claim 领取尝试计数列）。历史版本演进见 PostgresMigrationRunner.SchemaVersion 注释。
+        Assert.AreEqual("cc-schema-v63", PostgresMigrationRunner.SchemaVersion);
     }
 
     [TestMethod]

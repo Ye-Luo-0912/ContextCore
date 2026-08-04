@@ -392,9 +392,11 @@ public sealed class InMemoryWorkspaceQuotaService : IWorkspaceQuotaService
 {
     private readonly ConcurrentDictionary<string, WorkspaceQuotaState> _state
         = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, QuotaReservationEntry> _reservations
+        = new(StringComparer.Ordinal);
     private readonly SecurityOptions _options;
     private readonly ILogger<InMemoryWorkspaceQuotaService> _logger;
-    private readonly object _consumeLock = new();
+    private readonly object _quotaLock = new();
 
     public InMemoryWorkspaceQuotaService(SecurityOptions options, ILogger<InMemoryWorkspaceQuotaService> logger)
     {
@@ -410,48 +412,112 @@ public sealed class InMemoryWorkspaceQuotaService : IWorkspaceQuotaService
     }
 
     /// <inheritdoc />
-    public ValueTask<QuotaConsumptionResult> TryConsumeAsync(
+    public ValueTask<QuotaReservationResult> ReserveAsync(
         string workspaceId,
+        string reservationId,
         long tokens,
         double costUsd,
         CancellationToken cancellationToken = default)
     {
-        lock (_consumeLock)
+        lock (_quotaLock)
         {
             var state = GetOrCreateState(workspaceId);
             state.MaybeResetPeriod();
 
-            var newTokensUsed = state.TokensUsed + tokens;
-            var newCostUsed = state.CostUsedUsd + costUsd;
-
-            // 配额检查（MaxTokens=0 / MaxCostUsd=0 视为无限制）
-            if (state.MaxTokens > 0 && newTokensUsed > state.MaxTokens)
+            // 幂等：同一 reservationId 已预留则不重复计（重复创建/重放不重复占容量）
+            if (_reservations.ContainsKey(reservationId))
             {
-                return ValueTask.FromResult(new QuotaConsumptionResult
+                return ValueTask.FromResult(new QuotaReservationResult
                 {
-                    Allowed = false,
-                    FailureReason = $"Token 配额耗尽：已用 {state.TokensUsed}/{state.MaxTokens}，本次请求 {tokens}。",
+                    Allowed = true,
+                    ReservationId = reservationId,
                     UpdatedQuota = state.ToQuota()
                 });
             }
 
-            if (state.MaxCostUsd > 0 && newCostUsed > state.MaxCostUsd)
+            var newReservedTokens = state.ReservedTokens + tokens;
+            var newReservedCost = state.ReservedCostUsd + costUsd;
+
+            // 配额检查（MaxTokens=0 / MaxCostUsd=0 视为无限制），已消耗 + 已预留均计入
+            if (state.MaxTokens > 0 && state.TokensUsed + newReservedTokens > state.MaxTokens)
             {
-                return ValueTask.FromResult(new QuotaConsumptionResult
+                return ValueTask.FromResult(new QuotaReservationResult
                 {
                     Allowed = false,
-                    FailureReason = $"费用配额耗尽：已用 {state.CostUsedUsd:F2}/{state.MaxCostUsd:F2} USD，本次请求 {costUsd:F2}。",
+                    ReservationId = reservationId,
+                    FailureReason = $"Token 配额不足：已用 {state.TokensUsed}、已预留 {state.ReservedTokens}、上限 {state.MaxTokens}，本次预留 {tokens}。",
                     UpdatedQuota = state.ToQuota()
                 });
             }
 
-            state.TokensUsed = newTokensUsed;
-            state.CostUsedUsd = newCostUsed;
+            if (state.MaxCostUsd > 0 && state.CostUsedUsd + newReservedCost > state.MaxCostUsd)
+            {
+                return ValueTask.FromResult(new QuotaReservationResult
+                {
+                    Allowed = false,
+                    ReservationId = reservationId,
+                    FailureReason = $"费用配额不足：已用 {state.CostUsedUsd:F2}、已预留 {state.ReservedCostUsd:F2}、上限 {state.MaxCostUsd:F2} USD，本次预留 {costUsd:F2}。",
+                    UpdatedQuota = state.ToQuota()
+                });
+            }
+
+            state.ReservedTokens = newReservedTokens;
+            state.ReservedCostUsd = newReservedCost;
+            _reservations[reservationId] = new QuotaReservationEntry(workspaceId, tokens, costUsd);
+
+            return ValueTask.FromResult(new QuotaReservationResult
+            {
+                Allowed = true,
+                ReservationId = reservationId,
+                UpdatedQuota = state.ToQuota()
+            });
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask ReleaseAsync(string workspaceId, string reservationId, CancellationToken cancellationToken = default)
+    {
+        lock (_quotaLock)
+        {
+            // 幂等：未知 reservationId 视为已释放（无操作）
+            if (_reservations.TryRemove(reservationId, out var entry)
+                && _state.TryGetValue(entry.WorkspaceId, out var state))
+            {
+                state.ReservedTokens = Math.Max(0, state.ReservedTokens - entry.Tokens);
+                state.ReservedCostUsd = Math.Max(0, state.ReservedCostUsd - entry.CostUsd);
+            }
+            return default;
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask<QuotaConsumptionResult> ActualizeAsync(
+        string workspaceId,
+        string reservationId,
+        long actualTokens,
+        double actualCostUsd,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_quotaLock)
+        {
+            var targetWorkspace = workspaceId;
+            if (_reservations.TryRemove(reservationId, out var entry))
+            {
+                // 预留转正：按实际用量计入消耗，释放剩余预留（多退少补）
+                targetWorkspace = entry.WorkspaceId;
+                if (_state.TryGetValue(entry.WorkspaceId, out var state))
+                {
+                    state.ReservedTokens = Math.Max(0, state.ReservedTokens - entry.Tokens);
+                    state.ReservedCostUsd = Math.Max(0, state.ReservedCostUsd - entry.CostUsd);
+                    state.TokensUsed += actualTokens;
+                    state.CostUsedUsd += actualCostUsd;
+                }
+            }
 
             return ValueTask.FromResult(new QuotaConsumptionResult
             {
                 Allowed = true,
-                UpdatedQuota = state.ToQuota()
+                UpdatedQuota = GetOrCreateState(targetWorkspace).ToQuota()
             });
         }
     }
@@ -459,11 +525,25 @@ public sealed class InMemoryWorkspaceQuotaService : IWorkspaceQuotaService
     /// <inheritdoc />
     public ValueTask ResetAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        if (_state.TryGetValue(workspaceId, out var state))
+        lock (_quotaLock)
         {
-            state.TokensUsed = 0;
-            state.CostUsedUsd = 0;
-            state.PeriodStartedAt = DateTimeOffset.UtcNow;
+            if (_state.TryGetValue(workspaceId, out var state))
+            {
+                state.TokensUsed = 0;
+                state.CostUsedUsd = 0;
+                state.ReservedTokens = 0;
+                state.ReservedCostUsd = 0;
+                state.PeriodStartedAt = DateTimeOffset.UtcNow;
+            }
+
+            // 该 workspace 的既有预留全部作废（重置语义：配额清零，预留不再占用容量）
+            foreach (var kv in _reservations)
+            {
+                if (string.Equals(kv.Value.WorkspaceId, workspaceId, StringComparison.Ordinal))
+                {
+                    _reservations.TryRemove(kv.Key, out _);
+                }
+            }
         }
         return default;
     }
@@ -515,8 +595,10 @@ public sealed class InMemoryWorkspaceQuotaService : IWorkspaceQuotaService
         public string WorkspaceId { get; init; } = string.Empty;
         public long MaxTokens { get; set; }
         public long TokensUsed { get; set; }
+        public long ReservedTokens { get; set; }
         public double MaxCostUsd { get; set; }
         public double CostUsedUsd { get; set; }
+        public double ReservedCostUsd { get; set; }
         public TimeSpan Period { get; set; } = TimeSpan.FromHours(1);
         public DateTimeOffset PeriodStartedAt { get; set; }
 
@@ -531,6 +613,8 @@ public sealed class InMemoryWorkspaceQuotaService : IWorkspaceQuotaService
             {
                 TokensUsed = 0;
                 CostUsedUsd = 0;
+                ReservedTokens = 0;
+                ReservedCostUsd = 0;
                 PeriodStartedAt = now;
             }
         }
@@ -540,12 +624,17 @@ public sealed class InMemoryWorkspaceQuotaService : IWorkspaceQuotaService
             WorkspaceId = WorkspaceId,
             MaxTokens = MaxTokens,
             TokensUsed = TokensUsed,
+            ReservedTokens = ReservedTokens,
             MaxCostUsd = MaxCostUsd,
             CostUsedUsd = CostUsedUsd,
+            ReservedCostUsd = ReservedCostUsd,
             Period = Period,
             PeriodStartedAt = PeriodStartedAt
         };
     }
+
+    /// <summary>进程内预留注册条目：记录预留归属的 workspace 与预留量。</summary>
+    private sealed record QuotaReservationEntry(string WorkspaceId, long Tokens, double CostUsd);
 }
 
 // ── Audit Retention 默认实现 ──────────────────────────────────────────────

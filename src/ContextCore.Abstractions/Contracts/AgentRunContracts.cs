@@ -179,7 +179,16 @@ public enum AgentRunState : byte
     /// 已确立，只有持租约实例可推进；崩溃后由 Recovery Worker 扫描重新入队。
     /// Actor 以本状态为全新启动（首次 flush CAS Running → ContextBuilding）。
     /// </summary>
-    Running = 23
+    Running = 23,
+
+    /// <summary>
+    /// Claim 租约已过期（Scheduler Claim Lease 到期未被续约）：持有 claim 的节点
+    /// 崩溃或长时间未入队，Run 回到可领取集合，其他节点可重新领取
+    /// （<see cref="ClaimExpired"/> → <see cref="Claimed"/>，claim_attempt +1）。
+    /// 与 <see cref="Claimed"/> 的区别：ClaimExpired 明确标记"claim 已失效"，
+    /// 供调度诊断与监控区分正常持有与过期待接管。
+    /// </summary>
+    ClaimExpired = 24
 }
 
 /// <summary>
@@ -374,10 +383,13 @@ public sealed record AgentRun
 
     /// <summary>
     /// Scheduler Claim Lease 过期时间（UTC）。过期后其他节点可重新领取
-    /// （<see cref="AgentRunState.Claimed"/> 且 claim_expires_at &lt;= now → 重新可领取），
-    /// 防止节点在领取后崩溃导致 Run 永久卡在 Claimed。
+    /// （<see cref="AgentRunState.Claimed"/> 且 claim_expires_at &lt;= now → <see cref="AgentRunState.ClaimExpired"/>
+    /// → 重新可领取），防止节点在领取后崩溃导致 Run 永久卡在 Claimed。
     /// </summary>
     public DateTimeOffset? ClaimExpiresAtUtc { get; init; }
+
+    /// <summary>Scheduler Claim 领取尝试次数（每次领取/重领 +1，诊断用）。</summary>
+    public int ClaimAttempt { get; init; }
 }
 
 /// <summary>

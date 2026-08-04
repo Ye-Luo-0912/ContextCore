@@ -15,8 +15,8 @@ namespace ContextCore.Tests;
 // ===========================================================================
 // Workspace 配额强制验收测试
 //
-// 目标：IWorkspaceQuotaService.TryConsumeAsync 有实际调用方（此前零调用），
-// workspace 配额在请求阶段与 Run 创建阶段都被强制。
+// 目标：workspace 配额在请求阶段（中间件快路径）与 Run 创建阶段（端点预留）都被强制，
+// 配额预留的 Reserve / Release / Actualize 生命周期语义正确。
 //
 // 覆盖：
 // 1. 中间件：配额未启用 → 透传；配额已耗尽 → 429（快路径）；配额未耗尽 → 透传；
@@ -63,7 +63,7 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
             }
         };
         var quotaService = new InMemoryWorkspaceQuotaService(options, NullLogger<InMemoryWorkspaceQuotaService>.Instance);
-        await quotaService.TryConsumeAsync(Ws, 100, 0);
+        await quotaService.ReserveAsync(Ws, "res-1", 100, 0);
 
         var middleware = new WorkspaceQuotaMiddleware(
             _ => throw new InvalidOperationException("配额已耗尽时不应进入下一个中间件。"),
@@ -123,7 +123,7 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
             }
         };
         var quotaService = new InMemoryWorkspaceQuotaService(options, NullLogger<InMemoryWorkspaceQuotaService>.Instance);
-        await quotaService.TryConsumeAsync(Ws, 100, 0);
+        await quotaService.ReserveAsync(Ws, "res-1", 100, 0);
 
         var invoked = false;
         var middleware = new WorkspaceQuotaMiddleware(
@@ -153,7 +153,7 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
             }
         };
         var quotaService = new InMemoryWorkspaceQuotaService(options, NullLogger<InMemoryWorkspaceQuotaService>.Instance);
-        await quotaService.TryConsumeAsync(Ws, 100, 0);
+        await quotaService.ReserveAsync(Ws, "res-1", 100, 0);
 
         var invoked = false;
         var middleware = new WorkspaceQuotaMiddleware(
@@ -171,7 +171,7 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
     // ── 2. 端点：配额预留 ────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task Endpoint_QuotaEnabled_ConsumesAndRejectsWhenExhausted()
+    public async Task Endpoint_QuotaEnabled_ReservesAndRejectsWhenExhausted()
     {
         var securityOptions = new SecurityOptions
         {
@@ -192,13 +192,14 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
         Assert.AreEqual(StatusCodes.Status201Created, first.Status, "配额充足时创建 Run 应 201。");
 
         var quota = await quotaService.GetQuotaAsync(Ws);
-        Assert.AreEqual(100, quota.TokensUsed, "创建 Run 后应实际扣减配额（TryConsumeAsync 有调用方）。");
+        Assert.AreEqual(100, quota.ReservedTokens, "创建 Run 后应预留配额（reservationId = runId）。");
+        Assert.AreEqual(0, quota.TokensUsed, "预留只锁定容量，不计入已消耗。");
 
-        // 第二次：已用 100，Run 预算 100 → 200 > 100 → 预留失败 → 429
+        // 第二次：已预留 100，Run 预算 100 → 200 > 100 → 预留失败 → 429
         var second = await CreateRunAsync(harness, quotaService, maxTokens: 100);
         Assert.AreEqual(StatusCodes.Status429TooManyRequests, second.Status,
             "配额耗尽后创建 Run 应返回 429（不无限等待、不伪装成功）。");
-        StringAssert.Contains(second.Body, "配额耗尽");
+        StringAssert.Contains(second.Body, "配额不足");
     }
 
     [TestMethod]
@@ -215,10 +216,128 @@ public sealed class R30B_QuotaAdmissionEnforcementTests
         Assert.AreEqual(StatusCodes.Status201Created, second.Status, "配额未启用时不受配额限制。");
 
         var quota = await quotaService.GetQuotaAsync(Ws);
-        Assert.AreEqual(0, quota.TokensUsed, "配额未启用时不应扣减。");
+        Assert.AreEqual(0, quota.TokensUsed, "配额未启用时不应计入消耗。");
+        Assert.AreEqual(0, quota.ReservedTokens, "配额未启用时不应预留。");
+    }
+
+    // ── 3. 预留生命周期：Reserve / Release / Actualize ──────────────────
+
+    [TestMethod]
+    public async Task QuotaReservation_ReserveThenRelease_ReturnsCapacity()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        var reserve = await quotaService.ReserveAsync(Ws, "run-1", 60, 0);
+        Assert.IsTrue(reserve.Allowed, "配额充足时预留应成功。");
+
+        var quota = await quotaService.GetQuotaAsync(Ws);
+        Assert.AreEqual(60, quota.ReservedTokens, "预留后 ReservedTokens 应增加。");
+        Assert.AreEqual(0, quota.TokensUsed, "预留不计入已消耗。");
+
+        await quotaService.ReleaseAsync(Ws, "run-1");
+        quota = await quotaService.GetQuotaAsync(Ws);
+        Assert.AreEqual(0, quota.ReservedTokens, "释放后预留应退回容量。");
+
+        // 再次预留同容量仍可成功（容量已退回）
+        var again = await quotaService.ReserveAsync(Ws, "run-2", 100, 0);
+        Assert.IsTrue(again.Allowed, "释放后容量应可再次使用。");
+    }
+
+    [TestMethod]
+    public async Task QuotaReservation_ReserveExceedingLimit_Rejected()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        var ok = await quotaService.ReserveAsync(Ws, "run-1", 60, 0);
+        Assert.IsTrue(ok.Allowed);
+
+        var over = await quotaService.ReserveAsync(Ws, "run-2", 50, 0);
+        Assert.IsFalse(over.Allowed, "已消耗 + 已预留超出上限时应拒绝预留。");
+        Assert.IsNotNull(over.FailureReason);
+
+        var quota = await quotaService.GetQuotaAsync(Ws);
+        Assert.AreEqual(60, quota.ReservedTokens, "被拒绝的预留不应占用容量。");
+    }
+
+    [TestMethod]
+    public async Task QuotaReservation_ReserveSameId_IsIdempotent()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        await quotaService.ReserveAsync(Ws, "run-1", 60, 0);
+        var again = await quotaService.ReserveAsync(Ws, "run-1", 60, 0);
+
+        Assert.IsTrue(again.Allowed, "同一 reservationId 重复预留应幂等成功。");
+        var quota = await quotaService.GetQuotaAsync(Ws);
+        Assert.AreEqual(60, quota.ReservedTokens, "重复预留不应重复占容量。");
+    }
+
+    [TestMethod]
+    public async Task QuotaReservation_Actualize_MovesReservationToUsed()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        await quotaService.ReserveAsync(Ws, "run-1", 100, 0);
+        var result = await quotaService.ActualizeAsync(Ws, "run-1", 40, 0);
+
+        Assert.IsTrue(result.Allowed);
+        Assert.AreEqual(40, result.UpdatedQuota.TokensUsed, "Actualize 应按实际用量计入消耗（多退）。");
+        Assert.AreEqual(0, result.UpdatedQuota.ReservedTokens, "Actualize 应释放预留。");
+        Assert.AreEqual(60, result.UpdatedQuota.RemainingTokens, "剩余容量 = 上限 - 实际消耗。");
+    }
+
+    [TestMethod]
+    public async Task QuotaReservation_ActualizeOverReserved_ChargesActual()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        await quotaService.ReserveAsync(Ws, "run-1", 50, 0);
+        var result = await quotaService.ActualizeAsync(Ws, "run-1", 80, 0);
+
+        Assert.AreEqual(80, result.UpdatedQuota.TokensUsed, "Actualize 按实际用量结算（少补）。");
+        Assert.AreEqual(20, result.UpdatedQuota.RemainingTokens);
+    }
+
+    [TestMethod]
+    public async Task QuotaReservation_ReleaseUnknownId_NoOp()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        await quotaService.ReleaseAsync(Ws, "unknown-reservation");
+        var quota = await quotaService.GetQuotaAsync(Ws);
+        Assert.AreEqual(0, quota.ReservedTokens, "释放未知预留应为无操作。");
+    }
+
+    [TestMethod]
+    public async Task QuotaReservation_Reset_ClearsReservations()
+    {
+        var quotaService = NewQuotaService(maxTokens: 100);
+
+        await quotaService.ReserveAsync(Ws, "run-1", 60, 0);
+        await quotaService.ResetAsync(Ws);
+
+        var quota = await quotaService.GetQuotaAsync(Ws);
+        Assert.AreEqual(0, quota.ReservedTokens, "重置应清空预留。");
+        Assert.AreEqual(0, quota.TokensUsed);
     }
 
     // ── 辅助 ─────────────────────────────────────────────────────────────
+
+    private static InMemoryWorkspaceQuotaService NewQuotaService(long maxTokens)
+    {
+        var options = new SecurityOptions
+        {
+            Quota = new WorkspaceQuotaOptions
+            {
+                Enabled = true,
+                WorkspaceLimits = new Dictionary<string, WorkspaceQuotaLimit>
+                {
+                    [Ws] = new() { MaxTokens = maxTokens, MaxCostUsd = 0, Period = "01:00:00" }
+                }
+            }
+        };
+        return new InMemoryWorkspaceQuotaService(options, NullLogger<InMemoryWorkspaceQuotaService>.Instance);
+    }
 
     private static async Task<(int Status, string Body)> CreateRunAsync(
         EndpointHarness harness,

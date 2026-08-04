@@ -20,9 +20,9 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// 合法流转图（与 <see cref="AgentRunState"/> 注释一致）：
 /// <code>
 /// PendingAdmission → Queued → Claimed → Running → ContextBuilding → ModelCalling → AwaitingApproval
-///     │                     └(释放)─────────┘                  ↓ ↓ ↓ ↓
-///     └→ AdmissionRejected（终态）                            └───────────┴────────────────┴───────────────┘
-///                                                             ↓
+///     │                     │  └(释放)──────┘   ↑            ↓ ↓ ↓ ↓
+///     │                     │  └→ ClaimExpired ┘            └───────────┴────────────────┴───────────────┘
+///     └→ AdmissionRejected（终态）                            ↓
 ///                                                             ToolDispatching → AwaitingApproval（需审批时挂起）
 ///                                                             ↓ ↓
 ///                                                             └────────────┘
@@ -36,6 +36,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 ///                                                             └──── Cancelled (仅由外部取消触发)
 /// </code>
 /// 任意状态可跳转到 Failed（异常）或 Cancelled（用户取消）。
+/// Claimed → ClaimExpired（claim 过期）→ Claimed（其他节点重领）构成调度领取闭环。
 /// Checkpointing 后回到 ContextBuilding 开启下一轮循环。
 /// ToolDispatching → AwaitingApproval 允许 Tool 分派中需审批时挂起，
 /// 等待外部 POST /approvals/{approvalId} 决策后回到 ToolDispatching 继续。
@@ -170,8 +171,13 @@ public static class AgentRunStateMachine
 
             // P0-8：Claimed → Running（Execution/Fencing Lease 已获取，执行权确立）
             // / ContextBuilding（Actor 首次 flush：领取后直接开始执行，跳过显式 Running 推进的兼容路径）。
+            // / ClaimExpired（claim 租约过期未续约 → 显式标记失效，等待其他节点接管）。
             AgentRunState.Claimed => to == AgentRunState.Running
-                                      || to == AgentRunState.ContextBuilding,
+                                      || to == AgentRunState.ContextBuilding
+                                      || to == AgentRunState.ClaimExpired,
+
+            // Claim 过期（ClaimExpired）→ Claimed：其他节点重新领取（claim_attempt +1）。
+            AgentRunState.ClaimExpired => to == AgentRunState.Claimed,
 
             // Running → ContextBuilding（Actor 首次 flush：全新启动，从构建上下文开始）。
             AgentRunState.Running => to == AgentRunState.ContextBuilding,

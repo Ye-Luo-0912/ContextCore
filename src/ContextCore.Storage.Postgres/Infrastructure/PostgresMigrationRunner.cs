@@ -150,11 +150,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   新启动但尚未写 Applied State 的节点计入 NodeCount（未就绪，阻止 Rollout Ready）。
     /// - serving_enabled：Isolated 节点由 Reconciler 置 false，Admission/Middleware 据此
     ///   真正停止接收模型流量（不能只写 Applied State 数据库标志）。
-    /// v61 → v62，tool_reconciliation_entries 追加 decision_request_id：
-    /// - 客户端决策幂等身份：人工 resolve 携带的 DecisionRequestId 在裁决落终态时持久化，
-    ///   相同决策身份 + 相同 outcome 重试 → 幂等成功；相反 outcome → 决策冲突（409）。
+    /// v62 → v63，agent_runs 追加 claim_attempt：
+    /// - Scheduler Claim 领取尝试计数：每次领取/重领 +1，供调度诊断区分首次领取与反复接管。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v62";
+    public const string SchemaVersion = "cc-schema-v63";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2065,6 +2064,7 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
     claim_owner text NULL,
     claim_token text NULL,
     claim_expires_at timestamptz NULL,
+    claim_attempt integer NOT NULL DEFAULT 0,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (workspace_id, run_id)
 );
@@ -2092,6 +2092,11 @@ ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS next_retry_at timestamptz NULL;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_owner text NULL;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_token text NULL;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_expires_at timestamptz NULL;
+
+-- v62 → v63 迁移：为已有 agent_runs 表补充 Scheduler Claim 尝试计数列
+-- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效，幂等。
+--  claim_attempt：每次领取/重领 +1，供调度诊断区分首次领取与反复接管。）
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_attempt integer NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);

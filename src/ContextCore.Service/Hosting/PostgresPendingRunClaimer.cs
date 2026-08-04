@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Service.Extensions;
+using ContextCore.Service.Infrastructure;
 
 namespace ContextCore.Service.Hosting;
 
@@ -40,15 +41,18 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
 {
     private readonly IServiceProvider _services;
     private readonly ILogger<PostgresPendingRunClaimer> _logger;
+    private readonly ProductionRuntimeWorkerRegistry? _workerRegistry;
     // P0-8：本进程稳定的 Scheduler Claim Lease 持有者标识（观测用：哪个节点领取了哪些 Run）。
     private readonly string _claimOwner;
 
     public PostgresPendingRunClaimer(
         IServiceProvider services,
-        ILogger<PostgresPendingRunClaimer> logger)
+        ILogger<PostgresPendingRunClaimer> logger,
+        ProductionRuntimeWorkerRegistry? workerRegistry = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _workerRegistry = workerRegistry;
         try
         {
             _claimOwner = $"claimer-{Environment.MachineName}-{Guid.NewGuid():N}";
@@ -89,9 +93,11 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            _workerRegistry?.SetLeaseStatus(nameof(PostgresPendingRunClaimer), "polling");
             try
             {
                 await ClaimOnceAsync(stoppingToken).ConfigureAwait(false);
+                _workerRegistry?.MarkCycleSucceeded(nameof(PostgresPendingRunClaimer));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -100,6 +106,9 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "PostgresPendingRunClaimer 轮询循环异常（不中断后续轮询）。");
+                _workerRegistry?.RecordFailure(
+                    nameof(PostgresPendingRunClaimer), ex.Message, interval);
+                _workerRegistry?.SetLeaseStatus(nameof(PostgresPendingRunClaimer), "backoff");
             }
 
             try
@@ -112,6 +121,7 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
             }
         }
 
+        _workerRegistry?.SetLeaseStatus(nameof(PostgresPendingRunClaimer), "stopped");
         _logger.LogInformation("PostgresPendingRunClaimer 已停止。");
     }
 
@@ -187,6 +197,8 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
             _logger.LogError(ex, "PostgresPendingRunClaimer: 领取批次失败（下周期重试）。");
             return;
         }
+
+        _workerRegistry?.SetQueueLag(nameof(PostgresPendingRunClaimer), claimed.Count);
 
         if (claimed.Count == 0)
         {

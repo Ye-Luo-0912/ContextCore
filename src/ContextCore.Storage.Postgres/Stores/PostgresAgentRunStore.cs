@@ -480,6 +480,25 @@ LIMIT @take;
         var backoffMax = retryBackoffMax > TimeSpan.Zero ? retryBackoffMax : TimeSpan.FromMinutes(30);
         var backoffInterval = backoffBase > backoffMax ? backoffMax : backoffBase;
 
+        // 前置标记：过期的 Claimed（claim 租约到期未续约）→ ClaimExpired（显式失效状态，可观测）。
+        // 与主领取同事务：先标记过期，再领取 Queued / ClaimExpired，避免并发窗口。
+        await using (var expiryCommand = connection.CreateCommand())
+        {
+            expiryCommand.Transaction = transaction;
+            expiryCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            expiryCommand.CommandText = $"""
+                UPDATE {Table("agent_runs")}
+                SET state = 24,
+                    updated_at = clock_timestamp(),
+                    data = data || jsonb_build_object(
+                        'State', to_jsonb('ClaimExpired'),
+                        'UpdatedAt', to_jsonb(clock_timestamp()))
+                WHERE state = 22
+                  AND (claim_expires_at IS NULL OR claim_expires_at <= clock_timestamp());
+                """;
+            await expiryCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -505,8 +524,13 @@ WITH eligible AS (
                 -- Queued（state=21）且退避门通过（next_retry_at 为 null 或已到期）
                 (state = 21 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
                 OR
-                -- Claimed（state=22）且 claim 已过期（节点领取后崩溃 → 其他节点接管）
+                -- Claimed（state=22）且 claim 已过期（节点领取后崩溃 → 其他节点接管）。
+                -- 前置标记已把过期 Claimed 转为 ClaimExpired（state=24），此处同时认两种形态
+                -- （防御：并发窗口内可能仍是过期 Claimed）。
                 (state = 22 AND (claim_expires_at IS NULL OR claim_expires_at <= clock_timestamp()))
+                OR
+                -- ClaimExpired（state=24）：claim 已显式失效，可直接重新领取
+                (state = 24)
                 OR
                 -- Failed（state=8）且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
                 (state = 8 AND max_retries > 0 AND retry_count < max_retries
@@ -535,6 +559,7 @@ updated AS (
         claim_owner = @claim_owner,
         claim_token = t.claim_token,
         claim_expires_at = clock_timestamp() + @claim_duration,
+        claim_attempt = ar.claim_attempt + 1,
         retry_count = CASE WHEN ar.state = 8 THEN ar.retry_count + 1 ELSE ar.retry_count END,
         next_retry_at = CASE WHEN ar.state = 8
             THEN clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)
@@ -553,6 +578,7 @@ updated AS (
                 'ClaimToken', to_jsonb(t.claim_token),
                 'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration),
                 'RetryCount', to_jsonb(ar.retry_count + 1),
+                'ClaimAttempt', to_jsonb(ar.claim_attempt + 1),
                 'NextRetryAtUtc', to_jsonb(clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)),
                 'FinishedAt', to_jsonb(NULL::text),
                 'FailureReason', to_jsonb(NULL::text),
@@ -562,7 +588,8 @@ updated AS (
                 'UpdatedAt', to_jsonb(clock_timestamp()),
                 'ClaimOwner', to_jsonb(@claim_owner),
                 'ClaimToken', to_jsonb(t.claim_token),
-                'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration))
+                'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration),
+                'ClaimAttempt', to_jsonb(ar.claim_attempt + 1))
             END
     FROM tokens t
     WHERE ar.workspace_id = t.workspace_id AND ar.run_id = t.run_id
@@ -616,16 +643,18 @@ SET state = 22,
     claim_owner = @claim_owner,
     claim_token = claim.token,
     claim_expires_at = clock_timestamp() + @claim_duration,
+    claim_attempt = ar.claim_attempt + 1,
     updated_at = clock_timestamp(),
     data = data || jsonb_build_object(
         'State', to_jsonb('Claimed'),
         'UpdatedAt', to_jsonb(clock_timestamp()),
         'ClaimOwner', to_jsonb(@claim_owner),
         'ClaimToken', to_jsonb(claim.token),
-        'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration))
+        'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration),
+        'ClaimAttempt', to_jsonb(ar.claim_attempt + 1))
 FROM claim
 WHERE ar.workspace_id = @workspace_id AND ar.run_id = @run_id
-  AND ar.state = 21
+  AND (ar.state = 21 OR ar.state = 24)
   AND (ar.next_retry_at IS NULL OR ar.next_retry_at <= clock_timestamp())
 RETURNING ar.data;
 """;

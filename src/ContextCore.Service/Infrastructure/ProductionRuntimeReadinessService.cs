@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
@@ -41,6 +42,7 @@ public sealed class ProductionRuntimeWorkerRegistry
     private readonly List<string> _workerTypeNames = new();
     private readonly Lock _gate = new();
     private DateTimeOffset _lastHeartbeatUtc = DateTimeOffset.MinValue;
+    private readonly ConcurrentDictionary<string, WorkerRuntimeState> _workerStates = new(StringComparer.Ordinal);
 
     /// <summary>已注册的 Worker 实现类型全名列表。</summary>
     public IReadOnlyList<string> WorkerTypeNames
@@ -96,6 +98,71 @@ public sealed class ProductionRuntimeWorkerRegistry
                 && DateTimeOffset.UtcNow - _lastHeartbeatUtc <= window;
         }
     }
+
+    /// <summary>记录某 Worker 一次成功周期（清空上次错误与退避）。</summary>
+    public void MarkCycleSucceeded(string workerType)
+    {
+        var now = DateTimeOffset.UtcNow;
+        _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
+            ? prior with { LastCycleAtUtc = now, LastError = null, CurrentBackoff = null, UpdatedAtUtc = now }
+            : new WorkerRuntimeState
+            {
+                WorkerType = workerType,
+                LastCycleAtUtc = now,
+                UpdatedAtUtc = now
+            };
+    }
+
+    /// <summary>记录某 Worker 一次失败周期（错误信息 + 当前退避时长）。</summary>
+    public void RecordFailure(string workerType, string? error, TimeSpan? backoff)
+    {
+        var now = DateTimeOffset.UtcNow;
+        _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
+            ? prior with { LastError = error, CurrentBackoff = backoff, UpdatedAtUtc = now }
+            : new WorkerRuntimeState
+            {
+                WorkerType = workerType,
+                LastError = error,
+                CurrentBackoff = backoff,
+                UpdatedAtUtc = now
+            };
+    }
+
+    /// <summary>记录某 Worker 的队列积压量（待处理任务数）。</summary>
+    public void SetQueueLag(string workerType, int lag)
+    {
+        var now = DateTimeOffset.UtcNow;
+        _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
+            ? prior with { QueueLag = lag, UpdatedAtUtc = now }
+            : new WorkerRuntimeState
+            {
+                WorkerType = workerType,
+                QueueLag = lag,
+                UpdatedAtUtc = now
+            };
+    }
+
+    /// <summary>记录某 Worker 的租约状态（如 claimer：领取中/空闲/退避）。</summary>
+    public void SetLeaseStatus(string workerType, string? status)
+    {
+        var now = DateTimeOffset.UtcNow;
+        _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
+            ? prior with { LeaseStatus = status, UpdatedAtUtc = now }
+            : new WorkerRuntimeState
+            {
+                WorkerType = workerType,
+                LeaseStatus = status,
+                UpdatedAtUtc = now
+            };
+    }
+
+    /// <summary>查询某 Worker 的运行时状态（未上报过返回 null）。</summary>
+    public WorkerRuntimeState? GetWorkerRuntimeState(string workerType)
+        => _workerStates.TryGetValue(workerType, out var state) ? state : null;
+
+    /// <summary>全部已上报状态的 Worker 运行时状态快照。</summary>
+    public IReadOnlyList<WorkerRuntimeState> GetWorkerRuntimeStates()
+        => _workerStates.Values.OrderBy(s => s.WorkerType, StringComparer.Ordinal).ToArray();
 }
 
 /// <summary>
@@ -248,12 +315,18 @@ public sealed class ProductionRuntimeReadinessService
         foreach (var (typeName, displayName, expectedEnabled) in expectedWorkers)
         {
             var isRegistered = registeredTypes.Contains(typeName);
+            var state = _workerRegistry.GetWorkerRuntimeState(typeName);
             workers.Add(new WorkerStatus(
                 Name: displayName,
                 Type: typeName,
                 Enabled: expectedEnabled,
                 Registered: isRegistered,
-                Started: isRegistered && IsApplicationStarted));
+                Started: isRegistered && IsApplicationStarted,
+                LastCycleAtUtc: state?.LastCycleAtUtc,
+                LastError: state?.LastError,
+                CurrentBackoff: state?.CurrentBackoff,
+                QueueLag: state?.QueueLag,
+                LeaseStatus: state?.LeaseStatus));
         }
 
         return workers;
@@ -508,7 +581,47 @@ public sealed record ReadinessCheckItem(string Name, string Status, string Messa
 /// <param name="Enabled">是否在当前 Profile 下应启用。</param>
 /// <param name="Registered">是否已注册到 DI 容器。</param>
 /// <param name="Started">是否已启动（已注册且应用已启动）。</param>
-public sealed record WorkerStatus(string Name, string Type, bool Enabled, bool Registered, bool Started);
+/// <param name="LastCycleAtUtc">最近一次成功周期时间（未上报为 null）。</param>
+/// <param name="LastError">最近一次失败错误信息（无失败为 null）。</param>
+/// <param name="CurrentBackoff">当前退避时长（无退避为 null）。</param>
+/// <param name="QueueLag">当前队列积压量（未上报为 null）。</param>
+/// <param name="LeaseStatus">当前租约状态（未上报为 null）。</param>
+public sealed record WorkerStatus(
+    string Name,
+    string Type,
+    bool Enabled,
+    bool Registered,
+    bool Started,
+    DateTimeOffset? LastCycleAtUtc = null,
+    string? LastError = null,
+    TimeSpan? CurrentBackoff = null,
+    int? QueueLag = null,
+    string? LeaseStatus = null);
+
+/// <summary>Worker 运行时状态（由 Worker 循环上报，供 Readiness / Admission 验证）。</summary>
+public sealed record WorkerRuntimeState
+{
+    /// <summary>Worker 实现类型名称。</summary>
+    public required string WorkerType { get; init; }
+
+    /// <summary>最近一次成功周期时间（UTC；null = 尚未上报过成功周期）。</summary>
+    public DateTimeOffset? LastCycleAtUtc { get; init; }
+
+    /// <summary>最近一次失败错误信息（null = 无失败）。</summary>
+    public string? LastError { get; init; }
+
+    /// <summary>当前退避时长（null = 不在退避）。</summary>
+    public TimeSpan? CurrentBackoff { get; init; }
+
+    /// <summary>当前队列积压量（待处理任务数；null = 未上报）。</summary>
+    public int? QueueLag { get; init; }
+
+    /// <summary>当前租约状态（如 claimer：领取中 / 空闲 / 退避；null = 未上报）。</summary>
+    public string? LeaseStatus { get; init; }
+
+    /// <summary>最近一次状态上报时间（UTC）。</summary>
+    public DateTimeOffset UpdatedAtUtc { get; init; }
+}
 
 /// <summary>Model Activation 状态信息。</summary>
 /// <param name="Enabled">是否启用。</param>

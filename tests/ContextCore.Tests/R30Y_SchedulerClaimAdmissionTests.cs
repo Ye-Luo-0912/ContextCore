@@ -75,8 +75,28 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         StringAssert.Contains(sql, "claim_owner text NULL", "基线 DDL 应含 claim_owner 列（Scheduler Claim 持有者）。");
         StringAssert.Contains(sql, "claim_token text NULL", "基线 DDL 应含 claim_token 列（Release/接管 fencing）。");
         StringAssert.Contains(sql, "claim_expires_at timestamptz NULL", "基线 DDL 应含 claim_expires_at 列（领取过期时间）。");
+        StringAssert.Contains(sql, "claim_attempt integer NOT NULL DEFAULT 0", "基线 DDL 应含 claim_attempt 列（领取尝试计数）。");
         StringAssert.Contains(sql, "ADD COLUMN IF NOT EXISTS claim_owner text NULL",
             "基线 DDL 应含 v58→v59 幂等 ALTER（已有表补列）。");
+        StringAssert.Contains(sql, "ADD COLUMN IF NOT EXISTS claim_attempt integer NOT NULL DEFAULT 0",
+            "基线 DDL 应含 v62→v63 幂等 ALTER（已有表补领取尝试计数列）。");
+    }
+
+    /// <summary>验证：v62→v63 迁移声明（agent_runs 追加 claim_attempt 列）。</summary>
+    [TestMethod]
+    public void MigrationStepRegistry_ClaimAttempt_DeclaresV62ToV63()
+    {
+        var step = PostgresMigrationStepRegistry.Steps
+            .OfType<PostgresMigrationAgentRunClaimAttempt>()
+            .Single();
+
+        Assert.AreEqual("0010_agent_run_claim_attempt", step.MigrationId);
+        Assert.AreEqual("cc-schema-v62", step.FromSchemaVersion);
+        Assert.AreEqual("cc-schema-v63", step.ToSchemaVersion);
+        CollectionAssert.AreEqual(
+            new[] { PostgresMigrationStage.Online },
+            step.Stages.ToArray(),
+            "v62→v63 应为 Online（补列，非破坏性）。");
     }
 
     // ── 2. 状态机 ────────────────────────────────────────────────────────
@@ -97,13 +117,22 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         AgentRunStateMachine.ValidateTransition(AgentRunState.Claimed, AgentRunState.Running);
         AgentRunStateMachine.ValidateTransition(AgentRunState.Running, AgentRunState.ContextBuilding);
 
+        // Claim 过期闭环：Claimed → ClaimExpired（显式失效）→ Claimed（其他节点重领）
+        AgentRunStateMachine.ValidateTransition(AgentRunState.Claimed, AgentRunState.ClaimExpired);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.ClaimExpired, AgentRunState.Claimed);
+
         // 终态：AdmissionRejected 不可再推进；Claimed → Queued 非法（释放是 store 层操作）
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.AdmissionRejected),
             "AdmissionRejected 应为终态（配额失败的 Run 永不进入调度队列）。");
+        Assert.IsFalse(AgentRunStateMachine.IsTerminalState(AgentRunState.ClaimExpired),
+            "ClaimExpired 不是终态（可被其他节点重新领取）。");
         Assert.ThrowsException<InvalidOperationException>(
             () => AgentRunStateMachine.ValidateTransition(AgentRunState.AdmissionRejected, AgentRunState.Queued));
         Assert.ThrowsException<InvalidOperationException>(
             () => AgentRunStateMachine.ValidateTransition(AgentRunState.Claimed, AgentRunState.Queued));
+        Assert.ThrowsException<InvalidOperationException>(
+            () => AgentRunStateMachine.ValidateTransition(AgentRunState.ClaimExpired, AgentRunState.Running),
+            "ClaimExpired 不能直接执行——必须先被重新领取（Claimed）。");
     }
 
     // ── 3. Claim 契约（忠实模拟 PostgresAgentRunStore 语义的 InMemory 持久化 store）────
@@ -127,6 +156,7 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(claimed.ClaimToken), "应写入唯一 Claim token。");
         Assert.IsNotNull(claimed.ClaimExpiresAtUtc, "应写入 Claim 过期时间。");
         Assert.IsTrue(claimed.ClaimExpiresAtUtc > DateTimeOffset.UtcNow, "Claim 过期时间应在未来。");
+        Assert.AreEqual(1, claimed.ClaimAttempt, "首次领取 ClaimAttempt 应为 1。");
 
         var persisted = await store.GetAsync(Ws, run.RunId).ConfigureAwait(false);
         Assert.AreEqual(AgentRunState.Claimed, persisted!.State, "领取后存储中的状态应为 Claimed。");
@@ -238,6 +268,31 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         Assert.AreEqual(1, reclaimed.Count, "Claim 过期后应可重新领取（崩溃恢复路径）。");
         Assert.AreEqual(AgentRunState.Claimed, reclaimed[0].State);
         Assert.AreNotEqual(claimed!.ClaimToken, reclaimed[0].ClaimToken, "重新领取应轮换 claim_token（fencing）。");
+        Assert.AreEqual(2, reclaimed[0].ClaimAttempt, "过期重领后 ClaimAttempt 应为 2（首次领取 1 + 接管 1）。");
+    }
+
+    /// <summary>
+    /// 验证：ClaimExpired 状态可被直接领取（TryClaimSingleAsync 认 ClaimExpired），
+    /// 且领取后 ClaimAttempt +1——Claim 过期闭环 Claimed → ClaimExpired → Claimed。
+    /// </summary>
+    [TestMethod]
+    public async Task ClaimSingle_ClaimExpired_ReclaimableWithAttemptIncrement()
+    {
+        var store = new ClaimAwareInMemoryRunStore(new InMemoryAgentRunStore());
+        var run = await CreateQueuedRunAsync(store, "claim-expired-direct").ConfigureAwait(false);
+
+        // 直接构造 ClaimExpired 状态（等价于 Postgres 前置标记的结果）
+        await store.TransitionStateAsync(Ws, run.RunId, AgentRunState.Queued, AgentRunState.Claimed)
+            .ConfigureAwait(false);
+        await store.TransitionStateAsync(Ws, run.RunId, AgentRunState.Claimed, AgentRunState.ClaimExpired)
+            .ConfigureAwait(false);
+
+        var reclaimed = await store.TryClaimSingleAsync(Ws, run.RunId, "node-2", TimeSpan.FromSeconds(60))
+            .ConfigureAwait(false);
+
+        Assert.IsNotNull(reclaimed, "ClaimExpired 状态应可被重新领取。");
+        Assert.AreEqual(AgentRunState.Claimed, reclaimed!.State, "重领后应回到 Claimed。");
+        Assert.AreEqual(1, reclaimed.ClaimAttempt, "从 ClaimExpired 领取 ClaimAttempt 应为 1。");
     }
 
     // ── 4. 端点 Admission 语义（P0-6 / P0-7）─────────────────────────────
@@ -261,7 +316,7 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
             }
         };
         var quotaService = new InMemoryWorkspaceQuotaService(securityOptions, NullLogger<InMemoryWorkspaceQuotaService>.Instance);
-        await quotaService.TryConsumeAsync(Ws, 100, 0).ConfigureAwait(false);
+        await quotaService.ReserveAsync(Ws, "res-1", 100, 0).ConfigureAwait(false);
         await using var harness = await EndpointHarness.CreateAsync(securityOptions, quotaService).ConfigureAwait(false);
 
         var (status, body) = await CreateRunAsync(harness, maxTokens: 100).ConfigureAwait(false);
@@ -313,9 +368,10 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(terminal!.State),
             $"Run 应执行到终态，实际状态 {terminal.State}。");
 
-        // 配额实际扣减（TryConsumeAsync 有调用方）
+        // 配额已预留（reservationId = runId，预留只锁定容量不计入消耗）
         var quota = await quotaService.GetQuotaAsync(Ws).ConfigureAwait(false);
-        Assert.AreEqual(100, quota.TokensUsed, "创建 Run 后应实际扣减配额。");
+        Assert.AreEqual(100, quota.ReservedTokens, "创建 Run 后应预留配额。");
+        Assert.AreEqual(0, quota.TokensUsed, "预留不计入已消耗。");
     }
 
     /// <summary>
@@ -479,6 +535,7 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         private readonly InMemoryAgentRunStore _inner;
         private readonly TimeSpan _claimDuration;
         private readonly ConcurrentDictionary<string, (string Token, DateTimeOffset ExpiresAt)> _claims = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, int> _claimAttempts = new(StringComparer.Ordinal);
 
         /// <summary>模拟 Claimer 已抢先持有 Claim（TryClaimSingleAsync 一律返回 null）。</summary>
         public bool ClaimSingleDenied { get; set; }
@@ -541,9 +598,9 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
 
             var now = DateTimeOffset.UtcNow;
             var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
-            if (run is null || run.State != AgentRunState.Queued)
+            if (run is null || (run.State != AgentRunState.Queued && run.State != AgentRunState.ClaimExpired))
             {
-                return null; // 非 Queued / 不存在 → 不可领取
+                return null; // 非 Queued / ClaimExpired / 不存在 → 不可领取
             }
             if (run.NextRetryAtUtc is not null && run.NextRetryAtUtc > now)
             {
@@ -554,9 +611,9 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
             var expiresAt = now + (claimDuration > TimeSpan.Zero ? claimDuration : _claimDuration);
             try
             {
-                // 原子 CAS：Queued → Claimed（模拟 Postgres UPDATE ... WHERE state = 21）
+                // 原子 CAS：Queued/ClaimExpired → Claimed（模拟 Postgres UPDATE ... WHERE state IN (21, 24)）
                 await _inner.TransitionStateAsync(
-                    workspaceId, runId, AgentRunState.Queued, AgentRunState.Claimed, cancellationToken)
+                    workspaceId, runId, run.State, AgentRunState.Claimed, cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (InvalidOperationException)
@@ -565,13 +622,16 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
             }
 
             var claimed = (await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false))!;
+            var attempt = (_claimAttempts.TryGetValue(Key(workspaceId, runId), out var prior) ? prior : 0) + 1;
+            _claimAttempts[Key(workspaceId, runId)] = attempt;
             _claims[Key(workspaceId, runId)] = (token, expiresAt);
             return claimed with
             {
                 State = AgentRunState.Claimed,
                 ClaimOwner = claimOwner,
                 ClaimToken = token,
-                ClaimExpiresAtUtc = expiresAt
+                ClaimExpiresAtUtc = expiresAt,
+                ClaimAttempt = attempt
             };
         }
 
@@ -638,8 +698,8 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
                 }
             }
 
-            // 2. Claimed 且 Claim 已过期（节点领取后崩溃）→ 重新领取（新 token，状态保持 Claimed，
-            //    与 Postgres SQL 一致：UPDATE ... WHERE state=22 AND claim_expires_at <= now）
+            // 2. Claimed 且 Claim 已过期（节点领取后崩溃）→ 先标记 ClaimExpired（显式失效状态，
+            //    与 Postgres 前置标记语义一致），再由 ClaimExpired 重新领取（claim_attempt +1）
             var claimedRuns = await _inner.ListByStateAsync(AgentRunState.Claimed, take: 1000, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             foreach (var run in claimedRuns)
@@ -653,16 +713,22 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
                 {
                     continue; // 未过期 → 不重复领取
                 }
-                // 接管：claim_token 轮换 + 过期时间前移（状态保持 Claimed）
-                var token = Guid.NewGuid().ToString("N");
-                var expiresAt = now + (claimDuration > TimeSpan.Zero ? claimDuration : _claimDuration);
-                _claims[key] = (token, expiresAt);
-                claimed.Add(run with
+                try
                 {
-                    ClaimOwner = claimOwner,
-                    ClaimToken = token,
-                    ClaimExpiresAtUtc = expiresAt
-                });
+                    await _inner.TransitionStateAsync(
+                        run.WorkspaceId, run.RunId, AgentRunState.Claimed, AgentRunState.ClaimExpired, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (InvalidOperationException)
+                {
+                    continue; // 已被并发接管
+                }
+                var single = await TryClaimSingleAsync(
+                    run.WorkspaceId, run.RunId, claimOwner, claimDuration, cancellationToken).ConfigureAwait(false);
+                if (single is not null)
+                {
+                    claimed.Add(single);
+                }
             }
 
             // 3. Failed 且配置了重试且未耗尽（退避门通过）→ 重置为 Queued 再领取

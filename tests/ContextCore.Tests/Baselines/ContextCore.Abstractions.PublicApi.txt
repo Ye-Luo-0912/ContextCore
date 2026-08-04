@@ -79,6 +79,7 @@ F:ContextCore.Abstractions.AgentRunState.AwaitingApproval
 F:ContextCore.Abstractions.AgentRunState.AwaitingReconciliation
 F:ContextCore.Abstractions.AgentRunState.Cancelled
 F:ContextCore.Abstractions.AgentRunState.Checkpointing
+F:ContextCore.Abstractions.AgentRunState.ClaimExpired
 F:ContextCore.Abstractions.AgentRunState.Claimed
 F:ContextCore.Abstractions.AgentRunState.Completed
 F:ContextCore.Abstractions.AgentRunState.ContextBuilding
@@ -2716,10 +2717,12 @@ M:ContextCore.Abstractions.IWorkingMemoryService.SetActiveContextAsync(ContextCo
 M:ContextCore.Abstractions.IWorkingMemoryService.SetCurrentTaskAsync(ContextCore.Abstractions.Models.WorkingMemoryCurrentTask, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWorkspaceContextAccessor.Clear()
 M:ContextCore.Abstractions.IWorkspaceContextAccessor.Set(ContextCore.Abstractions.WorkspaceContext)
+M:ContextCore.Abstractions.IWorkspaceQuotaService.ActualizeAsync(System.String, System.String, System.Int64, System.Double, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWorkspaceQuotaService.GetQuotaAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IWorkspaceQuotaService.ReleaseAsync(System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IWorkspaceQuotaService.ReserveAsync(System.String, System.String, System.Int64, System.Double, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWorkspaceQuotaService.ResetAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWorkspaceQuotaService.SetLimitAsync(System.String, System.Int64, System.Double, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IWorkspaceQuotaService.TryConsumeAsync(System.String, System.Int64, System.Double, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWorkspaceRbacService.HasPermission(ContextCore.Abstractions.WorkspaceContext, ContextCore.Abstractions.WorkspacePermission)
 M:ContextCore.Abstractions.IWorkspaceRbacService.IsInRole(ContextCore.Abstractions.WorkspaceContext, ContextCore.Abstractions.WorkspaceRole[])
 M:ContextCore.Abstractions.IWorkspaceRbacService.ResolveRolesAsync(System.String, System.String, System.Threading.CancellationToken)
@@ -5249,6 +5252,13 @@ M:ContextCore.Abstractions.QuotaConsumptionResult.Equals(System.Object)
 M:ContextCore.Abstractions.QuotaConsumptionResult.GetHashCode()
 M:ContextCore.Abstractions.QuotaConsumptionResult.GetType()
 M:ContextCore.Abstractions.QuotaConsumptionResult.ToString()
+M:ContextCore.Abstractions.QuotaReservationResult.#ctor()
+M:ContextCore.Abstractions.QuotaReservationResult.<Clone>$()
+M:ContextCore.Abstractions.QuotaReservationResult.Equals(ContextCore.Abstractions.QuotaReservationResult)
+M:ContextCore.Abstractions.QuotaReservationResult.Equals(System.Object)
+M:ContextCore.Abstractions.QuotaReservationResult.GetHashCode()
+M:ContextCore.Abstractions.QuotaReservationResult.GetType()
+M:ContextCore.Abstractions.QuotaReservationResult.ToString()
 M:ContextCore.Abstractions.ReconciliationListResult.#ctor()
 M:ContextCore.Abstractions.ReconciliationListResult.<Clone>$()
 M:ContextCore.Abstractions.ReconciliationListResult.Equals(ContextCore.Abstractions.ReconciliationListResult)
@@ -5940,6 +5950,7 @@ P:ContextCore.Abstractions.AgentRetrievalQuery.Text (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Type (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Weight (get|init)
 P:ContextCore.Abstractions.AgentRun.AllowedToolIds (get|init)
+P:ContextCore.Abstractions.AgentRun.ClaimAttempt (get|init)
 P:ContextCore.Abstractions.AgentRun.ClaimExpiresAtUtc (get|init)
 P:ContextCore.Abstractions.AgentRun.ClaimOwner (get|init)
 P:ContextCore.Abstractions.AgentRun.ClaimToken (get|init)
@@ -11064,6 +11075,10 @@ P:ContextCore.Abstractions.ProviderOutputSnapshot.Succeeded (get|init)
 P:ContextCore.Abstractions.QuotaConsumptionResult.Allowed (get|init)
 P:ContextCore.Abstractions.QuotaConsumptionResult.FailureReason (get|init)
 P:ContextCore.Abstractions.QuotaConsumptionResult.UpdatedQuota (get|init)
+P:ContextCore.Abstractions.QuotaReservationResult.Allowed (get|init)
+P:ContextCore.Abstractions.QuotaReservationResult.FailureReason (get|init)
+P:ContextCore.Abstractions.QuotaReservationResult.ReservationId (get|init)
+P:ContextCore.Abstractions.QuotaReservationResult.UpdatedQuota (get|init)
 P:ContextCore.Abstractions.ReconciliationListResult.Items (get|init)
 P:ContextCore.Abstractions.ReconciliationListResult.OverdueCount (get|init)
 P:ContextCore.Abstractions.ReconciliationListResult.Total (get|init)
@@ -11547,6 +11562,8 @@ P:ContextCore.Abstractions.WorkspaceQuota.PeriodEndsAt (get)
 P:ContextCore.Abstractions.WorkspaceQuota.PeriodStartedAt (get|init)
 P:ContextCore.Abstractions.WorkspaceQuota.RemainingCostUsd (get)
 P:ContextCore.Abstractions.WorkspaceQuota.RemainingTokens (get)
+P:ContextCore.Abstractions.WorkspaceQuota.ReservedCostUsd (get|init)
+P:ContextCore.Abstractions.WorkspaceQuota.ReservedTokens (get|init)
 P:ContextCore.Abstractions.WorkspaceQuota.TokensUsed (get|init)
 P:ContextCore.Abstractions.WorkspaceQuota.WorkspaceId (get|init)
 T:ContextCore.Abstractions.AdaptiveRetrievalMode (Enum)
@@ -12493,6 +12510,7 @@ T:ContextCore.Abstractions.ProviderExecutionArtifact
 T:ContextCore.Abstractions.ProviderExecutionReport
 T:ContextCore.Abstractions.ProviderOutputSnapshot
 T:ContextCore.Abstractions.QuotaConsumptionResult
+T:ContextCore.Abstractions.QuotaReservationResult
 T:ContextCore.Abstractions.ReconciliationListResult
 T:ContextCore.Abstractions.ReconciliationQuery
 T:ContextCore.Abstractions.RelationDirection (Enum)

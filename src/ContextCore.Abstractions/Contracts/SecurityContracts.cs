@@ -387,23 +387,29 @@ public sealed record WorkspaceQuota
     /// <summary>当前周期开始时间（UTC）。</summary>
     public DateTimeOffset PeriodStartedAt { get; init; }
 
+    /// <summary>周期内已预留但尚未结算的 token（预留后未释放/未转正）。</summary>
+    public long ReservedTokens { get; init; }
+
+    /// <summary>周期内已预留但尚未结算的费用（美元）。</summary>
+    public double ReservedCostUsd { get; init; }
+
     /// <summary>当前周期结束时间（UTC；PeriodStartedAt + Period）。</summary>
     public DateTimeOffset PeriodEndsAt => PeriodStartedAt + Period;
 
-    /// <summary>是否已耗尽 token 配额。</summary>
-    public bool IsTokenExhausted => MaxTokens > 0 && TokensUsed >= MaxTokens;
+    /// <summary>是否已耗尽 token 配额（已消耗 + 已预留均计入）。</summary>
+    public bool IsTokenExhausted => MaxTokens > 0 && TokensUsed + ReservedTokens >= MaxTokens;
 
     /// <summary>是否已耗尽费用配额。</summary>
-    public bool IsCostExhausted => MaxCostUsd > 0 && CostUsedUsd >= MaxCostUsd;
+    public bool IsCostExhausted => MaxCostUsd > 0 && CostUsedUsd + ReservedCostUsd >= MaxCostUsd;
 
     /// <summary>剩余 token（MaxTokens=0 视为无限制，返回 long.MaxValue）。</summary>
-    public long RemainingTokens => MaxTokens <= 0 ? long.MaxValue : Math.Max(0, MaxTokens - TokensUsed);
+    public long RemainingTokens => MaxTokens <= 0 ? long.MaxValue : Math.Max(0, MaxTokens - TokensUsed - ReservedTokens);
 
     /// <summary>剩余费用（美元）。</summary>
-    public double RemainingCostUsd => MaxCostUsd <= 0 ? double.MaxValue : Math.Max(0, MaxCostUsd - CostUsedUsd);
+    public double RemainingCostUsd => MaxCostUsd <= 0 ? double.MaxValue : Math.Max(0, MaxCostUsd - CostUsedUsd - ReservedCostUsd);
 }
 
-/// <summary>配额消费结果。</summary>
+/// <summary>配额消费结果（Actualize 结算后的配额快照）。</summary>
 public sealed record QuotaConsumptionResult
 {
     /// <summary>是否成功扣减配额（false = 配额已耗尽）。</summary>
@@ -413,6 +419,22 @@ public sealed record QuotaConsumptionResult
     public string? FailureReason { get; init; }
 
     /// <summary>扣减后的最新配额快照。</summary>
+    public required WorkspaceQuota UpdatedQuota { get; init; }
+}
+
+/// <summary>配额预留结果。</summary>
+public sealed record QuotaReservationResult
+{
+    /// <summary>是否预留成功（false = 配额不足，预留未生效）。</summary>
+    public required bool Allowed { get; init; }
+
+    /// <summary>预留标识（调用方传入的 reservationId，通常为 runId）。</summary>
+    public string? ReservationId { get; init; }
+
+    /// <summary>失败原因（Allowed=false 时填充）。</summary>
+    public string? FailureReason { get; init; }
+
+    /// <summary>预留后的最新配额快照（含已预留量）。</summary>
     public required WorkspaceQuota UpdatedQuota { get; init; }
 }
 
@@ -430,12 +452,29 @@ public interface IWorkspaceQuotaService
     ValueTask<WorkspaceQuota> GetQuotaAsync(string workspaceId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 尝试扣减配额（原子操作）。配额耗尽时返回 Allowed=false。
+    /// 预留配额（原子操作）。预留锁定容量但不计入已消耗；配额不足时返回 Allowed=false。
+    /// 同一 reservationId 重复预留为幂等（不重复计预留量）。
     /// </summary>
-    ValueTask<QuotaConsumptionResult> TryConsumeAsync(
+    ValueTask<QuotaReservationResult> ReserveAsync(
         string workspaceId,
+        string reservationId,
         long tokens,
         double costUsd,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 释放预留（Run 不再执行时退回容量）。幂等：未知 reservationId 视为已释放。
+    /// </summary>
+    ValueTask ReleaseAsync(string workspaceId, string reservationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 结算预留（Run 实际执行后转正）：按实际用量计入消耗并释放该预留（多退少补）。
+    /// </summary>
+    ValueTask<QuotaConsumptionResult> ActualizeAsync(
+        string workspaceId,
+        string reservationId,
+        long actualTokens,
+        double actualCostUsd,
         CancellationToken cancellationToken = default);
 
     /// <summary>重置 workspace 配额。</summary>
