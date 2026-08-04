@@ -303,7 +303,11 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
             $"--file={outputPath}"
         };
         args.AddRange(connectionArgs);
-        if (!string.IsNullOrEmpty(_factory.Options.SchemaName))
+        // 默认 schema 为 public 时不传 --schema：pg_dump 在 schema 过滤模式下会排除扩展
+        // （如 vector），导致转储在全新数据库中无法恢复（类型缺失）。
+        // 自定义 schema 时仍按需过滤。
+        if (!string.IsNullOrEmpty(_factory.Options.SchemaName) &&
+            !string.Equals(_factory.Options.SchemaName, "public", StringComparison.OrdinalIgnoreCase))
         {
             args.Add($"--schema={_factory.Options.SchemaName}");
         }
@@ -324,7 +328,9 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
             args.Add("--clean");
             args.Add("--if-exists");
         }
-        if (!string.IsNullOrEmpty(_factory.Options.SchemaName))
+        // 与 dump 一致：默认 public schema 不传 --schema，保证扩展随转储一并恢复
+        if (!string.IsNullOrEmpty(_factory.Options.SchemaName) &&
+            !string.Equals(_factory.Options.SchemaName, "public", StringComparison.OrdinalIgnoreCase))
         {
             args.Add($"--schema={_factory.Options.SchemaName}");
         }
