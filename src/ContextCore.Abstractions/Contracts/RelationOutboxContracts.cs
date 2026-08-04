@@ -25,11 +25,20 @@ public enum RelationOutboxOperationKind
 /// <item><see cref="State"/> = <see cref="RelationOutboxStates.Applied"/>：worker 验证关系已落库或已删除，标记完成。</item>
 /// <item><see cref="State"/> = <see cref="RelationOutboxStates.Failed"/>：达到 <see cref="MaxRetryCount"/> 仍无法应用。</item>
 /// </list>
+/// <summary>批量续约的 outbox 记录条目（outboxId + owner）。由 <see cref="IRelationOutboxStore.RenewHeartbeatBatchAsync"/> 使用。</summary>
+public sealed record RelationOutboxHeartbeat
+{
+    /// <summary>Outbox 记录 ID。</summary>
+    public required string OutboxId { get; init; }
+
+    /// <summary>租约持有者标识（必须与 <see cref="IRelationOutboxStore.AcquirePendingAsync"/> 一致）。</summary>
+    public required string Owner { get; init; }
+}
+
 /// 一条 outbox 记录对应一条 <see cref="ContextRelation"/>（per-relation 粒度，与 context_jobs 的 per-job 模型一致）。
 /// </remarks>
 public sealed class RelationOutboxRecord
-{
-    /// <summary>Outbox 记录唯一标识符。</summary>
+{    /// <summary>Outbox 记录唯一标识符。</summary>
     public string OutboxId { get; init; } = string.Empty;
 
     /// <summary>所属工作空间 ID。</summary>
@@ -189,6 +198,23 @@ public interface IRelationOutboxStore
     Task<bool> RenewHeartbeatAsync(
         string outboxId,
         string owner,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 批量续约多条 outbox 记录的租约（心跳）：单次调用续约整批记录，
+    /// 由 worker 的共享心跳循环每周期调用一次，替代每条记录一个独立心跳任务（N 次往返 → 1 次）。
+    /// </summary>
+    /// <param name="heartbeats">待续约的记录条目（outboxId + owner）。</param>
+    /// <param name="leaseDuration">续约后的新有效期。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 续约失败的 outboxId 集合（lease_owner 不匹配或 state 非 Dispatched）。
+    /// 返回集合中的每条记录，调用方应停止处理。
+    /// </returns>
+    [StoreOperation(StoreOperationKind.Write)]
+    Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+        IReadOnlyList<RelationOutboxHeartbeat> heartbeats,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
 

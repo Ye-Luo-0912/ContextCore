@@ -295,6 +295,20 @@ public sealed class RelationReconciliationWorkerTests
             return Task.FromResult(_renewResult);
         }
 
+        public Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+            IReadOnlyList<RelationOutboxHeartbeat> heartbeats, TimeSpan leaseDuration,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref RenewHeartbeatCalls);
+            RenewHeartbeatCalled.TrySetResult(true);
+            if (!_renewResult)
+            {
+                return Task.FromResult<IReadOnlyList<string>>(
+                    heartbeats.Select(h => h.OutboxId).ToList());
+            }
+            return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        }
+
         public Task<int> CountStaleLeasesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(0);
 

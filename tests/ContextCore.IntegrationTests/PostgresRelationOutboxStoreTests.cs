@@ -308,6 +308,47 @@ public sealed class PostgresRelationOutboxStoreTests
         Assert.IsFalse(renewed2);
     }
 
+    /// <summary>RenewHeartbeatBatchAsync 批量续约仅对 lease_owner 匹配的 Dispatched 记录生效。</summary>
+    [TestMethod]
+    public async Task RenewHeartbeatBatchAsync_OnlyRenewsMatchingOwner()
+    {
+        var (outbox, _) = await BuildStoreAsync();
+        for (var i = 0; i < 3; i++)
+        {
+            await outbox.EnqueueAsync(CreateRecord($"rel-hb-{i}"), scope: null);
+        }
+
+        var acquired = await outbox.AcquirePendingAsync(limit: 3, owner: "owner-A", leaseDuration: TimeSpan.FromMinutes(5));
+        Assert.AreEqual(3, acquired.Count);
+
+        // 全部正确 owner 批量续约 → 无失败
+        var success = await outbox.RenewHeartbeatBatchAsync(
+            acquired.Select(r => new RelationOutboxHeartbeat { OutboxId = r.OutboxId, Owner = "owner-A" }).ToList(),
+            TimeSpan.FromMinutes(10));
+        Assert.AreEqual(0, success.Count, "匹配 owner 的批量续约应全部成功");
+
+        // 混入错误 owner → 仅该记录续约失败
+        var mixed = new List<RelationOutboxHeartbeat>
+        {
+            new() { OutboxId = acquired[0].OutboxId, Owner = "owner-A" },
+            new() { OutboxId = acquired[1].OutboxId, Owner = "intruder" }
+        };
+        var failed = await outbox.RenewHeartbeatBatchAsync(mixed, TimeSpan.FromMinutes(10));
+        Assert.AreEqual(1, failed.Count, "错误 owner 的记录应续约失败");
+        Assert.AreEqual(acquired[1].OutboxId, failed[0]);
+
+        // 已 Applied（state 非 Dispatched）的记录批量续约应失败
+        await outbox.MarkAppliedAsync(acquired[0].OutboxId);
+        var afterApplied = await outbox.RenewHeartbeatBatchAsync(
+            new List<RelationOutboxHeartbeat> { new() { OutboxId = acquired[0].OutboxId, Owner = "owner-A" } },
+            TimeSpan.FromMinutes(10));
+        Assert.AreEqual(1, afterApplied.Count, "非 Dispatched 状态的记录不应被续约");
+
+        // 空输入返回空失败集
+        var empty = await outbox.RenewHeartbeatBatchAsync([], TimeSpan.FromMinutes(10));
+        Assert.AreEqual(0, empty.Count);
+    }
+
     /// <summary>CountStaleLeasesAsync 统计 Dispatched + lease 过期的记录数。</summary>
     [TestMethod]
     public async Task CountStaleLeasesAsync_CountsExpiredDispatchedRecords()

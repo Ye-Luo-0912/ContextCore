@@ -2576,6 +2576,7 @@ M:ContextCore.Abstractions.IRelationOutboxStore.EnqueueBatchAsync(System.Collect
 M:ContextCore.Abstractions.IRelationOutboxStore.MarkAppliedAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationOutboxStore.MarkFailedAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationOutboxStore.RenewHeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.RenewHeartbeatBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.RelationOutboxHeartbeat>, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationProjectionWriter.WriteAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.Models.ContextRelation>, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationProjector.ProjectForCompression(ContextCore.Abstractions.Models.CompressionResponse)
 M:ContextCore.Abstractions.IRelationProjector.ProjectForIngest(ContextCore.Abstractions.Models.ContextItem)
@@ -5297,6 +5298,13 @@ M:ContextCore.Abstractions.RelationHydrationResponse.Equals(System.Object)
 M:ContextCore.Abstractions.RelationHydrationResponse.GetHashCode()
 M:ContextCore.Abstractions.RelationHydrationResponse.GetType()
 M:ContextCore.Abstractions.RelationHydrationResponse.ToString()
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.#ctor()
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.<Clone>$()
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.Equals(ContextCore.Abstractions.RelationOutboxHeartbeat)
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.Equals(System.Object)
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.GetHashCode()
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.GetType()
+M:ContextCore.Abstractions.RelationOutboxHeartbeat.ToString()
 M:ContextCore.Abstractions.RelationOutboxRecord.#ctor()
 M:ContextCore.Abstractions.RelationOutboxRecord.Equals(System.Object)
 M:ContextCore.Abstractions.RelationOutboxRecord.GetHashCode()
@@ -11124,6 +11132,8 @@ P:ContextCore.Abstractions.RelationHydrationResponse.Relations (get|init)
 P:ContextCore.Abstractions.RelationHydrationResponse.RequestedCount (get|init)
 P:ContextCore.Abstractions.RelationHydrationResponse.Source (get|init)
 P:ContextCore.Abstractions.RelationHydrationResponse.WorkspaceId (get|init)
+P:ContextCore.Abstractions.RelationOutboxHeartbeat.OutboxId (get|init)
+P:ContextCore.Abstractions.RelationOutboxHeartbeat.Owner (get|init)
 P:ContextCore.Abstractions.RelationOutboxRecord.AppliedAt (get|init)
 P:ContextCore.Abstractions.RelationOutboxRecord.CollectionId (get|init)
 P:ContextCore.Abstractions.RelationOutboxRecord.CreatedAt (get|init)
@@ -12530,6 +12540,7 @@ T:ContextCore.Abstractions.RelationDirection (Enum)
 T:ContextCore.Abstractions.RelationHydrationEntry
 T:ContextCore.Abstractions.RelationHydrationRequest
 T:ContextCore.Abstractions.RelationHydrationResponse
+T:ContextCore.Abstractions.RelationOutboxHeartbeat
 T:ContextCore.Abstractions.RelationOutboxOperationKind (Enum)
 T:ContextCore.Abstractions.RelationOutboxRecord
 T:ContextCore.Abstractions.RelationOutboxStates

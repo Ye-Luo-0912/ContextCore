@@ -47,6 +47,14 @@ public sealed class RelationReconciliationWorker : BackgroundService
     private readonly IOptions<RelationReconciliationOptions> _options;
     private readonly ILogger<RelationReconciliationWorker> _logger;
 
+    /// <summary>活跃 outbox 记录租约注册表（outboxId → 条目），供共享批量心跳循环续约。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, OutboxLeaseEntry> _outboxLeases =
+        new(System.StringComparer.Ordinal);
+
+    private readonly object _heartbeatLock = new();
+    private Task? _heartbeatLoopTask;
+    private CancellationTokenSource? _heartbeatLoopCts;
+
     public RelationReconciliationWorker(
         IServiceProvider services,
         IOptions<RelationReconciliationOptions> options,
@@ -55,6 +63,16 @@ public sealed class RelationReconciliationWorker : BackgroundService
         _services = services;
         _options = options;
         _logger = logger;
+    }
+
+    /// <summary>共享心跳注册表条目：outboxId + owner + 记录取消源 + 最后确认过期时间（本地 watchdog）。</summary>
+    private sealed class OutboxLeaseEntry
+    {
+        public required string OutboxId { get; init; }
+        public required string Owner { get; init; }
+        public required CancellationTokenSource LeaseCts { get; init; }
+        public long LastConfirmedExpiresTicks;
+        public int ConsecutiveFailures;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -97,19 +115,27 @@ public sealed class RelationReconciliationWorker : BackgroundService
                 .ConfigureAwait(false);
         }
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
+                try
+                {
+                    await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
 
-            await RunReconciliationBatchAsync(probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
-                .ConfigureAwait(false);
+                await RunReconciliationBatchAsync(probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            // 停止共享批量心跳循环（worker 退出时不再续约）
+            await StopHeartbeatLoopAsync().ConfigureAwait(false);
         }
     }
 
@@ -164,7 +190,7 @@ public sealed class RelationReconciliationWorker : BackgroundService
             try
             {
                 var (replayed, applied, leaseLost) = await ReconcileRecordAsync(
-                    outboxStore, relationStore, projectionWriter, record, owner, leaseDuration, heartbeatInterval, cancellationToken)
+                    outboxStore, relationStore, projectionWriter, record, owner, leaseDuration, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (leaseLost)
@@ -221,19 +247,18 @@ public sealed class RelationReconciliationWorker : BackgroundService
     /// <item>Replayed=true：通过 projectionWriter 回放了写入。</item>
     /// </list>
     /// </summary>
-    private static async Task<(bool Replayed, bool Applied, bool LeaseLost)> ReconcileRecordAsync(
+    private async Task<(bool Replayed, bool Applied, bool LeaseLost)> ReconcileRecordAsync(
         IRelationOutboxStore outboxStore,
         IRelationStore relationStore,
         IRelationProjectionWriter? projectionWriter,
         RelationOutboxRecord record,
         string owner,
         TimeSpan leaseDuration,
-        TimeSpan heartbeatInterval,
         CancellationToken cancellationToken)
     {
-        // 启动 heartbeat 任务——续约失败时取消当前记录处理。
+        // 将记录注册到共享批量心跳——续约失败时由循环取消 leaseCts，终止当前记录处理。
         using var leaseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var heartbeatTask = RunHeartbeatAsync(outboxStore, record.OutboxId, owner, leaseDuration, heartbeatInterval, leaseCts);
+        RegisterOutboxLease(record.OutboxId, owner, leaseCts);
 
         try
         {
@@ -265,15 +290,14 @@ public sealed class RelationReconciliationWorker : BackgroundService
         }
         catch (OperationCanceledException) when (leaseCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            // 租约丢失（heartbeat 续约失败取消了 leaseCts）——返回 LeaseLost=true，
+            // 租约丢失（共享心跳续约失败取消了 leaseCts）——返回 LeaseLost=true，
             // 让上层不调用 MarkApplied/MarkFailed，保留 Dispatched 状态供其他 worker 抢占。
             return (false, false, true);
         }
         finally
         {
+            UnregisterOutboxLease(record.OutboxId);
             leaseCts.Cancel();
-            try { await heartbeatTask.ConfigureAwait(false); }
-            catch { /* heartbeat 异常已在内部记录 */ }
         }
     }
 
@@ -338,47 +362,184 @@ public sealed class RelationReconciliationWorker : BackgroundService
             && Math.Abs(existing.Confidence - payload.Confidence) < 1e-9;
     }
 
-    private static async Task RunHeartbeatAsync(
-        IRelationOutboxStore outboxStore,
-        string outboxId,
-        string owner,
-        TimeSpan leaseDuration,
-        TimeSpan heartbeatInterval,
-        CancellationTokenSource leaseCts)
+    /// <summary>
+    /// 将 outbox 记录注册到共享批量心跳注册表；懒启动共享心跳循环（首个注册时）。
+    /// 续约失败（租约丢失）时由循环取消 <paramref name="leaseCts"/>。
+    /// </summary>
+    private void RegisterOutboxLease(string outboxId, string owner, CancellationTokenSource leaseCts)
     {
-        while (!leaseCts.IsCancellationRequested)
+        _outboxLeases[outboxId] = new OutboxLeaseEntry
+        {
+            OutboxId = outboxId,
+            Owner = owner,
+            LeaseCts = leaseCts,
+            LastConfirmedExpiresTicks = DateTimeOffset.UtcNow.Add(
+                _options.Value.LeaseDuration > TimeSpan.Zero ? _options.Value.LeaseDuration : TimeSpan.FromMinutes(10)).UtcTicks
+        };
+
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatLoopTask is null || _heartbeatLoopTask.IsCompleted)
+            {
+                _heartbeatLoopCts?.Dispose();
+                _heartbeatLoopCts = new CancellationTokenSource();
+                _heartbeatLoopTask = RunBatchHeartbeatLoopAsync(_heartbeatLoopCts.Token);
+            }
+        }
+    }
+
+    /// <summary>从共享批量心跳注册表移除记录（记录处理结束后停止续约）。</summary>
+    private void UnregisterOutboxLease(string outboxId)
+    {
+        _outboxLeases.TryRemove(outboxId, out _);
+    }
+
+    /// <summary>停止共享批量心跳循环（worker 退出时调用）。</summary>
+    private async Task StopHeartbeatLoopAsync()
+    {
+        lock (_heartbeatLock)
+        {
+            _heartbeatLoopCts?.Cancel();
+        }
+        if (_heartbeatLoopTask is not null)
+        {
+            try { await _heartbeatLoopTask.ConfigureAwait(false); }
+            catch { /* 循环异常已在内部记录，此处忽略 */ }
+        }
+        lock (_heartbeatLock)
+        {
+            _heartbeatLoopCts?.Dispose();
+            _heartbeatLoopCts = null;
+            _heartbeatLoopTask = null;
+        }
+    }
+
+    /// <summary>
+    /// 共享批量心跳循环：每 <see cref="RelationReconciliationOptions.HeartbeatInterval"/> 周期
+    /// 通过一次 <see cref="IRelationOutboxStore.RenewHeartbeatBatchAsync"/> 续约全部活跃记录，
+    /// 替代"每条记录一个独立续约任务 + 每次 DB 往返"的模式（N 次往返 → 1 次）。
+    /// 失败语义与旧逐条心跳一致：续约失败 → 取消对应记录；连续异常超过阈值 → 取消全部活跃记录。
+    /// </summary>
+    private async Task RunBatchHeartbeatLoopAsync(CancellationToken cancellationToken)
+    {
+        var heartbeatInterval = _options.Value.HeartbeatInterval > TimeSpan.Zero
+            ? _options.Value.HeartbeatInterval
+            : TimeSpan.FromSeconds(15);
+        var leaseDuration = _options.Value.LeaseDuration > TimeSpan.Zero
+            ? _options.Value.LeaseDuration
+            : TimeSpan.FromMinutes(10);
+        const int MaxConsecutiveFailures = 3;
+
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(heartbeatInterval, leaseCts.Token).ConfigureAwait(false);
+                await Task.Delay(heartbeatInterval, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                return;
+                break;
             }
 
-            if (leaseCts.IsCancellationRequested) return;
-
-            try
+            var entries = _outboxLeases.Values.ToList();
+            if (entries.Count == 0)
             {
-                var renewed = await outboxStore.RenewHeartbeatAsync(outboxId, owner, leaseDuration, CancellationToken.None)
-                    .ConfigureAwait(false);
-                if (!renewed)
+                continue;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var cancelSet = new HashSet<string>(StringComparer.Ordinal);
+
+            // 本地 watchdog：最后一次确认的租约已过期 → 取消对应记录（不发起续约）
+            foreach (var entry in entries)
+            {
+                if (now.UtcTicks >= Interlocked.Read(ref entry.LastConfirmedExpiresTicks))
                 {
-                    // 租约丢失——取消当前记录处理。其他 worker 会通过 AcquirePendingAsync 抢占。
-                    leaseCts.Cancel();
-                    return;
+                    _logger.LogWarning(
+                        "Outbox record {OutboxId} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消处理。",
+                        entry.OutboxId, new DateTimeOffset(entry.LastConfirmedExpiresTicks, TimeSpan.Zero));
+                    CancelOutboxLease(entry);
+                    cancelSet.Add(entry.OutboxId);
                 }
             }
-            catch (OperationCanceledException) when (leaseCts.IsCancellationRequested)
+
+            // 解析 outbox store（Singleton 注册；循环在 worker 生命周期内解析同一实例）
+            IRelationOutboxStore? outboxStore = null;
+            try
             {
-                return;
+                using var scope = _services.CreateScope();
+                outboxStore = scope.ServiceProvider.GetService<IRelationOutboxStore>();
             }
             catch
             {
-                // 瞬时错误——等待下次续约。若多次失败导致 lease 过期，下次 RenewHeartbeatAsync 仍会返回 false。
+                // 解析失败按瞬时错误处理，下周期重试
+            }
+            if (outboxStore is null)
+            {
+                continue;
+            }
+
+            var toRenew = entries
+                .Where(e => !cancelSet.Contains(e.OutboxId))
+                .Select(e => new RelationOutboxHeartbeat { OutboxId = e.OutboxId, Owner = e.Owner })
+                .ToList();
+            if (toRenew.Count == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var failed = await outboxStore.RenewHeartbeatBatchAsync(toRenew, leaseDuration, cancellationToken)
+                    .ConfigureAwait(false);
+                foreach (var entry in entries)
+                {
+                    if (cancelSet.Contains(entry.OutboxId))
+                    {
+                        continue;
+                    }
+                    if (failed.Contains(entry.OutboxId, StringComparer.Ordinal))
+                    {
+                        // 租约丢失——取消当前记录处理。其他 worker 会通过 AcquirePendingAsync 抢占。
+                        _logger.LogWarning(
+                            "Outbox record {OutboxId} 租约续约失败（被抢占或状态已改变），中止处理。", entry.OutboxId);
+                        CancelOutboxLease(entry);
+                    }
+                    else
+                    {
+                        Interlocked.Exchange(ref entry.ConsecutiveFailures, 0);
+                        Interlocked.Exchange(
+                            ref entry.LastConfirmedExpiresTicks,
+                            DateTimeOffset.UtcNow.Add(leaseDuration).UtcTicks);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch
+            {
+                // 瞬时错误——不立即中止；连续异常超过阈值后取消全部活跃记录
+                foreach (var entry in entries)
+                {
+                    var failures = Interlocked.Increment(ref entry.ConsecutiveFailures);
+                    if (failures >= MaxConsecutiveFailures)
+                    {
+                        _logger.LogError(
+                            "Outbox record {OutboxId} 心跳续约连续失败 {Failures} 次，中止处理。", entry.OutboxId, failures);
+                        CancelOutboxLease(entry);
+                    }
+                }
             }
         }
+    }
+
+    /// <summary>取消记录处理（租约丢失或本地 watchdog 触发）。</summary>
+    private void CancelOutboxLease(OutboxLeaseEntry entry)
+    {
+        try { entry.LeaseCts.Cancel(); }
+        catch (ObjectDisposedException) { /* 记录已处理完毕并释放了 leaseCts，忽略 */ }
     }
 
     private static string GenerateOwnerId()

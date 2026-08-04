@@ -322,6 +322,70 @@ WHERE outbox_id = @outbox_id
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+        IReadOnlyList<RelationOutboxHeartbeat> heartbeats,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(heartbeats);
+        if (heartbeats.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        var now = DateTimeOffset.UtcNow;
+        var outboxIds = new string[heartbeats.Count];
+        var owners = new string[heartbeats.Count];
+        for (var i = 0; i < heartbeats.Count; i++)
+        {
+            var heartbeat = heartbeats[i];
+            ArgumentException.ThrowIfNullOrWhiteSpace(heartbeat.OutboxId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(heartbeat.Owner);
+            outboxIds[i] = heartbeat.OutboxId;
+            owners[i] = heartbeat.Owner;
+        }
+
+        // 单条 SQL 批量续约：与单条路径同校验（lease_owner 匹配且 state='Dispatched'），
+        // RETURNING 返回成功续约的 outbox_id；未返回的即失败（租约被抢占或状态已改变）。
+        var renewedIds = new HashSet<string>(StringComparer.Ordinal);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $@"
+UPDATE {Table("relation_outbox")}
+SET lease_expires_at = @lease_expires_at,
+    last_heartbeat_at = @last_heartbeat_at,
+    updated_at = @updated_at
+FROM unnest(@outbox_ids, @owners) AS req(outbox_id, lease_owner)
+WHERE {Table("relation_outbox")}.outbox_id = req.outbox_id
+  AND {Table("relation_outbox")}.lease_owner = req.lease_owner
+  AND {Table("relation_outbox")}.state = 'Dispatched'
+RETURNING {Table("relation_outbox")}.outbox_id;";
+        command.Parameters.AddWithValue("outbox_ids", outboxIds);
+        command.Parameters.AddWithValue("owners", owners);
+        command.Parameters.AddWithValue("lease_expires_at", now.Add(leaseDuration));
+        command.Parameters.AddWithValue("last_heartbeat_at", now);
+        command.Parameters.AddWithValue("updated_at", now);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            renewedIds.Add(reader.GetString(0));
+        }
+
+        var failed = new List<string>(heartbeats.Count - renewedIds.Count);
+        foreach (var heartbeat in heartbeats)
+        {
+            if (!renewedIds.Contains(heartbeat.OutboxId))
+            {
+                failed.Add(heartbeat.OutboxId);
+            }
+        }
+        return failed;
+    }
+
+    /// <inheritdoc />
     public async Task<int> CountStaleLeasesAsync(CancellationToken cancellationToken = default)
     {
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
