@@ -190,7 +190,7 @@ public sealed class R29H_LearningEventAcceptanceTests
                     totalFailures++;
                     await outboxStore.MarkFailedAsync(
                         record.EventId,
-                        record.LeaseToken,
+                        record.LeaseToken ?? string.Empty,
                         "FailingUtilityLedger: simulated materialization failure",
                         CancellationToken.None);
                 }

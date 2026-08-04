@@ -45,7 +45,7 @@ public sealed class R29H_ToolCatalogDecouplingTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IToolHandler>(new CatalogTestHandler("search", ToolSideEffect.ReadOnly));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -76,7 +76,7 @@ public sealed class R29H_ToolCatalogDecouplingTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 

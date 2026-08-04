@@ -444,7 +444,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var rebuildAllocationDecisions = engineResult.AllocationDecisions.Count > 0
             ? engineResult.AllocationDecisions
             : BuildAllocationDecisions(engineResult.SelectedEnvelopes, engineResult.DroppedEnvelopes);
-        var rebuildEstimatedTokens = engineResult.Outcome.EstimatedTokens;
+        var rebuildEstimatedTokens = engineResult.Outcome.EffectiveTokens;
         var rebuildBudgetExceededCount = engineResult.Outcome.BudgetExceededCount;
         // 被 Hydration 或预算修复移出的候选（repair.HydrationDropped → DroppedEnvelopes）。
         IReadOnlyList<ContextCandidateEnvelope> hydrationDroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>();
@@ -1173,7 +1173,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             {
                 SelectedCount = 0,
                 DroppedCount = dropped.Count,
-                EstimatedTokens = 0,
+                EffectiveTokens = 0,
                 TokenBudget = tokenBudget,
                 Sections = Array.Empty<string>(),
                 SafetyGateBlockedCount = 0,
@@ -1326,7 +1326,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             {
                 CandidateKey = envelope.CanonicalKey,
                 Section = ResolveSectionForAllocation(envelope),
-                IncludedTokens = envelope.EstimatedTokens,
+                IncludedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope),
                 IsTruncated = false,
                 ReasonCode = CandidateDecisionReasonCode.SelectedHighestUtility
             });
@@ -1415,7 +1415,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             {
                 SelectedCount = 0,
                 DroppedCount = 0,
-                EstimatedTokens = 0,
+                EffectiveTokens = 0,
                 TokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget,
                 Sections = Array.Empty<string>(),
                 SafetyGateBlockedCount = 0,
@@ -1516,7 +1516,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             {
                 SelectedCount = 0,
                 DroppedCount = 0,
-                EstimatedTokens = 0,
+                EffectiveTokens = 0,
                 TokenBudget = decisionRequest.TokenBudget,
                 Sections = Array.Empty<string>(),
                 SafetyGateBlockedCount = 0,
@@ -2325,17 +2325,17 @@ internal static class TokenCostHelper
             totalTokens += contentTokens + separatorTokens + headerTokens;
         }
 
-        // 无 AllocationDecisions 时（如 Retrieval 路径或空决策）：使用 Outcome.EstimatedTokens 作为总 token
-        if (sections.Count == 0 && decision.Outcome.EstimatedTokens > 0)
+        // 无 AllocationDecisions 时（如 Retrieval 路径或空决策）：使用 Outcome.EffectiveTokens 作为总 token
+        if (sections.Count == 0 && decision.Outcome.EffectiveTokens > 0)
         {
             sections.Add(new SectionTokenCost
             {
                 Section = "default",
-                ContentTokens = decision.Outcome.EstimatedTokens,
+                ContentTokens = decision.Outcome.EffectiveTokens,
                 SeparatorTokens = 0,
                 HeaderTokens = 0
             });
-            totalTokens = decision.Outcome.EstimatedTokens;
+            totalTokens = decision.Outcome.EffectiveTokens;
         }
 
         var budgetLimit = decision.Outcome.TokenBudget;
@@ -3595,6 +3595,11 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         var threshold = routing.ModelConfidenceThreshold;
         var modelArtifactId = routing.ModelArtifactId;
 
+        // 上层已确保 _inferenceEngine / _featureRegistry 非空（engine-unavailable 已降级）；
+        // 捕获为局部引用——实例字段的 null 流分析不跨 await 保持（可被并发修改）。
+        var inferenceEngine = _inferenceEngine!;
+        var featureRegistry = _featureRegistry!;
+
         // 验证 ScoreWeights（w_d / w_m 非负且和为 1.0）。
         // 验证失败不抛异常，但记录降级原因（fail-safe）。
         var weightsValidation = _inferenceValidator is DefaultInferenceResultValidator defaultValidator
@@ -3603,7 +3608,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
 
         // 按 snapshot.FeatureSchemaVersion 解析 FeatureSchema（不再用 engine.ModelVersion）。
         // 这是关键解耦：模型版本与特征 schema 版本是不同维度。
-        var featureSchema = _featureRegistry!.Get(snapshot.FeatureSchemaVersion);
+        var featureSchema = featureRegistry.Get(snapshot.FeatureSchemaVersion);
         if (featureSchema is null)
         {
             // 无匹配 schema → 标记降级
@@ -3646,7 +3651,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
 
                 try
                 {
-                    inferenceResult = await _inferenceEngine.InferBatchAsync(featureBatch, cancellationToken).ConfigureAwait(false);
+                    inferenceResult = await inferenceEngine.InferBatchAsync(featureBatch, cancellationToken).ConfigureAwait(false);
                 }
                 catch (NotSupportedException)
                 {
@@ -3662,7 +3667,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                             fallbackReason: $"schema-validation-failed: {dictSchemaValidation.Error}");
                     }
 
-                    inferenceResult = await _inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
+                    inferenceResult = await inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
                 }
             }
             else
@@ -3678,7 +3683,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                         fallbackReason: $"schema-validation-failed: {dictSchemaValidation.Error}");
                 }
 
-                inferenceResult = await _inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
+                inferenceResult = await inferenceEngine.InferAsync(inferenceRequest, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -3731,7 +3736,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
             var rawScore = output.Score;
             var confidence = output.Confidence;
             var calibratedScore = _calibrationService is not null
-                ? _calibrationService.Calibrate(rawScore, _inferenceEngine.ModelVersion)
+                ? _calibrationService.Calibrate(rawScore, inferenceEngine.ModelVersion)
                 : rawScore;
 
             // 低于置信阈值 → 回退 deterministic（但标记 ModelAttempted=true）
@@ -4201,7 +4206,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         {
             SelectedCount = selected.Count,
             DroppedCount = dropped.Count,
-            EstimatedTokens = usedTokens,
+            EffectiveTokens = usedTokens,
             TokenBudget = tokenBudget,
             Sections = Array.Empty<string>(), // B-1 骨架不实现 section 分层
             SafetyGateBlockedCount = 0, // SafetyGate 在 Engine 内执行
@@ -4504,7 +4509,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
     /// <summary>将决策结果 + 候选正文投影为 AgentContextSnapshot。</summary>
     public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
     {
-        return Project(result, workingSet, context: null);
+        return Project(result, workingSet, context: null!);
     }
 
     /// <summary>
@@ -4514,7 +4519,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
     public AgentContextSnapshot Project(ContextDecisionExecutionResult execution)
     {
         ArgumentNullException.ThrowIfNull(execution);
-        return Project(execution.Decision, execution.WorkingSet, context: null);
+        return Project(execution.Decision, execution.WorkingSet, context: null!);
     }
 
     /// <summary>
@@ -4546,7 +4551,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
             .Select(env =>
             {
                 var section = ResolveAgentSectionName(env.Source);
-                var includedTokens = env.EstimatedTokens;
+                var includedTokens = env.TokenCost?.ContentTokens ?? 0;
                 if (allocationByKey.TryGetValue(env.CanonicalKey, out var decision))
                 {
                     section = decision.Section;
@@ -4576,9 +4581,9 @@ public sealed class AgentContextProjector : IAgentContextProjector
                         contentBuilder.Append("\n\n");
                     }
 
-                    // 当 IncludedTokens < EstimatedTokens 时，真正截断 Content
+                    // 当 IncludedTokens < ContentTokens 时，真正截断 Content
                     var contentToAppend = material.Content;
-                    if (item.IncludedTokens < item.Envelope.EstimatedTokens && item.IncludedTokens > 0)
+                    if (item.IncludedTokens < (item.Envelope.TokenCost?.ContentTokens ?? 0) && item.IncludedTokens > 0)
                     {
                         var truncation = _contentTruncator.Truncate(material.Content, item.IncludedTokens);
                         contentToAppend = truncation.TruncatedContent;

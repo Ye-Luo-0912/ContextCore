@@ -86,7 +86,6 @@ public sealed class R31C_WorkerHeartbeatRegistryTests
             })
             .Build();
         var services = new ServiceCollection();
-        services.AddContextCore();
         services.AddContextCoreRuntime(config);
         services.AddSingleton<IHostApplicationLifetime>(new TestHostApplicationLifetime());
         var provider = services.BuildServiceProvider();

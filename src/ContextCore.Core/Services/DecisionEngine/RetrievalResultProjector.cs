@@ -74,7 +74,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             Succeeded = true,
             SelectedItems = selectedItems,
             DroppedItems = droppedItems,
-            EstimatedTokens = result.Outcome.EstimatedTokens,
+            EstimatedTokens = result.Outcome.EffectiveTokens,
             CreatedAt = result.DecidedAt,
             Metadata = new Dictionary<string, string>
             {
@@ -171,7 +171,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
 
         // 从 AllocationDecision 恢复 IncludedTokens / IsTruncated（如有）
         // 优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
-        var includedTokens = envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
+        var includedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
         var isTruncated = false;
         if (allocationByKey.TryGetValue(envelope.CanonicalKey, out var decision))
         {
@@ -219,7 +219,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             Kind = ResolveCandidateKind(envelope.Source),
             Type = envelope.Type,
             Score = envelope.Utility.FinalScore,
-            EstimatedTokens = envelope.EstimatedTokens,
+            EstimatedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope),
             Reasons = ResolveReasons(envelope),
             SourceRefs = envelope.ProvenanceRefs
                 .Where(r => !string.IsNullOrEmpty(r.RefId))
@@ -238,7 +238,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             Type = envelope.Type,
             Reason = ResolveDropReason(envelope),
             Score = envelope.Utility.FinalScore,
-            EstimatedTokens = envelope.EstimatedTokens
+            EstimatedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope)
         };
     }
 

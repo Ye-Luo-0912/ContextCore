@@ -84,7 +84,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
                 {
                     SelectedCount = 0,
                     DroppedCount = 0,
-                    EstimatedTokens = 0,
+                    EffectiveTokens = 0,
                     TokenBudget = tokenBudget,
                     Sections = Array.Empty<string>(),
                     SafetyGateBlockedCount = 0,
@@ -217,7 +217,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         {
             SelectedCount = selected.Count,
             DroppedCount = dropped.Count,
-            EstimatedTokens = estimatedTokens,
+            EffectiveTokens = estimatedTokens,
             TokenBudget = tokenBudget,
             Sections = sections,
             SafetyGateBlockedCount = 0,
@@ -486,9 +486,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
     /// 回退到 EstimatedTokens（length/4 粗估）。
     /// </summary>
     private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
-    {
-        return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
-    }
+        => DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
 
     /// <summary>section 分配中间状态（便于第二轮 rollover 复用）。</summary>
     private sealed class SectionState

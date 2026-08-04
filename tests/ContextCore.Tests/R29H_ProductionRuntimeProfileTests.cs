@@ -63,7 +63,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -115,7 +115,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_wr_ha_"));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -163,7 +163,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -196,7 +196,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
@@ -235,7 +235,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
 
         // 不触发 ApplicationStarted
@@ -266,7 +266,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
@@ -328,7 +328,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
@@ -362,7 +362,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_canary_ha_"));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
@@ -395,7 +395,7 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
 
         var lifetime = new TestHostApplicationLifetime();
@@ -528,7 +528,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
 
         Assert.ThrowsException<InvalidOperationException>(() =>
             services.AddContextCoreRuntime(config),
@@ -548,7 +547,6 @@ public sealed class R29H_ProductionRuntimeProfileTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
 
         Assert.ThrowsException<InvalidOperationException>(() =>
             services.AddContextCoreRuntime(config),

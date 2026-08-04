@@ -53,7 +53,7 @@ public sealed class PackageCandidateAdapterTests
         Assert.AreEqual("pkg-1", envelope.CandidateId);
         Assert.AreEqual(ContextCandidateSource.WorkingMemory, envelope.Source);
         Assert.AreEqual("note", envelope.Type);
-        Assert.AreEqual(120, envelope.EstimatedTokens);
+        Assert.AreEqual(120, DecisionOutcomeRecomputer.GetEffectiveTokens(envelope));
         Assert.AreEqual(0.85, envelope.Utility.DeterministicScore);
         Assert.AreEqual(0.85, envelope.Utility.FinalScore);
         Assert.AreEqual(2, envelope.ProvenanceRefs.Count);

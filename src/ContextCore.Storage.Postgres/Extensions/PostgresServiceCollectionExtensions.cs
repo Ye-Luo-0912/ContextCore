@@ -3,6 +3,7 @@ using ContextCore.Storage.Postgres.Backup;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ContextCore.Storage.Postgres.Extensions;
 
@@ -403,9 +404,11 @@ public static class PostgresServiceCollectionExtensions
 
         services.AddSingleton(configuration);
         services.AddSingleton<PostgresLeasedWorkStore<TWork>>();
-        services.AddSingleton<IPostgresLeasedWorkStore<TWork>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
-        services.AddSingleton<ILeasedWorkStore<TWork, LeasedWork<TWork>>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
-        services.AddSingleton<ILeasedWorkStore>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
+        // 接口绑定使用 TryAdd：同一 TWork 的租约存储可注册多次（不同底层表，如 Agent Run 租约与
+        // Canary Leader 租约），接口只绑定首个实例（DI 无法用同型泛型接口区分多个存储）。
+        services.TryAddSingleton<IPostgresLeasedWorkStore<TWork>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
+        services.TryAddSingleton<ILeasedWorkStore<TWork, LeasedWork<TWork>>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
+        services.TryAddSingleton<ILeasedWorkStore>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
         return services;
     }
 }

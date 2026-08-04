@@ -567,7 +567,7 @@ internal static class ModelControlPlaneEndpoints
             if (descriptor is null)
             {
                 return ContextCoreHttpResultMapper.NotFound(
-                    null, string.Empty, "models.retire",
+                    httpContext, string.Empty, "models.retire",
                     $"未找到 ModelArtifactId='{id}'。");
             }
 
@@ -694,13 +694,14 @@ internal static class ModelControlPlaneEndpoints
         group.MapGet("/{id}", async Task<IResult> (
             string id,
             IModelArtifactRegistry registry,
+            HttpContext httpContext,
             CancellationToken ct) =>
         {
             var descriptor = await registry.GetAsync(id, ct).ConfigureAwait(false);
             if (descriptor is null)
             {
                 return ContextCoreHttpResultMapper.NotFound(
-                    null, string.Empty, "models.get",
+                    httpContext, string.Empty, "models.get",
                     $"未找到 ModelArtifactId='{id}'。");
             }
             return Results.Ok(ToDescriptorResponse(descriptor));

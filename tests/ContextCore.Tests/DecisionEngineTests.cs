@@ -58,7 +58,7 @@ public sealed class DecisionEngineTests
 
         Assert.AreEqual(3, result.SelectedEnvelopes.Count);
         Assert.AreEqual(0, result.DroppedEnvelopes.Count);
-        Assert.AreEqual(600, result.Outcome.EstimatedTokens);
+        Assert.AreEqual(600, result.Outcome.EffectiveTokens);
     }
 
     [TestMethod]
@@ -185,7 +185,7 @@ public sealed class DecisionEngineTests
 
         Assert.AreEqual(1, result.SelectedEnvelopes.Count);
         Assert.AreEqual("high", result.SelectedEnvelopes[0].CandidateId);
-        Assert.AreEqual(300, result.Outcome.EstimatedTokens);
+        Assert.AreEqual(300, result.Outcome.EffectiveTokens);
 
         Assert.AreEqual(2, result.DroppedEnvelopes.Count);
         Assert.AreEqual(2, result.Outcome.BudgetExceededCount);
@@ -247,7 +247,7 @@ public sealed class DecisionEngineTests
             },
             Outcome = new ContextDecisionOutcomeSummary
             {
-                SelectedCount = 1, DroppedCount = 1, EstimatedTokens = 100, TokenBudget = 500
+                SelectedCount = 1, DroppedCount = 1, EffectiveTokens = 100, TokenBudget = 500
             },
             PolicyVersion = ContextDecisionPolicyVersions.DecisionSchemaV2_0,
             ModelEnabled = false
@@ -299,7 +299,7 @@ public sealed class DecisionEngineTests
             },
             Outcome = new ContextDecisionOutcomeSummary
             {
-                SelectedCount = 1, DroppedCount = 1, EstimatedTokens = 150, TokenBudget = 200
+                SelectedCount = 1, DroppedCount = 1, EffectiveTokens = 150, TokenBudget = 200
             },
             PolicyVersion = ContextDecisionPolicyVersions.PackagePolicyV3_1,
             ModelEnabled = false
@@ -576,7 +576,12 @@ public sealed class DecisionEngineTests
                 entityId: candidateId,
                 entityVersion: "v1"),
             Source = source,
-            EstimatedTokens = tokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = tokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = safety ?? new CandidateSafetyState(),
             Utility = utility ?? new CandidateUtilityScore
             {

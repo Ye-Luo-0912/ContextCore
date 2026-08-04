@@ -97,21 +97,28 @@ public sealed class R29H_BenchmarkCIAcceptanceTests
                     var fileName = Path.GetFileName(reportFile);
                     var caseKey = $"{fileName} | {type}.{method} [{parameters}]";
 
-                    if (!benchmark.TryGetProperty("Statistics", out var stats))
+                    if (!benchmark.TryGetProperty("Measurements", out var measurements))
                     {
-                        lowSampleCases.Add($"{caseKey} — 缺少 Statistics 节点");
+                        lowSampleCases.Add($"{caseKey} — 缺少 Measurements 节点");
                         continue;
                     }
 
-                    if (!stats.TryGetProperty("N", out var nEl) || !nEl.TryGetInt32(out int n))
+                    // 以测量阶段（IterationStage=Actual）的迭代条数作为实际样本数：
+                    // Statistics.N / Result 阶段是剔除离群值后的统计样本，高方差用例会低于实际迭代数；
+                    // 用原始执行条数才能确定性地验证 MinIterationCount 已生效。
+                    var sampleCount = 0;
+                    foreach (var measurement in measurements.EnumerateArray())
                     {
-                        lowSampleCases.Add($"{caseKey} — Statistics.N 缺失");
-                        continue;
+                        if (measurement.TryGetProperty("IterationStage", out var stageEl)
+                            && string.Equals(stageEl.GetString(), "Actual", StringComparison.Ordinal))
+                        {
+                            sampleCount++;
+                        }
                     }
 
-                    if (n < 15)
+                    if (sampleCount < 15)
                     {
-                        lowSampleCases.Add($"{caseKey} — N={n}（< 15，BenchmarkOutputConfig.MinIterationCount 未生效）");
+                        lowSampleCases.Add($"{caseKey} — 样本数={sampleCount}（< 15，BenchmarkOutputConfig.MinIterationCount 未生效）");
                     }
                 }
             }

@@ -41,7 +41,7 @@ public sealed class DecisionEngineContractsTests
         Assert.AreEqual("cand-1", envelope.CandidateId);
         Assert.AreEqual(ContextCandidateSource.Lexical, envelope.Source);
         Assert.AreEqual(string.Empty, envelope.Type);
-        Assert.AreEqual(0, envelope.EstimatedTokens);
+        Assert.AreEqual(0, envelope.TokenCost?.ContentTokens ?? 0);
         Assert.IsNotNull(envelope.Features);
         Assert.IsNotNull(envelope.Safety);
         Assert.IsNotNull(envelope.Utility);
@@ -68,7 +68,12 @@ public sealed class DecisionEngineContractsTests
                 entityVersion: "v1"),
             Source = ContextCandidateSource.Semantic,
             Type = "note",
-            EstimatedTokens = 100
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            }
         };
 
         var enhanced = baseEnvelope with
@@ -86,7 +91,7 @@ public sealed class DecisionEngineContractsTests
         Assert.AreEqual("cand-1", enhanced.CandidateId);
         Assert.AreEqual(ContextCandidateSource.Semantic, enhanced.Source);
         Assert.AreEqual("note", enhanced.Type);
-        Assert.AreEqual(100, enhanced.EstimatedTokens);
+        Assert.AreEqual(100, enhanced.TokenCost?.ContentTokens ?? 0);
 
         // 增强字段生效
         Assert.AreEqual(0.85, enhanced.Utility.DeterministicScore);

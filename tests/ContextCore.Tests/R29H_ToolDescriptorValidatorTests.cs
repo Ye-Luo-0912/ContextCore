@@ -379,7 +379,7 @@ public sealed class R29H_ToolDescriptorValidatorTests
             "search",
             new ToolDescriptor { Name = "search", DeclaredSideEffect = ToolSideEffect.ReadOnly },
             schema: SearchSchema));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -412,7 +412,7 @@ public sealed class R29H_ToolDescriptorValidatorTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 

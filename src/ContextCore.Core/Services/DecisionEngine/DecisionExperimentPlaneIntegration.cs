@@ -674,8 +674,8 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
         // replay 从 WorkingSet 的首个 envelope 推导 Scope（replay 场景仅需决策可重现，不需原始查询文本）。
         var firstEnvelope = fixture.WorkingSet.Envelopes.FirstOrDefault();
         var replayScope = new ContextDecisionScope(
-            firstEnvelope.WorkspaceId,
-            firstEnvelope.CollectionId);
+            firstEnvelope?.WorkspaceId ?? string.Empty,
+            firstEnvelope?.CollectionId ?? string.Empty);
         var replayRequest = new ContextDecisionRuntimeRequest
         {
             RequestId = $"replay:{fixture.FixtureId}",

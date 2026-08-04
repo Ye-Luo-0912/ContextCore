@@ -1117,7 +1117,12 @@ public sealed class StrongSafetyAcceptanceTests
             CanonicalKey = CanonicalCandidateKey.Create("test-ws", "test-col", "entity", "mandatory-overflow", "v1"),
             Source = ContextCandidateSource.Mandatory,
             Type = "test-type",
-            EstimatedTokens = 5000,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 5000,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 1.0, FinalScore = 1.0, ReasonCode = "mandatory" }
         };
@@ -1257,7 +1262,12 @@ public sealed class ProductionReplayAcceptanceTests
             CandidateId = "expert-1",
             CanonicalKey = key1,
             Source = ContextCandidateSource.Lexical,
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.7, FinalScore = 0.7, ReasonCode = "test" }
         };

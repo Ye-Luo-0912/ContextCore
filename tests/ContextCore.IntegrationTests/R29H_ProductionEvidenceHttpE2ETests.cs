@@ -246,7 +246,6 @@ public sealed class R29H_ProductionEvidenceHttpE2ETests : IAsyncDisposable
         using var reader = new StreamReader(stream);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
 
-        var receivedAnyData = false;
         try
         {
             // 读取至少一行（或超时——超时是可接受的，证明连接持久）
@@ -255,7 +254,6 @@ public sealed class R29H_ProductionEvidenceHttpE2ETests : IAsyncDisposable
                 var line = await reader.ReadLineAsync(cts.Token);
                 if (line is not null)
                 {
-                    receivedAnyData = true;
                     // 收到首行后即可断言连接正常，无需继续等待
                     break;
                 }

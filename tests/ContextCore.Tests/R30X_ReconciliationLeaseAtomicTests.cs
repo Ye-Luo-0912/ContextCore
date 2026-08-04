@@ -305,7 +305,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var resolution = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease2.LeaseToken, expectedReconciliationVersion: 1,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
             null, cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.VersionMismatch, resolution.Status);
 
@@ -313,7 +313,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var ok = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease2.LeaseToken, lease2.FencingToken,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
             null, cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, ok.Status);
     }
@@ -332,12 +332,12 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-first" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token);
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
         var second = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token);
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.AlreadyTerminal, second.Status);
 
         var record = await store.GetAsync("rec-1", cts.Token);
@@ -358,14 +358,14 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
         // 相同决策身份 + 相同 outcome 重试（租约已清除）→ 幂等成功，不覆盖首次真相
         var retry = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, retry.Status, "相同决策身份 + 相同 outcome → 幂等成功。");
         Assert.AreEqual("txn-777", (await store.GetAsync("rec-1", cts.Token))!.Result, "重试不覆盖首次裁决内容。");
@@ -385,7 +385,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var occurred = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, occurred,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, occurred), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, occurred), null, cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
@@ -393,7 +393,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var opposite = new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "确认未发生" };
         var conflict = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, opposite,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, opposite), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, opposite), null, cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.DecisionConflict, conflict.Status, "相同决策身份 + 相反 outcome → 决策冲突。");
         Assert.AreEqual(true, (await store.GetAsync("rec-1", cts.Token))!.SideEffectOccurred, "首次裁决真相不被相反重试覆盖。");
@@ -413,13 +413,13 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
         var otherDecision = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
             decisionRequestId: "decision-2");
         Assert.AreEqual(ToolReconciliationResolutionStatus.AlreadyTerminal, otherDecision.Status,
             "不同决策身份 → 视为新的重复提交，拒绝（AlreadyTerminal）。");
@@ -437,7 +437,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var resolution = await store.ResolveReconciliationAtomicallyAsync(
             "ws-other", RunId, "req-1", "token", 1,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
-            BuildDurableResult(await store.GetAsync("rec-1", cts.Token)!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
             null, cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.NotFound, resolution.Status,
             "跨 Workspace 的租户键不匹配 → NotFound（P0-5 完整租户键）。");

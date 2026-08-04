@@ -395,15 +395,17 @@ public class ClosureGateBenchmarks
 
         // 计数 Provider 列表（V2 路径使用计数 store）
         // Semantic Provider 不注入 IVectorStore（返回空），避免构造复杂依赖。
+        // 注入 tokenizer：EnrichTokenCost 对非空正文 fail-fast（未注入时抛异常）。
+        var tokenizerResolver = new DefaultContextTokenizerResolver();
         _countingProviders = new List<CountingCandidateProvider>
         {
-            new(new MandatoryCandidateProvider(_countingStore)),
-            new(new ConstraintCandidateProvider(_constraintStore)),
-            new(new LexicalCandidateProvider(_countingStore)),
-            new(new SemanticCandidateProvider(_countingStore, _memoryStore, embeddingProvider: null, vectorStore: null)),
-            new(new WorkingMemoryCandidateProvider(_memoryStore)),
-            new(new StableMemoryCandidateProvider(_memoryStore)),
-            new(new GraphCandidateProvider(_countingStore, _relationStore, _memoryStore)),
+            new(new MandatoryCandidateProvider(_countingStore, tokenizerResolver)),
+            new(new ConstraintCandidateProvider(_constraintStore, tokenizerResolver)),
+            new(new LexicalCandidateProvider(_countingStore, tokenizerResolver)),
+            new(new SemanticCandidateProvider(_countingStore, _memoryStore, embeddingProvider: null, vectorStore: null, tokenizerResolver: tokenizerResolver)),
+            new(new WorkingMemoryCandidateProvider(_memoryStore, tokenizerResolver)),
+            new(new StableMemoryCandidateProvider(_memoryStore, tokenizerResolver)),
+            new(new GraphCandidateProvider(_countingStore, _relationStore, _memoryStore, tokenizerResolver)),
         };
 
         var canonicalMerger = new DefaultCanonicalCandidateMerger();

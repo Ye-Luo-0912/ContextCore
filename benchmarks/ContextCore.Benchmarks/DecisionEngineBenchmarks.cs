@@ -128,7 +128,12 @@ public class AllocatorBenchmarks
                     entityKind: source.ToString().ToLowerInvariant(),
                     entityId: entityId,
                     entityVersion: "v1"),
-                EstimatedTokens = tokens,
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = tokens,
+                    TokenizerId = "length-div-4",
+                    IsEstimated = true
+                },
                 Safety = new CandidateSafetyState
                 {
                     IsMandatory = isMandatory,
@@ -240,7 +245,12 @@ public class CanonicalMergerBenchmarks
                     Source = sources[e],
                     Type = "bench-type",
                     CanonicalKey = key,
-                    EstimatedTokens = tokens,
+                    TokenCost = new CandidateTokenCost
+                    {
+                        ContentTokens = tokens,
+                        TokenizerId = "length-div-4",
+                        IsEstimated = true
+                    },
                     Safety = new CandidateSafetyState
                     {
                         IsMandatory = sources[e] == ContextCandidateSource.Mandatory,
@@ -337,7 +347,12 @@ public class ProjectorBenchmarks
                 Source = i == 0 ? ContextCandidateSource.Mandatory : ContextCandidateSource.Lexical,
                 Type = "bench-type",
                 CanonicalKey = key,
-                EstimatedTokens = tokens,
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = tokens,
+                    TokenizerId = "length-div-4",
+                    IsEstimated = true
+                },
                 Safety = new CandidateSafetyState { PassesSafetyGate = true },
                 Utility = new CandidateUtilityScore
                 {
@@ -377,7 +392,7 @@ public class ProjectorBenchmarks
         var selected = envelopes.Take(selectedCount).ToList();
         var dropped = envelopes.Skip(selectedCount).ToList();
 
-        var totalTokens = selected.Sum(e => e.EstimatedTokens);
+        var totalTokens = selected.Sum(DecisionOutcomeRecomputer.GetEffectiveTokens);
 
         return new ContextDecisionResult
         {
@@ -388,7 +403,7 @@ public class ProjectorBenchmarks
             {
                 SelectedCount = selected.Count,
                 DroppedCount = dropped.Count,
-                EstimatedTokens = totalTokens,
+                EffectiveTokens = totalTokens,
                 TokenBudget = 8000
             },
             PolicyVersion = "bench-policy-v1",

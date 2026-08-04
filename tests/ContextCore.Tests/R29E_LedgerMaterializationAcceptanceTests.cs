@@ -266,7 +266,12 @@ public sealed class R29E_LedgerMaterializationAcceptanceTests
                 entityVersion: "v1"),
             Source = source,
             Type = "test-type",
-            EstimatedTokens = tokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = tokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = safety ?? new CandidateSafetyState(),
             Utility = new CandidateUtilityScore
             {

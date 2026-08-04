@@ -61,7 +61,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -118,7 +118,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -155,7 +155,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         var services = new ServiceCollection();
         // 注册 Postgres 存储服务（仅描述符，不连接 DB）
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_sn_"));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -228,7 +228,7 @@ public sealed class R29H_ServiceCompositionE2ETests
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_ha_"));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -303,7 +303,7 @@ public sealed class R29H_ServiceCompositionE2ETests
 
         var services = new ServiceCollection();
         services.AddContextCorePostgresStorage(BuildPostgresOptions("stub_hainfra_"));
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         var provider = services.BuildServiceProvider();
 
@@ -338,7 +338,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         // 断言：调用 AddContextCoreRuntime 抛 InvalidOperationException
         Assert.ThrowsException<InvalidOperationException>(() =>
@@ -361,7 +361,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         Assert.ThrowsException<InvalidOperationException>(() =>
             services.AddContextCoreRuntime(config),
@@ -381,7 +381,7 @@ public sealed class R29H_ServiceCompositionE2ETests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         Assert.ThrowsException<InvalidOperationException>(() =>
             services.AddContextCoreRuntime(config),
@@ -426,7 +426,7 @@ public sealed class R29H_ServiceCompositionE2ETests
                 TablePrefix = "ha_e2e_"
             };
             services.AddContextCorePostgresStorage(pgOptions);
-            services.AddContextCore();
+            services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
             services.AddContextCoreRuntime(config);
 
             var provider = services.BuildServiceProvider();

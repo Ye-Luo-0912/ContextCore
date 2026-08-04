@@ -200,7 +200,7 @@ public sealed class R29H_AgentRunSchedulerTests
         });
 
         var services = new ServiceCollection();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         await using var provider = services.BuildServiceProvider();
 
@@ -231,7 +231,7 @@ public sealed class R29H_AgentRunSchedulerTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(config);
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
         services.AddContextCoreRuntime(config);
         using var provider = services.BuildServiceProvider();
 

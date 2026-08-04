@@ -1,24 +1,25 @@
 ```
 
-BenchmarkDotNet v0.14.0, Windows 11 (10.0.26300.8772)
+BenchmarkDotNet v0.14.0, Windows 11 (10.0.26300.9032)
 Unknown processor
 .NET SDK 11.0.100-preview.6.26359.118
   [Host]     : .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
-  Job-XZCWAQ : .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+  Job-NEKVUD : .NET 10.0.9 (10.0.926.27113), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
 
-IterationCount=5  WarmupCount=3  
+MaxIterationCount=25  MaxWarmupIterationCount=10  MinIterationCount=15  
+MinWarmupIterationCount=3  
 
 ```
-| Method                                 | ItemCount | QueryDelayMs | Mean         | Error      | StdDev      | Ratio  | RatioSD | Gen0     | Gen1    | Allocated  | Alloc Ratio |
-|--------------------------------------- |---------- |------------- |-------------:|-----------:|------------:|-------:|--------:|---------:|--------:|-----------:|------------:|
-| **NoDelay_ParallelPrefetch**               | **50**        | **0**            |     **988.5 μs** |   **391.4 μs** |   **101.64 μs** |   **1.01** |    **0.13** |  **87.8906** |  **7.8125** |   **726.8 KB** |        **1.00** |
-| WithDelay_ParallelPrefetch             | 50        | 0            |     925.0 μs |   408.6 μs |   106.10 μs |   0.94 |    0.13 |  93.7500 |  7.8125 |  768.51 KB |        1.06 |
-| WithDelay_Concurrent4_ParallelPrefetch | 50        | 0            |   3,902.4 μs |   307.4 μs |    79.83 μs |   3.98 |    0.36 | 355.4688 | 35.1563 | 2912.18 KB |        4.01 |
-|                                        |           |              |              |            |             |        |         |          |         |            |             |
-| **NoDelay_ParallelPrefetch**               | **50**        | **1**            |     **976.6 μs** |   **279.7 μs** |    **72.63 μs** |   **1.00** |    **0.10** |  **80.0781** |  **7.8125** |  **658.03 KB** |        **1.00** |
-| WithDelay_ParallelPrefetch             | 50        | 1            | 186,246.7 μs | 1,091.7 μs |   168.93 μs | 191.54 |   12.88 |        - |       - |  737.55 KB |        1.12 |
-| WithDelay_Concurrent4_ParallelPrefetch | 50        | 1            | 186,154.1 μs | 4,253.8 μs | 1,104.71 μs | 191.45 |   12.84 |        - |       - | 2689.18 KB |        4.09 |
-|                                        |           |              |              |            |             |        |         |          |         |            |             |
-| **NoDelay_ParallelPrefetch**               | **50**        | **5**            |     **952.3 μs** |   **168.9 μs** |    **26.13 μs** |   **1.00** |    **0.03** |  **82.0313** |  **7.8125** |  **670.23 KB** |        **1.00** |
-| WithDelay_ParallelPrefetch             | 50        | 5            | 186,711.9 μs | 3,554.2 μs |   923.02 μs | 196.18 |    4.77 |        - |       - |  669.13 KB |        1.00 |
-| WithDelay_Concurrent4_ParallelPrefetch | 50        | 5            | 185,663.1 μs | 4,524.1 μs |   700.11 μs | 195.07 |    4.73 |        - |       - | 2665.29 KB |        3.98 |
+| Method                                 | ItemCount | QueryDelayMs | Mean         | Error       | StdDev      | Ratio  | RatioSD | Gen0     | Gen1   | Allocated  | Alloc Ratio |
+|--------------------------------------- |---------- |------------- |-------------:|------------:|------------:|-------:|--------:|---------:|-------:|-----------:|------------:|
+| **NoDelay_ParallelPrefetch**               | **50**        | **0**            |     **815.2 μs** |    **42.37 μs** |    **50.43 μs** |   **1.00** |    **0.08** |  **82.0313** | **7.8125** |  **672.51 KB** |        **1.00** |
+| WithDelay_ParallelPrefetch             | 50        | 0            |     868.1 μs |    54.29 μs |    70.60 μs |   1.07 |    0.10 |  89.8438 | 1.9531 |  742.46 KB |        1.10 |
+| WithDelay_Concurrent4_ParallelPrefetch | 50        | 0            |   3,313.1 μs |   187.45 μs |   230.20 μs |   4.08 |    0.36 | 363.2813 | 7.8125 | 2970.05 KB |        4.42 |
+|                                        |           |              |              |             |             |        |         |          |        |            |             |
+| **NoDelay_ParallelPrefetch**               | **50**        | **1**            |     **778.0 μs** |    **27.86 μs** |    **35.24 μs** |   **1.00** |    **0.06** |  **82.0313** | **7.8125** |  **672.51 KB** |        **1.00** |
+| WithDelay_ParallelPrefetch             | 50        | 1            | 185,478.6 μs | 2,411.54 μs | 2,255.75 μs | 238.88 |   10.82 |        - |      - |  680.65 KB |        1.01 |
+| WithDelay_Concurrent4_ParallelPrefetch | 50        | 1            | 186,478.4 μs |   586.78 μs |   548.88 μs | 240.17 |   10.53 | 333.3333 |      - | 2742.88 KB |        4.08 |
+|                                        |           |              |              |             |             |        |         |          |        |            |             |
+| **NoDelay_ParallelPrefetch**               | **50**        | **5**            |     **966.0 μs** |    **38.41 μs** |    **51.28 μs** |   **1.00** |    **0.07** |  **82.0313** | **7.8125** |   **672.5 KB** |        **1.00** |
+| WithDelay_ParallelPrefetch             | 50        | 5            | 186,525.7 μs | 1,064.02 μs |   995.28 μs | 193.60 |    9.76 |        - |      - |  680.65 KB |        1.01 |
+| WithDelay_Concurrent4_ParallelPrefetch | 50        | 5            | 186,597.6 μs |   724.49 μs |   677.69 μs | 193.67 |    9.73 | 333.3333 |      - | 2717.27 KB |        4.04 |

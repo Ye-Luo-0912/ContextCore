@@ -294,7 +294,11 @@ public sealed class DefaultGuardedOptimizationPipelineTests
             Percentage = 0.05
         };
 
+        // RecordCanaryAssignmentAsync 已标记 [Obsolete]（新流程经 AdvanceWithMetricsAsync
+        // 原子写入 PipelineAuditBatch.CanaryAssignment）；此处验证旧入口仍可查询，按约定保留。
+#pragma warning disable CS0618
         await pipeline.RecordCanaryAssignmentAsync(assignment);
+#pragma warning restore CS0618
         var list = await pipeline.GetCanaryAssignmentsAsync(run.RunId);
 
         Assert.AreEqual(1, list.Count);

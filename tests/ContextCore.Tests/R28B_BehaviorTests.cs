@@ -46,7 +46,12 @@ internal static class R28BTestHelpers
                 entityVersion: "v1"),
             Source = source,
             Type = "test-type",
-            EstimatedTokens = tokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = tokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = safety ?? new CandidateSafetyState(),
             Utility = utility ?? new CandidateUtilityScore
             {
@@ -75,7 +80,7 @@ internal static class R28BTestHelpers
             {
                 SelectedCount = selected?.Count ?? 0,
                 DroppedCount = dropped?.Count ?? 0,
-                EstimatedTokens = estimatedTokens,
+                EffectiveTokens = estimatedTokens,
                 TokenBudget = tokenBudget,
                 Sections = Array.Empty<string>(),
                 SafetyGateBlockedCount = 0,
@@ -1121,7 +1126,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
     {
         var integration = MakeIntegration();
 
-        var assessment = integration.EvaluateHistoricalFixtures();
+        var assessment = await integration.EvaluateHistoricalFixturesAsync();
 
         Assert.IsFalse(assessment.IsReady);
         Assert.AreEqual(0, assessment.TotalReports);
@@ -1143,7 +1148,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
         }
 
         await Task.Yield(); // 让 RecordAsync 完成
-        var assessment = integration.EvaluateHistoricalFixtures();
+        var assessment = await integration.EvaluateHistoricalFixturesAsync();
 
         Assert.IsTrue(assessment.IsReady);
         Assert.AreEqual(3, assessment.TotalReports);
@@ -1160,7 +1165,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
         integration.RecordFixture(MakeDivergentParityReport(), "fx-2", "ci");
 
         await Task.Yield();
-        var assessment = integration.EvaluateHistoricalFixtures();
+        var assessment = await integration.EvaluateHistoricalFixturesAsync();
 
         Assert.IsFalse(assessment.IsReady);
         Assert.AreEqual(1, assessment.DivergentCount);
@@ -1176,7 +1181,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
         integration.ClearHistory();
         await Task.Yield();
 
-        Assert.AreEqual(0, integration.FixtureHistory.Count);
+        Assert.AreEqual(0, (await integration.GetFixtureHistoryAsync()).Count);
     }
 
     [TestMethod]
@@ -1189,7 +1194,7 @@ public sealed class DecisionExperimentPlaneIntegrationTests
         integration.RecordFixture(MakeHardParityReport(), "fx-1", "test");
 
         // 从 integration.FixtureHistory 读取（应委托给 customRecorder）
-        Assert.AreEqual(1, integration.FixtureHistory.Count);
+        Assert.AreEqual(1, (await integration.GetFixtureHistoryAsync()).Count);
         // 直接从 customRecorder 读取（应与 integration.FixtureHistory 一致）
         var directHistory = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, directHistory.Count);

@@ -576,7 +576,12 @@ internal static class R28DTestHelpers
                 entityVersion: "v1"),
             Source = ContextCandidateSource.Semantic,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = safety ?? new CandidateSafetyState(),
             Utility = new CandidateUtilityScore
             {

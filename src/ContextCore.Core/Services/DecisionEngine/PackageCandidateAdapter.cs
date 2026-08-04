@@ -82,7 +82,12 @@ public static class PackageCandidateAdapter
             CandidateId = candidate.Id,
             Source = source,
             Type = candidate.Type,
-            EstimatedTokens = candidate.EstimatedTokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = candidate.EstimatedTokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
             CanonicalKey = canonicalKey,
@@ -330,7 +335,12 @@ public static class PackageCandidateAdapter
             CandidateId = decision.ItemId,
             Source = source,
             Type = decision.Type,
-            EstimatedTokens = decision.EstimatedTokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = decision.EstimatedTokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
             CanonicalKey = canonicalKey,
@@ -397,7 +407,12 @@ public static class PackageCandidateAdapter
             CandidateId = item.ItemId,
             Source = source,
             Type = item.Type,
-            EstimatedTokens = item.EstimatedTokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = item.EstimatedTokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
             CanonicalKey = canonicalKey,

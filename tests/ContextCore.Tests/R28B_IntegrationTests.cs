@@ -146,7 +146,12 @@ public sealed class V2RetrievalIntegrationTests
                 CanonicalKey = passingKey,
                 Source = ContextCandidateSource.Lexical,
                 Type = "test-type",
-                EstimatedTokens = 100,
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = 100,
+                    TokenizerId = "length-div-4",
+                    IsEstimated = true
+                },
                 Safety = new CandidateSafetyState { PassesSafetyGate = true },
                 Utility = new CandidateUtilityScore { DeterministicScore = 0.8, FinalScore = 0.8, ReasonCode = "test" }
             },
@@ -156,7 +161,12 @@ public sealed class V2RetrievalIntegrationTests
                 CanonicalKey = blockedKey,
                 Source = ContextCandidateSource.Lexical,
                 Type = "test-type",
-                EstimatedTokens = 100,
+                TokenCost = new CandidateTokenCost
+                {
+                    ContentTokens = 100,
+                    TokenizerId = "length-div-4",
+                    IsEstimated = true
+                },
                 Safety = new CandidateSafetyState
                 {
                     PassesSafetyGate = false,
@@ -241,7 +251,12 @@ public sealed class V2RetrievalIntegrationTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
         };
@@ -422,7 +437,12 @@ public sealed class V2PackageIntegrationTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.7, FinalScore = 0.7, ReasonCode = "test" }
         };
@@ -748,7 +768,12 @@ public sealed class CutoverTransitionIntegrationTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
         };

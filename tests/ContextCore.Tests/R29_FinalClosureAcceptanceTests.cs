@@ -99,16 +99,22 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
     [TestMethod]
     public async Task Journal_StateTransition_ThrowsOnRegression()
     {
-        // 验证：状态机不可逆退（Dispatched → Prepared 应抛异常）
+        // 验证：跨级跳跃抛异常（Prepared 直接推进到 Committed 被拒——不允许跳过中间状态）；
+        // 重复推进到同一状态为幂等成功（重试安全，不修改既有条目）。
         var journal = new InMemoryToolDispatchJournal();
         var requestId = "req-B5";
         await journal.PrepareAsync(BuildEntry(requestId, ToolDispatchState.Prepared));
-        await journal.MarkDispatchedAsync(requestId);
 
-        // 已是 Dispatched，再次 MarkDispatchedAsync（target=Dispatched, current=Dispatched）
-        // (int)target <= (int)current → 应抛逆退异常
+        // Prepared → Committed 跨级跳跃（缺少 Dispatched 前驱）→ 抛异常
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.MarkDispatchedAsync(requestId).AsTask());
+            () => journal.MarkCommittedAsync(requestId).AsTask());
+
+        // 逐级推进 Prepared → Dispatched → Committed
+        await journal.MarkDispatchedAsync(requestId);
+        await journal.MarkCommittedAsync(requestId);
+
+        // 已 Committed 再次 MarkCommitted → 幂等成功（重试安全，不修改）
+        await journal.MarkCommittedAsync(requestId);
     }
 
     private static ToolDispatchJournalEntry BuildEntry(string requestId, ToolDispatchState state) => new()

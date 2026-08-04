@@ -42,6 +42,8 @@ namespace ContextCore.Core.Services.Retrieval;
 /// V1 简化版：Budget-Aware TopK 模拟为非 Mandatory Expert 平均分配。
 /// V2+ 可注入 per-Expert 质量—成本曲线模型（IRetrievalExpertProfile）。
 /// </remarks>
+// 历史遗留过渡实现：IRetrievalRouter 已被 IRouter 取代，迁移完成前保留本实现（抑制 obsolete 警告）。
+#pragma warning disable CS0618
 public sealed class DefaultRetrievalRouter : IRetrievalRouter
 {
     /// <summary>默认 Router 标识（用于 ExpertRoutingDecisionSet.RouterId）。</summary>

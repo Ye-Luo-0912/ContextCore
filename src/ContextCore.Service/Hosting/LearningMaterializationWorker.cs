@@ -236,7 +236,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
             // 不重新以应用时钟估算（避免应用时钟与 DB clock_timestamp() 偏差导致 watchdog 误判）。
             // 续约异常时不更新；DB 不可达超过 LeaseDuration 后过期 → watchdog cancel leaseCts → linked CTS 取消 MaterializeAsync。
             var confirmedExpiresAt = record.LeaseExpiresAt ?? DateTimeOffset.UtcNow.Add(leaseDuration);
-            _activeLeases[record.EventId] = (record.LeaseToken, leaseCts, confirmedExpiresAt);
+            _activeLeases[record.EventId] = (record.LeaseToken ?? string.Empty, leaseCts, confirmedExpiresAt);
 
             try
             {
@@ -306,7 +306,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                     var decision = JsonSerializer.Deserialize<ContextDecisionResult>(record.Payload, PayloadSerializerOptions);
                     if (decision is null)
                     {
-                        await outboxStore.MarkFailedAsync(record.EventId, record.LeaseToken, "Failed to deserialize payload: null result.", cancellationToken)
+                        await outboxStore.MarkFailedAsync(record.EventId, record.LeaseToken ?? string.Empty, "Failed to deserialize payload: null result.", cancellationToken)
                             .ConfigureAwait(false);
                         _metrics.IncrementFailed();
                         continue;
@@ -318,7 +318,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                         .ConfigureAwait(false);
 
                     // Ack（需 lease_token 匹配——若 lease 已被抢占则 acked=false，当前 worker 应放弃该记录）。
-                    var acked = await outboxStore.MarkAckedAsync(record.EventId, record.LeaseToken, linkedToken).ConfigureAwait(false);
+                    var acked = await outboxStore.MarkAckedAsync(record.EventId, record.LeaseToken ?? string.Empty, linkedToken).ConfigureAwait(false);
                     if (acked)
                     {
                         var lagMs = (DateTimeOffset.UtcNow - record.CreatedAt).TotalMilliseconds;
@@ -357,7 +357,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
                     {
                         var marked = await outboxStore.MarkFailedAsync(
                             record.EventId,
-                            record.LeaseToken,
+                            record.LeaseToken ?? string.Empty,
                             $"{ex.GetType().Name}: {ex.Message}", CancellationToken.None)
                             .ConfigureAwait(false);
                         // store 根据 retry_count 决定回退 Pending 或转 DeadLettered。

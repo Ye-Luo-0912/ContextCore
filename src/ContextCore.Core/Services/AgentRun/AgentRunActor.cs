@@ -1909,7 +1909,7 @@ public sealed class AgentRunActor
         // 进入 ToolDispatching（本地推进 + 缓冲 StateTransition 事件）
         state = TransitionStateLocal(state, AgentRunState.ToolDispatching);
 
-        for (var toolIndex = 0; toolIndex < state.LastModelResponse.ToolCalls.Count; toolIndex++)
+        for (var toolIndex = 0; toolIndex < state.LastModelResponse!.ToolCalls.Count; toolIndex++)
         {
             var toolCall = state.LastModelResponse.ToolCalls[toolIndex];
 
@@ -1935,7 +1935,7 @@ public sealed class AgentRunActor
                 state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
                     toolCallId: toolCallId,
                     requestId: null,
-                    toolName: toolCall.ToolName,
+                    toolName: toolCall.ToolName ?? string.Empty,
                     idempotencyKey: toolCall.IdempotencyKey,
                     sideEffect: ToolSideEffect.Unknown.ToString(),
                     externalOperationId: null,
@@ -1957,7 +1957,7 @@ public sealed class AgentRunActor
                     state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
                         toolCallId: toolCallId,
                         requestId: null,
-                        toolName: toolCall.ToolName,
+                        toolName: toolCall.ToolName ?? string.Empty,
                         idempotencyKey: toolCall.IdempotencyKey,
                         sideEffect: ToolSideEffect.Unknown.ToString(),
                         externalOperationId: null,
@@ -1991,7 +1991,7 @@ public sealed class AgentRunActor
                     // remainingToolCallId 优先使用 NormalizedToolCall.InvocationId，确保审批恢复后
                     // ExecutePendingToolAsync 使用的 ID 与原 Assistant 消息 / 事件一致。
                     var pendingCommands = new List<PendingToolCommand> { pendingCommand };
-                    for (var j = toolIndex + 1; j < state.LastModelResponse.ToolCalls.Count; j++)
+                    for (var j = toolIndex + 1; j < state.LastModelResponse!.ToolCalls.Count; j++)
                     {
                         var remaining = state.LastModelResponse.ToolCalls[j];
                         var remainingNormalized = (state.NormalizedToolCalls is not null && j < state.NormalizedToolCalls.Count)
@@ -2118,8 +2118,8 @@ public sealed class AgentRunActor
                 // Bug 5 修复：使用预生成的 toolCallId 作为 RequestId（与 ToolCallStarted/Completed 一致）
                 var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
                 {
-                    ToolName = toolCall.ToolName,
-                    Payload = toolCall.Arguments,
+                    ToolName = toolCall.ToolName ?? string.Empty,
+                    Payload = toolCall.Arguments ?? string.Empty,
                     RequestId = toolCallId
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -2141,7 +2141,7 @@ public sealed class AgentRunActor
             state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
                 toolCallId: toolCallId,
                 requestId: toolResult.RequestId,
-                toolName: toolCall.ToolName,
+                toolName: toolCall.ToolName ?? string.Empty,
                 idempotencyKey: toolResult.IdempotencyKey,
                 sideEffect: toolResult.SideEffect.ToString(),
                 externalOperationId: toolResult.ExternalOperationId,
@@ -2152,7 +2152,7 @@ public sealed class AgentRunActor
                 durationMs: toolResult.Duration.TotalMilliseconds)));
 
             // Journal 处于模糊状态 → 创建对账记录（幂等；阻止 Run 在未裁决时 Completed）。
-            await EnsureReconciliationRecordAsync(state, toolResult, toolCall.ToolName, cancellationToken).ConfigureAwait(false);
+            await EnsureReconciliationRecordAsync(state, toolResult, toolCall.ToolName ?? string.Empty, cancellationToken).ConfigureAwait(false);
 
             // 观察结果以结构化 ToolObservation 形式追加到 Context.ToolObservations
             // （替代旧路径直接 Add AgentMessage 到 Messages）；
@@ -2163,7 +2163,7 @@ public sealed class AgentRunActor
 
             var toolObservation = new ToolObservation
             {
-                ToolName = toolCall.ToolName,
+                ToolName = toolCall.ToolName ?? string.Empty,
                 ToolCallId = toolCallId,
                 Result = toolResult.Result,
                 Error = toolResult.Error,

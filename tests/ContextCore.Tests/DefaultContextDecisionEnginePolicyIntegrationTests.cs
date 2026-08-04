@@ -827,7 +827,12 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
                 entityId: candidateId,
                 entityVersion: "v1"),
             Source = source,
-            EstimatedTokens = tokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = tokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = safety ?? new CandidateSafetyState(),
             Utility = utility ?? new CandidateUtilityScore
             {

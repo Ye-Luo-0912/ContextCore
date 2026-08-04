@@ -202,8 +202,8 @@ public sealed class DecisionExperimentPlane
             OnlyInV2Count: onlyInV2,
             JaccardIndex: jaccardIndex,
             ParityLevel: parityLevel,
-            LegacyTokenTotal: legacyResult.Outcome.EstimatedTokens,
-            V2TokenTotal: v2Result.Outcome.EstimatedTokens,
+            LegacyTokenTotal: legacyResult.Outcome.EffectiveTokens,
+            V2TokenTotal: v2Result.Outcome.EffectiveTokens,
             WorkingSetCandidateCount: workingSet?.Envelopes.Count ?? 0);
     }
 }
@@ -351,7 +351,7 @@ public sealed class ShadowDecisionRuntime
             {
                 SelectedCount = legacyResult.SelectedItems.Count,
                 DroppedCount = legacyResult.DroppedItems.Count,
-                EstimatedTokens = legacyResult.EstimatedTokens,
+                EffectiveTokens = legacyResult.EstimatedTokens,
                 TokenBudget = tokenBudget,
                 Sections = Array.Empty<string>(),
                 SafetyGateBlockedCount = 0,
@@ -457,7 +457,7 @@ public sealed class ShadowDecisionRuntime
             {
                 SelectedCount = legacyResult.SelectedItems.Count,
                 DroppedCount = legacyResult.DroppedItems.Count,
-                EstimatedTokens = legacyResult.EstimatedTokens,
+                EffectiveTokens = legacyResult.EstimatedTokens,
                 TokenBudget = tokenBudget,
                 Sections = legacyResult.Package.Sections.Select(s => s.Name).ToArray(),
                 SafetyGateBlockedCount = 0,

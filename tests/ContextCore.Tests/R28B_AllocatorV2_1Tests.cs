@@ -65,7 +65,12 @@ public sealed class R28B_AllocatorV2_1Tests
             entityVersion: "v1"),
         Source = ContextCandidateSource.Mandatory,
         Type = "mandatory-type",
-        EstimatedTokens = tokens,
+        TokenCost = new CandidateTokenCost
+        {
+            ContentTokens = tokens,
+            TokenizerId = "length-div-4",
+            IsEstimated = true
+        },
         Safety = new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true },
         Utility = new CandidateUtilityScore { DeterministicScore = score, FinalScore = score, ReasonCode = "mandatory" }
     };
@@ -87,7 +92,12 @@ public sealed class R28B_AllocatorV2_1Tests
             entityVersion: "v1"),
         Source = source,
         Type = type,
-        EstimatedTokens = tokens,
+        TokenCost = new CandidateTokenCost
+        {
+            ContentTokens = tokens,
+            TokenizerId = "length-div-4",
+            IsEstimated = true
+        },
         Safety = new CandidateSafetyState { PassesSafetyGate = true },
         Utility = new CandidateUtilityScore { DeterministicScore = score, FinalScore = score, ReasonCode = "test" }
     };
@@ -134,7 +144,7 @@ public sealed class R28B_AllocatorV2_1Tests
         Assert.AreEqual(0, result.Selected.Count, "空候选应产出 0 selected。");
         Assert.AreEqual(0, result.Dropped.Count, "空候选应产出 0 dropped。");
         Assert.AreEqual(0, result.AllocationDecisions.Count, "空候选应产出 0 decisions。");
-        Assert.AreEqual(0, result.Outcome.EstimatedTokens, "空候选 estimated tokens 应为 0。");
+        Assert.AreEqual(0, result.Outcome.EffectiveTokens, "空候选 estimated tokens 应为 0。");
     }
 
     [TestMethod]

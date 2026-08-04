@@ -117,7 +117,7 @@ public sealed class TokenBudgetZeroEdgeCaseTests
         // EstimatedTokens 应反映 mandatory 候选的 token 数（overflow，但 token 仍被计入）
         Assert.AreEqual(1, result.SelectedEnvelopes.Count,
             "mandatory 候选必须被选入。");
-        Assert.IsTrue(result.Outcome.EstimatedTokens > 0,
+        Assert.IsTrue(result.Outcome.EffectiveTokens > 0,
             "Outcome.EstimatedTokens 必须反映 selected 候选的 token 数（> 0）。");
     }
 

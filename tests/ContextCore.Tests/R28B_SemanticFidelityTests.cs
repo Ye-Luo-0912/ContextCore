@@ -254,7 +254,12 @@ public sealed class RequestSemanticsAcceptanceTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Semantic,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
         };
@@ -307,7 +312,12 @@ public sealed class ArtifactAndAgentAcceptanceTests
             CandidateId = "seed-1",
             CanonicalKey = key,
             Source = ContextCandidateSource.Semantic,
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.8, FinalScore = 0.8, ReasonCode = "seed" }
         };
@@ -594,7 +604,12 @@ public sealed class ReplayAcceptanceTests
             CandidateId = "expert-1",
             CanonicalKey = key1,
             Source = ContextCandidateSource.Lexical,
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.7, FinalScore = 0.7, ReasonCode = "test" }
         };
@@ -603,7 +618,12 @@ public sealed class ReplayAcceptanceTests
             CandidateId = "expert-2",
             CanonicalKey = key2,
             Source = ContextCandidateSource.Semantic,
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.8, FinalScore = 0.8, ReasonCode = "test" }
         };

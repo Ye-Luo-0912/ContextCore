@@ -254,7 +254,7 @@ public static class ContextDecisionProjector
                 SectionName = ResolveEnvelopeSectionName(env.Source),
                 Reason = ResolveEnvelopeSelectReason(env),
                 Score = env.Utility.FinalScore,
-                EstimatedTokens = env.EstimatedTokens,
+                EstimatedTokens = env.TokenCost?.ContentTokens ?? 0,
                 SourceRefs = env.ProvenanceRefs
                     .Where(r => !string.IsNullOrEmpty(r.RefId))
                     .Select(r => r.RefId)
@@ -273,7 +273,7 @@ public static class ContextDecisionProjector
                 SectionName = ResolveEnvelopeSectionName(env.Source),
                 Reason = ResolveEnvelopeDropReason(env),
                 Score = env.Utility.FinalScore,
-                EstimatedTokens = env.EstimatedTokens,
+                EstimatedTokens = env.TokenCost?.ContentTokens ?? 0,
                 SourceRefs = env.ProvenanceRefs
                     .Where(r => !string.IsNullOrEmpty(r.RefId))
                     .Select(r => r.RefId)

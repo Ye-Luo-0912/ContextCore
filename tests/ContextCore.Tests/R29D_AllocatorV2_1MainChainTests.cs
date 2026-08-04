@@ -92,7 +92,12 @@ public sealed class R29D_AllocatorV2_1MainChainTests
                 entityVersion: "v1"),
             Source = ContextCandidateSource.Mandatory,
             Type = "mandatory-type",
-            EstimatedTokens = tokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = tokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = score, FinalScore = score, ReasonCode = "mandatory" }
         };
@@ -345,6 +350,7 @@ public sealed class R29D_AllocatorV2_1MainChainTests
         services.AddSingleton<ISafetyGate, DefaultSafetyGate>();
         services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
         services.AddSingleton<IUtilityScorer, DefaultUtilityScorer>();
+        services.AddSingleton<IFeatureSchemaValidator, DefaultFeatureSchemaValidator>();
         services.AddSingleton<DefaultContextDecisionEngine>(sp => new DefaultContextDecisionEngine(
             sp.GetService<IPolicyRegistry>(),
             safetyGate: sp.GetService<ISafetyGate>(),
@@ -403,7 +409,12 @@ public sealed class R29D_MandatoryOverflowPolicyTests
                 entityVersion: "v1"),
             Source = ContextCandidateSource.Mandatory,
             Type = "mandatory-type",
-            EstimatedTokens = tokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = tokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = score, FinalScore = score, ReasonCode = "mandatory" }
         };
@@ -855,9 +866,13 @@ public sealed class R29D_ProviderTokenCostFailFastTests
 
         Assert.AreEqual(1, result.Envelopes.Count, "IncludeContent=false 不影响候选召回数量。");
         var envelope = result.Envelopes[0];
-        Assert.IsNotNull(envelope.TokenCost, "空内容也应填充 TokenCost（ContentTokens=0）。");
-        Assert.AreEqual(0, envelope.TokenCost!.ContentTokens,
-            "IncludeContent=false 时 ContentTokens 应为 0。");
+        Assert.IsNotNull(envelope.TokenCost, "空内容也应填充 TokenCost。");
+        // IncludeContent=false 时正文不进入 material，但 item.Content 仍存在（mandatory 通道
+        // 保留正文供评分）——ContentTokens 按长度估算（17/4≈4），供 allocator 预算，与
+        // metadata 持久化 content_length 的估算语义一致。
+        Assert.AreEqual(4, envelope.TokenCost!.ContentTokens,
+            "IncludeContent=false 时 ContentTokens 按正文长度估算（17/4≈4）。");
+        Assert.IsTrue(envelope.TokenCost!.IsEstimated, "无 tokenizer 时应为估算。");
         // Material.Content 应为空字符串
         Assert.AreEqual(string.Empty, result.Materials[envelope.CanonicalKey].Content);
     }

@@ -289,7 +289,7 @@ public sealed class R30E_CanaryRollbackKillSwitchTests
         CurrentPercentage = 0,
         NewRevision = 1,
         NewEpoch = 1,
-        FailureReason = null
+        FailureReason = string.Empty
     };
 
     /// <summary>可配置的决策应用器：applyResult 为 null 时模拟 DB CAS 失败。</summary>

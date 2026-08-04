@@ -53,7 +53,7 @@ public sealed class RetrievalCandidateAdapterTests
         Assert.AreEqual("cand-1", envelope.CandidateId);
         Assert.AreEqual(ContextCandidateSource.Lexical, envelope.Source);
         Assert.AreEqual("note", envelope.Type);
-        Assert.AreEqual(120, envelope.EstimatedTokens);
+        Assert.AreEqual(120, DecisionOutcomeRecomputer.GetEffectiveTokens(envelope));
         Assert.AreEqual(0.85, envelope.Utility.DeterministicScore);
         Assert.AreEqual(0.85, envelope.Utility.FinalScore);
         Assert.AreEqual("keyword-match;anchor-hit", envelope.Utility.ReasonCode);

@@ -729,7 +729,7 @@ internal static class CoreExtensions
 		// 子问题1：同时注册 DeterministicBatchInferenceEngine 为 IFallbackInferenceEngine，
 		// 供 ModelActivationManager 构造函数注入（避免与 IBatchInferenceEngine 注册冲突导致循环依赖）。
 		services.TryAddSingleton<IFallbackInferenceEngine>(sp => sp.GetRequiredService<DeterministicBatchInferenceEngine>());
-		if (modelExecutionOptions.Mode == ModelExecutionMode.RealModel)
+		if (modelExecutionOptions?.Mode == ModelExecutionMode.RealModel)
 		{
 			// RealModel 模式：注册 ModelActivationManager 为 IBatchInferenceEngine。
 			// 前置条件：调用方需注册 IModelArtifactRegistry（由 PostgresServiceCollectionExtensions 提供）。

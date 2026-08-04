@@ -90,7 +90,12 @@ public static class RetrievalCandidateAdapter
             CandidateId = candidateId,
             Source = source,
             Type = candidate.Type,
-            EstimatedTokens = candidate.EstimatedTokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = candidate.EstimatedTokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
             CanonicalKey = canonicalKey,
@@ -315,7 +320,12 @@ public static class RetrievalCandidateAdapter
             CandidateId = candidateId,
             Source = source,
             Type = decision.Type,
-            EstimatedTokens = decision.EstimatedTokens,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = decision.EstimatedTokens,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
             CanonicalKey = canonicalKey,

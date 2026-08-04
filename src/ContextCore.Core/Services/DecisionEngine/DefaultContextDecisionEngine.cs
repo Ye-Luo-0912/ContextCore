@@ -330,7 +330,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         {
             SelectedCount = selected.Count,
             DroppedCount = allDropped.Count,
-            EstimatedTokens = usedTokens,
+            EffectiveTokens = usedTokens,
             TokenBudget = outcomeTokenBudget,
             Sections = Array.Empty<string>(), // 不实现 section 分层
             SafetyGateBlockedCount = blocked.Count,
@@ -798,7 +798,5 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     /// 回退到 EstimatedTokens（length/4 粗估，仅用于兼容 Legacy 候选）。
     /// </summary>
     private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
-    {
-        return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
-    }
+        => DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
 }

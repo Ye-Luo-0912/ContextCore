@@ -194,7 +194,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             {
                 var section = ResolveSectionName(env.Source);
                 // 优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
-                var includedTokens = env.TokenCost?.ContentTokens ?? env.EstimatedTokens;
+                var includedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(env);
                 var isTruncated = false;
                 if (allocationByKey.TryGetValue(env.CanonicalKey, out var decision))
                 {
@@ -561,7 +561,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         // 从 AllocationDecision 消费 Section / IncludedTokens / IsTruncated
         var section = ResolveSectionName(envelope.Source);
         // 优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
-        var includedTokens = envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
+        var includedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
         var isTruncated = false;
         if (allocationByKey.TryGetValue(envelope.CanonicalKey, out var decision))
         {
@@ -617,7 +617,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             SectionName = ResolveSectionName(envelope.Source),
             Reason = ResolveSelectReason(envelope),
             Score = envelope.Utility.FinalScore,
-            EstimatedTokens = envelope.EstimatedTokens,
+            EstimatedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope),
             SourceRefs = envelope.ProvenanceRefs
                 .Where(r => !string.IsNullOrEmpty(r.RefId))
                 .Select(r => r.RefId)

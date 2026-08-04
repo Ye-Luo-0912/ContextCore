@@ -387,7 +387,7 @@ WHERE reconciliation_id = @reconciliation_id
         command.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
         command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("last_error", (object?)lastError ?? DBNull.Value);
-        command.Parameters.AddWithValue("next_attempt_at", retryDelay.HasValue ? (object?)(DateTimeOffset.UtcNow + retryDelay.Value) : DBNull.Value);
+        command.Parameters.AddWithValue("next_attempt_at", retryDelay.HasValue ? (object)(DateTimeOffset.UtcNow + retryDelay.Value) : DBNull.Value);
         command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
         var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return affected > 0;

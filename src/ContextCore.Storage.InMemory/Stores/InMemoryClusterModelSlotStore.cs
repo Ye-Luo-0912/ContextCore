@@ -46,7 +46,8 @@ public sealed class InMemoryClusterModelSlotStore : IClusterModelSlotStore
 
         // CAS：使用 ConcurrentDictionary 的 AddOrUpdate 进行原子更新。
         // 仅当当前 Revision == expectedRevision 时才更新，否则返回 null 表示冲突。
-        ClusterModelSlot? conflictSentinel = null;
+        // conflictSentinel 恒为 null：字典值类型为非空，用 null! 表达"冲突哨兵"（调用方判空即冲突）。
+        ClusterModelSlot conflictSentinel = null!;
         var updated = _slots.AddOrUpdate(
             slotName,
             // slot 不存在时不创建（TryUpdate 语义要求 slot 已存在）

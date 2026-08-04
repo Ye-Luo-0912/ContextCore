@@ -99,7 +99,7 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
             clone.Content = new ByteArrayContent(content);
             if (original.Content.Headers.ContentType is not null)
             {
-                clone.Content.Headers.ContentType = new MediaTypeHeaderValue(original.Content.Headers.ContentType.MediaType);
+                clone.Content.Headers.ContentType = new MediaTypeHeaderValue(original.Content.Headers.ContentType.MediaType!);
             }
         }
         foreach (var header in original.Headers)

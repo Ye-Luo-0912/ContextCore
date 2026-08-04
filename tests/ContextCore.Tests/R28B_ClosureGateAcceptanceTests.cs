@@ -118,7 +118,12 @@ public sealed class ProviderNetworkAcceptanceTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
         };
@@ -335,7 +340,12 @@ public sealed class CanonicalKeyAcceptanceTests
             CandidateId = "item-1",
             CanonicalKey = sharedKey,
             Source = ContextCandidateSource.Lexical,
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5 }
         };
@@ -364,7 +374,12 @@ public sealed class CanonicalKeyAcceptanceTests
             CandidateId = "conflict-1",
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5 }
         };
@@ -775,7 +790,12 @@ public sealed class CutoverAndDiAcceptanceTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
         };

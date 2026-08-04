@@ -359,7 +359,12 @@ public sealed class ShadowDecisionRuntimeComponentTests
             CanonicalKey = key,
             Source = ContextCandidateSource.Lexical,
             Type = "test-type",
-            EstimatedTokens = 100,
+            TokenCost = new CandidateTokenCost
+            {
+                ContentTokens = 100,
+                TokenizerId = "length-div-4",
+                IsEstimated = true
+            },
             Safety = new CandidateSafetyState { PassesSafetyGate = true },
             Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
         };
@@ -491,7 +496,7 @@ public sealed class ExperimentRecorderComponentTests
 
         // 使用 RecordingDecisionRuntime 作为重放 V2 Runtime（返回相同结果 → replay parity Hard）
         var replayRuntime = new RecordingDecisionRuntime(v2Result);
-        var replayReport = await integration.ReplayFixtureAsync("fx-replay-1", replayRuntime, CancellationToken.None);
+        var replayReport = await integration.LiveReexecutionComparisonAsync("fx-replay-1", replayRuntime, CancellationToken.None);
 
         Assert.IsNotNull(replayReport, "ReplayFixtureAsync 必须产出非 null 的 FixtureReplayReport。");
         Assert.AreEqual("fx-replay-1", replayReport.FixtureId);
@@ -513,7 +518,7 @@ public sealed class ExperimentRecorderComponentTests
             new DecisionExperimentPlane(), new ShadowGateEvaluator(),
             new CutoverConfiguration { CutoverPercentage = 100, EnableSampledShadow = false });
 
-        var report = await integration.ReplayFixtureAsync("non-existent-fx", v2Runtime: null, CancellationToken.None);
+        var report = await integration.LiveReexecutionComparisonAsync("non-existent-fx", v2Runtime: null, CancellationToken.None);
 
         Assert.IsNull(report, "fixtureId 不存在时 ReplayFixtureAsync 必须返回 null。");
         await integration.DisposeAsync();
@@ -530,12 +535,12 @@ public sealed class ExperimentRecorderComponentTests
         integration.RecordFixture(MakeHardParityReport(), "fx-1", "clear-test");
         integration.RecordFixture(MakeHardParityReport(), "fx-2", "clear-test");
         await integration.FlushAsync();
-        Assert.AreEqual(2, integration.FixtureHistory.Count);
+        Assert.AreEqual(2, (await integration.GetFixtureHistoryAsync()).Count);
 
         integration.ClearHistory();
         await integration.FlushAsync();
 
-        Assert.AreEqual(0, integration.FixtureHistory.Count,
+        Assert.AreEqual(0, (await integration.GetFixtureHistoryAsync()).Count,
             "ClearHistory 后 fixture history 必须为空。");
         await integration.DisposeAsync();
     }
@@ -555,7 +560,7 @@ public sealed class ExperimentRecorderComponentTests
         }
 
         await integration.FlushAsync();
-        var assessment = integration.EvaluateHistoricalFixtures();
+        var assessment = await integration.EvaluateHistoricalFixturesAsync();
 
         Assert.IsTrue(assessment.IsReady, "3 条全部 Hard parity → IsReady=true。");
         Assert.AreEqual(3, assessment.TotalReports);

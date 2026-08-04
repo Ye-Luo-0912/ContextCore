@@ -146,7 +146,7 @@ public sealed class ContextCoreDiArchitectureTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddContextStorage(MakePostgresOptions());
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         await using var sp = services.BuildServiceProvider();
         var versionStore = sp.GetRequiredService<IContextStateVersionStore>();
@@ -161,7 +161,7 @@ public sealed class ContextCoreDiArchitectureTests
         // 此为 InMemory provider 默认路径（无 Postgres 覆盖）
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         using var sp = services.BuildServiceProvider();
         var versionStore = sp.GetRequiredService<IContextStateVersionStore>();
@@ -239,7 +239,7 @@ public sealed class ContextCoreDiArchitectureTests
         // AddContextCore 单独调用时，IContextStateVersionStore 应仅有 1 次注册（InMemory 默认）
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         var registrations = services.Where(d => d.ServiceType == typeof(IContextStateVersionStore)).ToList();
         Assert.AreEqual(1, registrations.Count,
@@ -257,7 +257,7 @@ public sealed class ContextCoreDiArchitectureTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddContextStorage(MakePostgresOptions());
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         var dataPlaneDuplicates = services
             .Where(d => DataPlaneInterfaces.Contains(d.ServiceType))
@@ -294,7 +294,7 @@ public sealed class ContextCoreDiArchitectureTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddContextStorage(MakePostgresOptions());
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         await using var sp = services.BuildServiceProvider();
         var eventSink = sp.GetRequiredService<IContextEventSink>();
@@ -318,7 +318,7 @@ public sealed class ContextCoreDiArchitectureTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddContextStorage(MakePostgresOptions());
-        services.AddContextCore();
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
 
         var allDuplicates = services
             .Where(d => d.ServiceType.IsInterface)

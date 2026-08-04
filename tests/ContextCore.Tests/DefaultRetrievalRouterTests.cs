@@ -593,6 +593,9 @@ public sealed class DefaultRetrievalRouterTests
     // 17. 契约无存储 I/O（反射验证）
     // =========================================================================
 
+    // 旧 Router 接口契约测试：IRetrievalRouter 已标记 [Obsolete]（被 IRouter 取代），
+    // 但作为兼容契约仍需验证其同步、无 I/O 特性，此处按既有约定保留。
+#pragma warning disable CS0618
     [TestMethod]
     public void IRetrievalRouter_HasNoStorageIO_MethodsAreSyncOrReturnRoutingDecisionSet()
     {
@@ -629,6 +632,7 @@ public sealed class DefaultRetrievalRouterTests
     {
         Assert.IsTrue(typeof(DefaultRetrievalRouter).IsSealed);
     }
+#pragma warning restore CS0618
 
     // =========================================================================
     // 辅助方法
