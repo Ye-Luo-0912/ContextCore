@@ -179,6 +179,10 @@ WHERE job_id = @job_id;
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         PostgresJobQueueMetrics.QueueWait.Record((now - job.CreatedAt).TotalMilliseconds);
+        if (now - job.CreatedAt > PostgresJobQueueMetrics.QueueWaitSlo)
+        {
+            PostgresJobQueueMetrics.QueueWaitSloExceeded.Add(1);
+        }
         return running;
     }
 
@@ -265,7 +269,26 @@ SELECT job_id, data FROM updated;
                 }
                 jobs.Add(claimed);
                 PostgresJobQueueMetrics.QueueWait.Record((now - claimed.CreatedAt).TotalMilliseconds);
+                if (now - claimed.CreatedAt > PostgresJobQueueMetrics.QueueWaitSlo)
+                {
+                    PostgresJobQueueMetrics.QueueWaitSloExceeded.Add(1);
+                }
             }
+        }
+
+        // 领取后刷新排队深度 gauge（Queued / WaitingRetry / 租约过期的 Running）。
+        await using (var depthCommand = connection.CreateCommand())
+        {
+            depthCommand.Transaction = transaction;
+            depthCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            depthCommand.CommandText = $"""
+SELECT COUNT(*) FROM {Table("context_jobs")}
+WHERE state = 'Queued' OR state = 'WaitingRetry'
+   OR (state = 'Running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= @now);
+""";
+            depthCommand.Parameters.AddWithValue("now", now);
+            var depth = await depthCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            PostgresJobQueueMetrics.QueueDepth.Record(depth is null ? 0 : Convert.ToInt64(depth));
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

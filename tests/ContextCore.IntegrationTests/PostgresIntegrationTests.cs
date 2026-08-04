@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres;
@@ -736,6 +737,76 @@ public sealed class PostgresIntegrationTests
             // 剩余 1+1 个作业可被继续领取
             var remaining = await queue.AcquireLeaseBatchAsync("worker-1", TimeSpan.FromMinutes(1), take: 4, perWorkspace: 2);
             Assert.AreEqual(2, remaining.Count, "剩余 2 个作业应可被继续领取");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
+    public async Task JobQueue_SloCounterAndDepthGauge_RecordedOnAcquire()
+    {
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        // 强制静态初始化（先于 listener.Start 创建仪表盘，确保 InstrumentPublished 能补发）。
+        _ = PostgresJobQueueMetrics.QueueWaitSlo;
+
+        long sloExceededSum = 0;
+        long depthValue = -1;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name != "ContextCore.Storage.Postgres") return;
+            if (instrument.Name is "contextcore.postgres.jobqueue.wait.slo_exceeded.total"
+                or "contextcore.postgres.jobqueue.depth")
+            {
+                l.EnableMeasurementEvents(instrument, state: null);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, _, _) =>
+        {
+            switch (instrument.Name)
+            {
+                case "contextcore.postgres.jobqueue.wait.slo_exceeded.total":
+                    Interlocked.Add(ref sloExceededSum, value);
+                    break;
+                case "contextcore.postgres.jobqueue.depth":
+                    Interlocked.Exchange(ref depthValue, value);
+                    break;
+            }
+        });
+        listener.Start();
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("jqslo_");
+        try
+        {
+            var queue = new PostgresContextJobQueue(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            // 旧作业：等待 60s > SLO 30s → 领取时计入超标计数。
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "job-slo-old", WorkspaceId = "ws", CollectionId = "col",
+                Kind = ContextJobKind.Compression, State = ContextJobState.Queued,
+                CreatedAt = now - TimeSpan.FromSeconds(60)
+            });
+            // 新作业：未超 SLO。
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "job-slo-fresh", WorkspaceId = "ws", CollectionId = "col",
+                Kind = ContextJobKind.Compression, State = ContextJobState.Queued,
+                CreatedAt = now
+            });
+
+            var claimed = await queue.AcquireLeaseBatchAsync("worker-1", TimeSpan.FromMinutes(1), take: 4, perWorkspace: 4);
+            Assert.AreEqual(2, claimed.Count, "两个作业应都被领取。");
+            Assert.IsTrue(Interlocked.Read(ref sloExceededSum) >= 1,
+                "等待超过 SLO 的作业应计入超标计数。");
+            Assert.AreEqual(0, Interlocked.Read(ref depthValue),
+                "领取全部排队作业后深度 gauge 应为 0。");
         }
         finally
         {
