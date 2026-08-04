@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `9220eab5`（WP-D2 已推送；R30.1 实施中）。
+- **基线**：main @ `45bcceed`（WP-D3 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-D3 Canary Kill Switch 查询 fail-safe + TTL 缓存（P0-13，Override Store 故障回退 V1 而非请求失败）。
+- **最近完成**：WP-E1 节点级 Admission（P0-14，Applied State + 真实 IModelActivationManager 纳入准入）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -74,6 +74,11 @@
   - 运行时 fail-safe（AuthoritativeRetrievalRuntime / AuthoritativePackageRuntime 的 `IsEmergencyOverrideActiveAsync`）：try/catch 包裹 `GetActiveAsync`——`OperationCanceledException` 原样传播（调用方取消应立即传播），其余异常 `LogError` 告警 + 返回 true（按「覆盖活跃」处理强制回退 V1），请求不失败。两个运行时新增可选 `ILogger<T>? logger` 构造参数（默认 null，测试/未注册日志时兼容）。
   - 组合根（ProductionRuntimeExtensions.AddContextCoreRuntime 末尾 `ApplyCanaryOverrideCacheDecorator`）：收集现有 ICanaryEmergencyOverrideStore 注册（AddContextStorage 的 Postgres 实现或 CoreExtensions 的 InMemory 默认），`RemoveService` 移除全部原注册后**单注册**装饰器（避免 enumerable 重复，Microsoft DI 直接解析取最后一个注册，移除后包装语义与之前等价）；`CanaryOverrideCacheOptions` 从配置绑定为单例；未注册任何实现时跳过（运行时 store 为 null 不拦截 canary 流量）。`ResolveOverrideStoreInner` 支持 ServiceDescriptor 的 instance / ImplementationType / ImplementationFactory 三种形态（Postgres 注册为 factory，InMemory 为 ImplementationType）。
   - 测试：新增 `R30G_CanaryOverrideCacheTests`（13 项：TTL 内命中不访问内层、TTL 过期重新读取、负缓存、内层异常原样传播、TrySet 成功/返回 false 均失效缓存、TryClear 成功失效缓存、GetActiveOverridesAsync 绕过缓存、Retrieval/Package 运行时存储故障回退 V1 请求不失败、缓存写穿端到端 Kill Switch 立即生效、组合根单注册 + TTL 配置绑定 + 代理到内层）。验证：build 0 错误（Core / Service / Tests 全绿）；R30G 13/13 + 关联套件（R29H CanaryOverride / R30E / R29H Profile）43/44 通过（唯一失败为既有 11 项之一 ReadinessService_Development_GetRegisteredWorkers）；Canary 定向 71 通过 / 1 跳过 / 0 失败；PublicApi 1 通过 1 跳过（无 Abstractions 变更）。
+- **WP-E1 已完成**（P0-14）：节点级 Admission——当前节点 Applied State + 真实 IModelActivationManager 纳入准入。
+  - 问题：Production Admission 的 model-slot-applied 只验证集群 Desired 状态（DesiredStatus==Active && ActiveModelArtifactId 非空），未验证当前节点是否真正应用并加载期望模型——"集群期望 A、本节点尚未加载模型或仍运行 B" 的节点会通过准入并开始接流量。
+  - 修复（ProductionAdmissionController 实时探针 model-slot-live）：集群 Desired 正常之后追加 `VerifyNodeModelAppliedAsync` 节点级校验——(1) IModelActivationManager 未注册（ModelMode=Deterministic）保持集群 Desired 语义 Pass（向后兼容，R29R 既有测试不受影响）；(2) 已启用模型激活时要求 IModelNodeAppliedStateStore 已注册（缺失 Fail-closed）；(3) 节点已上报 Applied State（无记录 = Fail，"模型可能仍在加载"）；(4) 节点未隔离（Isolated = Fail，含隔离原因）；(5) 节点 AppliedRevision 与集群期望 Revision 一致（`!=` 比较 fail-closed，落后/超前均拒绝）；(6) 本地引擎 ActiveEngine 非空（可推理）；(7) 引擎 ActiveDescriptor.ModelArtifactId 与集群期望一致；(8) 集群 ContentHash 非空时引擎 ContentHash 必须一致（期望为空=旧数据时跳过哈希比对，其余项仍强制）。任一不满足 → model-slot-live Fail → 中间件 503，节点不接流量。
+  - 设计边界：节点级检查放在**请求阶段实时探针**而非启动期静态校验器——静态校验器在 ApplicationStarted 后运行且 Fail 即中止进程，冷启动节点合法地需要时间加载 ONNX 模型（load+warmup 秒级），中止会破坏冷启动；中间件 503 是"节点开始接流量"的正确控制面，Reconciler 持续重试激活直到探针通过。节点标识 = Environment.MachineName（与 ModelStateReconcilerWorker._nodeId 约定一致，跨进程重启稳定）。
+  - 测试：新增 `R30H_AdmissionNodeAppliedStateTests`（13 项：未注册激活管理器跳过节点检查 Pass（向后兼容）、节点已应用+引擎就绪 AllPassed、无 Applied State 记录 Fail、AppliedRevision 落后 Fail、AppliedRevision 超前 Fail（fail-closed）、节点 Isolated Fail、ActiveEngine=null Fail、引擎 ModelArtifactId 不匹配 Fail、引擎 ContentHash 漂移 Fail、AppliedStateStore 缺失 Fail-closed、中间件节点就绪 200、中间件节点未就绪 503 JSON 且 failedChecks 含 model-slot-live）。验证：build 0 错误（Service + Tests 全绿）；R30H 13/13 + R29R 12/12 通过；关联套件 72 项 3 失败全部命中既有 11 项（ReadinessService_Development_GetRegisteredWorkers、ProductionHA_AllNineMandatoryChecksPass、MemoryOnlyBatchLookup_SatisfiesHydrationPipeline）。
 
 ### 性能优化工作包进度
 

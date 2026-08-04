@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Inference.Onnx;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,10 @@ namespace ContextCore.Service.Infrastructure;
 //
 // 实时探针（仅 ProductionHA）：
 // 1. postgres-live — IPostgresConnectionFactory.PingAsync 实时连通性。
-// 2. model-slot-live — 重新查询 cluster model slot 'primary' 是否仍处于 Active。
+// 2. model-slot-live — 重新查询 cluster model slot 'primary' 是否仍处于 Active，
+//    并校验当前节点的 Applied State 与真实 IModelActivationManager（P0-14）：
+//    仅集群 Desired 正常不足以放行——节点必须已上报应用状态、未隔离、且本地引擎
+//    实际加载了期望模型（Model ID / ContentHash / ActiveEngine 可推理）。
 // 3. application-started-live — 应用是否已完成启动（所有 HostedService.StartAsync）。
 //
 // 缓存语义：
@@ -180,8 +184,8 @@ public sealed class ProductionAdmissionController
                 }
                 else
                 {
-                    checks.Add(Pass("model-slot-live",
-                        $"cluster model slot 'primary' 实时状态正常（{slot.ActiveModelArtifactId}，revision={slot.Revision}）。"));
+                    // P0-14：节点级真相——当前节点 Applied State + 真实 IModelActivationManager。
+                    checks.Add(await VerifyNodeModelAppliedAsync(slot, cts.Token).ConfigureAwait(false));
                 }
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -202,6 +206,82 @@ public sealed class ProductionAdmissionController
             ? Pass("application-started-live", "应用已完成启动（所有 HostedService.StartAsync 已触发）。")
             : Fail("application-started-live",
                 "应用尚未完成启动——请求阶段准入在启动完成前拒绝业务流量。"));
+    }
+
+    /// <summary>
+    /// P0-14：校验当前节点是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
+    /// </summary>
+    /// <remarks>
+    /// 原实现只验证 Cluster Slot 的 DesiredStatus==Active 与 ActiveModelArtifactId 非空——
+    /// "集群期望 A、本节点尚未加载模型或仍运行 B" 的节点会通过准入并开始接流量。
+    /// 此处把当前节点的 Applied State（<see cref="IModelNodeAppliedStateStore"/>）与
+    /// 真实 <see cref="IModelActivationManager"/>（引擎 Model ID / ContentHash / ActiveEngine
+    /// 可推理）纳入请求阶段准入：任一不满足即 Fail（中间件 503，节点不接流量）。
+    /// 节点标识与 <see cref="ModelStateReconcilerWorker"/> 的 node_id 约定一致
+    /// （机器名跨进程重启稳定）。未启用模型激活（IModelActivationManager 未注册，
+    /// ModelMode=Deterministic）时保持集群 Desired 语义（无节点级引擎可校验）。
+    /// </remarks>
+    private async Task<ProductionAdmissionCheck> VerifyNodeModelAppliedAsync(
+        ClusterModelSlot slot,
+        CancellationToken cancellationToken)
+    {
+        var activationManager = _services.GetService<IModelActivationManager>();
+        if (activationManager is null)
+        {
+            return Pass("model-slot-live",
+                $"cluster model slot 'primary' 实时状态正常（{slot.ActiveModelArtifactId}，revision={slot.Revision}）。"
+                + "未启用模型激活（IModelActivationManager 未注册），无节点级引擎校验。");
+        }
+
+        var nodeId = Environment.MachineName;
+        var appliedStateStore = _services.GetService<IModelNodeAppliedStateStore>();
+        if (appliedStateStore is null)
+        {
+            return Fail("model-slot-live",
+                $"IModelNodeAppliedStateStore 未注册——已启用模型激活但缺少节点已应用状态存储，"
+                + $"无法校验节点 {nodeId} 的 Applied State。");
+        }
+
+        var failures = new List<string>();
+
+        var applied = await appliedStateStore.GetAsync(nodeId, "primary", cancellationToken).ConfigureAwait(false);
+        if (applied is null)
+        {
+            failures.Add($"节点 {nodeId} 尚未上报已应用状态（无 model_node_applied_state 记录）——模型可能仍在加载或从未应用");
+        }
+        else
+        {
+            if (applied.Isolated)
+            {
+                failures.Add($"节点 {nodeId} 已被隔离（{applied.IsolationReason ?? "未知原因"}）");
+            }
+            if (applied.AppliedRevision != slot.Revision)
+            {
+                failures.Add($"节点 {nodeId} 已应用 Revision={applied.AppliedRevision}，落后于期望 Revision={slot.Revision}");
+            }
+        }
+
+        if (activationManager.ActiveEngine is null)
+        {
+            failures.Add($"节点 {nodeId} 本地引擎未激活（ActiveEngine=null）——无法推理");
+        }
+        if (!string.Equals(activationManager.ActiveDescriptor?.ModelArtifactId, slot.ActiveModelArtifactId, StringComparison.Ordinal))
+        {
+            failures.Add($"节点 {nodeId} 引擎加载模型 '{activationManager.ActiveDescriptor?.ModelArtifactId ?? "(无)"}'，期望 '{slot.ActiveModelArtifactId}'");
+        }
+        // ContentHash 期望为空（旧数据/未设置）时跳过哈希比对，其余项仍强制校验。
+        if (!string.IsNullOrEmpty(slot.ContentHash)
+            && !string.Equals(activationManager.ContentHash, slot.ContentHash, StringComparison.Ordinal))
+        {
+            failures.Add($"节点 {nodeId} 引擎内容哈希 '{activationManager.ContentHash ?? "(空)"}' 与期望 '{slot.ContentHash}' 不一致");
+        }
+
+        return failures.Count == 0
+            ? Pass("model-slot-live",
+                $"cluster model slot 'primary' 实时状态正常（{slot.ActiveModelArtifactId}，revision={slot.Revision}）；"
+                + $"节点 {nodeId} 已应用并加载期望模型（引擎可推理）。")
+            : Fail("model-slot-live",
+                $"cluster model slot 'primary' 期望状态正常，但当前节点未就绪：{string.Join("；", failures)}。");
     }
 
     // ── 结果构造辅助 ────────────────────────────────────────────────────
