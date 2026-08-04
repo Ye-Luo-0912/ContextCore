@@ -71,6 +71,7 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationAgentRunScheduling(),
         new PostgresMigrationModelNodeAppliedStateIsolation(),
         new PostgresMigrationRecoveryCanaryLearningDurability(),
-        new PostgresMigrationToolReconciliationLease()
+        new PostgresMigrationToolReconciliationLease(),
+        new PostgresMigrationAgentRunClaimLease()
     ];
 }

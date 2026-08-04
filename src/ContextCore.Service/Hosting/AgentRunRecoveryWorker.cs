@@ -67,13 +67,23 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// PendingToolExecution（批准）或 Failed（拒绝）后才由 Recovery Worker 重新入队执行。
     /// 周期性重启 AwaitingApproval 会导致 Actor 重复加载审批状态、重复持久化 ApprovalRequested 事件。
     ///
+    /// Queued / Claimed（P0-6/P0-8 执行前状态）不在此列表中——它们由
+    /// PostgresPendingRunClaimer 专属接管（Scheduler Claim Lease），Recovery Worker
+    /// 不与其竞争入队，避免双调度真源；Created 同理（v59 迁移已全量转换为 Queued）。
+    /// 被领取后崩溃的 Run（Claimed 且 claim 过期）由 Claimer 重新领取。
+    ///
+    /// Running（P0-8 新增）：Execution/Fencing Lease 已获取后推进到 Running；
+    /// Worker 崩溃后执行租约过期，Run 停留 Running，由本 Worker 扫描并重新入队，
+    /// 新节点取得过期执行租约后继续执行（Running 且已 flush 的 Run 走 resume 路径；
+    /// 尚未 flush 的 Running 走全新启动——两种路径均安全）。
+    ///
     /// RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
     /// 由本 Worker 在退避门（NextRetryAtUtc）通过后重新入队执行（退避期内跳过，不触发
     /// 超时→LeaseLost 逻辑；LeaseLost 会把等待退避的 Run 误判为卡死并移出恢复路径）。
     /// </remarks>
     private static readonly AgentRunState[] RecoverableStates =
     [
-        AgentRunState.Created,
+        AgentRunState.Running,
         AgentRunState.ContextBuilding,
         AgentRunState.ModelCalling,
         AgentRunState.ToolDispatching,

@@ -137,8 +137,15 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   Reconciliation Running 必须有租约，Worker 崩溃后 ListPendingAsync 重新领取
     ///   过期 Running，杜绝永久卡死；所有 Resolve/Fail/Renew 校验 lease_token + 未过期。
     /// - 唯一键 (run_id, request_id) → (workspace_id, run_id, request_id)（P0-5 完整租户键）。
+    /// v58 → v59，Scheduler Claim Lease + Admission 边界（P0-6/P0-8）：
+    /// - agent_runs 追加 claim_owner / claim_token / claim_expires_at 列：Scheduler Claim
+    ///   Lease 真正落库（领取即写入持有者/令牌/过期时间，行锁释放后其他节点不得重复领取；
+    ///   节点领取后崩溃时 claim 过期后其他节点重新领取）。
+    /// - 既有 Created（state=0）Run 批量转换为 Queued（state=21）：新语义下 Created 只属于
+    ///   InMemory/FileSystem provider，持久化待调度 Run 必须处于 Queued（Admission 已通过），
+    ///   否则 Durable Scheduler 永不领取（P0-6：配额失败的 Run 不得进入可调度状态）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v58";
+    public const string SchemaVersion = "cc-schema-v59";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2040,6 +2047,9 @@ CREATE TABLE IF NOT EXISTS {agentRuns} (
     last_checkpoint_id text NULL,
     last_checkpoint_sequence integer NULL,
     idempotency_key text NULL,
+    claim_owner text NULL,
+    claim_token text NULL,
+    claim_expires_at timestamptz NULL,
     data jsonb NOT NULL DEFAULT jsonb_build_object(),
     PRIMARY KEY (workspace_id, run_id)
 );
@@ -2059,6 +2069,14 @@ ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS priority integer NOT NULL DEFAU
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS max_retries integer NOT NULL DEFAULT 0;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS retry_count integer NOT NULL DEFAULT 0;
 ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS next_retry_at timestamptz NULL;
+
+-- v58 → v59 迁移：为已有 agent_runs 表补充 Scheduler Claim Lease 列
+-- （新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效，幂等。
+--  claim_owner：领取节点标识；claim_token：领取令牌（Release/续期 fencing）；
+--  claim_expires_at：领取过期时间——节点崩溃后其他节点可在过期后重新领取。）
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_owner text NULL;
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_token text NULL;
+ALTER TABLE {agentRuns} ADD COLUMN IF NOT EXISTS claim_expires_at timestamptz NULL;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "session")} ON {agentRuns} (workspace_id, session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_runs", "state")} ON {agentRuns} (state, created_at ASC);

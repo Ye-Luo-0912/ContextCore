@@ -141,7 +141,45 @@ public enum AgentRunState : byte
     /// 不再自动恢复，需运维介入。MaxRetries = 0（默认，不重试）的 Run 失败后保持
     /// <see cref="Failed"/> 终态，不会进入死信。
     /// </summary>
-    DeadLettered = 18
+    DeadLettered = 18,
+
+    /// <summary>
+    /// 等待准入（Admission）：Run 已持久化，但配额预留（IWorkspaceQuotaService.TryConsumeAsync）
+    /// 尚未完成。P0-6 Admission 边界——<see cref="PostgresPendingRunClaimer"/> 永不领取本状态，
+    /// 配额失败前 Run 不可能被调度执行；创建进程在配额判定前崩溃时由领取周期兜底
+    /// 标记为 <see cref="AdmissionRejected"/>（fail-closed，不伪装成可执行）。
+    /// </summary>
+    PendingAdmission = 19,
+
+    /// <summary>
+    /// 准入被拒绝：配额预留失败（workspace 配额耗尽）。终态——客户端收到 429，
+    /// Run 永不进入调度队列，<see cref="PostgresPendingRunClaimer"/> 永不领取。
+    /// 保留行记录（审计：请求曾被受理但因配额被拒），但绝不执行。
+    /// </summary>
+    AdmissionRejected = 20,
+
+    /// <summary>
+    /// 已入队（Admission 通过）：配额已预留，等待 Scheduler Claim Lease 领取入队。
+    /// 由 <see cref="PostgresPendingRunClaimer"/> 原子领取（Queued → <see cref="Claimed"/>）；
+    /// 领取后入队失败（本地队列满）释放回本状态，其他节点可再次领取。
+    /// </summary>
+    Queued = 21,
+
+    /// <summary>
+    /// 已领取（Scheduler Claim Lease 持有中）：本节点负责将该 Run 放入本地执行队列
+    /// （P0-8 两种租约分离——Scheduler Claim 控制"谁负责入队"，Execution/Fencing Lease
+    /// 控制"谁能执行副作用"）。claim 过期后其他节点可重新领取（崩溃恢复）。
+    /// Actor 以本状态为全新启动（事件流为空，从 ContextBuilding 开始）。
+    /// </summary>
+    Claimed = 22,
+
+    /// <summary>
+    /// 执行中（Execution/Fencing Lease 已获取）：Worker 已取得执行槽并持有执行租约，
+    /// Actor 正在运行。与 <see cref="Claimed"/> 的区别：Running 表示执行权（副作用 fence）
+    /// 已确立，只有持租约实例可推进；崩溃后由 Recovery Worker 扫描重新入队。
+    /// Actor 以本状态为全新启动（首次 flush CAS Running → ContextBuilding）。
+    /// </summary>
+    Running = 23
 }
 
 /// <summary>
@@ -317,6 +355,26 @@ public sealed record AgentRun
     /// 依赖恢复后由 Recovery Worker 在退避门通过后重新入队执行；0 表示尚未发生过恢复失败。
     /// </summary>
     public int RecoveryAttempt { get; init; }
+
+    /// <summary>
+    /// Scheduler Claim Lease 持有者标识（P0-8：控制"谁负责把 Run 放入本地队列"）。
+    /// 仅 <see cref="AgentRunState.Claimed"/> 时非空；claim 释放/过期后置空。
+    /// 区别于 Execution/Fencing Lease（agent_run_leases 表，控制"谁能执行副作用"）。
+    /// </summary>
+    public string? ClaimOwner { get; init; }
+
+    /// <summary>
+    /// Scheduler Claim Lease 令牌（唯一随机值）。释放 claim / 续约必须校验令牌匹配，
+    /// 防止过期节点误释放新持有者的 claim（fencing 语义）。
+    /// </summary>
+    public string? ClaimToken { get; init; }
+
+    /// <summary>
+    /// Scheduler Claim Lease 过期时间（UTC）。过期后其他节点可重新领取
+    /// （<see cref="AgentRunState.Claimed"/> 且 claim_expires_at &lt;= now → 重新可领取），
+    /// 防止节点在领取后崩溃导致 Run 永久卡在 Claimed。
+    /// </summary>
+    public DateTimeOffset? ClaimExpiresAtUtc { get; init; }
 }
 
 /// <summary>
@@ -1462,15 +1520,20 @@ public interface IAgentRunStore
 public interface IPersistentAgentRunStore : IAgentRunStore
 {
     /// <summary>
-    /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置。
-    /// 单条 SQL 事务内完成：
-    /// - Created（state=0）且退避门通过（next_retry_at 为 null 或已到期）→ 直接领取，状态不变
-    /// （Actor 以 state=Created 判定全新启动，因此领取不改状态列）；
+    /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置与 Scheduler Claim（P0-8）。
+    /// 单条 SQL 事务内完成，真正写入 claim 租约（不再只打 UpdatedAt 补丁）：
+    /// - Queued（state=21）且退避门通过（next_retry_at 为 null 或已到期）→ 领取 → Claimed（state=22）
+    ///   + claim_owner / claim_token / claim_expires_at；
+    /// - Claimed（state=22）且 claim 已过期（claim_expires_at IS NULL 或 &lt;= now）→ 重新领取
+    ///   （节点领取后崩溃的恢复路径，claim_token 轮换 + 过期时间前移）；
     /// - Failed（state=8）且 max_retries &gt; 0 且 retry_count &lt; max_retries 且退避门通过
-    /// → 重置为 Created + retry_count+1 + next_retry_at=退避时间（事件流同步清空，
-    /// 作为全新启动重试）；
-    /// - 排序 (Priority DESC, CreatedAt ASC, RunId ASC)，LIMIT take；
-    /// - 每 workspace 最多领取 <paramref name="perWorkspace"/> 个（ROW_NUMBER PARTITION BY，
+    ///   → 重置为 Queued + retry_count+1 + next_retry_at=退避时间，再领取 → Claimed
+    ///   （事件流同步清空，作为全新启动重试；不可变 Attempt 化见 WP-C2/P0-9）；
+    /// - RecoveryDependencyUnavailable（state=17）且退避门通过 → 领取 → Claimed；
+    /// - Created（state=0）/ PendingAdmission（state=19）/ AdmissionRejected（state=20）永不领取
+    ///   （P0-6 Admission 边界：配额未通过的 Run 不得进入可调度状态）。
+    /// 排序 (Priority DESC, CreatedAt ASC, RunId ASC)，LIMIT take；
+    /// 每 workspace 最多领取 <paramref name="perWorkspace"/> 个（ROW_NUMBER PARTITION BY，
     /// 公平轮转防止单 workspace 独占批次）。
     /// 领取行由 FOR UPDATE SKIP LOCKED 加锁，多实例并发安全（被锁行跳过，下轮再取）。
     /// </summary>
@@ -1478,13 +1541,52 @@ public interface IPersistentAgentRunStore : IAgentRunStore
     /// <param name="perWorkspace">每 workspace 本批次最多领取数（公平性上限）。</param>
     /// <param name="retryBackoffBase">重试退避基数（重试 i 次后等待 retryBackoffBase × 2^(i-1)）。</param>
     /// <param name="retryBackoffMax">重试退避上限（封顶，防止指数爆炸）。</param>
+    /// <param name="claimOwner">Scheduler Claim Lease 持有者标识（本节点实例 ID）。</param>
+    /// <param name="claimDuration">Scheduler Claim Lease 时长。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>领取的 Run 列表（含重置后的 Created 状态与递增的 RetryCount）。</returns>
+    /// <returns>领取的 Run 列表（状态=Claimed，含 claim 字段与递增的 RetryCount）。</returns>
     ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
         int take,
         int perWorkspace,
         TimeSpan retryBackoffBase,
         TimeSpan retryBackoffMax,
+        string claimOwner,
+        TimeSpan claimDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 原子领取单个 Run（端点 201/202 路径专用）：Queued（state=21）且退避门通过
+    /// → Claimed + Scheduler Claim Lease（claim_owner / claim_token / claim_expires_at）。
+    /// 与 <see cref="ClaimPendingBatchAsync"/> 同一 claim 语义——端点直接入队前必须先
+    /// 取得 Scheduler Claim，防止 Claimer 在另一节点重复领取同一 Run（P0-8 双真源）。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="claimOwner">Scheduler Claim Lease 持有者标识（本节点实例 ID）。</param>
+    /// <param name="claimDuration">Scheduler Claim Lease 时长。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>领取成功返回 Run（状态=Claimed，含 ClaimToken）；不可领取（非 Queued / 已领取 / 退避中）返回 null。</returns>
+    ValueTask<AgentRun?> TryClaimSingleAsync(
+        string workspaceId,
+        string runId,
+        string claimOwner,
+        TimeSpan claimDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 释放 Scheduler Claim（P0-8）：Claimed → Queued，清空 claim 字段。
+    /// 必须校验 claim_token 匹配（fencing——过期节点不得释放新持有者的 claim）。
+    /// 入队失败（本地队列满）与领取周期背压时调用，让其他节点可重新领取。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="claimToken">领取时返回的 claim token。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true = 释放成功；false = claim_token 不匹配或状态非 Claimed（已被接管/推进）。</returns>
+    ValueTask<bool> ReleaseClaimAsync(
+        string workspaceId,
+        string runId,
+        string claimToken,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -2131,6 +2233,13 @@ public sealed class AgentHostOptions
     /// （公平轮转上限，防止单 workspace 独占整批领取）。默认 10。
     /// </summary>
     public int PendingClaimPerWorkspace { get; set; } = 10;
+
+    /// <summary>
+    /// Scheduler Claim Lease 时长（P0-8：领取后到 Run 被放入本地执行队列的有效窗口）。
+    /// 默认 60 秒——应远大于 领取→入队 的本地延迟，且远小于 Run 执行租约（LeaseDuration），
+    /// 确保节点在领取后崩溃时其他节点能快速重新领取（Claimed 且过期 → 可重新领取）。
+    /// </summary>
+    public TimeSpan SchedulerClaimDuration { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Durable Scheduler 每周期最多死信的 Run 数（DeadLetterExhaustedRunsAsync 的 take 上限）。

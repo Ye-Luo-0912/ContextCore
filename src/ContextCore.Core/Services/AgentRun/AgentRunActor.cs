@@ -272,8 +272,14 @@ public sealed class AgentRunActor
         _leaseExpiresAtProvider = leaseExpiresAtProvider;
 
         // 运行时能力补齐：检测 resume 场景
-        // run.State != Created 表示 Run 之前已开始执行（崩溃/重启后由 RecoveryWorker 重新入队）
-        var isResume = run.State != AgentRunState.Created;
+        // 全新启动状态集 = Created（旧路径）+ Queued/Claimed/Running（P0-6/P0-8 引入的
+        // 执行前交接状态）：这些状态代表 Run 尚未产生任何持久化事件（首次 flush 才原子
+        // CAS 到 ContextBuilding 并落库 RunCreated），必须走全新启动路径。
+        // 其余非终态（ContextBuilding/ModelCalling/...）为崩溃恢复场景（resume）。
+        var isResume = run.State != AgentRunState.Created
+            && run.State != AgentRunState.Queued
+            && run.State != AgentRunState.Claimed
+            && run.State != AgentRunState.Running;
 
         // 锛氭寜 Run.AllowedToolIds 杩囨护妯″瀷鍙鐨?Tool Definitions锛堝湪妯″瀷璋冪敤鍓嶈繃婊わ級
         if (run.AllowedToolIds.Count > 0 && _toolDefinitions.Count > 0)

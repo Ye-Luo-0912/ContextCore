@@ -222,11 +222,15 @@ RETURNING data;
         var leaseValidated = leaseToken is not null && fencingToken is not null;
 
         var now = DateTimeOffset.UtcNow;
+        // 终态集合与 AgentRunStateMachine.IsTerminalState 对齐（P0-6：AdmissionRejected 亦是终态，
+        // 配额拒绝后记录 finished_at 供审计/列举）。RecoveryBlocked/RecoveryCorrupted/
+        // ReconciliationRejected 由各自专用路径写 finished_at，此处不重复覆盖。
         var isTerminal = newState == AgentRunState.Completed
                          || newState == AgentRunState.Failed
                          || newState == AgentRunState.Cancelled
                          || newState == AgentRunState.LeaseLost
-                         || newState == AgentRunState.DeadLettered;
+                         || newState == AgentRunState.DeadLettered
+                         || newState == AgentRunState.AdmissionRejected;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -425,28 +429,35 @@ LIMIT @take;
 
     /// <inheritdoc />
     /// <remarks>
-    /// 单条 SQL 事务内完成"领取 Created + 重试重置 Failed + 恢复依赖重试"：
+    /// 单条 SQL 事务内完成"领取 + 真正写入 Scheduler Claim（P0-8）"：
     /// 1. 三层嵌套（Postgres 限制：FOR UPDATE 不能与窗口函数同层）：
     /// 内层 SELECT ... FOR UPDATE SKIP LOCKED（锁定候选行，被锁行跳过下轮再取）；
     /// 中层 ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY priority DESC, created_at ASC, run_id ASC)
     /// 计算每 workspace 内排名（公平轮转上限）；
     /// 外层 WHERE ws_rank &lt;= @per_workspace。
-    /// 2. UPDATE ... FROM eligible：state=8（Failed）且可重试的行重置为 Created + retry_count+1 +
-    /// next_retry_at=指数退避（base × 2^(retry_count-1)，封顶 cap）；Created 行仅锁定领取、状态不变
-    /// （Actor 以 state=Created 判定全新启动，领取不改状态列）。
-    /// state=17（RecoveryDependencyUnavailable）可重试且非终态——退避门
-    /// （NextRetryAtUtc）通过后同样领取，但状态列与事件流均保持不变（Actor 恢复路径将本地
-    /// 状态规范化为 ContextBuilding 后重新执行，事件流按哈希链重放，不回退为全新启动）。
-    /// 3. 重试重置行同步清空事件流（DELETE FROM agent_run_events）与 checkpoint 指针——
-    /// 全新启动需事件链从 sequence 0 重新开始，残留的失败尝试事件会导致 AppendBatchAsync 链校验失败。
-    /// 4. data jsonb 同步打补丁（State/UpdatedAt/RetryCount/NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），
-    /// 保持"state 列 == data JSON.State"的单真源约束（与 TransitionStateAsync 同一模式）。
+    /// 2. tokens CTE 为每行生成唯一 claim_token（md5(random + clock)，单表达式复用保证
+    /// 列与 data jsonb 写入同一令牌）。
+    /// 3. UPDATE ... FROM tokens：领取行统一置为 Claimed（state=22）+ claim_owner / claim_token /
+    /// claim_expires_at——Scheduler Claim Lease 真正落库（不再只打 UpdatedAt 补丁）：
+    ///   - Queued（state=21）→ 领取；
+    ///   - Claimed（state=22）且 claim 已过期 → 重新领取（节点崩溃后其他节点接管）；
+    ///   - Failed（state=8）且可重试 → 重置为 Claimed + retry_count+1 + next_retry_at=指数退避
+    ///     （base × 2^(retry_count-1)，封顶 cap），清空失败字段与 checkpoint 指针；
+    ///   - RecoveryDependencyUnavailable（state=17）退避门通过 → 领取（事件流保留，按哈希链重放）。
+    ///   - Created（state=0）/ PendingAdmission（state=19）/ AdmissionRejected（state=20）永不领取
+    ///     （P0-6 Admission 边界：配额未通过的 Run 不得进入可调度状态）。
+    /// 4. 重试重置行同步清空事件流（DELETE FROM agent_run_events）——全新启动需事件链从 sequence 0
+    /// 重新开始（不可变 Attempt 化见 WP-C2/P0-9）。
+    /// 5. data jsonb 同步打补丁（State/UpdatedAt/ClaimOwner/ClaimToken/ClaimExpiresAtUtc/RetryCount/
+    /// NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），保持"state 列 == data JSON.State"单真源。
     /// </remarks>
     public async ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
         int take,
         int perWorkspace,
         TimeSpan retryBackoffBase,
         TimeSpan retryBackoffMax,
+        string claimOwner,
+        TimeSpan claimDuration,
         CancellationToken cancellationToken = default)
     {
         if (take <= 0)
@@ -457,6 +468,7 @@ LIMIT @take;
         {
             perWorkspace = take;
         }
+        ArgumentException.ThrowIfNullOrWhiteSpace(claimOwner);
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -471,6 +483,8 @@ LIMIT @take;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.Parameters.AddWithValue("take", take);
         command.Parameters.AddWithValue("per_workspace", perWorkspace);
+        command.Parameters.AddWithValue("claim_owner", claimOwner);
+        command.Parameters.AddWithValue("claim_duration", claimDuration > TimeSpan.Zero ? claimDuration : TimeSpan.FromSeconds(60));
         // interval 参数：Npgsql 将 TimeSpan 映射为 interval；LEAST(interval × 2^n, cap) 实现指数退避封顶。
         command.Parameters.AddWithValue("backoff_base", backoffInterval);
         command.Parameters.AddWithValue("backoff_cap", backoffMax);
@@ -486,18 +500,18 @@ WITH eligible AS (
             SELECT workspace_id, run_id, priority, created_at, state
             FROM {Table("agent_runs")}
             WHERE (
-                -- Created 且退避门通过（next_retry_at 为 null 或已到期）
-                (state = 0 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
+                -- Queued（state=21）且退避门通过（next_retry_at 为 null 或已到期）
+                (state = 21 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
                 OR
-                -- Failed 且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
+                -- Claimed（state=22）且 claim 已过期（节点领取后崩溃 → 其他节点接管）
+                (state = 22 AND (claim_expires_at IS NULL OR claim_expires_at <= clock_timestamp()))
+                OR
+                -- Failed（state=8）且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
                 (state = 8 AND max_retries > 0 AND retry_count < max_retries
                  AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
                 OR
                 -- Recovery Integrity State：恢复依赖不可用（state = 17）为可重试状态（非终态），
                 -- 退避门（NextRetryAtUtc）通过后由 Durable Scheduler 领取重新入队。
-                -- 领取不改状态列（CASE WHEN ar.state = 8 的 ELSE 分支仅打 UpdatedAt 补丁），
-                -- Actor 恢复路径将本地状态规范化为 ContextBuilding 后重新执行；事件流保留
-                --（依赖恢复后按哈希链重放，不回退为全新启动）。
                 (state = 17 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
             )
             ORDER BY priority DESC, created_at ASC, run_id ASC
@@ -507,9 +521,18 @@ WITH eligible AS (
     ) ranked
     WHERE ws_rank <= @per_workspace
 ),
+-- 每行唯一 claim_token：同一表达式在列与 data jsonb 中复用（md5(random + clock) 每行仅求值一次）。
+tokens AS (
+    SELECT workspace_id, run_id, was_failed,
+           md5(random()::text || clock_timestamp()::text) AS claim_token
+    FROM eligible
+),
 updated AS (
     UPDATE {Table("agent_runs")} ar
-    SET state = CASE WHEN ar.state = 8 THEN 0 ELSE ar.state END,
+    SET state = 22,
+        claim_owner = @claim_owner,
+        claim_token = t.claim_token,
+        claim_expires_at = clock_timestamp() + @claim_duration,
         retry_count = CASE WHEN ar.state = 8 THEN ar.retry_count + 1 ELSE ar.retry_count END,
         next_retry_at = CASE WHEN ar.state = 8
             THEN clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)
@@ -522,19 +545,28 @@ updated AS (
         last_checkpoint_sequence = CASE WHEN ar.state = 8 THEN NULL ELSE ar.last_checkpoint_sequence END,
         data = CASE WHEN ar.state = 8
             THEN data || jsonb_build_object(
-                'State', to_jsonb('Created'),
+                'State', to_jsonb('Claimed'),
                 'UpdatedAt', to_jsonb(clock_timestamp()),
+                'ClaimOwner', to_jsonb(@claim_owner),
+                'ClaimToken', to_jsonb(t.claim_token),
+                'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration),
                 'RetryCount', to_jsonb(ar.retry_count + 1),
                 'NextRetryAtUtc', to_jsonb(clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)),
                 'FinishedAt', to_jsonb(NULL::text),
                 'FailureReason', to_jsonb(NULL::text),
                 'FinalAnswer', to_jsonb(NULL::text))
-            ELSE data || jsonb_build_object('UpdatedAt', to_jsonb(clock_timestamp())) END
-    FROM eligible e
-    WHERE ar.workspace_id = e.workspace_id AND ar.run_id = e.run_id
-    RETURNING ar.workspace_id, ar.run_id, ar.data, e.was_failed
+            ELSE data || jsonb_build_object(
+                'State', to_jsonb('Claimed'),
+                'UpdatedAt', to_jsonb(clock_timestamp()),
+                'ClaimOwner', to_jsonb(@claim_owner),
+                'ClaimToken', to_jsonb(t.claim_token),
+                'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration))
+            END
+    FROM tokens t
+    WHERE ar.workspace_id = t.workspace_id AND ar.run_id = t.run_id
+    RETURNING ar.workspace_id, ar.run_id, ar.data, ar.claim_token, t.was_failed
 )
-SELECT workspace_id, run_id, data, was_failed FROM updated;
+SELECT workspace_id, run_id, data, claim_token, was_failed FROM updated;
 """;
 
         var runs = new List<AgentRun>();
@@ -547,9 +579,10 @@ SELECT workspace_id, run_id, data, was_failed FROM updated;
                 var run = Serializer.Deserialize<AgentRun>(data);
                 if (run is not null)
                 {
-                    runs.Add(run);
+                    // 从列回填 claim_token（data jsonb 与列同值；防御性校验一致性）。
+                    runs.Add(run with { ClaimToken = reader.GetString(3) });
                 }
-                if (reader.GetBoolean(3))
+                if (reader.GetBoolean(4))
                 {
                     retriedIds.Add((reader.GetString(0), reader.GetString(1)));
                 }
@@ -574,6 +607,112 @@ WHERE workspace_id = ANY(@workspace_ids) AND run_id = ANY(@run_ids);
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return runs;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<AgentRun?> TryClaimSingleAsync(
+        string workspaceId,
+        string runId,
+        string claimOwner,
+        TimeSpan claimDuration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(claimOwner);
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 单行 CTE 生成唯一 claim_token（列与 data jsonb 同一值）。
+        command.CommandText = $"""
+WITH claim AS (
+    SELECT md5(random()::text || clock_timestamp()::text) AS token
+)
+UPDATE {Table("agent_runs")} ar
+SET state = 22,
+    claim_owner = @claim_owner,
+    claim_token = claim.token,
+    claim_expires_at = clock_timestamp() + @claim_duration,
+    updated_at = clock_timestamp(),
+    data = data || jsonb_build_object(
+        'State', to_jsonb('Claimed'),
+        'UpdatedAt', to_jsonb(clock_timestamp()),
+        'ClaimOwner', to_jsonb(@claim_owner),
+        'ClaimToken', to_jsonb(claim.token),
+        'ClaimExpiresAtUtc', to_jsonb(clock_timestamp() + @claim_duration))
+FROM claim
+WHERE ar.workspace_id = @workspace_id AND ar.run_id = @run_id
+  AND ar.state = 21
+  AND (ar.next_retry_at IS NULL OR ar.next_retry_at <= clock_timestamp())
+RETURNING ar.data;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("claim_owner", claimOwner);
+        command.Parameters.AddWithValue("claim_duration", claimDuration > TimeSpan.Zero ? claimDuration : TimeSpan.FromSeconds(60));
+
+        object? result;
+        try
+        {
+            result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            return null;
+        }
+        if (result is null or DBNull)
+        {
+            return null; // 非 Queued / 已被领取 / 退避中 → 不可领取
+        }
+        var data = (string)result;
+        var run = Serializer.Deserialize<AgentRun>(data);
+        if (run is null)
+        {
+            return null;
+        }
+        // data jsonb 已含完整 claim 补丁（State=Claimed + ClaimOwner/ClaimToken/ClaimExpiresAtUtc）。
+        return run;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<bool> ReleaseClaimAsync(
+        string workspaceId,
+        string runId,
+        string claimToken,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(claimToken);
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = 21,
+    claim_owner = NULL,
+    claim_token = NULL,
+    claim_expires_at = NULL,
+    updated_at = clock_timestamp(),
+    data = data || jsonb_build_object(
+        'State', to_jsonb('Queued'),
+        'UpdatedAt', to_jsonb(clock_timestamp()),
+        'ClaimOwner', to_jsonb(NULL::text),
+        'ClaimToken', to_jsonb(NULL::text),
+        'ClaimExpiresAtUtc', to_jsonb(NULL::text))
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+  AND state = 22
+  AND claim_token = @claim_token;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("claim_token", claimToken);
+        var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return affected > 0;
     }
 
     /// <inheritdoc />

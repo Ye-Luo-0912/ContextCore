@@ -189,7 +189,8 @@ public sealed class R29P_DurableRunSchedulerTests
     {
         var store = CreateStoreWithoutConnection();
         var result = await store.ClaimPendingBatchAsync(
-            0, 5, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(30)).ConfigureAwait(false);
+            0, 5, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(30), "test-owner", TimeSpan.FromSeconds(60))
+            .ConfigureAwait(false);
         Assert.AreEqual(0, result.Count, "take<=0 应短路返回空列表（不触库）。");
     }
 
@@ -205,7 +206,7 @@ public sealed class R29P_DurableRunSchedulerTests
 
     /// <summary>
     /// 验证：PostgresPendingRunClaimer 周期性调用 DeadLetterExhaustedRunsAsync +
-    /// ClaimPendingBatchAsync，把领取到的 Created Run 经 AgentKernelHost 入队执行到终态
+    /// ClaimPendingBatchAsync，把领取到的 Queued Run 经 AgentKernelHost 入队执行到终态
     /// （进程重启恢复：持久化的 pending Run 由 claimer 自动接管执行）。
     /// </summary>
     [TestMethod]
@@ -281,7 +282,8 @@ public sealed class R29P_DurableRunSchedulerTests
         WorkspaceId = Ws,
         SessionId = "session-durable-scheduler",
         Task = task,
-        State = AgentRunState.Created,
+        // P0-6/P0-8：持久化路径下 Claimer 只领取 Queued（state=21）Run（Created 永不领取）。
+        State = AgentRunState.Queued,
         Turn = 0,
         ModelCallsUsed = 0,
         CreatedAt = DateTimeOffset.UtcNow,
@@ -509,12 +511,25 @@ public sealed class R29P_DurableRunSchedulerTests
 
         public async ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
             int take, int perWorkspace, TimeSpan retryBackoffBase, TimeSpan retryBackoffMax,
+            string claimOwner, TimeSpan claimDuration,
             CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _claimCalls);
-            return await _inner.ListByStateAsync(AgentRunState.Created, take, null, null, cancellationToken)
+            // P0-6/P0-8：Claimer 领取 Queued（state=21）Run（不再领取 Created）。
+            return await _inner.ListByStateAsync(AgentRunState.Queued, take, null, null, cancellationToken)
                 .ConfigureAwait(false);
         }
+
+        // P0-8 Scheduler Claim 接口成员：本测试走批次领取路径 → 单点领取不可用。
+        public ValueTask<AgentRun?> TryClaimSingleAsync(
+            string workspaceId, string runId, string claimOwner, TimeSpan claimDuration,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<AgentRun?>(null);
+
+        public ValueTask<bool> ReleaseClaimAsync(
+            string workspaceId, string runId, string claimToken,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(false);
 
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)

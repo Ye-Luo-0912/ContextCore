@@ -1140,11 +1140,23 @@ internal static class AgentExecutionEndpoints
 
     /// <summary>
     /// 创建并启动 AgentRun 的处理逻辑（internal static，供端点单元测试直接调用）。
-    /// 流程：幂等创建（CreateOrGetByIdempotencyKeyAsync）→ workspace 配额预留
-    /// （IWorkspaceQuotaService.TryConsumeAsync，Security:Quota:Enabled=true 时）→
-    /// 入队调度（TryEnqueueAsync，非阻塞）。配额预留失败 → 429；队列满 → 429；
-    /// Host 已关闭 → 202（Run 已持久化，由 Recovery 接管）。
     /// </summary>
+    /// <remarks>
+    /// P0-6/P0-7/P0-8 严格 Admission 语义（持久化 store 路径）：
+    /// <list type="number">
+    /// <item>以 PendingAdmission 状态原子创建（Claimer 永不领取；配额判定前 Run 永不进入可调度状态）；</item>
+    /// <item>幂等重放（IdempotencyKey 命中）→ 200 OK；</item>
+    /// <item>配额预留（TryConsumeAsync）失败 → 推进 AdmissionRejected（终态）→ <b>429</b>
+    /// （请求不会被执行——AdmissionRejected 不在 Claimer 候选集，保留行仅作审计）；</item>
+    /// <item>配额成功 → 推进 Queued → TryClaimSingleAsync 取得 Scheduler Claim Lease（P0-8）；</item>
+    /// <item>入队成功 → <b>201</b>（已持久化并成功排入执行队列）；</item>
+    /// <item>本地队列饱和（QueueFull/Closed）→ 释放 Scheduler Claim（回 Queued，其他节点/下周期接管）
+    /// → <b>202</b>（已持久化、等待后台调度）；</item>
+    /// <item>Claim 已被 Claimer 抢先取得 → <b>202</b>（本地不重复入队，避免双调度真源）。</item>
+    /// </list>
+    /// InMemory/FileSystem 路径保持 Created 流程（进程重启后数据即失，无需 Admission 状态机），
+    /// 但 QueueFull 同样返回 202（Run 已持久化，语义不再与 429 混用）。
+    /// </remarks>
     internal static async Task<IResult> CreateAgentRunHandlerAsync(
         CreateRunRequest request,
         IAgentRunStore runStore,
@@ -1203,13 +1215,18 @@ internal static class AgentExecutionEndpoints
             ? new HashSet<string>(toolIds, StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
 
+        // P0-6 Admission 边界：持久化路径以 PendingAdmission 创建（Claimer 永不领取），
+        // 配额预留成功才推进 Queued；InMemory/FileSystem 路径保持 Created（进程重启后数据即失，
+        // 无需 Admission 状态机——Created 仍由 Actor 判定为全新启动）。
+        var persistentStore = runStore as IPersistentAgentRunStore;
+
         var run = new AgentRun
         {
             RunId = runId,
             WorkspaceId = workspaceId,
             SessionId = sessionId,
             Task = request.Task!,
-            State = AgentRunState.Created,
+            State = persistentStore is not null ? AgentRunState.PendingAdmission : AgentRunState.Created,
             Turn = 0,
             ModelCallsUsed = 0,
             CreatedAt = now,
@@ -1257,6 +1274,22 @@ internal static class AgentExecutionEndpoints
                 ct).ConfigureAwait(false);
             if (!consumption.Allowed)
             {
+                // P0-6：配额判定失败 → 推进 AdmissionRejected（终态，持久化路径）。
+                // 429 语义 = 请求未持久化、不会执行：Run 行虽保留（审计），但处于 Claimer
+                // 永不领取的 AdmissionRejected 终态，任何后台调度都不会执行它——Admission 边界不再失效。
+                if (persistentStore is not null)
+                {
+                    try
+                    {
+                        await persistentStore.TransitionStateAsync(
+                            workspaceId, createResult.Run.RunId,
+                            AgentRunState.PendingAdmission, AgentRunState.AdmissionRejected, ct).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // CAS 失败：状态已被并发路径推进（幂等重放/另一节点）→ 以现有状态为准，仍返回 429
+                    }
+                }
                 return Results.Json(
                     new
                     {
@@ -1268,20 +1301,100 @@ internal static class AgentExecutionEndpoints
             }
         }
 
-        // Created: try to enqueue to Host. Queue full → 429 (prompt rejection,
-        // run is persisted, client can poll or Recovery will pick it up);
-        // Host closed → 202 Accepted (run is persisted, Recovery will pick it up).
-        var enqueue = await host.TryEnqueueAsync(createResult.Run, CancellationToken.None).ConfigureAwait(false);
-        var response = ToRunResponse(createResult.Run);
-        return enqueue.Status switch
+        // P0-6：配额预留成功 → 推进 Queued（持久化路径）——进入 Scheduler 可领取状态。
+        // InMemory 路径无此步骤（Created 直接入队）。
+        var admittedRun = createResult.Run;
+        if (persistentStore is not null)
         {
-            AgentRunEnqueueStatus.QueueFull => Results.Json(
-                response,
-                statusCode: StatusCodes.Status429TooManyRequests),
-            AgentRunEnqueueStatus.Closed => Results.Accepted(
-                $"/api/agents/runs/{createResult.Run.RunId}", response),
-            _ => Results.Created($"/api/agents/runs/{createResult.Run.RunId}", response)
-        };
+            try
+            {
+                await persistentStore.TransitionStateAsync(
+                    workspaceId, createResult.Run.RunId,
+                    AgentRunState.PendingAdmission, AgentRunState.Queued, ct).ConfigureAwait(false);
+                admittedRun = admittedRun with { State = AgentRunState.Queued };
+            }
+            catch (InvalidOperationException)
+            {
+                // 已被并发路径推进（幂等重放/另一节点）→ 读取最新状态，以存储事实为准
+                admittedRun = await runStore.GetAsync(workspaceId, createResult.Run.RunId, ct).ConfigureAwait(false)
+                              ?? admittedRun;
+            }
+        }
+
+        // P0-8：入队前先取得 Scheduler Claim Lease（TryClaimSingleAsync）——防止 Claimer 在
+        // 另一节点重复领取同一 Run（双调度真源）。领取成功 → 入队 → 201。
+        var enqueueTarget = admittedRun;
+        if (persistentStore is not null)
+        {
+            var (claimOwner, claimDuration) = ResolveSchedulerClaim(httpContext);
+            var claimed = await persistentStore.TryClaimSingleAsync(
+                workspaceId, admittedRun.RunId, claimOwner, claimDuration, ct).ConfigureAwait(false);
+            if (claimed is not null)
+            {
+                enqueueTarget = claimed;
+            }
+            else
+            {
+                // 不可领取：已被 Claimer 抢先领取 / 状态已离开 Queued（并发取消等）。
+                // 本地不重复入队（避免双调度真源）——Run 已持久化并入调度路径，由持有
+                // Claim 的节点（或 claim 过期后的下一领取周期）负责执行 → 202。
+                return Results.Accepted(
+                    $"/api/agents/runs/{admittedRun.RunId}",
+                    ToRunResponse(admittedRun));
+            }
+        }
+
+        // 入队调度：成功 → 201（已持久化并成功排入执行队列）。
+        // 本地队列饱和（QueueFull/Closed）→ 释放 Scheduler Claim（回 Queued，其他节点/
+        // 下周期接管）→ 202（P0-7：202 = 已持久化、等待后台调度；429 仅保留给配额拒绝/未持久化）。
+        var enqueue = await host.TryEnqueueAsync(enqueueTarget, CancellationToken.None).ConfigureAwait(false);
+        if (enqueue.Status == AgentRunEnqueueStatus.QueueFull || enqueue.Status == AgentRunEnqueueStatus.Closed)
+        {
+            if (persistentStore is not null && enqueueTarget.ClaimToken is not null)
+            {
+                try
+                {
+                    await persistentStore.ReleaseClaimAsync(
+                        workspaceId, enqueueTarget.RunId, enqueueTarget.ClaimToken, CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // 释放失败非致命：claim 过期后由其他节点接管（fail-open 于调度路径，
+                    // 不阻断 202 返回——Run 已持久化，由 Claimer 下周期或 claim 过期后接管）
+                }
+            }
+            return Results.Accepted(
+                $"/api/agents/runs/{enqueueTarget.RunId}",
+                ToRunResponse(enqueueTarget));
+        }
+
+        return Results.Created($"/api/agents/runs/{enqueueTarget.RunId}", ToRunResponse(enqueueTarget));
+    }
+
+    /// <summary>
+    /// 解析 Scheduler Claim Lease 参数（P0-8）：Owner 优先取 AgentHostOptions.Owner，
+    /// 否则生成 host-{MachineName}-{guid}；Duration 取 AgentHostOptions.SchedulerClaimDuration（默认 60s）。
+    /// </summary>
+    private static (string Owner, TimeSpan Duration) ResolveSchedulerClaim(HttpContext httpContext)
+    {
+        var options = httpContext.RequestServices.GetService<AgentHostOptions>();
+        var duration = options is not null && options.SchedulerClaimDuration > TimeSpan.Zero
+            ? options.SchedulerClaimDuration
+            : TimeSpan.FromSeconds(60);
+        var owner = options?.Owner;
+        if (string.IsNullOrWhiteSpace(owner))
+        {
+            try
+            {
+                owner = $"host-{Environment.MachineName}-{Guid.NewGuid():N}";
+            }
+            catch
+            {
+                owner = $"host-{Guid.NewGuid():N}";
+            }
+        }
+        return (owner, duration);
     }
 
 }

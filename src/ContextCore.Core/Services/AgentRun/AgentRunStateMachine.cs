@@ -19,21 +19,21 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// <remarks>
 /// 合法流转图（与 <see cref="AgentRunState"/> 注释一致）：
 /// <code>
-/// Created → ContextBuilding → ModelCalling → AwaitingApproval
-/// ↓ ↓ ↓ ↓
-/// └───────────┴────────────────┴───────────────┘
-/// ↓
-/// ToolDispatching → AwaitingApproval（需审批时挂起）
-/// ↓ ↓
-/// └────────────┘
-/// ↓
-/// Observing → Checkpointing
-/// ↓ ↓ ↓
-/// └────────────┴────────────┘
-/// ↓
-/// ┌────── Completed
-/// ├────── Failed
-/// └──── Cancelled (仅由外部取消触发)
+/// PendingAdmission → Queued → Claimed → Running → ContextBuilding → ModelCalling → AwaitingApproval
+///     │                     └(释放)─────────┘                  ↓ ↓ ↓ ↓
+///     └→ AdmissionRejected（终态）                            └───────────┴────────────────┴───────────────┘
+///                                                             ↓
+///                                                             ToolDispatching → AwaitingApproval（需审批时挂起）
+///                                                             ↓ ↓
+///                                                             └────────────┘
+///                                                             ↓
+///                                                             Observing → Checkpointing
+///                                                             ↓ ↓ ↓
+///                                                             └────────────┴────────────┘
+///                                                             ↓
+///                                                             ┌────── Completed
+///                                                             ├────── Failed
+///                                                             └──── Cancelled (仅由外部取消触发)
 /// </code>
 /// 任意状态可跳转到 Failed（异常）或 Cancelled（用户取消）。
 /// Checkpointing 后回到 ContextBuilding 开启下一轮循环。
@@ -67,13 +67,15 @@ public static class AgentRunStateMachine
 
         if (to == AgentRunState.LeaseLost)
         {
-            // LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled/ReconciliationRejected。
-            // Completed/Cancelled 是确定终态，不应被丢租覆盖；ReconciliationRejected 是裁决终态，也不应被丢租覆盖。
-            if (from == AgentRunState.Completed || from == AgentRunState.Cancelled || from == AgentRunState.ReconciliationRejected)
+            // LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled/ReconciliationRejected/AdmissionRejected。
+            // Completed/Cancelled 是确定终态，不应被丢租覆盖；ReconciliationRejected 是裁决终态，也不应被丢租覆盖；
+            // AdmissionRejected 是准入拒绝终态（P0-6），同样不应被丢租覆盖。
+            if (from == AgentRunState.Completed || from == AgentRunState.Cancelled
+                || from == AgentRunState.ReconciliationRejected || from == AgentRunState.AdmissionRejected)
             {
                 throw new InvalidOperationException(
                     $"Agent Run 状态机非法转换：{from} 不可流转到 {to}。" +
-                    $"Completed/Cancelled/ReconciliationRejected 已是确定终态，不应被标记为 LeaseLost。");
+                    $"Completed/Cancelled/ReconciliationRejected/AdmissionRejected 已是确定终态，不应被标记为 LeaseLost。");
             }
             return;
         }
@@ -83,7 +85,7 @@ public static class AgentRunStateMachine
         {
             throw new InvalidOperationException(
                 $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
-                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered）不可再推进。");
+                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered/AdmissionRejected）不可再推进。");
         }
 
         // 恢复失败状态（fail-closed）：任意非终态可跳入。
@@ -101,20 +103,22 @@ public static class AgentRunStateMachine
         {
             throw new InvalidOperationException(
                 $"Agent Run 状态机非法转换：{from} → {to} 不在合法流转图中。" +
-                $"合法流转：Created → ContextBuilding → ModelCalling → AwaitingApproval → " +
-                $"ToolDispatching → Observing → Checkpointing → ContextBuilding（下一轮）/ Completed；" +
+                $"合法流转：PendingAdmission → Queued → Claimed → Running → ContextBuilding → ModelCalling → " +
+                $"AwaitingApproval → ToolDispatching → Observing → Checkpointing → ContextBuilding（下一轮）/ Completed；" +
                 $"任意状态可跳转到 Failed/Cancelled；LeaseLost 仅可由非 Completed/Cancelled 状态跳入（P0-5）。");
         }
     }
 
     /// <summary>
     /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost / ReconciliationRejected /
-    /// RecoveryBlocked / RecoveryCorrupted / DeadLettered）。
+    /// RecoveryBlocked / RecoveryCorrupted / DeadLettered / AdmissionRejected）。
     /// </summary>
     /// <remarks>
     /// <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 不是终态：它表示恢复依赖（事件存储）
     /// 暂时不可用，fail-closed 下不得回退为全新启动，但依赖恢复后由恢复 Worker 在退避门
     /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（退避重试）。
+    /// <see cref="AgentRunState.AdmissionRejected"/> 是终态（P0-6 Admission 边界）：
+    /// 配额预留失败的 Run 永不进入调度队列，保留行仅作审计。
     /// </remarks>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
@@ -126,7 +130,8 @@ public static class AgentRunStateMachine
            || state == AgentRunState.ReconciliationRejected
            || state == AgentRunState.RecoveryBlocked
            || state == AgentRunState.RecoveryCorrupted
-           || state == AgentRunState.DeadLettered;
+           || state == AgentRunState.DeadLettered
+           || state == AgentRunState.AdmissionRejected;
 
     /// <summary>
     /// 判断指定状态是否为恢复失败状态（RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable）。
@@ -149,8 +154,27 @@ public static class AgentRunStateMachine
     private static bool IsValidForwardTransition(AgentRunState from, AgentRunState to)
         => from switch
         {
-            // Created → ContextBuilding（启动）
+            // Created → ContextBuilding（启动；InMemory / FileSystem provider 路径）
             AgentRunState.Created => to == AgentRunState.ContextBuilding,
+
+            // P0-6 Admission：PendingAdmission → Queued（配额预留成功）/ AdmissionRejected（配额失败，终态）。
+            // 两者均不进入 Claimer 候选集；AdmissionRejected 不可再推进（终态已短路）。
+            AgentRunState.PendingAdmission => to == AgentRunState.Queued
+                                               || to == AgentRunState.AdmissionRejected,
+
+            // P0-8 Scheduler Claim：Queued → Claimed（领取 Scheduler Claim Lease）。
+            // 入队失败释放后回到 Queued，其他节点可再次领取。
+            // / ContextBuilding（防御：Queued 直接到达 Actor 时按全新启动处理——执行前状态）。
+            AgentRunState.Queued => to == AgentRunState.Claimed
+                                    || to == AgentRunState.ContextBuilding,
+
+            // P0-8：Claimed → Running（Execution/Fencing Lease 已获取，执行权确立）
+            // / ContextBuilding（Actor 首次 flush：领取后直接开始执行，跳过显式 Running 推进的兼容路径）。
+            AgentRunState.Claimed => to == AgentRunState.Running
+                                      || to == AgentRunState.ContextBuilding,
+
+            // Running → ContextBuilding（Actor 首次 flush：全新启动，从构建上下文开始）。
+            AgentRunState.Running => to == AgentRunState.ContextBuilding,
 
             // ContextBuilding → ModelCalling（开始调用模型）
             // / AwaitingReconciliation（轮次结束且存在未裁决高风险 Tool，暂停等待对账）

@@ -837,8 +837,20 @@ public sealed class R29H_AgentRunProcessRestartTests
         // B3 Durable Scheduler 接口成员：进程重启测试不使用领取/死信路径 → 返回空。
         public ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
             int take, int perWorkspace, TimeSpan retryBackoffBase, TimeSpan retryBackoffMax,
+            string claimOwner, TimeSpan claimDuration,
             CancellationToken cancellationToken = default)
             => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
+
+        // P0-8 Scheduler Claim 接口成员：进程重启测试不使用领取路径 → 不可领取/释放失败。
+        public ValueTask<AgentRun?> TryClaimSingleAsync(
+            string workspaceId, string runId, string claimOwner, TimeSpan claimDuration,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<AgentRun?>(null);
+
+        public ValueTask<bool> ReleaseClaimAsync(
+            string workspaceId, string runId, string claimToken,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(false);
 
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)

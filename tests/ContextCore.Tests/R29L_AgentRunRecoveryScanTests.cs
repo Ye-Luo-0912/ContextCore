@@ -147,9 +147,11 @@ public sealed class R29L_AgentRunRecoveryScanTests
         var deadline = now.AddHours(1);     // 自身超时未到期（Worker 应 continue 而非标记终态）
 
         // 与 AgentRunRecoveryWorker.RecoverableStates 一致的 7 个可恢复状态
+        // （P0-6/P0-8：Created 由 v59 迁移全量转换为 Queued，归属 Claimer；
+        //  Recovery Worker 接管执行中崩溃的 Running Run——执行租约过期后重新入队）。
         var states = new[]
         {
-            AgentRunState.Created,
+            AgentRunState.Running,
             AgentRunState.ContextBuilding,
             AgentRunState.ModelCalling,
             AgentRunState.ToolDispatching,
@@ -323,8 +325,20 @@ public sealed class R29L_AgentRunRecoveryScanTests
         // B3 Durable Scheduler 接口成员：恢复扫描测试不使用领取/死信路径 → 返回空。
         public ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
             int take, int perWorkspace, TimeSpan retryBackoffBase, TimeSpan retryBackoffMax,
+            string claimOwner, TimeSpan claimDuration,
             CancellationToken cancellationToken = default)
             => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
+
+        // P0-8 Scheduler Claim 接口成员：恢复扫描测试不使用领取路径 → 不可领取/释放失败。
+        public ValueTask<AgentRun?> TryClaimSingleAsync(
+            string workspaceId, string runId, string claimOwner, TimeSpan claimDuration,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<AgentRun?>(null);
+
+        public ValueTask<bool> ReleaseClaimAsync(
+            string workspaceId, string runId, string claimToken,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(false);
 
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)

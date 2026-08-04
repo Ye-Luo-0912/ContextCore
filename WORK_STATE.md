@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `10c86ee2`（TODO.md 路线图更新已推送；R30.1 实施中）。
+- **基线**：main @ `6e9d8c11`（WP-A2 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-A2 对账原子裁决 + 租约（P0-3 + P0-4 + P0-5）。
+- **最近完成**：WP-B 调度 Admission + 严格入队语义 + Scheduler Claim Lease（P0-6 + P0-7 + P0-8）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -34,6 +34,13 @@
   - P0-4 修复：租约列（lease_owner / lease_token / lease_expires_at / fencing_token / attempt_count / next_attempt_at / last_error）；`TryBeginAsync` 用 CTE `FOR UPDATE SKIP LOCKED`（Pending 或租约已过期的 Running）领取并 fencing+1 / attempt+1；`ListPendingAsync` 重新拾取过期 Running（含 next_attempt_at 退避门）；Renew/Reset/Terminal 全部校验 `lease_token = @token AND lease_expires_at > clock_timestamp()`；Coordinator Worker 路径 TryBegin → Handler 期间 30s 心跳续租 → 原子提交，Handler 异常回退 Pending（last_error + 30s 退避）。
   - P0-5 修复：所有裁决入口先 `TryBeginAsync` 原子取得裁决权再提交 Journal（人工 resolve 端点与自动 Handler 竞争只有一个赢家）；schema v58（迁移 `PostgresMigrationToolReconciliationLease` 0005：7 租约列 + UNIQUE(workspace_id, run_id, request_id) 重建）。
   - 测试：新增 `R30X_ReconciliationLeaseAtomicTests`（14 项：租约互斥/过期接管/fencing 递增/续租校验/退避/终态校验/七步原子集成含 Run 推进+审计链/ArbitrationLost/VersionMismatch/AlreadyTerminal/NotFound/租户键幂等/协调器 busy→3）；更新 R29H（租约先行 + 真实 runId 租户键 + 退避语义）与 R29H_Postgres（租约先行）；Service.Tests 端点测试 MarkRejected 改租约先行。验证：build 0 错误 0 警告；定向 44 通过（R29H + R30X + R29S + PublicApi）+ Service.Tests 2 通过。
+- **WP-B 已完成**（P0-6 + P0-7 + P0-8）：调度 Admission + 严格入队语义 + Scheduler Claim Lease。
+  - 状态机（Abstractions，PublicApi baseline 已更新）：新增 `PendingAdmission=19` / `AdmissionRejected=20` / `Queued=21` / `Claimed=22` / `Running=23`（原 Created 由 v59 迁移一次性转 Queued）；`AgentRun` 新增 ClaimOwner/ClaimToken/ClaimExpiresAtUtc；`AgentHostOptions.SchedulerClaimDuration`（默认 60s）；`IPersistentAgentRunStore` 新增 `TryClaimSingleAsync` / `ReleaseClaimAsync`，`ClaimPendingBatchAsync` 增加 claimOwner/claimDuration 参数。
+  - P0-6 修复（原子 Admission 边界）：持久化路径创建即 `PendingAdmission`（配额校验前不可被 Claimer 领取）；配额失败 `PendingAdmission→AdmissionRejected`（终态，设置 finished_at）→ 429；配额通过 → `Queued` → Claim → 入队 → 201。配额被拒的 Run 永不进入 Claimer 可领取状态，Admission 边界由状态机强制（Claimer 只认 Queued/过期 Claimed）。
+  - P0-7 修复（严格 429/202/201 语义）：429 = 请求未持久化（AdmissionRejected，不执行、不重发）；202 = Run 已持久化但本地队列饱和或 Claim 已被后台 Claimer 领取（等待后台调度）；201 = 已持久化并成功入队。InMemory 路径 QueueFull 也由 429 改为 202（原来混用 429 语义）。
+  - P0-8 修复（两种 Lease 分离）：Scheduler Claim Lease 控制"谁把 Run 放入本地队列"——`ClaimPendingBatchAsync`（CTE 内层 FOR UPDATE SKIP LOCKED + ROW_NUMBER per-workspace 公平）领取 Queued/过期 Claimed 时写入 claim_owner/claim_token/claim_expires_at 并置 Claimed（不再只更新 updated_at）；`TryClaimSingleAsync` 供 API 入队路径单条领取；`ReleaseClaimAsync` 按 claim_token 释放（QueueFull/Closed 时归还未入队 Run 的 claim，防 Claimer 重复领取）。Execution/Fencing Lease 仍由 AgentKernelHost 控制"谁能执行副作用"——执行租约取得后 fenced `Claimed→Running` 推进（lease_token/fencing_token 校验，0 行容忍重读），Actor 全新启动状态集含 Queued/Claimed/Running，RecoveryWorker 只认 Running 起（Queued/Claimed 归 Claimer 专属，防双执行）。
+  - Schema v59：迁移 `PostgresMigrationAgentRunClaimLease` 0006（3 claim 列 + Created→Queued 批量转换 + data jsonb State 同步）；基线 DDL 与 v52→v53 ALTER 后补充 claim 列。
+  - 测试：新增 `R30Y_SchedulerClaimAdmissionTests`（12 项：迁移声明/DDL 列/状态机合法流转/单条领取写租约/已领取返回 null/按 token 释放/批领取永不拿 Created|PendingAdmission|AdmissionRejected/过期可重领/429 配额拒绝/201 全链路到终态/202 队列满释放/202 Claim 被抢占）；更新 R29P/R29L/R29Q/R29H 假 store 与新接口签名；SchemaVersion 断言 v59。验证：build 0 错误；定向 112 通过 / 2 跳过 / 0 失败（R29P+R29L+R29Q+R30B+R29S+R30Y+R29H×3+PostgresStorage+PublicApi）。
 
 ### 性能优化工作包进度
 

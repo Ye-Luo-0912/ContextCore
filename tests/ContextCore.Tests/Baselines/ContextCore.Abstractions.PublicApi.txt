@@ -68,10 +68,12 @@ F:ContextCore.Abstractions.AgentRunEventType.StateTransition
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallCompleted
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallStarted
 F:ContextCore.Abstractions.AgentRunEventType.ToolReconciliationResolved
+F:ContextCore.Abstractions.AgentRunState.AdmissionRejected
 F:ContextCore.Abstractions.AgentRunState.AwaitingApproval
 F:ContextCore.Abstractions.AgentRunState.AwaitingReconciliation
 F:ContextCore.Abstractions.AgentRunState.Cancelled
 F:ContextCore.Abstractions.AgentRunState.Checkpointing
+F:ContextCore.Abstractions.AgentRunState.Claimed
 F:ContextCore.Abstractions.AgentRunState.Completed
 F:ContextCore.Abstractions.AgentRunState.ContextBuilding
 F:ContextCore.Abstractions.AgentRunState.Created
@@ -80,12 +82,15 @@ F:ContextCore.Abstractions.AgentRunState.Failed
 F:ContextCore.Abstractions.AgentRunState.LeaseLost
 F:ContextCore.Abstractions.AgentRunState.ModelCalling
 F:ContextCore.Abstractions.AgentRunState.Observing
+F:ContextCore.Abstractions.AgentRunState.PendingAdmission
 F:ContextCore.Abstractions.AgentRunState.PendingToolExecution
+F:ContextCore.Abstractions.AgentRunState.Queued
 F:ContextCore.Abstractions.AgentRunState.ReconciliationRejected
 F:ContextCore.Abstractions.AgentRunState.ReconciliationRunning
 F:ContextCore.Abstractions.AgentRunState.RecoveryBlocked
 F:ContextCore.Abstractions.AgentRunState.RecoveryCorrupted
 F:ContextCore.Abstractions.AgentRunState.RecoveryDependencyUnavailable
+F:ContextCore.Abstractions.AgentRunState.Running
 F:ContextCore.Abstractions.AgentRunState.ToolDispatching
 F:ContextCore.Abstractions.AgentRuntimeKind.ClaudeCode
 F:ContextCore.Abstractions.AgentRuntimeKind.Codex
@@ -2488,8 +2493,10 @@ M:ContextCore.Abstractions.IPerformanceMonitor.RecordExecutionTime(System.String
 M:ContextCore.Abstractions.IPerformanceMonitor.RecordFallback(System.String, System.String, System.Double)
 M:ContextCore.Abstractions.IPerformanceMonitor.ShouldFallbackToV20(System.String)
 M:ContextCore.Abstractions.IPersistentAgentApprovalStore.ResolveApprovalAndAdvanceRunAsync(System.String, System.String, System.String, ContextCore.Abstractions.AgentRunState, ContextCore.Abstractions.AgentApprovalStatus, System.String, System.String, ContextCore.Abstractions.AgentRunEvent, System.Threading.CancellationToken, System.String, System.Nullable<ContextCore.Abstractions.AgentRunState>)
-M:ContextCore.Abstractions.IPersistentAgentRunStore.ClaimPendingBatchAsync(System.Int32, System.Int32, System.TimeSpan, System.TimeSpan, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPersistentAgentRunStore.ClaimPendingBatchAsync(System.Int32, System.Int32, System.TimeSpan, System.TimeSpan, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPersistentAgentRunStore.DeadLetterExhaustedRunsAsync(System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPersistentAgentRunStore.ReleaseClaimAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPersistentAgentRunStore.TryClaimSingleAsync(System.String, System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.DeleteRunAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.GetRollbackRecordByRunAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.GetRunAsync(System.String, System.Threading.CancellationToken)
@@ -5823,6 +5830,7 @@ P:ContextCore.Abstractions.AgentHostOptions.PendingClaimInterval (get|set)
 P:ContextCore.Abstractions.AgentHostOptions.PendingClaimPerWorkspace (get|set)
 P:ContextCore.Abstractions.AgentHostOptions.RetryBackoffBase (get|set)
 P:ContextCore.Abstractions.AgentHostOptions.RetryBackoffMax (get|set)
+P:ContextCore.Abstractions.AgentHostOptions.SchedulerClaimDuration (get|set)
 P:ContextCore.Abstractions.AgentHostOptions.WorkerCount (get|set)
 P:ContextCore.Abstractions.AgentInput.RequiredIds (get|init)
 P:ContextCore.Abstractions.AgentInput.RequiredTags (get|init)
@@ -5880,6 +5888,9 @@ P:ContextCore.Abstractions.AgentRetrievalQuery.Text (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Type (get|init)
 P:ContextCore.Abstractions.AgentRetrievalQuery.Weight (get|init)
 P:ContextCore.Abstractions.AgentRun.AllowedToolIds (get|init)
+P:ContextCore.Abstractions.AgentRun.ClaimExpiresAtUtc (get|init)
+P:ContextCore.Abstractions.AgentRun.ClaimOwner (get|init)
+P:ContextCore.Abstractions.AgentRun.ClaimToken (get|init)
 P:ContextCore.Abstractions.AgentRun.CostBudget (get|init)
 P:ContextCore.Abstractions.AgentRun.CreatedAt (get|init)
 P:ContextCore.Abstractions.AgentRun.DeadlineAt (get|init)

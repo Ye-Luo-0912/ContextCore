@@ -12,19 +12,23 @@ namespace ContextCore.Service.Hosting;
 // 实现跨进程重启恢复的 Durable Run 调度：
 // 1. 死信：把重试耗尽（Failed 且 retry_count >= max_retries）的 Run 原子标记为
 // DeadLettered（终态，保留 failure_reason / 事件流作为审计证据）。
-// 2. 领取：SKIP LOCKED 原子领取 Created / 可重试 Failed Run（含重试重置为 Created +
-// retry_count+1 + 指数退避），按优先级倒序 + 每 workspace 公平上限。
+// 2. 领取：SKIP LOCKED 原子领取 Queued / 可重试 Failed / RecoveryDependencyUnavailable Run
+// （P0-6/P0-8：Created/PendingAdmission/AdmissionRejected 永不领取），按优先级倒序 +
+// 每 workspace 公平上限；领取即写入 Scheduler Claim Lease（claim_owner / claim_token /
+// claim_expires_at），不再只打 UpdatedAt 补丁。
 // 3. 入队：领取到的 Run 经 <see cref="AgentKernelHost.TryEnqueueAsync"/> 入队执行；
-// 队列满（QueueFull）时停止本周期领取（背压——Run 已持久化，下周期再取）。
+// 队列满（QueueFull）时释放当前 Run 的 Claim（回 Queued）并停止本周期领取
+// （背压——Run 已持久化，下周期再取）。
 //
 // 设计边界：
 // 1. 仅对持久化 <see cref="IAgentRunStore"/> 生效（IPersistentAgentRunStore 标记）。
 // InMemory store 进程重启后数据丢失，无 Run 可领取——worker 检测到非持久化
 // 实现后立即退出（no-op）。
 // 2. 幂等性：SKIP LOCKED 保证多实例并发领取时同一 Run 仅被一个实例领走；
+// claim_token fencing 保证释放/接管只作用于当前持有者（过期节点不得释放新持有者的 claim）；
 // <see cref="AgentKernelHost"/> 的 _activeRuns 去重防止同进程重复入队。
-// 3. 领取不改 Created 状态（Actor 以 state=Created 判定全新启动）；
-// 重试重置走原子 UPDATE（state Failed→Created + 事件流清空），跨实例安全。
+// 3. 领取写入 Claimed（state=22）+ Scheduler Claim Lease；AgentKernelHost 取得
+// Execution/Fencing Lease 后再推进 Claimed → Running（P0-8 两种 Lease 分离）。
 // 4. 异常隔离：单个周期失败不中断轮询循环（catch + log）。
 // ===========================================================================
 
@@ -36,6 +40,8 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
 {
     private readonly IServiceProvider _services;
     private readonly ILogger<PostgresPendingRunClaimer> _logger;
+    // P0-8：本进程稳定的 Scheduler Claim Lease 持有者标识（观测用：哪个节点领取了哪些 Run）。
+    private readonly string _claimOwner;
 
     public PostgresPendingRunClaimer(
         IServiceProvider services,
@@ -43,6 +49,14 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        try
+        {
+            _claimOwner = $"claimer-{Environment.MachineName}-{Guid.NewGuid():N}";
+        }
+        catch
+        {
+            _claimOwner = $"claimer-{Guid.NewGuid():N}";
+        }
     }
 
     /// <inheritdoc />
@@ -120,6 +134,11 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
         var deadLetterBatch = options.DeadLetterBatchSize > 0 ? options.DeadLetterBatchSize : 50;
         var claimBatch = options.PendingClaimBatchSize > 0 ? options.PendingClaimBatchSize : 50;
         var perWorkspace = options.PendingClaimPerWorkspace > 0 ? options.PendingClaimPerWorkspace : 10;
+        // P0-8：Scheduler Claim Lease 时长（节点领取后崩溃时，过期后其他节点重新领取）。
+        var claimDuration = options.SchedulerClaimDuration > TimeSpan.Zero
+            ? options.SchedulerClaimDuration
+            : TimeSpan.FromSeconds(60);
+        var claimOwner = options.Owner ?? _claimOwner;
         // Recovery Integrity State：人工介入告警接收器（未注册时跳过告警，best-effort 钩子）。
         var alertSink = scope.ServiceProvider.GetService<IRecoveryAlertSink>();
 
@@ -149,11 +168,14 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
         }
 
         // 2. 领取 pending Run（SKIP LOCKED，优先级倒序 + 每 workspace 公平上限）。
+        // P0-8：Scheduler Claim Lease 真正落库（claim_owner / claim_token / claim_expires_at）——
+        // 领取即写入持有者/令牌/过期时间，事务提交后其他节点不得重复领取同一 Run。
         IReadOnlyList<AgentRun> claimed;
         try
         {
             claimed = await store.ClaimPendingBatchAsync(
-                claimBatch, perWorkspace, options.RetryBackoffBase, options.RetryBackoffMax, cancellationToken)
+                claimBatch, perWorkspace, options.RetryBackoffBase, options.RetryBackoffMax,
+                claimOwner, claimDuration, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -179,10 +201,33 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
             var result = await host.TryEnqueueAsync(run, cancellationToken).ConfigureAwait(false);
             if (result.Status == AgentRunEnqueueStatus.QueueFull || result.Status == AgentRunEnqueueStatus.Closed)
             {
-                // 背压：队列已满 → 停止本周期领取（Run 已持久化，下周期再取）。
+                // 背压：队列已满 → 释放当前 Run 的 Scheduler Claim（回 Queued，其他节点可重新领取），
+                // 并停止本周期领取（Run 已持久化，下周期再取）。
+                // P0-8：必须释放 claim，否则本节点崩溃后该 Run 直到 claim 过期才被重新调度，
+                // 且同一 Run 的 claim 长期占住候选前列。
+                if (run.ClaimToken is not null)
+                {
+                    try
+                    {
+                        var released = await store.ReleaseClaimAsync(
+                            run.WorkspaceId, run.RunId, run.ClaimToken, cancellationToken).ConfigureAwait(false);
+                        if (!released)
+                        {
+                            _logger.LogDebug(
+                                "PostgresPendingRunClaimer: Run {RunId} 的 Scheduler Claim 释放失败（claim_token 不匹配——已被接管/推进），跳过。",
+                                run.RunId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            "PostgresPendingRunClaimer: 释放 Run {RunId} 的 Scheduler Claim 失败（claim 过期后由其他节点接管）。",
+                            run.RunId);
+                    }
+                }
                 _logger.LogInformation(
-                    "PostgresPendingRunClaimer: 调度队列已满（{Depth}/{Capacity}），本周期停止领取。",
-                    result.QueueDepth, result.Capacity);
+                    "PostgresPendingRunClaimer: 调度队列已满（{Depth}/{Capacity}），释放 Run {RunId} 的 Scheduler Claim 并停止本周期领取。",
+                    result.QueueDepth, result.Capacity, run.RunId);
                 break;
             }
             if (result.Status == AgentRunEnqueueStatus.Accepted)
