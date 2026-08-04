@@ -330,6 +330,13 @@ public sealed class AgentRunActor
         else
         {
             // 全新启动：记录 RunCreated 事件（审计起点）— 缓冲到 _pendingTurnEvents，待 Turn 结束批量提交
+            if (run.RetryCount > 0)
+            {
+                // 不可变 Attempt：重试尝试在既有事件链上续写（不删除前序 Attempt 历史）。
+                // 先写入 RunRetryScheduled（Attempt 边界锚点）+ AttemptStarted 标记，
+                // 再续 RunCreated——恢复重放以最后一个 RunRetryScheduled 为界只重放当前 Attempt。
+                state = await BeginRetryAttemptAsync(state, cancellationToken).ConfigureAwait(false);
+            }
             state = BufferEvent(state, AgentRunEventType.RunCreated, JsonSerializer.Serialize(new
             {
                 runId = run.RunId,
@@ -451,6 +458,64 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
+    /// 不可变 Attempt：重试尝试开始时从事件流尾部续写 RunRetryScheduled + AttemptStarted 标记。
+    /// </summary>
+    /// <remarks>
+    /// 重试（RetryCount &gt; 0）不再删除前序 Attempt 的事件历史（不可变审计）：
+    /// 当前 Attempt 的事件链紧随前序 Attempt 的尾部事件续写。首次 flush 时
+    /// AppendBatchAsync 校验首事件 Sequence = 当前 MAX(sequence) + 1，
+    /// 因此必须先从事件流读取尾部（Sequence + ContentHash）作为续写锚点。
+    /// RunRetryScheduled 同时是恢复重放的 Attempt 边界锚点（见 RebuildStateFromEventsAsync）。
+    /// </remarks>
+    /// <param name="state">当前执行状态（Run.State 为 Claimed，事件缓冲为空）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>已续写两个标记事件（RunRetryScheduled + AttemptStarted）的执行状态。</returns>
+    private async Task<AgentRunExecutionState> BeginRetryAttemptAsync(
+        AgentRunExecutionState state,
+        CancellationToken cancellationToken)
+    {
+        // 尾部读取失败非致命：后续首次 flush 的 AppendBatchAsync 会以 Sequence 不连续
+        // 显式失败（fail-closed），不会静默产生错误链。
+        try
+        {
+            var lastSeq = await _eventStore.GetLastSequenceAsync(
+                state.Run.WorkspaceId, state.Run.RunId, cancellationToken).ConfigureAwait(false);
+            if (lastSeq >= 0)
+            {
+                var tail = await _eventStore.ReadAsync(
+                    state.Run.WorkspaceId, state.Run.RunId, lastSeq, 1, cancellationToken).ConfigureAwait(false);
+                if (tail.Count == 1)
+                {
+                    // 续写锚点：下一事件 Sequence = 尾部 + 1，PrevChainHash = 尾部 ContentHash。
+                    state = state with
+                    {
+                        EventSequence = tail[0].Sequence + 1,
+                        EventChainHash = tail[0].ContentHash
+                    };
+                }
+            }
+        }
+        catch
+        {
+            // 读取失败：保持当前 EventSequence（0）——首次 flush 会因链不连续显式失败。
+        }
+
+        var attempt = state.Run.RetryCount + 1;
+        state = BufferEvent(state, AgentRunEventType.RunRetryScheduled, JsonSerializer.Serialize(new
+        {
+            attempt,
+            retryCount = state.Run.RetryCount,
+            scheduledAt = DateTimeOffset.UtcNow
+        }));
+        state = BufferEvent(state, AgentRunEventType.AttemptStarted, JsonSerializer.Serialize(new
+        {
+            attempt,
+            retryCount = state.Run.RetryCount
+        }));
+        return state;
+    }
+
+    /// <summary>
     /// 运行时能力补齐：从事件流重建 AgentRunExecutionState（崩溃恢复 / resume）。
     /// </summary>
     /// <param name="state">初始执行状态（Run + 默认 Context）。</param>
@@ -509,6 +574,29 @@ public sealed class AgentRunActor
         // Keyset pagination：快路径从游标之后开始读，全量路径从 0 开始
         var allEvents = new List<AgentRunEvent>();
         var fromSequence = useCursorFastPath ? cursor!.LastEventSequence + 1 : 0;
+
+        // 不可变 Attempt（重试不删历史）：以最后一个 RunRetryScheduled 事件为 Attempt 边界，
+        // 只重放当前 Attempt 的事件（Sequence > 边界）——前序 Attempt 的对话/工具观察
+        // 已由全新启动清空，若连同重放会用旧 Attempt 上下文污染当前 Attempt。
+        var attemptBoundaryStart = 0;
+        try
+        {
+            var attemptBoundary = await _eventStore.GetAttemptBoundarySequenceAsync(
+                state.Run.WorkspaceId, state.Run.RunId, cancellationToken).ConfigureAwait(false);
+            if (attemptBoundary >= 0)
+            {
+                attemptBoundaryStart = attemptBoundary + 1;
+                if (attemptBoundaryStart > fromSequence)
+                {
+                    fromSequence = attemptBoundaryStart;
+                }
+            }
+        }
+        catch
+        {
+            // 边界查询失败：交由后续事件流读取路径判定（存储不可用 → RecoveryDependencyUnavailable）。
+        }
+
         string? expectedPrevChainHash = null;
         AgentRunEvent? boundaryEvent = null;
         var readFailed = false;
@@ -519,9 +607,10 @@ public sealed class AgentRunActor
         {
             try
             {
-                // 快路径：读取游标指向的最后事件作为哈希链锚点
-                // （无新事件时它就是最后事件，用于恢复 EventSequence / EventChainHash）
-                if (useCursorFastPath && fromSequence > 0)
+                // 从 fromSequence - 1 读取哈希链锚点事件（快路径 = checkpoint 游标指向的事件；
+                // 不可变 Attempt 边界 = RunRetryScheduled 事件）——首个重放事件的
+                // PrevChainHash 必须等于锚点 ContentHash（跨 Attempt 哈希链连续）。
+                if (fromSequence > 0)
                 {
                     var boundaryPage = await _eventStore.ReadAsync(
                         state.Run.WorkspaceId, state.Run.RunId,
@@ -533,9 +622,9 @@ public sealed class AgentRunActor
                     }
                     else
                     {
-                        // 游标指向的事件不存在（数据异常）→ 降级为全量重放
+                        // 锚点事件不存在（数据异常）→ 降级为全量重放
                         throw new AgentRunRecoveryCorruptionException(
-                            $"checkpoint 游标指向的事件不存在（sequence={fromSequence - 1}，run={state.Run.RunId}）。");
+                            $"重放锚点事件不存在（sequence={fromSequence - 1}，run={state.Run.RunId}）。");
                     }
                 }
 
@@ -599,7 +688,8 @@ public sealed class AgentRunActor
                     useCursorFastPath = false;
                     restoredContext = null;
                     allEvents.Clear();
-                    fromSequence = 0;
+                    // 降级为全量重放：仍受不可变 Attempt 边界约束（跳过前序 Attempt 事件）。
+                    fromSequence = attemptBoundaryStart;
                     expectedPrevChainHash = null;
                     boundaryEvent = null;
                     continue;
@@ -2594,6 +2684,17 @@ public sealed class AgentRunActor
                 modelCallsUsed = _modelCallsUsed,
                 turn = _currentTurn
             }));
+
+            // 不可变 Attempt：重试 Attempt 失败追加 AttemptFailed 审计标记
+            // （前序 Attempt 历史保留；Attempt 边界由 RunRetryScheduled 锚定）。
+            if (state.Run.RetryCount > 0)
+            {
+                state = BufferEvent(state, AgentRunEventType.AttemptFailed, JsonSerializer.Serialize(new
+                {
+                    attempt = state.Run.RetryCount + 1,
+                    reason
+                }));
+            }
 
             // 终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
             await FlushPendingEventsAsync(state.Run, CancellationToken.None).ConfigureAwait(false);

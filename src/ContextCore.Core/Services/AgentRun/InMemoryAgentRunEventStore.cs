@@ -289,6 +289,33 @@ public sealed class InMemoryAgentRunEventStore : IAgentRunEventStore
         }
     }
 
+    /// <inheritdoc />
+    public ValueTask<int> GetAttemptBoundarySequenceAsync(
+        string workspaceId, string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+        var key = Key(workspaceId, runId);
+        if (!_events.TryGetValue(key, out var list) || list.Count == 0)
+        {
+            return ValueTask.FromResult(-1);
+        }
+
+        lock (_locks.GetOrAdd(key, _ => new object()))
+        {
+            // 最后一个 RunRetryScheduled 事件的 Sequence 即当前 Attempt 边界（无则 -1）。
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (list[i].EventType == AgentRunEventType.RunRetryScheduled)
+                {
+                    return ValueTask.FromResult(list[i].Sequence);
+                }
+            }
+            return ValueTask.FromResult(-1);
+        }
+    }
+
     /// <summary>
     /// 获取指定 Run 的最新 checkpoint 游标（从内存游标字典读取；开发/测试用）。
     /// </summary>

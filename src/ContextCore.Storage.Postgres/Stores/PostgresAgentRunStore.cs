@@ -442,12 +442,14 @@ LIMIT @take;
     ///   - Queued（state=21）→ 领取；
     ///   - Claimed（state=22）且 claim 已过期 → 重新领取（节点崩溃后其他节点接管）；
     ///   - Failed（state=8）且可重试 → 重置为 Claimed + retry_count+1 + next_retry_at=指数退避
-    ///     （base × 2^(retry_count-1)，封顶 cap），清空失败字段与 checkpoint 指针；
+    ///     （base × 2^(retry_count-1)，封顶 cap），清空失败字段与 checkpoint 指针
+    ///     （新 Attempt 全新启动，不复用前序 Attempt 的 checkpoint 上下文）；
     ///   - RecoveryDependencyUnavailable（state=17）退避门通过 → 领取（事件流保留，按哈希链重放）。
     ///   - Created（state=0）/ PendingAdmission（state=19）/ AdmissionRejected（state=20）永不领取
     ///     （P0-6 Admission 边界：配额未通过的 Run 不得进入可调度状态）。
-    /// 4. 重试重置行同步清空事件流（DELETE FROM agent_run_events）——全新启动需事件链从 sequence 0
-    /// 重新开始（不可变 Attempt 化见 WP-C2/P0-9）。
+    /// 4. 不可变 Attempt：重试**不删除** agent_run_events（前序 Attempt 历史保留，不可变审计）。
+    ///    RunRetryScheduled / AttemptStarted 边界标记由 Actor 在重试 Attempt 开始时
+    ///    于既有事件链上续写；恢复重放以最后一个 RunRetryScheduled 为界只重放当前 Attempt。
     /// 5. data jsonb 同步打补丁（State/UpdatedAt/ClaimOwner/ClaimToken/ClaimExpiresAtUtc/RetryCount/
     /// NextRetryAtUtc/FinishedAt/FailureReason/FinalAnswer），保持"state 列 == data JSON.State"单真源。
     /// </remarks>
@@ -490,9 +492,9 @@ LIMIT @take;
         command.Parameters.AddWithValue("backoff_cap", backoffMax);
         command.CommandText = $"""
 WITH eligible AS (
-    SELECT workspace_id, run_id, was_failed, ws_rank
+    SELECT workspace_id, run_id, ws_rank
     FROM (
-        SELECT workspace_id, run_id, (state = 8) AS was_failed,
+        SELECT workspace_id, run_id,
                ROW_NUMBER() OVER (
                    PARTITION BY workspace_id
                    ORDER BY priority DESC, created_at ASC, run_id ASC) AS ws_rank
@@ -523,7 +525,7 @@ WITH eligible AS (
 ),
 -- 每行唯一 claim_token：同一表达式在列与 data jsonb 中复用（md5(random + clock) 每行仅求值一次）。
 tokens AS (
-    SELECT workspace_id, run_id, was_failed,
+    SELECT workspace_id, run_id,
            md5(random()::text || clock_timestamp()::text) AS claim_token
     FROM eligible
 ),
@@ -564,13 +566,12 @@ updated AS (
             END
     FROM tokens t
     WHERE ar.workspace_id = t.workspace_id AND ar.run_id = t.run_id
-    RETURNING ar.workspace_id, ar.run_id, ar.data, ar.claim_token, t.was_failed
+    RETURNING ar.workspace_id, ar.run_id, ar.data, ar.claim_token
 )
-SELECT workspace_id, run_id, data, claim_token, was_failed FROM updated;
+SELECT workspace_id, run_id, data, claim_token FROM updated;
 """;
 
         var runs = new List<AgentRun>();
-        var retriedIds = new List<(string WorkspaceId, string RunId)>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -582,27 +583,7 @@ SELECT workspace_id, run_id, data, claim_token, was_failed FROM updated;
                     // 从列回填 claim_token（data jsonb 与列同值；防御性校验一致性）。
                     runs.Add(run with { ClaimToken = reader.GetString(3) });
                 }
-                if (reader.GetBoolean(4))
-                {
-                    retriedIds.Add((reader.GetString(0), reader.GetString(1)));
-                }
             }
-        }
-
-        // 重试重置的行清空事件流（全新启动需事件链从 sequence 0 重建；
-        // 残留失败尝试事件会导致 AppendBatchAsync 的链连续性校验失败）。
-        if (retriedIds.Count > 0)
-        {
-            await using var deleteCmd = connection.CreateCommand();
-            deleteCmd.Transaction = transaction;
-            deleteCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-            deleteCmd.CommandText = $"""
-DELETE FROM {Table("agent_run_events")}
-WHERE workspace_id = ANY(@workspace_ids) AND run_id = ANY(@run_ids);
-""";
-            deleteCmd.Parameters.AddWithValue("workspace_ids", retriedIds.Select(x => x.WorkspaceId).ToArray());
-            deleteCmd.Parameters.AddWithValue("run_ids", retriedIds.Select(x => x.RunId).ToArray());
-            await deleteCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

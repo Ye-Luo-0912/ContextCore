@@ -307,6 +307,10 @@ public sealed class R29H_AgentRunRecoveryFailClosedTests
             string workspaceId, string runId, CancellationToken cancellationToken = default)
             => _inner.GetLastSequenceAsync(workspaceId, runId, cancellationToken);
 
+        public ValueTask<int> GetAttemptBoundarySequenceAsync(
+            string workspaceId, string runId, CancellationToken cancellationToken = default)
+            => _inner.GetAttemptBoundarySequenceAsync(workspaceId, runId, cancellationToken);
+
         public ValueTask<AgentCheckpointCursor?> GetCheckpointCursorAsync(
             string workspaceId, string runId, CancellationToken cancellationToken = default)
             => _inner.GetCheckpointCursorAsync(workspaceId, runId, cancellationToken);

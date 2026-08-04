@@ -633,6 +633,32 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id;
         return result is long l ? (int)l : (result is int i ? i : -1);
     }
 
+    /// <inheritdoc />
+    public async ValueTask<int> GetAttemptBoundarySequenceAsync(
+        string workspaceId, string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 不可变 Attempt 边界：最后一个 RunRetryScheduled 事件的 Sequence（无重试 → -1）。
+        // 恢复重放以本边界为起点，跳过前序 Attempt 的事件（历史保留，不删除）。
+        command.CommandText = $"""
+SELECT COALESCE(MAX(sequence), -1)
+FROM {Table("agent_run_events")}
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND event_type = @event_type;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("event_type", (byte)AgentRunEventType.RunRetryScheduled);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is long l ? (int)l : (result is int i ? i : -1);
+    }
+
     /// <summary>
     /// 获取指定 Run 的最新 checkpoint 游标（从 agent_runs 表的 last_checkpoint_id / last_checkpoint_sequence 列读取）。
     /// </summary>

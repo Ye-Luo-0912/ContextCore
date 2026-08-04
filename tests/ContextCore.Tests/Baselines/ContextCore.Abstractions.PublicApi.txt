@@ -56,6 +56,8 @@ F:ContextCore.Abstractions.AgentRunEnqueueStatus.Closed
 F:ContextCore.Abstractions.AgentRunEnqueueStatus.QueueFull
 F:ContextCore.Abstractions.AgentRunEventType.ApprovalRequested
 F:ContextCore.Abstractions.AgentRunEventType.ApprovalResolved
+F:ContextCore.Abstractions.AgentRunEventType.AttemptFailed
+F:ContextCore.Abstractions.AgentRunEventType.AttemptStarted
 F:ContextCore.Abstractions.AgentRunEventType.CheckpointSaved
 F:ContextCore.Abstractions.AgentRunEventType.ModelCallCompleted
 F:ContextCore.Abstractions.AgentRunEventType.ModelCallStarted
@@ -64,6 +66,7 @@ F:ContextCore.Abstractions.AgentRunEventType.RunCancelled
 F:ContextCore.Abstractions.AgentRunEventType.RunCompleted
 F:ContextCore.Abstractions.AgentRunEventType.RunCreated
 F:ContextCore.Abstractions.AgentRunEventType.RunFailed
+F:ContextCore.Abstractions.AgentRunEventType.RunRetryScheduled
 F:ContextCore.Abstractions.AgentRunEventType.StateTransition
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallCompleted
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallStarted
@@ -2193,6 +2196,7 @@ M:ContextCore.Abstractions.IAgentRunEventNotifier.RegisterSubscription(System.St
 M:ContextCore.Abstractions.IAgentRunEventNotifier.SubscribeAsync(System.String, System.String, System.Int64, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.AppendAsync(ContextCore.Abstractions.AgentRunEvent, System.Threading.CancellationToken, System.String, System.Nullable<System.Int64>)
 M:ContextCore.Abstractions.IAgentRunEventStore.AppendBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.AgentRunEvent>, ContextCore.Abstractions.AgentRunStateUpdate, ContextCore.Abstractions.AgentCheckpointCursor, ContextCore.Abstractions.AgentCheckpoint, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRunEventStore.GetAttemptBoundarySequenceAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.GetCheckpointCursorAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.GetLastSequenceAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.ReadAsync(System.String, System.String, System.Int32, System.Int32, System.Threading.CancellationToken)

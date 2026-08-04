@@ -330,9 +330,12 @@ public sealed record AgentRun
     /// <summary>
     /// Run 级最大重试次数（默认 0 = 不重试，失败保持 <see cref="AgentRunState.Failed"/> 终态，
     /// 与既有行为一致）。&gt; 0 时，Failed 的 Run 由 Durable Scheduler 在
-    /// <c>RetryCount &lt; MaxRetries</c> 期间自动重置为 <see cref="AgentRunState.Created"/>
-    /// 并递增 <see cref="RetryCount"/>（事件流同步重置，作为全新启动重试）；
+    /// <c>RetryCount &lt; MaxRetries</c> 期间自动重置为 <see cref="AgentRunState.Claimed"/>
+    /// 并递增 <see cref="RetryCount"/>（Scheduler Claim Lease + 指数退避）；
     /// 达到上限后原子标记为 <see cref="AgentRunState.DeadLettered"/>（死信，需运维介入）。
+    /// 重试为不可变 Attempt：前序 Attempt 的事件流全部保留（不删除），
+    /// 新 Attempt 在既有事件链上续写 RunRetryScheduled / AttemptStarted 标记后
+    /// 作为全新启动执行（上下文清空，但历史审计完整）。
     /// </summary>
     public int MaxRetries { get; init; }
 
@@ -488,7 +491,29 @@ public enum AgentRunEventType : byte
     /// Tool 对账裁决完成（P0-3：与记录终态同一事务追加的审计事件，
     /// 记录 reconciliationId / requestId / sideEffectOccurred / result / error）。
     /// </summary>
-    ToolReconciliationResolved = 13
+    ToolReconciliationResolved = 13,
+
+    /// <summary>
+    /// 重试已调度（不可变 Attempt 标记）：Run 从 Failed 进入重试 Attempt 时追加。
+    /// 事件负载含 attempt（新 Attempt 序号，从 1 起）/ retryCount / scheduledAt。
+    /// 作为 Attempt 边界锚点——恢复重放以最后一个 RunRetryScheduled 为界，
+    /// 只重放当前 Attempt 的事件（前序 Attempt 历史保留，不可变审计）。
+    /// </summary>
+    RunRetryScheduled = 14,
+
+    /// <summary>
+    /// Attempt 开始执行（不可变 Attempt 标记）：重试 Attempt 首个事件
+    /// （紧随 <see cref="RunRetryScheduled"/> 之后，再续 RunCreated）。
+    /// 事件负载含 attempt / retryCount。首次执行（RetryCount=0）不追加本事件。
+    /// </summary>
+    AttemptStarted = 15,
+
+    /// <summary>
+    /// Attempt 失败（不可变 Attempt 标记）：重试 Attempt 失败时在 RunFailed 之后追加，
+    /// 标记该 Attempt 的终结边界。事件负载含 attempt / reason。
+    /// 首次执行（RetryCount=0）不追加本事件（RunFailed 已足够）。
+    /// </summary>
+    AttemptFailed = 16
 }
 
 /// <summary>
@@ -1745,6 +1770,18 @@ public interface IAgentRunEventStore
     /// 获取指定 Run 的最新序列号（用于断点续读）。
     /// </summary>
     ValueTask<int> GetLastSequenceAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取当前 Attempt 的边界序列号：最后一个 <see cref="AgentRunEventType.RunRetryScheduled"/>
+    /// 事件的 Sequence；从未重试过（或事件流为空）时返回 -1。
+    /// </summary>
+    /// <remarks>
+    /// 不可变 Attempt 语义：重试不删除历史事件，当前 Attempt 的事件链紧随
+    /// RunRetryScheduled 之后续写。恢复重放以本边界为起点（Sequence &gt; 边界），
+    /// 跳过前序 Attempt 的事件——避免用旧 Attempt 的上下文/工具观察污染新 Attempt。
+    /// </remarks>
+    ValueTask<int> GetAttemptBoundarySequenceAsync(
+        string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Get the latest checkpoint cursor for a Run (used to determine recovery start position).

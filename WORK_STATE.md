@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `6e9d8c11`（WP-A2 已推送；R30.1 实施中）。
+- **基线**：main @ `92a19c3d`（WP-B 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-B 调度 Admission + 严格入队语义 + Scheduler Claim Lease（P0-6 + P0-7 + P0-8）。
+- **最近完成**：WP-C2 不可变 Attempt（P0-9，事件不删除 + RunRetryScheduled/AttemptStarted/AttemptFailed + unnest 成对）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -41,6 +41,12 @@
   - P0-8 修复（两种 Lease 分离）：Scheduler Claim Lease 控制"谁把 Run 放入本地队列"——`ClaimPendingBatchAsync`（CTE 内层 FOR UPDATE SKIP LOCKED + ROW_NUMBER per-workspace 公平）领取 Queued/过期 Claimed 时写入 claim_owner/claim_token/claim_expires_at 并置 Claimed（不再只更新 updated_at）；`TryClaimSingleAsync` 供 API 入队路径单条领取；`ReleaseClaimAsync` 按 claim_token 释放（QueueFull/Closed 时归还未入队 Run 的 claim，防 Claimer 重复领取）。Execution/Fencing Lease 仍由 AgentKernelHost 控制"谁能执行副作用"——执行租约取得后 fenced `Claimed→Running` 推进（lease_token/fencing_token 校验，0 行容忍重读），Actor 全新启动状态集含 Queued/Claimed/Running，RecoveryWorker 只认 Running 起（Queued/Claimed 归 Claimer 专属，防双执行）。
   - Schema v59：迁移 `PostgresMigrationAgentRunClaimLease` 0006（3 claim 列 + Created→Queued 批量转换 + data jsonb State 同步）；基线 DDL 与 v52→v53 ALTER 后补充 claim 列。
   - 测试：新增 `R30Y_SchedulerClaimAdmissionTests`（12 项：迁移声明/DDL 列/状态机合法流转/单条领取写租约/已领取返回 null/按 token 释放/批领取永不拿 Created|PendingAdmission|AdmissionRejected/过期可重领/429 配额拒绝/201 全链路到终态/202 队列满释放/202 Claim 被抢占）；更新 R29P/R29L/R29Q/R29H 假 store 与新接口签名；SchemaVersion 断言 v59。验证：build 0 错误；定向 112 通过 / 2 跳过 / 0 失败（R29P+R29L+R29Q+R30B+R29S+R30Y+R29H×3+PostgresStorage+PublicApi）。
+- **WP-C2 已完成**（P0-9）：不可变 Attempt（事件不删除 + Attempt 边界标记 + 消除 ANY 交叉删除）。
+  - 契约（Abstractions，PublicApi baseline 已更新）：`AgentRunEventType` 新增 `RunRetryScheduled=14` / `AttemptStarted=15` / `AttemptFailed=16`（在 ToolReconciliationResolved=13 后续接，不重排既有类型）；`IAgentRunEventStore` 新增 `GetAttemptBoundarySequenceAsync`（最后一个 RunRetryScheduled 的 Sequence，从未重试/空流返回 -1）；`AgentRun.MaxRetries` 文档更新：重试重置为 Claimed（Scheduler Claim Lease），不可变 Attempt——前序 Attempt 事件全保留，新 Attempt 在既有链上续写。
+  - 修复（不再 DELETE 事件）：`PostgresAgentRunStore.ClaimPendingBatchAsync` 删除整段 `DELETE FROM agent_run_events WHERE workspace_id = ANY(@workspace_ids) AND run_id = ANY(@run_ids)`——该双数组 ANY 未成对关联，可能删除交叉组合 Run 的事件（P0-9 指出的交叉删除 bug，全仓唯一一处，grep 验证）；claim SQL 简化（去掉 was_failed 透传）。重试重置只清 checkpoint 指针（新 Attempt 不复用前序上下文），事件历史保留。
+  - Actor 续写标记（Storage.Postgres 不引用 Core，哈希链只能由 Actor 追加）：重试 fresh-start（RetryCount>0）时 `BeginRetryAttemptAsync` 读取事件流尾部（GetLastSequenceAsync + ReadAsync 尾事件）作为续写锚点（Sequence+1 / PrevChainHash=尾哈希），缓冲 RunRetryScheduled → AttemptStarted → RunCreated；尾部读取失败非致命——首次 flush 的 AppendBatchAsync 以 Sequence 不连续显式失败（fail-closed）。失败路径 `FailAsync` 在 RunFailed 后追加 AttemptFailed（仅 RetryCount>0；首次执行不追加，向后兼容无迁移）。
+  - 恢复边界：`RebuildStateFromEventsAsync` 以 `GetAttemptBoundarySequenceAsync` 钳制重放起点 fromSequence = max(checkpointCursor+1, 边界+1)；锚点读取从 fromSequence-1 泛化（快路径游标事件 = 不可变 Attempt 的 RunRetryScheduled），锚点缺失抛 RecoveryCorrupted；快路径降级为全量重放时仍受边界约束（attemptBoundaryStart），前序 Attempt 的对话/工具观察不污染当前 Attempt。
+  - 测试：新增 `R30Z_ImmutableAttemptTests`（8 项：枚举值固定 13/14/15/16、边界查询空流/无标记/有标记返回 -1/-1/标记序号、重试全新启动续写标记且前序历史保留+VerifyChain+Completed、重试 Attempt 失败追加 RunFailed+AttemptFailed、恢复只重放当前 Attempt（模型只见 attempt-2-content 不见 attempt-1-content）、无边界恢复全量重放向后兼容）；更新 R29H/R29Q 假 store 接口签名；PublicApi baseline +4（3 枚举值 + 1 接口方法）。验证：build 0 错误；定向 318 通过 / 2 既有失败 / 5 跳过（R30Z+R29H+R29Q+R30Y+PublicApi）。
 
 ### 性能优化工作包进度
 
