@@ -30,7 +30,7 @@ namespace ContextCore.Core.Services.Evolution;
 /// <remarks>
 /// <para>
 /// <b>语义</b>：<see cref="Consistent"/> 表示进程内 <c>_runStates</c> +
-/// <see cref="CutoverController"/> 与 <c>canary_pipelines</c> 表的 DB 真相一致；
+/// <see cref="CutoverController"/> 与 pipeline_runs snapshot 的 DB 真相一致（P0-12 单一真相源）；
 /// 其他位标记表示存在不一致，<see cref="CanaryProgressionService.AdvanceAsync"/> 应拒绝推进。
 /// </para>
 /// <para>
@@ -49,7 +49,7 @@ public enum CanaryLocalState : byte
     /// <summary>本地已紧急回滚到 0% 且紧急状态尚未解除（活跃 Kill Switch 覆盖，或 DB CAS 失败）。</summary>
     LocalEmergencyRollback = 1,
 
-    /// <summary>等待 DB 持久化（本地变更尚未写入 <c>canary_pipelines</c>）。</summary>
+    /// <summary>等待 DB 持久化（本地变更尚未写入 pipeline_runs snapshot 真相源）。</summary>
     PersistPending = 2,
 
     /// <summary>进度推进被阻止（需 Operator 干预或重试 DB 持久化后才能恢复）。</summary>
@@ -163,7 +163,9 @@ public sealed class CanaryProgressionService
     // 非空时 InitializeCanary/AdvanceAsync/RollbackAsync 操作 registry.GetOrCreate(runId) 专用控制器；
     // 为 null 时回退到直接注入的 _cutoverController（B-8 之前行为，保持向后兼容）。
     private readonly CutoverControllerRegistry? _registry;
-    // 可选的 DB 决策应用器，用于启动时从 canary_pipelines 表恢复 in-memory 状态。
+    // 可选的 DB 决策应用器：生产路径（Advance/Rollback）通过它在单一事务内
+    // 把 Canary 状态原子写入 pipeline_runs snapshot（P0-12 单一真相源）；
+    // 启动时从 legacy canary_pipelines 表做一次性迁移读取恢复 in-memory 状态。
     // 为 null 时（如单元测试使用 InMemoryPipelineRunStore）RecoverFromStoreAsync 为 no-op。
     private readonly ICanaryDecisionApplier? _decisionApplier;
     // 可选的集群级 Kill Switch 存储。非空时 RecoverFromStoreAsync 对存在活跃紧急覆盖的
@@ -199,8 +201,10 @@ public sealed class CanaryProgressionService
     /// 避免多 run 共享 Singleton 导致百分比互相覆盖；为 null 时回退到 <paramref name="cutoverController"/>。
     /// </param>
     /// <param name="decisionApplier">
-    /// 可选的 DB 决策应用器。非空时 <see cref="RecoverFromStoreAsync"/> 从
-    /// <c>canary_pipelines</c> 表读取活跃 pipeline 状态并恢复 in-memory 百分比
+    /// 可选的 DB 决策应用器。非空时 <see cref="AdvanceAsync"/> / <see cref="RollbackAsync"/>
+    /// 通过它在单一事务内把 Canary 状态原子写入 pipeline_runs snapshot（P0-12 单一真相源），
+    /// <see cref="RecoverFromStoreAsync"/> 对 legacy run（snapshot CanaryRevision == 0）
+    /// 从 <c>canary_pipelines</c> 表做一次性迁移读取恢复 in-memory 百分比
     /// （CutoverController + <c>_runStates</c>）。为 null 时恢复为 no-op（单节点/测试场景）。
     /// </param>
     /// <param name="emergencyOverrideStore">
@@ -479,8 +483,10 @@ public sealed class CanaryProgressionService
                 {
                     var nextPercentage = evaluation.NextPercentage!.Value;
 
-                    // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
-                    // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
+                    // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync）。
+                    // P0-12：Canary 状态（percentage/revision/epoch）与 transition audit 由
+                    // applier 在同一事务内原子写入 pipeline_runs snapshot（单一真相源），
+                    // 服务不再二次写 snapshot，消除双真相源与 revision 双计数器漂移。
                     if (_decisionApplier is not null)
                     {
                         var dbResult = await ApplyDecisionToStoreAsync(
@@ -492,10 +498,6 @@ public sealed class CanaryProgressionService
                             UpdateInMemoryPercentage(runId, nextPercentage);
                             // DB CAS 成功 → 本地与 DB 一致，清除任何遗留的本地状态标记。
                             _localStates[runId] = CanaryLocalState.Consistent;
-                            // 单真相源写入 — canary 状态并入 pipeline run snapshot
-                            await PersistCanaryStateToRunAsync(
-                                runId, nextPercentage, dbResult.NewEpoch,
-                                _timeProvider.GetUtcNow(), cancellationToken).ConfigureAwait(false);
                         }
 
                         return new CanaryProgressionResult
@@ -681,20 +683,14 @@ public sealed class CanaryProgressionService
         // 本地 route = 0%（无条件，安全优先——无论 Kill Switch / DB CAS 结果如何）。
         UpdateInMemoryPercentage(runId, 0);
 
-        // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync），
-        // 统一 DB 真相源（canary_pipelines 表）。旧路径仅写进程内状态，重启后丢失。
+        // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync）。
+        // P0-12：回滚到 0% 的 snapshot 写入（percentage/revision/epoch）与 transition audit
+        // 由 applier 在同一事务内原子完成，服务不再二次写 snapshot。
         if (_decisionApplier is not null)
         {
             var dbResult = await ApplyDecisionToStoreAsync(
                 runId, CanaryDecision.Rollback, 0, previousPercentage,
                 tid, $"Canary 自动回滚：reason={reason}", cancellationToken).ConfigureAwait(false);
-
-            if (dbResult.Applied)
-            {
-                // 单真相源写入 — 回滚到 0%
-                await PersistCanaryStateToRunAsync(
-                    runId, 0, dbResult.NewEpoch, now, cancellationToken).ConfigureAwait(false);
-            }
 
             _localStates[runId] = ResolveRollbackLocalState(overridePersisted, dbResult.Applied);
 
@@ -799,7 +795,7 @@ public sealed class CanaryProgressionService
     /// 解析自动回滚后的本地状态（P0-11：Kill Switch 优先 + fail-closed）。
     /// </summary>
     /// <param name="overridePersisted">持久化 Kill Switch（Emergency Override）是否已生效。</param>
-    /// <param name="dbPersisted">Canary 真相源（canary_pipelines / DB CAS）是否已持久化 0%。</param>
+    /// <param name="dbPersisted">Canary 真相源（pipeline_runs snapshot / DB CAS）是否已持久化 0%。</param>
     /// <remarks>
     /// <list type="bullet">
     /// <item>无 Kill Switch 存储：无法建立持久化覆盖，维持原语义（DB 成功 → Consistent）。</item>
@@ -910,22 +906,23 @@ public sealed class CanaryProgressionService
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>恢复的活跃 pipeline 数量（0 = 无活跃 pipeline）。</returns>
     /// <remarks>
-    /// <b>问题背景</b>：Canary 百分比有三个真值源——
+    /// <b>问题背景</b>：Canary 百分比有多个真值源——
     /// <list type="number">
-    /// <item><c>canary_pipelines</c> 表（DB，legacy，由 <see cref="ICanaryDecisionApplier"/> 维护）。</item>
+    /// <item><see cref="PipelineRunSnapshot"/>（DB 单一真相源：CanaryPercentage / CanaryRevision / CanaryEpoch）。</item>
+    /// <item><c>canary_pipelines</c> 表（DB，legacy，只读；P0-12 后生产不再写入，仅一次性迁移读取）。</item>
     /// <item><c>_runStates</c>（进程内 ConcurrentDictionary）。</item>
     /// <item><see cref="CutoverController"/> 的 <c>_cutoverPercentage</c>（进程内 int）。</item>
     /// </list>
-    /// 进程重启后 / 丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时重建
+    /// 进程重启后 in-memory 真值源丢失，服务回到 0% 而 DB 仍持有真实百分比。本方法在启动时重建
     /// 进程内路由状态（CutoverController 百分比与 <c>_runStates</c> 字典）。
     /// <para>
-    /// <b>合并方向</b>：canary 状态已并入 <see cref="PipelineRunSnapshot"/>
-    /// （CanaryPercentage / CanaryRevision / CanaryEpoch，由 <see cref="PersistCanaryStateToRunAsync"/>
-    /// 经 <see cref="IPipelineRunStore.UpdateCanaryStateAsync"/> 持久化）。因此本方法
+    /// <b>合并方向</b>：canary 状态已并入 <see cref="PipelineRunSnapshot"/>，由
+    /// <see cref="ICanaryDecisionApplier"/>（生产路径，单事务）或
+    /// <see cref="PersistCanaryStateToRunAsync"/>（回退路径）持久化。因此本方法
     /// <b>优先从 <see cref="IPipelineRunStore"/> 的 ScopedCanary 阶段 run snapshot 恢复</b>
     /// （snapshot.CanaryPercentage 权威，消除对 canary_pipelines 表的依赖）；
     /// 仅当 run 尚未持久化 canary 数据（CanaryRevision == 0，legacy 数据）时，回退到
-    /// <see cref="ICanaryDecisionApplier.GetAllActivePipelineStatesAsync"/>。
+    /// <see cref="ICanaryDecisionApplier.GetAllActivePipelineStatesAsync"/>（一次性迁移读取）。
     /// </para>
     /// <para>
     /// <b>幂等性</b>：可安全重复调用；已存在的 run 会被最新值覆盖。
@@ -939,7 +936,8 @@ public sealed class CanaryProgressionService
         var restored = 0;
 
         // 优先从 pipeline run snapshot 恢复（单一真相源）。
-        // snapshot.CanaryRevision > 0 表示 canary 状态已由 PersistCanaryStateToRunAsync 持久化；
+        // snapshot.CanaryRevision > 0 表示 canary 状态已由 applier（生产路径）或
+        // PersistCanaryStateToRunAsync（回退路径）持久化；
         // == 0 表示 legacy 数据（尚未经单真相源写入），交给 canary_pipelines 回退路径。
         var snapshotRestored = new HashSet<string>(StringComparer.Ordinal);
         var snapshotRuns = await _pipelineRunStore.ListRunsByStageAsync(
@@ -1144,7 +1142,7 @@ public sealed class CanaryProgressionService
 
     /// <summary>
     /// 通过 <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionLocalAsync"/> 单事务写入 DB
-    /// （canary_pipelines revision CAS + transition audit + epoch 递增），统一 DB 真相源。
+    /// （pipeline_runs snapshot CAS + transition audit + epoch 递增），统一 DB 真相源。
     /// </summary>
     /// <param name="runId">Canary run ID。</param>
     /// <param name="decision">决策类型（Promote/Rollback）。</param>
@@ -1157,7 +1155,7 @@ public sealed class CanaryProgressionService
     /// <remarks>
     /// <b>单节点模式</b>：跳过 lease/fencing 校验（FencingToken 传 "0"，被
     /// <see cref="ICanaryDecisionApplier.ApplyCanaryDecisionLocalAsync"/> 忽略），
-    /// 仅执行 revision CAS + transition audit + epoch update，确保 DB 与进程内状态一致。
+    /// 仅执行 snapshot CAS + transition audit + epoch update，确保 DB 与进程内状态一致。
     /// <para>
     /// <b>Epoch 计算</b>：从 <see cref="ICanaryDecisionApplier.GetCurrentEpochAsync"/> 读取当前 epoch，
     /// 计算 <c>newEpoch = currentEpoch + 1</c>，确保重启后 epoch 单调递增（不回退）。
@@ -1211,17 +1209,20 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>
-    /// 单真相源写入：将 canary 推进状态并入 pipeline run snapshot。
+    /// 单真相源写入：将 canary 推进状态并入 pipeline run snapshot（仅回退路径使用）。
     /// </summary>
     /// <remarks>
-    /// 合并方向：canary_pipelines 的 percentage/revision/epoch 并入
+    /// P0-12 之后生产路径（<see cref="ICanaryDecisionApplier"/> 非空）不再调用本方法——
+    /// Canary 状态由 applier 在 <c>ApplyCanaryDecision(Local)Async</c> 单事务内原子写入
+    /// pipeline_runs snapshot。本方法仅保留给回退路径（_decisionApplier == null，
+    /// InMemory/测试场景），把 percentage/revision/epoch 并入
     /// <see cref="PipelineRunSnapshot"/>（CanaryPercentage / CanaryRevision / CanaryEpoch），
     /// 让 <see cref="IPipelineRunStore"/> 成为 run 状态唯一真相源，重启后可直接从 snapshot
     /// 恢复（<see cref="RecoverFromStoreAsync"/> 优先读取 snapshot）。
     /// <para>
     /// 失败语义：run 不存在或 canary revision CAS 不匹配时仅记录日志，<b>不阻断推进</b>——
-    /// legacy canary_pipelines 写入已由 <see cref="ICanaryDecisionApplier"/> 完成，双真相源
-    /// 过渡期内不丢状态；后续推进的 CAS 以最新 snapshot 为准自然收敛。
+    /// 回退路径无 DB 真相源写入（仅进程内状态 + stage_transitions），snapshot 写入失败
+    /// 不阻断推进；后续写入以最新 snapshot 为准自然收敛。
     /// </para>
     /// </remarks>
     /// <param name="runId">Canary run ID。</param>
@@ -1256,7 +1257,7 @@ public sealed class CanaryProgressionService
             {
                 _logger.LogWarning(
                     "Canary run {RunId} 单真相源写入失败（canary revision CAS 不匹配）；" +
-                    "保留 legacy canary_pipelines 状态，下次推进自然收敛。",
+                    "回退路径 snapshot 未更新，后续写入以最新 snapshot 为准自然收敛。",
                     runId);
             }
         }

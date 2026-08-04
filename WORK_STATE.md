@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `0edacb3a`（WP-C3 已推送；R30.1 实施中；WP-D1 待推送）。
+- **基线**：main @ `15688696`（WP-D1 已推送；R30.1 实施中）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-D1 自动回滚先写持久化 Kill Switch（P0-11，RollbackAsync 先 TrySetOverrideAsync + fail-closed）。
+- **最近完成**：WP-D2 迁移 Canary 单一真相源到 pipeline_runs snapshot（P0-12，applier 单事务原子写 + 删除 canary_pipelines 生产写入）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -61,6 +61,12 @@
   - 本地状态表：Override 生效 + DB 成功 → LocalEmergencyRollback|OperatorAlertRequired（无 PersistPending，推进被阻断直到覆盖清除）；Override 生效 + DB 失败 → 叠加 PersistPending；Override 写入失败 + DB 成功 → LocalEmergencyRollback|OperatorAlertRequired（DB 0% 为可恢复权威回滚，推进可恢复）；Override 写入失败 + DB 失败 → 叠加 PersistPending；无存储 + DB 成功 → Consistent（原语义，向后兼容）。
   - 范围说明：HA Leader 路径（CanaryLeaderHostedService）为单事务原子回滚（lease/fencing + revision CAS + audit + epoch 同事务，失败整体回滚、本地百分比仅在 Applied 后同步），无本地/DB 撕裂，不在 P0-11 所述缺陷范围内。
   - 测试：新增 `R30E_CanaryRollbackKillSwitchTests`（7 项：DB CAS 失败仍先持久化 Override（Operator=system:automatic-rollback）+ PersistPending 阻断且清除覆盖不解阻、DB CAS 成功保留 Override 且不进入 Consistent + 推进阻断、Override 写入失败 + DB 失败 fail-closed、Override 写入失败 + DB 成功本地立即 fail-closed 且推进可恢复、无存储维持 Consistent、既有人工覆盖不被覆盖、清除覆盖后推进解除阻断并重新同步）。验证：build 0 错误；R30E 7/7；Canary 定向 237 通过 / 2 既有失败（SchemaVersion_IsV30、RequiredIndexes_IncludeUtilityLedgerIndexes）/ 1 跳过；Service build 0 错误。
+- **WP-D2 已完成**（P0-12）：Canary 单一真相源迁移——pipeline_runs snapshot 原子写入，删除 canary_pipelines 生产写入。
+  - 问题：推进仍先写 canary_pipelines，随后 `PersistCanaryStateToRunAsync` 二次写 snapshot（独立事务，CAS 失败仅 Warning "不阻断推进"）→ 双真相源（canary_pipelines=50% / snapshot=25% / local=50%）；HA Leader 路径从不写 snapshot（snapshot 恒为 0）。
+  - PostgresCanaryLeaderLease（ICanaryDecisionApplier 生产实现）：`ApplyCanaryDecisionAsync` / `ApplyCanaryDecisionLocalAsync` 的步骤 2-3 由 canary_pipelines 读写改为 pipeline_runs snapshot CAS——事务内 `SELECT data`（jsonb → PipelineRunSnapshot）读当前 CanaryRevision/CanaryPercentage，`UPDATE pipeline_runs SET canary_percentage/canary_revision/canary_epoch/updated_at/data WHERE run_id AND canary_revision=@expected RETURNING canary_revision`（0 行 → RevisionMismatch 整体回滚）；transition audit（from_percentage = snapshot 值）与 epoch UPSERT 保持同事务（P0-12：Audit 与 PipelineRun CAS 同事务）；**删除对 canary_pipelines 的全部 INSERT/UPDATE**（含 newStatus 计算）。run 行缺失/CanaryRevision 不匹配均 fail-closed 返回 RevisionMismatch（Canary 推进不为缺失 run 建行，行由 pipeline 创建）。
+  - `GetCanaryPipelineStateAsync` 改读 pipeline_runs snapshot（Revision=(int)CanaryRevision / Percentage=CanaryPercentage / Status 由 PipelineRunStatus 映射 Active/Promoted/RolledBack）；`GetAllActivePipelineStatesAsync` 保留读 canary_pipelines（**legacy 一次性迁移读取**，仅 RecoverFromStoreAsync 对 snapshot CanaryRevision==0 的旧 run 兜底恢复）。migration 边界：旧 run 首次推进前 snapshot CanaryRevision==0 → 锚点 0，审计 from_percentage 可能一次性读 0（可接受，恢复路径仍以 canary_pipelines 兜底）。
+  - CanaryProgressionService：`AdvanceAsync` / `RollbackAsync` 的 `_decisionApplier != null` 生产分支**移除 PersistCanaryStateToRunAsync 二次调用**（snapshot 由 applier 单事务原子写入，消除 revision 双计数器漂移）；回退路径（_decisionApplier==null，InMemory/测试）保留原样。CanaryLeaderHostedService HA 路径顺带修复：applier 现在原子写 snapshot，HA 模式 snapshot 不再恒 0。文档注释全面更新（class/接口/PersistCanaryStateToRunAsync/RecoverFromStoreAsync/CanaryLocalState 语义）。
+  - 测试：新增 `R30F_CanarySingleTruthSourceTests`（5 项：Advance 生产路径 snapshot 只写一次（CanaryRevision 0→1 非 2）、连续两次推进 CAS 链 0→1→2 且 epoch 同步（无双计数器漂移）、Rollback 生产路径 snapshot 只写一次、迁移 SQL 保留 legacy canary 三表 + pipeline_runs canary 列、legacy 表仍注册为必需运维表）。验证：build 0 错误（Storage.Postgres / Core / Service / Abstractions / Tests 全绿）；R30D+R30E+R30F 25/25 通过；Canary 定向 206 通过 / 1 跳过（MultiInstance Postgres）/ 0 失败；PublicApi 1 通过 1 跳过（仅文档注释变更，无签名变更）。
 
 ### 性能优化工作包进度
 

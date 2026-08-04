@@ -352,8 +352,8 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                         _lastKnownEpoch[runId] = decisionResult.NewEpoch;
 
                         // 同步 in-memory CutoverController + _runStates（保持进程内路由状态一致）
-                        // DB 状态已由事务原子更新（canary_pipelines + canary_transition_audit + canary_run_epochs），
-                        // 此处仅更新进程本地状态，不重复写入 DB。
+                        // DB 状态已由事务原子更新（pipeline_runs snapshot + canary_transition_audit + canary_run_epochs；
+                        // P0-12 单一真相源，不再写 canary_pipelines），此处仅更新进程本地状态，不重复写入 DB。
                         _progressionService.UpdateInMemoryPercentage(runId, newPercentage);
 
                         // 周期性清理旧 epoch 数据，控制表增长

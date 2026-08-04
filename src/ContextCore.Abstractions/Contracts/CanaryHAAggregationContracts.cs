@@ -350,9 +350,9 @@ public sealed record CanaryDecisionRequest
     public required string RunId { get; init; }
 
     /// <summary>
-    /// 调用方已知的 pipeline 修订号（CAS 预期值）。
-    /// 首次初始化时传 0（表示行尚不存在，事务内会 INSERT 初始行 revision=1）。
-    /// 后续推进时传当前 revision，事务内 UPDATE 校验 <c>WHERE revision = @expectedRevision</c>。
+    /// 调用方已知的 Canary revision（CAS 预期值，针对 pipeline_runs snapshot 的 CanaryRevision）。
+    /// 首次推进时传 0（snapshot 尚未有 Canary 数据），事务内 CAS 0 → 1。
+    /// 后续推进时传当前 CanaryRevision，事务内 UPDATE 校验 <c>WHERE canary_revision = @expectedRevision</c>。
     /// </summary>
     public required int ExpectedRevision { get; init; }
 
@@ -430,12 +430,15 @@ public sealed record CanaryDecisionResult
 /// <code>
 /// BEGIN;
 /// -- 1. lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行）
-/// -- 2. pipeline revision CAS（UPDATE WHERE revision = @expectedRevision）
-/// -- 3. transition audit 写入（INSERT canary_transition_audit）
+/// -- 2. pipeline_runs snapshot CAS（P0-12 单一真相源：UPDATE ... WHERE canary_revision = @expectedRevision）
+/// -- 3. transition audit 写入（INSERT canary_transition_audit，与 snapshot CAS 同事务）
 /// -- 4. epoch 更新（UPSERT canary_run_epochs）
 /// COMMIT;
 /// </code>
-/// 任一步骤失败则 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout。
+/// 任一步骤失败则 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout，
+/// 且 audit 与 snapshot 状态不会撕裂。Canary 的 percentage/revision/epoch 直接写入
+/// <see cref="PipelineRunSnapshot"/>，<c>canary_pipelines</c> 不再有任何生产写入
+/// （仅 <see cref="GetAllActivePipelineStatesAsync"/> 保留 legacy 一次性迁移读取）。
 /// </remarks>
 public interface ICanaryDecisionApplier
 {
@@ -458,12 +461,13 @@ public interface ICanaryDecisionApplier
     /// <remarks>
     /// <b>用途</b>：单节点模式（<c>CanaryProgressionHostedService</c>）下统一 DB 真相源。
     /// 旧路径 <c>CanaryProgressionService.AdvanceAsync</c> 仅写进程内状态（<c>_runStates</c> +
-    /// <c>CutoverController</c>），不写 <c>canary_pipelines</c> 表，导致进程重启后
-    /// <c>RecoverFromStoreAsync</c> 读不到真实百分比。本方法跳过 lease 校验（单节点无 Leader），
-    /// 但仍走 revision CAS + transition audit + epoch update 单事务，确保 DB 与审计一致。
+    /// <c>CutoverController</c>），不写 DB，导致进程重启后 <c>RecoverFromStoreAsync</c>
+    /// 读不到真实百分比。本方法跳过 lease 校验（单节点无 Leader），
+    /// 但仍走 pipeline_runs snapshot CAS + transition audit + epoch update 单事务，
+    /// 确保 DB 与审计一致（P0-12 单一真相源）。
     /// <para>
     /// <b>与 <see cref="ApplyCanaryDecisionAsync"/> 的区别</b>：仅省略步骤 1（lease/fencing 校验），
-    /// 步骤 2-5（revision CAS + audit + epoch）完全一致。
+    /// 步骤 2-5（snapshot CAS + audit + epoch）完全一致。
     /// </para>
     /// </remarks>
     ValueTask<CanaryDecisionResult> ApplyCanaryDecisionLocalAsync(
@@ -507,9 +511,9 @@ public interface ICanaryDecisionApplier
     /// <returns>所有活跃 pipeline 的状态列表（status NOT IN 终态集合）；无活跃行时返回空列表。</returns>
     /// <remarks>
     /// <b>用途</b>：服务启动时从 DB 恢复 in-memory 状态（CutoverController 百分比 +
-    /// <c>CanaryProgressionService._runStates</c>）。进程重启后这两个 in-memory 真值源丢失，
-    /// 而 <c>canary_pipelines</c> 表仍持有权威百分比；本方法提供批量读取入口，
-    /// 供 <c>RecoverFromStoreAsync</c> 重建进程内路由状态，避免重启后回到 0%。
+    /// <c>CanaryProgressionService._runStates</c>）。进程重启后这两个 in-memory 真值源丢失。
+    /// P0-12 后生产不再写入 <c>canary_pipelines</c>，本方法仅作为 legacy 一次性迁移读取，
+    /// 供 <c>RecoverFromStoreAsync</c> 对 snapshot CanaryRevision == 0 的旧 run 重建进程内路由状态。
     /// </remarks>
     ValueTask<IReadOnlyList<CanaryPipelineState>> GetAllActivePipelineStatesAsync(
         CancellationToken cancellationToken = default);
@@ -537,8 +541,8 @@ public sealed record CanaryPipelineState
 /// 集群级 Canary 紧急停止（Kill Switch）记录。
 /// </summary>
 /// <remarks>
-/// 该记录代表一次由运维人员手动触发的紧急干预：无论 <c>canary_pipelines</c> 表中
-/// 的百分比是多少，只要存在未清除（<c>ClearedAt == null</c>）的记录，路由层就必须
+/// 该记录代表一次由运维人员手动触发的紧急干预：无论 pipeline_runs snapshot 中
+/// 的 Canary 百分比是多少，只要存在未清除（<c>ClearedAt == null</c>）的记录，路由层就必须
 /// 强制回退到 V1（百分比按 0 处理），且 <c>CanaryProgressionService</c> 不得把
 /// 恢复后的本地状态标记为 <c>Consistent</c>，直到运维显式清除该覆盖。
 /// </remarks>
