@@ -2232,6 +2232,7 @@ M:ContextCore.Abstractions.IAgentRunEventStore.GetAttemptBoundarySequenceAsync(S
 M:ContextCore.Abstractions.IAgentRunEventStore.GetCheckpointCursorAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.GetLastSequenceAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunEventStore.ReadAsync(System.String, System.String, System.Int32, System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRunLease.GetActiveLeaseRunIdsAsync(System.Collections.Generic.IReadOnlyList<System.String>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunLease.HasActiveLeaseAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunLease.MarkLeaseLostIfLeaseExpiredAsync(System.String, System.String, ContextCore.Abstractions.AgentRunState, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentRunLease.ReapExpiredAsync(System.Threading.CancellationToken)

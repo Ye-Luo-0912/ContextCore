@@ -3,11 +3,13 @@ using ContextCore.Abstractions;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Service.Hosting;
 using ContextCore.Storage.Postgres;
+using ContextCore.Storage.Postgres.Extensions;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Testcontainers.PostgreSql;
 
 namespace ContextCore.Tests;
 
@@ -202,6 +204,155 @@ public sealed class R29P_DurableRunSchedulerTests
         Assert.AreEqual(0, result.Count, "take<=0 应短路返回空列表（不触库）。");
     }
 
+    // ── 6.5 空闲槽位联动（B1）──────────────────────────────────────────
+
+    /// <summary>
+    /// 验证：AgentKernelHost.AvailableQueueSlots 精确反映空闲队列槽位——
+    /// 初始 = 全部容量；worker 拾起 Run（阻塞）后槽位释放；队列中等待的 Run 占用槽位。
+    /// </summary>
+    [TestMethod]
+    public async Task Host_AvailableQueueSlots_ReflectsFreeCapacity()
+    {
+        var transport = new RecordingBlockingTransport();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAgentRunStore>(new InMemoryAgentRunStore());
+        services.AddSingleton<IAgentRunEventStore>(new InMemoryAgentRunEventStore(new InMemoryAgentRunStore()));
+        services.AddSingleton<IToolDispatcher>(new NoopToolDispatcher());
+        services.AddSingleton<IAgentModelTransport>(transport);
+        services.AddSingleton(new AgentHostOptions
+        {
+            ChannelCapacity = 4,
+            WorkerCount = 1,
+            // 保留容量归零：AvailableQueueSlots 精确等于常规池剩余 permit，可确定性断言。
+            ReservedQueueCapacity = 0,
+            DrainTimeout = TimeSpan.FromSeconds(5)
+        });
+        services.AddSingleton<AgentKernelHost>();
+        await using var provider = services.BuildServiceProvider();
+        var host = provider.GetRequiredService<AgentKernelHost>();
+
+        Assert.AreEqual(4, host.AvailableQueueSlots, "初始空闲槽位 = 全部容量。");
+
+        var run1 = BuildRun("slots-1");
+        var run2 = BuildRun("slots-2");
+        Assert.AreEqual(AgentRunEnqueueStatus.Accepted, (await host.TryEnqueueAsync(run1)).Status);
+
+        // worker 拾起 run1 并阻塞在 transport → 队列槽位释放，空闲槽位恢复为 4。
+        // （出队在 transport 调用前完成，故 CallCount>=1 即槽位已释放。）
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (transport.CallCount == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20).ConfigureAwait(false);
+        }
+        Assert.IsTrue(transport.CallCount >= 1, "worker 应在超时前拾起 run1 并进入 transport 调用。");
+        Assert.AreEqual(4, host.AvailableQueueSlots, "worker 拾起 Run 后槽位应释放。");
+
+        Assert.AreEqual(AgentRunEnqueueStatus.Accepted, (await host.TryEnqueueAsync(run2)).Status);
+        Assert.AreEqual(3, host.AvailableQueueSlots, "队列中等待的 Run 占用 1 个槽位。");
+    }
+
+    /// <summary>
+    /// 验证：Claimer 领取批次与实际空闲队列槽位联动——6 个可领取 Run、批量上限 10，
+    /// 但空闲槽位只有 4 时，单周期领取量 ≤ 4（而非 10），避免多余 Run 持有 Scheduler Claim。
+    /// </summary>
+    [TestMethod]
+    public async Task Claimer_BatchLimitedByAvailableQueueSlots()
+    {
+        var inner = new InMemoryAgentRunStore();
+        var recording = new RecordingPersistentRunStore(inner);
+        for (var i = 0; i < 6; i++)
+        {
+            await inner.CreateAsync(BuildRun($"claimer-cap-{i}"));
+        }
+
+        var transport = new RecordingBlockingTransport();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAgentRunStore>(recording);
+        services.AddSingleton<IPersistentAgentRunStore>(recording);
+        services.AddSingleton<IAgentRunEventStore>(new InMemoryAgentRunEventStore(inner));
+        services.AddSingleton<IAgentModelTransport>(transport);
+        services.AddSingleton<IToolDispatcher>(new NoopToolDispatcher());
+        services.AddSingleton(new AgentHostOptions
+        {
+            PendingClaimInterval = TimeSpan.FromMilliseconds(50),
+            PendingClaimBatchSize = 10,
+            PendingClaimPerWorkspace = 10,
+            DeadLetterBatchSize = 10,
+            ChannelCapacity = 4,
+            WorkerCount = 1,
+            ReservedQueueCapacity = 0,
+            DrainTimeout = TimeSpan.FromSeconds(5)
+        });
+        services.AddSingleton<AgentKernelHost>();
+        services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
+        await using var provider = services.BuildServiceProvider();
+
+        var claimer = new PostgresPendingRunClaimer(provider, NullLogger<PostgresPendingRunClaimer>.Instance);
+        await claimer.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (recording.ClaimCalls == 0 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50).ConfigureAwait(false);
+            }
+            Assert.IsTrue(recording.ClaimCalls >= 1, "claimer 应至少执行一次领取周期。");
+            await Task.Delay(300).ConfigureAwait(false); // 留出多个周期窗口
+
+            // 空闲槽位 4（容量 4，worker 拾起后释放）→ 领取批次不得超过 4（而非批量上限 10）。
+            Assert.IsTrue(recording.LastClaimTake <= 4,
+                $"领取批次应受空闲槽位（4）约束，实际 {recording.LastClaimTake}。");
+            Assert.IsTrue(recording.LastClaimTake >= 1, "空闲槽位非零时至少领取 1 个 Run。");
+        }
+        finally
+        {
+            transport.Release();
+            await claimer.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    // ── 6.6 Postgres 领取排除活跃执行租约（B2a）─────────────────────────
+
+    /// <summary>
+    /// 验证：ClaimPendingBatchAsync 排除存在活跃执行租约的 Run——正被其他实例执行
+    /// （或崩溃后租约未过期）的 Run 不应被领取入队（避免反复空转），仅领取无租约的 Queued Run。
+    /// </summary>
+    [TestMethod]
+    public async Task Postgres_ClaimBatch_ExcludesRunsWithActiveExecutionLease()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — Postgres 领取排除测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store) = await ResolveStoreAsync(container, "claim_lease_");
+            await using (provider)
+            {
+                var runA = BuildRun("pg-claim-a");
+                var runB = BuildRun("pg-claim-b");
+                await store.CreateAsync(runA).ConfigureAwait(false);
+                await store.CreateAsync(runB).ConfigureAwait(false);
+
+                // 给 runA 一个活跃执行租约（模拟其他实例正在执行）。
+                var leaseStore = provider.GetRequiredService<IAgentRunLease>();
+                var lease = await leaseStore.TryAcquireAsync(
+                    runA.RunId, TimeSpan.FromMinutes(5), "host-other").ConfigureAwait(false);
+                Assert.IsNotNull(lease, "runA 应成功获取执行租约。");
+
+                var claimed = await store.ClaimPendingBatchAsync(
+                    10, 10, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(30),
+                    "claimer-1", TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+
+                Assert.AreEqual(1, claimed.Count, "仅无活跃执行租约的 Queued Run 应被领取。");
+                Assert.AreEqual(runB.RunId, claimed[0].RunId, "runA（活跃执行租约）不得被领取。");
+            }
+        }
+    }
+
     // ── 7. Claimer 循环：领取并驱动执行到终态 ───────────────────────────
 
     /// <summary>
@@ -311,6 +462,46 @@ public sealed class R29P_DurableRunSchedulerTests
                 ConnectionString = "Host=localhost;Database=x;Username=x;Password=x",
                 AutoMigrate = false
             })));
+
+    /// <summary>最小 DI 注册（AddContextCorePostgresStorage），解析持久化 Run store（含租约 store）。</summary>
+    private static async Task<(ServiceProvider Provider, PostgresAgentRunStore Store)> ResolveStoreAsync(
+        PostgreSqlContainer container, string tablePrefix)
+    {
+        var services = new ServiceCollection();
+        services.AddContextCorePostgresStorage(new PostgresOptions
+        {
+            ConnectionString = container.GetConnectionString(),
+            AutoMigrate = true,
+            EnablePgVectorExtension = true,
+            TablePrefix = tablePrefix
+        });
+        var provider = services.BuildServiceProvider();
+        var store = provider.GetRequiredService<IPersistentAgentRunStore>();
+        Assert.IsInstanceOfType(store, typeof(PostgresAgentRunStore),
+            "AddContextCorePostgresStorage 必须把 IPersistentAgentRunStore 解析为 PostgresAgentRunStore。");
+        return (provider, (PostgresAgentRunStore)store);
+    }
+
+    private static async Task<PostgreSqlContainer?> TryStartPostgresAsync()
+    {
+        const string pgVectorImage = "pgvector/pgvector:pg17";
+        try
+        {
+            var container = new PostgreSqlBuilder(pgVectorImage)
+                .WithDatabase("cctest")
+                .WithUsername("cctest")
+                .WithPassword("cctest")
+                .Build();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await container.StartAsync(cts.Token);
+            return container;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[R29P_DurableRunSchedulerTests] Docker/Postgres 不可用：{ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
 
     /// <summary>Host + InMemory store + 阻塞/录制 transport 的优先级调度夹具。</summary>
     private sealed class PriorityHarness : IAsyncDisposable
@@ -474,11 +665,15 @@ public sealed class R29P_DurableRunSchedulerTests
     {
         private readonly InMemoryAgentRunStore _inner;
         private int _claimCalls;
+        private int _lastClaimTake;
 
         public RecordingPersistentRunStore(InMemoryAgentRunStore inner) => _inner = inner;
 
         /// <summary>ClaimPendingBatchAsync 调用次数。</summary>
         public int ClaimCalls => Volatile.Read(ref _claimCalls);
+
+        /// <summary>最近一次 ClaimPendingBatchAsync 的 take 参数（验证领取批次与空闲槽位联动）。</summary>
+        public int LastClaimTake => Volatile.Read(ref _lastClaimTake);
 
         public ValueTask CreateAsync(AgentRun run, CancellationToken cancellationToken = default)
             => _inner.CreateAsync(run, cancellationToken);
@@ -515,6 +710,7 @@ public sealed class R29P_DurableRunSchedulerTests
             CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _claimCalls);
+            Volatile.Write(ref _lastClaimTake, take);
             // P0-6/P0-8：Claimer 领取 Queued（state=21）Run（不再领取 Created）。
             return await _inner.ListByStateAsync(AgentRunState.Queued, take, null, null, cancellationToken)
                 .ConfigureAwait(false);

@@ -245,6 +245,78 @@ public sealed class R29L_AgentRunRecoveryScanTests
         }
     }
 
+    /// <summary>
+    /// 验证：Recovery Worker 跳过存在活跃执行租约的 Run（正被其他实例执行）——
+    /// 不把无法取得 Execution Lease 的 Run 反复放入本地队列；无租约的 Running Run 正常恢复入队。
+    /// </summary>
+    [TestMethod]
+    public async Task RecoveryWorker_SkipsRunsWithActiveExecutionLease()
+    {
+        var innerStore = new InMemoryAgentRunStore();
+        var recordingStore = new RecordingPersistentRunStore(innerStore);
+        var eventStore = new InMemoryAgentRunEventStore(recordingStore);
+        var leaseStore = new InMemoryAgentRunLease(recordingStore);
+
+        var now = DateTimeOffset.UtcNow;
+        var runNoLease = BuildRun("recover-no-lease", AgentRunState.Running, now);
+        var runWithLease = BuildRun("recover-with-lease", AgentRunState.Running, now);
+        await recordingStore.CreateAsync(runNoLease);
+        await recordingStore.CreateAsync(runWithLease);
+
+        // 给 runWithLease 一个活跃执行租约（模拟其他实例正在执行——无需恢复）。
+        var lease = await leaseStore.TryAcquireAsync(
+            runWithLease.RunId, TimeSpan.FromMinutes(5), "host-other");
+        Assert.IsNotNull(lease, "模拟其他实例持有执行租约。");
+
+        // 阻塞 transport：首个调用阻塞，观察哪些 Run 被恢复入队。
+        var blockingTransport = new BlockingModelTransport();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAgentRunStore>(recordingStore);
+        services.AddSingleton<IPersistentAgentRunStore>(recordingStore);
+        services.AddSingleton<IAgentRunEventStore>(eventStore);
+        services.AddSingleton<IAgentRunLease>(leaseStore);
+        services.AddSingleton<IToolDispatcher>(new EchoToolDispatcher());
+        services.AddSingleton<IAgentModelTransport>(blockingTransport);
+        services.AddSingleton<AgentKernelHost>();
+        services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
+        var serviceProvider = services.BuildServiceProvider();
+
+        await using (serviceProvider.GetRequiredService<AgentKernelHost>())
+        {
+            var options = new ContextCoreRuntimeOptions
+            {
+                EnableAgentRunRecovery = true,
+                RunRecoveryInterval = TimeSpan.FromMilliseconds(50),
+                RunExecutionTimeout = TimeSpan.FromHours(1)
+            };
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+            var worker = new AgentRunRecoveryWorker(
+                serviceProvider, options, loggerFactory.CreateLogger<AgentRunRecoveryWorker>());
+            await worker.StartAsync(CancellationToken.None);
+            try
+            {
+                // 等待无租约的 Run 被恢复入队并阻塞在 transport（首次调用）。
+                var deadline = DateTime.UtcNow.AddSeconds(8);
+                while (blockingTransport.CallCount == 0 && DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(50);
+                }
+                Assert.IsTrue(blockingTransport.CallCount >= 1, "无租约的 Running Run 应被恢复入队。");
+                // 留出窗口：若有租约的 Run 被错误入队，transport 会收到第 2 次调用。
+                await Task.Delay(300);
+                Assert.AreEqual(1, blockingTransport.CallCount,
+                    "存在活跃执行租约的 Run 不得被恢复入队（避免反复空转）。");
+                Assert.AreEqual(runNoLease.RunId, blockingTransport.CallOrder.Single(),
+                    "被恢复入队的应为无租约的 Run。");
+            }
+            finally
+            {
+                blockingTransport.Release();
+                await worker.StopAsync(CancellationToken.None);
+            }
+        }
+    }
+
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
     private static AgentRun BuildRun(string runId, AgentRunState state, DateTimeOffset timestamp) => new()
@@ -343,5 +415,49 @@ public sealed class R29L_AgentRunRecoveryScanTests
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)
             => ValueTask.FromResult<IReadOnlyList<AgentRun>>(Array.Empty<AgentRun>());
+    }
+
+    /// <summary>
+    /// transport stub：首个调用阻塞在 TCS（观察恢复入队），后续调用立即返回最终答案；
+    /// 录制调用顺序（按 RunId）。
+    /// </summary>
+    private sealed class BlockingModelTransport : IAgentModelTransport
+    {
+        private readonly ConcurrentQueue<string> _callOrder = new();
+        private TaskCompletionSource<AgentModelResponse>? _gate;
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+        public IReadOnlyList<string> CallOrder => _callOrder.ToList();
+
+        public ValueTask<AgentModelResponse> CallAsync(string runId, string context, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException("应调用 AgentModelRequest 重载。");
+
+        public ValueTask<AgentModelResponse> CallAsync(string runId, IReadOnlyList<AgentMessage> messages, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException("应调用 AgentModelRequest 重载。");
+
+        public async ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+        {
+            var n = Interlocked.Increment(ref _callCount);
+            _callOrder.Enqueue(request.RunId);
+            if (n == 1)
+            {
+                var gate = new TaskCompletionSource<AgentModelResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _gate = gate;
+                return await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            return FinalResponse();
+        }
+
+        public void Release() => _gate?.TrySetResult(FinalResponse());
+
+        private static AgentModelResponse FinalResponse() => new()
+        {
+            Content = "完成",
+            ToolCalls = Array.Empty<AgentToolCallRequest>(),
+            IsFinalAnswer = true,
+            TokensConsumed = 3,
+            Duration = TimeSpan.FromMilliseconds(1)
+        };
     }
 }

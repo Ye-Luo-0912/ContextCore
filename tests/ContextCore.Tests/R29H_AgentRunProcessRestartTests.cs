@@ -910,6 +910,10 @@ public sealed class R29H_AgentRunProcessRestartTests
         public ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
             => _inner.HasActiveLeaseAsync(runId, cancellationToken);
 
+        public ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
+            IReadOnlyList<string> runIds, CancellationToken cancellationToken = default)
+            => _inner.GetActiveLeaseRunIdsAsync(runIds, cancellationToken);
+
         public ValueTask<int> MarkLeaseLostIfLeaseExpiredAsync(
             string workspaceId, string runId, AgentRunState expectedCurrentState, CancellationToken ct = default)
             => _inner.MarkLeaseLostIfLeaseExpiredAsync(workspaceId, runId, expectedCurrentState, ct);

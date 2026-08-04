@@ -238,6 +238,29 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     }
 
     /// <inheritdoc />
+    public ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
+        IReadOnlyList<string> runIds,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (runIds.Count == 0)
+        {
+            return ValueTask.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var active = new List<string>(runIds.Count);
+        foreach (var runId in runIds)
+        {
+            if (_leases.TryGetValue(runId, out var entry) && entry.ExpiresAt > now)
+            {
+                active.Add(runId);
+            }
+        }
+        return ValueTask.FromResult<IReadOnlyList<string>>(active);
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     /// InMemory 实现 — 检查无活跃租约后通过 IAgentRunStore 推进状态机到 LeaseLost（CAS）。
     /// 注入 IAgentRunStore 时执行完整转移；未注入时仅返回"可以标记"信号（1=无活跃租约，0=有活跃租约）。

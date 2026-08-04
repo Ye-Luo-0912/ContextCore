@@ -540,6 +540,13 @@ WITH eligible AS (
                 -- 退避门（NextRetryAtUtc）通过后由 Durable Scheduler 领取重新入队。
                 (state = 17 AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
             )
+            AND NOT EXISTS (
+                -- 排除存在活跃执行租约的 Run：正被其他实例执行（或崩溃后租约尚未过期），
+                -- 领取只会入队后因无法取得 Execution Lease 被丢弃（反复空转）。
+                SELECT 1 FROM {Table("agent_run_leases")} l
+                WHERE l.run_id = {Table("agent_runs")}.run_id
+                  AND l.lease_expires_at > clock_timestamp()
+            )
             ORDER BY priority DESC, created_at ASC, run_id ASC
             LIMIT @take
             FOR UPDATE SKIP LOCKED

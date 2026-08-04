@@ -2125,6 +2125,18 @@ public interface IAgentRunLease
     ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 批量查询指定 Run 中哪些存在未过期（活跃）执行租约——供 Recovery Worker
+    /// 跳过正被其他实例执行的 Run，避免把无法取得 Execution Lease 的 Run 反复放入本地队列。
+    /// 空输入返回空列表。
+    /// </summary>
+    /// <param name="runIds">待过滤的 Run ID 集合。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>存在未过期租约的 Run ID 子集（无则空列表）。</returns>
+    ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
+        IReadOnlyList<string> runIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Atomically mark a Run as LeaseLost if it has no active lease and its state matches.
     /// 用于 Recovery Worker 的超时回收：Run 在非终态停留超过 RunExecutionTimeout 且无人持有租约，
     /// 说明原 owner 已丢租（崩溃/网络分区）且未及时被接管——原子写入终态 LeaseLost（区别于 Failed）。

@@ -178,6 +178,16 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
         }
 
         // 2. 领取 pending Run（SKIP LOCKED，优先级倒序 + 每 workspace 公平上限）。
+        // 领取数量与实际空闲队列槽位联动：只领取能入队的量，避免多余 Run 持有
+        // Scheduler Claim 直到过期（阻塞其他节点重新调度）；队列已满时本周期不领取
+        // （Run 已持久化，下周期再取）。
+        var availableSlots = host.AvailableQueueSlots;
+        if (availableSlots <= 0)
+        {
+            return;
+        }
+        claimBatch = Math.Min(claimBatch, availableSlots);
+
         // P0-8：Scheduler Claim Lease 真正落库（claim_owner / claim_token / claim_expires_at）——
         // 领取即写入持有者/令牌/过期时间，事务提交后其他节点不得重复领取同一 Run。
         IReadOnlyList<AgentRun> claimed;

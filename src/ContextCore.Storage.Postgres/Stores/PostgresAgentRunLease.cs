@@ -299,6 +299,38 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
+        IReadOnlyList<string> runIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(runIds);
+        if (runIds.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT l.run_id
+FROM unnest(@run_ids) AS ids(run_id)
+JOIN {Table("agent_run_leases")} l ON l.run_id = ids.run_id
+WHERE l.lease_expires_at > clock_timestamp();
+""";
+        command.Parameters.AddWithValue("run_ids", runIds.ToArray());
+
+        var active = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            active.Add(reader.GetString(0));
+        }
+        return active;
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     /// 单 SQL 原子操作 — 只有无活跃租约 AND 状态匹配时才更新为 LeaseLost。
     /// 消除 Recovery Worker 中 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。

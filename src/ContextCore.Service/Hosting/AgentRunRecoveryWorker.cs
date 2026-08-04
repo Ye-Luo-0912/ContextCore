@@ -177,6 +177,9 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
             return;
         }
 
+        // 执行租约存储（批量过滤正被其他实例执行的 Run；未注册时跳过过滤——单节点无租约竞争）。
+        var runLease = scope.ServiceProvider.GetService<IAgentRunLease>();
+
         var timeout = _options.RunExecutionTimeout;
         var now = DateTimeOffset.UtcNow;
         var totalRecovered = 0;
@@ -203,8 +206,34 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                 continue;
             }
 
+            // 批量过滤活跃执行租约：正被其他实例执行的 Run 无需恢复——
+            // 避免把无法取得 Execution Lease 的 Run 反复放入本地队列（入队后丢执行槽空转）。
+            HashSet<string>? activeLeaseRunIds = null;
+            if (runLease is not null)
+            {
+                try
+                {
+                    var active = await runLease.GetActiveLeaseRunIdsAsync(
+                        runs.Select(r => r.RunId).ToList(), cancellationToken).ConfigureAwait(false);
+                    if (active.Count > 0)
+                    {
+                        activeLeaseRunIds = new HashSet<string>(active, StringComparer.Ordinal);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // 过滤失败按无过滤处理（保守恢复路径，不阻断扫描）。
+                    _logger.LogDebug(ex, "AgentRunRecoveryWorker: 批量查询活跃执行租约失败（跳过过滤）。");
+                }
+            }
+
             foreach (var run in runs)
             {
+                if (activeLeaseRunIds is not null && activeLeaseRunIds.Contains(run.RunId))
+                {
+                    // 该 Run 存在活跃执行租约（其他实例正在执行）→ 跳过恢复，等待其完成/租约过期。
+                    continue;
+                }
                 // Recovery Integrity State：RecoveryDependencyUnavailable（17）是退避重试状态。
                 // 跳过超时→LeaseLost 逻辑（Run 是故意等待退避门而非卡死——标记 LeaseLost 会把它
                 // 移出恢复路径，破坏 fail-closed 语义），并在退避门（NextRetryAtUtc）未通过时
@@ -257,7 +286,6 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
                         // 单 SQL 原子转移 — 消除 HasActiveLeaseAsync + TransitionStateAsync 的 check-then-act 竞态。
                         // 只有无活跃租约 AND 状态匹配时才更新为 Failed，避免误杀正被活跃 Actor 持有合法租约的 Run。
-                        var runLease = scope.ServiceProvider.GetService<IAgentRunLease>();
                         if (runLease is not null)
                         {
                             try

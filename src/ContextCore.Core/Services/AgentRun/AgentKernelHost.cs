@@ -422,6 +422,13 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// <summary>调度队列容量上限（诊断/监控用，含保留容量）。</summary>
     public int QueueCapacity => _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
 
+    /// <summary>
+    /// 当前空闲队列槽位数（常规池 + 保留池剩余 permit，诊断/调度联动用）。
+    /// 供外部调度器（PostgresPendingRunClaimer）按实际可入队容量领取 Run，
+    /// 避免领取超过空闲槽位导致多余 Run 持有 Scheduler Claim 直到过期。
+    /// </summary>
+    public int AvailableQueueSlots => _queueCapacity.CurrentCount + (_reservedCapacity?.CurrentCount ?? 0);
+
     /// <summary>固定 worker 数（从队列拉取 Run 并执行的后台任务数）。</summary>
     public int WorkerCount => _workerCount;
 
