@@ -154,9 +154,10 @@ public sealed class PostgresPerformanceTests
 
             Console.WriteLine($"[Postgres Perf] Single: {swSingle.ElapsedMilliseconds}ms, 4-way concurrent: {swConcurrent.ElapsedMilliseconds}ms, ratio: {swConcurrent.Elapsed.TotalMilliseconds / swSingle.Elapsed.TotalMilliseconds:F2}x");
 
-            // 4 路并发不应超过单路 × 4（最坏情况 = 完全串行化），实际应有并行加速
-            Assert.IsTrue(swConcurrent.Elapsed.TotalSeconds < swSingle.Elapsed.TotalSeconds * 4.0,
-                $"4 路并发延迟 {swConcurrent.Elapsed.TotalSeconds:F2}s 超过单路 × 4 = {swSingle.Elapsed.TotalSeconds * 4.0:F2}s");
+            // 4 路并发不应超过单路 × 4（最坏情况 = 完全串行化），实际应有并行加速；
+            // 叠加 0.25s 绝对容差，吸收慢速 CI runner 上亚秒级测量的调度抖动
+            Assert.IsTrue(swConcurrent.Elapsed.TotalSeconds < swSingle.Elapsed.TotalSeconds * 4.0 + 0.25,
+                $"4 路并发延迟 {swConcurrent.Elapsed.TotalSeconds:F2}s 超过单路 × 4 + 0.25s = {swSingle.Elapsed.TotalSeconds * 4.0 + 0.25:F2}s");
         }
         finally
         {
@@ -166,7 +167,8 @@ public sealed class PostgresPerformanceTests
 
     /// <summary>
     /// 16 路高并发测试：验证 Postgres 在高并发下的连接池限制和降级行为。
-    /// 预算：16 路并发应在单路 × 10 倍时间内完成（允许连接池争用导致的性能下降）。
+    /// 预算：16 路并发应在单路 × 10 倍 + 0.5s 容差时间内完成（允许连接池争用导致的性能下降，
+    /// 容差用于吸收慢速 CI runner 上亚秒级测量的抖动）。
     /// </summary>
     [TestMethod]
     [Timeout(120_000)]
@@ -204,9 +206,9 @@ public sealed class PostgresPerformanceTests
 
             Console.WriteLine($"[Postgres Perf] Single: {swSingle.ElapsedMilliseconds}ms, 16-way concurrent: {swConcurrent.ElapsedMilliseconds}ms, ratio: {swConcurrent.Elapsed.TotalMilliseconds / swSingle.Elapsed.TotalMilliseconds:F2}x");
 
-            // 16 路并发不应超过单路 × 10（允许连接池争用和上下文切换开销）
-            Assert.IsTrue(swConcurrent.Elapsed.TotalSeconds < swSingle.Elapsed.TotalSeconds * 10.0,
-                $"16 路并发延迟 {swConcurrent.Elapsed.TotalSeconds:F2}s 超过单路 × 10 = {swSingle.Elapsed.TotalSeconds * 10.0:F2}s");
+            // 16 路并发不应超过单路 × 10 + 0.5s（允许连接池争用和上下文切换开销）
+            Assert.IsTrue(swConcurrent.Elapsed.TotalSeconds < swSingle.Elapsed.TotalSeconds * 10.0 + 0.5,
+                $"16 路并发延迟 {swConcurrent.Elapsed.TotalSeconds:F2}s 超过单路 × 10 + 0.5s = {swSingle.Elapsed.TotalSeconds * 10.0 + 0.5:F2}s");
         }
         finally
         {

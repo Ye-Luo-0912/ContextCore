@@ -55,9 +55,11 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
         var tables = await ListTablesAsync(cancellationToken).ConfigureAwait(false);
 
         // 2) 调用 pg_dump -Fc -f <outputPath>
+        var (dumpArgs, dumpEnv) = BuildDumpArguments(outputPath);
         await RunProcessAsync(
             ResolveBinary("pg_dump"),
-            BuildDumpArguments(outputPath),
+            dumpArgs,
+            dumpEnv,
             cancellationToken).ConfigureAwait(false);
 
         // 3) 计算转储文件哈希与大小
@@ -117,8 +119,8 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
             throw new FileNotFoundException("Postgres 转储文件不存在。", dumpPath);
         }
 
-        var args = BuildRestoreArguments(dumpPath, cleanBeforeRestore);
-        await RunProcessAsync(ResolveBinary("pg_restore"), args, cancellationToken).ConfigureAwait(false);
+        var (args, env) = BuildRestoreArguments(dumpPath, cleanBeforeRestore);
+        await RunProcessAsync(ResolveBinary("pg_restore"), args, env, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -256,31 +258,67 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
         return null;
     }
 
-    private IReadOnlyList<string> BuildDumpArguments(string outputPath)
+    /// <summary>
+    /// 把 Npgsql 连接字符串拆分为 libpq 可识别的连接参数与密码环境变量。
+    /// libpq 不识别 Npgsql 风格的键（Host/Database/Username），须转换为
+    /// host/dbname/user，密码通过 PGPASSWORD 传递以避免出现在命令行中。
+    /// </summary>
+    private (IReadOnlyList<string> Args, IReadOnlyDictionary<string, string>? Env) BuildConnectionArguments()
     {
-        // 注意：通过 -d 传递整个连接字符串；--no-password 防止交互式阻塞
+        var builder = new NpgsqlConnectionStringBuilder(_factory.Options.ConnectionString);
+        var args = new List<string>();
+        if (!string.IsNullOrEmpty(builder.Host))
+        {
+            args.Add($"--host={builder.Host}");
+        }
+        if (builder.Port != 0)
+        {
+            args.Add($"--port={builder.Port}");
+        }
+        if (!string.IsNullOrEmpty(builder.Database))
+        {
+            args.Add($"--dbname={builder.Database}");
+        }
+        if (!string.IsNullOrEmpty(builder.Username))
+        {
+            args.Add($"--username={builder.Username}");
+        }
+
+        IReadOnlyDictionary<string, string>? env = null;
+        if (!string.IsNullOrEmpty(builder.Password))
+        {
+            env = new Dictionary<string, string> { ["PGPASSWORD"] = builder.Password };
+        }
+        return (args, env);
+    }
+
+    private (IReadOnlyList<string> Args, IReadOnlyDictionary<string, string>? Env) BuildDumpArguments(string outputPath)
+    {
+        // 连接参数拆分传入；--no-password 防止交互式阻塞
+        var (connectionArgs, env) = BuildConnectionArguments();
         var args = new List<string>
         {
             "--format=custom",
             "--no-password",
-            $"--file={outputPath}",
-            $"--dbname={_factory.Options.ConnectionString}"
+            $"--file={outputPath}"
         };
+        args.AddRange(connectionArgs);
         if (!string.IsNullOrEmpty(_factory.Options.SchemaName))
         {
             args.Add($"--schema={_factory.Options.SchemaName}");
         }
-        return args;
+        return (args, env);
     }
 
-    private IReadOnlyList<string> BuildRestoreArguments(string dumpPath, bool cleanBeforeRestore)
+    private (IReadOnlyList<string> Args, IReadOnlyDictionary<string, string>? Env) BuildRestoreArguments(string dumpPath, bool cleanBeforeRestore)
     {
+        var (connectionArgs, env) = BuildConnectionArguments();
         var args = new List<string>
         {
-            "--no-password",
-            $"--dbname={_factory.Options.ConnectionString}",
-            dumpPath
+            "--no-password"
         };
+        args.AddRange(connectionArgs);
+        args.Add(dumpPath);
         if (cleanBeforeRestore)
         {
             args.Add("--clean");
@@ -290,12 +328,13 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
         {
             args.Add($"--schema={_factory.Options.SchemaName}");
         }
-        return args;
+        return (args, env);
     }
 
     private async Task RunProcessAsync(
         string executable,
         IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string>? environment,
         CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
@@ -309,6 +348,13 @@ public sealed class PostgresBackupRunner : IAsyncDisposable
         foreach (var a in args)
         {
             startInfo.ArgumentList.Add(a);
+        }
+        if (environment is not null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                startInfo.Environment[key] = value;
+            }
         }
 
         using var process = new Process { StartInfo = startInfo };

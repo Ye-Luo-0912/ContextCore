@@ -26,8 +26,11 @@ namespace ContextCore.IntegrationTests;
 [TestCategory("DockerRequired")]
 public sealed class PostgresBackupIntegrationTests
 {
-    // pgvector 官方镜像，含 pg 17 + vector 扩展；与 PostgresIntegrationTests 保持一致
-    private const string PgVectorImage = "pgvector/pgvector:pg17";
+    // pgvector 官方镜像，含 pg 16 + vector 扩展。
+    // 选用 pg 16 与 CI runner 预装的 pg_dump/pg_restore 16 版本匹配：
+    // pg_dump 无法转储比自身更新的服务器，若服务器为 pg 17 而客户端为 16，
+    // 会以 "server version mismatch" 中止；pg 16 服务器对 16/17 客户端均兼容。
+    private const string PgVectorImage = "pgvector/pgvector:pg16";
 
     private static PostgreSqlContainer? _container;
     private static string? _connectionString;
