@@ -2680,7 +2680,14 @@ public sealed record AgentRunEventSnapshot
     /// <summary>已折叠（归档）的事件数。</summary>
     public required int FoldedEventCount { get; init; }
 
-    /// <summary>折叠状态摘要（JSON；锚点事件的完整 data 序列化，作为状态重建基准）。</summary>
+    /// <summary>
+    /// 折叠状态摘要（JSON）。<b>P0-10 正式方案</b>：此字段存
+    /// <see cref="AgentRunRecoverableState"/>（<see cref="AgentRunEventStateRebuilder.Rebuild"/>
+    /// 从折叠前缀 [0..anchor] 重建的完整可恢复状态：Conversation / ToolObservations /
+    /// ExecutionModelTurn / PendingToolCommands + Sequence/ChainHeadHash），
+    /// Recovery 按 "Snapshot → validate anchor → replay hot delta" 恢复。
+    /// 旧版本（WP-C1）曾存锚点事件的完整 data 序列化，无法解析为可恢复状态。
+    /// </summary>
     public required string StateJson { get; init; }
 
     /// <summary>快照创建时间（UTC）。</summary>

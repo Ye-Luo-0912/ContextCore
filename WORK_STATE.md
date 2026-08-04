@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `92a19c3d`（WP-B 已推送；R30.1 实施中）。
+- **基线**：main @ `92a19c3d`（WP-B 已推送；R30.1 实施中；WP-C3 待推送）。
 - **进行中**：R30.1 Production Semantics Stabilization（16 项 P0 阻断项，12 个 WP，计划见会话 plan.md）。
-- **最近完成**：WP-C2 不可变 Attempt（P0-9，事件不删除 + RunRetryScheduled/AttemptStarted/AttemptFailed + unnest 成对）。
+- **最近完成**：WP-C3 可恢复快照（P0-10 正式方案，Snapshot + Anchor + Hot Delta + Archived Audit Stream）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -47,6 +47,13 @@
   - Actor 续写标记（Storage.Postgres 不引用 Core，哈希链只能由 Actor 追加）：重试 fresh-start（RetryCount>0）时 `BeginRetryAttemptAsync` 读取事件流尾部（GetLastSequenceAsync + ReadAsync 尾事件）作为续写锚点（Sequence+1 / PrevChainHash=尾哈希），缓冲 RunRetryScheduled → AttemptStarted → RunCreated；尾部读取失败非致命——首次 flush 的 AppendBatchAsync 以 Sequence 不连续显式失败（fail-closed）。失败路径 `FailAsync` 在 RunFailed 后追加 AttemptFailed（仅 RetryCount>0；首次执行不追加，向后兼容无迁移）。
   - 恢复边界：`RebuildStateFromEventsAsync` 以 `GetAttemptBoundarySequenceAsync` 钳制重放起点 fromSequence = max(checkpointCursor+1, 边界+1)；锚点读取从 fromSequence-1 泛化（快路径游标事件 = 不可变 Attempt 的 RunRetryScheduled），锚点缺失抛 RecoveryCorrupted；快路径降级为全量重放时仍受边界约束（attemptBoundaryStart），前序 Attempt 的对话/工具观察不污染当前 Attempt。
   - 测试：新增 `R30Z_ImmutableAttemptTests`（8 项：枚举值固定 13/14/15/16、边界查询空流/无标记/有标记返回 -1/-1/标记序号、重试全新启动续写标记且前序历史保留+VerifyChain+Completed、重试 Attempt 失败追加 RunFailed+AttemptFailed、恢复只重放当前 Attempt（模型只见 attempt-2-content 不见 attempt-1-content）、无边界恢复全量重放向后兼容）；更新 R29H/R29Q 假 store 接口签名；PublicApi baseline +4（3 枚举值 + 1 接口方法）。验证：build 0 错误；定向 318 通过 / 2 既有失败 / 5 跳过（R30Z+R29H+R29Q+R30Y+PublicApi）。
+- **WP-C3 已完成**（P0-10 正式方案）：Recoverable Snapshot + Anchor + Hot Delta + Archived Audit Stream。
+  - 契约（Abstractions，PublicApi baseline 已更新）：新增 `AgentRunRecoverableState`（Sequence / ChainHeadHash / Conversation / ToolObservations / ExecutionModelTurn / PendingToolCommands，前五项 required——旧 WP-C1 锚点-only JSON 因缺必需成员反序列化失败返回 null，杜绝静默丢对话）+ `AgentRunEventStateRebuilder` 共享重建器（Rebuild 全量重建、Serialize/TryDeserialize 快照序列化、RebuildFromEvent 增量、RebuildExecutionModelTurn 嵌入值取 max + legacy 计数、ExtractPendingToolCommands 回溯最后一个 ApprovalRequested）；Actor 原私有重建助手全部委托共享静态——全量重放 / Checkpoint / 快照三条路径同一真相源。
+  - Compactor（Storage.Postgres）：`UpsertSnapshotAsync` 改为对折叠前缀全量 `Rebuild` 并序列化写入 state_json（不再只存锚点）；折叠产出 = 归档前缀 + 热表锚点 + 可恢复快照四段式；终态-only 压缩保留为保守策略（文档化，非需求约束）。
+  - Actor 恢复（AgentRunActor）：注入可选 `IAgentRunEventCompactor`（AgentKernelHost.CreateActor 解析传入）；恢复顺序 Snapshot → validate anchor → replay hot delta——`TryRestoreSnapshotStateAsync` 探测快照，仅当 `fromSequence < state.Sequence + 1` 走快照路径（Attempt 边界/游标超前时忽略，防前序 Attempt 污染）；快照路径禁用游标快路径（游标可能指向已归档事件）；锚点热事件 ContentHash 与快照 ChainHeadHash 不一致即抛 RecoveryCorrupted（fail-closed）；旧格式/不可解析快照回退既有重放路径同样 fail-closed；`BuildResumedStateFromSnapshot` 以快照 Conversation/ToolObservations 为基 + 增量重放热 delta，PendingToolExecution 由 delta 提取 ?? 快照恢复，ExecutionModelTurn = max(快照, delta 嵌入值) + legacy 计数。
+  - Raw Events 审计（AgentExecutionEndpoints）：`GET /{id}/events/raw` 注入 compactor 时读取归档 + 热表并按 Sequence 双指针归并（`MergeRawEventStreams`，同 Sequence 归档优先），压缩后管理员仍可看完整历史。
+  - 测试：新增 `R30S_RecoverableSnapshotTests`（11 项：Rebuild 构建对话/观察/轮次/哈希头、空流抛、序列化往返、旧格式锚点 JSON 返回 null、ApprovalRequested 提取 PendingToolCommands、ExecutionModelTurn 嵌入值 max + legacy 计数、Actor 快照恢复后重放热 delta、锚点哈希不一致 fail-closed RecoveryCorrupted、Raw Events 归档热表按 Sequence 交错、limit 截断、无归档回退热表）；PublicApi baseline 重新生成（+~24 项）。
+  - 验证：build 0 错误；R30S 11/11 + 相邻套件（R29S+R30S+R30Z+R30X+R30Y）54/54；PublicApi 2 通过 1 跳过；920 项定向扫描 910 通过 / 6 失败全部命中既有 11 项 / 4 跳过。
 
 ### 性能优化工作包进度
 

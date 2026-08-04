@@ -114,6 +114,9 @@ public sealed class AgentRunActor
     private readonly AgentHostOptions? _hostOptions;
     // Recovery Integrity State：人工介入告警接收器（null = 不告警，best-effort 钩子）。
     private readonly IRecoveryAlertSink? _alertSink;
+    // P0-10 正式方案：事件流压缩器（null = 非 Postgres provider，无快照/归档，走全量重放）。
+    // Recovery 按 "Snapshot → validate anchor → replay hot delta" 从可恢复快照恢复折叠状态。
+    private readonly IAgentRunEventCompactor? _eventCompactor;
 
     /// <summary>
     /// 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
@@ -188,6 +191,10 @@ public sealed class AgentRunActor
     /// <param name="toolCatalog">Tool 目录（提供模型 function calling 声明；null 时回退到 toolDispatcher 的 IToolCatalog 实现，均无则空列表）。</param>
     /// <param name="hostOptions">Host 选项（提供恢复退避参数；null 时用默认值 30s base / 30min cap）。</param>
     /// <param name="alertSink">人工介入告警接收器（null = 不告警；best-effort 钩子）。</param>
+    /// <param name="eventCompactor">
+    /// 事件流压缩器（null = 非 Postgres provider；P0-10 正式方案：Recovery 读取
+    /// 可恢复快照 + 归档审计，按 "Snapshot → validate anchor → replay hot delta" 恢复）。
+    /// </param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -205,7 +212,8 @@ public sealed class AgentRunActor
         IToolReconciliationStore? reconciliationStore = null,
         IToolCatalog? toolCatalog = null,
         AgentHostOptions? hostOptions = null,
-        IRecoveryAlertSink? alertSink = null)
+        IRecoveryAlertSink? alertSink = null,
+        IAgentRunEventCompactor? eventCompactor = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -231,6 +239,7 @@ public sealed class AgentRunActor
         _turnStartState = AgentRunState.Created;
         _hostOptions = hostOptions;
         _alertSink = alertSink;
+        _eventCompactor = eventCompactor;
     }
 
     /// <summary>
@@ -522,8 +531,12 @@ public sealed class AgentRunActor
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>重建后的执行状态（含 ToolObservations / EventSequence / EventChainHash）。</returns>
     /// <remarks>
-    /// <b>重建策略</b>：
+    /// <b>重建策略</b>（优先级从高到低）：
     /// <list type="bullet">
+    /// <item>可恢复快照（P0-10 正式方案）：存在可解析的 Recoverable Snapshot 且覆盖范围
+    /// 超过重放起点时，按 "Snapshot → validate anchor → replay hot delta" 恢复——
+    /// 快照还原折叠前缀 [0..anchor] 的状态（对话流 / 工具观察 / 模型轮次 / Pending 命令），
+    /// 校验热表锚点 ContentHash == 快照 ChainHeadHash，再重放锚点后的热表增量事件。</item>
     /// <item>存在 Checkpoint Cursor 且 checkpoint 本体 metadata 完整时走快路径：
     /// 从 checkpoint 还原对话流 / 工具观察 / 模型轮次，仅重放游标之后的新事件。</item>
     /// <item>否则读取 Run 的完整事件流（按 Sequence 升序），从事件重建全部状态。</item>
@@ -544,8 +557,9 @@ public sealed class AgentRunActor
     /// 已 commit 的 Tool 不会被重复执行（返回缓存结果）。
     ///
     /// <b>降级处理</b>：
-    /// 快路径读取失败时降级为全量事件重放；若事件流为空（崩溃发生在首次 flush 之前）
-    /// 或无事件可读，回退为全新启动路径。
+    /// 快路径/快照路径读取失败时降级为全量事件重放；若事件流为空（崩溃发生在首次 flush 之前）
+    /// 或无事件可读，回退为全新启动路径。快照缺失/不可解析（旧格式）时，压缩过的热表
+    /// 会由全量重放 fail-closed 判定 RecoveryCorrupted（安全，需运维介入）。
     /// </remarks>
     private async Task<AgentRunExecutionState> RebuildStateFromEventsAsync(
         AgentRunExecutionState state,
@@ -603,13 +617,40 @@ public sealed class AgentRunActor
         // 区分恢复失败原因：事件数据损坏（哈希链/序列号/ContentHash） vs 存储不可用。
         var recoveryCorruptionDetected = false;
 
+        // ── 可恢复快照探测（P0-10 正式方案）────────────────────────────
+        // 折叠前缀已归档到 agent_run_events_archive，热表只保留锚点 + 增量事件，
+        // Recovery 不能依赖"从 Sequence 0 全量重放"。存在可解析的 Recoverable
+        // Snapshot 且覆盖范围超过当前重放起点（fromSequence）时，启用快照路径：
+        //   Snapshot → validate anchor → replay hot delta。
+        // 忽略快照的场景：
+        // - 快照不可解析（旧格式仅序列化锚点事件 / 损坏）→ 降级为现有恢复路径
+        //   （压缩过的热表会 fail-closed 判定 RecoveryCorrupted，安全，需运维介入）；
+        // - 快照覆盖范围落后于 attempt 边界 / checkpoint 游标（fromSequence 更晚）
+        //   → 保留 cursor/attempt 路径，防止旧 Attempt 上下文污染当前 Attempt。
+        // 快照读取失败（存储不可用）非致命：降级为现有恢复路径。
+        var snapshotRestore = await TryRestoreSnapshotStateAsync(state.Run, cancellationToken).ConfigureAwait(false);
+        var recoverableState = snapshotRestore?.State;
+        // 快照记录链头（agent_run_event_snapshots.chain_head_hash）是锚点校验的权威基准；
+        // state_json 内嵌 ChainHeadHash 与其在同一事务写入，二者一致（不一致视为快照损坏）。
+        var snapshotChainHeadHash = snapshotRestore?.ChainHeadHash;
+        var useSnapshotPath = recoverableState is not null && fromSequence < recoverableState.Sequence + 1;
+        if (useSnapshotPath)
+        {
+            // 快照优先于 checkpoint 快路径：cursor 指向的事件可能已被归档（< 锚点），
+            // 快照本身已覆盖折叠历史，无需 checkpoint metadata 还原。
+            useCursorFastPath = false;
+            restoredContext = null;
+            fromSequence = recoverableState!.Sequence + 1;
+            expectedPrevChainHash = snapshotChainHeadHash;
+        }
+
         while (true)
         {
             try
             {
                 // 从 fromSequence - 1 读取哈希链锚点事件（快路径 = checkpoint 游标指向的事件；
-                // 不可变 Attempt 边界 = RunRetryScheduled 事件）——首个重放事件的
-                // PrevChainHash 必须等于锚点 ContentHash（跨 Attempt 哈希链连续）。
+                // 不可变 Attempt 边界 = RunRetryScheduled 事件；快照路径 = 快照锚点事件）——
+                // 首个重放事件的 PrevChainHash 必须等于锚点 ContentHash（跨 Attempt 哈希链连续）。
                 if (fromSequence > 0)
                 {
                     var boundaryPage = await _eventStore.ReadAsync(
@@ -619,6 +660,18 @@ public sealed class AgentRunActor
                     {
                         boundaryEvent = boundaryPage[0];
                         expectedPrevChainHash = boundaryEvent.ContentHash;
+
+                        // 快照锚点校验（Snapshot → validate anchor）：热表锚点事件的
+                        // ContentHash 必须与快照记录链头（chain_head_hash 列）一致——
+                        // 锚点被替换/篡改时立即判定 RecoveryCorrupted（快照记录与归档
+                        // 同一事务写入，是权威基准）。
+                        if (useSnapshotPath
+                            && !string.Equals(boundaryEvent.ContentHash, snapshotChainHeadHash, StringComparison.Ordinal))
+                        {
+                            throw new AgentRunRecoveryCorruptionException(
+                                $"快照锚点哈希校验失败：热表锚点事件 sequence={boundaryEvent.Sequence} 的 " +
+                                $"ContentHash 与快照 ChainHeadHash 不一致（run={state.Run.RunId}）。");
+                        }
                     }
                     else
                     {
@@ -709,6 +762,13 @@ public sealed class AgentRunActor
             return await EnterRecoveryFailureStateAsync(state, recoveryState, cancellationToken).ConfigureAwait(false);
         }
 
+        // 快照路径：快照已覆盖锚点之前的折叠历史，仅需重放锚点后的热表增量事件
+        // （Snapshot → validate anchor → replay hot delta）。
+        if (useSnapshotPath)
+        {
+            return BuildResumedStateFromSnapshot(state, recoverableState!, boundaryEvent!, allEvents);
+        }
+
         // 快路径：checkpoint 已覆盖游标之前的历史，仅需重放游标之后的新事件
         if (useCursorFastPath)
         {
@@ -752,7 +812,7 @@ public sealed class AgentRunActor
         var rebuiltConversation = new List<AgentMessage>();
         foreach (var evt in events)
         {
-            RebuildFromEvent(evt, rebuiltConversation, toolObservations);
+            AgentRunEventStateRebuilder.RebuildFromEvent(evt, rebuiltConversation, toolObservations);
         }
 
         // 从最后一个事件恢复 EventSequence / EventChainHash（保证哈希链连续）
@@ -760,7 +820,7 @@ public sealed class AgentRunActor
 
         // 从事件流统计 ModelCallCompleted 重建 _executionModelTurn，
         // 避免恢复后从 0 重新计数导致 RequestId 改变（Journal 无法识别原调用）。
-        _executionModelTurn = RebuildExecutionModelTurn(events);
+        _executionModelTurn = AgentRunEventStateRebuilder.RebuildExecutionModelTurn(events);
 
         // 审批通过后从 PendingToolExecution 状态恢复——不规范化为 ContextBuilding，
         // 而是从最后一个 ApprovalRequested 事件提取 PendingToolCommands，让主循环直接执行原 Tool。
@@ -768,7 +828,7 @@ public sealed class AgentRunActor
         // 此处仅处理 PendingToolExecution（Failed 已是终态，不会进入 resume）。
         if (state.Run.State == AgentRunState.PendingToolExecution)
         {
-            var pendingCommands = ExtractPendingToolCommands(events);
+            var pendingCommands = AgentRunEventStateRebuilder.ExtractPendingToolCommands(events);
             if (pendingCommands is { Count: > 0 })
             {
                 // 保持 PendingToolExecution 状态（主循环检测后直接执行原 Tool）
@@ -1018,7 +1078,7 @@ public sealed class AgentRunActor
         var toolObservations = new List<ToolObservation>(restored.ToolObservations);
         foreach (var evt in newEvents)
         {
-            RebuildFromEvent(evt, conversation, toolObservations);
+            AgentRunEventStateRebuilder.RebuildFromEvent(evt, conversation, toolObservations);
         }
 
         _executionModelTurn = restored.ExecutionModelTurn;
@@ -1051,213 +1111,140 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// 将单个事件追加到重建的对话流与工具观察（全量重放与快路径共用）。
-    /// ModelCallCompleted → Assistant 消息；ToolCallCompleted → ToolObservation + Tool 消息。
-    /// 旧事件缺少字段时跳过；单事件解析失败不影响整体恢复。
+    /// 尝试从事件流压缩器读取可恢复快照（P0-10 正式方案）。
     /// </summary>
-    private static void RebuildFromEvent(
-        AgentRunEvent evt,
-        List<AgentMessage> conversation,
-        List<ToolObservation> toolObservations)
+    /// <returns>
+    /// 快照可解析为 <see cref="AgentRunRecoverableState"/> 时返回 (状态, 快照记录链头)；
+    /// 以下场景返回 null（调用方降级为现有恢复路径）：
+    /// <list type="bullet">
+    /// <item>压缩器未注入（非 Postgres provider，无快照/归档）；</item>
+    /// <item>快照读取失败（存储不可用）——非致命，降级为现有恢复路径；</item>
+    /// <item>快照不存在（从未压缩）或 state_json 为空；</item>
+    /// <item>旧格式快照（仅序列化锚点事件，缺少可恢复状态成员，无法解析）或 JSON 损坏——
+    /// 压缩过的热表会由后续全量重放 fail-closed 判定 RecoveryCorrupted（安全，需运维介入）。</item>
+    /// </list>
+    /// </returns>
+    private async Task<(AgentRunRecoverableState State, string? ChainHeadHash)?> TryRestoreSnapshotStateAsync(
+        AgentRun run,
+        CancellationToken cancellationToken)
     {
-        if (evt.EventType == AgentRunEventType.ModelCallCompleted)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(evt.Payload);
-                var root = doc.RootElement;
-                // 旧事件无 content 字段 → 跳过（向后兼容）
-                if (!root.TryGetProperty("content", out var contentProp))
-                {
-                    return;
-                }
-
-                var content = contentProp.GetString() ?? string.Empty;
-                List<AgentToolCallEntry>? toolCalls = null;
-                if (root.TryGetProperty("toolCalls", out var tcArrayEl)
-                    && tcArrayEl.ValueKind == JsonValueKind.Array
-                    && tcArrayEl.GetArrayLength() > 0)
-                {
-                    toolCalls = new List<AgentToolCallEntry>(tcArrayEl.GetArrayLength());
-                    foreach (var tcEl in tcArrayEl.EnumerateArray())
-                    {
-                        toolCalls.Add(new AgentToolCallEntry
-                        {
-                            Id = tcEl.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty,
-                            Name = tcEl.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty,
-                            Arguments = tcEl.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() ?? string.Empty : string.Empty
-                        });
-                    }
-                }
-
-                // 仅当有内容或 ToolCalls 时才追加（避免空消息污染对话流）
-                if (!string.IsNullOrEmpty(content) || toolCalls is { Count: > 0 })
-                {
-                    conversation.Add(new AgentMessage
-                    {
-                        Role = AgentMessageRole.Assistant,
-                        Content = content,
-                        ToolCalls = toolCalls
-                    });
-                }
-            }
-            catch
-            {
-                // 解析单个事件失败 → 跳过（不影响整体恢复）
-            }
-        }
-        else if (evt.EventType == AgentRunEventType.ToolCallCompleted)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(evt.Payload);
-                var root = doc.RootElement;
-                if (!root.TryGetProperty("succeeded", out var succeededProp))
-                {
-                    return;
-                }
-
-                var succeeded = succeededProp.GetBoolean();
-                var toolName = root.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
-                var toolCallId = root.TryGetProperty("toolCallId", out var tcProp) ? tcProp.GetString() : null;
-                var output = root.TryGetProperty("output", out var outProp) ? outProp.GetString() : null;
-                var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : null;
-
-                var obs = new ToolObservation
-                {
-                    ToolName = toolName,
-                    ToolCallId = toolCallId,
-                    Result = output,
-                    Error = error,
-                    Succeeded = succeeded
-                };
-                toolObservations.Add(obs);
-                conversation.Add(obs.ToAgentMessage());
-            }
-            catch
-            {
-                // 解析单个事件失败 → 跳过（不影响整体恢复）
-            }
-        }
-    }
-
-    /// <summary>
-    /// 从事件流统计 ModelCallCompleted 重建 _executionModelTurn（全量重放路径）。
-    /// 优先读取事件内嵌的 executionModelTurn（新事件）；旧事件无此字段时降级为计数。
-    /// </summary>
-    private static int RebuildExecutionModelTurn(IReadOnlyList<AgentRunEvent> events)
-    {
-        var rebuiltModelTurn = 0;
-        foreach (var evt in events)
-        {
-            if (evt.EventType != AgentRunEventType.ModelCallCompleted)
-            {
-                continue;
-            }
-            try
-            {
-                using var doc = JsonDocument.Parse(evt.Payload);
-                if (doc.RootElement.TryGetProperty("executionModelTurn", out var emtEl)
-                    && emtEl.ValueKind == JsonValueKind.Number)
-                {
-                    var v = emtEl.GetInt32();
-                    if (v > rebuiltModelTurn) { rebuiltModelTurn = v; }
-                }
-                else
-                {
-                    // 旧事件无此字段 — 降级为计数（与原 _executionModelTurn 递增语义一致）
-                    rebuiltModelTurn++;
-                }
-            }
-            catch
-            {
-                // 解析失败 — 降级为计数
-                rebuiltModelTurn++;
-            }
-        }
-        return rebuiltModelTurn;
-    }
-
-    /// <summary>
-    /// 从事件流中提取最后一个 ApprovalRequested 事件的 PendingToolCommands 列表。
-    /// 审批通过后恢复时，Actor 据此依次执行所有 Pending Tool Call（不依赖模型重生成）。
-    /// 兼容旧版单数 pendingToolCommand payload（旧版本的事件）。
-    /// </summary>
-    /// <param name="events">Run 的完整事件流（按 Sequence 升序）。</param>
-    /// <returns>提取的 PendingToolCommands 列表；事件 payload 损坏/无 ApprovalRequested 事件时返回 null。</returns>
-    private static List<PendingToolCommand>? ExtractPendingToolCommands(IReadOnlyList<AgentRunEvent> events)
-    {
-        // 从后往前找最后一个 ApprovalRequested 事件
-        for (var i = events.Count - 1; i >= 0; i--)
-        {
-            var evt = events[i];
-            if (evt.EventType != AgentRunEventType.ApprovalRequested)
-            {
-                continue;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(evt.Payload);
-                var root = doc.RootElement;
-
-                // 优先读取 pendingToolCommands（数组），兼容旧版 pendingToolCommand（单数）
-                if (root.TryGetProperty("pendingToolCommands", out var ptcsProp) && ptcsProp.ValueKind == JsonValueKind.Array)
-                {
-                    var list = new List<PendingToolCommand>();
-                    foreach (var ptc in ptcsProp.EnumerateArray())
-                    {
-                        var cmd = ParsePendingToolCommand(ptc);
-                        if (cmd is not null)
-                        {
-                            list.Add(cmd);
-                        }
-                    }
-                    return list.Count > 0 ? list : null;
-                }
-
-                // 旧版事件 payload 仅有 pendingToolCommand（单数）→ 包装为单元素列表
-                if (root.TryGetProperty("pendingToolCommand", out var ptcProp))
-                {
-                    var cmd = ParsePendingToolCommand(ptcProp);
-                    return cmd is not null ? new List<PendingToolCommand> { cmd } : null;
-                }
-
-                // 旧版事件 payload 未携带 pendingToolCommand（旧版本）→ 无法恢复
-                return null;
-            }
-            catch
-            {
-                // 解析失败 → 继续找更早的 ApprovalRequested 事件
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// 从 JSON 元素解析单个 PendingToolCommand。
-    /// </summary>
-    private static PendingToolCommand? ParsePendingToolCommand(JsonElement ptc)
-    {
-        var toolCallId = ptc.TryGetProperty("ToolCallId", out var tciProp) ? tciProp.GetString() ?? string.Empty : string.Empty;
-        var toolName = ptc.TryGetProperty("ToolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
-        var argumentsJson = ptc.TryGetProperty("ArgumentsJson", out var ajProp) ? ajProp.GetString() ?? string.Empty : string.Empty;
-        var idempotencyKey = ptc.TryGetProperty("IdempotencyKey", out var ikProp) ? ikProp.GetString() : null;
-        var modelTurnRevision = ptc.TryGetProperty("ModelTurnRevision", out var mtrProp) && mtrProp.ValueKind == JsonValueKind.Number ? mtrProp.GetInt32() : 0;
-
-        if (string.IsNullOrEmpty(toolCallId) && string.IsNullOrEmpty(toolName))
+        if (_eventCompactor is null)
         {
             return null;
         }
 
-        return new PendingToolCommand
+        AgentRunEventSnapshot? snapshot;
+        try
         {
-            ToolCallId = toolCallId,
-            ToolName = toolName,
-            ArgumentsJson = argumentsJson,
-            IdempotencyKey = idempotencyKey,
-            ModelTurnRevision = modelTurnRevision
+            snapshot = await _eventCompactor.GetSnapshotAsync(
+                run.WorkspaceId, run.RunId, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 快照读取失败非致命：降级为现有恢复路径（存储不可用由后续事件流读取判定）。
+            return null;
+        }
+
+        if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.StateJson))
+        {
+            return null;
+        }
+
+        var state = AgentRunEventStateRebuilder.TryDeserialize(snapshot.StateJson);
+        if (state is null)
+        {
+            return null;
+        }
+
+        return (state, snapshot.ChainHeadHash);
+    }
+
+    /// <summary>
+    /// 从可恢复快照还原的状态 + 锚点后的热表增量事件构建恢复状态（快照快路径）。
+    /// </summary>
+    /// <remarks>
+    /// P0-10 正式方案（Snapshot → validate anchor → replay hot delta）的最后一步：
+    /// 快照覆盖折叠前缀 [0..anchor] 的重建状态（Conversation / ToolObservations /
+    /// ExecutionModelTurn / PendingToolCommands），在此之上重放锚点后的热表增量事件；
+    /// 锚点一致性已由调用方（RebuildStateFromEventsAsync 边界读取）按 ChainHeadHash 校验。
+    /// 审批恢复（PendingToolExecution）优先从增量事件提取更新的 ApprovalRequested，
+    /// 增量无审批事件时回退到快照保存的 PendingToolCommands。
+    /// </remarks>
+    private AgentRunExecutionState BuildResumedStateFromSnapshot(
+        AgentRunExecutionState state,
+        AgentRunRecoverableState recoverable,
+        AgentRunEvent boundaryEvent,
+        IReadOnlyList<AgentRunEvent> deltaEvents)
+    {
+        // 快照覆盖锚点之前的折叠历史；在此基础上重放锚点后的热表增量事件
+        var conversation = new List<AgentMessage>(recoverable.Conversation);
+        var toolObservations = new List<ToolObservation>(recoverable.ToolObservations);
+        foreach (var evt in deltaEvents)
+        {
+            AgentRunEventStateRebuilder.RebuildFromEvent(evt, conversation, toolObservations);
+        }
+
+        // _executionModelTurn：快照折叠值 + 增量事件的最大值（增量内嵌更高轮次时取高，
+        // 避免恢复后 RequestId 回退导致 Journal 无法识别原调用）。
+        _executionModelTurn = AgentRunEventStateRebuilder.RebuildExecutionModelTurn(
+            deltaEvents, recoverable.ExecutionModelTurn);
+        // 本次读取的事件均为快照之后的新事件（未计入快照折叠范围）
+        _eventsSinceLastCheckpoint = deltaEvents.Count;
+
+        // 最后事件：有新事件取最后一个；否则取锚点事件（无增量时即最后事件）
+        var lastEvent = deltaEvents.Count > 0 ? deltaEvents[^1] : boundaryEvent;
+
+        // 审批恢复：PendingToolExecution 状态时优先从增量事件提取（更新的 ApprovalRequested），
+        // 增量无审批事件时回退到快照中保存的 PendingToolCommands（折叠前缀已归档）。
+        if (state.Run.State == AgentRunState.PendingToolExecution)
+        {
+            var pendingCommands = AgentRunEventStateRebuilder.ExtractPendingToolCommands(deltaEvents)
+                ?? recoverable.PendingToolCommands;
+            if (pendingCommands is { Count: > 0 })
+            {
+                // 保持 PendingToolExecution 状态（主循环检测后直接执行原 Tool）
+                var pendingRun = state.Run with { State = AgentRunState.PendingToolExecution };
+                return state with
+                {
+                    Run = pendingRun,
+                    Context = new AgentContextState
+                    {
+                        CurrentTask = state.Run.Task,
+                        Messages = new List<AgentMessage>(),
+                        ToolObservations = toolObservations,
+                        Conversation = conversation,
+                        StableMemoryReferences = new List<MemoryReference>(),
+                        LastModelTurn = null
+                    },
+                    LastModelResponse = null,
+                    LastDecisionResult = null,
+                    EventSequence = lastEvent.Sequence + 1,
+                    EventChainHash = lastEvent.ContentHash,
+                    PendingToolCommands = pendingCommands
+                };
+            }
+            // PendingToolCommands 提取失败（增量与快照均无）→ 降级为 ContextBuilding 重新调用模型
+        }
+
+        // 本地状态规范化为 ContextBuilding（与 checkpoint 快路径语义一致）
+        var resumedRun = state.Run with { State = AgentRunState.ContextBuilding };
+
+        return state with
+        {
+            Run = resumedRun,
+            Context = new AgentContextState
+            {
+                CurrentTask = state.Run.Task,
+                Messages = new List<AgentMessage>(),
+                ToolObservations = toolObservations,
+                Conversation = conversation,
+                StableMemoryReferences = new List<MemoryReference>(),
+                LastModelTurn = null
+            },
+            LastModelResponse = null,
+            LastDecisionResult = null,
+            EventSequence = lastEvent.Sequence + 1,
+            EventChainHash = lastEvent.ContentHash
         };
     }
 

@@ -347,15 +347,19 @@ internal static class AgentExecutionEndpoints
         .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
-        // ── 管理员审计：读取原始事件流（游标分页）───────────────────────
+        // ── 管理员审计：读取原始事件流（游标分页；压缩后自动拼接归档）─────────────
         // SSE 公开端点隐藏敏感信息（Tool 参数、原始模型输出、异常堆栈），
         // 管理员需要完整 Payload 进行审计/调试时通过此端点获取原始 AgentRunEvent。
         // 需要 WorkspaceRole.Admin 角色（RBAC 强制校验未启用时自动放行，仅记录审计日志）。
         // 分页参数：after = 上一页 NextSequence（省略或 -1 = 从头）；limit = 页大小（服务端 clamp 到上限）。
+        // 事件流压缩（P0-10）后折叠前缀已归档到 agent_run_events_archive，热表只保留
+        // 锚点 + 增量：端点按 Sequence 合并归档 + 热表，保证管理员始终能看到完整历史
+        // （修复审计缺口；非 Postgres provider 未注册 compactor 时仅读热表）。
         group.MapGet("/{id}/events/raw", async Task<IResult> (
             string id,
             IAgentRunStore runStore,
             IAgentRunEventStore eventStore,
+            [FromServices] IAgentRunEventCompactor? compactor,
             IWorkspaceContextAccessor workspaceContextAccessor,
             HttpContext httpContext,
             CancellationToken ct,
@@ -375,12 +379,28 @@ internal static class AgentExecutionEndpoints
             // 游标分页：多读 1 条判定 HasMore，服务端 clamp 页大小上限（替代旧 take=int.MaxValue 无界读取）。
             var fromSequence = (after ?? -1) + 1;
             var pageSize = Math.Clamp(limit ?? DefaultRawEventsPageSize, 1, MaxRawEventsPageSize);
-            var events = await eventStore.ReadAsync(workspaceId, id, fromSequence, pageSize + 1, ct)
-                .ConfigureAwait(false);
 
-            var hasMore = events.Count > pageSize;
-            var items = hasMore ? events.Take(pageSize).ToArray() : events;
-            var nextSequence = hasMore && items.Count > 0 ? items[^1].Sequence : -1;
+            // 审计拼接：归档（折叠前缀，sequence < 锚点）+ 热表（锚点 + 增量）按 Sequence 合并，
+            // 保证压缩后管理员仍能看到完整事件历史（P0-10 审计缺口修复）。
+            // 非 Postgres provider 未注册 compactor → 仅读热表（与压缩不可用的部署一致）。
+            var merged = new List<AgentRunEvent>(pageSize + 1);
+            if (compactor is not null)
+            {
+                var archived = await compactor.GetArchivedEventsAsync(
+                    workspaceId, id, fromSequence, pageSize + 1, ct).ConfigureAwait(false);
+                var hot = await eventStore.ReadAsync(workspaceId, id, fromSequence, pageSize + 1, ct)
+                    .ConfigureAwait(false);
+                MergeRawEventStreams(archived, hot, pageSize + 1, merged);
+            }
+            else
+            {
+                merged.AddRange(await eventStore.ReadAsync(workspaceId, id, fromSequence, pageSize + 1, ct)
+                    .ConfigureAwait(false));
+            }
+
+            var hasMore = merged.Count > pageSize;
+            var items = hasMore ? merged.Take(pageSize).ToArray() : merged.ToArray();
+            var nextSequence = hasMore && items.Length > 0 ? items[^1].Sequence : -1;
 
             return Results.Ok(new AgentRunRawEventsPage
             {
@@ -786,14 +806,15 @@ internal static class AgentExecutionEndpoints
                     $"未找到 RunId='{id}'。");
             }
 
-            // R30.1 安全限制：仅终态（或重试已耗尽）的 Run 允许压缩——当前 Recovery 不读取
-            // 快照/归档，非终态 Run 压缩后重启恢复会因事件链断裂判定 RecoveryCorrupted。
-            // 与 PostgresAgentRunEventCompactor.FindCandidatesAsync 的候选过滤保持一致。
+            // R30.1 保守策略：仅终态（或重试已耗尽）的 Run 允许压缩。可恢复快照
+            // （P0-10 正式方案：Snapshot + Anchor + Hot Delta）已支持非终态 Run 的崩溃恢复，
+            // 但保留终态限制避免意外压缩活跃 Run；与 PostgresAgentRunEventCompactor
+            // FindCandidatesAsync 的候选过滤保持一致。
             if (!PostgresAgentRunEventCompactor.IsCompactableRunState(run.State, run.RetryCount, run.MaxRetries))
             {
                 return ContextCoreHttpResultMapper.InvalidRequest(
                     httpContext, string.Empty, "agents.runs.compact",
-                    $"RunId='{id}' 当前状态 {run.State} 非终态，不允许压缩事件流（可恢复快照方案落地前仅限终态 Run）。",
+                    $"RunId='{id}' 当前状态 {run.State} 非终态，不允许压缩事件流（R30.1 保守策略仅限终态 Run）。",
                     statusCode: StatusCodes.Status409Conflict);
             }
 
@@ -862,6 +883,52 @@ internal static class AgentExecutionEndpoints
         .Produces<ContextCoreErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
         return app;
+    }
+
+    /// <summary>
+    /// 按 Sequence 合并归档事件（折叠前缀）与热表事件（锚点 + 增量），供管理员 raw 事件
+    /// 端点分页读取（P0-10 审计缺口修复：压缩后仍能看到完整事件历史）。
+    /// </summary>
+    /// <remarks>
+    /// 两个输入各自按 Sequence 升序；归档（sequence &lt; 锚点）与热表（sequence ≥ 锚点）
+    /// 天然不重叠。合并结果截断到 <paramref name="limit"/> 条（调用方用 limit = 页大小 + 1
+    /// 判定 HasMore），输出保持 Sequence 升序保证游标分页连续性。
+    /// </remarks>
+    internal static void MergeRawEventStreams(
+        IReadOnlyList<AgentRunEvent> archived,
+        IReadOnlyList<AgentRunEvent> hot,
+        int limit,
+        List<AgentRunEvent> output)
+    {
+        ArgumentNullException.ThrowIfNull(archived);
+        ArgumentNullException.ThrowIfNull(hot);
+        ArgumentNullException.ThrowIfNull(output);
+        if (limit <= 0)
+        {
+            return;
+        }
+
+        var i = 0;
+        var j = 0;
+        while (output.Count < limit && (i < archived.Count || j < hot.Count))
+        {
+            if (i >= archived.Count)
+            {
+                output.Add(hot[j++]);
+            }
+            else if (j >= hot.Count)
+            {
+                output.Add(archived[i++]);
+            }
+            else if (archived[i].Sequence <= hot[j].Sequence)
+            {
+                output.Add(archived[i++]);
+            }
+            else
+            {
+                output.Add(hot[j++]);
+            }
+        }
     }
 
     /// <summary>

@@ -869,6 +869,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var toolCatalog = _serviceProvider.GetService(typeof(IToolCatalog)) as IToolCatalog;
         // Recovery Integrity State：解析人工介入告警接收器（未注册时 Actor 不告警，best-effort 钩子）。
         var recoveryAlertSink = _serviceProvider.GetService(typeof(IRecoveryAlertSink)) as IRecoveryAlertSink;
+        // P0-10 正式方案：解析事件流压缩器（未注册时 Actor 无快照/归档，走全量重放）。
+        // 仅 Postgres provider 注册 IAgentRunEventCompactor。
+        var eventCompactor = _serviceProvider.GetService(typeof(IAgentRunEventCompactor)) as IAgentRunEventCompactor;
 
         return new AgentRunActor(
             _runStore,
@@ -887,7 +890,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             reconciliationStore,
             toolCatalog,
             _options,
-            recoveryAlertSink);
+            recoveryAlertSink,
+            eventCompactor);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

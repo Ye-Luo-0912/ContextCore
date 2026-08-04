@@ -18,10 +18,12 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 3. 压缩幂等：重复调用同一 upToSequence 返回相同结果；upToSequence 超过当前最后
 /// sequence 时自动钳制到最后事件。
 /// 4. 归档表 ON CONFLICT DO NOTHING：重复压缩同一前缀不产生重复归档行。
-/// 5. <b>仅限终态 Run（R30.1 安全限制）</b>：<see cref="FindCandidatesAsync"/> 只选取
-/// 终态（或重试已耗尽）的 Run——当前 Recovery 不读取快照/归档，非终态 Run 被压缩后
-/// 重启恢复会因事件链断裂判定 RecoveryCorrupted。正式可恢复快照方案（Snapshot + Anchor
-/// + Hot Delta + Archived Audit Stream）落地前保持此限制；操作员端点同样拒绝非终态 Run。
+/// 5. 快照 state_json 存 <see cref="ContextCore.Abstractions.AgentRunRecoverableState"/>
+/// （<see cref="AgentRunEventStateRebuilder.Rebuild"/> 从折叠前缀重建的完整可恢复状态），
+/// Recovery 按 "Snapshot → validate anchor → replay hot delta" 恢复（P0-10 正式方案）。
+/// 6. <b>自动压缩仍仅限终态 Run（R30.1 保守策略）</b>：<see cref="FindCandidatesAsync"/>
+/// 只选取终态（或重试已耗尽）的 Run。可恢复快照已支持非终态 Run 的崩溃恢复，但保留
+/// 终态限制避免意外压缩活跃 Run；操作员端点同样仅允许终态 Run 压缩。
 /// </remarks>
 public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRunEventCompactor
 {
@@ -117,9 +119,10 @@ public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRu
             await DeleteFoldedPrefixAsync(
                 connection, transaction, workspaceId, runId, anchorSequence, cancellationToken).ConfigureAwait(false);
 
-            // 5. UPSERT 快照（per-run 单行，幂等覆盖）。
+            // 5. UPSERT 快照（per-run 单行，幂等覆盖）。state_json = 折叠前缀
+            // [0..anchor] 重建的可恢复状态（P0-10 正式方案：Snapshot + Anchor + Hot Delta）。
             await UpsertSnapshotAsync(
-                connection, transaction, workspaceId, runId, anchor, foldedEventCount, archivedRowCount, cancellationToken)
+                connection, transaction, workspaceId, runId, events, foldedEventCount, archivedRowCount, cancellationToken)
                 .ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -450,11 +453,14 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND sequence < @anchor_s
         NpgsqlTransaction transaction,
         string workspaceId,
         string runId,
-        AgentRunEvent anchor,
+        IReadOnlyList<AgentRunEvent> prefixEvents,
         int foldedEventCount,
         int archivedRowCount,
         CancellationToken cancellationToken)
     {
+        // 锚点 = 折叠前缀最后事件（按 Sequence 升序传入，与 ComputeFold 的锚点一致）。
+        var anchor = prefixEvents[prefixEvents.Count - 1];
+
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -477,7 +483,12 @@ ON CONFLICT (workspace_id, run_id) DO UPDATE SET
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("anchor_sequence", anchor.Sequence);
         command.Parameters.AddWithValue("chain_head_hash", (object?)anchor.ContentHash ?? DBNull.Value);
-        command.Parameters.AddWithValue("state_json", Serializer.Serialize(anchor));
+        // P0-10 正式方案：state_json 不再是"锚点事件序列化"，而是折叠前缀 [0..anchor]
+        // 重建的完整可恢复状态（Conversation / ToolObservations / ExecutionModelTurn /
+        // PendingToolCommands + Sequence/ChainHeadHash），供 Recovery 快照恢复使用。
+        command.Parameters.AddWithValue(
+            "state_json",
+            AgentRunEventStateRebuilder.Serialize(AgentRunEventStateRebuilder.Rebuild(prefixEvents)));
         command.Parameters.AddWithValue("folded_event_count", foldedEventCount);
         command.Parameters.AddWithValue("archived_row_count", archivedRowCount);
         command.Parameters.AddWithValue("compacted_at", DateTimeOffset.UtcNow);
