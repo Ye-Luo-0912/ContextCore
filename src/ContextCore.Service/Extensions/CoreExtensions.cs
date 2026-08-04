@@ -978,9 +978,26 @@ internal static class CoreExtensions
 			opts.LeaseEnabled = section.GetValue("LeaseEnabled", opts.LeaseEnabled);
 			opts.MaxGlobalRuns = section.GetValue("MaxGlobalRuns", opts.MaxGlobalRuns);
 			opts.MaxWorkspaceRuns = section.GetValue("MaxWorkspaceRuns", opts.MaxWorkspaceRuns);
-			// 调度队列参数绑定（队列深度 / worker 池 / 优雅 drain 超时）。
+			// 调度队列参数绑定（队列深度 / worker 池 / 优雅 drain 超时 / 公平性）。
 			opts.ChannelCapacity = section.GetValue("ChannelCapacity", opts.ChannelCapacity);
 			opts.WorkerCount = section.GetValue("WorkerCount", opts.WorkerCount);
+			opts.MaxQueuedPerWorkspace = section.GetValue("MaxQueuedPerWorkspace", opts.MaxQueuedPerWorkspace);
+			opts.ReservedQueueCapacity = section.GetValue("ReservedQueueCapacity", opts.ReservedQueueCapacity);
+			opts.ReservedPriorityThreshold = section.GetValue("ReservedPriorityThreshold", opts.ReservedPriorityThreshold);
+			opts.WorkspaceQueueWeight = section.GetValue("WorkspaceQueueWeight", opts.WorkspaceQueueWeight);
+			opts.PriorityAgingStep = section.GetValue("PriorityAgingStep", opts.PriorityAgingStep);
+
+			var queueWaitSloStr = section["QueueWaitSlo"];
+			if (TimeSpan.TryParse(queueWaitSloStr, out var qws))
+			{
+				opts.QueueWaitSlo = qws;
+			}
+
+			var agingIntervalStr = section["PriorityAgingInterval"];
+			if (TimeSpan.TryParse(agingIntervalStr, out var pai))
+			{
+				opts.PriorityAgingInterval = pai;
+			}
 
 			var drainTimeoutStr = section["DrainTimeout"];
 			if (TimeSpan.TryParse(drainTimeoutStr, out var dt))

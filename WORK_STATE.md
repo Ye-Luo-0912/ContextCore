@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `6dee79fa`（R30.1 16 项 P0 全部完成并推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1（Tool 成功结果与 Journal 一致 + Reconciliation 决策幂等）已完成待推送；WP-G2..G8 依次推进。
-- **最近完成**：WP-G1（P1-1 + P1-2，详见下方条目）。
+- **基线**：main @ `ae56f3f0`（WP-G1 已推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1、WP-G2 已完成待推送；WP-G3..G8 依次推进。
+- **最近完成**：WP-G2（P1-3 本地队列 Workspace 公平性，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -101,6 +101,12 @@
   - 最终全量验证（12 个 WP 全部完成后统一跑一次）：解决方案构建 0 错误（7 个警告全部为既有，无 WP 引入）；ContextCore.Tests **3523 总数 / 20 失败 / 3489 通过 / 14 跳过**——20 个失败 = 既有 11 项中的 10 项（PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 本次通过，纯 SQL 断言波动非回归）+ 10 个 Docker 不可用环境下的 Postgres 集成测试（42P01 迁移顺序 bug，已在 HEAD 工作树对照证实预存在），**与 HEAD 逐一对比无任何 WP 新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）。OpenAPI 快照再生成（`service/openapi/service-api.openapi.json`，纯新增 160 行）：GetPolicy 新增 5 个租户查询参数、RecordAdaptiveRetrievalFeedbackRequest / RetrievalPlanFeedback 各 6 个反馈字段、`RetrievalFeedbackSource` 枚举 schema、ToolReconciliation 记录 7 个租约字段（WP-A2 P0-4 契约，此前仅比较 schema 名称集未触发漂移）——全部为 WP-A2/F1 契约新增，无意外变更。
 
 ### P1 完善项进度
+
+- **WP-G2 已完成**（P1-3）：Agent 本地调度队列 Workspace 公平性。
+  - 队列重写（AgentKernelHost）：全局单 PriorityQueue → per-workspace 分桶加权公平队列——(1) per-workspace 排队上限 `MaxQueuedPerWorkspace`（默认 64，快路径预检 + 锁内权威判定，超限 QueueFull 且 detail 指明上限，其他 Workspace 不受影响）；(2) 加权公平出队 `DequeueFair`——出队选 `min(ServiceCount/Weight)` 的 Workspace（交叉相乘避免浮点，平局按 WorkspaceId），等权重 = 严格轮转，ServiceCount 跨空桶持续（公平性记忆），字典超 `WorkspaceQueueMaxEntries`(256) 时淘汰空闲条目；(3) 优先级老化——桶内线性扫描 `(reverse aged priority, 入队时间)`，aged = 原始优先级 + 排队时长/`PriorityAgingInterval` × `PriorityAgingStep`，等待越久提升越多，防低优先级饿死；(4) 保留容量——`ReservedQueueCapacity`（默认自动 = clamp(max(8, 容量/16), 0, 容量/2)）为 `Priority >= ReservedPriorityThreshold`(1000) 的 Run 提供独立槽位，饱和时高优先级仍 Accepted、普通 Run QueueFull；(5) 排队 SLO——出队记录 `CoreMetrics` 排队等待直方图 + 超 `QueueWaitSlo`(30s) 计数。常规池/保留池双 SemaphoreSlim 表达背压；ReleasePoolSlot 按来源池释放。
+  - 契约（Abstractions，PublicApi baseline 已更新 +7）：AgentHostOptions 新增 MaxQueuedPerWorkspace / ReservedQueueCapacity / ReservedPriorityThreshold / WorkspaceQueueWeight / PriorityAgingInterval / PriorityAgingStep / QueueWaitSlo；CoreExtensions 配置绑定同步。
+  - 测试：新增 `R31A_QueueFairnessTests`（5 项：per-workspace 上限隔离、等权重轮转（A→C→B）、老化提升（低优先级先于新高优先级）、保留容量饱和准入、SLO 指标 MeterListener 捕获）。修复实现缺陷：空桶移除导致 ServiceCount 公平性丢失 → 改为保留空桶 + 容量上限淘汰。
+  - 验证：build 0 错误；定向 20 项全通过（R31A×5 + R29P 优先级/FIFO + R30B 超时 + R29H 调度器 + HA 并发 + PublicApi）；宽扫 356 项 341 通过 / 4 跳过 / 11 失败全部为既有环境性失败（Benchmark_Baseline、ReadinessService_Development 2 项既有 + 9 项 Docker Postgres 42P01 迁移顺序 bug——本环境 Docker 可用使集成测试真实运行命中，WP-G6 修复），与改动无关。
 
 - **WP-G1 已完成**（P1-1 + P1-2）：Tool 成功结果与 Journal 状态一致 + Reconciliation 决策幂等。
   - P1-1 修复（DefaultDurableToolExecutor）：最终返回处按 Journal 真实状态收敛 Succeeded——finalJournalState 处于模糊态（DispatchingIntent/Dispatched/Reconciling）时，即使 Provider 调用成功也强制 Succeeded=false 并附待对账错误信息（FailurePhase=ProviderReturned，MarkCommitted 失败仍 JournalCommitFailed）；覆盖 MarkDispatched/MarkCommitted 失败与策略 HoldForReconciliation（非幂等写/RequiresReconciliation/Unknown/未审批）路径，模型不再看到成功 Tool 观察，直到真相已 Commit 或对账完成；对账提交后重放路径仍返回提交后结果。Actor 观察直接消费 toolResult.Succeeded，无需改动。更新 R29H_ToolEffectPolicyTests 4 项断言（模糊态 Succeeded=false）。

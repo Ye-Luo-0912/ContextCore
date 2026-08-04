@@ -2234,6 +2234,51 @@ public sealed class AgentHostOptions
     public int ChannelCapacity { get; set; } = 256;
 
     /// <summary>
+    /// 单个 Workspace 排队上限（队列槽位层面的公平保护）。
+    /// 防止单 Workspace 填满全部队列槽位使其他 Workspace 获得 QueueFull——
+    /// 达到上限后该 Workspace 的后续入队立即 QueueFull，其他 Workspace 不受影响。
+    /// 默认 64；设为 0 或负数时使用默认值。保留容量（高优先级）路径不受此限制。
+    /// </summary>
+    public int MaxQueuedPerWorkspace { get; set; } = 64;
+
+    /// <summary>
+    /// 保留队列容量（高优先级 / 系统路径专用槽位）。
+    /// 默认 0 = 自动 = clamp(max(8, ChannelCapacity/16), 0, ChannelCapacity/2)。
+    /// 常规池容量 = ChannelCapacity - 保留容量；保留池只为 Priority ≥
+    /// <see cref="ReservedPriorityThreshold"/> 的 Run 服务，保证高优先级工作在队列饱和时仍能入队。
+    /// </summary>
+    public int ReservedQueueCapacity { get; set; } = 0;
+
+    /// <summary>
+    /// 保留容量准入的优先级阈值：<c>run.Priority &gt;= 该值</c> 的 Run 使用保留池。
+    /// 默认 1000（普通 Run 优先级远低于此，只有显式高优先级 / 系统路径命中）。
+    /// </summary>
+    public int ReservedPriorityThreshold { get; set; } = 1000;
+
+    /// <summary>
+    /// 公平队列权重（weighted fair queue 的均等权重基，所有 Workspace 默认相同）。
+    /// 出队按 <c>min(ServiceCount / Weight)</c> 选择 Workspace——等权重 = 严格轮转公平；
+    /// 未来需要差异化时按 Workspace 权重扩展。默认 1；设为 0 或负数时使用默认值。
+    /// </summary>
+    public int WorkspaceQueueWeight { get; set; } = 1;
+
+    /// <summary>
+    /// 优先级老化间隔：排队每经过该间隔，aged priority 提升 <see cref="PriorityAgingStep"/> 级，
+    /// 防止低优先级 Run 被持续到达的高优先级 Run 饿死。默认 10 秒。
+    /// </summary>
+    public TimeSpan PriorityAgingInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>优先级老化步长（每个 <see cref="PriorityAgingInterval"/> 提升的优先级级数）。默认 1。</summary>
+    public int PriorityAgingStep { get; set; } = 1;
+
+    /// <summary>
+    /// 排队 SLO：Run 从入队到出队的等待超过该时长时，
+    /// 计入 <c>contextcore.agent.queue.wait_slo_exceeded</c> 计数（排队 SLO 观测）。
+    /// 默认 30 秒。
+    /// </summary>
+    public TimeSpan QueueWaitSlo { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// 固定 worker 数（从 Channel 拉取 Run 并执行的后台任务数）。
     /// 应 &gt;= <see cref="MaxGlobalRuns"/> 以避免 worker 成为瓶颈（worker 阻塞在 SemaphoreSlim 等待槽位）。
     /// 默认 0 = 自动使用 <see cref="MaxGlobalRuns"/>。

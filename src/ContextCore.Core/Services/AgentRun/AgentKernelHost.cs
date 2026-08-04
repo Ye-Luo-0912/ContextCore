@@ -62,21 +62,29 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     // workspace 信号量 LRU 最大条目数（超过时淘汰空闲条目）
     private const int WorkspaceSemaphoreMaxEntries = 128;
 
-    // bounded 优先级队列 + 固定 worker 池（替代 Task.Factory.StartNew / FIFO Channel）
+    // weighted fair queue + 固定 worker 池（替代 Task.Factory.StartNew / FIFO Channel）
     // B3：调度从 FIFO 升级为按 Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）。
-    // 队列使用 PriorityQueue（最小堆）+ 互斥锁保护（多 worker 并发出队）；
-    // 背压由 _queueCapacity SemaphoreSlim(容量) 表达——TryEnqueue 非阻塞尝试获取槽位，
-    // 满时立即返回 QueueFull（与旧 Channel.TryWrite 语义一致）；
+    // 公平性（P1-3）：队列按 Workspace 分桶（weighted fair queue——出队选
+    // min(ServiceCount / Weight) 的 Workspace，等权重 = 严格轮转），单 Workspace 排队上限
+    // 防止独占全部槽位；出队时按 aged priority（原始优先级 + 排队时长老化提升）取桶内最优，
+    // 防止低优先级饿死；保留容量（ReservedQueueCapacity）保障高优先级/系统路径在饱和时仍能入队；
+    // 排队等待超 SLO 计入 CoreMetrics 排队指标。
+    // 背压由 _queueCapacity（常规池）+ _reservedCapacity（保留池）两个 SemaphoreSlim 表达——
+    // TryEnqueue 非阻塞尝试获取槽位，满时立即返回 QueueFull（与旧 Channel.TryWrite 语义一致）；
     // _queueSignal 通知 worker 有新任务（计数 = 队列中待执行数）。
     private readonly object _queueLock = new();
-    private readonly PriorityQueue<RunWorkItem, (int ReversePriority, long Sequence)> _queue = new();
+    private readonly Dictionary<string, WorkspaceQueueEntry> _workspaceQueues = new(StringComparer.Ordinal);
+    private int _totalQueued;
     private readonly SemaphoreSlim _queueCapacity;
+    private readonly SemaphoreSlim? _reservedCapacity;
     private readonly SemaphoreSlim _queueSignal;
-    private long _queueSequence;
     private readonly Task[] _workers;
     private readonly CancellationTokenSource _workerCts;
     private readonly int _workerCount;
     private int _disposed;
+
+    /// <summary>Workspace 队列字典上限（超过时淘汰空闲条目，保证长期运行工作集有界）。</summary>
+    private const int WorkspaceQueueMaxEntries = 256;
 
     /// <summary>
     /// 构造 Kernel Host。
@@ -109,9 +117,12 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var globalMax = _options.MaxGlobalRuns > 0 ? _options.MaxGlobalRuns : 100;
         _globalSemaphore = new SemaphoreSlim(globalMax, globalMax);
 
-        // bounded 优先级队列：容量上限 = ChannelCapacity（保留 256 默认与 QueueFull 拒绝策略）。
+        // bounded 队列：常规池（ChannelCapacity - 保留容量）+ 保留池（高优先级专用）。
+        // 保留容量自动 = clamp(max(8, ChannelCapacity/16), 0, ChannelCapacity/2)，防止小容量被保留池吞掉。
         var capacity = _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
-        _queueCapacity = new SemaphoreSlim(capacity, capacity);
+        var reserved = ComputeReservedCapacity(capacity);
+        _queueCapacity = new SemaphoreSlim(capacity - reserved, capacity - reserved);
+        _reservedCapacity = reserved > 0 ? new SemaphoreSlim(reserved, reserved) : null;
         _queueSignal = new SemaphoreSlim(0, int.MaxValue);
 
         // 固定 worker 池：默认 = MaxGlobalRuns（worker 阻塞在 SemaphoreSlim 等待槽位，不成为瓶颈）。
@@ -212,9 +223,26 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 "同进程内已有活跃 Run（并发竞争），跳过重复入队。");
         }
 
+        // 保留池判定：Priority >= ReservedPriorityThreshold 的 Run 走保留容量（高优先级/系统路径），
+        // 不占用常规容量、不受 Workspace 排队上限约束——保障饱和时高优先级工作仍能入队。
+        var usesReserved = _reservedCapacity is not null && run.Priority >= _options.ReservedPriorityThreshold;
+        var perWorkspaceLimit = _options.MaxQueuedPerWorkspace > 0 ? _options.MaxQueuedPerWorkspace : 64;
+
+        // 快路径预检：常规池下 Workspace 排队已达上限 → 立即 QueueFull（不浪费等待/槽位）。
+        // 权威判定在锁内重做（防并发超限竞态），此处仅为快速拒绝。
+        if (!usesReserved && !IsWorkspaceQueueUnderLimit(run.WorkspaceId, perWorkspaceLimit))
+        {
+            _activeRuns.TryRemove(key, out _);
+            cts.Dispose();
+            return BuildEnqueueResult(
+                AgentRunEnqueueStatus.QueueFull, run.RunId, capacity,
+                $"调度队列已满（workspace 排队上限 {perWorkspaceLimit}，workspaceId={run.WorkspaceId}）；Run 已持久化，将由 RecoveryWorker 稍后接管执行。");
+        }
+
         // 获取容量槽位：timeout=0 等价于非阻塞 Wait(0)（满队列立即返回 QueueFull）；
         // timeout>0 有界等待（Enqueue Timeout），超时仍满 → QueueFull。不无限等待。
-        var acquired = await AcquireQueueSlotAsync(timeout, cancellationToken).ConfigureAwait(false);
+        var pool = usesReserved ? _reservedCapacity! : _queueCapacity;
+        var acquired = await AcquireQueueSlotAsync(pool, timeout, cancellationToken).ConfigureAwait(false);
         if (!acquired)
         {
             // 失败路径清理：移除活跃 Run 跟踪 + 释放 CTS（不留残留）
@@ -232,14 +260,32 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             if (Volatile.Read(ref _disposed) != 0)
             {
                 // Dispose 竞态窗口：释放槽位 + 清理跟踪（不留残留）
-                _queueCapacity.Release();
+                ReleasePoolSlot(usesReserved);
                 _activeRuns.TryRemove(key, out _);
                 cts.Dispose();
                 return BuildEnqueueResult(
                     AgentRunEnqueueStatus.Closed, run.RunId, capacity,
                     "AgentKernelHost 已关闭，无法入队新的 Run。");
             }
-            _queue.Enqueue(new RunWorkItem(run, key, activeRun), (-run.Priority, _queueSequence++));
+
+            // 权威 per-workspace 排队上限（锁内判定，杜绝并发超限）：常规池受限，保留池不受限。
+            var workspaceQueue = GetOrCreateWorkspaceQueue(run.WorkspaceId);
+            if (!usesReserved && workspaceQueue.Items.Count >= perWorkspaceLimit)
+            {
+                ReleasePoolSlot(usesReserved);
+                _activeRuns.TryRemove(key, out _);
+                cts.Dispose();
+                return BuildEnqueueResult(
+                    AgentRunEnqueueStatus.QueueFull, run.RunId, capacity,
+                    $"调度队列已满（workspace 排队上限 {perWorkspaceLimit}，workspaceId={run.WorkspaceId}）；Run 已持久化，将由 RecoveryWorker 稍后接管执行。");
+            }
+
+            workspaceQueue.Items.Add(new RunWorkItem(
+                run, key, activeRun,
+                Priority: run.Priority,
+                EnqueueUtcTicks: DateTimeOffset.UtcNow.Ticks,
+                UsesReservedPool: usesReserved));
+            _totalQueued++;
         }
         _queueSignal.Release();
 
@@ -251,21 +297,84 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// 获取队列容量槽位：timeout &lt;= 0 时非阻塞（Wait(0)）；timeout &gt; 0 时有界等待。
     /// 取消时视为未获取（返回 false，调用方按 QueueFull 处理——Run 已持久化，非致命）。
     /// </summary>
-    private async ValueTask<bool> AcquireQueueSlotAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    private static async ValueTask<bool> AcquireQueueSlotAsync(
+        SemaphoreSlim pool, TimeSpan timeout, CancellationToken cancellationToken)
     {
         if (timeout <= TimeSpan.Zero)
         {
-            return _queueCapacity.Wait(0);
+            return pool.Wait(0);
         }
 
         try
         {
-            return await _queueCapacity.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            return await pool.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             return false;
         }
+    }
+
+    /// <summary>释放容量槽位到其来源池（保留池 / 常规池）。</summary>
+    private void ReleasePoolSlot(bool usesReserved)
+    {
+        if (usesReserved && _reservedCapacity is not null)
+        {
+            _reservedCapacity.Release();
+        }
+        else
+        {
+            _queueCapacity.Release();
+        }
+    }
+
+    /// <summary>
+    /// 计算保留容量：显式配置 > 0 时取 min(配置, ChannelCapacity/2)（小容量不被保留池吞掉）；
+    /// 否则自动 = clamp(max(8, ChannelCapacity/16), 0, ChannelCapacity/2)。
+    /// </summary>
+    private int ComputeReservedCapacity(int capacity)
+    {
+        var half = capacity / 2;
+        if (_options.ReservedQueueCapacity > 0)
+        {
+            return Math.Min(_options.ReservedQueueCapacity, half);
+        }
+        return Math.Clamp(Math.Max(8, capacity / 16), 0, half);
+    }
+
+    /// <summary>快路径预检：Workspace 排队数是否低于上限（调用方随后持锁做权威判定）。</summary>
+    private bool IsWorkspaceQueueUnderLimit(string workspaceId, int limit)
+    {
+        lock (_queueLock)
+        {
+            return !_workspaceQueues.TryGetValue(workspaceId, out var queue) || queue.Items.Count < limit;
+        }
+    }
+
+    /// <summary>获取（或创建）Workspace 队列条目；调用方必须已持有 _queueLock。</summary>
+    private WorkspaceQueueEntry GetOrCreateWorkspaceQueue(string workspaceId)
+    {
+        // 字典超过上限时淘汰空闲条目（Items 为空）：公平性记忆只保留到上限，
+        // 保证长期运行下 Workspace 集合有界；非空条目数 ≤ 总排队数（≤ 队列容量）。
+        if (_workspaceQueues.Count >= WorkspaceQueueMaxEntries)
+        {
+            foreach (var key in _workspaceQueues.Where(kvp => kvp.Value.Items.Count == 0).Select(kvp => kvp.Key).ToArray())
+            {
+                _workspaceQueues.Remove(key);
+            }
+        }
+
+        if (!_workspaceQueues.TryGetValue(workspaceId, out var entry))
+        {
+            entry = new WorkspaceQueueEntry
+            {
+                WorkspaceId = workspaceId,
+                Weight = _options.WorkspaceQueueWeight > 0 ? _options.WorkspaceQueueWeight : 1
+            };
+            _workspaceQueues[workspaceId] = entry;
+        }
+        Interlocked.Exchange(ref entry.LastTouchTicks, DateTimeOffset.UtcNow.Ticks);
+        return entry;
     }
 
     private AgentRunEnqueueResult BuildEnqueueResult(
@@ -287,20 +396,20 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         {
             lock (_queueLock)
             {
-                return _queue.Count;
+                return _totalQueued;
             }
         }
     }
 
-    /// <summary>调度队列容量上限（诊断/监控用）。</summary>
+    /// <summary>调度队列容量上限（诊断/监控用，含保留容量）。</summary>
     public int QueueCapacity => _options.ChannelCapacity > 0 ? _options.ChannelCapacity : 256;
 
     /// <summary>固定 worker 数（从队列拉取 Run 并执行的后台任务数）。</summary>
     public int WorkerCount => _workerCount;
 
     /// <summary>
-    /// 固定 worker 循环：从优先级队列读取 Run work item，调用 RunWithLeaseAndConcurrencyAsync。
-    /// 每轮先在锁内检查队列（有任务 → 出队执行；空且已 dispose → 退出；空且未 dispose → 等待信号）。
+    /// 固定 worker 循环：从公平队列读取 Run work item，调用 RunWithLeaseAndConcurrencyAsync。
+    /// 每轮先在锁内检查队列（有任务 → 加权公平出队执行；空且已 dispose → 退出；空且未 dispose → 等待信号）。
     /// check-before-wait 结构保证优雅 drain：Dispose 设置 disposed 后 worker 排空剩余任务，
     /// 队列为空时在下一次循环检查中退出（不依赖 drain 超时强制取消）。
     /// </summary>
@@ -313,9 +422,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 RunWorkItem? item = null;
                 lock (_queueLock)
                 {
-                    if (_queue.Count > 0)
+                    if (_totalQueued > 0)
                     {
-                        item = _queue.Dequeue();
+                        item = DequeueFair();
                     }
                     else if (Volatile.Read(ref _disposed) != 0)
                     {
@@ -338,7 +447,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                     continue;
                 }
 
-                _queueCapacity.Release();
+                ReleasePoolSlot(item.UsesReservedPool);
 
                 try
                 {
@@ -361,6 +470,109 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         catch (Exception ex)
         {
             _logger?.LogError(ex, "AgentKernelHost worker {WorkerId} crashed.", workerId);
+        }
+    }
+
+    /// <summary>
+    /// 加权公平出队（调用方必须已持有 _queueLock）：
+    /// 1. Workspace 选择——min(ServiceCount / Weight)（交叉相乘避免浮点），平局按 WorkspaceId 字典序；
+    ///    等权重 = 严格轮转：每个 Workspace 每轮最多被服务一次，再回到队首。
+    /// 2. 桶内选择——取 (reverse aged priority, 入队时间) 最小者：原始优先级优先，
+    ///    同优先级 FIFO；aged priority = 原始优先级 + 排队时长老化提升（防低优先级饿死）。
+    /// 3. 出队后 ServiceCount+1、全局排队数 -1、记录排队等待指标（QueueWait SLO）。
+    ///    空桶保留在字典中（ServiceCount 公平性记忆持续生效），由容量上限淘汰空闲条目。
+    /// </summary>
+    private RunWorkItem DequeueFair()
+    {
+        WorkspaceQueueEntry? winner = null;
+        foreach (var kvp in _workspaceQueues)
+        {
+            if (kvp.Value.Items.Count == 0)
+            {
+                continue;
+            }
+            if (winner is null || CompareFairness(kvp.Value, winner) < 0)
+            {
+                winner = kvp.Value;
+            }
+        }
+
+        if (winner is null)
+        {
+            // 理论不可达：_totalQueued > 0 时必有非空 Workspace 队列。
+            _totalQueued = 0;
+            return null!;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        RunWorkItem? best = null;
+        long bestReverse = long.MaxValue;
+        long bestEnqueue = long.MaxValue;
+        foreach (var item in winner.Items)
+        {
+            var agedPriority = ComputeAgedPriority(item.Priority, item.EnqueueUtcTicks, now);
+            var reverse = -(long)agedPriority;
+            if (reverse < bestReverse || (reverse == bestReverse && item.EnqueueUtcTicks < bestEnqueue))
+            {
+                bestReverse = reverse;
+                bestEnqueue = item.EnqueueUtcTicks;
+                best = item;
+            }
+        }
+
+        winner.Items.Remove(best!);
+        winner.ServiceCount++;
+        Interlocked.Exchange(ref winner.LastTouchTicks, now.Ticks);
+        _totalQueued--;
+        RecordQueueWait(best!, now);
+        return best!;
+    }
+
+    /// <summary>
+    /// 公平性比较：a 比 b 更公平（ServiceCount/Weight 更小）返回负值；相等按 WorkspaceId 字典序。
+    /// 交叉相乘（a.Count × b.Weight vs b.Count × a.Weight）避免浮点精度问题。
+    /// </summary>
+    private static int CompareFairness(WorkspaceQueueEntry a, WorkspaceQueueEntry b)
+    {
+        var left = a.ServiceCount * b.Weight;
+        var right = b.ServiceCount * a.Weight;
+        var cmp = left.CompareTo(right);
+        return cmp != 0 ? cmp : string.CompareOrdinal(a.WorkspaceId, b.WorkspaceId);
+    }
+
+    /// <summary>
+    /// 老化优先级：原始优先级 + 排队等待时长内完整老化间隔数 × 步长。
+    /// 等待越久的 Run 提升越多，最终超过新到达的高优先级 Run（防饿死）。
+    /// </summary>
+    private int ComputeAgedPriority(int priority, long enqueueUtcTicks, DateTimeOffset now)
+    {
+        var interval = _options.PriorityAgingInterval > TimeSpan.Zero
+            ? _options.PriorityAgingInterval
+            : TimeSpan.FromSeconds(10);
+        var step = _options.PriorityAgingStep > 0 ? _options.PriorityAgingStep : 1;
+        var waited = now.UtcTicks - enqueueUtcTicks;
+        if (waited <= 0)
+        {
+            return priority;
+        }
+        var boost = (long)(waited / interval.Ticks) * step;
+        var aged = (long)priority + boost;
+        return aged > int.MaxValue ? int.MaxValue : (int)aged;
+    }
+
+    /// <summary>记录排队等待指标：等待时长直方图 + 超过 QueueWaitSlo 的计数。</summary>
+    private void RecordQueueWait(RunWorkItem item, DateTimeOffset now)
+    {
+        var waitedTicks = now.UtcTicks - item.EnqueueUtcTicks;
+        if (waitedTicks <= 0)
+        {
+            return;
+        }
+        CoreMetrics.AgentQueueWaitDuration.Record(waitedTicks / TimeSpan.TicksPerMillisecond);
+        var slo = _options.QueueWaitSlo > TimeSpan.Zero ? _options.QueueWaitSlo : TimeSpan.FromSeconds(30);
+        if (waitedTicks >= slo.Ticks)
+        {
+            CoreMetrics.AgentQueueWaitSloExceeded.Add(1);
         }
     }
 
@@ -975,8 +1187,29 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         public int ConsecutiveFailures;
     }
 
-    /// <summary>优先级队列 work item（Run + key + ActiveRun）。</summary>
-    private sealed record RunWorkItem(AgentRun Run, string Key, ActiveRun ActiveRun);
+    /// <summary>公平队列 work item（Run + key + ActiveRun + 出队判定元数据）。</summary>
+    private sealed record RunWorkItem(
+        AgentRun Run,
+        string Key,
+        ActiveRun ActiveRun,
+        int Priority,
+        long EnqueueUtcTicks,
+        bool UsesReservedPool);
+
+    /// <summary>
+    /// Workspace 队列条目（weighted fair queue 调度单元）：
+    /// Items 按入队序追加（出队时线性扫描 aged key——桶内规模受全局容量与 per-workspace 上限约束，有界）。
+    /// ServiceCount 记录该 Workspace 已服务次数（公平性依据，跨空桶持续）；Weight 为加权公平权重；
+    /// LastTouchTicks 为最近入队/出队时间（空闲条目淘汰依据）。
+    /// </summary>
+    private sealed class WorkspaceQueueEntry
+    {
+        public required string WorkspaceId { get; init; }
+        public required int Weight { get; init; }
+        public long ServiceCount;
+        public long LastTouchTicks;
+        public readonly List<RunWorkItem> Items = new();
+    }
 
     /// <summary>
     /// workspace 信号量 LRU 条目（含信号量与最后访问时间，用于淘汰空闲条目）。

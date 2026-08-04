@@ -65,6 +65,24 @@ public static class CoreMetrics
             unit: "ms",
             description: "LlmContextCompressor 压缩端到端耗时（含模型调用）");
 
+    // ── Agent Run 本地调度队列指标 ─────────────────────────────────────
+    // 由 AgentKernelHost 在出队时记录：排队等待时长直方图 + 超过 QueueWaitSlo 的计数，
+    // 支撑"队列等待 SLO"观测（weighted fair queue 的等待质量度量）。
+
+    /// <summary>Run 从入队到出队的排队等待时长（毫秒；worker 出队时记录）。</summary>
+    public static readonly Histogram<double> AgentQueueWaitDuration =
+        _meter.CreateHistogram<double>(
+            "contextcore.agent.queue.wait.duration",
+            unit: "ms",
+            description: "Agent Run 本地调度队列排队等待时长（入队→出队）");
+
+    /// <summary>排队等待超过 <c>AgentHostOptions.QueueWaitSlo</c> 的 Run 数。</summary>
+    public static readonly Counter<long> AgentQueueWaitSloExceeded =
+        _meter.CreateCounter<long>(
+            "contextcore.agent.queue.wait_slo_exceeded",
+            unit: "{runs}",
+            description: "排队等待超过 QueueWaitSlo 的 Run 数");
+
     /// <summary>压缩消耗 Token 数（仅在成功时计入）。</summary>
     public static readonly Counter<long> CompressionTokens =
         _meter.CreateCounter<long>(
