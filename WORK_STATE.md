@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `57ab3224`（WP-G6 已推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）。WP-G1..G7 已完成；WP-G8 待推进。
-- **最近完成**：WP-G7（P1-10 推理指标模型/节点/批次维度，详见下方条目）。
+- **基线**：main @ `fabfc686`（WP-G7 已推送；P1 完善项阶段进行中）。
+- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）已全部完成；进入最终全量验证。
+- **最近完成**：WP-G8（P1-11 CI Artifact 进一步瘦身，详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -101,6 +101,13 @@
   - 最终全量验证（12 个 WP 全部完成后统一跑一次）：解决方案构建 0 错误（7 个警告全部为既有，无 WP 引入）；ContextCore.Tests **3523 总数 / 20 失败 / 3489 通过 / 14 跳过**——20 个失败 = 既有 11 项中的 10 项（PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 本次通过，纯 SQL 断言波动非回归）+ 10 个 Docker 不可用环境下的 Postgres 集成测试（42P01 迁移顺序 bug，已在 HEAD 工作树对照证实预存在），**与 HEAD 逐一对比无任何 WP 新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）。OpenAPI 快照再生成（`service/openapi/service-api.openapi.json`，纯新增 160 行）：GetPolicy 新增 5 个租户查询参数、RecordAdaptiveRetrievalFeedbackRequest / RetrievalPlanFeedback 各 6 个反馈字段、`RetrievalFeedbackSource` 枚举 schema、ToolReconciliation 记录 7 个租约字段（WP-A2 P0-4 契约，此前仅比较 schema 名称集未触发漂移）——全部为 WP-A2/F1 契约新增，无意外变更。
 
 ### P1 完善项进度
+
+- **WP-G8 已完成**（P1-11）：CI Artifact 进一步瘦身。
+  - 现状（本地 Release 配置实测）：`tests/**/bin` 724MB（跨平台原生运行时 runtimes 590MB / linux-x64 66MB / 其余程序集 134MB）+ `**/obj` 60MB（NuGet 恢复资产 4.3MB / 中间编译产物 56MB）。
+  - 三项剔除（build job 构建后原地执行，bash 脚本）：(1) 测试 bin 中 runtimes 下除 linux-x64 外的全部平台原生负载——运行器为 ubuntu-latest，按 RID 只加载 linux-x64，ios/android/osx/win 等平台负载永不加载；(2) 测试 bin 中 PDB 符号（运行测试不需要）；(3) obj 中间编译产物——仅保留 NuGet 恢复资产（project.assets.json / project.nuget.cache / *.nuget.g.props / *.nuget.g.targets / *.nuget.dgspec.json，供 `--no-build --no-restore` 资产解析）。
+  - 上传路径改为精确正向 glob（`tests/**/bin/` + 上述 obj 资产文件），避免 upload-artifact 的排除/重新包含语义歧义。
+  - 验证：obj 最小化实测——备份全量 obj（60.2MB）→ 删至仅资产（4.31MB）→ 解决方案级 `dotnet test -c Release --no-build --no-restore` 全项目 `--list-tests` 正常、跨项目真实执行（单元 1/1、OpenAPI 套件 2/2）通过，随后还原 obj；排除脚本在临时夹具实测（WSL bash）：非 linux-x64 runtimes 剔除 / linux-x64 保留 / PDB 剔除 / obj 资产保留且中间产物与空目录剔除，行为与预期一致。附带核实：OpenAPI 漂移测试一次失败系本地陈旧 bin（构建早于 WP-G1）所致，重建后 3/3 通过，非真实漂移。
+  - 体积：~0.8GB → ~0.2GB（再 -75%）。本地为 Windows 无法直接模拟 linux-x64-only 端到端（本地跑测试需保留 win 原生库），该剔除仅在 CI ubuntu 运行器生效且按 RID 解析安全。
 
 - **WP-G7 已完成**（P1-10）：推理指标按模型 / 节点 / 批次维度标注。
   - 维度设计：五项推理指标统一携带维度——model（模型版本）、node（节点标识 = Environment.MachineName，与 ModelStateReconcilerWorker 的节点标识约定一致）；批次类指标（排队等待 / 填充率 / 分片）额外携带 batch（该指标事件涉及的批次行数）。
