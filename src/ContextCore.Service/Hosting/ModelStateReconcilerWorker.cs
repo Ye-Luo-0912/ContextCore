@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Inference.Onnx;
+using ContextCore.Service.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -443,26 +444,17 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     };
 
     /// <summary>
-    /// 从 IConfiguration 读取默认 tensor 名，避免硬编码（与 ModelControlPlaneEndpoints 一致）。
+    /// 从 IConfiguration 读取默认推理配置（tensor 名与 Execution Provider / GPU 设备，
+    /// 与 ModelControlPlaneEndpoints 共用 ModelArtifactOptionsReader）。
     /// </summary>
     private OnnxInferenceEngineOptions CreateDefaultOnnxOptions(bool enableWarmup)
     {
-        var inputTensorName = _configuration["ModelArtifact:DefaultInputTensorName"];
-        if (string.IsNullOrWhiteSpace(inputTensorName))
-        {
-            inputTensorName = "input";
-        }
-
-        var scoreOutputName = _configuration["ModelArtifact:DefaultScoreOutputName"];
-        if (string.IsNullOrWhiteSpace(scoreOutputName))
-        {
-            scoreOutputName = "score";
-        }
-
         return new OnnxInferenceEngineOptions
         {
-            InputTensorName = inputTensorName,
-            ScoreOutputName = scoreOutputName,
+            InputTensorName = ModelArtifactOptionsReader.ResolveInputTensorName(_configuration),
+            ScoreOutputName = ModelArtifactOptionsReader.ResolveScoreOutputName(_configuration),
+            ExecutionProvider = ModelArtifactOptionsReader.ResolveExecutionProvider(_configuration),
+            ExecutionProviderDeviceId = ModelArtifactOptionsReader.ResolveExecutionProviderDeviceId(_configuration),
             EnableWarmup = enableWarmup,
             InferencePhaseTimingCallback = _healthRegistry is null
                 ? null

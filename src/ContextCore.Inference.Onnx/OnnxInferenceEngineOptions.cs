@@ -151,13 +151,15 @@ public sealed class OnnxInferenceEngineOptions
 
     /// <summary>
     /// 子问题4：单引擎允许的并发推理槽位数（SemaphoreSlim 容量）。
-    /// 默认 0 = 使用 Environment.ProcessorCount；正数表示显式上限。
+    /// 默认 0 = 按 Execution Provider profile 解析（CPU = ProcessorCount；单 GPU = 1，
+    /// 会话内 session.Run 串行执行，避免按核数配置导致过度订阅）；正数表示显式上限。
     /// 用于防止并发请求打满 ORT 线程池导致 P99 飙升。
     /// </summary>
     /// <remarks>
     /// 槽位控制的是 <see cref="OnnxInferenceEngine.InferBatchAsync"/> 同时调用
     /// <see cref="IOnnxInferenceSession.InferBatchAsync"/> 的最大并发数。
     /// 超过此数的请求在 SemaphoreSlim 上等待，不消耗 ORT 线程。
+    /// 单 GPU 场景无需增大：session.Run 在单一 stream 上串行，提升并发只增加争抢。
     /// </remarks>
     public int MaxConcurrentInferences { get; init; } = 0;
 

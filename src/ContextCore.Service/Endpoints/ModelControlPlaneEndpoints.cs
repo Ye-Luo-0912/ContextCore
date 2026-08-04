@@ -907,34 +907,24 @@ internal static class ModelControlPlaneEndpoints
 
     /// <summary>
     /// 从 IConfiguration 构造默认 OnnxInferenceEngineOptions。
-    /// tensor 名从配置读取（ModelArtifact:DefaultInputTensorName / DefaultScoreOutputName），
-    /// 缺省时回退到 "input" / "score"，与历史行为保持向后兼容。
+    /// tensor 名与 Execution Provider / GPU 设备从配置读取（ModelArtifact:* 前缀），
+    /// 缺省时回退到 "input" / "score" / CPU，与历史行为保持向后兼容。
     /// 替换原本散落在多个端点中的硬编码字面量。
     /// </summary>
     /// <param name="configuration">IConfiguration 实例。</param>
     /// <param name="enableWarmup">是否在加载后执行 warmup。</param>
-    /// <returns>填充了配置默认 tensor 名的 OnnxInferenceEngineOptions。</returns>
+    /// <returns>填充了配置默认值的 OnnxInferenceEngineOptions。</returns>
     private static OnnxInferenceEngineOptions CreateDefaultOnnxOptions(
         IConfiguration configuration,
         bool enableWarmup,
         DefaultComponentHealthRegistry? healthRegistry = null)
     {
-        var inputTensorName = configuration["ModelArtifact:DefaultInputTensorName"];
-        if (string.IsNullOrWhiteSpace(inputTensorName))
-        {
-            inputTensorName = "input";
-        }
-
-        var scoreOutputName = configuration["ModelArtifact:DefaultScoreOutputName"];
-        if (string.IsNullOrWhiteSpace(scoreOutputName))
-        {
-            scoreOutputName = "score";
-        }
-
         return new OnnxInferenceEngineOptions
         {
-            InputTensorName = inputTensorName,
-            ScoreOutputName = scoreOutputName,
+            InputTensorName = ModelArtifactOptionsReader.ResolveInputTensorName(configuration),
+            ScoreOutputName = ModelArtifactOptionsReader.ResolveScoreOutputName(configuration),
+            ExecutionProvider = ModelArtifactOptionsReader.ResolveExecutionProvider(configuration),
+            ExecutionProviderDeviceId = ModelArtifactOptionsReader.ResolveExecutionProviderDeviceId(configuration),
             EnableWarmup = enableWarmup,
             InferencePhaseTimingCallback = healthRegistry is null
                 ? null
