@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-04。
-> **Current HEAD：`6dee79fa`**（WP-F1 自适应检索反馈加固；R30.1 16 项 P0 全部完成并推送，与 origin/main 一致）。
-> **Current Phase：R30.1 Production Semantics Stabilization** —— 16 项 P0 全部关闭（12 个 WP），详见「当前阶段」。
+> **Current HEAD：`51f4d0d3`**（P1 完善项 11 项全部完成并推送，与 origin/main 一致）。
+> **Current Phase：R30.1 Production Semantics Stabilization（已完成）+ P1 完善项（已完成，8 个工作包）** —— 16 项 P0 全部关闭（12 个 WP）+ 11 项 P1 完善项（WP-G1..G8），详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R29 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -27,6 +27,16 @@
 - WP-F1（P0-16）：自适应检索反馈加固——租户隔离 SHA-256 签名（workspace/collection/purpose/policy/profile/taskClass）、反馈幂等键/可信度/时间衰减/单主体封顶、默认 Disabled
 
 **Open P0（待办）**：无（16 项全部关闭）。
+
+**P1 完善项（已完成，HEAD `51f4d0d3`，8 个工作包 WP-G1..G8 覆盖 11 项 P1）**：
+- WP-G1（P1-1 + P1-2）：Tool 成功结果与 Journal 状态一致（模糊态强制 Succeeded=false）+ Reconciliation 决策幂等（DecisionRequestId 身份）
+- WP-G2（P1-3）：Agent 本地调度队列 Workspace 公平性——per-workspace 分桶加权公平 + 优先级老化 + 保留容量
+- WP-G3（P1-4 + P1-5）：生产准入能力探针深度化（原生 Tool Calling 三级探针 / Tool Schema 复用运行时校验）+ 节点级检查核实
+- WP-G4（P1-6 + P1-7）：Event Compaction 数据库侧归档（INSERT..SELECT + 快照增量重建）+ Raw/SSE 统一 Archive 视图
+- WP-G5（P1-8）：移除未消费的 ILearningLeaseStore 抽象（含 learning_leases 死 schema 清理）
+- WP-G6（P1-9）：迁移 DDL 分阶段修复迁移顺序（消除 Docker 集成测试 42P01）+ 陈旧断言修复 + 共享异步迁移缓存
+- WP-G7（P1-10）：推理指标按模型 / 节点 / 批次维度标注（NodeId + ModelNodeTags/ModelNodeBatchTags）
+- WP-G8（P1-11）：CI Artifact 进一步瘦身（剔除跨平台原生运行时 / PDB / obj 中间产物，~0.8GB → ~0.2GB）
 
 ## 历史快照（R27~R29 已完成记录，不作为当前架构依据）
 
@@ -168,10 +178,10 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `6dee79fa`（R30.1 16 项 P0 全部完成并推送；12 个 WP：WP-A1/A2/B/C1/C2/C3/D1/D2/D3/E1/E2/F1） | - |
+| 当前 HEAD | `51f4d0d3`（P1 完善项 11 项全部完成并推送；8 个 WP：WP-G1/G2/G3/G4/G5/G6/G7/G8） | - |
 | PublicApi baseline 行数 | R29 新增 AgentRunContracts + CanaryHAAggregationContracts + PerformanceAttributionContracts 三大契约集（IAgentModelTransport/IAgentLoopPolicy/IAgentRunStore/IAgentApprovalGate/IAgentToolCallValidator/IAgentRunEventStore + ICanaryExternalMetricsSource/ICanaryMetricsAggregator/ICanaryLeaderLease + IComponentHealthRegistry 等）；R30.1 各 WP 陆续追加（ToolFailurePhase/ToolRetrySafety/ReconciliationLease/ClaimLease/RecoverableSnapshot/NodeMembership/AdaptiveRetrieval 等） | 单一事实源 |
 | 构建 | 0 错误 / 7 既有警告（benchmarks CS0618 5 处 + IntegrationTests 2 处，均非本轮引入） | 0 / 0 |
-| 测试 | 最近一次全量验证：ContextCore.Tests **3523 总数 / 20 失败**（10 个既有 11 项 + 10 个 Docker 不可用环境下的 Postgres 集成 42P01 环境性失败，与 HEAD 对照无新增）/ 3489 通过 / 14 跳过；Service.Tests **0 失败 / 64 通过**（1 跳过）。既有失败名单见 WORK_STATE.md | 除既有与环境性失败外 0 失败 |
+| 测试 | P1 收口最终全量验证：ContextCore.Tests **3539 总数 / 6 失败**（全部命中既有 7 项名单，与 P1 前基线对比无新增）/ 3519 通过 / 14 跳过；Service.Tests **0 失败 / 64 通过**（1 跳过）；ContextCore.IntegrationTests **21 失败 / 111 通过**（21 个失败全部命中 P1 前基线 111 项失败名单，非回归；P1 修复其中 90 项）。既有失败名单见 WORK_STATE.md | 除既有与环境性失败外 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -194,7 +204,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 | Decision Evidence V2 | CandidateDecisionReasonCode 枚举 + V2 字段填充 | 已达成（R14-1） |
 | Package Quality 报告 | 8 指标 + OverallScore 加权 | 已达成（R14-2） |
 | OpenAPI snapshot 辅助再生 | OpenApi_RegenerateSnapshot `[Ignore]` 方法 | 已达成 |
-| Postgres schema 版本 | cc-schema-v61（R30.1 WP-F1 迁移 0008 检索反馈加固） | 稳定 |
+| Postgres schema 版本 | cc-schema-v62（P1 WP-G1 迁移 0009 工具对账 DecisionRequestId 列） | 稳定 |
 | Postgres Unsupported stores 残留 | 0（R14-PG-5 完成时清零） | 0 |
 | Postgres 多实例 cache invalidation | PostgresContextStateVersionStore + Decorator 文档化 | 已达成（R14-PG-6/7） |
 | Postgres migration 框架 | registry + history + rollback + 版本短路 | 已达成（R14-PG-8 + P0 冻结） |
@@ -222,7 +232,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ## 下一阶段任务
 
-> R30.1 16 项 P0 已全部关闭，当前无待办 P0。下一阶段待用户决定方向（候选：R30 Self-Learning Agent Runtime——Utility Ledger 物化 → Dataset Builder → 训练/校准 → Replay → Canary → Promotion）。以下小节为已完成阶段的记录与候选方向，供回溯参考。
+> R30.1 16 项 P0 已全部关闭，P1 完善项 11 项（WP-G1..G8）已全部完成，当前无待办 P0/P1。下一阶段待用户决定方向（候选：R30 Self-Learning Agent Runtime——Utility Ledger 物化 → Dataset Builder → 训练/校准 → Replay → Canary → Promotion）。以下小节为已完成阶段的记录与候选方向，供回溯参考。
 
 ### R30 候选方向（历史设计，暂缓启动）— Self-Learning Agent Runtime
 

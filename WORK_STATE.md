@@ -15,9 +15,9 @@
 
 ## 当前状态
 
-- **基线**：main @ `fabfc686`（WP-G7 已推送；P1 完善项阶段进行中）。
-- **进行中**：P1 完善项 11 项（WP-G1..WP-G8 共 8 个工作包）已全部完成；进入最终全量验证。
-- **最近完成**：WP-G8（P1-11 CI Artifact 进一步瘦身，详见下方条目）。
+- **基线**：main @ `51f4d0d3`（P1 完善项 11 项全部完成并推送；最终全量验证通过）。
+- **进行中**：无（P1 完善项阶段收口；下一方向待用户指示，候选见 TODO.md）。
+- **最近完成**：P1 完善项全部 8 个工作包 + 最终全量验证（详见下方条目）。
 
 ### R30.1 P0 阻断项修复进度
 
@@ -102,6 +102,8 @@
 
 ### P1 完善项进度
 
+- **最终全量验证（P1 收口，全部工作包完成后统一执行一次）**：解决方案构建 0 错误；ContextCore.Tests **3539 总数 / 6 失败 / 3519 通过 / 14 跳过**——6 个失败全部命中既有 7 项名单（Journal_StateTransition_ThrowsOnRegression、PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema、ProductionComposition_Postgres_NoNonDecoratorUnexpectedDuplicates、Benchmark_Baseline_Contains_At_Least_15_Samples_PerCase、DI_Registration_EngineResolvesWithAllocatorV2_1、MandatoryProvider_NoTokenizer_EmptyContent_Succeeds；第 7 项 MemoryOnlyBatchLookup_SatisfiesHydrationPipeline 本次通过），**与基线对比无任何新增失败**；Service.Tests **0 失败 / 64 通过 / 1 跳过**（跳过项为 `[Ignore]` 的 OpenApi_RegenerateSnapshot）；ContextCore.IntegrationTests **21 失败 / 111 通过 / 6 跳过**——在 P1 前基线（fc7cf5b3）worktree 对照运行：基线该套件为 111 失败 / 11 通过 / 16 跳过，**HEAD 的 21 个失败全部命中基线失败名单（既有，非回归），P1 阶段反而修复其中 90 个**（HTTP E2E、Postgres 存储、恢复链路等）。
+
 - **WP-G8 已完成**（P1-11）：CI Artifact 进一步瘦身。
   - 现状（本地 Release 配置实测）：`tests/**/bin` 724MB（跨平台原生运行时 runtimes 590MB / linux-x64 66MB / 其余程序集 134MB）+ `**/obj` 60MB（NuGet 恢复资产 4.3MB / 中间编译产物 56MB）。
   - 三项剔除（build job 构建后原地执行，bash 脚本）：(1) 测试 bin 中 runtimes 下除 linux-x64 外的全部平台原生负载——运行器为 ubuntu-latest，按 RID 只加载 linux-x64，ios/android/osx/win 等平台负载永不加载；(2) 测试 bin 中 PDB 符号（运行测试不需要）；(3) obj 中间编译产物——仅保留 NuGet 恢复资产（project.assets.json / project.nuget.cache / *.nuget.g.props / *.nuget.g.targets / *.nuget.dgspec.json，供 `--no-build --no-restore` 资产解析）。
@@ -171,7 +173,7 @@
 - 规则文件：`AGENTS.md`（注释规范、工程化原则、工作状态维护）。
 - 路线图：`TODO.md`；历史归档 `docs/archive/roadmap-history.md`。
 - 提交约定：commit 消息写入 UTF-8 临时文件后用 `git commit -F`（pwsh 内联中文会乱码）；push main 已预授权。
-- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 7 项中的项，名单见下与「既有 7 个测试失败」；WP-G6 已修复迁移顺序，Docker Postgres 集成测试不再环境性失败）。
+- 验证门禁：build 0 错误；build 与 test **串行**执行；开发中只跑定向测试，**全量测试在全部任务完成后统一跑一次**（ContextCore.Tests 失败须为既有 7 项中的项，名单见下与「既有 7 个测试失败」；ContextCore.IntegrationTests 存在 21 个既有失败——P1 前基线对照确认，非回归；WP-G6 已修复迁移顺序，Docker Postgres 集成测试不再环境性失败）。
 
 ## 既有 7 个测试失败（勿当回归处理）
 
