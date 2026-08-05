@@ -481,13 +481,17 @@ RETURNING data;
         insertCommand.Parameters.AddWithValue("idempotency_key", (object?)run.IdempotencyKey ?? DBNull.Value);
         AddJson(insertCommand, "data", run);
 
+        // 幂等键 partial UNIQUE 冲突（同 idempotency_key 不同 run_id）会抛 unique_violation。
+        // 事务内语句失败会中止整个事务，因此用 savepoint 包裹 INSERT：冲突时回滚到
+        // savepoint（事务保持可用），返回 null 走幂等重放查询路径（与原 CreateOrGet 语义一致）。
+        await transaction.SaveAsync("insert_run", cancellationToken).ConfigureAwait(false);
         try
         {
             return await insertCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            // 幂等键 partial UNIQUE 冲突（同 idempotency_key 不同 run_id）→ 视为未插入。
+            await transaction.RollbackAsync("insert_run", cancellationToken).ConfigureAwait(false);
             return null;
         }
     }

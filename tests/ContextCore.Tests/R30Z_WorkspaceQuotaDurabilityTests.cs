@@ -174,6 +174,41 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         }
     }
 
+    [TestMethod]
+    public async Task AdmitRunAtomically_SameIdempotencyKey_ReturnsExistingRun()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, _) = await ResolveAsync(container, "admit_key_");
+            await using (provider)
+            {
+                // 同一 idempotency_key、不同 run_id → 幂等重放命中既有 Run（事务内幂等键冲突路径）。
+                var run1 = BuildPendingAdmissionRun(tokensUsed: 0) with { IdempotencyKey = "idem-key-1" };
+                var run2 = BuildPendingAdmissionRun(tokensUsed: 0) with { IdempotencyKey = "idem-key-1" };
+
+                var first = await store.AdmitRunAtomicallyAsync(run1, quotaAdmission: null, default);
+                Assert.IsTrue(first.Created, "首次创建成功。");
+
+                var replay = await store.AdmitRunAtomicallyAsync(run2, quotaAdmission: null, default);
+                Assert.IsFalse(replay.Created, "同 idempotency_key 重放不应创建新 Run。");
+                Assert.IsTrue(replay.WasExisting, "应按 idempotency_key 命中既有 Run。");
+                Assert.AreEqual(first.Run.RunId, replay.Run.RunId, "重放应返回首次创建的 Run。");
+
+                var count = await QueryScalarAsync(
+                    container, provider,
+                    $"SELECT COUNT(1) FROM {{prefix}}agent_runs WHERE idempotency_key = 'idem-key-1';");
+                Assert.AreEqual("1", count, "同 idempotency_key 不应产生重复行。");
+            }
+        }
+    }
+
     // ── 2. 配额服务生命周期 + 持久化 ────────────────────────────────────
 
     [TestMethod]
