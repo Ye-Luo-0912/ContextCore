@@ -481,24 +481,26 @@ internal static class AgentExecutionEndpoints
                             statusCode: StatusCodes.Status400BadRequest);
                     }
                 }
-
-                if (approvalForAuthorization is not null)
+                else
                 {
-                    var authorizationError = await CheckApprovalAuthorizationAsync(
-                        run,
-                        approvalForAuthorization,
-                        workspaceContextAccessor?.Current,
-                        httpContext.RequestServices.GetService<SecurityOptions>(),
-                        httpContext.RequestServices.GetService<IToolAuthorizationPolicy>(),
-                        httpContext.RequestServices.GetService<IToolAuthorizer>(),
-                        ct).ConfigureAwait(false);
+                    // 审批存储缺失 → 无法复核 Tool 授权（获取不到 Tool 名称），fail-closed 拒绝批准。
+                    return Results.Forbid();
+                }
 
-                    if (authorizationError is not null)
-                    {
-                        // 审批者无执行/审批权限或快照失效 → 403（与 409 语义区分：
-                        // 409 是裁决冲突，403 是授权不足）。
-                        return Results.Forbid();
-                    }
+                var authorizationError = await CheckApprovalAuthorizationAsync(
+                    run,
+                    approvalForAuthorization,
+                    workspaceContextAccessor?.Current,
+                    httpContext.RequestServices.GetService<SecurityOptions>(),
+                    httpContext.RequestServices.GetService<IToolAuthorizationPolicy>(),
+                    httpContext.RequestServices.GetService<IToolAuthorizer>(),
+                    ct).ConfigureAwait(false);
+
+                if (authorizationError is not null)
+                {
+                    // 审批者无执行/审批权限或快照失效 → 403（与 409 语义区分：
+                    // 409 是裁决冲突，403 是授权不足）。
+                    return Results.Forbid();
                 }
             }
 
