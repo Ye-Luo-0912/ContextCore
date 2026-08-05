@@ -1474,8 +1474,8 @@ public sealed class AgentRunActor
                 // 回退路径：直接调 IToolDispatcher（无 journal，无 durable 保证）
                 var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
                 {
-                    ToolName = toolCall.ToolName,
-                    Payload = toolCall.Arguments,
+                    ToolName = toolCall.ToolName ?? string.Empty,
+                    Payload = toolCall.Arguments ?? string.Empty,
                     RequestId = pendingCommand.ToolCallId,
                     IdempotencyKey = toolCall.IdempotencyKey,
                     WorkspaceId = state.Run.WorkspaceId,
