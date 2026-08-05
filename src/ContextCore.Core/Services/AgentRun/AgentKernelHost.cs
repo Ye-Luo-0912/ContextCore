@@ -1109,6 +1109,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         // P0-10 正式方案：解析事件流压缩器（未注册时 Actor 无快照/归档，走全量重放）。
         // 仅 Postgres provider 注册 IAgentRunEventCompactor。
         var eventCompactor = _serviceProvider.GetService(typeof(IAgentRunEventCompactor)) as IAgentRunEventCompactor;
+        // 解析 Tool 授权策略（提供授权快照校验；未注册时 Actor 跳过快照校验——旧路径）。
+        var toolAuthorizationPolicy = _serviceProvider.GetService(typeof(IToolAuthorizationPolicy)) as IToolAuthorizationPolicy;
 
         return new AgentRunActor(
             _runStore,
@@ -1128,7 +1130,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             toolCatalog,
             _options,
             recoveryAlertSink,
-            eventCompactor);
+            eventCompactor,
+            toolAuthorizationPolicy);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

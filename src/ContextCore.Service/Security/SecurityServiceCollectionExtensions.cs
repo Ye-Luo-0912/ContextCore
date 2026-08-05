@@ -48,9 +48,14 @@ public static class SecurityServiceCollectionExtensions
         services.TryAddSingleton<IApiKeyStore>(sp =>
             new InMemoryApiKeyStore(securityOptions, sp.GetRequiredService<ILogger<InMemoryApiKeyStore>>()));
 
-        // Tool Authorizer：Singleton（注册表为进程内字典）
+        // Tool 授权策略：Singleton（按工具名称分类能力位，供快照签发与派发校验）。
+        services.TryAddSingleton<IToolAuthorizationPolicy>(_ => new DefaultToolAuthorizationPolicy());
+
+        // Tool Authorizer：Singleton（注册表为进程内字典，未命中时回退到授权策略）
         services.TryAddSingleton<IToolAuthorizer>(sp =>
-            new DefaultToolAuthorizer(sp.GetRequiredService<ILogger<DefaultToolAuthorizer>>()));
+            new DefaultToolAuthorizer(
+                sp.GetRequiredService<ILogger<DefaultToolAuthorizer>>(),
+                sp.GetService<IToolAuthorizationPolicy>()));
 
         // Workspace Quota Service：Singleton（进程内字典）
         services.TryAddSingleton<IWorkspaceQuotaService>(sp =>

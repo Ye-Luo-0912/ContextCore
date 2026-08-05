@@ -69,6 +69,8 @@ public sealed class AgentRunActor
     // Tool 定义列表（从 IToolCatalog 构建，用于原生 function calling 声明；
     // 未注入 Catalog 或实现无定义 → 空列表，模型不感知 Tool）。
     private IReadOnlyList<AgentToolDefinition> _toolDefinitions;  // mutable for AllowedToolIds filtering in ExecuteAsync
+    // Tool 授权策略（null 时跳过授权快照校验——旧路径；快照存在但策略缺失则拒绝执行）。
+    private readonly IToolAuthorizationPolicy? _toolAuthorizationPolicy;
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
@@ -195,6 +197,9 @@ public sealed class AgentRunActor
     /// 事件流压缩器（null = 非 Postgres provider；P0-10 正式方案：Recovery 读取
     /// 可恢复快照 + 归档审计，按 "Snapshot → validate anchor → replay hot delta" 恢复）。
     /// </param>
+    /// <param name="toolAuthorizationPolicy">
+    /// Tool 授权策略（null = 无快照校验的旧路径；Run 已建立授权快照时缺失策略将拒绝执行）。
+    /// </param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -213,7 +218,8 @@ public sealed class AgentRunActor
         IToolCatalog? toolCatalog = null,
         AgentHostOptions? hostOptions = null,
         IRecoveryAlertSink? alertSink = null,
-        IAgentRunEventCompactor? eventCompactor = null)
+        IAgentRunEventCompactor? eventCompactor = null,
+        IToolAuthorizationPolicy? toolAuthorizationPolicy = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -240,6 +246,7 @@ public sealed class AgentRunActor
         _hostOptions = hostOptions;
         _alertSink = alertSink;
         _eventCompactor = eventCompactor;
+        _toolAuthorizationPolicy = toolAuthorizationPolicy;
     }
 
     /// <summary>
@@ -1287,6 +1294,32 @@ public sealed class AgentRunActor
                 ToolCallId = pendingCommand.ToolCallId
             };
 
+            // 授权快照校验（安全边界，覆盖全部 pending 命令——含已审批首项：
+            // 审批通过到执行之间的窗口内快照可能过期/策略漂移，一律 fail-closed）。
+            var (authorized, authorizationDenial, authorizationReason) = IsToolAuthorizedBySnapshot(state.Run, toolCall.ToolName ?? string.Empty);
+            if (!authorized)
+            {
+                if (authorizationDenial == ToolAuthorizationDenial.SnapshotInvalid)
+                {
+                    await FailAsync(state, authorizationReason, cancellationToken).ConfigureAwait(false);
+                    return state with { Run = state.Run with { State = AgentRunState.Failed } };
+                }
+
+                state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
+                    toolCallId: pendingCommand.ToolCallId,
+                    requestId: null,
+                    toolName: pendingCommand.ToolName,
+                    idempotencyKey: pendingCommand.IdempotencyKey,
+                    sideEffect: ToolSideEffect.Unknown.ToString(),
+                    externalOperationId: null,
+                    journalState: ToolDispatchState.Prepared.ToString(),
+                    succeeded: false,
+                    output: null,
+                    error: authorizationReason,
+                    durationMs: 0)));
+                continue;
+            }
+
             // 后续 Tool Call（非首项）必须走独立校验+审批流程
             if (cmdIndex > 0)
             {
@@ -1959,6 +1992,67 @@ public sealed class AgentRunActor
     }
 
     /// <summary>执行 DispatchTool 阶段（含校验 + 审批 + 分派 + 观察）。</summary>
+    /// <summary>
+    /// Tool 派发前授权校验的拒绝分类。
+    /// </summary>
+    private enum ToolAuthorizationDenial
+    {
+        /// <summary>通过。</summary>
+        None,
+
+        /// <summary>工具不在 Run 授权快照的已授权集合中（跳过该 Tool，与 AllowedToolIds 约束一致）。</summary>
+        ToolNotGranted,
+
+        /// <summary>快照整体失效（过期 / 策略版本漂移 / 策略缺失）——终止本轮，不允许继续执行任何 Tool。</summary>
+        SnapshotInvalid
+    }
+
+    /// <summary>
+    /// 校验 Run 的 Tool 授权快照是否允许执行指定 Tool。
+    /// 快照为空（旧路径）→ 放行（无快照可校验，仍受 AllowedToolIds 约束）。
+    /// </summary>
+    private (bool Allowed, ToolAuthorizationDenial Denial, string Reason) IsToolAuthorizedBySnapshot(AgentRun run, string toolName)
+    {
+        var snapshot = run.AuthorizationSnapshot;
+        if (snapshot is null)
+        {
+            return (true, ToolAuthorizationDenial.None, string.Empty);
+        }
+
+        if (_toolAuthorizationPolicy is null)
+        {
+            return (false, ToolAuthorizationDenial.SnapshotInvalid,
+                "Run 已建立 Tool 授权快照但未注册授权策略，拒绝执行。");
+        }
+
+        if (snapshot.ExpiresAt < DateTimeOffset.UtcNow)
+        {
+            return (false, ToolAuthorizationDenial.SnapshotInvalid,
+                $"Tool 授权快照已过期（ExpiresAt={snapshot.ExpiresAt:O}），拒绝执行。");
+        }
+
+        if (!string.Equals(snapshot.PolicyVersion, _toolAuthorizationPolicy.PolicyVersion, StringComparison.Ordinal))
+        {
+            return (false, ToolAuthorizationDenial.SnapshotInvalid,
+                $"Tool 授权策略版本已漂移（快照 {snapshot.PolicyVersion}，当前 {_toolAuthorizationPolicy.PolicyVersion}），拒绝执行。");
+        }
+
+        if (!snapshot.GrantedToolIds.Contains(toolName))
+        {
+            return (false, ToolAuthorizationDenial.ToolNotGranted,
+                $"Tool '{toolName}' 不在 Run 授权快照的已授权工具集合中，已被授权约束拒绝。");
+        }
+
+        var requirement = _toolAuthorizationPolicy.GetRequirement(toolName);
+        if (!snapshot.GrantedPermissions.Contains(requirement.ExecutePermissionId))
+        {
+            return (false, ToolAuthorizationDenial.ToolNotGranted,
+                $"Run 创建者缺少执行 Tool '{toolName}' 所需的权限 {requirement.ExecutePermissionId}，已被授权约束拒绝。");
+        }
+
+        return (true, ToolAuthorizationDenial.None, string.Empty);
+    }
+
     private async Task<AgentRunExecutionState> DispatchToolsAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
         if (state.LastModelResponse is null || state.LastModelResponse.ToolCalls.Count == 0)
@@ -2004,6 +2098,32 @@ public sealed class AgentRunActor
                     succeeded: false,
                     output: null,
                     error: $"Tool '{toolCall.ToolName}' 不在 Run.AllowedToolIds 白名单中，已被 Run 约束拒绝。",
+                    durationMs: 0)));
+                continue;
+            }
+
+            // 授权快照校验（安全边界）：快照整体失效（过期/策略漂移/策略缺失）→ 终止本轮，
+            // 不允许继续执行任何 Tool；工具不在授权集 → 跳过该 Tool（与 AllowedToolIds 约束一致）。
+            var (authorized, authorizationDenial, authorizationReason) = IsToolAuthorizedBySnapshot(state.Run, toolCall.ToolName ?? string.Empty);
+            if (!authorized)
+            {
+                if (authorizationDenial == ToolAuthorizationDenial.SnapshotInvalid)
+                {
+                    await FailAsync(state, authorizationReason, cancellationToken).ConfigureAwait(false);
+                    return state with { Run = state.Run with { State = AgentRunState.Failed } };
+                }
+
+                state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
+                    toolCallId: toolCallId,
+                    requestId: null,
+                    toolName: toolCall.ToolName ?? string.Empty,
+                    idempotencyKey: toolCall.IdempotencyKey,
+                    sideEffect: ToolSideEffect.Unknown.ToString(),
+                    externalOperationId: null,
+                    journalState: ToolDispatchState.Prepared.ToString(),
+                    succeeded: false,
+                    output: null,
+                    error: authorizationReason,
                     durationMs: 0)));
                 continue;
             }

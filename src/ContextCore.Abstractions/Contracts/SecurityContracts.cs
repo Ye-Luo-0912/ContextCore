@@ -75,8 +75,18 @@ public enum WorkspacePermission : ushort
     /// <summary>读取模型工件信息（Model Control Plane 只读端点：active/list/get/ready/consistency）。</summary>
     ModelRead = 1 << 7,
 
-    /// <summary>Admin 隐含的所有权限位（除 QuotaManage 外的并集）。</summary>
+    /// <summary>文件系统类 Tool 能力位（file_* 等工具的执行与审批）。</summary>
+    FileAccess = 1 << 8,
+
+    /// <summary>进程 / 命令执行类 Tool 能力位（process_* / shell_* 等工具的执行与审批）。</summary>
+    ProcessExec = 1 << 9,
+
+    /// <summary>网络访问类 Tool 能力位（network_* / http_* 等工具的执行与审批）。</summary>
+    NetworkAccess = 1 << 10,
+
+    /// <summary>Admin 隐含的所有权限位（含文件 / 进程 / 网络能力位）。</summary>
     AdminAll = AgentRun | ModelActivate | ModelRegister | ModelRead | LearningView | ConfigEdit | ApiKeyManage | QuotaManage
+               | FileAccess | ProcessExec | NetworkAccess
 }
 
 /// <summary>
@@ -359,6 +369,69 @@ public interface IToolAuthorizer
 
     /// <summary>查询 Tool 所需权限位（未注册返回 None = 不限制）。</summary>
     WorkspacePermission GetRequiredPermission(string toolName);
+}
+
+/// <summary>
+/// Tool 授权要求：某个 Tool 的执行 / 审批所需的能力与权限标识。
+/// 能力位（<see cref="RequiredCapability"/>）用于判定主体是否覆盖；
+/// 权限标识（ExecutePermissionId / ApprovePermissionId）用于快照 GrantedPermissions 的记录与复核。
+/// </summary>
+public sealed record ToolAuthorizationRequirement
+{
+    /// <summary>
+    /// 执行/审批所需的能力位（None = 仅需 AgentRun）。
+    /// 高危 Tool 映射到文件 / 进程 / 网络 / 管理能力位——主体凭角色持有能力位即可派生对应
+    /// ToolExecute:/ToolApprove: 权限，低权限角色（仅 AgentRun）无法执行或审批高危 Tool。
+    /// </summary>
+    public WorkspacePermission RequiredCapability { get; init; }
+
+    /// <summary>执行权限标识（基础 Tool = "AgentRun"；高危 Tool = "ToolExecute:&lt;tool&gt;"）。</summary>
+    public string ExecutePermissionId { get; init; } = string.Empty;
+
+    /// <summary>审批权限标识（基础 Tool = "AgentRun"；高危 Tool = "ToolApprove:&lt;tool&gt;"）。</summary>
+    public string ApprovePermissionId { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Tool 授权策略：按 Tool 名称/类别解析执行与审批要求，并提供策略版本号
+/// （快照固化策略版本，派发时校验策略未漂移）。
+/// </summary>
+public interface IToolAuthorizationPolicy
+{
+    /// <summary>策略版本标识（快照记录；策略变化时递增）。</summary>
+    string PolicyVersion { get; }
+
+    /// <summary>解析指定 Tool 的授权要求。</summary>
+    ToolAuthorizationRequirement GetRequirement(string toolName);
+}
+
+/// <summary>
+/// Run 创建时的不可变 Tool 授权快照：冻结创建者当时被授予的工具与权限集。
+/// 审批裁决与 Tool 派发前重复校验（快照未过期 + 工具在授权集内 + 权限覆盖），
+/// 防止"仅持 AgentRun 权限的主体创建/审批高权限 Tool"的提权路径。
+/// </summary>
+public sealed record ToolAuthorizationSnapshot
+{
+    /// <summary>Workspace ID（隔离边界）。</summary>
+    public string WorkspaceId { get; init; } = string.Empty;
+
+    /// <summary>创建 Run 的主体标识（API Key ID；未认证时为 Workspace ID）。</summary>
+    public string PrincipalId { get; init; } = string.Empty;
+
+    /// <summary>创建时授权给 Run 的 Tool 集合（显式请求 ∩ 主体可执行集；未指定时 = 主体可执行集）。</summary>
+    public IReadOnlyList<string> GrantedToolIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>创建时主体持有的权限标识集（WorkspacePermission 名称 + ToolExecute:/ToolApprove: 派生标识）。</summary>
+    public IReadOnlyList<string> GrantedPermissions { get; init; } = Array.Empty<string>();
+
+    /// <summary>策略版本（与 <see cref="IToolAuthorizationPolicy.PolicyVersion"/> 一致）。</summary>
+    public string PolicyVersion { get; init; } = string.Empty;
+
+    /// <summary>快照签发时间（UTC）。</summary>
+    public DateTimeOffset IssuedAt { get; init; }
+
+    /// <summary>快照过期时间（UTC；过期后派发拒绝，Run 需重新授权）。</summary>
+    public DateTimeOffset ExpiresAt { get; init; }
 }
 
 // ── Workspace Quota ───────────────────────────────────────────────────────

@@ -7,20 +7,20 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace ContextCore.Tests;
 
 // ===========================================================================
-// R30X — Tool 对账裁决租约 + 原子裁决测试（P0-3 / P0-4 / P0-5）
+// R30X — Tool 对账裁决租约 + 原子裁决测试
 //
-// P0-4：对账 Running 必须有租约（lease_owner / lease_token / lease_expires_at /
+// 对账 Running 必须有租约（lease_owner / lease_token / lease_expires_at /
 // fencing_token / attempt_count / next_attempt_at / last_error）——
 // - TryBeginAsync 领取裁决租约（Pending → Running），有效租约持有期间不可重复接管；
 // - 租约过期后 ListPendingAsync 重新取回、TryBeginAsync 可接管（fencing 递增隔离旧持有者）；
 // - RenewLeaseAsync / TryResetToPendingAsync / MarkResolvedAsync / MarkRejectedAsync
 // 全部校验 lease_token + 未过期（无效租约 → false）。
 //
-// P0-3：ResolveReconciliationAtomicallyAsync 单事务原子裁决——
+// ResolveReconciliationAtomicallyAsync 单事务原子裁决——
 // journal 推进 + Durable Result UPSERT + 记录终态 + Run 推进 + 审计事件整体成功/回滚；
 // 唯一裁决者校验（租约 + fencing）失败时返回 ArbitrationLost / VersionMismatch。
 //
-// P0-5：先原子取得裁决权（租约）再提交 Journal——仲裁权被占用时
+// 先原子取得裁决权（租约）再提交 Journal——仲裁权被占用时
 // ToolReconciliationCoordinator.ResolveAsync 返回 3，人工裁决不污染自动 Handler 的 Journal。
 // ===========================================================================
 
@@ -32,7 +32,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
     private const string Ws = "ws-recon-lease";
     private const string RunId = "run-recon-lease";
 
-    // ── 1. 裁决租约（P0-4）──────────────────────────────────────────────
+    // ── 1. 裁决租约 ────────────────────────────────────────────────────
 
     /// <summary>验证：TryBeginAsync 领取租约——返回 token/fencing/expiry，记录进入 Running 并写入租约字段。</summary>
     [TestMethod]
@@ -77,7 +77,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(1, record.FencingToken, "fencing 不被无效接管推进。");
     }
 
-    /// <summary>验证：租约过期后 TryBeginAsync 可接管（P0-4 崩溃恢复），fencing/attempt 递增隔离旧持有者。</summary>
+    /// <summary>验证：租约过期后 TryBeginAsync 可接管（崩溃恢复），fencing/attempt 递增隔离旧持有者。</summary>
     [TestMethod]
     public async Task Store_TryBegin_ExpiredLease_Reclaimable_FencingIncrements()
     {
@@ -100,7 +100,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(2, record.AttemptCount, "接管计为第二次尝试。");
     }
 
-    /// <summary>验证：ListPendingAsync 重新取回过期 Running（P0-4），跳过有效 Running。</summary>
+    /// <summary>验证：ListPendingAsync 重新取回过期 Running，跳过有效 Running。</summary>
     [TestMethod]
     public async Task Store_ListPending_RepicksExpiredRunning_SkipsActiveRunning()
     {
@@ -124,7 +124,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.IsFalse(ids.Contains("rec-active"), "有效 Running 记录不被列出。");
     }
 
-    /// <summary>验证：RenewLeaseAsync 校验 lease_token + 未过期（P0-4 心跳）。</summary>
+    /// <summary>验证：RenewLeaseAsync 校验 lease_token + 未过期（心跳续约）。</summary>
     [TestMethod]
     public async Task Store_RenewLease_ValidatesTokenAndExpiry()
     {
@@ -206,7 +206,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.IsNull(record.LeaseToken, "回退清除租约。");
     }
 
-    /// <summary>验证：MarkResolved/MarkRejected 必须持有有效租约（P0-4）。</summary>
+    /// <summary>验证：MarkResolved/MarkRejected 必须持有有效租约。</summary>
     [TestMethod]
     public async Task Store_MarkTerminal_RequiresValidLease()
     {
@@ -471,7 +471,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
             cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.NotFound, resolution.Status,
-            "跨 Workspace 的租户键不匹配 → NotFound（P0-5 完整租户键）。");
+            "跨 Workspace 的租户键不匹配 → NotFound（完整租户键隔离）。");
     }
 
     // ── 2b. Journal 状态约束────────────────────────────────────────────
@@ -744,7 +744,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual("rec-3", otherRun.ReconciliationId, "不同 Run 的同 RequestId 各自独立。");
     }
 
-    // ── 3. 仲裁权（P0-5）──────────────────────────────────────────────
+    // ── 3. 仲裁权 ───────────────────────────────────────────────────────
 
     /// <summary>验证：自动 Handler 持有仲裁权时，人工裁决返回 3（仲裁权被占用），不污染 Journal。</summary>
     [TestMethod]

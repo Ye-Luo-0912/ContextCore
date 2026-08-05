@@ -341,6 +341,13 @@ public sealed record AgentRun
     public HashSet<string> AllowedToolIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// Run 创建时的 Tool 授权快照（冻结创建者当时被授予的工具与权限集）。
+    /// 审批裁决与 Tool 派发前重复校验；null = 未建立快照（旧路径，派发时按
+    /// AllowedToolIds + 策略能力位兜底校验，不授予快照内权限之外的执行权）。
+    /// </summary>
+    public ToolAuthorizationSnapshot? AuthorizationSnapshot { get; init; }
+
+    /// <summary>
     /// Run 执行截止时间（UTC）。
     /// 从 API 入参 TimeoutSeconds 计算（DeadlineAt = CreatedAt + TimeoutSeconds）。
     /// Actor 在每次模型调用前检查；超过则 Fail。

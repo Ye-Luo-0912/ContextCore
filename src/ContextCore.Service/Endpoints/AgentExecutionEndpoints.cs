@@ -447,6 +447,61 @@ internal static class AgentExecutionEndpoints
                     statusCode: StatusCodes.Status409Conflict);
             }
 
+            // Tool 授权复核（仅批准路径）：审批裁决前重复校验——快照有效 + 工具在授权集内 +
+            // 审批者能力覆盖。拒绝不授予任何执行权，无需复核。审批 Store 缺失时无法获取
+            // Tool 名称，按 fail-closed 拒绝批准。
+            if (!string.Equals(request.Decision, "reject", StringComparison.OrdinalIgnoreCase))
+            {
+                AgentApproval? approvalForAuthorization = null;
+                if (approvalStore is not null)
+                {
+                    try
+                    {
+                        approvalForAuthorization = await approvalStore
+                            .GetAsync(workspaceId, approvalId, ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ContextCoreHttpResultMapper.Error(
+                            httpContext, ex, string.Empty, "agents.runs.approvals");
+                    }
+
+                    if (approvalForAuthorization is null)
+                    {
+                        return ContextCoreHttpResultMapper.NotFound(
+                            httpContext, string.Empty, "agents.runs.approvals",
+                            $"未找到 approvalId='{approvalId}'。");
+                    }
+
+                    if (!string.Equals(approvalForAuthorization.RunId, id, StringComparison.Ordinal))
+                    {
+                        return ContextCoreHttpResultMapper.InvalidRequest(
+                            httpContext, string.Empty, "agents.runs.approvals",
+                            $"审批记录的 RunId='{approvalForAuthorization.RunId}' 与路由 RunId='{id}' 不匹配。",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                }
+
+                if (approvalForAuthorization is not null)
+                {
+                    var authorizationError = await CheckApprovalAuthorizationAsync(
+                        run,
+                        approvalForAuthorization,
+                        workspaceContextAccessor?.Current,
+                        httpContext.RequestServices.GetService<SecurityOptions>(),
+                        httpContext.RequestServices.GetService<IToolAuthorizationPolicy>(),
+                        httpContext.RequestServices.GetService<IToolAuthorizer>(),
+                        ct).ConfigureAwait(false);
+
+                    if (authorizationError is not null)
+                    {
+                        // 审批者无执行/审批权限或快照失效 → 403（与 409 语义区分：
+                        // 409 是裁决冲突，403 是授权不足）。
+                        return Results.Forbid();
+                    }
+                }
+            }
+
             var isReject = string.Equals(request.Decision, "reject", StringComparison.OrdinalIgnoreCase);
             var approver = request.Approver ?? httpContext.User?.Identity?.Name;
             var decision = isReject
@@ -1333,6 +1388,20 @@ internal static class AgentExecutionEndpoints
         // 无需 Admission 状态机——Created 仍由 Actor 判定为全新启动）。
         var persistentStore = runStore as IPersistentAgentRunStore;
 
+        // Tool 授权快照：冻结创建者当时被授予的工具与权限集（审批裁决与 Tool 派发前重复校验）。
+        // 过期时间取 Run 执行截止时间——快照在 Run 的整个执行窗口内有效，不早于签发时间。
+        var deadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds);
+        var authorizationSnapshot = BuildAuthorizationSnapshot(
+            request,
+            workspaceId,
+            deadlineAt,
+            workspaceContextAccessor?.Current,
+            httpContext.RequestServices.GetService<SecurityOptions>(),
+            httpContext.RequestServices.GetService<IToolAuthorizationPolicy>(),
+            httpContext.RequestServices.GetService<IToolCatalog>(),
+            httpContext.RequestServices.GetService<IToolDispatcher>(),
+            now);
+
         var run = new AgentRun
         {
             RunId = runId,
@@ -1348,7 +1417,8 @@ internal static class AgentExecutionEndpoints
             CostBudget = costBudget,
             ModelArtifactId = string.IsNullOrWhiteSpace(request.ModelId) ? null : request.ModelId,
             AllowedToolIds = allowedToolIds,
-            DeadlineAt = now + TimeSpan.FromSeconds(timeoutSeconds),
+            AuthorizationSnapshot = authorizationSnapshot,
+            DeadlineAt = deadlineAt,
             ModelContextTokenBudget = 8192,
             IdempotencyKey = idempotencyKey,
             // B3 Durable Scheduler：优先级（高者先执行）+ Run 级重试预算（0 = 不重试）。
@@ -1486,6 +1556,160 @@ internal static class AgentExecutionEndpoints
         }
 
         return Results.Created($"/api/agents/runs/{enqueueTarget.RunId}", ToRunResponse(enqueueTarget));
+    }
+
+    /// <summary>
+    /// 构建 Run 创建时的 Tool 授权快照：冻结创建者当时被授予的工具与权限集。
+    /// 显式请求的 ToolIds 与主体可执行集求交；未指定时取 Tool Catalog / Dispatcher
+    /// 全部已注册工具中主体可执行的子集。RBAC 未强制或无法解析主体上下文时按全量授权
+    /// （与 RequireWorkspacePermission 的放行语义一致）。策略未注册时返回 null
+    /// （旧路径，派发时仅受 AllowedToolIds 约束）。
+    /// </summary>
+    private static ToolAuthorizationSnapshot? BuildAuthorizationSnapshot(
+        CreateRunRequest request,
+        string workspaceId,
+        DateTimeOffset expiresAt,
+        WorkspaceContext? principal,
+        SecurityOptions? securityOptions,
+        IToolAuthorizationPolicy? policy,
+        IToolCatalog? toolCatalog,
+        IToolDispatcher? toolDispatcher,
+        DateTimeOffset now)
+    {
+        if (policy is null)
+        {
+            return null;
+        }
+
+        // RBAC 未强制或无主体上下文 → 与端点放行语义一致，视为全量授权（信任部署方配置）。
+        var rbacEnforced = securityOptions is { Rbac.Enforce: true } && principal is not null;
+        var principalPermissions = rbacEnforced
+            ? principal!.Permissions
+            : WorkspacePermission.AdminAll;
+        var principalId = principal?.ApiKeyId ?? workspaceId;
+
+        // 候选工具集：显式请求；未指定时取 Catalog 定义 ∪ Dispatcher 支持集。
+        IEnumerable<string> candidates;
+        if (request.ToolIds is { Count: > 0 })
+        {
+            candidates = request.ToolIds.Where(t => !string.IsNullOrWhiteSpace(t));
+        }
+        else
+        {
+            var definitions = toolCatalog?.GetToolDefinitions().Select(d => d.Name) ?? Array.Empty<string>();
+            IEnumerable<string> supported = (IEnumerable<string>?)toolDispatcher?.SupportedTools ?? Array.Empty<string>();
+            candidates = definitions.Concat(supported);
+        }
+
+        var granted = new List<string>();
+        var grantedPermissions = new List<string> { WorkspacePermission.AgentRun.ToString() };
+        var coveredCapabilities = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tool in candidates.Distinct(StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(tool))
+            {
+                continue;
+            }
+
+            var requirement = policy.GetRequirement(tool);
+            if (requirement.RequiredCapability == WorkspacePermission.None)
+            {
+                // 基础工具：主体持 AgentRun 即可（无额外能力位）。
+                if ((principalPermissions & WorkspacePermission.AgentRun) == WorkspacePermission.AgentRun)
+                {
+                    granted.Add(tool);
+                }
+                continue;
+            }
+
+            // 高危工具：主体必须持有对应能力位，否则不授予（杜绝低权限主体创建高权限 Tool Run）。
+            if ((principalPermissions & requirement.RequiredCapability) != requirement.RequiredCapability)
+            {
+                continue;
+            }
+
+            granted.Add(tool);
+            grantedPermissions.Add(requirement.ExecutePermissionId);
+            grantedPermissions.Add(requirement.ApprovePermissionId);
+            coveredCapabilities.Add(requirement.RequiredCapability.ToString());
+        }
+
+        grantedPermissions.AddRange(coveredCapabilities);
+
+        return new ToolAuthorizationSnapshot
+        {
+            WorkspaceId = workspaceId,
+            PrincipalId = principalId,
+            GrantedToolIds = granted,
+            GrantedPermissions = grantedPermissions,
+            PolicyVersion = policy.PolicyVersion,
+            IssuedAt = now,
+            ExpiresAt = expiresAt
+        };
+    }
+
+    /// <summary>
+    /// 审批裁决前的 Tool 授权复核：快照未过期 + 策略版本一致 + 工具在授权集内，
+    /// 且（RBAC 强制时）审批者持有该工具对应的能力位。任一不满足返回错误原因（null = 通过）。
+    /// 快照为空（旧路径）时仅复核审批者能力。
+    /// </summary>
+    internal static async ValueTask<string?> CheckApprovalAuthorizationAsync(
+        AgentRun run,
+        AgentApproval approval,
+        WorkspaceContext? approver,
+        SecurityOptions? securityOptions,
+        IToolAuthorizationPolicy? policy,
+        IToolAuthorizer? toolAuthorizer,
+        CancellationToken ct)
+    {
+        // 1. 快照有效性（存在快照时）。
+        if (run.AuthorizationSnapshot is { } snapshot)
+        {
+            if (snapshot.ExpiresAt < DateTimeOffset.UtcNow)
+            {
+                return "Run 的 Tool 授权快照已过期，拒绝审批。";
+            }
+
+            if (policy is null || !string.Equals(snapshot.PolicyVersion, policy.PolicyVersion, StringComparison.Ordinal))
+            {
+                return "Tool 授权策略版本漂移，拒绝审批。";
+            }
+
+            if (!snapshot.GrantedToolIds.Contains(approval.ToolName))
+            {
+                return $"Tool '{approval.ToolName}' 不在 Run 授权快照的已授权工具集合中，拒绝审批。";
+            }
+        }
+
+        // 2. 审批者能力（RBAC 强制时）：高危 Tool 的审批要求审批者持有对应能力位，
+        // 不能由仅持 AgentRun 的低权限主体批准（审批解决"是否确认执行"，不解决"是否有权执行"）。
+        if (securityOptions is { Rbac.Enforce: true })
+        {
+            if (approver is null)
+            {
+                return "无法解析审批者上下文，拒绝审批。";
+            }
+
+            if (policy is not null)
+            {
+                var requirement = policy.GetRequirement(approval.ToolName);
+                if (requirement.RequiredCapability != WorkspacePermission.None
+                    && (approver.Permissions & requirement.RequiredCapability) != requirement.RequiredCapability)
+                {
+                    return $"审批者缺少审批 Tool '{approval.ToolName}' 所需能力 {requirement.RequiredCapability}。";
+                }
+            }
+            else if (toolAuthorizer is not null)
+            {
+                var authorization = await toolAuthorizer.AuthorizeAsync(approver, approval.ToolName, ct).ConfigureAwait(false);
+                if (!authorization.IsAuthorized)
+                {
+                    return authorization.FailureReason ?? $"审批者无权限审批 Tool '{approval.ToolName}'。";
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -321,18 +321,116 @@ public sealed class InMemoryApiKeyStore : IApiKeyStore
 // ── Tool Authorizer 默认实现 ──────────────────────────────────────────────
 
 /// <summary>
-/// 默认 Tool 授权器。基于 ToolName → WorkspacePermission 映射表校验。
-/// 未注册的 Tool 视为不限制权限（None）。
+/// 默认 Tool 授权策略。按工具名称前缀/类别映射到能力位：
+/// - 文件系统类（file_* / fs_* / read_file / write_file 等）→ <see cref="WorkspacePermission.FileAccess"/>；
+/// - 进程/命令执行类（process_* / shell_* / exec_* / run_* / execute_command 等）→ <see cref="WorkspacePermission.ProcessExec"/>；
+/// - 网络访问类（network_* / http_* / web_* / http_request 等）→ <see cref="WorkspacePermission.NetworkAccess"/>；
+/// - 其余视为基础工具（仅需 <see cref="WorkspacePermission.AgentRun"/>）。
+/// 高危工具的执行/审批权限标识派生为 ToolExecute:&lt;tool&gt; / ToolApprove:&lt;tool&gt;，
+/// 主体凭角色持有对应能力位即可派生这些标识（能力位 → 角色派生，不新增端点/表）。
+/// </summary>
+public sealed class DefaultToolAuthorizationPolicy : IToolAuthorizationPolicy
+{
+    /// <summary>当前策略版本（快照固化；分类映射变化时递增）。</summary>
+    public const string CurrentVersion = "v1";
+
+    /// <inheritdoc />
+    public string PolicyVersion => CurrentVersion;
+
+    /// <inheritdoc />
+    public ToolAuthorizationRequirement GetRequirement(string toolName)
+    {
+        var capability = Classify(toolName);
+        if (capability == WorkspacePermission.None)
+        {
+            return new ToolAuthorizationRequirement
+            {
+                RequiredCapability = WorkspacePermission.None,
+                ExecutePermissionId = WorkspacePermission.AgentRun.ToString(),
+                ApprovePermissionId = WorkspacePermission.AgentRun.ToString()
+            };
+        }
+
+        return new ToolAuthorizationRequirement
+        {
+            RequiredCapability = capability,
+            ExecutePermissionId = $"ToolExecute:{toolName}",
+            ApprovePermissionId = $"ToolApprove:{toolName}"
+        };
+    }
+
+    /// <summary>按名称前缀/类别解析工具的能力位（未知工具视为基础工具）。</summary>
+    private static WorkspacePermission Classify(string toolName)
+    {
+        if (string.IsNullOrWhiteSpace(toolName))
+        {
+            return WorkspacePermission.None;
+        }
+
+        // 文件系统类
+        if (toolName.StartsWith("file_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("fs_", StringComparison.OrdinalIgnoreCase)
+            || IsOneOf(toolName, "read_file", "write_file", "delete_file", "list_files",
+                "move_file", "copy_file", "search_files", "create_file", "append_file"))
+        {
+            return WorkspacePermission.FileAccess;
+        }
+
+        // 进程 / 命令执行类
+        if (toolName.StartsWith("process_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("shell_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("exec_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("run_", StringComparison.OrdinalIgnoreCase)
+            || IsOneOf(toolName, "execute_command", "run_command", "run_shell", "shell_exec",
+                "kill_process", "process_kill", "registry_set"))
+        {
+            return WorkspacePermission.ProcessExec;
+        }
+
+        // 网络访问类
+        if (toolName.StartsWith("network_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("http_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("web_", StringComparison.OrdinalIgnoreCase)
+            || toolName.StartsWith("fetch_", StringComparison.OrdinalIgnoreCase)
+            || IsOneOf(toolName, "http_request", "web_fetch", "web_search", "web_request", "api_call"))
+        {
+            return WorkspacePermission.NetworkAccess;
+        }
+
+        return WorkspacePermission.None;
+    }
+
+    private static bool IsOneOf(string value, params string[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+/// <summary>
+/// 默认 Tool 授权器。基于 ToolName → WorkspacePermission 映射表校验；
+/// 注册表未命中时回退到 <see cref="IToolAuthorizationPolicy"/> 的能力位分类。
+/// 未注册且策略无分类的 Tool 视为不限制权限（None）。
 /// </summary>
 public sealed class DefaultToolAuthorizer : IToolAuthorizer
 {
     private readonly ConcurrentDictionary<string, WorkspacePermission> _permissions
         = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<DefaultToolAuthorizer> _logger;
+    private readonly IToolAuthorizationPolicy? _policy;
 
-    public DefaultToolAuthorizer(ILogger<DefaultToolAuthorizer> logger)
+    public DefaultToolAuthorizer(
+        ILogger<DefaultToolAuthorizer> logger,
+        IToolAuthorizationPolicy? policy = null)
     {
         _logger = logger;
+        _policy = policy;
     }
 
     /// <inheritdoc />
@@ -377,7 +475,12 @@ public sealed class DefaultToolAuthorizer : IToolAuthorizer
     /// <inheritdoc />
     public WorkspacePermission GetRequiredPermission(string toolName)
     {
-        return _permissions.TryGetValue(toolName, out var perm) ? perm : WorkspacePermission.None;
+        if (_permissions.TryGetValue(toolName, out var perm))
+        {
+            return perm;
+        }
+        // 注册表未命中时回退到授权策略的能力位分类（高危 Tool 名称 → 能力位）。
+        return _policy?.GetRequirement(toolName).RequiredCapability ?? WorkspacePermission.None;
     }
 }
 
