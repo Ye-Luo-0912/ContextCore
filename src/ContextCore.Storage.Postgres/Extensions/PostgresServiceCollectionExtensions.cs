@@ -308,6 +308,21 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresToolReconciliationStore>();
         services.AddSingleton<IToolReconciliationStore>(sp => sp.GetRequiredService<PostgresToolReconciliationStore>());
 
+        // Workspace 配额持久化（PostgreSQL）。
+        // 替代 AddContextCoreSecurity 的 InMemoryWorkspaceQuotaService，让多实例部署下
+        // 配额真相源落在数据库（ledger + reservations 跨节点共享，重启不丢失）。
+        // 未配置 workspace 的默认上限：组合根（ProductionRuntimeExtensions）按配置覆盖注册；
+        // 此处注册默认无限制（0 = 无限制），保证服务始终可解析。
+        services.AddSingleton<PostgresWorkspaceQuotaService>(sp => new PostgresWorkspaceQuotaService(
+            sp.GetRequiredService<PostgresConnectionFactory>(),
+            sp.GetRequiredService<PostgresJsonSerializer>(),
+            sp.GetRequiredService<PostgresMigrationRunner>()));
+        services.AddSingleton<IWorkspaceQuotaService>(sp => sp.GetRequiredService<PostgresWorkspaceQuotaService>());
+
+        // Run 终态结算 outbox（PostgreSQL）：终态结算 worker 消费（Actualize / Release）。
+        services.AddSingleton<PostgresTerminalRunSettlementStore>();
+        services.AddSingleton<ITerminalRunSettlementStore>(sp => sp.GetRequiredService<PostgresTerminalRunSettlementStore>());
+
         // 注册 ILeasedWorkStore 用于 Agent Run 租约（统一租约基础设施 — dual-registration）。
         // 与 IAgentRunLease 共享同一底层表（agent_run_leases），使用统一的 ILeasedWorkStore 接口。
         // 消费方（AgentKernelHost）暂不改用 ILeasedWorkStore，先通过 dual-registration 证明语义覆盖。

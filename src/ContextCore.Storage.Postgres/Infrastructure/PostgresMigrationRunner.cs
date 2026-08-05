@@ -152,8 +152,15 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   真正停止接收模型流量（不能只写 Applied State 数据库标志）。
     /// v62 → v63，agent_runs 追加 claim_attempt：
     /// - Scheduler Claim 领取尝试计数：每次领取/重领 +1，供调度诊断区分首次领取与反复接管。
+    /// v63 → v64，Workspace 配额持久化：
+    /// - 新增 workspace_quota_ledger（按 workspace 的配额周期状态：上限 / 已用 / 已预留 / 周期起点）、
+    ///   workspace_quota_reservations（持久化预留行，reservation_id 幂等）与
+    ///   terminal_run_settlement_outbox（Run 终态结算 outbox：所有终态 exactly-once
+    ///   Actualize 或 Release）。
+    /// - 配额预留 + Run 创建 + Run → Queued 收敛为同一数据库事务（原子准入），
+    ///   替代「创建 → 预留 → 推进」三步调用；终态结算统一由结算 worker 执行。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v63";
+    public const string SchemaVersion = "cc-schema-v64";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -266,7 +273,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Model Node Membership（P0-15 节点成员资格租约：活跃成员 + stale cutoff + serving 开关）
         "model_node_membership",
         // Tool Reconciliation Control Plane（对账记录跨进程持久化 + ExternalOperationId 反查 + deadline 高亮）
-        "tool_reconciliation_entries"
+        "tool_reconciliation_entries",
+        // Workspace 配额持久化（配额周期状态 / 持久化预留 / 终态结算 outbox）
+        "workspace_quota_ledger",
+        "workspace_quota_reservations",
+        "terminal_run_settlement_outbox"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -457,7 +468,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("tool_reconciliation_entries", "workspace"),
         ("tool_reconciliation_entries", "run"),
         ("tool_reconciliation_entries", "status"),
-        ("tool_reconciliation_entries", "external_op")
+        ("tool_reconciliation_entries", "external_op"),
+        // Workspace 配额持久化索引（预留按 workspace 反查 + 结算 outbox 领取/租约回收）
+        ("workspace_quota_reservations", "workspace"),
+        ("terminal_run_settlement_outbox", "status"),
+        ("terminal_run_settlement_outbox", "lease")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -599,6 +614,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var modelNodeMemberships = Infrastructure.PostgresNames.Table(options, "model_node_membership");
         // Tool Reconciliation Control Plane（对账记录持久化表）
         var toolReconciliationEntries = Infrastructure.PostgresNames.Table(options, "tool_reconciliation_entries");
+        // Workspace 配额持久化（配额周期状态 / 持久化预留 / 终态结算 outbox）
+        var workspaceQuotaLedger = Infrastructure.PostgresNames.Table(options, "workspace_quota_ledger");
+        var workspaceQuotaReservations = Infrastructure.PostgresNames.Table(options, "workspace_quota_reservations");
+        var terminalRunSettlementOutbox = Infrastructure.PostgresNames.Table(options, "terminal_run_settlement_outbox");
         // 自适应检索规划器反馈持久化表
         var retrievalPlanFeedback = Infrastructure.PostgresNames.Table(options, "retrieval_plan_feedback");
         var extensionSql = options.EnablePgVectorExtension
@@ -2605,6 +2624,67 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_re
 -- 按 journal externalOperationId 反查（ControlRoom / 运维）
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_reconciliation_entries", "external_op")}
     ON {toolReconciliationEntries} (external_operation_id) WHERE external_operation_id IS NOT NULL;
+
+-- Workspace 配额持久化表（生产多实例配额真相源）
+-- workspace_quota_ledger：每 workspace 一行配额周期状态（上限 / 已用 / 已预留 / 周期起点）。
+-- MaxTokens=0 / MaxCostUsd=0 表示无限制（与 WorkspaceQuota.IsTokenExhausted 语义一致）。
+-- 预留（Reserve）与结算（Release / Actualize）通过 FOR UPDATE 行锁串行化，
+-- 周期过期在预留时惰性重置（tokens_used / reserved 清零，周期起点前移）。
+CREATE TABLE IF NOT EXISTS {workspaceQuotaLedger} (
+    workspace_id text NOT NULL,
+    max_tokens bigint NOT NULL DEFAULT 0,
+    tokens_used bigint NOT NULL DEFAULT 0,
+    reserved_tokens bigint NOT NULL DEFAULT 0,
+    max_cost_usd double precision NOT NULL DEFAULT 0,
+    cost_used_usd double precision NOT NULL DEFAULT 0,
+    reserved_cost_usd double precision NOT NULL DEFAULT 0,
+    period_seconds bigint NOT NULL DEFAULT 3600,
+    period_started_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    PRIMARY KEY (workspace_id)
+);
+
+-- 持久化预留行：reservation_id 幂等（重复预留不重复占容量），
+-- 跨节点共享（节点重启不丢失预留，另一节点可对同一预留执行 Release / Actualize）。
+CREATE TABLE IF NOT EXISTS {workspaceQuotaReservations} (
+    reservation_id text NOT NULL,
+    workspace_id text NOT NULL,
+    tokens bigint NOT NULL,
+    cost_usd double precision NOT NULL,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (reservation_id)
+);
+
+-- 按 workspace 反查预留（释放/结算按 workspace 维度审计）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "workspace_quota_reservations", "workspace")}
+    ON {workspaceQuotaReservations} (workspace_id, created_at ASC);
+
+-- Run 终态结算 outbox：Run 推进终态时在状态转换事务内写入（仅当预留存在），
+-- 结算 worker 按租约领取并执行 Actualize / Release（exactly-once）。
+-- status：0 = 待结算，1 = 已结算，2 = 结算中（持有租约），3 = 死信（尝试耗尽）。
+CREATE TABLE IF NOT EXISTS {terminalRunSettlementOutbox} (
+    outbox_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    reservation_id text NOT NULL,
+    terminal_state smallint NOT NULL,
+    status smallint NOT NULL DEFAULT 0,
+    attempts integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    processed_at timestamptz NULL,
+    lease_owner text NULL,
+    lease_token text NULL,
+    lease_expires_at timestamptz NULL,
+    last_error text NULL
+);
+
+-- 结算 worker 领取索引：按待结算 + 创建时间升序（最早优先）
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "terminal_run_settlement_outbox", "status")}
+    ON {terminalRunSettlementOutbox} (status, created_at ASC);
+-- 过期租约回收索引：结算中但租约过期（worker 崩溃）可被重新领取
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "terminal_run_settlement_outbox", "lease")}
+    ON {terminalRunSettlementOutbox} (status, lease_expires_at);
 """;
     }
 

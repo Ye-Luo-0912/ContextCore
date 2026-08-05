@@ -48,17 +48,23 @@ public sealed class ToolReconciliationCoordinator
 
     /// <summary>
     /// 人工/自动裁决对账记录（POST resolve 端点与 Worker 共用）。
+    /// 加载记录后校验其属于指定 Workspace + Run（跨租户 reconciliationId 视为不存在），
+    /// 防止一个租户凭 Run 存在性裁决另一个租户的对账记录。
     /// </summary>
-    /// <returns>0 = 成功裁决（含幂等重试）；1 = 记录不存在；2 = 已裁决（无决策身份或身份不同）；
+    /// <returns>0 = 成功裁决（含幂等重试）；1 = 记录不存在或不属于该 Workspace/Run；2 = 已裁决（无决策身份或身份不同）；
     /// 3 = 仲裁权被占用/租约失效；4 = 决策冲突（相同 DecisionRequestId 但相反 outcome）。</returns>
     public async Task<int> ResolveAsync(
+        string workspaceId,
+        string runId,
         string reconciliationId,
         ToolReconciliationOutcome outcome,
         CancellationToken ct,
         string? decisionRequestId = null)
     {
         var record = await _store.GetAsync(reconciliationId, ct).ConfigureAwait(false);
-        if (record is null)
+        if (record is null
+            || !string.Equals(record.WorkspaceId, workspaceId, StringComparison.Ordinal)
+            || !string.Equals(record.RunId, runId, StringComparison.Ordinal))
         {
             return 1;
         }

@@ -9,7 +9,8 @@ namespace ContextCore.Service.Hosting;
 //
 // 目标：
 // 周期性扫描 <see cref="IAgentRunStore"/> 中处于非终态的 Run（崩溃前未完成），
-// 通过 <see cref="AgentKernelHost.StartRunAsync"/> 重新入队执行。
+// 做完整性判断 / LeaseLost 识别 / 状态修复：把可恢复 Run CAS 回 Queued，
+// 由 Durable Scheduler（PostgresPendingRunClaimer）统一领取入队执行。
 //
 // 运行时能力补齐：
 // 1. 超时检测：Run 在非终态停留超过 RunExecutionTimeout 且无活跃租约时原子标记为 LeaseLost
@@ -21,9 +22,9 @@ namespace ContextCore.Service.Hosting;
 // 1. 仅对持久化 <see cref="IAgentRunStore"/> 生效（IPersistentAgentRunStore 标记）。
 // InMemory store 在进程重启后数据丢失，无 Run 可恢复——worker 检测到非持久化
 // 实现后立即退出（no-op）。
-// 2. 幂等性：<see cref="AgentKernelHost.StartRunAsync"/> 内部通过 _activeRuns
-// ConcurrentDictionary 去重，同一 Run 不会被重复入队。多实例场景下
-// <see cref="IAgentRunLease"/> 确保仅一个实例处理（ProductionHA profile）。
+// 2. 幂等性：CAS 回 Queued 为原子操作，多实例并发时只有一个 CAS 成功；
+// 领取/入队由 Durable Scheduler 独家负责（ClaimPendingBatchAsync SKIP LOCKED +
+// AgentKernelHost._activeRuns 去重）。
 // 3. 非终态扫描：Created / ContextBuilding / ModelCalling / AwaitingApproval /
 // ToolDispatching / Observing / Checkpointing 均为可恢复状态。
 // Completed / Failed / Cancelled / LeaseLost 为终态，跳过。
@@ -31,11 +32,15 @@ namespace ContextCore.Service.Hosting;
 // 5. 扫描防饥饿：每状态 keyset 游标（ORDER BY updated_at, run_id）跨轮次推进，
 // 每轮每状态最多扫描 MaxRunsPerStatePerScan 条，且状态按 round-robin 轮转起始——
 // 早期富状态无法独占扫描预算，后续状态与状态内后进 Run 都能持续获得超时检测/恢复机会。
+//
+// 调度边界（单一调度所有者）：本 Worker 只做状态修复（CAS → Queued），
+// 绝不直接入队；只有 PostgresPendingRunClaimer 能把 Run 放入 Host 队列。
 // ===========================================================================
 
 /// <summary>
 /// 生产 Composition Root：AgentRun Recovery Worker。
-/// 周期性扫描未完成的 Run 并重新入队执行；对超时且无人持有租约的 Run 原子标记为 LeaseLost。
+/// 周期性扫描未完成的 Run：超时且无人持有租约的 Run 原子标记为 LeaseLost；
+/// 其余可恢复 Run CAS 回 Queued（由 Durable Scheduler 领取执行）。
 /// </summary>
 internal sealed class AgentRunRecoveryWorker : BackgroundService
 {
@@ -78,7 +83,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// 尚未 flush 的 Running 走全新启动——两种路径均安全）。
     ///
     /// RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
-    /// 由本 Worker 在退避门（NextRetryAtUtc）通过后重新入队执行（退避期内跳过，不触发
+    /// 由本 Worker 在退避门（NextRetryAtUtc）通过后 CAS 回 Queued（退避期内跳过，不触发
     /// 超时→LeaseLost 逻辑；LeaseLost 会把等待退避的 Run 误判为卡死并移出恢复路径）。
     /// </remarks>
     private static readonly AgentRunState[] RecoverableStates =
@@ -170,13 +175,6 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
             return;
         }
 
-        var host = scope.ServiceProvider.GetService<AgentKernelHost>();
-        if (host is null)
-        {
-            _logger.LogDebug("AgentKernelHost 未注册；跳过恢复扫描。");
-            return;
-        }
-
         // 执行租约存储（批量过滤正被其他实例执行的 Run；未注册时跳过过滤——单节点无租约竞争）。
         var runLease = scope.ServiceProvider.GetService<IAgentRunLease>();
 
@@ -237,8 +235,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                 // Recovery Integrity State：RecoveryDependencyUnavailable（17）是退避重试状态。
                 // 跳过超时→LeaseLost 逻辑（Run 是故意等待退避门而非卡死——标记 LeaseLost 会把它
                 // 移出恢复路径，破坏 fail-closed 语义），并在退避门（NextRetryAtUtc）未通过时
-                // 跳过本轮入队；通过后重新入队，Actor 恢复路径重新读取事件流（依赖已恢复则继续，
-                // 仍未恢复则再次进入 17 并递增 RecoveryAttempt）。
+                // 跳过本轮；通过后 CAS 回 Queued（Durable Claimer 领取入队）。
                 if (run.State == AgentRunState.RecoveryDependencyUnavailable)
                 {
                     if (run.NextRetryAtUtc is not null && run.NextRetryAtUtc > now)
@@ -250,17 +247,26 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                     }
                     try
                     {
-                        await host.StartRunAsync(run, cancellationToken).ConfigureAwait(false);
+                        await runStore.TransitionStateAsync(
+                            run.WorkspaceId, run.RunId, run.State, AgentRunState.Queued, cancellationToken)
+                            .ConfigureAwait(false);
                         totalRecovered++;
                         _logger.LogInformation(
-                            "AgentRunRecoveryWorker: 恢复 Run {RunId}（状态=RecoveryDependencyUnavailable，退避门已过，workspace={WorkspaceId}，attempt={Attempt}）。",
-                            run.RunId, run.WorkspaceId, run.RecoveryAttempt);
+                            "AgentRunRecoveryWorker: Run {RunId}（RecoveryDependencyUnavailable，退避门已过，workspace={WorkspaceId}）CAS 回 Queued，由 Durable Claimer 领取执行。",
+                            run.RunId, run.WorkspaceId);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // CAS 失败：状态已被并发推进（Claimer 已领取 / 其他节点已恢复）→ 非致命。
+                        _logger.LogDebug(
+                            "AgentRunRecoveryWorker: Run {RunId}（RecoveryDependencyUnavailable）CAS 回 Queued 失败（已被并发推进）。",
+                            run.RunId);
                     }
                     catch (Exception ex)
                     {
                         // 单个 Run 恢复失败不中断整个扫描
                         _logger.LogError(ex,
-                            "AgentRunRecoveryWorker: 恢复 Run {RunId} 失败（状态=RecoveryDependencyUnavailable）。",
+                            "AgentRunRecoveryWorker: Run {RunId}（RecoveryDependencyUnavailable）CAS 回 Queued 失败。",
                             run.RunId);
                     }
                     continue;
@@ -335,18 +341,27 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                     }
                 }
 
-                // 运行时能力补齐：resume from checkpoint
+                // 状态修复：把可恢复 Run CAS 回 Queued，由 Durable Claimer（PostgresPendingRunClaimer）
+                // 统一领取入队——本 Worker 不做入队（单一调度所有者），避免与 Claimer 双真源竞争。
                 // AgentRunActor.ExecuteAsync 通过 run.State 检测是否为恢复场景：
                 // - run.State == Created → 全新启动（正常路径）
                 // - run.State != Created → 恢复场景，Actor 从事件流重建上下文
-                // 此处仅记录日志，实际 resume 由 Actor 内部处理
                 try
                 {
-                    await host.StartRunAsync(run, cancellationToken).ConfigureAwait(false);
+                    await runStore.TransitionStateAsync(
+                        run.WorkspaceId, run.RunId, run.State, AgentRunState.Queued, cancellationToken)
+                        .ConfigureAwait(false);
                     totalRecovered++;
                     _logger.LogInformation(
-                        "AgentRunRecoveryWorker: 恢复 Run {RunId}（状态={State}, workspace={WorkspaceId}, turn={Turn}, modelCalls={ModelCalls}）。",
+                        "AgentRunRecoveryWorker: 恢复 Run {RunId}（状态={State}, workspace={WorkspaceId}, turn={Turn}, modelCalls={ModelCalls}）CAS 回 Queued，由 Durable Claimer 领取执行。",
                         run.RunId, run.State, run.WorkspaceId, run.Turn, run.ModelCallsUsed);
+                }
+                catch (InvalidOperationException)
+                {
+                    // CAS 失败：状态已被并发推进（Claimer 已领取 / 其他节点已恢复）→ 非致命。
+                    _logger.LogDebug(
+                        "AgentRunRecoveryWorker: Run {RunId}（状态={State}）CAS 回 Queued 失败（已被并发推进）。",
+                        run.RunId, run.State);
                 }
                 catch (Exception ex)
                 {

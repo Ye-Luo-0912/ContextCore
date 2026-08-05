@@ -1301,8 +1301,7 @@ public sealed class AgentRunActor
             {
                 if (authorizationDenial == ToolAuthorizationDenial.SnapshotInvalid)
                 {
-                    await FailAsync(state, authorizationReason, cancellationToken).ConfigureAwait(false);
-                    return state with { Run = state.Run with { State = AgentRunState.Failed } };
+                    return await FailAsync(state, authorizationReason, cancellationToken).ConfigureAwait(false);
                 }
 
                 state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
@@ -1610,10 +1609,9 @@ public sealed class AgentRunActor
         // 新路径由 Run.DeadlineAt 字段承载超时控制，Actor 在每次模型调用前检查。
         if (state.Run.DeadlineAt is not null && DateTimeOffset.UtcNow > state.Run.DeadlineAt)
         {
-            await FailAsync(state,
+            return await FailAsync(state,
                 $"Run 超时：已超过执行截止时间（DeadlineAt={state.Run.DeadlineAt:O}）。",
                 cancellationToken).ConfigureAwait(false);
-            return state with { Run = state.Run with { State = AgentRunState.Failed } };
         }
 
         // 进入 ModelCalling（本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
@@ -1639,10 +1637,9 @@ public sealed class AgentRunActor
                     "决策依赖不可用：Decision Runtime 执行异常，本轮终止，等待依赖恢复后重试。").ConfigureAwait(false);
                 return state;
             case AgentContextBuildStatus.BudgetUnsatisfiable:
-                await FailAsync(state,
+                return await FailAsync(state,
                     "预算不可满足：mandatory 上下文经精确 tokenize 后仍超出模型上下文窗口，Run 失败（需人工介入调整预算或任务）。",
                     cancellationToken).ConfigureAwait(false);
-                return state with { Run = state.Run with { State = AgentRunState.Failed } };
             default:
                 throw new InvalidOperationException($"未知上下文构建状态：{contextBuildStatus}");
         }
@@ -2109,8 +2106,7 @@ public sealed class AgentRunActor
             {
                 if (authorizationDenial == ToolAuthorizationDenial.SnapshotInvalid)
                 {
-                    await FailAsync(state, authorizationReason, cancellationToken).ConfigureAwait(false);
-                    return state with { Run = state.Run with { State = AgentRunState.Failed } };
+                    return await FailAsync(state, authorizationReason, cancellationToken).ConfigureAwait(false);
                 }
 
                 state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
@@ -2445,7 +2441,8 @@ public sealed class AgentRunActor
 
         var record = new ToolReconciliationRecord
         {
-            ReconciliationId = "rec:" + toolResult.RequestId,
+            // 对账记录 ID 包含 Workspace（跨租户唯一，防同 RunId/RequestId 碰撞）。
+            ReconciliationId = "rec:" + state.Run.WorkspaceId + ":" + toolResult.RequestId,
             RunId = state.Run.RunId,
             WorkspaceId = state.Run.WorkspaceId,
             RequestId = toolResult.RequestId,
@@ -2629,7 +2626,7 @@ public sealed class AgentRunActor
         if (_reconciliationStore is not null)
         {
             var unresolved = await _reconciliationStore
-                .HasUnresolvedForRunAsync(state.Run.RunId, cancellationToken).ConfigureAwait(false);
+                .HasUnresolvedForRunAsync(state.Run.WorkspaceId, state.Run.RunId, cancellationToken).ConfigureAwait(false);
             if (unresolved)
             {
                 state = TransitionStateLocal(state, AgentRunState.AwaitingReconciliation);
@@ -2832,9 +2829,40 @@ public sealed class AgentRunActor
         }
     }
 
-    /// <summary>将 Run 标记为 Failed 并记录 RunFailed 事件。</summary>
-    private async Task FailAsync(AgentRunExecutionState state, string reason, CancellationToken cancellationToken)
+    /// <summary>
+    /// 将 Run 标记为 Failed 并记录 RunFailed 事件；若存在未决对账记录（外部副作用真相未确认），
+    /// 改停靠 AwaitingReconciliation（fail-closed：真相未确认前不得进入 Failed 并被自动重试）。
+    /// 返回最终状态（Failed 或 AwaitingReconciliation）。
+    /// </summary>
+    private async Task<AgentRunExecutionState> FailAsync(
+        AgentRunExecutionState state,
+        string reason,
+        CancellationToken cancellationToken)
     {
+        // 未决对账门禁：存在 Pending/Running 对账记录 → 停靠 AwaitingReconciliation（等待对账完成），
+        // 不写 Failed——避免"外部副作用真相未确认 + Run 进入 Failed + Scheduler 自动重试"违背
+        // 真相未确认前不得推进的原则。仅当前状态允许停靠时执行（其余状态按原路径 Failed，
+        // Scheduler 领取 SQL 另有一层未决对账排除作为兜底）。
+        if (_reconciliationStore is not null)
+        {
+            try
+            {
+                var unresolved = await _reconciliationStore
+                    .HasUnresolvedForRunAsync(state.Run.WorkspaceId, state.Run.RunId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (unresolved)
+                {
+                    state = TransitionStateLocal(state, AgentRunState.AwaitingReconciliation);
+                    await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+                    return state;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // 当前状态不允许停靠 AwaitingReconciliation → 按原路径 Failed（Scheduler 层另有兜底）。
+            }
+        }
+
         try
         {
             var fromState = state.Run.State;
@@ -2876,10 +2904,12 @@ public sealed class AgentRunActor
 
             // 终态 flush — 批量提交所有缓冲事件 + state CAS（单事务，立即持久化）
             await FlushPendingEventsAsync(state.Run, CancellationToken.None).ConfigureAwait(false);
+            return state;
         }
         catch
         {
             // 失败处理中的失败静默忽略，避免掩盖原始异常
+            return state with { Run = state.Run with { State = AgentRunState.Failed } };
         }
     }
 

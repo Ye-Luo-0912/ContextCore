@@ -247,7 +247,7 @@ public sealed class R29L_AgentRunRecoveryScanTests
 
     /// <summary>
     /// 验证：Recovery Worker 跳过存在活跃执行租约的 Run（正被其他实例执行）——
-    /// 不把无法取得 Execution Lease 的 Run 反复放入本地队列；无租约的 Running Run 正常恢复入队。
+    /// 不做状态修复；无租约的 Running Run CAS 回 Queued（由 Durable Claimer 领取执行）。
     /// </summary>
     [TestMethod]
     public async Task RecoveryWorker_SkipsRunsWithActiveExecutionLease()
@@ -268,15 +268,13 @@ public sealed class R29L_AgentRunRecoveryScanTests
             runWithLease.RunId, TimeSpan.FromMinutes(5), "host-other");
         Assert.IsNotNull(lease, "模拟其他实例持有执行租约。");
 
-        // 阻塞 transport：首个调用阻塞，观察哪些 Run 被恢复入队。
-        var blockingTransport = new BlockingModelTransport();
         var services = new ServiceCollection();
         services.AddSingleton<IAgentRunStore>(recordingStore);
         services.AddSingleton<IPersistentAgentRunStore>(recordingStore);
         services.AddSingleton<IAgentRunEventStore>(eventStore);
         services.AddSingleton<IAgentRunLease>(leaseStore);
         services.AddSingleton<IToolDispatcher>(new EchoToolDispatcher());
-        services.AddSingleton<IAgentModelTransport>(blockingTransport);
+        services.AddSingleton<IAgentModelTransport>(new DeterministicAgentModelTransport());
         services.AddSingleton<AgentKernelHost>();
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
         var serviceProvider = services.BuildServiceProvider();
@@ -295,23 +293,28 @@ public sealed class R29L_AgentRunRecoveryScanTests
             await worker.StartAsync(CancellationToken.None);
             try
             {
-                // 等待无租约的 Run 被恢复入队并阻塞在 transport（首次调用）。
+                // 等待无租约的 Run 被 CAS 回 Queued（Worker 状态修复）。
                 var deadline = DateTime.UtcNow.AddSeconds(8);
-                while (blockingTransport.CallCount == 0 && DateTime.UtcNow < deadline)
+                AgentRun? noLeaseState = null;
+                while (DateTime.UtcNow < deadline)
                 {
+                    noLeaseState = await recordingStore.GetAsync(runNoLease.WorkspaceId, runNoLease.RunId);
+                    if (noLeaseState is not null && noLeaseState.State == AgentRunState.Queued)
+                    {
+                        break;
+                    }
                     await Task.Delay(50);
                 }
-                Assert.IsTrue(blockingTransport.CallCount >= 1, "无租约的 Running Run 应被恢复入队。");
-                // 留出窗口：若有租约的 Run 被错误入队，transport 会收到第 2 次调用。
-                await Task.Delay(300);
-                Assert.AreEqual(1, blockingTransport.CallCount,
-                    "存在活跃执行租约的 Run 不得被恢复入队（避免反复空转）。");
-                Assert.AreEqual(runNoLease.RunId, blockingTransport.CallOrder.Single(),
-                    "被恢复入队的应为无租约的 Run。");
+                Assert.AreEqual(AgentRunState.Queued, noLeaseState?.State,
+                    "无活跃租约的 Running Run 应被 CAS 回 Queued（由 Durable Claimer 领取）。");
+
+                // 存在活跃执行租约的 Run 不得被修改（保持 Running，等待原执行者完成/租约过期）。
+                var leasedState = await recordingStore.GetAsync(runWithLease.WorkspaceId, runWithLease.RunId);
+                Assert.AreEqual(AgentRunState.Running, leasedState?.State,
+                    "存在活跃执行租约的 Run 不得被 Worker 触碰（避免双执行）。");
             }
             finally
             {
-                blockingTransport.Release();
                 await worker.StopAsync(CancellationToken.None);
             }
         }
@@ -365,6 +368,29 @@ public sealed class R29L_AgentRunRecoveryScanTests
         public ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(AgentRun run, CancellationToken ct = default)
             => _inner.CreateOrGetByIdempotencyKeyAsync(run, ct);
 
+        public async ValueTask<AgentRunAdmitResult> AdmitRunAtomicallyAsync(
+            AgentRun run, QuotaAdmissionRequest? quotaAdmission, CancellationToken cancellationToken = default)
+        {
+            var created = await _inner.CreateOrGetByIdempotencyKeyAsync(run, cancellationToken).ConfigureAwait(false);
+            if (created.WasExisting)
+            {
+                return new AgentRunAdmitResult { Created = false, WasExisting = true, Run = created.Run };
+            }
+            // 恢复扫描测试不消费配额语义：预留请求直接放行，推进 Queued。
+            if (run.State == AgentRunState.PendingAdmission)
+            {
+                await _inner.TransitionStateAsync(
+                    run.WorkspaceId, run.RunId, AgentRunState.PendingAdmission, AgentRunState.Queued, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            return new AgentRunAdmitResult
+            {
+                Created = true,
+                WasExisting = false,
+                Run = created.Run with { State = AgentRunState.Queued, UpdatedAt = DateTimeOffset.UtcNow }
+            };
+        }
+
         public ValueTask TransitionStateAsync(
             string workspaceId, string runId,
             AgentRunState expectedCurrentState, AgentRunState newState,
@@ -411,6 +437,28 @@ public sealed class R29L_AgentRunRecoveryScanTests
             string workspaceId, string runId, string claimToken,
             CancellationToken cancellationToken = default)
             => ValueTask.FromResult(false);
+
+        public async ValueTask<AgentRun> ConsumeClaimAsync(
+            string workspaceId, string runId, string? expectedClaimToken, string? expectedClaimOwner,
+            string? executionLeaseToken, long? executionFencingToken,
+            CancellationToken cancellationToken = default)
+        {
+            await _inner.TransitionStateAsync(
+                workspaceId, runId, AgentRunState.Claimed, AgentRunState.Running,
+                cancellationToken, executionLeaseToken, executionFencingToken).ConfigureAwait(false);
+            var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null)
+            {
+                throw new InvalidOperationException($"Run 不存在：{workspaceId}/{runId}。");
+            }
+            return run with
+            {
+                State = AgentRunState.Running,
+                ClaimOwner = null,
+                ClaimToken = null,
+                ClaimExpiresAtUtc = null
+            };
+        }
 
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)

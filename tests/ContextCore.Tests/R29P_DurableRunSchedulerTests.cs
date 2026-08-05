@@ -687,6 +687,29 @@ public sealed class R29P_DurableRunSchedulerTests
         public ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(AgentRun run, CancellationToken ct = default)
             => _inner.CreateOrGetByIdempotencyKeyAsync(run, ct);
 
+        public async ValueTask<AgentRunAdmitResult> AdmitRunAtomicallyAsync(
+            AgentRun run, QuotaAdmissionRequest? quotaAdmission, CancellationToken cancellationToken = default)
+        {
+            var created = await _inner.CreateOrGetByIdempotencyKeyAsync(run, cancellationToken).ConfigureAwait(false);
+            if (created.WasExisting)
+            {
+                return new AgentRunAdmitResult { Created = false, WasExisting = true, Run = created.Run };
+            }
+            // 调度测试不消费配额语义：预留请求直接放行，推进 Queued。
+            if (run.State == AgentRunState.PendingAdmission)
+            {
+                await _inner.TransitionStateAsync(
+                    run.WorkspaceId, run.RunId, AgentRunState.PendingAdmission, AgentRunState.Queued, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            return new AgentRunAdmitResult
+            {
+                Created = true,
+                WasExisting = false,
+                Run = created.Run with { State = AgentRunState.Queued, UpdatedAt = DateTimeOffset.UtcNow }
+            };
+        }
+
         public ValueTask TransitionStateAsync(
             string workspaceId, string runId, AgentRunState expectedState, AgentRunState newState,
             CancellationToken cancellationToken = default, string? leaseToken = null, long? fencingToken = null)
@@ -726,6 +749,28 @@ public sealed class R29P_DurableRunSchedulerTests
             string workspaceId, string runId, string claimToken,
             CancellationToken cancellationToken = default)
             => ValueTask.FromResult(false);
+
+        public async ValueTask<AgentRun> ConsumeClaimAsync(
+            string workspaceId, string runId, string? expectedClaimToken, string? expectedClaimOwner,
+            string? executionLeaseToken, long? executionFencingToken,
+            CancellationToken cancellationToken = default)
+        {
+            await _inner.TransitionStateAsync(
+                workspaceId, runId, AgentRunState.Claimed, AgentRunState.Running,
+                cancellationToken, executionLeaseToken, executionFencingToken).ConfigureAwait(false);
+            var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null)
+            {
+                throw new InvalidOperationException($"Run 不存在：{workspaceId}/{runId}。");
+            }
+            return run with
+            {
+                State = AgentRunState.Running,
+                ClaimOwner = null,
+                ClaimToken = null,
+                ClaimExpiresAtUtc = null
+            };
+        }
 
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)

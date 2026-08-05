@@ -768,8 +768,8 @@ public interface IToolReconciliationStore
     /// <summary>按对账记录 ID 查询。</summary>
     ValueTask<ToolReconciliationRecord?> GetAsync(string reconciliationId, CancellationToken cancellationToken = default);
 
-    /// <summary>按 Run 列出全部对账记录（含已裁决）。</summary>
-    ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string runId, CancellationToken cancellationToken = default);
+    /// <summary>按 Workspace + Run 列出全部对账记录（含已裁决）。</summary>
+    ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>按外部操作 ID 反查对账记录（跨 Run；ControlRoom / 运维按 journal externalOperationId 查询）。</summary>
     ValueTask<IReadOnlyList<ToolReconciliationRecord>> QueryByExternalOperationIdAsync(string externalOperationId, CancellationToken cancellationToken = default);
@@ -777,8 +777,8 @@ public interface IToolReconciliationStore
     /// <summary>ControlRoom 分页列表：按过滤条件（workspace/run/status/overdue）分页返回，附总数与过期告警计数。</summary>
     ValueTask<ReconciliationListResult> ListAsync(ReconciliationQuery query, CancellationToken cancellationToken = default);
 
-    /// <summary>Run 是否存在未裁决（Pending/Running）对账记录。</summary>
-    ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default);
+    /// <summary>指定 Workspace + Run 是否存在未裁决（Pending/Running）对账记录。</summary>
+    ValueTask<bool> HasUnresolvedForRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 列出待接管记录（ToolReconciliationWorker 轮询用，按创建时间升序）：

@@ -533,6 +533,7 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
     private sealed class ClaimAwareInMemoryRunStore : IPersistentAgentRunStore
     {
         private readonly InMemoryAgentRunStore _inner;
+        private readonly IWorkspaceQuotaService? _quotaService;
         private readonly TimeSpan _claimDuration;
         private readonly ConcurrentDictionary<string, (string Token, DateTimeOffset ExpiresAt)> _claims = new(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<string, int> _claimAttempts = new(StringComparer.Ordinal);
@@ -540,9 +541,10 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         /// <summary>模拟 Claimer 已抢先持有 Claim（TryClaimSingleAsync 一律返回 null）。</summary>
         public bool ClaimSingleDenied { get; set; }
 
-        public ClaimAwareInMemoryRunStore(InMemoryAgentRunStore inner, TimeSpan? claimDuration = null)
+        public ClaimAwareInMemoryRunStore(InMemoryAgentRunStore inner, IWorkspaceQuotaService? quotaService = null, TimeSpan? claimDuration = null)
         {
             _inner = inner;
+            _quotaService = quotaService;
             _claimDuration = claimDuration ?? TimeSpan.FromSeconds(60);
         }
 
@@ -569,6 +571,69 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
 
         public ValueTask<AgentRunCreateResult> CreateOrGetByIdempotencyKeyAsync(AgentRun run, CancellationToken ct = default)
             => _inner.CreateOrGetByIdempotencyKeyAsync(run, ct);
+
+        public async ValueTask<AgentRunAdmitResult> AdmitRunAtomicallyAsync(
+            AgentRun run, QuotaAdmissionRequest? quotaAdmission, CancellationToken cancellationToken = default)
+        {
+            var created = await _inner.CreateOrGetByIdempotencyKeyAsync(run, cancellationToken).ConfigureAwait(false);
+            if (created.WasExisting)
+            {
+                return new AgentRunAdmitResult { Created = false, WasExisting = true, Run = created.Run };
+            }
+
+            // 配额启用且注入配额服务时按预留语义执行：容量不足 → AdmissionRejected + QuotaDenied。
+            if (quotaAdmission is not null && _quotaService is not null)
+            {
+                var reservation = await _quotaService.ReserveAsync(
+                    run.WorkspaceId, run.RunId, quotaAdmission.Tokens, quotaAdmission.CostUsd, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!reservation.Allowed)
+                {
+                    try
+                    {
+                        await _inner.TransitionStateAsync(
+                            run.WorkspaceId, run.RunId,
+                            AgentRunState.PendingAdmission, AgentRunState.AdmissionRejected, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // 已被并发路径推进 → 以现有状态为准
+                    }
+                    return new AgentRunAdmitResult
+                    {
+                        Created = true,
+                        WasExisting = false,
+                        QuotaDenied = true,
+                        QuotaFailureReason = reservation.FailureReason,
+                        Run = created.Run with
+                        {
+                            State = AgentRunState.AdmissionRejected,
+                            FinishedAt = DateTimeOffset.UtcNow
+                        }
+                    };
+                }
+            }
+
+            // 预留成功（或配额未启用）→ 推进 Queued。
+            try
+            {
+                await _inner.TransitionStateAsync(
+                    run.WorkspaceId, run.RunId,
+                    AgentRunState.PendingAdmission, AgentRunState.Queued, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // 已被并发路径推进 → 以现有状态为准
+            }
+            return new AgentRunAdmitResult
+            {
+                Created = true,
+                WasExisting = false,
+                Run = created.Run with { State = AgentRunState.Queued, UpdatedAt = DateTimeOffset.UtcNow }
+            };
+        }
 
         public ValueTask TransitionStateAsync(
             string workspaceId, string runId, AgentRunState expectedState, AgentRunState newState,
@@ -666,6 +731,49 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
 
             _claims.TryRemove(key, out _);
             return true;
+        }
+
+        public async ValueTask<AgentRun> ConsumeClaimAsync(
+            string workspaceId, string runId, string? expectedClaimToken, string? expectedClaimOwner,
+            string? executionLeaseToken, long? executionFencingToken,
+            CancellationToken cancellationToken = default)
+        {
+            var key = Key(workspaceId, runId);
+            var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null)
+            {
+                throw new InvalidOperationException($"Run 不存在：{workspaceId}/{runId}。");
+            }
+            if (run.State != AgentRunState.Claimed)
+            {
+                throw new InvalidOperationException(
+                    $"Claim 消费失败：期望 Claimed，实际 {run.State}。");
+            }
+            var claim = _claims.TryGetValue(key, out var existing) ? existing : default;
+            if (claim.Token is null
+                || !string.Equals(claim.Token, expectedClaimToken, StringComparison.Ordinal)
+                || !string.Equals(run.ClaimOwner, expectedClaimOwner, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Scheduler Claim 已被接管（claim_token/owner 不匹配）。");
+            }
+            if (claim.ExpiresAt <= DateTimeOffset.UtcNow)
+            {
+                throw new InvalidOperationException("Scheduler Claim 已过期。");
+            }
+
+            await _inner.TransitionStateAsync(
+                workspaceId, runId, AgentRunState.Claimed, AgentRunState.Running, cancellationToken)
+                .ConfigureAwait(false);
+            _claims.TryRemove(key, out _);
+
+            var consumed = (await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false))!;
+            return consumed with
+            {
+                State = AgentRunState.Running,
+                ClaimOwner = null,
+                ClaimToken = null,
+                ClaimExpiresAtUtc = null
+            };
         }
 
         public async ValueTask<IReadOnlyList<AgentRun>> ClaimPendingBatchAsync(
@@ -835,7 +943,7 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
             bool blockModelCalls = false)
         {
             var inner = new InMemoryAgentRunStore();
-            var runStore = new ClaimAwareInMemoryRunStore(inner);
+            var runStore = new ClaimAwareInMemoryRunStore(inner, quotaService);
             var eventStore = new InMemoryAgentRunEventStore(inner);
             var blocking = blockModelCalls ? new BlockingModelTransport() : null;
             IAgentModelTransport transport = (IAgentModelTransport?)blocking ?? new DeterministicAgentModelTransport();

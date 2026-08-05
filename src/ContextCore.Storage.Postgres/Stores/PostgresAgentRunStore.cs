@@ -206,6 +206,381 @@ RETURNING data;
         throw new InvalidOperationException(
             $"INSERT conflict but no existing row found for workspace_id={run.WorkspaceId}, run_id={run.RunId}.");
     }
+
+    /// <inheritdoc />
+    public async ValueTask<AgentRunAdmitResult> AdmitRunAtomicallyAsync(
+        AgentRun run,
+        QuotaAdmissionRequest? quotaAdmission,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        var now = DateTimeOffset.UtcNow;
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            // 1. 插入 Run（调用方应传 PendingAdmission；幂等冲突 → 返回既有 Run）。
+            var insertedData = await InsertRunCoreAsync(
+                connection, transaction, run, cancellationToken).ConfigureAwait(false);
+            if (insertedData is null)
+            {
+                var existing = await FindExistingRunCoreAsync(
+                    connection, transaction, run, cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return new AgentRunAdmitResult { Created = false, WasExisting = true, Run = existing };
+            }
+
+            var insertedRun = Serializer.Deserialize<AgentRun>(insertedData) ?? run;
+
+            // 2. 配额未启用 → 直接推进 Queued。
+            if (quotaAdmission is null)
+            {
+                await UpdateRunStateCoreAsync(
+                    connection, transaction, run.WorkspaceId, run.RunId,
+                    AgentRunState.PendingAdmission, AgentRunState.Queued, now,
+                    isTerminal: false, cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return new AgentRunAdmitResult
+                {
+                    Created = true,
+                    WasExisting = false,
+                    Run = insertedRun with { State = AgentRunState.Queued, UpdatedAt = now }
+                };
+            }
+
+            // 3. 配额预留（与 Run 创建同一事务）：seed ledger → 行锁 → 周期重置 → 容量判定。
+            // 未配置的 workspace 以上限参数初始化 ledger 行（上限来自创建请求解析的配置）。
+            await using (var seedCmd = connection.CreateCommand())
+            {
+                seedCmd.Transaction = transaction;
+                seedCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                seedCmd.CommandText = $"""
+INSERT INTO {Table("workspace_quota_ledger")} (
+    workspace_id, max_tokens, tokens_used, reserved_tokens,
+    max_cost_usd, cost_used_usd, reserved_cost_usd,
+    period_seconds, period_started_at, updated_at)
+VALUES (
+    @workspace_id, @max_tokens, 0, 0,
+    @max_cost_usd, 0, 0,
+    @period_seconds, @now, @now)
+ON CONFLICT (workspace_id) DO NOTHING;
+""";
+                seedCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+                seedCmd.Parameters.AddWithValue("max_tokens", quotaAdmission.MaxTokens);
+                seedCmd.Parameters.AddWithValue("max_cost_usd", quotaAdmission.MaxCostUsd);
+                seedCmd.Parameters.AddWithValue("period_seconds", quotaAdmission.PeriodSeconds > 0 ? quotaAdmission.PeriodSeconds : 3600);
+                seedCmd.Parameters.AddWithValue("now", now);
+                await seedCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            long maxTokens;
+            long tokensUsed;
+            long reservedTokens;
+            double maxCostUsd;
+            double costUsedUsd;
+            double reservedCostUsd;
+            long periodSeconds;
+            DateTimeOffset periodStartedAt;
+            await using (var lockCmd = connection.CreateCommand())
+            {
+                lockCmd.Transaction = transaction;
+                lockCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                lockCmd.CommandText = $"""
+SELECT max_tokens, tokens_used, reserved_tokens,
+       max_cost_usd, cost_used_usd, reserved_cost_usd,
+       period_seconds, period_started_at
+FROM {Table("workspace_quota_ledger")}
+WHERE workspace_id = @workspace_id
+FOR UPDATE;
+""";
+                lockCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+                await using var reader = await lockCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    throw new InvalidOperationException($"配额 ledger 行缺失：workspace_id={run.WorkspaceId}。");
+                }
+                maxTokens = reader.GetInt64(reader.GetOrdinal("max_tokens"));
+                tokensUsed = reader.GetInt64(reader.GetOrdinal("tokens_used"));
+                reservedTokens = reader.GetInt64(reader.GetOrdinal("reserved_tokens"));
+                maxCostUsd = reader.GetDouble(reader.GetOrdinal("max_cost_usd"));
+                costUsedUsd = reader.GetDouble(reader.GetOrdinal("cost_used_usd"));
+                reservedCostUsd = reader.GetDouble(reader.GetOrdinal("reserved_cost_usd"));
+                periodSeconds = reader.GetInt64(reader.GetOrdinal("period_seconds"));
+                periodStartedAt = reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("period_started_at"));
+            }
+
+            // 周期过期 → 惰性重置（已用 / 已预留清零，周期起点前移）。
+            if (periodSeconds > 0 && now >= periodStartedAt.AddSeconds(periodSeconds))
+            {
+                await using (var resetCmd = connection.CreateCommand())
+                {
+                    resetCmd.Transaction = transaction;
+                    resetCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                    resetCmd.CommandText = $"""
+UPDATE {Table("workspace_quota_ledger")}
+SET tokens_used = 0, reserved_tokens = 0,
+    cost_used_usd = 0, reserved_cost_usd = 0,
+    period_started_at = @now, updated_at = @now
+WHERE workspace_id = @workspace_id;
+""";
+                    resetCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+                    resetCmd.Parameters.AddWithValue("now", now);
+                    await resetCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+                tokensUsed = 0;
+                reservedTokens = 0;
+                costUsedUsd = 0;
+                reservedCostUsd = 0;
+            }
+
+            // 容量不足 → Run 推进 AdmissionRejected（终态，审计保留）→ 事务提交 → QuotaDenied。
+            var deniedReason = EvaluateCapacity(
+                quotaAdmission, maxTokens, tokensUsed, reservedTokens, maxCostUsd, costUsedUsd, reservedCostUsd);
+            if (deniedReason is not null)
+            {
+                await UpdateRunStateCoreAsync(
+                    connection, transaction, run.WorkspaceId, run.RunId,
+                    AgentRunState.PendingAdmission, AgentRunState.AdmissionRejected, now,
+                    isTerminal: true, cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return new AgentRunAdmitResult
+                {
+                    Created = true,
+                    WasExisting = false,
+                    QuotaDenied = true,
+                    QuotaFailureReason = deniedReason,
+                    Run = insertedRun with
+                    {
+                        State = AgentRunState.AdmissionRejected,
+                        UpdatedAt = now,
+                        FinishedAt = now
+                    }
+                };
+            }
+
+            // 容量充足 → 写入预留行 + ledger 已预留增量（同一事务）。
+            await using (var reserveCmd = connection.CreateCommand())
+            {
+                reserveCmd.Transaction = transaction;
+                reserveCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                reserveCmd.CommandText = $"""
+INSERT INTO {Table("workspace_quota_reservations")} (
+    reservation_id, workspace_id, tokens, cost_usd, created_at)
+VALUES (@reservation_id, @workspace_id, @tokens, @cost_usd, @now)
+ON CONFLICT (reservation_id) DO NOTHING;
+""";
+                reserveCmd.Parameters.AddWithValue("reservation_id", run.RunId);
+                reserveCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+                reserveCmd.Parameters.AddWithValue("tokens", quotaAdmission.Tokens);
+                reserveCmd.Parameters.AddWithValue("cost_usd", quotaAdmission.CostUsd);
+                reserveCmd.Parameters.AddWithValue("now", now);
+                await reserveCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await using (var applyCmd = connection.CreateCommand())
+            {
+                applyCmd.Transaction = transaction;
+                applyCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                applyCmd.CommandText = $"""
+UPDATE {Table("workspace_quota_ledger")}
+SET reserved_tokens = reserved_tokens + @tokens,
+    reserved_cost_usd = reserved_cost_usd + @cost_usd,
+    updated_at = @now
+WHERE workspace_id = @workspace_id;
+""";
+                applyCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+                applyCmd.Parameters.AddWithValue("tokens", quotaAdmission.Tokens);
+                applyCmd.Parameters.AddWithValue("cost_usd", quotaAdmission.CostUsd);
+                applyCmd.Parameters.AddWithValue("now", now);
+                await applyCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // 4. 配额预留成功 → 推进 Queued（进入 Scheduler 可领取状态）。
+            await UpdateRunStateCoreAsync(
+                connection, transaction, run.WorkspaceId, run.RunId,
+                AgentRunState.PendingAdmission, AgentRunState.Queued, now,
+                isTerminal: false, cancellationToken).ConfigureAwait(false);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+            return new AgentRunAdmitResult
+            {
+                Created = true,
+                WasExisting = false,
+                Run = insertedRun with { State = AgentRunState.Queued, UpdatedAt = now }
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>容量判定：容量充足返回 null；不足返回失败原因（Max=0 视为无限制）。</summary>
+    private static string? EvaluateCapacity(
+        QuotaAdmissionRequest admission,
+        long maxTokens, long tokensUsed, long reservedTokens,
+        double maxCostUsd, double costUsedUsd, double reservedCostUsd)
+    {
+        if (maxTokens > 0 && tokensUsed + reservedTokens + admission.Tokens > maxTokens)
+        {
+            return $"Token 配额不足：已用 {tokensUsed}、已预留 {reservedTokens}、上限 {maxTokens}，本次预留 {admission.Tokens}。";
+        }
+        if (maxCostUsd > 0 && costUsedUsd + reservedCostUsd + admission.CostUsd > maxCostUsd)
+        {
+            return $"费用配额不足：已用 {costUsedUsd:F2}、已预留 {reservedCostUsd:F2}、上限 {maxCostUsd:F2} USD，本次预留 {admission.CostUsd:F2}。";
+        }
+        return null;
+    }
+
+    /// <summary>事务内插入 Run（RETURNING data）；主键/幂等键冲突返回 null。</summary>
+    private async Task<string?> InsertRunCoreAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        AgentRun run,
+        CancellationToken cancellationToken)
+    {
+        await using var insertCommand = connection.CreateCommand();
+        insertCommand.Transaction = transaction;
+        insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+        insertCommand.CommandText = $"""
+INSERT INTO {Table("agent_runs")} (
+    workspace_id, run_id, session_id, task, state, turn,
+    priority, max_retries, retry_count, next_retry_at,
+    created_at, updated_at, finished_at, failure_reason, final_answer,
+    turn_budget_json, cost_budget_json, idempotency_key, data)
+VALUES (
+    @workspace_id, @run_id, @session_id, @task, @state, @turn,
+    @priority, @max_retries, @retry_count, @next_retry_at,
+    @created_at, @updated_at, @finished_at, @failure_reason, @final_answer,
+    @turn_budget_json, @cost_budget_json, @idempotency_key, @data)
+ON CONFLICT (workspace_id, run_id) DO NOTHING
+RETURNING data;
+""";
+        insertCommand.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+        insertCommand.Parameters.AddWithValue("run_id", run.RunId);
+        insertCommand.Parameters.AddWithValue("session_id", run.SessionId);
+        insertCommand.Parameters.AddWithValue("task", run.Task ?? string.Empty);
+        insertCommand.Parameters.AddWithValue("state", (byte)run.State);
+        insertCommand.Parameters.AddWithValue("turn", run.Turn);
+        insertCommand.Parameters.AddWithValue("priority", run.Priority);
+        insertCommand.Parameters.AddWithValue("max_retries", run.MaxRetries);
+        insertCommand.Parameters.AddWithValue("retry_count", run.RetryCount);
+        insertCommand.Parameters.AddWithValue("next_retry_at", (object?)run.NextRetryAtUtc ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("created_at", run.CreatedAt);
+        insertCommand.Parameters.AddWithValue("updated_at", run.UpdatedAt);
+        insertCommand.Parameters.AddWithValue("finished_at", (object?)run.FinishedAt ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("failure_reason", (object?)run.FailureReason ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("final_answer", (object?)run.FinalAnswer ?? DBNull.Value);
+        insertCommand.Parameters.AddWithValue("turn_budget_json", run.TurnBudget is null ? DBNull.Value : JsonSerializer.Serialize(run.TurnBudget));
+        insertCommand.Parameters.AddWithValue("cost_budget_json", run.CostBudget is null ? DBNull.Value : JsonSerializer.Serialize(run.CostBudget));
+        insertCommand.Parameters.AddWithValue("idempotency_key", (object?)run.IdempotencyKey ?? DBNull.Value);
+        AddJson(insertCommand, "data", run);
+
+        try
+        {
+            return await insertCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // 幂等键 partial UNIQUE 冲突（同 idempotency_key 不同 run_id）→ 视为未插入。
+            return null;
+        }
+    }
+
+    /// <summary>事务内查找既有 Run（幂等重放：优先 idempotency_key，其次 run_id）。</summary>
+    private async Task<AgentRun> FindExistingRunCoreAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        AgentRun run,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(run.IdempotencyKey))
+        {
+            await using var keyCmd = connection.CreateCommand();
+            keyCmd.Transaction = transaction;
+            keyCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+            keyCmd.CommandText = $"""
+SELECT data FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND idempotency_key = @idempotency_key
+LIMIT 1;
+""";
+            keyCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+            keyCmd.Parameters.AddWithValue("idempotency_key", run.IdempotencyKey);
+            var byKey = await keyCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+            if (!string.IsNullOrWhiteSpace(byKey))
+            {
+                return Serializer.Deserialize<AgentRun>(byKey);
+            }
+        }
+
+        await using var idCmd = connection.CreateCommand();
+        idCmd.Transaction = transaction;
+        idCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        idCmd.CommandText = $"""
+SELECT data FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+        idCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
+        idCmd.Parameters.AddWithValue("run_id", run.RunId);
+        var byId = await idCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+        if (!string.IsNullOrWhiteSpace(byId))
+        {
+            return Serializer.Deserialize<AgentRun>(byId);
+        }
+
+        throw new InvalidOperationException(
+            $"INSERT conflict but no existing row found for workspace_id={run.WorkspaceId}, run_id={run.RunId}.");
+    }
+
+    /// <summary>事务内推进 Run 状态（state 列与 data JSON 双写，终态写 finished_at）。</summary>
+    private async Task UpdateRunStateCoreAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        AgentRunState expectedCurrentState,
+        AgentRunState newState,
+        DateTimeOffset now,
+        bool isTerminal,
+        CancellationToken cancellationToken)
+    {
+        await using var updateCommand = connection.CreateCommand();
+        updateCommand.Transaction = transaction;
+        updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+        var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
+        var dataMerge = isTerminal
+            ? "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at), 'FinishedAt', to_jsonb(@finished_at))"
+            : "data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))";
+        updateCommand.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = @new_state, updated_at = @updated_at{setFinished}, {dataMerge}
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state;
+""";
+        updateCommand.Parameters.AddWithValue("workspace_id", workspaceId);
+        updateCommand.Parameters.AddWithValue("run_id", runId);
+        updateCommand.Parameters.AddWithValue("expected_state", (byte)expectedCurrentState);
+        updateCommand.Parameters.AddWithValue("new_state", (byte)newState);
+        updateCommand.Parameters.AddWithValue("new_state_name", newState.ToString());
+        updateCommand.Parameters.AddWithValue("updated_at", now);
+        if (isTerminal)
+        {
+            updateCommand.Parameters.AddWithValue("finished_at", now);
+        }
+        var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (affected == 0)
+        {
+            throw new InvalidOperationException(
+                $"Agent Run 状态机 CAS 失败：workspace_id={workspaceId}, run_id={runId}。" +
+                $"期望当前状态={expectedCurrentState}（原子准入事务内推进）。");
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask TransitionStateAsync(
         string workspaceId,
@@ -234,6 +609,7 @@ RETURNING data;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         // 1. expected-state CAS：UPDATE WHERE workspace_id AND run_id AND state = expected
         // 修复双真源：同一 UPDATE 语句中同步更新 state 列与 data JSON 中的
@@ -242,8 +618,10 @@ RETURNING data;
         // 使用 jsonb || jsonb_build_object 合并覆盖（原子操作，无 read-before-write）。
         // 当 leaseToken + fencingToken 提供时，WHERE 追加 EXISTS 子查询校验 agent_run_leases
         // 中仍由当前实例持有该 lease；lease 被抢占后 fencing_token 不匹配 → 0 行受影响 → 抛异常。
+        // 状态转换与终态结算 outbox 写入在同一事务内提交（CAS 成功才写 outbox）。
         await using (var updateCommand = connection.CreateCommand())
         {
+            updateCommand.Transaction = transaction;
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
             var setFinished = isTerminal ? ", finished_at = @finished_at" : string.Empty;
             // 终态时同步更新 data JSON 中的 FinishedAt 字段；非终态不覆盖（保留原值）
@@ -280,12 +658,39 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             var affected = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             if (affected > 0)
             {
+                // CAS 成功：终态且存在对应预留时，写入结算 outbox（同一事务，exactly-once）。
+                // 仅当预留行存在才入队——配额未启用 / 预留已被释放的 Run 无需结算。
+                if (isTerminal)
+                {
+                    await using (var outboxCommand = connection.CreateCommand())
+                    {
+                        outboxCommand.Transaction = transaction;
+                        outboxCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                        outboxCommand.CommandText = $"""
+INSERT INTO {Table("terminal_run_settlement_outbox")} (
+    workspace_id, run_id, reservation_id, terminal_state, created_at, updated_at)
+SELECT @workspace_id, @run_id, @run_id, @new_state, @now, @now
+WHERE EXISTS (
+    SELECT 1 FROM {Table("workspace_quota_reservations")}
+    WHERE reservation_id = @run_id
+);
+""";
+                        outboxCommand.Parameters.AddWithValue("workspace_id", workspaceId);
+                        outboxCommand.Parameters.AddWithValue("run_id", runId);
+                        outboxCommand.Parameters.AddWithValue("new_state", (byte)newState);
+                        outboxCommand.Parameters.AddWithValue("now", now);
+                        await outboxCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
                 return; // CAS 成功
             }
         }
 
         // 2. 0 行受影响：检查行是否存在以区分"逆退/已推进/lease 失效"与"Run 不存在"
         await using var selectCommand = connection.CreateCommand();
+        selectCommand.Transaction = transaction;
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
 SELECT state FROM {Table("agent_runs")}
@@ -301,11 +706,13 @@ LIMIT 1;
             // lease 校验失败时给出专门的错误信息（区分于状态 CAS 失败）
             if (leaseValidated && currentState == expectedCurrentState)
             {
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 throw new InvalidOperationException(
                     $"Agent Run lease fencing 校验失败：workspace_id={workspaceId}, run_id={runId}。" +
                     $"状态机前件匹配（{expectedCurrentState}），但 lease_token/fencing_token 不匹配——" +
                     $"lease 已被其他实例抢占，应立即停止处理该 Run。");
             }
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw new InvalidOperationException(
                 $"Agent Run 状态机 CAS 失败：workspace_id={workspaceId}, run_id={runId}。" +
                 $"期望当前状态={expectedCurrentState}，实际={currentState}。" +
@@ -313,6 +720,7 @@ LIMIT 1;
         }
 
         // 3. 行不存在
+        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
         throw new InvalidOperationException(
             $"Agent Run 不存在：workspace_id={workspaceId}, run_id={runId}。" +
             $"无法推进状态机（缺失 Run 元数据）。");
@@ -547,6 +955,15 @@ WITH eligible AS (
                 WHERE l.run_id = {Table("agent_runs")}.run_id
                   AND l.lease_expires_at > clock_timestamp()
             )
+            AND NOT EXISTS (
+                -- 排除存在未决对账记录（Pending/Running）的 Run：外部副作用真相未确认前
+                -- 不得被自动重试/调度（含 Failed 重试路径）——先完成对账，避免新 Attempt
+                -- 跨越"真相未确认"边界导致副作用重复或丢失。
+                SELECT 1 FROM {Table("tool_reconciliation_entries")} r
+                WHERE r.workspace_id = {Table("agent_runs")}.workspace_id
+                  AND r.run_id = {Table("agent_runs")}.run_id
+                  AND r.status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running})
+            )
             ORDER BY priority DESC, created_at ASC, run_id ASC
             LIMIT @take
             FOR UPDATE SKIP LOCKED
@@ -730,6 +1147,135 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id
         command.Parameters.AddWithValue("claim_token", claimToken);
         var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return affected > 0;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// 执行交接：Claimed（state=22）→ Running（state=23），单 UPDATE 内校验
+    /// claim_token / claim_owner 与队列项一致 + claim 未过期 + （可选）执行租约 fencing。
+    /// 成功后清空 claim_owner / claim_token / claim_expires_at 列与 data jsonb 对应字段。
+    /// 0 行受影响时按"claim 不匹配 / claim 过期 / 状态已变 / 执行租约失效"分诊后抛异常
+    /// （语义与 <see cref="TransitionStateAsync"/> 一致：调用方应重读最新状态或停止执行）。
+    /// </remarks>
+    public async ValueTask<AgentRun> ConsumeClaimAsync(
+        string workspaceId,
+        string runId,
+        string? expectedClaimToken,
+        string? expectedClaimOwner,
+        string? executionLeaseToken,
+        long? executionFencingToken,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        // 执行租约校验要求 token + fencing 同时提供（或同时为 null），语义同 TransitionStateAsync。
+        var leaseValidated = executionLeaseToken is not null && executionFencingToken is not null;
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        var leaseClause = leaseValidated
+            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
+            : string.Empty;
+        command.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = 23,
+    claim_owner = NULL,
+    claim_token = NULL,
+    claim_expires_at = NULL,
+    updated_at = clock_timestamp(),
+    data = data || jsonb_build_object(
+        'State', to_jsonb('Running'::text),
+        'UpdatedAt', to_jsonb(clock_timestamp()),
+        'ClaimOwner', to_jsonb(NULL::text),
+        'ClaimToken', to_jsonb(NULL::text),
+        'ClaimExpiresAtUtc', to_jsonb(NULL::text))
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+  AND state = 22
+  AND claim_token = @claim_token
+  AND claim_owner = @claim_owner
+  AND (claim_expires_at IS NULL OR claim_expires_at > clock_timestamp()){leaseClause}
+RETURNING data;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("claim_token", expectedClaimToken ?? string.Empty);
+        command.Parameters.AddWithValue("claim_owner", expectedClaimOwner ?? string.Empty);
+        if (leaseValidated)
+        {
+            command.Parameters.AddWithValue("lease_token", executionLeaseToken!);
+            command.Parameters.AddWithValue("fencing_token", executionFencingToken!.Value);
+        }
+
+        object? result;
+        try
+        {
+            result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new InvalidOperationException(
+                $"Agent Run Claim 消费唯一性冲突：workspace_id={workspaceId}, run_id={runId}。");
+        }
+        if (result is null or DBNull)
+        {
+            // 0 行受影响：分诊——先查当前行，区分 claim 不匹配 / 状态已变 / lease 失效。
+            await using var selectCommand = connection.CreateCommand();
+            selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            selectCommand.CommandText = $"""
+SELECT state, claim_token, claim_owner, claim_expires_at FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+            selectCommand.Parameters.AddWithValue("workspace_id", workspaceId);
+            selectCommand.Parameters.AddWithValue("run_id", runId);
+            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var currentState = (AgentRunState)reader.GetByte(0);
+                var dbClaimToken = reader.IsDBNull(1) ? null : reader.GetString(1);
+                var dbClaimOwner = reader.IsDBNull(2) ? null : reader.GetString(2);
+                var dbClaimExpiresAt = reader.IsDBNull(3) ? (DateTimeOffset?)null : reader.GetDateTime(3);
+
+                if (currentState != AgentRunState.Claimed)
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run Claim 消费失败：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"期望当前状态=Claimed，实际={currentState}（Claim 已被推进/释放/接管）。");
+                }
+                if (!string.Equals(dbClaimToken, expectedClaimToken, StringComparison.Ordinal)
+                    || !string.Equals(dbClaimOwner, expectedClaimOwner, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run Scheduler Claim 已被接管：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"队列项 claim_token/owner 与数据库不一致——Claim 过期后他节点已重新领取，本节点不得执行。");
+                }
+                if (dbClaimExpiresAt is null || dbClaimExpiresAt <= DateTimeOffset.UtcNow)
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run Scheduler Claim 已过期：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"claim_expires_at={dbClaimExpiresAt:O}，需重新领取后方可执行。");
+                }
+                if (leaseValidated)
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run 执行租约 fencing 校验失败：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"状态与 Claim 均匹配，但 lease_token/fencing_token 不匹配——lease 已被其他实例抢占。");
+                }
+                throw new InvalidOperationException(
+                    $"Agent Run Claim 消费失败：workspace_id={workspaceId}, run_id={runId}（未知原因）。");
+            }
+
+            throw new InvalidOperationException(
+                $"Agent Run 不存在：workspace_id={workspaceId}, run_id={runId}。无法消费 Claim。");
+        }
+
+        var data = (string)result;
+        var run = Serializer.Deserialize<AgentRun>(data)
+                  ?? throw new InvalidOperationException(
+                      $"Agent Run 反序列化失败：workspace_id={workspaceId}, run_id={runId}。");
+        return run;
     }
 
     /// <inheritdoc />

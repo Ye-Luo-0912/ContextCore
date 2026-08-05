@@ -259,6 +259,11 @@ internal static class ProductionRuntimeExtensions
         services.AddHostedService<ToolReconciliationWorker>();
         workerRegistry.Add<ToolReconciliationWorker>();
 
+        // TerminalRunSettlementWorker：消费 Run 终态结算 outbox（配额 Actualize / Release）。
+        // 无条件注册；非 Postgres provider 时自退出 no-op。
+        services.AddHostedService<TerminalRunSettlementWorker>();
+        workerRegistry.Add<TerminalRunSettlementWorker>();
+
         // 单节点 Canary Progression HostedService 注册。
         // CanaryProgressionHostedService 通过 IOptionsMonitor<CanarySchedulerOptions> 读取 Enabled 标志，
         // ProductionHA 模式的 PostConfigure(Enabled=false) 能被正确感知。
@@ -294,6 +299,27 @@ internal static class ProductionRuntimeExtensions
         // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
         services.AddHostedService<ToolReconciliationWorker>();
         workerRegistry.Add<ToolReconciliationWorker>();
+
+        // Workspace 配额：替换默认进程内实现为 Postgres 持久化实现（多实例共享配额真相源）。
+        // 未配置 workspace 的默认上限取 SecurityOptions.Quota.DefaultLimit（与进程内实现一致）；
+        // 已配置 workspace 的上限由创建端点在原子准入请求中解析（WorkspaceLimits 覆盖优先）。
+        RemoveService(services, typeof(IWorkspaceQuotaService));
+        services.AddSingleton<IWorkspaceQuotaService>(sp =>
+        {
+            var securityOptions = sp.GetService<SecurityOptions>();
+            var defaultLimit = securityOptions?.Quota?.DefaultLimit;
+            return new PostgresWorkspaceQuotaService(
+                sp.GetRequiredService<PostgresConnectionFactory>(),
+                sp.GetRequiredService<PostgresJsonSerializer>(),
+                sp.GetRequiredService<PostgresMigrationRunner>(),
+                defaultLimit?.MaxTokens ?? 0,
+                defaultLimit?.MaxCostUsd ?? 0,
+                defaultLimit?.PeriodSpan ?? TimeSpan.FromHours(1));
+        });
+
+        // TerminalRunSettlementWorker：消费 Run 终态结算 outbox（配额 Actualize / Release）。
+        services.AddHostedService<TerminalRunSettlementWorker>();
+        workerRegistry.Add<TerminalRunSettlementWorker>();
 
         // 单节点 Canary Progression HostedService 注册。
         services.AddHostedService<CanaryProgressionHostedService>();
@@ -352,6 +378,27 @@ internal static class ProductionRuntimeExtensions
         // ToolReconciliationWorker：轮询未裁决 Tool 对账记录，确认外部副作用真相后重新入队 Run。
         services.AddHostedService<ToolReconciliationWorker>();
         workerRegistry.Add<ToolReconciliationWorker>();
+
+        // Workspace 配额：替换默认进程内实现为 Postgres 持久化实现（多实例共享配额真相源）。
+        // 未配置 workspace 的默认上限取 SecurityOptions.Quota.DefaultLimit（与进程内实现一致）；
+        // 已配置 workspace 的上限由创建端点在原子准入请求中解析（WorkspaceLimits 覆盖优先）。
+        RemoveService(services, typeof(IWorkspaceQuotaService));
+        services.AddSingleton<IWorkspaceQuotaService>(sp =>
+        {
+            var securityOptions = sp.GetService<SecurityOptions>();
+            var defaultLimit = securityOptions?.Quota?.DefaultLimit;
+            return new PostgresWorkspaceQuotaService(
+                sp.GetRequiredService<PostgresConnectionFactory>(),
+                sp.GetRequiredService<PostgresJsonSerializer>(),
+                sp.GetRequiredService<PostgresMigrationRunner>(),
+                defaultLimit?.MaxTokens ?? 0,
+                defaultLimit?.MaxCostUsd ?? 0,
+                defaultLimit?.PeriodSpan ?? TimeSpan.FromHours(1));
+        });
+
+        // TerminalRunSettlementWorker：消费 Run 终态结算 outbox（配额 Actualize / Release）。
+        services.AddHostedService<TerminalRunSettlementWorker>();
+        workerRegistry.Add<TerminalRunSettlementWorker>();
 
         // 3. HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。

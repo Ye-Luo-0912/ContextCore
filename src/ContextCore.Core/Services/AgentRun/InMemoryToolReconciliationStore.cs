@@ -81,11 +81,12 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string runId, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var records = _records.Values
-            .Where(r => string.Equals(r.RunId, runId, StringComparison.Ordinal))
+            .Where(r => string.Equals(r.WorkspaceId, workspaceId, StringComparison.Ordinal)
+                        && string.Equals(r.RunId, runId, StringComparison.Ordinal))
             .OrderBy(r => r.CreatedAt)
             .ToList();
         return ValueTask.FromResult<IReadOnlyList<ToolReconciliationRecord>>(records);
@@ -132,11 +133,12 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
     }
 
     /// <inheritdoc />
-    public ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default)
+    public ValueTask<bool> HasUnresolvedForRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var hasUnresolved = _records.Values.Any(r =>
-            string.Equals(r.RunId, runId, StringComparison.Ordinal)
+            string.Equals(r.WorkspaceId, workspaceId, StringComparison.Ordinal)
+            && string.Equals(r.RunId, runId, StringComparison.Ordinal)
             && (r.Status == ToolReconciliationStatus.Pending || r.Status == ToolReconciliationStatus.Running));
         return ValueTask.FromResult(hasUnresolved);
     }

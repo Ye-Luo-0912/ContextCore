@@ -714,60 +714,32 @@ internal static class AgentExecutionEndpoints
                 Error = request.Error
             };
 
-            int code;
-            if (coordinator is not null)
+            // 记录终态只能由 ToolReconciliationCoordinator 推进（journal 提交 + 记录裁决原子一致）。
+            // 协调器未注册 → 503，绝不回退到存储直裁（那会重新引入"记录 Resolved 而 Journal 仍 Dispatched"的撕裂）。
+            if (coordinator is null)
             {
-                code = await coordinator.ResolveAsync(reconciliationId, outcome, ct, request.DecisionRequestId).ConfigureAwait(false);
-            }
-            else if (reconciliationStore is not null)
-            {
-                // 协调器未注册（独立宿主场景）→ 回退到存储幂等裁决（不提交 journal）。
-                // P0-5：先原子取得裁决权（租约）再裁决，避免与自动 Handler 竞争写入相反结果。
-                var record = await reconciliationStore.GetAsync(reconciliationId, ct).ConfigureAwait(false);
-                if (record is null)
-                {
-                    code = 1;
-                }
-                else if (record.Status is ToolReconciliationStatus.Resolved or ToolReconciliationStatus.Rejected)
-                {
-                    // 客户端决策幂等——相同决策身份 + 相同 outcome → 幂等成功（0）；
-                    // 相同决策身份 + 相反 outcome → 决策冲突（4）；无/不同决策身份 → 2。
-                    if (!string.IsNullOrWhiteSpace(request.DecisionRequestId)
-                        && string.Equals(record.DecisionRequestId, request.DecisionRequestId, StringComparison.Ordinal))
-                    {
-                        code = record.SideEffectOccurred == outcome.SideEffectOccurred ? 0 : 4;
-                    }
-                    else
-                    {
-                        code = 2;
-                    }
-                }
-                else
-                {
-                    var lease = await reconciliationStore.TryBeginAsync(
-                        reconciliationId, "manual:endpoint", TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
-                    if (lease is null)
-                    {
-                        code = 3; // 仲裁权被占用（有效租约持有中）
-                    }
-                    else if (outcome.SideEffectOccurred)
-                    {
-                        await reconciliationStore.MarkResolvedAsync(reconciliationId, lease.LeaseToken, outcome, ct).ConfigureAwait(false);
-                        code = 0;
-                    }
-                    else
-                    {
-                        await reconciliationStore.MarkRejectedAsync(reconciliationId, lease.LeaseToken, outcome, ct).ConfigureAwait(false);
-                        code = 0;
-                    }
-                }
-            }
-            else
-            {
-                return ContextCoreHttpResultMapper.InternalError(
+                return ContextCoreHttpResultMapper.Misconfigured(
                     httpContext, string.Empty, "agents.runs.reconciliations",
-                    "未注册 ToolReconciliationCoordinator / IToolReconciliationStore，无法裁决对账记录。");
+                    "未注册 ToolReconciliationCoordinator，无法裁决对账记录（记录终态只能由协调器推进）。");
             }
+
+            // 归属校验：reconciliationId 对应的记录必须同时属于当前 Workspace 和 Run。
+            // 跨租户（他租户的同 RunId）或错 Run 的 reconciliationId → 404，杜绝凭 Run 存在性裁决他人记录。
+            if (reconciliationStore is not null)
+            {
+                var ownership = await reconciliationStore.GetAsync(reconciliationId, ct).ConfigureAwait(false);
+                if (ownership is null
+                    || !string.Equals(ownership.WorkspaceId, workspaceId, StringComparison.Ordinal)
+                    || !string.Equals(ownership.RunId, id, StringComparison.Ordinal))
+                {
+                    return ContextCoreHttpResultMapper.NotFound(
+                        httpContext, string.Empty, "agents.runs.reconciliations",
+                        $"未找到 reconciliationId='{reconciliationId}'。");
+                }
+            }
+
+            int code = await coordinator.ResolveAsync(
+                workspaceId, id, reconciliationId, outcome, ct, request.DecisionRequestId).ConfigureAwait(false);
 
             return code switch
             {
@@ -1044,7 +1016,7 @@ internal static class AgentExecutionEndpoints
     {
         // 仍有未裁决记录 → 保持停车，等待后续裁决全部完成后由 Worker 重新入队。
         if (reconciliationStore is not null
-            && await reconciliationStore.HasUnresolvedForRunAsync(runId, ct).ConfigureAwait(false))
+            && await reconciliationStore.HasUnresolvedForRunAsync(workspaceId, runId, ct).ConfigureAwait(false))
         {
             return Results.Accepted($"/api/agents/runs/{runId}");
         }
@@ -1430,83 +1402,92 @@ internal static class AgentExecutionEndpoints
         };
 
         AgentRunCreateResult createResult;
-        try
-        {
-            createResult = await runStore.CreateOrGetByIdempotencyKeyAsync(run, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
-        }
-
-        if (createResult.WasExisting)
-        {
-            // Idempotent replay: return existing run (200 OK)
-            return Results.Ok(ToRunResponse(createResult.Run));
-        }
-
-        // Workspace 配额强制：仅新创建的 Run 预留配额（幂等重放不重复预留）。
-        // 配额启用且服务已注册时，按 Run 预算（MaxTokens / MaxCostUsd）预留——reservationId 取 runId，
-        // 幂等：同一 run 重复创建不重复占容量。预留失败（workspace 配额已耗尽）→ 429（中间件已做
-        // 耗尽快路径，此处为权威预留点）。预留由 Run 取消时 Release（退回容量），实际执行后
-        // 由结算方 Actualize 转正（按实际用量多退少补）。
+        AgentRun admittedRun;
         var securityOptions = httpContext.RequestServices.GetService<SecurityOptions>();
         var quotaService = httpContext.RequestServices.GetService<IWorkspaceQuotaService>();
-        if (securityOptions is not null && securityOptions.Quota.Enabled && quotaService is not null)
+        var quotaEnabled = securityOptions is not null && securityOptions.Quota.Enabled && quotaService is not null;
+
+        if (persistentStore is not null)
         {
-            var reservation = await quotaService.ReserveAsync(
-                workspaceId,
-                run.RunId,
-                run.CostBudget?.MaxTokens ?? 0,
-                run.CostBudget?.MaxCostUsd ?? 0,
-                ct).ConfigureAwait(false);
-            if (!reservation.Allowed)
+            // 原子准入：配额预留 + Run 创建 + 推进 Queued 同一数据库事务（持久化路径唯一创建入口）。
+            // 配额启用时按 Run 预算（MaxTokens / MaxCostUsd）预留——reservationId 取 runId，
+            // 幂等：同一 run 重复创建不重复占容量。配额判定失败 → Run 推进 AdmissionRejected
+            // 终态（审计保留，Claimer 永不领取）→ 429。
+            var quotaAdmission = quotaEnabled
+                ? BuildQuotaAdmissionRequest(securityOptions!, workspaceId, run)
+                : null;
+            AgentRunAdmitResult admitResult;
+            try
             {
-                // P0-6：配额判定失败 → 推进 AdmissionRejected（终态，持久化路径）。
-                // 429 语义 = 请求未持久化、不会执行：Run 行虽保留（审计），但处于 Claimer
-                // 永不领取的 AdmissionRejected 终态，任何后台调度都不会执行它——Admission 边界不再失效。
-                if (persistentStore is not null)
-                {
-                    try
-                    {
-                        await persistentStore.TransitionStateAsync(
-                            workspaceId, createResult.Run.RunId,
-                            AgentRunState.PendingAdmission, AgentRunState.AdmissionRejected, ct).ConfigureAwait(false);
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // CAS 失败：状态已被并发路径推进（幂等重放/另一节点）→ 以现有状态为准，仍返回 429
-                    }
-                }
+                admitResult = await persistentStore.AdmitRunAtomicallyAsync(run, quotaAdmission, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
+            }
+
+            if (admitResult.WasExisting)
+            {
+                // Idempotent replay: return existing run (200 OK)
+                return Results.Ok(ToRunResponse(admitResult.Run));
+            }
+            if (admitResult.QuotaDenied)
+            {
+                // 429 语义 = 配额判定失败：Run 已持久化为 AdmissionRejected 终态（审计），
+                // 任何后台调度都不会执行它——Admission 边界不失效。
                 return Results.Json(
                     new
                     {
                         error = "workspace_quota_exhausted",
-                        message = reservation.FailureReason ?? "Workspace 配额已耗尽，无法创建新的 Agent Run。",
+                        message = admitResult.QuotaFailureReason ?? "Workspace 配额已耗尽，无法创建新的 Agent Run。",
                         workspaceId
                     },
                     statusCode: StatusCodes.Status429TooManyRequests);
             }
-        }
 
-        // P0-6：配额预留成功 → 推进 Queued（持久化路径）——进入 Scheduler 可领取状态。
-        // InMemory 路径无此步骤（Created 直接入队）。
-        var admittedRun = createResult.Run;
-        if (persistentStore is not null)
+            admittedRun = admitResult.Run; // 新创建且已推进 Queued（进入 Scheduler 可领取状态）
+        }
+        else
         {
+            // InMemory/FileSystem 路径：创建 Created → 配额预留（可选）→ 直接入队。
+            // 无 Admission 状态机（进程重启后数据即失）：配额拒绝即返回 429，Run 保持 Created 不入调度。
             try
             {
-                await persistentStore.TransitionStateAsync(
-                    workspaceId, createResult.Run.RunId,
-                    AgentRunState.PendingAdmission, AgentRunState.Queued, ct).ConfigureAwait(false);
-                admittedRun = admittedRun with { State = AgentRunState.Queued };
+                createResult = await runStore.CreateOrGetByIdempotencyKeyAsync(run, ct).ConfigureAwait(false);
             }
-            catch (InvalidOperationException)
+            catch (Exception ex)
             {
-                // 已被并发路径推进（幂等重放/另一节点）→ 读取最新状态，以存储事实为准
-                admittedRun = await runStore.GetAsync(workspaceId, createResult.Run.RunId, ct).ConfigureAwait(false)
-                              ?? admittedRun;
+                return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "agents.runs.create");
             }
+
+            if (createResult.WasExisting)
+            {
+                // Idempotent replay: return existing run (200 OK)
+                return Results.Ok(ToRunResponse(createResult.Run));
+            }
+
+            if (quotaEnabled)
+            {
+                var reservation = await quotaService!.ReserveAsync(
+                    workspaceId,
+                    createResult.Run.RunId,
+                    createResult.Run.CostBudget?.MaxTokens ?? 0,
+                    createResult.Run.CostBudget?.MaxCostUsd ?? 0,
+                    ct).ConfigureAwait(false);
+                if (!reservation.Allowed)
+                {
+                    return Results.Json(
+                        new
+                        {
+                            error = "workspace_quota_exhausted",
+                            message = reservation.FailureReason ?? "Workspace 配额已耗尽，无法创建新的 Agent Run。",
+                            workspaceId
+                        },
+                        statusCode: StatusCodes.Status429TooManyRequests);
+                }
+            }
+
+            admittedRun = createResult.Run;
         }
 
         // P0-8：入队前先取得 Scheduler Claim Lease（TryClaimSingleAsync）——防止 Claimer 在
@@ -1737,6 +1718,28 @@ internal static class AgentExecutionEndpoints
             }
         }
         return (owner, duration);
+    }
+
+    /// <summary>
+    /// 构建原子准入的配额预留请求：按 Run 预算预留量 + workspace 生效配额上限
+    /// （WorkspaceLimits 覆盖优先，否则 DefaultLimit）。
+    /// </summary>
+    private static QuotaAdmissionRequest BuildQuotaAdmissionRequest(
+        SecurityOptions securityOptions,
+        string workspaceId,
+        AgentRun run)
+    {
+        var limit = securityOptions.Quota.WorkspaceLimits.TryGetValue(workspaceId, out var ws)
+            ? ws
+            : securityOptions.Quota.DefaultLimit;
+        return new QuotaAdmissionRequest
+        {
+            Tokens = run.CostBudget?.MaxTokens ?? 0,
+            CostUsd = run.CostBudget?.MaxCostUsd ?? 0,
+            MaxTokens = limit.MaxTokens,
+            MaxCostUsd = limit.MaxCostUsd,
+            PeriodSeconds = (long)limit.PeriodSpan.TotalSeconds
+        };
     }
 
 }

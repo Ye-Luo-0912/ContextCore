@@ -649,24 +649,37 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
 
             // P0-8：Scheduler Claim Lease → Execution/Fencing Lease 交接（Claimed → Running）。
             // Run 被 Claimer/端点领取（Claimed）并放入本地队列后，本节点取得执行租约即宣告
-            // "开始执行"——将状态推进为 Running（CAS 附带 execution lease fencing，
-            // 租约被抢占时推进失败）。Running 属于 Actor 的全新启动状态集（尚未产生任何
-            // 持久化事件：首次 flush 才原子 CAS Running→ContextBuilding 并落库 RunCreated）。
+            // "开始执行"——将状态推进为 Running。持久化路径使用 ConsumeClaimAsync：
+            // 单事务校验 DB 中 claim_token / claim_owner 与队列项一致且 claim 未过期
+            // （防 Claim 过期后他节点重新领取、旧节点仍消费旧 Claim 的仲裁失效竞态），
+            // 成功后清空 claim 字段并附带执行租约 fencing（租约被抢占时推进失败）。
+            // 非持久化（InMemory）回退通用 CAS（无 Scheduler Claim 语义）。
             if (run.State == AgentRunState.Claimed)
             {
                 try
                 {
-                    await _runStore.TransitionStateAsync(
-                        run.WorkspaceId, run.RunId,
-                        AgentRunState.Claimed, AgentRunState.Running,
-                        activeRun.Cts.Token, lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
-                    run = run with { State = AgentRunState.Running };
+                    if (_runStore is IPersistentAgentRunStore persistentStore)
+                    {
+                        run = await persistentStore.ConsumeClaimAsync(
+                            run.WorkspaceId, run.RunId,
+                            run.ClaimToken, run.ClaimOwner,
+                            lease?.LeaseToken, lease?.FencingToken,
+                            activeRun.Cts.Token).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await _runStore.TransitionStateAsync(
+                            run.WorkspaceId, run.RunId,
+                            AgentRunState.Claimed, AgentRunState.Running,
+                            activeRun.Cts.Token, lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
+                        run = run with { State = AgentRunState.Running };
+                    }
                 }
                 catch (InvalidOperationException)
                 {
-                    // 0 行受影响：状态已被其他节点推进（重复入队竞态）或已离开 Claimed。
+                    // 0 行受影响：Claim 已被接管（claim_token 不匹配）/已过期/状态已被其他节点推进。
                     // 执行租约保证单执行者；重新读取最新状态维持 Actor 的 CAS 一致性。
-                    _logger?.LogDebug("Run {RunId} Claimed→Running 推进失败（已被接管），重新读取最新状态。", run.RunId);
+                    _logger?.LogDebug("Run {RunId} Claimed→Running 消费失败（Claim 被接管或状态已变），重新读取最新状态。", run.RunId);
                     try
                     {
                         var latest = await _runStore.GetAsync(run.WorkspaceId, run.RunId, activeRun.Cts.Token)

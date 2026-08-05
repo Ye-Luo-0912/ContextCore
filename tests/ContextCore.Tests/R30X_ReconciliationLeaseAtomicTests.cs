@@ -765,7 +765,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
 
         // 人工裁决尝试 → 仲裁权被占用 → 3
         var code = await coordinator.ResolveAsync(
-            record.ReconciliationId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token);
+            Ws, RunId, record.ReconciliationId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token);
         Assert.AreEqual(3, code, "仲裁权被占用 → 3。");
 
         var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);

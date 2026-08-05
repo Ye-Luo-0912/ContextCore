@@ -136,12 +136,13 @@ public sealed class ToolReconciliationWorker : BackgroundService
 
     /// <summary>
     /// 人工/自动裁决对账记录（POST resolve 端点与 Handler 路径共用）。
+    /// 校验记录属于指定 Workspace + Run（跨租户 reconciliationId 视为不存在）。
     /// </summary>
     /// <returns>
-    /// 0 = 成功裁决；1 = 记录不存在；2 = 已裁决（幂等冲突）。
+    /// 0 = 成功裁决；1 = 记录不存在或不属于该 Workspace/Run；2 = 已裁决（幂等冲突）。
     /// </returns>
-    public Task<int> ResolveAsync(string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken ct)
-        => _coordinator.ResolveAsync(reconciliationId, outcome, ct);
+    public Task<int> ResolveAsync(string workspaceId, string runId, string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken ct)
+        => _coordinator.ResolveAsync(workspaceId, runId, reconciliationId, outcome, ct);
 
     private async Task ReconcileOnceAsync(CancellationToken ct)
     {
@@ -166,12 +167,14 @@ public sealed class ToolReconciliationWorker : BackgroundService
                 record.DeadlineUtc?.ToString("O") ?? "<无截止>", record.Status);
         }
 
-        foreach (var group in pending.GroupBy(r => r.RunId, StringComparer.Ordinal))
+        foreach (var group in pending.GroupBy(r => (r.WorkspaceId, r.RunId)))
         {
             // Worker 接管该 Run 的对账：AwaitingReconciliation → ReconciliationRunning（best-effort）。
-            var workspaceId = group.First().WorkspaceId;
+            // 分组键含 Workspace——跨租户同 RunId 不会互相串扰（各租户独立推进/重入队）。
+            var workspaceId = group.Key.WorkspaceId;
+            var runId = group.Key.RunId;
             await TransitionRunStateAsync(
-                workspaceId, group.Key, AgentRunState.AwaitingReconciliation, AgentRunState.ReconciliationRunning, ct).ConfigureAwait(false);
+                workspaceId, runId, AgentRunState.AwaitingReconciliation, AgentRunState.ReconciliationRunning, ct).ConfigureAwait(false);
 
             foreach (var record in group)
             {
@@ -215,7 +218,7 @@ public sealed class ToolReconciliationWorker : BackgroundService
                 }
             }
 
-            await MaybeRequeueRunAsync(workspaceId, group.Key, ct).ConfigureAwait(false);
+            await MaybeRequeueRunAsync(workspaceId, runId, ct).ConfigureAwait(false);
         }
     }
 
@@ -227,7 +230,7 @@ public sealed class ToolReconciliationWorker : BackgroundService
     /// </summary>
     private async Task MaybeRequeueRunAsync(string workspaceId, string runId, CancellationToken ct)
     {
-        if (await _store.HasUnresolvedForRunAsync(runId, ct).ConfigureAwait(false))
+        if (await _store.HasUnresolvedForRunAsync(workspaceId, runId, ct).ConfigureAwait(false))
         {
             return; // 仍有未裁决记录 → Run 不得恢复
         }

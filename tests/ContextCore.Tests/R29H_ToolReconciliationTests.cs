@@ -56,7 +56,7 @@ public sealed class R29H_ToolReconciliationTests
         var other = await store.CreateAsync(BuildRecord("rec-2", "req-2", "bank-transfer"), cts.Token);
         Assert.AreEqual("rec-2", other.ReconciliationId);
 
-        var all = await store.ListByRunAsync(RunId, cts.Token);
+        var all = await store.ListByRunAsync(Ws, RunId, cts.Token);
         Assert.AreEqual(2, all.Count, "两条不同 RequestId 的记录应各自保留。");
     }
 
@@ -71,27 +71,27 @@ public sealed class R29H_ToolReconciliationTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
-        Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, cts.Token), "Pending 记录 → 未裁决。");
+        Assert.IsTrue(await store.HasUnresolvedForRunAsync(Ws, RunId, cts.Token), "Pending 记录 → 未裁决。");
 
         // 其他 Run 的记录不影响本 Run
         await store.CreateAsync(BuildRecord("rec-other", "req-other", "bank-transfer", runId: "run-other"), cts.Token);
-        Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, cts.Token));
+        Assert.IsTrue(await store.HasUnresolvedForRunAsync(Ws, RunId, cts.Token));
 
         // 裁决为 Resolved → 不再未裁决
         var lease1 = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token);
         Assert.IsNotNull(lease1, "Pending → Running 接管成功。");
         await store.MarkResolvedAsync("rec-1", lease1!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, cts.Token);
-        Assert.IsFalse(await store.HasUnresolvedForRunAsync(RunId, cts.Token), "全部 Resolved → 无未裁决记录。");
+        Assert.IsFalse(await store.HasUnresolvedForRunAsync(Ws, RunId, cts.Token), "全部 Resolved → 无未裁决记录。");
 
         // Running 记录 → 未裁决
         await store.CreateAsync(BuildRecord("rec-2", "req-2", "bank-transfer"), cts.Token);
         var lease2 = await store.TryBeginAsync("rec-2", "test", TimeSpan.FromMinutes(1), cts.Token);
         Assert.IsNotNull(lease2, "Pending → Running 接管成功。");
-        Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, cts.Token), "Running 记录仍属未裁决。");
+        Assert.IsTrue(await store.HasUnresolvedForRunAsync(Ws, RunId, cts.Token), "Running 记录仍属未裁决。");
 
         // 裁决为 Rejected → 不再未裁决
         await store.MarkRejectedAsync("rec-2", lease2!.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "未发生" }, cts.Token);
-        Assert.IsFalse(await store.HasUnresolvedForRunAsync(RunId, cts.Token));
+        Assert.IsFalse(await store.HasUnresolvedForRunAsync(Ws, RunId, cts.Token));
     }
 
     /// <summary>
@@ -268,7 +268,7 @@ public sealed class R29H_ToolReconciliationTests
         var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-        var code = await coordinator.ResolveAsync("rec-missing", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
+        var code = await coordinator.ResolveAsync(Ws, RunId, "rec-missing", new ToolReconciliationOutcome { SideEffectOccurred = true }, cts.Token);
         Assert.AreEqual(1, code, "记录不存在 → 1。");
     }
 
@@ -287,8 +287,8 @@ public sealed class R29H_ToolReconciliationTests
         var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-A"), 0, cts.Token);
         await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
 
-        Assert.AreEqual(0, await coordinator.ResolveAsync("rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, cts.Token));
-        var code = await coordinator.ResolveAsync("rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-2" }, cts.Token);
+        Assert.AreEqual(0, await coordinator.ResolveAsync(Ws, RunId, "rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" }, cts.Token));
+        var code = await coordinator.ResolveAsync(Ws, RunId, "rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-2" }, cts.Token);
         Assert.AreEqual(2, code, "已裁决记录 → 2。");
 
         var record = await store.GetAsync("rec:" + result.RequestId, cts.Token);
@@ -311,9 +311,9 @@ public sealed class R29H_ToolReconciliationTests
         await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
 
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" };
-        Assert.AreEqual(0, await coordinator.ResolveAsync("rec:" + result.RequestId, outcome, cts.Token, "decision-1"),
+        Assert.AreEqual(0, await coordinator.ResolveAsync(Ws, RunId, "rec:" + result.RequestId, outcome, cts.Token, "decision-1"),
             "首次裁决成功。");
-        var retry = await coordinator.ResolveAsync("rec:" + result.RequestId, outcome, cts.Token, "decision-1");
+        var retry = await coordinator.ResolveAsync(Ws, RunId, "rec:" + result.RequestId, outcome, cts.Token, "decision-1");
         Assert.AreEqual(0, retry, "相同决策身份 + 相同 outcome 重试 → 幂等成功。");
 
         var record = await store.GetAsync("rec:" + result.RequestId, cts.Token);
@@ -337,10 +337,10 @@ public sealed class R29H_ToolReconciliationTests
         await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
 
         var occurred = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-1" };
-        Assert.AreEqual(0, await coordinator.ResolveAsync("rec:" + result.RequestId, occurred, cts.Token, "decision-1"));
+        Assert.AreEqual(0, await coordinator.ResolveAsync(Ws, RunId, "rec:" + result.RequestId, occurred, cts.Token, "decision-1"));
 
         var opposite = new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "确认未发生" };
-        var code = await coordinator.ResolveAsync("rec:" + result.RequestId, opposite, cts.Token, "decision-1");
+        var code = await coordinator.ResolveAsync(Ws, RunId, "rec:" + result.RequestId, opposite, cts.Token, "decision-1");
         Assert.AreEqual(4, code, "相同决策身份 + 相反 outcome → 决策冲突（4）。");
 
         var record = await store.GetAsync("rec:" + result.RequestId, cts.Token);
@@ -371,7 +371,7 @@ public sealed class R29H_ToolReconciliationTests
 
         // 人工/自动裁决：外部系统确认转账已发生
         var code = await coordinator.ResolveAsync(
-            "rec:" + result.RequestId,
+            Ws, RunId, "rec:" + result.RequestId,
             new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" },
             cts.Token);
         Assert.AreEqual(0, code);
@@ -412,7 +412,7 @@ public sealed class R29H_ToolReconciliationTests
         await store.CreateAsync(BuildRecord("rec:" + result.RequestId, result.RequestId, "bank-transfer", result), cts.Token);
 
         var code = await coordinator.ResolveAsync(
-            "rec:" + result.RequestId,
+            Ws, RunId, "rec:" + result.RequestId,
             new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "外部系统确认转账未发生" },
             cts.Token);
         Assert.AreEqual(0, code);
@@ -555,7 +555,7 @@ public sealed class R29H_ToolReconciliationTests
             coordinator, store, handlers: null, kernelHost: null, runStore,
             new ContextCoreRuntimeOptions(), NullLogger<ToolReconciliationWorker>.Instance);
 
-        var code = await worker.ResolveAsync("rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token);
+        var code = await worker.ResolveAsync(Ws, run.RunId, "rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token);
         Assert.AreEqual(0, code);
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync("rec:" + result.RequestId, cts.Token))!.Status);
         Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State);
@@ -617,7 +617,7 @@ public sealed class R29H_ToolReconciliationTests
             "存在未裁决对账记录 → Run 不得进入 Completed。");
 
         // 对账记录已创建（Pending + 声明 Handler + 外部操作 ID）
-        var records = await reconciliationStore.ListByRunAsync(run.RunId, cts.Token);
+        var records = await reconciliationStore.ListByRunAsync(run.WorkspaceId, run.RunId, cts.Token);
         Assert.AreEqual(1, records.Count, "模糊态 Tool 应创建一条对账记录。");
         var record = records[0];
         Assert.AreEqual(ToolReconciliationStatus.Pending, record.Status);
@@ -691,12 +691,12 @@ public sealed class R29H_ToolReconciliationTests
         var parked = await runStore.GetAsync(run.WorkspaceId, run.RunId);
         Assert.AreEqual(AgentRunState.AwaitingReconciliation, parked!.State, "阶段 1 应停车在 AwaitingReconciliation。");
 
-        var records = await reconciliationStore.ListByRunAsync(run.RunId, cts.Token);
+        var records = await reconciliationStore.ListByRunAsync(run.WorkspaceId, run.RunId, cts.Token);
         Assert.AreEqual(1, records.Count);
 
         // 阶段 2：裁决"外部副作用已发生"（模拟 Worker/人工 resolve 端点）
         var code = await coordinator.ResolveAsync(
-            records[0].ReconciliationId,
+            run.WorkspaceId, run.RunId, records[0].ReconciliationId,
             new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" },
             cts.Token);
         Assert.AreEqual(0, code);
@@ -787,12 +787,12 @@ public sealed class R29H_ToolReconciliationTests
         var parked = await runStore.GetAsync(run.WorkspaceId, run.RunId);
         Assert.AreEqual(AgentRunState.AwaitingReconciliation, parked!.State);
 
-        var records = await reconciliationStore.ListByRunAsync(run.RunId, cts.Token);
+        var records = await reconciliationStore.ListByRunAsync(run.WorkspaceId, run.RunId, cts.Token);
         Assert.AreEqual(1, records.Count);
 
         // 裁决：外部系统确认转账未发生 → Rejected（禁止重放）
         var code = await coordinator.ResolveAsync(
-            records[0].ReconciliationId,
+            run.WorkspaceId, run.RunId, records[0].ReconciliationId,
             new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "外部系统确认转账未发生" },
             cts.Token);
         Assert.AreEqual(0, code);

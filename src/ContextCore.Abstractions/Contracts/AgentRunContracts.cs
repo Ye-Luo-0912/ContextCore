@@ -1586,6 +1586,117 @@ public interface IAgentRunStore
 }
 
 /// <summary>
+/// 原子准入的配额预留请求（配额启用时随 Run 创建一并提交）。
+/// </summary>
+/// <remarks>
+/// 由创建端点从 <c>SecurityOptions.Quota</c> 解析（workspace 覆盖或默认上限），
+/// 随 <see cref="IPersistentAgentRunStore.AdmitRunAtomicallyAsync"/> 传入存储层，
+/// 让配额预留、容量判定与 Run 创建落在同一数据库事务内。
+/// </remarks>
+public sealed record QuotaAdmissionRequest
+{
+    /// <summary>本 Run 预留的 token 数（来自 Run 的 CostBudget.MaxTokens）。</summary>
+    public long Tokens { get; init; }
+
+    /// <summary>本 Run 预留的费用（美元，来自 Run 的 CostBudget.MaxCostUsd）。</summary>
+    public double CostUsd { get; init; }
+
+    /// <summary>workspace 周期内 token 上限（0 = 无限制）。</summary>
+    public long MaxTokens { get; init; }
+
+    /// <summary>workspace 周期内费用上限（美元，0 = 无限制）。</summary>
+    public double MaxCostUsd { get; init; }
+
+    /// <summary>配额周期长度（秒）。</summary>
+    public long PeriodSeconds { get; init; }
+}
+
+/// <summary>原子准入（配额预留 + Run 创建 + 状态推进）的结果。</summary>
+public sealed record AgentRunAdmitResult
+{
+    /// <summary>是否新创建（true = 本次插入；false = 幂等重放命中既有 Run）。</summary>
+    public required bool Created { get; init; }
+
+    /// <summary>是否命中既有 Run（幂等重放：同一 run_id 或 idempotency_key）。</summary>
+    public required bool WasExisting { get; init; }
+
+    /// <summary>准入后的 Run（新创建为 Queued；配额拒绝为 AdmissionRejected；重放为既有状态）。</summary>
+    public required AgentRun Run { get; init; }
+
+    /// <summary>是否因配额不足被拒绝（Run 已推进 AdmissionRejected 终态，审计保留）。</summary>
+    public bool QuotaDenied { get; init; }
+
+    /// <summary>配额拒绝原因（QuotaDenied=true 时填充）。</summary>
+    public string? QuotaFailureReason { get; init; }
+}
+
+/// <summary>Run 终态结算 outbox 条目（结算 worker 领取的最小单元）。</summary>
+public sealed record TerminalSettlementEntry
+{
+    /// <summary>outbox 行 ID。</summary>
+    public required long OutboxId { get; init; }
+
+    /// <summary>Workspace ID。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>Run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>预留 ID（= runId）。</summary>
+    public required string ReservationId { get; init; }
+
+    /// <summary>触发结算的终态。</summary>
+    public required AgentRunState TerminalState { get; init; }
+
+    /// <summary>领取时写入的租约 token（结算完成后回传 CAS 标记）。</summary>
+    public required string LeaseToken { get; init; }
+}
+
+/// <summary>
+/// Run 终态结算 outbox 持久化抽象（Postgres 实现）。
+/// 所有终态（Completed / Failed / Cancelled / LeaseLost / DeadLettered / AdmissionRejected）
+/// 统一经 outbox 由结算 worker 执行 Actualize 或 Release，保证 exactly-once。
+/// </summary>
+public interface ITerminalRunSettlementStore
+{
+    /// <summary>
+    /// 领取一批待结算条目（FOR UPDATE SKIP LOCKED + 租约）：
+    /// 待结算（status=0）或结算中但租约已过期（worker 崩溃）的条目可被领取，
+    /// 领取后 status=结算中 + lease_token / lease_expires_at（防双结算）。
+    /// </summary>
+    /// <param name="limit">本批次最多领取数。</param>
+    /// <param name="owner">领取者标识（节点实例）。</param>
+    /// <param name="leaseDuration">租约时长。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>领取的条目列表（含 lease token）。</returns>
+    ValueTask<IReadOnlyList<TerminalSettlementEntry>> ClaimBatchAsync(
+        int limit,
+        string owner,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 标记条目已结算（CAS：仅持有租约者可标记；0 行 = 租约已被抢占，调用方应放弃）。
+    /// </summary>
+    ValueTask<bool> MarkProcessedAsync(
+        long outboxId,
+        string leaseToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 记录结算失败（CAS：仅持有租约者可记录；租约保持至过期，之后可被重新领取重试）。
+    /// </summary>
+    ValueTask<bool> MarkFailedAsync(
+        long outboxId,
+        string leaseToken,
+        string errorMessage,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>把尝试耗尽的结算中条目转死信（不再重试，供运维排查）。</summary>
+    ValueTask<int> DeadLetterExhaustedAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// 持久化 Agent Run Store 标记接口（复用 IPersistentAgentCheckpointStore 模式）。
 /// </summary>
 /// <remarks>
@@ -1594,6 +1705,25 @@ public interface IAgentRunStore
 /// </remarks>
 public interface IPersistentAgentRunStore : IAgentRunStore
 {
+    /// <summary>
+    /// 原子准入：配额预留 + Run 创建 + 状态推进同一数据库事务（持久化路径的创建入口，
+    /// 替代「创建 → 预留 → 推进」三步调用，消除预留与创建之间的不一致窗口）。
+    /// 事务内语义：
+    /// - 新 Run 以传入状态（调用方应传 PendingAdmission）插入，幂等冲突返回 WasExisting；
+    /// - <paramref name="quotaAdmission"/> 非 null（配额启用）时预留：容量不足 →
+    ///   Run 推进 AdmissionRejected（终态，审计保留）并返回 QuotaDenied；
+    ///   容量充足 → 写入预留并推进 Queued；
+    /// - <paramref name="quotaAdmission"/> 为 null（配额未启用）时直接推进 Queued。
+    /// </summary>
+    /// <param name="run">待创建的 Run（State 应为 PendingAdmission）。</param>
+    /// <param name="quotaAdmission">配额预留请求；配额未启用时传 null。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>准入结果（Created / WasExisting / QuotaDenied）。</returns>
+    ValueTask<AgentRunAdmitResult> AdmitRunAtomicallyAsync(
+        AgentRun run,
+        QuotaAdmissionRequest? quotaAdmission,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置与 Scheduler Claim（P0-8）。
     /// 单条 SQL 事务内完成，真正写入 claim 租约（不再只打 UpdatedAt 补丁）：
@@ -1662,6 +1792,32 @@ public interface IPersistentAgentRunStore : IAgentRunStore
         string workspaceId,
         string runId,
         string claimToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 消费 Scheduler Claim（执行交接）：Claimed → Running，校验 DB 中 claim_token /
+    /// claim_owner 与队列项一致且 claim 未过期，成功后清空 claim 字段。
+    /// 防止"Claim 过期后他节点重新领取，旧节点仍消费旧 Claim"的仲裁失效竞态。
+    /// 执行租约（executionLeaseToken / executionFencingToken）同时提供时校验
+    /// agent_run_leases 中仍由当前实例持有（语义同 <see cref="TransitionStateAsync"/>）。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="expectedClaimToken">队列项携带的 claim token（必须与 DB 一致才能消费）。</param>
+    /// <param name="expectedClaimOwner">队列项携带的 claim owner（必须与 DB 一致才能消费）。</param>
+    /// <param name="executionLeaseToken">执行租约 token（无租约路径传 null）。</param>
+    /// <param name="executionFencingToken">执行租约 fencing token（无租约路径传 null）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>消费成功后的 Run（状态=Running，claim 字段已清空）。</returns>
+    /// <exception cref="InvalidOperationException">claim 不匹配 / 已过期 / 状态非 Claimed /
+    /// 执行租约失效（与 <see cref="TransitionStateAsync"/> 的 CAS 失败语义一致）。</exception>
+    ValueTask<AgentRun> ConsumeClaimAsync(
+        string workspaceId,
+        string runId,
+        string? expectedClaimToken,
+        string? expectedClaimOwner,
+        string? executionLeaseToken,
+        long? executionFencingToken,
         CancellationToken cancellationToken = default);
 
     /// <summary>

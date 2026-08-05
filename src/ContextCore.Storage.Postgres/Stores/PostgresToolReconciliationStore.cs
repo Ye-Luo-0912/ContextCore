@@ -115,7 +115,7 @@ ON CONFLICT (workspace_id, run_id, request_id) DO NOTHING;
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string runId, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListByRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
     {
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -123,9 +123,10 @@ ON CONFLICT (workspace_id, run_id, request_id) DO NOTHING;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 SELECT {ReadColumns} FROM {Table("tool_reconciliation_entries")}
-WHERE run_id = @run_id
+WHERE workspace_id = @workspace_id AND run_id = @run_id
 ORDER BY created_at ASC;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         return await ReadManyAsync(command, cancellationToken).ConfigureAwait(false);
     }
@@ -204,7 +205,7 @@ LIMIT @limit OFFSET @offset;
     }
 
     /// <inheritdoc />
-    public async ValueTask<bool> HasUnresolvedForRunAsync(string runId, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> HasUnresolvedForRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
     {
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -213,10 +214,11 @@ LIMIT @limit OFFSET @offset;
         command.CommandText = $"""
 SELECT EXISTS (
     SELECT 1 FROM {Table("tool_reconciliation_entries")}
-    WHERE run_id = @run_id
+    WHERE workspace_id = @workspace_id AND run_id = @run_id
       AND status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running})
 );
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is bool b && b;

@@ -67,7 +67,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
 
                 // 不同 RequestId → 独立记录
                 await store.CreateAsync(BuildRecord("rec-2", "req-2", Deadline: null), default);
-                var all = await store.ListByRunAsync(RunId, default);
+                var all = await store.ListByRunAsync(Ws, RunId, default);
                 Assert.AreEqual(2, all.Count, "两条不同 RequestId 的记录应各自保留。");
             }
         }
@@ -96,13 +96,13 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
             {
                 await store.CreateAsync(BuildRecord("rec-1", "req-1", Deadline: null), default);
 
-                Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, default), "Pending 记录 → 未裁决。");
+                Assert.IsTrue(await store.HasUnresolvedForRunAsync(Ws, RunId, default), "Pending 记录 → 未裁决。");
 
                 var lease = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), default);
                 Assert.IsNotNull(lease, "Pending → Running 首次接管成功。");
                 Assert.IsNull(await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), default), "Running 状态不可重复接管。");
                 Assert.AreEqual(ToolReconciliationStatus.Running, (await store.GetAsync("rec-1", default))!.Status);
-                Assert.IsTrue(await store.HasUnresolvedForRunAsync(RunId, default), "Running 记录仍属未裁决。");
+                Assert.IsTrue(await store.HasUnresolvedForRunAsync(Ws, RunId, default), "Running 记录仍属未裁决。");
 
                 Assert.IsTrue(await store.TryResetToPendingAsync("rec-1", lease!.LeaseToken, null, null, default), "Running → Pending 回退成功。");
                 Assert.IsFalse(await store.TryResetToPendingAsync("rec-1", lease.LeaseToken, null, null, default), "仅 Running 可回退。");
@@ -119,7 +119,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
                 Assert.IsFalse(await store.MarkRejectedAsync(
                     "rec-1", lease2.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = false }, default),
                     "已 Resolved 记录不可再 Rejected。");
-                Assert.IsFalse(await store.HasUnresolvedForRunAsync(RunId, default), "全部终态 → 无未裁决记录。");
+                Assert.IsFalse(await store.HasUnresolvedForRunAsync(Ws, RunId, default), "全部终态 → 无未裁决记录。");
 
                 var resolved = await store.GetAsync("rec-1", default);
                 Assert.IsNotNull(resolved, "应能取回已裁决记录。");
