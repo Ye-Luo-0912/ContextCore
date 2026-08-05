@@ -71,17 +71,20 @@ jobs:
             find "$d" -type d -empty -delete
           done < <(find . -type d -name obj -print0)
 
+      # 上传时 obj 资产必须保持 `**/obj/**` 全库范围：upload-artifact 会按所有匹配
+      # 文件的公共根目录裁剪存储路径。若把 obj 收窄到 tests/**，公共根变为 tests/，
+      # bin 文件也会被剥掉 tests/ 前缀，下游 --no-build 将找不到测试程序集。
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-output
           path: |
             tests/**/bin/
-            tests/**/obj/project.assets.json
-            tests/**/obj/project.nuget.cache
-            tests/**/obj/*.nuget.dgspec.json
-            tests/**/obj/*.nuget.g.props
-            tests/**/obj/*.nuget.g.targets
+            **/obj/project.assets.json
+            **/obj/project.nuget.cache
+            **/obj/*.nuget.dgspec.json
+            **/obj/*.nuget.g.props
+            **/obj/*.nuget.g.targets
           retention-days: 1
 
   unit:
