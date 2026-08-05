@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace ContextCore.Abstractions;
 
@@ -509,7 +510,13 @@ public enum ToolReconciliationStatus : byte
     Resolved = 2,
 
     /// <summary>已拒绝：外部副作用确认未发生或人工拒绝（journal 已提交 void 结果，禁止重放）。</summary>
-    Rejected = 3
+    Rejected = 3,
+
+    /// <summary>
+    /// 已损坏：Journal 状态非法（Prepared / 缺失）或与既有已提交结果不一致（指纹冲突），
+    /// 无法安全裁决。不视为 Resolved，需人工修复（ControlRoom 可见），禁止自动重放。
+    /// </summary>
+    Corrupted = 4
 }
 
 /// <summary>
@@ -660,7 +667,13 @@ public enum ToolReconciliationResolutionStatus : byte
     /// 决策冲突：相同 DecisionRequestId 重试但携带相反 outcome——
     /// 首次裁决已提交（Resolved/Rejected），重试决策与既有真相矛盾，客户端必须撤销或更换决策身份。
     /// </summary>
-    DecisionConflict = 5
+    DecisionConflict = 5,
+
+    /// <summary>
+    /// 记录损坏：Journal 缺失 / Prepared，或 Journal 已提交但结果指纹与本次不一致。
+    /// 原子裁决拒绝执行（回滚），记录置 <see cref="ToolReconciliationStatus.Corrupted"/>，需人工修复。
+    /// </summary>
+    Corrupted = 6
 }
 
 /// <summary>
@@ -836,8 +849,10 @@ public interface IToolReconciliationStore
     /// <summary>
     /// 原子裁决。单事务内完成：锁定对账记录 → 验证唯一裁决者
     /// （lease_token 匹配 + 未过期 + fencing_token = expectedReconciliationVersion）→
-    /// journal Reconciling → Committed → Durable Result UPSERT → 记录终态 →
-    /// 可选 Run 状态推进（targetRunState 非空且 Run 处于停车状态时）→ 审计事件追加。
+    /// 锁定 Journal 行并按状态分支（仅 DispatchingIntent/Dispatched/Reconciling 可推进 Committed；
+    /// Committed/ResultDelivered 幂等判定指纹，Prepared/缺失 → Corrupted）→
+    /// Durable Result UPSERT（含指纹）→ 记录终态 → Run 状态推进
+    /// （Run 处于停车状态且无其他未决记录时 → Queued，同一事务）→ 审计事件追加。
     /// 任意一步失败整体回滚；返回 <see cref="ToolReconciliationResolution"/> 描述结果。
     /// </summary>
     /// <param name="decisionRequestId">
@@ -853,9 +868,20 @@ public interface IToolReconciliationStore
         long expectedReconciliationVersion,
         ToolReconciliationOutcome outcome,
         DurableToolResult durableResult,
-        AgentRunState? targetRunState,
         CancellationToken cancellationToken = default,
         string? decisionRequestId = null);
+
+    /// <summary>
+    /// 补偿扫描：把"永久停车"的 Run 恢复为 Queued。
+    /// 条件：Run 状态 ∈ {AwaitingReconciliation, ReconciliationRunning} 且
+    /// 该 Run 不存在任何未决对账记录（Pending/Running）。
+    /// 用于封死裁决事务提交后、进程内重新入队前崩溃导致的停车窗口
+    /// （原子裁决现已在同一事务内推进 Run，本方法兜底历史遗留与异常路径）。
+    /// </summary>
+    /// <param name="limit">单次最多恢复的 Run 数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>实际恢复为 Queued 的 Run 数。</returns>
+    ValueTask<int> RecoverParkedRunsAsync(int limit, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1138,6 +1164,28 @@ public sealed record DurableToolResult
 
     /// <summary>执行耗时（毫秒）。</summary>
     public required double DurationMs { get; init; }
+
+    /// <summary>
+    /// 计算 Durable 结果的规范指纹（SHA-256 小写 hex）。
+    /// 按记录属性声明顺序序列化（System.Text.Json 稳定输出），用于对账幂等判定：
+    /// Journal 已 Committed/ResultDelivered 时比较指纹，完全相同才允许幂等成功，禁止覆盖。
+    /// </summary>
+    /// <returns>结果规范 JSON 的 SHA-256 摘要（小写 hex）。</returns>
+    public string ComputeFingerprint()
+        => ComputeResultFingerprint(this);
+
+    /// <summary>
+    /// 计算 <see cref="DurableToolResult"/> 的规范指纹（SHA-256 小写 hex）。
+    /// 供存储层对既有结果与新裁决结果做内容等价比较。
+    /// </summary>
+    /// <param name="result">待计算的结果。</param>
+    /// <returns>规范 JSON 的 SHA-256 摘要（小写 hex）。</returns>
+    public static string ComputeResultFingerprint(DurableToolResult result)
+    {
+        var json = JsonSerializer.Serialize(result);
+        var bytes = Encoding.UTF8.GetBytes(json);
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
 }
 
 /// <summary>

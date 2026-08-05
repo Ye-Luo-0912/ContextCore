@@ -257,7 +257,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var durableResult = BuildDurableResult(record, outcome);
         var resolution = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, record.RequestId, lease!.LeaseToken, lease.FencingToken, outcome, durableResult,
-            AgentRunState.ContextBuilding, cts.Token);
+            cts.Token);
 
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status);
         Assert.AreEqual(ToolReconciliationStatus.Resolved, resolution.Record!.Status);
@@ -276,9 +276,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(ToolReconciliationStatus.Resolved, stored!.Status);
         Assert.IsNull(stored.LeaseToken, "终态清除租约。");
 
-        // 4. Run 状态推进（AwaitingReconciliation → ContextBuilding）
+        // 4. Run 状态推进（停车态且无其他未决记录 → Queued，同一事务，杜绝崩溃后永久停车）
         var advanced = await runStore.GetAsync(Ws, RunId);
-        Assert.AreEqual(AgentRunState.ContextBuilding, advanced!.State, "Run 从停车态推进到目标态。");
+        Assert.AreEqual(AgentRunState.Queued, advanced!.State, "Run 从停车态原子推进到 Queued。");
 
         // 5. 审计事件追加 + 哈希链完整
         var events = await eventStore.ReadAsync(Ws, RunId);
@@ -306,7 +306,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             Ws, RunId, record.RequestId, "wrong-token", lease!.FencingToken,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
             BuildDurableResult(record, new ToolReconciliationOutcome { SideEffectOccurred = true }),
-            null, cts.Token);
+            cts.Token);
 
         Assert.AreEqual(ToolReconciliationResolutionStatus.ArbitrationLost, resolution.Status);
         Assert.AreEqual(ToolDispatchState.Dispatched, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State,
@@ -337,7 +337,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             Ws, RunId, "req-1", lease2.LeaseToken, expectedReconciliationVersion: 1,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
             BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
-            null, cts.Token);
+            cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.VersionMismatch, resolution.Status);
 
         // 用当前版本（2）提交 → 成功
@@ -345,7 +345,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             Ws, RunId, "req-1", lease2.LeaseToken, lease2.FencingToken,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
             BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
-            null, cts.Token);
+            cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, ok.Status);
     }
 
@@ -363,12 +363,12 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-first" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token);
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
         var second = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token);
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.AlreadyTerminal, second.Status);
 
         var record = await store.GetAsync("rec-1", cts.Token);
@@ -389,14 +389,14 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
         // 相同决策身份 + 相同 outcome 重试（租约已清除）→ 幂等成功，不覆盖首次真相
         var retry = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, retry.Status, "相同决策身份 + 相同 outcome → 幂等成功。");
         Assert.AreEqual("txn-777", (await store.GetAsync("rec-1", cts.Token))!.Result, "重试不覆盖首次裁决内容。");
@@ -416,7 +416,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var occurred = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, occurred,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, occurred), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, occurred), cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
@@ -424,7 +424,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var opposite = new ToolReconciliationOutcome { SideEffectOccurred = false, Error = "确认未发生" };
         var conflict = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, opposite,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, opposite), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, opposite), cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.DecisionConflict, conflict.Status, "相同决策身份 + 相反 outcome → 决策冲突。");
         Assert.AreEqual(true, (await store.GetAsync("rec-1", cts.Token))!.SideEffectOccurred, "首次裁决真相不被相反重试覆盖。");
@@ -444,13 +444,13 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-777" };
         var first = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease!.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), cts.Token,
             decisionRequestId: "decision-1");
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, first.Status);
 
         var otherDecision = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, "req-1", lease.LeaseToken, lease.FencingToken, outcome,
-            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), null, cts.Token,
+            BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, outcome), cts.Token,
             decisionRequestId: "decision-2");
         Assert.AreEqual(ToolReconciliationResolutionStatus.AlreadyTerminal, otherDecision.Status,
             "不同决策身份 → 视为新的重复提交，拒绝（AlreadyTerminal）。");
@@ -469,9 +469,259 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             "ws-other", RunId, "req-1", "token", 1,
             new ToolReconciliationOutcome { SideEffectOccurred = true },
             BuildDurableResult((await store.GetAsync("rec-1", cts.Token))!, new ToolReconciliationOutcome { SideEffectOccurred = true }),
-            null, cts.Token);
+            cts.Token);
         Assert.AreEqual(ToolReconciliationResolutionStatus.NotFound, resolution.Status,
             "跨 Workspace 的租户键不匹配 → NotFound（P0-5 完整租户键）。");
+    }
+
+    // ── 2b. Journal 状态约束────────────────────────────────────────────
+
+    /// <summary>验证：Journal 为 Prepared（外部副作用从未分派）→ 记录标记损坏（Corrupted），不写结果、不终态化、不推进 Journal。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_JournalPrepared_MarksCorrupted()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var resultStore = new InMemoryDurableToolResultStore();
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await journal.PrepareAsync(new ToolDispatchJournalEntry
+        {
+            RequestId = "req-prepared",
+            ToolName = "bank-transfer",
+            State = ToolDispatchState.Prepared,
+            UpdatedAt = DateTimeOffset.UtcNow
+        }, cts.Token);
+        var record = await store.CreateAsync(BuildRecord("rec-prepared", "req-prepared", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-prepared" };
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-prepared", lease!.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(record, outcome), cts.Token);
+
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Corrupted, resolution.Status, "Prepared Journal 无法裁决 → Corrupted。");
+        Assert.AreEqual(ToolReconciliationStatus.Corrupted, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
+            "记录标记损坏，不标为 Resolved。");
+        Assert.IsNull(await resultStore.GetByRequestIdAsync("req-prepared", cts.Token), "损坏路径不写 Durable Result。");
+        Assert.AreEqual(ToolDispatchState.Prepared, await journal.GetStateAsync(Ws, RunId, "req-prepared", cts.Token),
+            "损坏路径不推进 Journal。");
+    }
+
+    /// <summary>验证：Journal 行缺失（已注入 journal 但无对应条目）→ 记录标记损坏。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_JournalMissing_MarksCorrupted()
+    {
+        var journal = new InMemoryToolDispatchJournal();
+        var resultStore = new InMemoryDurableToolResultStore();
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var record = await store.CreateAsync(BuildRecord("rec-missing", "req-missing", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-missing" };
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, "req-missing", lease!.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(record, outcome), cts.Token);
+
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Corrupted, resolution.Status, "缺失 Journal 行无法裁决 → Corrupted。");
+        Assert.AreEqual(ToolReconciliationStatus.Corrupted, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
+            "记录标记损坏，不标为 Resolved。");
+        Assert.IsNull(await resultStore.GetByRequestIdAsync("req-missing", cts.Token), "损坏路径不写 Durable Result。");
+    }
+
+    /// <summary>验证：Journal 已 Committed 且指纹一致 → 幂等成功，复用既有已交付结果、绝不覆盖。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_JournalCommitted_SameFingerprint_IdempotentNoOverwrite()
+    {
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, resultStore) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-committed"), 0, cts.Token);
+        Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState);
+
+        var record = await store.CreateAsync(BuildRecord("rec-committed", result.RequestId, "bank-transfer", result), cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-committed" };
+        var durableResult = BuildDurableResult(record, outcome);
+        // 既有结果已交付（Journal Committed + 结果落库），对账记录仍 Running。
+        await journal.MarkCommittedWithResultAsync(result.RequestId, durableResult, cts.Token);
+        await resultStore.SaveByRequestIdAsync(durableResult, cts.Token);
+
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, result.RequestId, lease!.LeaseToken, lease.FencingToken, outcome,
+            durableResult, cts.Token);
+
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status, "指纹一致 → 幂等成功。");
+        Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
+        Assert.AreEqual(ToolDispatchState.Committed, await journal.GetStateAsync(Ws, RunId, result.RequestId, cts.Token),
+            "Journal 保持 Committed。");
+        Assert.AreEqual("txn-committed", (await resultStore.GetByRequestIdAsync(result.RequestId, cts.Token))!.Result,
+            "既有已交付结果内容保持不变。");
+    }
+
+    /// <summary>验证：Journal 已 Committed 但指纹不一致 → 拒绝覆盖，记录标记损坏、既有结果保留。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_JournalCommitted_DifferentFingerprint_RejectedNoOverwrite()
+    {
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, resultStore) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-diff"), 0, cts.Token);
+
+        var record = await store.CreateAsync(BuildRecord("rec-diff", result.RequestId, "bank-transfer", result), cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var deliveredOutcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-original" };
+        var deliveredResult = BuildDurableResult(record, deliveredOutcome);
+        await journal.MarkCommittedWithResultAsync(result.RequestId, deliveredResult, cts.Token);
+        await resultStore.SaveByRequestIdAsync(deliveredResult, cts.Token);
+
+        var conflictingOutcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-overwrite-attempt" };
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, result.RequestId, lease!.LeaseToken, lease.FencingToken, conflictingOutcome,
+            BuildDurableResult(record, conflictingOutcome), cts.Token);
+
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Corrupted, resolution.Status, "指纹不一致 → 拒绝，标记损坏。");
+        Assert.AreEqual(ToolReconciliationStatus.Corrupted, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
+            "记录不标为 Resolved。");
+        Assert.AreEqual("txn-original", (await resultStore.GetByRequestIdAsync(result.RequestId, cts.Token))!.Result,
+            "既有已交付结果不被覆盖。");
+        Assert.AreEqual(ToolDispatchState.Committed, await journal.GetStateAsync(Ws, RunId, result.RequestId, cts.Token),
+            "Journal 保持 Committed。");
+    }
+
+    /// <summary>验证：Journal 已 ResultDelivered 且指纹一致 → 幂等成功，已送达状态不回退、结果不覆盖。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_JournalResultDelivered_SameFingerprint_Idempotent()
+    {
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, resultStore) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-delivered"), 0, cts.Token);
+
+        var record = await store.CreateAsync(BuildRecord("rec-delivered", result.RequestId, "bank-transfer", result), cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-delivered" };
+        var durableResult = BuildDurableResult(record, outcome);
+        await journal.MarkCommittedWithResultAsync(result.RequestId, durableResult, cts.Token);
+        await journal.MarkResultDeliveredAsync(result.RequestId, cts.Token);
+        await resultStore.SaveByRequestIdAsync(durableResult, cts.Token);
+
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, result.RequestId, lease!.LeaseToken, lease.FencingToken, outcome,
+            durableResult, cts.Token);
+
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status, "指纹一致 → 幂等成功。");
+        Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
+        Assert.AreEqual(ToolDispatchState.ResultDelivered, await journal.GetStateAsync(Ws, RunId, result.RequestId, cts.Token),
+            "已送达状态不被回退。");
+    }
+
+    // ── 2c. Run 状态推进 + 补偿扫描─────────────────────────────────────
+
+    /// <summary>验证：Run 停车且无其他未决对账记录 → 原子裁决后 Run 推进为 Queued（同一事务，杜绝崩溃后永久停车）。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_RunParked_NoOtherUnresolved_AdvancesToQueued()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var run = BuildRun("原子推进 Queued 验证");
+        await runStore.CreateAsync(run);
+        await runStore.TransitionStateAsync(Ws, run.RunId, AgentRunState.Created, AgentRunState.AwaitingReconciliation, default);
+
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, resultStore) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore, runStore: runStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-queued"), 0, cts.Token);
+        var record = await store.CreateAsync(BuildRecord("rec-queued", result.RequestId, "bank-transfer", result), cts.Token);
+        var lease = await store.TryBeginAsync(record.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-queued" };
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, result.RequestId, lease!.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(record, outcome), cts.Token);
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status);
+
+        var advanced = await runStore.GetAsync(Ws, RunId);
+        Assert.AreEqual(AgentRunState.Queued, advanced!.State, "裁决后无其他未决 → Run 原子推进为 Queued。");
+    }
+
+    /// <summary>验证：Run 停车但仍有其他未决对账记录 → 保持停车（不提前恢复）。</summary>
+    [TestMethod]
+    public async Task AtomicResolve_RunParked_OtherUnresolved_StaysParked()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var run = BuildRun("保持停车验证");
+        await runStore.CreateAsync(run);
+        await runStore.TransitionStateAsync(Ws, run.RunId, AgentRunState.Created, AgentRunState.AwaitingReconciliation, default);
+
+        var handler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, resultStore) = CreateExecutor(handler);
+        var store = new InMemoryToolReconciliationStore(journal: journal, resultStore: resultStore, runStore: runStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var resultA = await executor.ExecuteAsync(RunId, Ws, BuildToolCall("bank-transfer", "arg-park-a"), 0, cts.Token);
+        var recordA = await store.CreateAsync(BuildRecord("rec-park-a", resultA.RequestId, "bank-transfer", resultA), cts.Token);
+        await store.CreateAsync(BuildRecord("rec-park-b", "req-park-b", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync(recordA.ReconciliationId, "worker-a", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+
+        var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-park-a" };
+        var resolution = await store.ResolveReconciliationAtomicallyAsync(
+            Ws, RunId, resultA.RequestId, lease!.LeaseToken, lease.FencingToken, outcome,
+            BuildDurableResult(recordA, outcome), cts.Token);
+        Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status);
+
+        var parked = await runStore.GetAsync(Ws, RunId);
+        Assert.AreEqual(AgentRunState.AwaitingReconciliation, parked!.State, "仍有未决记录 → Run 保持停车。");
+    }
+
+    /// <summary>验证：补偿扫描只恢复"停车且无未决记录"的 Run；有未决或非停车不动。</summary>
+    [TestMethod]
+    public async Task RecoverParkedRuns_OnlyRestoresParkedWithoutUnresolved()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var run1 = BuildRun("无未决停车", "run-parked-clean");
+        await runStore.CreateAsync(run1);
+        await runStore.TransitionStateAsync(Ws, run1.RunId, AgentRunState.Created, AgentRunState.AwaitingReconciliation, default);
+
+        var run2 = BuildRun("有未决停车", "run-parked-pending");
+        await runStore.CreateAsync(run2);
+        await runStore.TransitionStateAsync(Ws, run2.RunId, AgentRunState.Created, AgentRunState.AwaitingReconciliation, default);
+
+        var run3 = BuildRun("非停车", "run-not-parked");
+        await runStore.CreateAsync(run3);
+        await runStore.TransitionStateAsync(Ws, run3.RunId, AgentRunState.Created, AgentRunState.Queued, default);
+
+        var store = new InMemoryToolReconciliationStore(runStore: runStore);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-r1", "req-r1", "bank-transfer", runId: run1.RunId) with { Status = ToolReconciliationStatus.Resolved }, cts.Token);
+        await store.CreateAsync(BuildRecord("rec-r2", "req-r2", "bank-transfer", runId: run2.RunId), cts.Token);
+
+        var recovered = await store.RecoverParkedRunsAsync(10, cts.Token);
+        Assert.AreEqual(1, recovered, "只恢复 1 个（停车且无未决）。");
+
+        Assert.AreEqual(AgentRunState.Queued, (await runStore.GetAsync(Ws, run1.RunId))!.State, "run1 恢复为 Queued。");
+        Assert.AreEqual(AgentRunState.AwaitingReconciliation, (await runStore.GetAsync(Ws, run2.RunId))!.State, "run2 有未决 → 保持停车。");
+        Assert.AreEqual(AgentRunState.Queued, (await runStore.GetAsync(Ws, run3.RunId))!.State, "run3 非停车 → 不受影响。");
     }
 
     /// <summary>验证：CreateAsync 按 (WorkspaceId, RunId, RequestId) 幂等——跨 Workspace 同 RequestId 各自独立。</summary>
@@ -551,9 +801,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
 
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
-    private static AgentRun BuildRun(string task) => new()
+    private static AgentRun BuildRun(string task, string runId = RunId) => new()
     {
-        RunId = RunId,
+        RunId = runId,
         WorkspaceId = Ws,
         SessionId = "session-recon-lease",
         Task = task,

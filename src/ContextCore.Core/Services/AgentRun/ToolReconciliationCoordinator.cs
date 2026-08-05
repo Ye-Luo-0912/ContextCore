@@ -128,7 +128,8 @@ public sealed class ToolReconciliationCoordinator
     /// <summary>
     /// 原子提交对账真相（P0-3）：单事务完成 journal 状态推进（DispatchingIntent/Dispatched →
     /// Reconciling → Committed + 对账结果）、Durable Result UPSERT、记录终态（Resolved/Rejected）、
-    /// 可选 Run 状态推进与审计事件追加——任意一步失败整体回滚，绝不出现撕裂。
+    /// Run 状态推进（Run 停车且无其他未决记录时 → Queued，同一事务，杜绝崩溃后永久停车）与
+    /// 审计事件追加——任意一步失败整体回滚，绝不出现撕裂。
     /// 调用方必须先持有有效租约（P0-5 唯一裁决者）。
     /// </summary>
     public async Task<int> CommitOutcomeAsync(
@@ -163,7 +164,6 @@ public sealed class ToolReconciliationCoordinator
             lease.FencingToken,
             outcome,
             durableResult,
-            targetRunState: null,
             ct,
             decisionRequestId).ConfigureAwait(false);
 

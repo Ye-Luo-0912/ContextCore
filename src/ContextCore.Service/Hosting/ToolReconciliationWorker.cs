@@ -106,6 +106,16 @@ public sealed class ToolReconciliationWorker : BackgroundService
                     _logger.LogError(ex, "ToolReconciliationWorker 轮询循环异常（不中断后续轮询）。");
                 }
 
+                // 补偿扫描：恢复"停车且无未决对账记录"的 Run（兜底原子推进未覆盖的历史/异常路径）。
+                try
+                {
+                    await RecoverParkedRunsAsync(stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 try
                 {
                     await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
@@ -210,8 +220,10 @@ public sealed class ToolReconciliationWorker : BackgroundService
     }
 
     /// <summary>
-    /// 裁决完成后若 Run 无未裁决记录：先回退 Run 状态（ReconciliationRunning → AwaitingReconciliation），
-    /// 再重新入队让 Actor 恢复执行。
+    /// 裁决完成后若 Run 无未裁决记录：进程内即时恢复优化。
+    /// 持久化推进已由原子裁决在同一事务内完成（停车状态 → Queued，杜绝崩溃后永久停车）；
+    /// 本方法仅在 Run 仍处于停车状态（历史/异常路径，原子推进未生效）时兜底恢复，
+    /// 并让已 Queued 的 Run 即时入队（执行租约 CAS 保证单实例执行，Durable Claimer 兜底）。
     /// </summary>
     private async Task MaybeRequeueRunAsync(string workspaceId, string runId, CancellationToken ct)
     {
@@ -224,22 +236,47 @@ public sealed class ToolReconciliationWorker : BackgroundService
             return;
         }
 
-        await TransitionRunStateAsync(
-            workspaceId, runId, AgentRunState.ReconciliationRunning, AgentRunState.AwaitingReconciliation, ct).ConfigureAwait(false);
-
         try
         {
             var run = await _runStore.GetAsync(workspaceId, runId, ct).ConfigureAwait(false);
-            if (run is not null)
+            if (run is null)
             {
-                await _kernelHost.StartRunAsync(run, ct).ConfigureAwait(false);
-                _logger.LogInformation(
-                    "ToolReconciliationWorker: Run {RunId} 对账全部完成，重新入队恢复执行。", runId);
+                return;
             }
+            if (run.State is AgentRunState.AwaitingReconciliation or AgentRunState.ReconciliationRunning)
+            {
+                // 原子推进未生效（历史/异常路径）：先回退停车状态再恢复。
+                await TransitionRunStateAsync(
+                    workspaceId, runId, AgentRunState.ReconciliationRunning, AgentRunState.AwaitingReconciliation, ct).ConfigureAwait(false);
+            }
+            await _kernelHost.StartRunAsync(run, ct).ConfigureAwait(false);
+            _logger.LogInformation(
+                "ToolReconciliationWorker: Run {RunId} 对账全部完成，重新入队恢复执行。", runId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ToolReconciliationWorker: Run {RunId} 对账完成后重新入队失败。", runId);
+        }
+    }
+
+    /// <summary>
+    /// 补偿扫描：把"停车且无未决对账记录"的 Run 恢复为 Queued（Durable Claimer 接管）。
+    /// 封死历史遗留与异常路径导致的永久停车窗口。
+    /// </summary>
+    private async Task RecoverParkedRunsAsync(CancellationToken ct)
+    {
+        try
+        {
+            var recovered = await _store.RecoverParkedRunsAsync(100, ct).ConfigureAwait(false);
+            if (recovered > 0)
+            {
+                _logger.LogInformation(
+                    "ToolReconciliationWorker: 补偿扫描恢复 {Count} 个停车 Run 为 Queued。", recovered);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ToolReconciliationWorker: 补偿扫描失败（不中断后续轮询）。");
         }
     }
 

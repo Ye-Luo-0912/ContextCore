@@ -1891,6 +1891,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "tool_call_id")} ON {toolDispatchResults} (tool_call_id);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "idempotency_key")} ON {toolDispatchResults} (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
+-- 7. 结果规范指纹（SHA-256 小写 hex）：对账幂等判定用——
+-- Journal 已 Committed/ResultDelivered 时与既有结果指纹比较，完全相同才允许幂等成功，禁止覆盖。
+ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS result_fingerprint text;
+
 -- Model Artifact Registry 持久化表
 -- model_artifacts: model_artifact_id 主键 — 每个已注册模型工件描述符一行
 -- 反规范化 model_name / model_version / feature_schema_version / calibration_version / engine_kind /

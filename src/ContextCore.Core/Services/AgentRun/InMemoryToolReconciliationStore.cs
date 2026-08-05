@@ -14,7 +14,9 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //   P0-4 崩溃恢复；所有 Resolve/Fail/Renew 校验 lease_token + 未过期）；
 // - RenewLeaseAsync 心跳续租；TryResetToPendingAsync 失败回退（携带 last_error + 退避）；
 // - ResolveReconciliationAtomicallyAsync 锁等价原子裁决：进程内单门串行化
-//   journal 推进 + 结果 UPSERT + 记录终态 + 可选 Run 推进 + 审计事件（P0-3）。
+//   journal 推进（状态分支：Prepared/缺失 → Corrupted；Committed/ResultDelivered →
+//   指纹幂等判定）+ 结果 UPSERT + 记录终态 + Run 推进（停车且无未决 → Queued）
+//   + 审计事件（P0-3）。
 // ===========================================================================
 
 /// <summary>
@@ -353,7 +355,6 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         long expectedReconciliationVersion,
         ToolReconciliationOutcome outcome,
         DurableToolResult durableResult,
-        AgentRunState? targetRunState,
         CancellationToken cancellationToken = default,
         string? decisionRequestId = null)
     {
@@ -401,24 +402,68 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 return new ToolReconciliationResolution { Status = ToolReconciliationResolutionStatus.VersionMismatch };
             }
 
-            // 1. journal 推进（DispatchingIntent/Dispatched → Reconciling → Committed；Reconciling → Committed）。
-            //    Prepared / 缺失 / 已 Committed / ResultDelivered → 跳过 journal 变更（结果仍 UPSERT）。
-            if (_journal is not null)
+            // 1. Journal 状态分支：
+            //    DispatchingIntent/Dispatched/Reconciling → 推进 Committed 并 UPSERT 结果；
+            //    Committed/ResultDelivered → 幂等判定（指纹一致才允许，绝不覆盖）；
+            //    Prepared/行缺失（已注入 journal 时）→ 记录标记损坏（Corrupted），不写结果、不终态化、不推进 Run。
+            //    未注入 journal（测试简化配置）→ 跳过 journal 约束，保持既有行为。
+            ToolDispatchState? journalState = null;
+            var journalParticipates = _journal is not null;
+            if (journalParticipates)
             {
-                var journalState = await _journal.GetStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
-                if (journalState is ToolDispatchState.DispatchingIntent or ToolDispatchState.Dispatched)
-                {
-                    await _journal.BeginReconciliationAsync(requestId, cancellationToken).ConfigureAwait(false);
-                    await _journal.MarkReconciledWithResultAsync(requestId, durableResult, cancellationToken).ConfigureAwait(false);
-                }
-                else if (journalState == ToolDispatchState.Reconciling)
-                {
-                    await _journal.MarkReconciledWithResultAsync(requestId, durableResult, cancellationToken).ConfigureAwait(false);
-                }
+                journalState = await _journal!.GetStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
             }
 
-            // 2. Durable Result UPSERT（与 journal / 记录同一"事务"）。
-            if (_resultStore is not null)
+            var incomingFingerprint = durableResult.ComputeFingerprint();
+            bool writeResult = false;
+            switch (journalState)
+            {
+                case ToolDispatchState.DispatchingIntent:
+                case ToolDispatchState.Dispatched:
+                    await _journal!.BeginReconciliationAsync(requestId, cancellationToken).ConfigureAwait(false);
+                    await _journal.MarkReconciledWithResultAsync(requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                    writeResult = true;
+                    break;
+
+                case ToolDispatchState.Reconciling:
+                    await _journal!.MarkReconciledWithResultAsync(requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                    writeResult = true;
+                    break;
+
+                case ToolDispatchState.Committed:
+                case ToolDispatchState.ResultDelivered:
+                {
+                    var existing = _resultStore is not null
+                        ? await _resultStore.GetByRequestIdAsync(requestId, cancellationToken).ConfigureAwait(false)
+                        : null;
+                    if (existing is null
+                        || !string.Equals(existing.ComputeFingerprint(), incomingFingerprint, StringComparison.Ordinal))
+                    {
+                        var reason = existing is null
+                            ? "Journal 已提交但 Durable Result 缺失，无法幂等确认，记录标记损坏。"
+                            : "Journal 已提交且既有结果指纹与本次裁决不一致，拒绝覆盖，记录标记损坏。";
+                        return MarkCorrupted(record, reason, now);
+                    }
+                    // 指纹一致 → 幂等成功（复用既有已交付结果，不覆盖）。
+                    break;
+                }
+
+                case null when journalParticipates:
+                case ToolDispatchState.Prepared:
+                {
+                    var reason = journalState is null
+                        ? "Journal 行缺失，无法确认裁决前提，记录标记损坏。"
+                        : "Journal 状态为 Prepared（外部副作用从未分派），无法裁决，记录标记损坏。";
+                    return MarkCorrupted(record, reason, now);
+                }
+
+                case null:
+                    // 未注入 journal（测试简化配置）：跳过 journal 约束，走结果写入与终态化。
+                    break;
+            }
+
+            // 2. Durable Result UPSERT（愉快/重试路径）。
+            if (writeResult && _resultStore is not null)
             {
                 await _resultStore.SaveByRequestIdAsync(durableResult, cancellationToken).ConfigureAwait(false);
             }
@@ -441,7 +486,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             };
             _records[record.ReconciliationId] = terminal;
 
-            // 4. 可选 Run 状态推进（targetRunState 非空且 Run 处于停车状态时）。
+            // 4. Run 状态推进（P0-3）：Run 处于停车状态且无其他未决对账记录 → Queued（同一临界区，原子）。
             AgentRunState? auditState = null;
             if (_runStore is not null)
             {
@@ -449,12 +494,17 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 if (run is not null)
                 {
                     auditState = run.State;
-                    if (targetRunState.HasValue
-                        && (run.State == AgentRunState.AwaitingReconciliation || run.State == AgentRunState.ReconciliationRunning))
+                    var hasOtherUnresolved = _records.Values.Any(r =>
+                        string.Equals(r.WorkspaceId, workspaceId, StringComparison.Ordinal)
+                        && string.Equals(r.RunId, runId, StringComparison.Ordinal)
+                        && !string.Equals(r.RequestId, requestId, StringComparison.Ordinal)
+                        && (r.Status == ToolReconciliationStatus.Pending || r.Status == ToolReconciliationStatus.Running));
+                    if (run.State is AgentRunState.AwaitingReconciliation or AgentRunState.ReconciliationRunning
+                        && !hasOtherUnresolved)
                     {
                         try
                         {
-                            await _runStore.TransitionStateAsync(workspaceId, runId, run.State, targetRunState.Value, cancellationToken).ConfigureAwait(false);
+                            await _runStore.TransitionStateAsync(workspaceId, runId, run.State, AgentRunState.Queued, cancellationToken).ConfigureAwait(false);
                         }
                         catch (InvalidOperationException)
                         {
@@ -476,6 +526,83 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 Status = ToolReconciliationResolutionStatus.Resolved,
                 Record = terminal
             };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 把记录标记为损坏（Corrupted）：清除租约与重试指针，写入损坏原因，不写结果、不终态化。
+    /// </summary>
+    private ToolReconciliationResolution MarkCorrupted(ToolReconciliationRecord record, string reason, DateTimeOffset now)
+    {
+        var corrupted = record with
+        {
+            Status = ToolReconciliationStatus.Corrupted,
+            LastError = reason,
+            UpdatedAt = now,
+            LeaseOwner = null,
+            LeaseToken = null,
+            LeaseExpiresAt = null,
+            NextAttemptAt = null
+        };
+        _records[record.ReconciliationId] = corrupted;
+        return new ToolReconciliationResolution
+        {
+            Status = ToolReconciliationResolutionStatus.Corrupted,
+            Record = corrupted
+        };
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<int> RecoverParkedRunsAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (limit <= 0 || _runStore is null)
+        {
+            return 0;
+        }
+
+        // 进程内没有"全量枚举 Run"能力，从对账记录出发收集出现过记录的 Run
+        // （Run 只有因存在对账记录才会进入停车状态，覆盖现实中的停车窗口）。
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var recovered = 0;
+            var groups = _records.Values
+                .GroupBy(r => (r.WorkspaceId, r.RunId))
+                .Take(limit);
+            foreach (var group in groups)
+            {
+                var ws = group.Key.WorkspaceId;
+                var runId = group.Key.RunId;
+                var run = await _runStore.GetAsync(ws, runId, cancellationToken).ConfigureAwait(false);
+                if (run is null
+                    || (run.State != AgentRunState.AwaitingReconciliation && run.State != AgentRunState.ReconciliationRunning))
+                {
+                    continue;
+                }
+                var hasUnresolved = _records.Values.Any(r =>
+                    string.Equals(r.WorkspaceId, ws, StringComparison.Ordinal)
+                    && string.Equals(r.RunId, runId, StringComparison.Ordinal)
+                    && (r.Status == ToolReconciliationStatus.Pending || r.Status == ToolReconciliationStatus.Running));
+                if (hasUnresolved)
+                {
+                    continue;
+                }
+                try
+                {
+                    await _runStore.TransitionStateAsync(ws, runId, run.State, AgentRunState.Queued, cancellationToken).ConfigureAwait(false);
+                    recovered++;
+                }
+                catch (InvalidOperationException)
+                {
+                    // CAS 失败（Run 状态被并发推进）→ 跳过，不阻断扫描。
+                }
+            }
+            return recovered;
         }
         finally
         {

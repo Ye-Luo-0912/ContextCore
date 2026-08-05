@@ -21,8 +21,10 @@ namespace ContextCore.Storage.Postgres.Stores;
 // - RenewLeaseAsync / TryResetToPendingAsync / MarkResolvedAsync / MarkRejectedAsync
 //   全部校验 lease_token = @token AND lease_expires_at > clock_timestamp()（P0-4）；
 // - ResolveReconciliationAtomicallyAsync（P0-3）单事务完成：锁定对账记录 →
-//   验证唯一裁决者（lease + fencing）→ journal Reconciling → Committed →
-//   Durable Result UPSERT → 记录终态 → 可选 Run 状态推进 → 审计事件追加，
+//   验证唯一裁决者（lease + fencing）→ 锁定 Journal 行并按状态分支
+//   （仅 DispatchingIntent/Dispatched/Reconciling 可推进 Committed；Committed/ResultDelivered
+//   按结果指纹幂等判定，Prepared/缺失 → Corrupted）→ Durable Result UPSERT（含指纹）→
+//   记录终态 → Run 状态推进（停车且无其他未决 → Queued，同一事务）→ 审计事件追加，
 //   任意一步失败整体回滚，杜绝"记录 Resolved 而 Journal 仍 DispatchingIntent"的撕裂；
 // - deadline_utc 列 + ControlRoom 列表（ListAsync）支持过期未决高亮与告警计数；
 // - external_operation_id partial 索引支持按 journal 外部操作 ID 反查。
@@ -516,7 +518,6 @@ WHERE reconciliation_id = @reconciliation_id
         long expectedReconciliationVersion,
         ToolReconciliationOutcome outcome,
         DurableToolResult durableResult,
-        AgentRunState? targetRunState,
         CancellationToken cancellationToken = default,
         string? decisionRequestId = null)
     {
@@ -613,148 +614,95 @@ FOR UPDATE;
                 runIsParking = auditState is AgentRunState.AwaitingReconciliation or AgentRunState.ReconciliationRunning;
             }
 
-            // 4. journal 推进（完整租户键）：DispatchingIntent/Dispatched → Reconciling → Committed；
-            //    Reconciling/Committed → Committed；Prepared/缺失/ResultDelivered → 跳过（结果仍 UPSERT）。
-            await using (var journalCmd = connection.CreateCommand())
+            // 4. 锁定 Journal 行并读取状态（裁决前提校验；与记录同一事务，行锁防止并发推进）。
+            ToolDispatchState? journalState = null;
+            await using (var journalLockCmd = connection.CreateCommand())
             {
-                journalCmd.Transaction = transaction;
-                journalCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-                journalCmd.CommandText = $"""
-UPDATE {Table("tool_dispatch_journal_entries")}
-SET state = @reconciling, updated_at = @now
+                journalLockCmd.Transaction = transaction;
+                journalLockCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                journalLockCmd.CommandText = $"""
+SELECT state FROM {Table("tool_dispatch_journal_entries")}
 WHERE workspace_id = @workspace_id AND run_id = @run_id AND request_id = @request_id
-  AND state IN (@dispatching_intent, @dispatched);
-
-UPDATE {Table("tool_dispatch_journal_entries")}
-SET state = @committed, updated_at = @now
-WHERE workspace_id = @workspace_id AND run_id = @run_id AND request_id = @request_id
-  AND state IN (@reconciling, @committed);
+FOR UPDATE;
 """;
-                journalCmd.Parameters.AddWithValue("workspace_id", workspaceId);
-                journalCmd.Parameters.AddWithValue("run_id", runId);
-                journalCmd.Parameters.AddWithValue("request_id", requestId);
-                journalCmd.Parameters.AddWithValue("dispatching_intent", (byte)ToolDispatchState.DispatchingIntent);
-                journalCmd.Parameters.AddWithValue("dispatched", (byte)ToolDispatchState.Dispatched);
-                journalCmd.Parameters.AddWithValue("reconciling", (byte)ToolDispatchState.Reconciling);
-                journalCmd.Parameters.AddWithValue("committed", (byte)ToolDispatchState.Committed);
-                journalCmd.Parameters.AddWithValue("now", now);
-                await journalCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                journalLockCmd.Parameters.AddWithValue("workspace_id", workspaceId);
+                journalLockCmd.Parameters.AddWithValue("run_id", runId);
+                journalLockCmd.Parameters.AddWithValue("request_id", requestId);
+                await using var reader = await journalLockCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    journalState = (ToolDispatchState)reader.GetByte(0);
+                }
             }
 
-            // 5. Durable Result UPSERT（与 journal / 记录同一事务，复制 PostgresToolDispatchJournal 结果表契约）。
-            await using (var resultCmd = connection.CreateCommand())
+            // 4.1 按 Journal 状态分支：
+            // - DispatchingIntent/Dispatched/Reconciling → 推进 Committed 并 UPSERT 结果（愉快/重试路径）；
+            // - Committed/ResultDelivered → 幂等判定：既有结果指纹与本次完全一致才允许幂等成功，绝不覆盖；
+            // - Prepared/缺失 → 记录标记损坏（Corrupted），不写结果、不终态化、不推进 Run。
+            var incomingFingerprint = durableResult.ComputeFingerprint();
+            bool writeResult = false;
+            switch (journalState)
             {
-                resultCmd.Transaction = transaction;
-                resultCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-                resultCmd.CommandText = $"""
-INSERT INTO {Table("tool_dispatch_results")} (
-    tool_call_id, request_id, workspace_id, run_id, invocation_id, idempotency_key,
-    side_effect, external_operation_id, result, succeeded, error, duration_ms, created_at)
-VALUES (
-    @tool_call_id, @request_id, @workspace_id, @run_id, @invocation_id, @idempotency_key,
-    @side_effect, @external_operation_id, @result, @succeeded, @error, @duration_ms, @created_at)
-ON CONFLICT (request_id) DO UPDATE SET
-    tool_call_id = EXCLUDED.tool_call_id,
-    workspace_id = EXCLUDED.workspace_id,
-    run_id = EXCLUDED.run_id,
-    invocation_id = EXCLUDED.invocation_id,
-    idempotency_key = EXCLUDED.idempotency_key,
-    side_effect = EXCLUDED.side_effect,
-    external_operation_id = EXCLUDED.external_operation_id,
-    result = EXCLUDED.result,
-    succeeded = EXCLUDED.succeeded,
-    error = EXCLUDED.error,
-    duration_ms = EXCLUDED.duration_ms,
-    created_at = EXCLUDED.created_at;
-""";
-                resultCmd.Parameters.AddWithValue("tool_call_id", durableResult.ToolCallId);
-                resultCmd.Parameters.AddWithValue("request_id", durableResult.RequestId);
-                resultCmd.Parameters.AddWithValue("workspace_id", (object?)durableResult.WorkspaceId ?? DBNull.Value);
-                resultCmd.Parameters.AddWithValue("run_id", (object?)durableResult.RunId ?? DBNull.Value);
-                resultCmd.Parameters.AddWithValue("invocation_id", (object?)durableResult.InvocationId ?? DBNull.Value);
-                resultCmd.Parameters.AddWithValue("idempotency_key", (object?)durableResult.IdempotencyKey ?? DBNull.Value);
-                resultCmd.Parameters.AddWithValue("side_effect", durableResult.SideEffect.ToString());
-                resultCmd.Parameters.AddWithValue("external_operation_id", (object?)durableResult.ExternalOperationId ?? DBNull.Value);
-                AddJson(resultCmd, "result", durableResult);
-                resultCmd.Parameters.AddWithValue("succeeded", durableResult.Succeeded);
-                resultCmd.Parameters.AddWithValue("error", (object?)durableResult.Error ?? DBNull.Value);
-                resultCmd.Parameters.AddWithValue("duration_ms", (long)Math.Round(durableResult.DurationMs));
-                resultCmd.Parameters.AddWithValue("created_at", now);
-                await resultCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                case ToolDispatchState.DispatchingIntent:
+                case ToolDispatchState.Dispatched:
+                case ToolDispatchState.Reconciling:
+                    await AdvanceJournalToCommittedAsync(connection, transaction, workspaceId, runId, requestId, now, cancellationToken).ConfigureAwait(false);
+                    writeResult = true;
+                    break;
+
+                case ToolDispatchState.Committed:
+                case ToolDispatchState.ResultDelivered:
+                {
+                    var existingFingerprint = await ReadResultFingerprintAsync(connection, transaction, requestId, cancellationToken).ConfigureAwait(false);
+                    if (existingFingerprint is null
+                        || !string.Equals(existingFingerprint, incomingFingerprint, StringComparison.Ordinal))
+                    {
+                        var reason = existingFingerprint is null
+                            ? "Journal 已提交但 Durable Result 缺失，无法幂等确认，记录标记损坏。"
+                            : "Journal 已提交且既有结果指纹与本次裁决不一致，拒绝覆盖，记录标记损坏。";
+                        var corrupted = await MarkRecordCorruptedAsync(connection, transaction, record, reason, leaseToken, expectedReconciliationVersion, now, cancellationToken).ConfigureAwait(false);
+                        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                        return new ToolReconciliationResolution
+                        {
+                            Status = ToolReconciliationResolutionStatus.Corrupted,
+                            Record = corrupted
+                        };
+                    }
+                    // 指纹一致 → 幂等成功（复用既有已交付结果，不覆盖）。
+                    break;
+                }
+
+                case null:
+                case ToolDispatchState.Prepared:
+                {
+                    var reason = journalState is null
+                        ? "Journal 行缺失，无法确认裁决前提，记录标记损坏。"
+                        : "Journal 状态为 Prepared（外部副作用从未分派），无法裁决，记录标记损坏。";
+                    var corrupted = await MarkRecordCorruptedAsync(connection, transaction, record, reason, leaseToken, expectedReconciliationVersion, now, cancellationToken).ConfigureAwait(false);
+                    await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                    return new ToolReconciliationResolution
+                    {
+                        Status = ToolReconciliationResolutionStatus.Corrupted,
+                        Record = corrupted
+                    };
+                }
+            }
+
+            if (writeResult)
+            {
+                // 5. Durable Result UPSERT（与 journal / 记录同一事务，写入规范指纹供幂等判定）。
+                await UpsertDurableResultAsync(connection, transaction, durableResult, incomingFingerprint, now, cancellationToken).ConfigureAwait(false);
             }
 
             // 6. 记录终态 + 清除租约（行已锁定，条件校验双重兜底：lease + fencing）。
             var target = outcome.SideEffectOccurred ? ToolReconciliationStatus.Resolved : ToolReconciliationStatus.Rejected;
-            await using (var terminalCmd = connection.CreateCommand())
-            {
-                terminalCmd.Transaction = transaction;
-                terminalCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-                terminalCmd.CommandText = $"""
-UPDATE {Table("tool_reconciliation_entries")}
-SET status = @target,
-    result = @result,
-    side_effect_occurred = @side_effect_occurred,
-    reason = @reason,
-    decision_request_id = @decision_request_id,
-    updated_at = @now,
-    resolved_at = @now,
-    lease_owner = NULL,
-    lease_token = NULL,
-    lease_expires_at = NULL,
-    next_attempt_at = NULL,
-    last_error = NULL
-WHERE reconciliation_id = @reconciliation_id
-  AND lease_token = @lease_token
-  AND lease_expires_at > clock_timestamp()
-  AND fencing_token = @fencing_token;
-""";
-                terminalCmd.Parameters.AddWithValue("reconciliation_id", record.ReconciliationId);
-                terminalCmd.Parameters.AddWithValue("target", (byte)target);
-                terminalCmd.Parameters.AddWithValue("result", (object?)outcome.Result ?? DBNull.Value);
-                terminalCmd.Parameters.AddWithValue("side_effect_occurred", outcome.SideEffectOccurred);
-                terminalCmd.Parameters.AddWithValue("reason", (object?)outcome.Error ?? DBNull.Value);
-                terminalCmd.Parameters.AddWithValue("decision_request_id", (object?)decisionRequestId ?? DBNull.Value);
-                terminalCmd.Parameters.AddWithValue("lease_token", leaseToken);
-                terminalCmd.Parameters.AddWithValue("fencing_token", expectedReconciliationVersion);
-                terminalCmd.Parameters.AddWithValue("now", now);
-                var affected = await terminalCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                if (affected == 0)
-                {
-                    // 行已锁定且预读校验通过，0 行 = 校验条件与预读不一致（版本/租约在锁内被外部篡改），fail-closed。
-                    throw new InvalidOperationException(
-                        $"对账原子裁决失败：记录终态 CAS 未命中（reconciliation_id={record.ReconciliationId}），" +
-                        $"lease/fencing 校验在锁内失效，整体回滚。");
-                }
-            }
+            await FinalizeRecordTerminalAsync(connection, transaction, record, target, outcome, decisionRequestId, leaseToken, expectedReconciliationVersion, now, cancellationToken).ConfigureAwait(false);
 
-            // 7. 可选 Run 状态推进（targetRunState 非空且 Run 处于停车状态时）。
-            if (targetRunState.HasValue && runIsParking)
+            // 7. Run 状态推进：Run 处于停车状态且无其他未决对账记录 → Queued
+            //    （同一事务内完成，杜绝"裁决提交后、进程内重新入队前崩溃"导致的永久停车）。
+            if (runIsParking && !await HasOtherUnresolvedAsync(connection, transaction, workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false))
             {
-                await using (var runUpdateCmd = connection.CreateCommand())
-                {
-                    runUpdateCmd.Transaction = transaction;
-                    runUpdateCmd.CommandTimeout = Options.CommandTimeoutSeconds;
-                    var setFinished = targetRunState.Value == AgentRunState.Failed ? ", finished_at = @finished_at" : string.Empty;
-                    runUpdateCmd.CommandText = $"""
-UPDATE {Table("agent_runs")}
-SET state = @new_state, updated_at = @updated_at{setFinished},
-    data = data || jsonb_build_object('State', to_jsonb(@new_state_name), 'UpdatedAt', to_jsonb(@updated_at))
-WHERE workspace_id = @workspace_id AND run_id = @run_id
-  AND state IN (@awaiting_reconciliation, @reconciliation_running);
-""";
-                    runUpdateCmd.Parameters.AddWithValue("workspace_id", workspaceId);
-                    runUpdateCmd.Parameters.AddWithValue("run_id", runId);
-                    runUpdateCmd.Parameters.AddWithValue("new_state", (byte)targetRunState.Value);
-                    runUpdateCmd.Parameters.AddWithValue("new_state_name", targetRunState.Value.ToString());
-                    runUpdateCmd.Parameters.AddWithValue("awaiting_reconciliation", (byte)AgentRunState.AwaitingReconciliation);
-                    runUpdateCmd.Parameters.AddWithValue("reconciliation_running", (byte)AgentRunState.ReconciliationRunning);
-                    runUpdateCmd.Parameters.AddWithValue("updated_at", now);
-                    if (setFinished.Length > 0)
-                    {
-                        runUpdateCmd.Parameters.AddWithValue("finished_at", now);
-                    }
-                    await runUpdateCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                }
+                await AdvanceParkedRunToQueuedAsync(connection, transaction, workspaceId, runId, now, cancellationToken).ConfigureAwait(false);
             }
 
             // 8. 审计事件追加（ToolReconciliationResolved，与记录终态同一事务；哈希链契约与 AgentRunEventChain 一致）。
@@ -809,6 +757,364 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND request_id = @reques
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("request_id", requestId);
         return await ReadSingleAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<int> RecoverParkedRunsAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+        {
+            return 0;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            // 锁定候选 Run：停车状态（AwaitingReconciliation / ReconciliationRunning）且无任何未决对账记录
+            // （Pending / Running）。FOR UPDATE SKIP LOCKED 防止多个 Worker 并发重复恢复。
+            var candidates = new List<(string WorkspaceId, string RunId)>();
+            await using (var selectCmd = connection.CreateCommand())
+            {
+                selectCmd.Transaction = transaction;
+                selectCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+                selectCmd.CommandText = $"""
+SELECT workspace_id, run_id FROM {Table("agent_runs")}
+WHERE state IN (@awaiting_reconciliation, @reconciliation_running)
+  AND NOT EXISTS (
+      SELECT 1 FROM {Table("tool_reconciliation_entries")} e
+      WHERE e.workspace_id = {Table("agent_runs")}.workspace_id
+        AND e.run_id = {Table("agent_runs")}.run_id
+        AND e.status IN (@pending, @running))
+LIMIT @limit
+FOR UPDATE SKIP LOCKED;
+""";
+                selectCmd.Parameters.AddWithValue("awaiting_reconciliation", (byte)AgentRunState.AwaitingReconciliation);
+                selectCmd.Parameters.AddWithValue("reconciliation_running", (byte)AgentRunState.ReconciliationRunning);
+                selectCmd.Parameters.AddWithValue("pending", (byte)ToolReconciliationStatus.Pending);
+                selectCmd.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
+                selectCmd.Parameters.AddWithValue("limit", limit);
+                await using var reader = await selectCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    candidates.Add((reader.GetString(0), reader.GetString(1)));
+                }
+            }
+
+            foreach (var (workspaceId, runId) in candidates)
+            {
+                await AdvanceParkedRunToQueuedAsync(connection, transaction, workspaceId, runId, now, cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return candidates.Count;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 原子裁决内推进 Journal 至 Committed：DispatchingIntent/Dispatched → Reconciling → Committed，
+    /// Reconciling → Committed（调用方已锁定 Journal 行并确认状态属于可推进集合）。
+    /// </summary>
+    private async Task AdvanceJournalToCommittedAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        string requestId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+UPDATE {Table("tool_dispatch_journal_entries")}
+SET state = @reconciling, updated_at = @now
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND request_id = @request_id
+  AND state IN (@dispatching_intent, @dispatched);
+
+UPDATE {Table("tool_dispatch_journal_entries")}
+SET state = @committed, updated_at = @now
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND request_id = @request_id
+  AND state IN (@reconciling, @committed);
+""";
+        cmd.Parameters.AddWithValue("workspace_id", workspaceId);
+        cmd.Parameters.AddWithValue("run_id", runId);
+        cmd.Parameters.AddWithValue("request_id", requestId);
+        cmd.Parameters.AddWithValue("dispatching_intent", (byte)ToolDispatchState.DispatchingIntent);
+        cmd.Parameters.AddWithValue("dispatched", (byte)ToolDispatchState.Dispatched);
+        cmd.Parameters.AddWithValue("reconciling", (byte)ToolDispatchState.Reconciling);
+        cmd.Parameters.AddWithValue("committed", (byte)ToolDispatchState.Committed);
+        cmd.Parameters.AddWithValue("now", now);
+        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>原子裁决内 UPSERT Durable Result（含规范指纹，供幂等判定）。</summary>
+    private async Task UpsertDurableResultAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        DurableToolResult durableResult,
+        string fingerprint,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+INSERT INTO {Table("tool_dispatch_results")} (
+    tool_call_id, request_id, workspace_id, run_id, invocation_id, idempotency_key,
+    side_effect, external_operation_id, result, succeeded, error, duration_ms, created_at, result_fingerprint)
+VALUES (
+    @tool_call_id, @request_id, @workspace_id, @run_id, @invocation_id, @idempotency_key,
+    @side_effect, @external_operation_id, @result, @succeeded, @error, @duration_ms, @created_at, @result_fingerprint)
+ON CONFLICT (request_id) DO UPDATE SET
+    tool_call_id = EXCLUDED.tool_call_id,
+    workspace_id = EXCLUDED.workspace_id,
+    run_id = EXCLUDED.run_id,
+    invocation_id = EXCLUDED.invocation_id,
+    idempotency_key = EXCLUDED.idempotency_key,
+    side_effect = EXCLUDED.side_effect,
+    external_operation_id = EXCLUDED.external_operation_id,
+    result = EXCLUDED.result,
+    succeeded = EXCLUDED.succeeded,
+    error = EXCLUDED.error,
+    duration_ms = EXCLUDED.duration_ms,
+    created_at = EXCLUDED.created_at,
+    result_fingerprint = EXCLUDED.result_fingerprint;
+""";
+        cmd.Parameters.AddWithValue("tool_call_id", durableResult.ToolCallId);
+        cmd.Parameters.AddWithValue("request_id", durableResult.RequestId);
+        cmd.Parameters.AddWithValue("workspace_id", (object?)durableResult.WorkspaceId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("run_id", (object?)durableResult.RunId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("invocation_id", (object?)durableResult.InvocationId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("idempotency_key", (object?)durableResult.IdempotencyKey ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("side_effect", durableResult.SideEffect.ToString());
+        cmd.Parameters.AddWithValue("external_operation_id", (object?)durableResult.ExternalOperationId ?? DBNull.Value);
+        AddJson(cmd, "result", durableResult);
+        cmd.Parameters.AddWithValue("succeeded", durableResult.Succeeded);
+        cmd.Parameters.AddWithValue("error", (object?)durableResult.Error ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("duration_ms", (long)Math.Round(durableResult.DurationMs));
+        cmd.Parameters.AddWithValue("created_at", now);
+        cmd.Parameters.AddWithValue("result_fingerprint", fingerprint);
+        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 读取既有 Durable Result 的规范指纹（优先列值；旧数据无列值时从 result jsonb 反序列化重算）。
+    /// 无结果行或无法反序列化 → null（调用方按损坏处理）。
+    /// </summary>
+    private async Task<string?> ReadResultFingerprintAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+SELECT result_fingerprint, result FROM {Table("tool_dispatch_results")}
+WHERE request_id = @request_id;
+""";
+        cmd.Parameters.AddWithValue("request_id", requestId);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+        if (!reader.IsDBNull(0))
+        {
+            return reader.GetString(0);
+        }
+        if (!reader.IsDBNull(1))
+        {
+            try
+            {
+                return Serializer.Deserialize<DurableToolResult>(reader.GetString(1)).ComputeFingerprint();
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 把对账记录标记为损坏（Corrupted）：清除租约与重试指针，写入损坏原因。
+    /// 不写结果、不终态化、不推进 Run——由调用方决定是否提交。
+    /// </summary>
+    private async Task<ToolReconciliationRecord> MarkRecordCorruptedAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ToolReconciliationRecord record,
+        string reason,
+        string leaseToken,
+        long expectedReconciliationVersion,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+UPDATE {Table("tool_reconciliation_entries")}
+SET status = @corrupted,
+    last_error = @reason,
+    updated_at = @now,
+    lease_owner = NULL,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    next_attempt_at = NULL
+WHERE reconciliation_id = @reconciliation_id
+  AND lease_token = @lease_token
+  AND lease_expires_at > clock_timestamp()
+  AND fencing_token = @fencing_token;
+""";
+        cmd.Parameters.AddWithValue("reconciliation_id", record.ReconciliationId);
+        cmd.Parameters.AddWithValue("corrupted", (byte)ToolReconciliationStatus.Corrupted);
+        cmd.Parameters.AddWithValue("reason", reason);
+        cmd.Parameters.AddWithValue("lease_token", leaseToken);
+        cmd.Parameters.AddWithValue("fencing_token", expectedReconciliationVersion);
+        cmd.Parameters.AddWithValue("now", now);
+        var affected = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (affected == 0)
+        {
+            throw new InvalidOperationException(
+                $"对账记录损坏标记 CAS 未命中（reconciliation_id={record.ReconciliationId}），lease/fencing 校验在锁内失效，整体回滚。");
+        }
+        return record with
+        {
+            Status = ToolReconciliationStatus.Corrupted,
+            LastError = reason,
+            UpdatedAt = now,
+            LeaseOwner = null,
+            LeaseToken = null,
+            LeaseExpiresAt = null,
+            NextAttemptAt = null
+        };
+    }
+
+    /// <summary>记录终态 + 清除租约（行已锁定，条件校验双重兜底：lease + fencing）。</summary>
+    private async Task FinalizeRecordTerminalAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ToolReconciliationRecord record,
+        ToolReconciliationStatus target,
+        ToolReconciliationOutcome outcome,
+        string? decisionRequestId,
+        string leaseToken,
+        long expectedReconciliationVersion,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+UPDATE {Table("tool_reconciliation_entries")}
+SET status = @target,
+    result = @result,
+    side_effect_occurred = @side_effect_occurred,
+    reason = @reason,
+    decision_request_id = @decision_request_id,
+    updated_at = @now,
+    resolved_at = @now,
+    lease_owner = NULL,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    next_attempt_at = NULL,
+    last_error = NULL
+WHERE reconciliation_id = @reconciliation_id
+  AND lease_token = @lease_token
+  AND lease_expires_at > clock_timestamp()
+  AND fencing_token = @fencing_token;
+""";
+        cmd.Parameters.AddWithValue("reconciliation_id", record.ReconciliationId);
+        cmd.Parameters.AddWithValue("target", (byte)target);
+        cmd.Parameters.AddWithValue("result", (object?)outcome.Result ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("side_effect_occurred", outcome.SideEffectOccurred);
+        cmd.Parameters.AddWithValue("reason", (object?)outcome.Error ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("decision_request_id", (object?)decisionRequestId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("lease_token", leaseToken);
+        cmd.Parameters.AddWithValue("fencing_token", expectedReconciliationVersion);
+        cmd.Parameters.AddWithValue("now", now);
+        var affected = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (affected == 0)
+        {
+            // 行已锁定且预读校验通过，0 行 = 校验条件与预读不一致（版本/租约在锁内被外部篡改），fail-closed。
+            throw new InvalidOperationException(
+                $"对账原子裁决失败：记录终态 CAS 未命中（reconciliation_id={record.ReconciliationId}），" +
+                $"lease/fencing 校验在锁内失效，整体回滚。");
+        }
+    }
+
+    /// <summary>是否存在该 Run 的其他未决对账记录（Pending/Running；排除当前记录）。</summary>
+    private async Task<bool> HasOtherUnresolvedAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+SELECT EXISTS (
+    SELECT 1 FROM {Table("tool_reconciliation_entries")}
+    WHERE workspace_id = @workspace_id AND run_id = @run_id
+      AND request_id != @request_id
+      AND status IN (@pending, @running));
+""";
+        cmd.Parameters.AddWithValue("workspace_id", workspaceId);
+        cmd.Parameters.AddWithValue("run_id", runId);
+        cmd.Parameters.AddWithValue("request_id", requestId);
+        cmd.Parameters.AddWithValue("pending", (byte)ToolReconciliationStatus.Pending);
+        cmd.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
+        var exists = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return exists is not null && (bool)exists;
+    }
+
+    /// <summary>把停车状态的 Run 推进为 Queued（同一事务；调用方已锁定 run 行）。</summary>
+    private async Task AdvanceParkedRunToQueuedAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string workspaceId,
+        string runId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandTimeout = Options.CommandTimeoutSeconds;
+        cmd.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = @queued, updated_at = @updated_at,
+    data = data || jsonb_build_object('State', to_jsonb(@state_name), 'UpdatedAt', to_jsonb(@updated_at))
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+  AND state IN (@awaiting_reconciliation, @reconciliation_running);
+""";
+        cmd.Parameters.AddWithValue("workspace_id", workspaceId);
+        cmd.Parameters.AddWithValue("run_id", runId);
+        cmd.Parameters.AddWithValue("queued", (byte)AgentRunState.Queued);
+        cmd.Parameters.AddWithValue("state_name", AgentRunState.Queued.ToString());
+        cmd.Parameters.AddWithValue("awaiting_reconciliation", (byte)AgentRunState.AwaitingReconciliation);
+        cmd.Parameters.AddWithValue("reconciliation_running", (byte)AgentRunState.ReconciliationRunning);
+        cmd.Parameters.AddWithValue("updated_at", now);
+        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>读取单条记录（0 行 → null）。</summary>
