@@ -908,9 +908,10 @@ public sealed class AgentRunActor
     private async Task<AgentRunExecutionState> EnterRecoveryFailureStateAsync(
         AgentRunExecutionState state,
         AgentRunState recoveryState,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? reasonOverride = null)
     {
-        var failureReason = recoveryState switch
+        var failureReason = reasonOverride ?? recoveryState switch
         {
             AgentRunState.RecoveryBlocked => "RecoveryBlocked：事件流为空（事件数据丢失），无法安全重建执行状态，需运维介入。",
             AgentRunState.RecoveryCorrupted => "RecoveryCorrupted：事件流损坏（哈希链断裂 / 序列不连续 / ContentHash 重算不匹配），需运维介入。",
@@ -1585,8 +1586,33 @@ public sealed class AgentRunActor
         // 进入 ModelCalling（本地推进 + 缓冲 StateTransition 事件，CAS 延后到批量提交）
         state = TransitionStateLocal(state, AgentRunState.ModelCalling);
 
-        // 构建结构化上下文（首次追加 User(run.Task) + 可选 System(decisionContext)；后续轮次复用 Messages）
-        state = await BuildContextAsync(state, cancellationToken).ConfigureAwait(false);
+        // 构建结构化上下文（首次追加 User(run.Task) + 可选 System(decisionContext)；后续轮次复用 Messages）。
+        // fail-closed：仅 Ready / OptionalRetrievalDegraded 允许继续调用模型；
+        // 其余状态终止本轮——模型绝不能在缺失 mandatory 上下文时运行。
+        var (contextBuildStatus, contextBuiltState) = await BuildContextAsync(state, cancellationToken).ConfigureAwait(false);
+        state = contextBuiltState;
+        switch (contextBuildStatus)
+        {
+            case AgentContextBuildStatus.Ready:
+            case AgentContextBuildStatus.OptionalRetrievalDegraded:
+                break;
+            case AgentContextBuildStatus.SafetyBlocked:
+                state = await EnterSafetyBlockedStateAsync(state,
+                    "安全阻断：mandatory / hard constraint 上下文缺失或不可用，模型不得在缺失 mandatory 上下文时运行。",
+                    cancellationToken).ConfigureAwait(false);
+                return state;
+            case AgentContextBuildStatus.DependencyUnavailable:
+                state = await EnterRecoveryFailureStateAsync(state, AgentRunState.RecoveryDependencyUnavailable, cancellationToken,
+                    "决策依赖不可用：Decision Runtime 执行异常，本轮终止，等待依赖恢复后重试。").ConfigureAwait(false);
+                return state;
+            case AgentContextBuildStatus.BudgetUnsatisfiable:
+                await FailAsync(state,
+                    "预算不可满足：mandatory 上下文经精确 tokenize 后仍超出模型上下文窗口，Run 失败（需人工介入调整预算或任务）。",
+                    cancellationToken).ConfigureAwait(false);
+                return state with { Run = state.Run with { State = AgentRunState.Failed } };
+            default:
+                throw new InvalidOperationException($"未知上下文构建状态：{contextBuildStatus}");
+        }
 
         // 模型传输未注入 → 降级：直接产出空响应，进入下一轮决策
         if (_modelTransport is null)
@@ -1781,40 +1807,38 @@ public sealed class AgentRunActor
     /// </summary>
     /// <param name="state">当前执行状态。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    private async Task<AgentRunExecutionState> BuildContextAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
+    private async Task<(AgentContextBuildStatus Status, AgentRunExecutionState State)> BuildContextAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
         // CurrentTask 已在 ExecuteAsync 初始化时设置为 run.Task，
         // ProjectForModel 会将其投影为 User 消息，无需在此追加。
         // 旧路径的 hasUserMessage 去重检查随之移除（CurrentTask 是单值字段，天然不会重复）。
 
-        // 若 IContextDecisionRuntime 注入，执行决策获取 WorkingSet（含 Materials 正文）
-        if (_decisionRuntime is not null)
+        // 若 IContextDecisionRuntime 注入，执行决策获取 WorkingSet（含 Materials 正文）。
+        // 未注入时按 Ready 处理（按设计的无召回配置，可调用模型）。
+        if (_decisionRuntime is null)
         {
-            var decisionResult = await TryExecuteDecisionAsync(state.Run, cancellationToken).ConfigureAwait(false);
-            if (decisionResult is not null)
-            {
-                // 存储决策结果供投影器使用（不再追加 System 消息摘要到 Messages）
-                state = state with { LastDecisionResult = decisionResult };
-            }
-            else
-            {
-                // 决策失败或无选中候选 → 清空上轮的决策结果（避免投影器使用过期 Materials）
-                state = state with { LastDecisionResult = null };
-            }
+            return (AgentContextBuildStatus.Ready, state);
         }
 
-        return state;
+        var (status, decisionResult) = await TryExecuteDecisionAsync(state.Run, cancellationToken).ConfigureAwait(false);
+        // 阻断状态一律清空上轮决策结果（避免投影器使用过期 Materials），交由调用方终止本轮；
+        // 可继续的状态把决策结果存入供投影器使用。
+        state = status is AgentContextBuildStatus.Ready or AgentContextBuildStatus.OptionalRetrievalDegraded
+            ? state with { LastDecisionResult = decisionResult }
+            : state with { LastDecisionResult = null };
+        return (status, state);
     }
 
     /// <summary>
-    /// 调用 IContextDecisionRuntime 执行决策，返回含 WorkingSet.Materials 的完整执行结果。
-    /// 失败时返回 null（降级为仅 Task + History，投影器不注入 Retrieved Materials）。
+    /// 调用 IContextDecisionRuntime 执行决策，返回构建状态 + 含 WorkingSet.Materials 的执行结果。
+    /// 仅 Ready / OptionalRetrievalDegraded 允许调用模型；其余状态终止本轮
+    /// （模型绝不能在缺失 mandatory 上下文时运行）。
     /// </summary>
-    private async Task<ContextDecisionExecutionResult?> TryExecuteDecisionAsync(AgentRun run, CancellationToken cancellationToken)
+    private async Task<(AgentContextBuildStatus Status, ContextDecisionExecutionResult? Result)> TryExecuteDecisionAsync(AgentRun run, CancellationToken cancellationToken)
     {
         if (_decisionRuntime is null)
         {
-            return null;
+            return (AgentContextBuildStatus.Ready, null);
         }
 
         try
@@ -1876,7 +1900,7 @@ public sealed class AgentRunActor
                     System.Diagnostics.Trace.TraceWarning(
                         "[AgentRunActor] Fail-closed: hydration budget exceeded after exact tokenize for run {0}; mandatory items alone exceed token budget. Decision result discarded.",
                         run.RunId);
-                    return null;
+                    return (AgentContextBuildStatus.BudgetUnsatisfiable, null);
                 }
 
                 foreach (var envelope in result.Decision.SelectedEnvelopes)
@@ -1893,17 +1917,44 @@ public sealed class AgentRunActor
                             "[AgentRunActor] Fail-closed: hard constraint / mandatory candidate {0} has no hydrated content for run {1}; decision result discarded.",
                             envelope.CanonicalKey.EntityId,
                             run.RunId);
-                        return null;
+                        return (AgentContextBuildStatus.SafetyBlocked, null);
                     }
                 }
             }
 
-            return result;
+            // 成功（或仅可选候选降级）→ 允许调用模型。
+            return result is not null
+                ? (AgentContextBuildStatus.Ready, result)
+                : (AgentContextBuildStatus.OptionalRetrievalDegraded, null);
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Decision Runtime 失败 → 降级为 null（不阻断模型调用）
-            return null;
+            // 外部取消 → 交由主循环转 Cancelled
+            throw;
+        }
+        catch (MandatoryContextWindowExceededException)
+        {
+            // 分配器 fail-closed：mandatory 独占超出硬窗口（未到 hydration 即被拒绝）。
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] Fail-closed: mandatory context window exceeded for run {0}; decision discarded.",
+                run.RunId);
+            return (AgentContextBuildStatus.BudgetUnsatisfiable, null);
+        }
+        catch (MandatoryHydrationFailedException)
+        {
+            // 水合器 fail-closed：mandatory / hard constraint 候选正文获取失败。
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] Fail-closed: mandatory context hydration failed for run {0}; decision discarded.",
+                run.RunId);
+            return (AgentContextBuildStatus.SafetyBlocked, null);
+        }
+        catch (Exception)
+        {
+            // Decision Runtime 执行异常 → 依赖不可用，终止本轮（可重试），不降级调用模型。
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] Decision Runtime exception for run {0}; run blocked as dependency unavailable.",
+                run.RunId);
+            return (AgentContextBuildStatus.DependencyUnavailable, null);
         }
     }
 
@@ -2709,6 +2760,81 @@ public sealed class AgentRunActor
         catch
         {
             // 失败处理中的失败静默忽略，避免掩盖原始异常
+        }
+    }
+
+    /// <summary>
+    /// 将 Run 标记为安全阻断（ContextSafetyBlocked，终态）并记录 RunFailed 事件 + 人工介入告警。
+    /// 上下文构建判定为安全阻断（mandatory / hard constraint 正文缺失或不可用）时调用——
+    /// 模型未运行，Run 终止等待人工介入。
+    /// </summary>
+    private async Task<AgentRunExecutionState> EnterSafetyBlockedStateAsync(
+        AgentRunExecutionState state,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fromState = state.Run.State;
+
+            // 更新本地 Run 副本（含阻断原因）
+            var blockedRun = state.Run with
+            {
+                FailureReason = reason,
+                ModelCallsUsed = _modelCallsUsed,
+                TurnBudget = _turnBudget,
+                CostBudget = _costBudget,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                FinishedAt = DateTimeOffset.UtcNow
+            };
+            state = state with { Run = blockedRun };
+
+            // 推进到 ContextSafetyBlocked（本地 + 缓冲 StateTransition 事件；终态）
+            state = TransitionStateLocal(state, AgentRunState.ContextSafetyBlocked);
+
+            // 缓冲 RunFailed 事件（安全阻断语义），终态 flush 单事务落库
+            state = BufferEvent(state, AgentRunEventType.RunFailed, JsonSerializer.Serialize(new
+            {
+                reason,
+                fromState = fromState.ToString(),
+                modelCallsUsed = _modelCallsUsed,
+                turn = _currentTurn
+            }));
+            await FlushPendingEventsAsync(state.Run, CancellationToken.None).ConfigureAwait(false);
+
+            // 人工介入告警（best-effort，持久化成功后投递）
+            if (_alertSink is not null)
+            {
+                var alert = new AgentRunAlert
+                {
+                    RunId = state.Run.RunId,
+                    WorkspaceId = state.Run.WorkspaceId,
+                    SessionId = state.Run.SessionId,
+                    Kind = AgentRunAlertKind.ContextSafetyBlocked,
+                    Reason = reason,
+                    Attempt = 0
+                };
+                try
+                {
+                    await _alertSink.NotifyInterventionRequiredAsync(alert, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception alertEx)
+                {
+                    System.Diagnostics.Trace.TraceWarning(
+                        "[AgentRunActor] 投递安全阻断告警失败（run={0}，workspace={1}）：{2}。",
+                        state.Run.RunId, state.Run.WorkspaceId, alertEx.Message);
+                }
+            }
+
+            return state;
+        }
+        catch (Exception ex)
+        {
+            // 尽力而为：无法持久化安全阻断状态时记录警告，Run 保持原状态，不掩盖阻断事实。
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] 持久化安全阻断状态失败（run={0}，workspace={1}）：{2}。",
+                state.Run.RunId, state.Run.WorkspaceId, ex.Message);
+            return state;
         }
     }
 

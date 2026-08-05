@@ -86,16 +86,18 @@ public static class AgentRunStateMachine
         {
             throw new InvalidOperationException(
                 $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
-                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/DeadLettered/AdmissionRejected）不可再推进。");
+                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/ContextSafetyBlocked/DeadLettered/AdmissionRejected）不可再推进。");
         }
 
         // 恢复失败状态（fail-closed）：任意非终态可跳入。
         // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入，不自动重试）；
         // RecoveryDependencyUnavailable 为可重试状态（依赖恢复后由恢复 Worker 在退避门通过后
         // 重新入队执行），其 → ContextBuilding 的合法流转在 IsValidForwardTransition 中声明。
+        // ContextSafetyBlocked 为终态（安全阻断，需人工介入），任意非终态可跳入。
         if (to == AgentRunState.RecoveryBlocked
             || to == AgentRunState.RecoveryCorrupted
-            || to == AgentRunState.RecoveryDependencyUnavailable)
+            || to == AgentRunState.RecoveryDependencyUnavailable
+            || to == AgentRunState.ContextSafetyBlocked)
         {
             return;
         }
@@ -112,7 +114,7 @@ public static class AgentRunStateMachine
 
     /// <summary>
     /// 判断指定状态是否为终态（Completed / Failed / Cancelled / LeaseLost / ReconciliationRejected /
-    /// RecoveryBlocked / RecoveryCorrupted / DeadLettered / AdmissionRejected）。
+    /// RecoveryBlocked / RecoveryCorrupted / ContextSafetyBlocked / DeadLettered / AdmissionRejected）。
     /// </summary>
     /// <remarks>
     /// <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 不是终态：它表示恢复依赖（事件存储）
@@ -120,6 +122,8 @@ public static class AgentRunStateMachine
     /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（退避重试）。
     /// <see cref="AgentRunState.AdmissionRejected"/> 是终态（P0-6 Admission 边界）：
     /// 配额预留失败的 Run 永不进入调度队列，保留行仅作审计。
+    /// <see cref="AgentRunState.ContextSafetyBlocked"/> 是终态：mandatory 上下文安全阻断，
+    /// 模型未运行，等待人工介入（不自动重试）。
     /// </remarks>
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
@@ -131,6 +135,7 @@ public static class AgentRunStateMachine
            || state == AgentRunState.ReconciliationRejected
            || state == AgentRunState.RecoveryBlocked
            || state == AgentRunState.RecoveryCorrupted
+           || state == AgentRunState.ContextSafetyBlocked
            || state == AgentRunState.DeadLettered
            || state == AgentRunState.AdmissionRejected;
 

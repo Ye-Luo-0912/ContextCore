@@ -188,7 +188,38 @@ public enum AgentRunState : byte
     /// 与 <see cref="Claimed"/> 的区别：ClaimExpired 明确标记"claim 已失效"，
     /// 供调度诊断与监控区分正常持有与过期待接管。
     /// </summary>
-    ClaimExpired = 24
+    ClaimExpired = 24,
+
+    /// <summary>
+    /// 上下文安全阻断（终态，需人工介入）：上下文构建判定为安全阻断
+    /// （mandatory / hard constraint 候选正文缺失或不可用），模型不得在缺失
+    /// mandatory 上下文时运行。与 Failed 的区别：本状态明确表达"安全原因终止"，
+    /// 不参与自动重试（与 RecoveryBlocked 语义一致，等待人工介入修复或重建）。
+    /// </summary>
+    ContextSafetyBlocked = 25
+}
+
+/// <summary>
+/// Agent 上下文构建结果状态：决定本轮是否允许调用模型。
+/// 只有 <see cref="Ready"/> 与 <see cref="OptionalRetrievalDegraded"/> 允许继续调用模型；
+/// 其余状态必须终止本轮——模型绝不能在缺失 mandatory 上下文时运行。
+/// </summary>
+public enum AgentContextBuildStatus : byte
+{
+    /// <summary>上下文就绪（含未注入决策运行时、按设计无召回的配置），可调用模型。</summary>
+    Ready = 0,
+
+    /// <summary>可选检索降级（仅可选候选缺失/降级，mandatory 上下文完整），可调用模型。</summary>
+    OptionalRetrievalDegraded = 1,
+
+    /// <summary>依赖不可用（Decision Runtime 执行异常），终止本轮，可重试。</summary>
+    DependencyUnavailable = 2,
+
+    /// <summary>安全阻断（mandatory / hard constraint 正文缺失或不可用），终止本轮，需人工介入。</summary>
+    SafetyBlocked = 3,
+
+    /// <summary>预算不可满足（mandatory 上下文精确 tokenize 后仍超窗口），终止本轮。</summary>
+    BudgetUnsatisfiable = 4
 }
 
 /// <summary>
@@ -2675,7 +2706,13 @@ public enum AgentRunAlertKind : byte
     /// 仅在首次（RecoveryAttempt == 1）告警——依赖恢复后由恢复 Worker 自动重试，
     /// 持续不可用时仅记日志，避免告警风暴；长期不恢复仍需运维介入。
     /// </summary>
-    RecoveryDependencyUnavailable = 3
+    RecoveryDependencyUnavailable = 3,
+
+    /// <summary>
+    /// 上下文安全阻断（ContextSafetyBlocked）：mandatory / hard constraint 上下文
+    /// 缺失或不可用，模型未运行。属安全类终止，需人工介入修复或重建。
+    /// </summary>
+    ContextSafetyBlocked = 4
 }
 
 /// <summary>
