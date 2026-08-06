@@ -358,8 +358,8 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
             {
                 var lease = membershipLeaseDuration ?? TimeSpan.FromMinutes(5);
                 await membershipStore.TryAcquireOrRenewLeaseAsync(
-                    Environment.MachineName,
-                    "test-instance",
+                    NodeIdentity.ResolveNodeGroupId(),
+                    NodeIdentity.ResolveInstanceId(),
                     lease,
                     membershipServingEnabled).ConfigureAwait(false);
             }
@@ -449,8 +449,8 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
         // P0-15：成员资格租约（中间件场景恒注册；nodeReady 只影响 Applied State，租约恒有效）。
         var membershipStore = new InMemoryModelNodeMembershipStore();
         await membershipStore.TryAcquireOrRenewLeaseAsync(
-            Environment.MachineName,
-            "test-instance",
+            NodeIdentity.ResolveNodeGroupId(),
+            NodeIdentity.ResolveInstanceId(),
             TimeSpan.FromMinutes(5),
             servingEnabled: true).ConfigureAwait(false);
         builder.Services.AddSingleton<IModelNodeMembershipStore>(membershipStore);
@@ -569,7 +569,8 @@ public sealed class R30H_AdmissionNodeAppliedStateTests
         string? isolationReason = null)
         => new()
         {
-            NodeId = Environment.MachineName,
+            NodeGroupId = NodeIdentity.ResolveNodeGroupId(),
+            InstanceId = NodeIdentity.ResolveInstanceId(),
             SlotName = "primary",
             AppliedRevision = revision,
             ModelArtifactId = "artifact-7f3a",

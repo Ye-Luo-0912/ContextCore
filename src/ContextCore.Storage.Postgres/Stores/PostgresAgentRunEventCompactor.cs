@@ -101,7 +101,11 @@ public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRu
                     workspaceId, runId, -1, 0, 0, null, DateTimeOffset.UtcNow);
             }
 
-            var anchorSequence = Math.Min(Math.Max(upToSequence, 0), lastSequence);
+            // 负数显式解释为 lastSequence（折叠到当前最后事件，前缀全部归档）；
+            // 非负值按钳制公式（锚点不越界，防并发新增事件越界）。
+            var anchorSequence = upToSequence < 0
+                ? lastSequence
+                : Math.Min(Math.Max(upToSequence, 0), lastSequence);
 
             // 2. 锁定 run 行：串行化同 Run 并发压缩，保证快照增量重建读到一致基线与增量
             //    （否则并发折叠时后提交者可能缺失已被先提交者删除的中间事件）。
@@ -337,7 +341,10 @@ LIMIT @limit;
 
         // 防御：按 sequence 升序稳定排序（正常路径调用方已升序传入）。
         var ordered = events.OrderBy(e => e.Sequence).ToList();
-        var anchorIndex = Math.Min(Math.Max(upToSequence, 0), ordered.Count - 1);
+        // 负数显式解释为最后事件（折叠到流末尾，前缀全部归档）；非负值按钳制公式。
+        var anchorIndex = upToSequence < 0
+            ? ordered.Count - 1
+            : Math.Min(Math.Max(upToSequence, 0), ordered.Count - 1);
         var anchor = ordered[anchorIndex];
         var archived = ordered.Take(anchorIndex).ToList();
         return (anchor, archived, anchorIndex);

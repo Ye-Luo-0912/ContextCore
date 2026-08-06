@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Service.Extensions;
+using ContextCore.Service.Infrastructure;
 
 namespace ContextCore.Service.Hosting;
 
@@ -47,6 +48,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     private readonly IServiceProvider _services;
     private readonly ContextCoreRuntimeOptions _options;
     private readonly ILogger<AgentRunRecoveryWorker> _logger;
+    private readonly ProductionRuntimeWorkerRegistry? _workerRegistry;
 
     /// <summary>
     /// 每状态每次扫描的运行数预算。超过预算的 Run 由 keyset 游标保留到后续轮次继续扫描，
@@ -85,6 +87,11 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
     /// 由本 Worker 在退避门（NextRetryAtUtc）通过后 CAS 回 Queued（退避期内跳过，不触发
     /// 超时→LeaseLost 逻辑；LeaseLost 会把等待退避的 Run 误判为卡死并移出恢复路径）。
+    ///
+    /// ScheduledLocally（本地调度，入队成功即消费 Scheduler Claim）：Run 已离开可领取集合，
+    /// 排队期间不依赖 Claim 续租。节点崩溃后本地队列随进程消失，Run 滞留 ScheduledLocally
+    /// 无人接管——由本 Worker 直接 CAS 回 Queued（无退避门；排队等待执行槽不是卡死，
+    /// 超时→LeaseLost 语义不适用），由 Durable Claimer 重新领取调度。
     /// </remarks>
     private static readonly AgentRunState[] RecoverableStates =
     [
@@ -95,17 +102,20 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
         AgentRunState.Observing,
         AgentRunState.Checkpointing,
         AgentRunState.PendingToolExecution,
-        AgentRunState.RecoveryDependencyUnavailable
+        AgentRunState.RecoveryDependencyUnavailable,
+        AgentRunState.ScheduledLocally
     ];
 
     public AgentRunRecoveryWorker(
         IServiceProvider services,
         ContextCoreRuntimeOptions options,
-        ILogger<AgentRunRecoveryWorker> logger)
+        ILogger<AgentRunRecoveryWorker> logger,
+        ProductionRuntimeWorkerRegistry? workerRegistry = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _workerRegistry = workerRegistry;
     }
 
     /// <inheritdoc />
@@ -134,9 +144,11 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            _workerRegistry?.SetLeaseStatus(nameof(AgentRunRecoveryWorker), "polling");
             try
             {
                 await RecoverOnceAsync(stoppingToken).ConfigureAwait(false);
+                _workerRegistry?.MarkCycleSucceeded(nameof(AgentRunRecoveryWorker));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -145,6 +157,8 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "AgentRunRecoveryWorker 轮询循环异常（不中断后续轮询）。");
+                _workerRegistry?.RecordFailure(nameof(AgentRunRecoveryWorker), ex.Message, interval);
+                _workerRegistry?.SetLeaseStatus(nameof(AgentRunRecoveryWorker), "backoff");
             }
 
             try
@@ -157,6 +171,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
             }
         }
 
+        _workerRegistry?.SetLeaseStatus(nameof(AgentRunRecoveryWorker), "stopped");
         _logger.LogInformation("AgentRunRecoveryWorker 已停止。");
     }
 
@@ -267,6 +282,41 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
                         // 单个 Run 恢复失败不中断整个扫描
                         _logger.LogError(ex,
                             "AgentRunRecoveryWorker: Run {RunId}（RecoveryDependencyUnavailable）CAS 回 Queued 失败。",
+                            run.RunId);
+                    }
+                    continue;
+                }
+
+                // ScheduledLocally（本地调度，入队成功即消费 Scheduler Claim）：
+                // 节点崩溃后本地队列随进程消失，Run 滞留 ScheduledLocally 无人接管。
+                // 直接 CAS 回 Queued（无退避门、不触发超时→LeaseLost——排队等待执行槽的
+                // Run 不是卡死，LeaseLost 会把它移出恢复路径）；回退后由 Durable Claimer
+                // 重新领取入队。存活节点的排队 Run 状态推进（ScheduledLocally→Running）与
+                // 本 CAS 竞争时只有一方成功（单执行由执行租约保证），另一方放弃或跳过。
+                if (run.State == AgentRunState.ScheduledLocally)
+                {
+                    try
+                    {
+                        await runStore.TransitionStateAsync(
+                            run.WorkspaceId, run.RunId, run.State, AgentRunState.Queued, cancellationToken)
+                            .ConfigureAwait(false);
+                        totalRecovered++;
+                        _logger.LogInformation(
+                            "AgentRunRecoveryWorker: Run {RunId}（ScheduledLocally，workspace={WorkspaceId}）CAS 回 Queued，由 Durable Claimer 重新领取执行。",
+                            run.RunId, run.WorkspaceId);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // CAS 失败：状态已被并发推进（本节点已出队执行 / 其他节点已恢复）→ 非致命。
+                        _logger.LogDebug(
+                            "AgentRunRecoveryWorker: Run {RunId}（ScheduledLocally）CAS 回 Queued 失败（已被并发推进）。",
+                            run.RunId);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 单个 Run 恢复失败不中断整个扫描
+                        _logger.LogError(ex,
+                            "AgentRunRecoveryWorker: Run {RunId}（ScheduledLocally）CAS 回 Queued 失败。",
                             run.RunId);
                     }
                     continue;

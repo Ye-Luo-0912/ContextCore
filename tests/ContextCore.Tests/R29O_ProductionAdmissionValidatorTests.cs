@@ -34,6 +34,17 @@ namespace ContextCore.Tests;
 [TestCategory("Admission")]
 public sealed class R29O_ProductionAdmissionValidatorTests
 {
+    /// <summary>ProductionHA 预期注册的 Worker 类型名（与校验器 expected 列表一致）。</summary>
+    private static readonly string[] ExpectedWorkerTypes =
+    [
+        nameof(AgentRunRecoveryWorker),
+        nameof(PostgresPendingRunClaimer),
+        nameof(LearningMaterializationWorker),
+        nameof(ToolReconciliationWorker),
+        nameof(CanaryLeaderHostedService),
+        nameof(ModelStateReconcilerWorker)
+    ];
+
     [TestMethod]
     public void AdmissionRequired_IsTrueOnlyForProductionHA()
     {
@@ -297,6 +308,63 @@ public sealed class R29O_ProductionAdmissionValidatorTests
         registry.Add<CanaryLeaderHostedService>();
         registry.Add<ModelStateReconcilerWorker>();
         // 故意漏掉 ToolReconciliationWorker，验证 Worker 集群检查能捕获缺失。
+
+        var report = await ValidateFullyConfiguredAsync(registry);
+
+        Assert.IsFalse(report.AllPassed);
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Fail, GetCheck(report, "worker-fleet-started").Status);
+    }
+
+    [TestMethod]
+    public async Task WorkersNeverReported_ToleratedInWorkerFleetCheck()
+    {
+        // 从未上报成功周期的 Worker 不判 Fail——可能为配置禁用（如 LearningMaterialization
+        // 默认 Enabled=false）或首周期尚未完成（模型激活可能耗时数秒）；
+        // 其存在性由注册检查 + 集群心跳兜底。
+        var registry = FullWorkerRegistry();
+
+        var report = await ValidateFullyConfiguredAsync(registry);
+
+        Assert.IsTrue(report.AllPassed);
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Pass, GetCheck(report, "worker-fleet-started").Status);
+    }
+
+    [TestMethod]
+    public async Task WorkerCyclesFresh_WithinWindow_PassesAdmission()
+    {
+        // 各 Worker 已上报成功周期且未超窗（模拟活跃集群）→ 逐项 freshness 通过。
+        var registry = FullWorkerRegistry();
+        foreach (var type in ExpectedWorkerTypes)
+        {
+            registry.MarkCycleSucceeded(type);
+        }
+
+        var report = await ValidateFullyConfiguredAsync(registry);
+
+        Assert.IsTrue(report.AllPassed);
+        Assert.AreEqual(ProductionAdmissionCheckStatus.Pass, GetCheck(report, "worker-fleet-started").Status);
+    }
+
+    [TestMethod]
+    public async Task WorkerCycleStale_FailsAdmission()
+    {
+        // 已上报过成功周期的 Worker 随后静默（LastCycleAtUtc 超窗）→ 即使集群心跳仍新鲜
+        // （心跳服务持续刷新）也拒绝上线——逐项 freshness 捕获单 Worker 循环停滞。
+        var time = new ManualTimeProvider();
+        var registry = new ProductionRuntimeWorkerRegistry(time);
+        registry.Add<AgentRunRecoveryWorker>();
+        registry.Add<PostgresPendingRunClaimer>();
+        registry.Add<LearningMaterializationWorker>();
+        registry.Add<ToolReconciliationWorker>();
+        registry.Add<CanaryLeaderHostedService>();
+        registry.Add<ModelStateReconcilerWorker>();
+        foreach (var type in ExpectedWorkerTypes)
+        {
+            registry.MarkCycleSucceeded(type);
+        }
+        registry.MarkFleetHeartbeat();           // t0：注册即心跳 + 各 Worker 成功周期
+        time.Advance(TimeSpan.FromMinutes(11));  // 超过默认 10 分钟窗口
+        registry.MarkFleetHeartbeat();           // 集群心跳重新新鲜（心跳服务仍在运行）
 
         var report = await ValidateFullyConfiguredAsync(registry);
 

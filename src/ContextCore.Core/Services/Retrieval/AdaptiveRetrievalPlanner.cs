@@ -95,7 +95,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         }
 
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        var policy = await GetCachedPolicyAsync(signature, ct).ConfigureAwait(false);
+        var policy = await GetCachedPolicyAsync(signature, NormalizeWorkspace(input.WorkspaceId), ct).ConfigureAwait(false);
 
         // Shadow：计算策略但不应用（观察学习信号，验证无副作用后再启用）。
         if (_options.Mode == AdaptiveRetrievalMode.Shadow)
@@ -113,9 +113,11 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         ct.ThrowIfCancellationRequested();
 
         // P0-16 清洗：保证 FeedbackId / 数值字段在合法范围内、Source 为合法枚举值，
-        // 防止脏数据 / 恶意大值扭曲加权策略。
+        // 防止脏数据 / 恶意大值扭曲加权策略；WorkspaceId 归一为 trim 后的非空值
+        // （隔离边界：记录必须归属到具体工作区，缺失按全局默认工作区处理）。
         var sanitized = feedback with
         {
+            WorkspaceId = NormalizeWorkspace(feedback.WorkspaceId),
             FeedbackId = string.IsNullOrWhiteSpace(feedback.FeedbackId)
                 ? Guid.NewGuid().ToString("N")
                 : feedback.FeedbackId,
@@ -136,24 +138,26 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
     {
         ArgumentNullException.ThrowIfNull(input);
         var signature = AdaptiveRetrievalPlanSignature.Compute(input);
-        return await GetCachedPolicyAsync(signature, ct).ConfigureAwait(false);
+        return await GetCachedPolicyAsync(signature, NormalizeWorkspace(input.WorkspaceId), ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async ValueTask<AdaptiveRetrievalPolicy> GetPolicyForSignatureAsync(string planSignature, CancellationToken ct = default)
+    public async ValueTask<AdaptiveRetrievalPolicy> GetPolicyForSignatureAsync(string workspaceId, string planSignature, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planSignature);
-        return await GetCachedPolicyAsync(planSignature, ct).ConfigureAwait(false);
+        return await GetCachedPolicyAsync(planSignature, NormalizeWorkspace(workspaceId), ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListFeedbackAsync(string planSignature, int limit = 20, CancellationToken ct = default)
-        => _feedbackStore.ListRecentAsync(planSignature, limit, ct);
+    public ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListFeedbackAsync(
+        string workspaceId, string planSignature, int limit = 20, CancellationToken ct = default)
+        => _feedbackStore.ListRecentAsync(NormalizeWorkspace(workspaceId), planSignature, limit, ct);
 
     /// <inheritdoc />
-    public async ValueTask<int> ResetAsync(string? planSignature = null, CancellationToken ct = default)
+    public async ValueTask<int> ResetAsync(string? workspaceId, string? planSignature = null, CancellationToken ct = default)
     {
-        var cleared = await _feedbackStore.ClearAsync(planSignature, ct).ConfigureAwait(false);
+        var cleared = await _feedbackStore.ClearAsync(
+            workspaceId is null ? null : NormalizeWorkspace(workspaceId), planSignature, ct).ConfigureAwait(false);
         if (planSignature is null)
         {
             _policyCache.Clear();
@@ -169,9 +173,10 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
 
     /// <summary>
     /// 按签名获取策略：缓存命中且未过期 → 直接返回；否则读取近期反馈重算并写入缓存。
+    /// 读取以工作区为作用域（隔离边界：跨工作区的相同签名不共享反馈）。
     /// TTL 非正时禁用缓存（每次重算，行为等价于无缓存版本）。
     /// </summary>
-    private async ValueTask<AdaptiveRetrievalPolicy> GetCachedPolicyAsync(string signature, CancellationToken ct)
+    private async ValueTask<AdaptiveRetrievalPolicy> GetCachedPolicyAsync(string signature, string workspaceId, CancellationToken ct)
     {
         var ttl = _options.PolicyCacheTtl;
         var now = DateTimeOffset.UtcNow;
@@ -182,11 +187,14 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
             return cached.Policy;
         }
 
-        var recent = await _feedbackStore.ListRecentAsync(signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
+        var recent = await _feedbackStore.ListRecentAsync(workspaceId, signature, _options.FeedbackLookbackLimit, ct).ConfigureAwait(false);
         var policy = ComputePolicy(signature, recent, _options);
         SetCachedPolicy(signature, policy, ttl);
         return policy;
     }
+
+    /// <summary>工作区 ID 归一：null/空白按全局默认工作区（空字符串）处理。</summary>
+    private static string NormalizeWorkspace(string? workspaceId) => (workspaceId ?? string.Empty).Trim();
 
     /// <summary>写入缓存并做上限保护：超过最大条目数时先淘汰过期条目，仍超限则移除最旧条目。</summary>
     private void SetCachedPolicy(string signature, AdaptiveRetrievalPolicy policy, TimeSpan ttl)

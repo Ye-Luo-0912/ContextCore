@@ -14,7 +14,7 @@ namespace ContextCore.Storage.InMemory.Stores;
 /// </remarks>
 public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
 {
-    private readonly ConcurrentDictionary<string, ModelNodeMembership> _memberships = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string NodeGroupId, string InstanceId), ModelNodeMembership> _memberships = new();
 
     // 合并写（SetServingAndAppliedStateAsync）需要的已应用状态存储——DI 注册时注入
     // （InMemory provider 下与 InMemoryModelNodeAppliedStateStore 同驻）；直接构造（测试）可为 null。
@@ -27,41 +27,33 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
 
     /// <inheritdoc />
     public ValueTask<ModelNodeMembership?> TryAcquireOrRenewLeaseAsync(
-        string nodeId,
+        string nodeGroupId,
         string instanceId,
         TimeSpan leaseDuration,
         bool servingEnabled,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        ArgumentException.ThrowIfNullOrWhiteSpace(nodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeGroupId);
         ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
 
+        var key = (nodeGroupId, instanceId);
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now + leaseDuration;
 
         while (true)
         {
-            _memberships.TryGetValue(nodeId, out var existing);
+            _memberships.TryGetValue(key, out var existing);
 
-            // 被其他活跃实例持有（租约未过期且 instance 不同）→ 拒绝。
-            if (existing is not null
-                && existing.LeaseExpiresAt > now
-                && !string.Equals(existing.InstanceId, instanceId, StringComparison.Ordinal))
-            {
-                return ValueTask.FromResult<ModelNodeMembership?>(null);
-            }
-
-            // 同实例续租保持令牌；过期接管（或首次领取）生成新令牌 fencing 旧持有者。
+            // 每 (NodeGroupId, InstanceId) 一行：同实例续租保持令牌；首次领取/过期后接管生成新令牌。
             var token = existing is not null
                 && existing.LeaseExpiresAt > now
-                && string.Equals(existing.InstanceId, instanceId, StringComparison.Ordinal)
                 ? existing.LeaseToken
                 : NewToken();
 
             var updated = new ModelNodeMembership
             {
-                NodeId = nodeId,
+                NodeGroupId = nodeGroupId,
                 InstanceId = instanceId,
                 LeaseToken = token,
                 LeaseExpiresAt = expiresAt,
@@ -71,12 +63,12 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
 
             if (existing is null)
             {
-                if (_memberships.TryAdd(nodeId, updated))
+                if (_memberships.TryAdd(key, updated))
                 {
                     return ValueTask.FromResult<ModelNodeMembership?>(updated);
                 }
             }
-            else if (_memberships.TryUpdate(nodeId, updated, existing))
+            else if (_memberships.TryUpdate(key, updated, existing))
             {
                 return ValueTask.FromResult<ModelNodeMembership?>(updated);
             }
@@ -85,15 +77,18 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
     }
 
     /// <inheritdoc />
-    public ValueTask<ModelNodeMembership?> GetAsync(string nodeId, CancellationToken ct = default)
+    public ValueTask<ModelNodeMembership?> GetAsync(
+        string nodeGroupId,
+        string instanceId,
+        CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(nodeId))
+        if (string.IsNullOrWhiteSpace(nodeGroupId) || string.IsNullOrWhiteSpace(instanceId))
         {
             return default;
         }
 
-        _memberships.TryGetValue(nodeId, out var membership);
+        _memberships.TryGetValue((nodeGroupId, instanceId), out var membership);
         return new ValueTask<ModelNodeMembership?>(membership);
     }
 
@@ -105,27 +100,29 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
         var now = DateTimeOffset.UtcNow;
         var entries = _memberships.Values
             .Where(m => m.LeaseExpiresAt > now)
-            .OrderBy(m => m.NodeId, StringComparer.Ordinal)
+            .OrderBy(m => m.NodeGroupId, StringComparer.Ordinal)
+            .ThenBy(m => m.InstanceId, StringComparer.Ordinal)
             .ToArray();
         return new ValueTask<IReadOnlyList<ModelNodeMembership>>(entries);
     }
 
     /// <inheritdoc />
     public ValueTask<bool> SetServingEnabledAsync(
-        string nodeId,
+        string nodeGroupId,
         string instanceId,
         string leaseToken,
         bool servingEnabled,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        ArgumentException.ThrowIfNullOrWhiteSpace(nodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeGroupId);
         ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
 
+        var key = (nodeGroupId, instanceId);
         while (true)
         {
-            if (!_memberships.TryGetValue(nodeId, out var existing))
+            if (!_memberships.TryGetValue(key, out var existing))
             {
                 return ValueTask.FromResult(false);
             }
@@ -142,7 +139,7 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
                 ServingEnabled = servingEnabled,
                 LastHeartbeat = DateTimeOffset.UtcNow
             };
-            if (_memberships.TryUpdate(nodeId, updated, existing))
+            if (_memberships.TryUpdate(key, updated, existing))
             {
                 return ValueTask.FromResult(true);
             }
@@ -152,7 +149,7 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
 
     /// <inheritdoc />
     public async ValueTask<bool> SetServingAndAppliedStateAsync(
-        string nodeId,
+        string nodeGroupId,
         string instanceId,
         string leaseToken,
         bool servingEnabled,
@@ -162,7 +159,7 @@ public sealed class InMemoryModelNodeMembershipStore : IModelNodeMembershipStore
         ct.ThrowIfCancellationRequested();
 
         // 先更新 serving 开关（fencing 校验）——失败则整体返回 false（fail-closed）。
-        var servingUpdated = await SetServingEnabledAsync(nodeId, instanceId, leaseToken, servingEnabled, ct).ConfigureAwait(false);
+        var servingUpdated = await SetServingEnabledAsync(nodeGroupId, instanceId, leaseToken, servingEnabled, ct).ConfigureAwait(false);
         if (!servingUpdated)
         {
             return false;

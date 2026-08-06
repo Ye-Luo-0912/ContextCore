@@ -739,11 +739,12 @@ internal static class ModelControlPlaneEndpoints
         // ── 节点一致性报告 ─────────────────────────────────────────────
         group.MapGet("/consistency", ([FromServices] IModelActivationManager? activationManager, HttpContext httpContext) =>
         {
-            var nodeId = ResolveNodeId();
+            // 报告本实例标识（节点组 + 实例）：HA 多节点对账按实例区分同一机器上的多个进程。
+            var instanceId = NodeIdentity.ResolveInstanceId();
             var activeDescriptor = activationManager?.ActiveDescriptor;
             return Results.Ok(new NodeConsistencyResponse
             {
-                NodeId = nodeId,
+                NodeId = instanceId,
                 ActiveModelArtifactId = activeDescriptor?.ModelArtifactId,
                 ActiveModelVersion = activeDescriptor?.ModelVersion,
                 ActiveContentHash = activeDescriptor?.ContentHash,
@@ -848,7 +849,7 @@ internal static class ModelControlPlaneEndpoints
                 Reason = reason,
                 Succeeded = succeeded,
                 ErrorMessage = errorMessage,
-                NodeId = ResolveNodeId()
+                NodeId = NodeIdentity.ResolveInstanceId()
             }, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -862,11 +863,6 @@ internal static class ModelControlPlaneEndpoints
                 errorMessage);
         }
     }
-
-    private static string ResolveNodeId()
-        => Environment.GetEnvironmentVariable("CONTEXTCORE_NODE_ID")
-            ?? Environment.GetEnvironmentVariable("INSTANCE_ID")
-            ?? Environment.MachineName;
 
     private static async ValueTask<string> ComputeSha256Async(string filePath, CancellationToken cancellationToken)
     {

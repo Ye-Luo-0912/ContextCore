@@ -76,6 +76,42 @@ public sealed class R31C_WorkerHeartbeatRegistryTests
     }
 
     [TestMethod]
+    public void Registry_IsWorkerCycleFresh_TrueWithinWindow()
+    {
+        var registry = new ProductionRuntimeWorkerRegistry();
+
+        registry.MarkCycleSucceeded(ClaimerType);
+
+        Assert.IsTrue(
+            registry.IsWorkerCycleFresh(ClaimerType, TimeSpan.FromMinutes(10)),
+            "刚上报成功周期应视为新鲜。");
+    }
+
+    [TestMethod]
+    public void Registry_IsWorkerCycleFresh_FalseWhenNeverReported()
+    {
+        var registry = new ProductionRuntimeWorkerRegistry();
+
+        Assert.IsFalse(
+            registry.IsWorkerCycleFresh(ClaimerType, TimeSpan.FromMinutes(10)),
+            "从未上报成功周期不应视为新鲜。");
+    }
+
+    [TestMethod]
+    public void Registry_IsWorkerCycleFresh_FalseWhenStale()
+    {
+        var time = new ManualTimeProvider();
+        var registry = new ProductionRuntimeWorkerRegistry(time);
+
+        registry.MarkCycleSucceeded(ClaimerType);
+        time.Advance(TimeSpan.FromMinutes(11));
+
+        Assert.IsFalse(
+            registry.IsWorkerCycleFresh(ClaimerType, TimeSpan.FromMinutes(10)),
+            "成功周期超过窗口后不应视为新鲜。");
+    }
+
+    [TestMethod]
     public void Readiness_GetRegisteredWorkers_IncludesRuntimeState()
     {
         var config = new ConfigurationBuilder()

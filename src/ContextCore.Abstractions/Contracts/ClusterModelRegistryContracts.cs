@@ -83,16 +83,19 @@ public sealed record ClusterSlotAppliedSummary
 /// </summary>
 public sealed record ClusterNodeAppliedEntry
 {
-    /// <summary>节点 Id。</summary>
-    public required string NodeId { get; init; }
+    /// <summary>节点组 Id（稳定节点标识，如机器名或 CONTEXTCORE_NODE_ID 覆盖）。</summary>
+    public required string NodeGroupId { get; init; }
 
-    /// <summary>该节点已应用的集群槽位 Revision。</summary>
+    /// <summary>实例 Id（节点组内的具体进程实例）。</summary>
+    public required string InstanceId { get; init; }
+
+    /// <summary>该实例已应用的集群槽位 Revision。</summary>
     public required long AppliedRevision { get; init; }
 
-    /// <summary>该节点已应用的模型工件 Id（Inactive 期望状态下为 null）。</summary>
+    /// <summary>该实例已应用的模型工件 Id（Inactive 期望状态下为 null）。</summary>
     public string? ModelArtifactId { get; init; }
 
-    /// <summary>该节点已应用的内容哈希（Inactive 期望状态下为 null）。</summary>
+    /// <summary>该实例已应用的内容哈希（Inactive 期望状态下为 null）。</summary>
     public string? ContentHash { get; init; }
 
     /// <summary>应用时间。</summary>
@@ -104,7 +107,7 @@ public sealed record ClusterNodeAppliedEntry
     /// <summary>是否落后于期望 Revision。</summary>
     public required bool IsBehind { get; init; }
 
-    /// <summary>是否已被隔离（漂移自动隔离；节点内容与期望不一致时 Reconciler 标记）。</summary>
+    /// <summary>是否已被隔离（漂移自动隔离；实例内容与期望不一致时 Reconciler 标记）。</summary>
     public required bool Isolated { get; init; }
 
     /// <summary>隔离原因（未隔离时为 null）。</summary>

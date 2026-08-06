@@ -34,15 +34,18 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private readonly IModelActivationManager _activationManager;
     private readonly IModelNodeAppliedStateStore? _appliedStateStore;
     private readonly IModelNodeMembershipStore? _membershipStore;
+    private readonly IModelArtifactRegistry? _modelRegistry;
     private readonly IOptionsMonitor<ModelStateReconcilerOptions> _options;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModelStateReconcilerWorker> _logger;
     private readonly DefaultComponentHealthRegistry? _healthRegistry;
+    private readonly ProductionRuntimeWorkerRegistry? _workerRegistry;
     private readonly string _instanceId;
 
-    // 节点标识：机器名是跨进程重启保持稳定的节点身份，用于 model_node_applied_state 的 node_id；
-    // _instanceId 仅用于日志区分同一机器上的多个进程。
-    private readonly string _nodeId;
+    // 节点组标识：机器名（或 CONTEXTCORE_NODE_ID 覆盖）是跨进程重启保持稳定的节点组身份；
+    // _instanceId（CONTEXTCORE_INSTANCE_ID 覆盖或自动生成）标识组内具体进程实例——
+    // 成员资格与已应用状态均以 (NodeGroupId, InstanceId) 为键，同一节点组可驻留多个实例。
+    private readonly string _nodeGroupId;
 
     // 本地已应用的最新集群槽位 Revision（AppliedClusterSlotRevision）。
     // 与本地引擎代次（ActiveGeneration，LocalEngineGeneration）是独立计数空间——
@@ -52,10 +55,14 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private int _initialSyncDone;
 
     // P0-15：节点成员资格租约（最近一次成功心跳的成员资格，含 LeaseToken 供 serving 开关写操作）；
-    // _servingEnabled 反映本地健康状态——漂移隔离时置 false（Admission 据此阻断流量），
-    // 成功应用期望模型后置 true（恢复服务）。心跳以该状态刷新成员租约的 serving_enabled。
+    // _servingEnabled 反映本地健康状态——初始为 false（未完成首次完整 Apply 前不得接流量），
+    // 漂移隔离时置 false（Admission 据此阻断流量），成功应用期望模型后置 true（恢复服务）。
+    // 心跳以该状态刷新成员租约的 serving_enabled。
     private ModelNodeMembership? _membership;
-    private bool _servingEnabled = true;
+    private bool _servingEnabled;
+
+    // 最近一次成功激活时使用的 Execution Provider（供漂移检测：配置变更但引擎未随之重载 → 漂移）。
+    private OnnxExecutionProvider? _appliedExecutionProvider;
 
     public ModelStateReconcilerWorker(
         IClusterModelSlotStore clusterSlotStore,
@@ -65,18 +72,22 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         ILogger<ModelStateReconcilerWorker> logger,
         IModelNodeAppliedStateStore? appliedStateStore = null,
         IModelNodeMembershipStore? membershipStore = null,
-        DefaultComponentHealthRegistry? healthRegistry = null)
+        DefaultComponentHealthRegistry? healthRegistry = null,
+        IModelArtifactRegistry? modelRegistry = null,
+        ProductionRuntimeWorkerRegistry? workerRegistry = null)
     {
         _clusterSlotStore = clusterSlotStore;
         _activationManager = activationManager;
         _appliedStateStore = appliedStateStore;
         _membershipStore = membershipStore;
+        _modelRegistry = modelRegistry;
         _options = options;
         _configuration = configuration;
         _logger = logger;
         _healthRegistry = healthRegistry;
-        _instanceId = Environment.MachineName + "-" + Guid.NewGuid().ToString("N")[..8];
-        _nodeId = Environment.MachineName;
+        _workerRegistry = workerRegistry;
+        _nodeGroupId = NodeIdentity.ResolveNodeGroupId();
+        _instanceId = NodeIdentity.ResolveInstanceId();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -109,9 +120,12 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 
             // 指数退避：成功复位；连续失败按 BackoffBaseDelay × 2^n 增长，
             // 上限 BackoffMaxDelay / MaxRetryCount，避免故障风暴下高频空转。
+            // 逐项健康上报：成功周期 / 失败周期（含退避）写入 Worker 注册表，
+            // 供生产准入按 LastCycleAtUtc 新鲜度判定 Worker 是否仍在健康运转。
             if (succeeded)
             {
                 consecutiveFailures = 0;
+                _workerRegistry?.MarkCycleSucceeded(nameof(ModelStateReconcilerWorker));
             }
             else
             {
@@ -128,6 +142,10 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                         "ModelStateReconcilerWorker 应用期望状态仍失败（连续失败 {ConsecutiveFailures} 次，下次退避 {NextDelay}）。",
                         consecutiveFailures, ComputeBackoffDelay(options, consecutiveFailures));
                 }
+                _workerRegistry?.RecordFailure(
+                    nameof(ModelStateReconcilerWorker),
+                    "应用期望状态失败",
+                    ComputeBackoffDelay(options, consecutiveFailures));
             }
 
             var delay = consecutiveFailures == 0
@@ -195,7 +213,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             // 引擎为空（进程重启，冷启动）时绝不据此跳过——冷启动必须重新应用当前期望状态。
             if (_appliedStateStore is not null)
             {
-                var applied = await _appliedStateStore.GetAsync(_nodeId, "primary", ct).ConfigureAwait(false);
+                var applied = await _appliedStateStore.GetAsync(_nodeGroupId, _instanceId, "primary", ct).ConfigureAwait(false);
                 if (applied is not null)
                 {
                     var engineMatchesApplied =
@@ -208,8 +226,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                     }
 
                     _logger.LogInformation(
-                        "ModelStateReconcilerWorker 节点 {NodeId} 上次已应用 Revision={AppliedRevision}（模型 {ModelId}），引擎状态一致={EngineMatchesApplied}。",
-                        _nodeId, applied.AppliedRevision, applied.ModelArtifactId, engineMatchesApplied);
+                        "ModelStateReconcilerWorker 节点组 {NodeGroupId}（实例 {InstanceId}）上次已应用 Revision={AppliedRevision}（模型 {ModelId}），引擎状态一致={EngineMatchesApplied}。",
+                        _nodeGroupId, _instanceId, applied.AppliedRevision, applied.ModelArtifactId, engineMatchesApplied);
                 }
             }
 
@@ -221,43 +239,50 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         // 乐观并发控制：仅当远端 Revision > 本地已应用 Revision 时才应用变更
         if (slot.Revision <= _appliedClusterSlotRevision)
         {
-            // Revision 相同但 ContentHash 不匹配 → 漂移：记录告警并将本节点标记为隔离
+            // Revision 相同但本地引擎与集群期望不一致 → 漂移：记录告警并将本节点标记为隔离
             // （漂移自动隔离）。隔离事实持久化到节点已应用状态，集群注册表据此
             // 计算 DriftedNodeCount / IsRolloutReady，使"Slot=A、Engine=B"错位可见、不可伪装收敛。
+            // 全字段漂移检测：ModelArtifactId / ContentHash / EngineGeneration / FeatureSchema /
+            // CalibrationVersion / ExecutionProvider 任一不一致即视为漂移（不只是 ContentHash）。
             if (slot.Revision == _appliedClusterSlotRevision
                 && slot.DesiredStatus == ClusterModelSlotDesiredStatus.Active
-                && !string.IsNullOrEmpty(slot.ContentHash)
-                && !string.IsNullOrEmpty(slot.ActiveModelArtifactId)
-                && !string.Equals(slot.ContentHash, _activationManager.ContentHash, StringComparison.Ordinal))
+                && !string.IsNullOrEmpty(slot.ActiveModelArtifactId))
             {
-                _logger.LogWarning(
-                    "检测到 ContentHash 漂移：模型 {ModelId} 期望 {DesiredHash}，实际 {ActualHash}。" +
-                    "可能跨节点加载了不同内容的模型，节点 {NodeId} 已自动隔离。",
-                    slot.ActiveModelArtifactId, slot.ContentHash, _activationManager.ContentHash, _nodeId);
-
-                if (_appliedStateStore is not null)
+                var (drifted, driftReasons) = await DetectModelDriftAsync(slot, ct).ConfigureAwait(false);
+                if (drifted)
                 {
-                    try
-                    {
-                        await _appliedStateStore.MarkIsolatedAsync(
-                            _nodeId,
-                            "primary",
-                            $"ContentHash 漂移：期望 {slot.ContentHash}，实际 {_activationManager.ContentHash}。",
-                            ct).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "标记节点 {NodeId} 漂移隔离失败（不影响本轮结果）：Revision {Revision}",
-                            _nodeId, slot.Revision);
-                    }
-                }
+                    _logger.LogWarning(
+                        "检测到模型状态漂移：模型 {ModelId}（期望哈希 {DesiredHash}，实际 {ActualHash}）。" +
+                        "可能跨节点加载了不同内容的模型，节点组 {NodeGroupId} 实例 {InstanceId} 已自动隔离。原因：{Reasons}",
+                        slot.ActiveModelArtifactId, slot.ContentHash, _activationManager.ContentHash, _nodeGroupId, _instanceId,
+                        string.Join("；", driftReasons));
 
-                // P0-15：隔离节点必须真正停止接流量——本地 serving 关闭并同步到成员租约
-                // （Admission/Middleware 校验 serving_enabled=false 阻断；Applied State 的
-                // Isolated 标志只是数据库事实，不能单独作为流量阻断依据）。
-                _servingEnabled = false;
-                await DisableServingAsync(ct).ConfigureAwait(false);
+                    if (_appliedStateStore is not null)
+                    {
+                        try
+                        {
+                            await _appliedStateStore.MarkIsolatedAsync(
+                                _nodeGroupId,
+                                _instanceId,
+                                "primary",
+                                $"模型状态漂移：{string.Join("；", driftReasons)}。",
+                                ct).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex,
+                                "标记节点组 {NodeGroupId} 实例 {InstanceId} 漂移隔离失败（不影响本轮结果）：Revision {Revision}",
+                                _nodeGroupId, _instanceId, slot.Revision);
+                        }
+                    }
+
+                    // 隔离节点必须真正停止接流量——本地 serving 关闭并同步到成员租约
+                    // （Admission/Middleware 校验 serving_enabled=false 阻断；Applied State 的
+                    // Isolated 标志只是数据库事实，不能单独作为流量阻断依据）。
+                    _servingEnabled = false;
+                    await DisableServingAsync(ct).ConfigureAwait(false);
+                }
+                return true;
             }
             return true;
         }
@@ -292,6 +317,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                         // 不更新 AppliedClusterSlotRevision，下次轮询重试（退避）
                         return false;
                     }
+                    // 记录本次激活实际使用的 Execution Provider：配置变更但引擎未随之重载 → 漂移检测。
+                    _appliedExecutionProvider = onnxOptions.ExecutionProvider;
                 }
             }
             else if (slot.DesiredStatus == ClusterModelSlotDesiredStatus.Inactive)
@@ -330,6 +357,77 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     }
 
     /// <summary>
+    /// 全字段模型漂移检测：本地引擎实际状态与集群期望（slot + 期望模型注册描述符 + 配置）
+    /// 逐字段比对，任一不一致即判为漂移：
+    /// <list type="bullet">
+    /// <item>EngineGeneration：期望 Active 但本地引擎未加载（ActiveGeneration=null）→ 漂移；</item>
+    /// <item>ModelArtifactId：本地已加载模型与期望不一致；</item>
+    /// <item>ContentHash：本地引擎内容与期望不一致（期望哈希非空时强制校验）；</item>
+    /// <item>FeatureSchema / CalibrationVersion：与期望模型的注册描述符比对（注册表未注入时跳过）；</item>
+    /// <item>ExecutionProvider：配置期望的 provider 与最近一次激活实际使用的 provider 不一致
+    /// （配置变更但引擎未随之重载）。</item>
+    /// </list>
+    /// </summary>
+    private async Task<(bool Drifted, IReadOnlyList<string> Reasons)> DetectModelDriftAsync(
+        ClusterModelSlot slot,
+        CancellationToken ct)
+    {
+        var drift = new List<string>();
+        var descriptor = _activationManager.ActiveDescriptor;
+
+        // 引擎未加载：期望 Active 但本地无 active engine → 漂移（未加载模型却声称已应用 = 错位）。
+        if (_activationManager.ActiveGeneration is null)
+        {
+            drift.Add("本地引擎未加载（期望 Active）");
+        }
+
+        // ModelArtifactId：本地已加载的模型与期望不一致。
+        if (!string.Equals(descriptor?.ModelArtifactId, slot.ActiveModelArtifactId, StringComparison.Ordinal))
+        {
+            drift.Add($"模型 ID 不一致：本地 {descriptor?.ModelArtifactId ?? "(无)"}，期望 {slot.ActiveModelArtifactId}");
+        }
+
+        // ContentHash：本地引擎内容与期望不一致（期望哈希非空时强制校验）。
+        if (!string.IsNullOrEmpty(slot.ContentHash)
+            && !string.Equals(_activationManager.ContentHash, slot.ContentHash, StringComparison.Ordinal))
+        {
+            drift.Add($"内容哈希不一致：本地 {_activationManager.ContentHash ?? "(空)"}，期望 {slot.ContentHash}");
+        }
+
+        // FeatureSchema / CalibrationVersion：以期望模型的注册描述符为基准（注册表不可用时跳过该两项）。
+        if (_modelRegistry is not null)
+        {
+            var desired = await _modelRegistry.GetAsync(slot.ActiveModelArtifactId!, ct).ConfigureAwait(false);
+            if (desired is not null)
+            {
+                if (!string.Equals(descriptor?.FeatureSchemaVersion, desired.FeatureSchemaVersion, StringComparison.Ordinal))
+                {
+                    drift.Add($"特征 schema 不一致：本地 {descriptor?.FeatureSchemaVersion ?? "(无)"}，期望 {desired.FeatureSchemaVersion}");
+                }
+                if (!string.Equals(_activationManager.CalibrationVersion, desired.CalibrationVersion, StringComparison.Ordinal))
+                {
+                    drift.Add($"校准版本不一致：本地 {_activationManager.CalibrationVersion}，期望 {desired.CalibrationVersion}");
+                }
+            }
+            else
+            {
+                drift.Add($"期望模型 {slot.ActiveModelArtifactId} 在注册表中不存在");
+            }
+        }
+
+        // ExecutionProvider：配置期望的 provider 与最近一次激活实际使用的 provider 不一致 → 漂移。
+        // 仅本地曾成功激活过模型时校验（从未激活时由"引擎未加载"分支覆盖）。
+        if (_appliedExecutionProvider is { } applied
+            && applied != ModelArtifactOptionsReader.ResolveExecutionProvider(_configuration))
+        {
+            var configured = ModelArtifactOptionsReader.ResolveExecutionProvider(_configuration);
+            drift.Add($"执行提供程序不一致：本地 {applied}，配置期望 {configured}");
+        }
+
+        return (drift.Count > 0, drift);
+    }
+
+    /// <summary>
     /// 心跳节点成员租约（P0-15）：领取/续租并刷新 serving_enabled。
     /// 返回 true = 租约已持有（或未配置成员存储）；false = 被其他活跃实例持有或心跳异常
     /// （调用方应退避重试）。
@@ -344,7 +442,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         try
         {
             var membership = await _membershipStore.TryAcquireOrRenewLeaseAsync(
-                _nodeId,
+                _nodeGroupId,
                 _instanceId,
                 _options.CurrentValue.MembershipLeaseDuration,
                 _servingEnabled,
@@ -352,8 +450,8 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
             if (membership is null)
             {
                 _logger.LogWarning(
-                    "节点 {NodeId} 成员租约被其他活跃实例持有（实例 {InstanceId} 无法领取），本轮失败退避。",
-                    _nodeId, _instanceId);
+                    "节点组 {NodeGroupId} 成员租约领取失败（实例 {InstanceId}），本轮失败退避。",
+                    _nodeGroupId, _instanceId);
                 return false;
             }
 
@@ -366,7 +464,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "节点 {NodeId} 成员租约心跳失败（本轮失败退避）。", _nodeId);
+            _logger.LogError(ex, "节点组 {NodeGroupId}（实例 {InstanceId}）成员租约心跳失败（本轮失败退避）。", _nodeGroupId, _instanceId);
             return false;
         }
     }
@@ -381,13 +479,13 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 
         try
         {
-            await _membershipStore.SetServingEnabledAsync(_nodeId, _instanceId, _membership.LeaseToken, false, ct).ConfigureAwait(false);
+            await _membershipStore.SetServingEnabledAsync(_nodeGroupId, _instanceId, _membership.LeaseToken, false, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "关闭节点 {NodeId} serving 失败（隔离已标记，准入仍会阻断流量）：Revision {Revision}",
-                _nodeId, _appliedClusterSlotRevision);
+                "关闭节点组 {NodeGroupId}（实例 {InstanceId}）serving 失败（隔离已标记，准入仍会阻断流量）：Revision {Revision}",
+                _nodeGroupId, _instanceId, _appliedClusterSlotRevision);
         }
     }
 
@@ -407,11 +505,11 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
 
         var applied = _appliedStateStore is null ? null : BuildAppliedState(slot);
         var updated = await _membershipStore.SetServingAndAppliedStateAsync(
-            _nodeId, _instanceId, _membership.LeaseToken, true, applied, ct).ConfigureAwait(false);
+            _nodeGroupId, _instanceId, _membership.LeaseToken, true, applied, ct).ConfigureAwait(false);
         if (!updated)
         {
             throw new InvalidOperationException(
-                $"节点 {_nodeId} 恢复 serving / 写入已应用状态失败：成员租约令牌失效或已过期（可能已被其他实例接管）。");
+                $"节点组 {_nodeGroupId}（实例 {_instanceId}）恢复 serving / 写入已应用状态失败：成员租约令牌失效或已过期（可能已被其他实例接管）。");
         }
     }
 
@@ -430,10 +528,11 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
         await _appliedStateStore.UpsertAsync(BuildAppliedState(slot), ct).ConfigureAwait(false);
     }
 
-    /// <summary>构造本节点对当前 slot 的已应用状态快照（本地引擎实际生效内容）。</summary>
+    /// <summary>构造本实例对当前 slot 的已应用状态快照（本地引擎实际生效内容）。</summary>
     private ModelNodeAppliedState BuildAppliedState(ClusterModelSlot slot) => new()
     {
-        NodeId = _nodeId,
+        NodeGroupId = _nodeGroupId,
+        InstanceId = _instanceId,
         SlotName = slot.SlotName,
         AppliedRevision = slot.Revision,
         ModelArtifactId = _activationManager.ActiveDescriptor?.ModelArtifactId,

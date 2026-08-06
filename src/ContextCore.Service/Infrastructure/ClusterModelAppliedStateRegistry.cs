@@ -48,24 +48,26 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
         var activeMembers = _membershipStore is null
             ? null
             : await _membershipStore.GetActiveMembersAsync(ct).ConfigureAwait(false);
-        var memberNodeIds = activeMembers is null
+        // 成员与已应用记录均以 (NodeGroupId, InstanceId) 标识——同一节点组可驻留多个实例，
+        // 各实例独立参与集群收敛判定（聚合键为实例而非节点组）。
+        var memberKeys = activeMembers is null
             ? null
-            : new HashSet<string>(activeMembers.Select(m => m.NodeId), StringComparer.Ordinal);
+            : new HashSet<(string NodeGroupId, string InstanceId)>(activeMembers.Select(m => (m.NodeGroupId, m.InstanceId)));
 
-        // 相关节点 = 活跃成员的已应用记录（无成员存储时 = 全部记录）。
-        var relevantNodes = memberNodeIds is null
+        // 相关实例 = 活跃成员的已应用记录（无成员存储时 = 全部记录）。
+        var relevantNodes = memberKeys is null
             ? nodes
-            : nodes.Where(n => memberNodeIds.Contains(n.NodeId)).ToArray();
+            : nodes.Where(n => memberKeys.Contains((n.NodeGroupId, n.InstanceId))).ToArray();
 
         var desiredRevision = slot?.Revision ?? 0;
         var desiredStatus = slot?.DesiredStatus ?? ClusterModelSlotDesiredStatus.Inactive;
         var desiredModelId = slot?.ActiveModelArtifactId;
         var desiredHash = slot?.ContentHash;
 
-        // NodeCount：活跃成员数（含尚未上报 Applied State 的新节点）；无成员存储时回退到已上报记录数。
+        // NodeCount：活跃成员数（含尚未上报 Applied State 的新实例）；无成员存储时回退到已上报记录数。
         var nodeCount = activeMembers is not null ? activeMembers.Count : relevantNodes.Count;
 
-        var (converged, nodesBehind) = memberNodeIds is null
+        var (converged, nodesBehind) = memberKeys is null
             ? ComputeConvergenceLegacy(relevantNodes, desiredRevision)
             : ComputeConvergenceByMembership(activeMembers!, relevantNodes, desiredRevision);
 
@@ -111,10 +113,12 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
         var desiredHash = slot?.ContentHash;
 
         var entries = nodes
-            .OrderBy(n => n.NodeId, StringComparer.Ordinal)
+            .OrderBy(n => n.NodeGroupId, StringComparer.Ordinal)
+            .ThenBy(n => n.InstanceId, StringComparer.Ordinal)
             .Select(n => new ClusterNodeAppliedEntry
             {
-                NodeId = n.NodeId,
+                NodeGroupId = n.NodeGroupId,
+                InstanceId = n.InstanceId,
                 AppliedRevision = n.AppliedRevision,
                 ModelArtifactId = n.ModelArtifactId,
                 ContentHash = n.ContentHash,
@@ -141,19 +145,21 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
     /// <summary>
     /// 基于活跃成员的收敛判定（P0-15）：
     /// 每个活跃成员都必须已有 Applied State 记录且 AppliedRevision == 期望（尚未上报应用的
-    /// 新节点视为未就绪 → 不收敛）；NodesBehind 含"无记录"与"记录落后"两类成员。
+    /// 新实例视为未就绪 → 不收敛）；NodesBehind 含"无记录"与"记录落后"两类成员。
     /// </summary>
     private static (bool Converged, int NodesBehind) ComputeConvergenceByMembership(
         IReadOnlyList<ModelNodeMembership> members,
         IReadOnlyList<ModelNodeAppliedState> nodes,
         long desiredRevision)
     {
-        var appliedByNode = nodes.ToDictionary(n => n.NodeId, StringComparer.Ordinal);
+        var appliedByKey = nodes.ToDictionary(
+            n => (n.NodeGroupId, n.InstanceId),
+            n => n);
         var converged = members.Count > 0 && members.All(m =>
-            appliedByNode.TryGetValue(m.NodeId, out var state)
+            appliedByKey.TryGetValue((m.NodeGroupId, m.InstanceId), out var state)
             && state.AppliedRevision == desiredRevision);
         var nodesBehind = members.Count(m =>
-            !appliedByNode.TryGetValue(m.NodeId, out var state)
+            !appliedByKey.TryGetValue((m.NodeGroupId, m.InstanceId), out var state)
             || state.AppliedRevision < desiredRevision);
         return (converged, nodesBehind);
     }

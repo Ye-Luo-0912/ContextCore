@@ -599,6 +599,27 @@ public sealed class R29Q_RecoveryIntegrityStateTests
             };
         }
 
+        public async ValueTask<AgentRun> ScheduleLocallyAsync(
+            string workspaceId, string runId, string? expectedClaimToken, string? expectedClaimOwner,
+            CancellationToken cancellationToken = default)
+        {
+            await _inner.TransitionStateAsync(
+                workspaceId, runId, AgentRunState.Claimed, AgentRunState.ScheduledLocally,
+                cancellationToken).ConfigureAwait(false);
+            var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null)
+            {
+                throw new InvalidOperationException($"Run 不存在：{workspaceId}/{runId}。");
+            }
+            return run with
+            {
+                State = AgentRunState.ScheduledLocally,
+                ClaimOwner = null,
+                ClaimToken = null,
+                ClaimExpiresAtUtc = null
+            };
+        }
+
         public ValueTask<IReadOnlyList<AgentRun>> DeadLetterExhaustedRunsAsync(
             int take, CancellationToken cancellationToken = default)
             => ValueTask.FromResult<IReadOnlyList<AgentRun>>([_deadRun]);

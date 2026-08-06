@@ -46,7 +46,8 @@ public sealed record ProductionAdmissionReport(
 /// 6. 至少一条原生 Tool Calling 路由（真实 transport + 已配置模型的网关）
 /// 7. Cluster Model Slot 'primary' 已应用模型（DesiredStatus=Active）
 /// 8. Late Hydration 管道完整（hydrator + batch lookup 已注册）
-/// 9. ProductionHA Worker 集群已注册（随应用启动）
+/// 9. ProductionHA Worker 集群已注册且逐项健康（随应用启动 + 集群心跳 +
+///    各 Worker 成功周期在新鲜度窗口内——已上报的 Worker 静默超窗即拒绝）
 /// </summary>
 public sealed class ProductionAdmissionValidator
 {
@@ -475,9 +476,45 @@ public sealed class ProductionAdmissionValidator
             return;
         }
 
+        // 逐项 freshness：仅注册名 + 集群心跳不足以证明每个 Worker 循环都存活。
+        // 某 Worker 的循环停滞（死锁 / 异常风暴 / 后台任务被挂起）时，心跳服务仍会
+        // 刷新集群心跳，但该 Worker 的 LastCycleAtUtc 会超过窗口——此处逐项校验：
+        // - 已上报成功周期且未超窗 → 新鲜；
+        // - 已上报但超窗（静默）→ Fail（循环停滞，拒绝上线）；
+        // - 从未上报（LastCycleAtUtc=null）→ 不判 Fail：可能是配置禁用（如
+        //   LearningMaterialization 默认 Enabled=false）或首周期尚未完成（模型激活
+        //   可能耗时数秒），其存在性已由注册检查 + 集群心跳兜底。
+        var staleWorkers = expected
+            .Where(name => !_workerRegistry.IsWorkerCycleFresh(name, _workerHeartbeatWindow)
+                && _workerRegistry.GetWorkerRuntimeState(name)?.LastCycleAtUtc is not null)
+            .ToList();
+        if (staleWorkers.Count > 0)
+        {
+            checks.Add(Fail("worker-fleet-started",
+                $"以下预期 Worker 已停止上报成功周期（LastCycleAtUtc 超过 "
+                + $"{_workerHeartbeatWindow.TotalMinutes:0.#} 分钟窗口）：{string.Join("，", staleWorkers.Select(DescribeWorkerCycleAge))}。"));
+            return;
+        }
+
+        var freshCycleCount = expected.Count(w =>
+            _workerRegistry.IsWorkerCycleFresh(w, _workerHeartbeatWindow));
         checks.Add(Pass("worker-fleet-started",
             $"ProductionHA Worker 集群已注册并随应用启动（{expected.Count} 个预期 Worker 全部就位，"
-            + $"心跳在 {_workerHeartbeatWindow.TotalMinutes:0.#} 分钟窗口内）。"));
+            + $"心跳在 {_workerHeartbeatWindow.TotalMinutes:0.#} 分钟窗口内，"
+            + $"{freshCycleCount} 个已上报新鲜成功周期）。"));
+    }
+
+    private string DescribeWorkerCycleAge(string workerType)
+    {
+        var last = _workerRegistry.GetWorkerRuntimeState(workerType)?.LastCycleAtUtc;
+        if (last is null)
+        {
+            return $"{workerType}（从未上报）";
+        }
+        var age = DateTimeOffset.UtcNow - last.Value;
+        return age.TotalSeconds < 60
+            ? $"{workerType}（{age.TotalSeconds:0.#} 秒前）"
+            : $"{workerType}（{age.TotalMinutes:0.#} 分钟前）";
     }
 
     private string DescribeHeartbeatAge()

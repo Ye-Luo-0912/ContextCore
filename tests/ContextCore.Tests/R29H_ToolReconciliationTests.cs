@@ -197,6 +197,125 @@ public sealed class R29H_ToolReconciliationTests
     }
 
     /// <summary>
+    /// 验证：ListPendingAsync 的 handler 过滤参数排除无法自动处理的记录
+    /// （未声明 Handler / Handler 不在本节点注册集合内）——无 Handler 记录不占用轮询配额。
+    /// </summary>
+    [TestMethod]
+    public async Task Store_ListPending_HandlerFilter_ExcludesUnavailableHandlers()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "tool-a", reconciliationHandler: "bank-recon"), cts.Token);
+        await store.CreateAsync(BuildRecord("rec-2", "req-2", "tool-b", reconciliationHandler: "other-recon"), cts.Token);
+        await store.CreateAsync(BuildRecord("rec-3", "req-3", "tool-c", reconciliationHandler: null), cts.Token);
+
+        // 本节点仅注册 bank-recon → 只列出可处理的 rec-1
+        var filtered = await store.ListPendingAsync(10, cts.Token, new HashSet<string> { "bank-recon" });
+        Assert.AreEqual(1, filtered.Count, "仅列出 Handler 可处理的记录。");
+        Assert.AreEqual("rec-1", filtered[0].ReconciliationId);
+
+        // 本节点无任何 Handler → 不列出任何记录（全部等待人工裁决）
+        var none = await store.ListPendingAsync(10, cts.Token, new HashSet<string>());
+        Assert.AreEqual(0, none.Count, "无 Handler 集合时不列出任何记录。");
+
+        // 未传过滤参数（兼容路径）→ 全部 Pending 记录列出
+        var all = await store.ListPendingAsync(10, cts.Token);
+        Assert.AreEqual(3, all.Count, "无过滤参数时列出全部 Pending 记录。");
+    }
+
+    /// <summary>
+    /// 验证：ListPendingAsync 的 keyset 游标逐页推进——单页配额内的记录处理完后
+    /// 从游标位置续扫，队尾记录不会被队首持续占据（队头阻塞治理）。
+    /// </summary>
+    [TestMethod]
+    public async Task Store_ListPending_CursorPagination_AdvancesAcrossPages()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        for (var i = 0; i < 5; i++)
+        {
+            await store.CreateAsync(BuildRecord($"rec-{i}", $"req-{i}", "tool-a", createdAt: baseTime.AddMinutes(i)), cts.Token);
+        }
+
+        // 第 1 页：前 2 条
+        var page1 = await store.ListPendingAsync(2, cts.Token);
+        Assert.AreEqual(2, page1.Count);
+        Assert.AreEqual("rec-0", page1[0].ReconciliationId);
+        Assert.AreEqual("rec-1", page1[1].ReconciliationId);
+
+        // 第 2 页：从游标（rec-1 位置）续扫 → rec-2 / rec-3
+        var page2 = await store.ListPendingAsync(
+            2, cts.Token, afterCreatedAt: page1[^1].CreatedAt, afterReconciliationId: page1[^1].ReconciliationId);
+        Assert.AreEqual(2, page2.Count);
+        Assert.AreEqual("rec-2", page2[0].ReconciliationId);
+        Assert.AreEqual("rec-3", page2[1].ReconciliationId);
+
+        // 第 3 页：不足配额 → 剩余 1 条（rec-4）
+        var page3 = await store.ListPendingAsync(
+            2, cts.Token, afterCreatedAt: page2[^1].CreatedAt, afterReconciliationId: page2[^1].ReconciliationId);
+        Assert.AreEqual(1, page3.Count);
+        Assert.AreEqual("rec-4", page3[0].ReconciliationId);
+
+        // 第 4 页：已到队尾 → 空
+        var page4 = await store.ListPendingAsync(
+            2, cts.Token, afterCreatedAt: page3[^1].CreatedAt, afterReconciliationId: page3[^1].ReconciliationId);
+        Assert.AreEqual(0, page4.Count, "游标越过末条后不应再有数据。");
+    }
+
+    /// <summary>
+    /// 验证：ManualReviewRequired（自动对账达上限升级）仍计为未决——
+    /// Run 保持停车，直到人工 resolve 端点给出裁决。
+    /// </summary>
+    [TestMethod]
+    public async Task Store_HasUnresolvedForRun_CountsManualReviewRequired()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync("rec-1", "test", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease, "Pending → Running 接管成功。");
+        Assert.IsTrue(await store.MarkManualReviewRequiredAsync("rec-1", lease!.LeaseToken, "attempts exhausted", cts.Token),
+            "Running → ManualReviewRequired 升级成功。");
+
+        var record = await store.GetAsync("rec-1", cts.Token);
+        Assert.AreEqual(ToolReconciliationStatus.ManualReviewRequired, record!.Status);
+        Assert.IsNull(record.LeaseToken, "升级后租约清空。");
+        Assert.AreEqual("attempts exhausted", record.LastError);
+        Assert.IsTrue(await store.HasUnresolvedForRunAsync(Ws, RunId, cts.Token),
+            "ManualReviewRequired 仍属未决（Run 保持停车等待人工裁决）。");
+    }
+
+    /// <summary>
+    /// 验证：ManualReviewRequired 记录可被人工 resolve 端点接管（TryBegin 支持该状态）
+    /// 并最终裁决为 Resolved。
+    /// </summary>
+    [TestMethod]
+    public async Task Store_ManualReviewRequired_CanBeClaimedAndResolved()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await store.CreateAsync(BuildRecord("rec-1", "req-1", "bank-transfer"), cts.Token);
+        var lease = await store.TryBeginAsync("rec-1", "worker", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(lease);
+        Assert.IsTrue(await store.MarkManualReviewRequiredAsync("rec-1", lease!.LeaseToken, "attempts exhausted", cts.Token));
+
+        // 人工端点重新接管（Pending/ManualReviewRequired 均可领取）
+        var manualLease = await store.TryBeginAsync("rec-1", "manual:endpoint", TimeSpan.FromMinutes(1), cts.Token);
+        Assert.IsNotNull(manualLease, "ManualReviewRequired 记录可被人工 resolve 端点接管。");
+        Assert.AreEqual(2, manualLease!.FencingToken, "接管后 fencing 递增隔离旧持有者。");
+
+        Assert.IsTrue(await store.MarkResolvedAsync(
+            "rec-1", manualLease.LeaseToken, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token),
+            "人工接管后可按正常路径裁决为 Resolved。");
+        Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync("rec-1", cts.Token))!.Status);
+    }
+
+    /// <summary>
     /// 验证（-B1 Control Plane）：按 ExternalOperationId 跨 Run 反查（InMemory 实现与 Postgres 同语义）。
     /// </summary>
     [TestMethod]
@@ -485,6 +604,57 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "对账失败不得污染 journal 状态。");
     }
 
+    /// <summary>
+    /// 验证：对账失败后的指数退避——第 1 次失败退避基数（30s），第 4 次失败退避
+    /// 基数 × 2^(已尝试次数)（30s × 2^3 = 240s）；达尝试上限（5 次）后升级
+    /// ManualReviewRequired（停止自动重试，转人工裁决）。
+    /// </summary>
+    [TestMethod]
+    public async Task Coordinator_ExponentialBackoff_And_MaxAttemptsEscalation()
+    {
+        var store = new InMemoryToolReconciliationStore();
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var now = DateTimeOffset.UtcNow;
+
+        // 第 1 次失败（AttemptCount=0）→ 退避 30s（基数）
+        await store.CreateAsync(BuildRecord("rec-base", "req-base", "bank-transfer") with { AttemptCount = 0 }, cts.Token);
+        var recBase = (await store.GetAsync("rec-base", cts.Token))!;
+        var leaseBase = await store.TryBeginAsync("rec-base", "worker:test", TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsNotNull(leaseBase);
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => coordinator.ReconcileWithLeaseAsync(recBase, leaseBase!, new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true }, throwException: true), cts.Token));
+        var afterBase = (await store.GetAsync("rec-base", cts.Token))!;
+        Assert.AreEqual(ToolReconciliationStatus.Pending, afterBase.Status);
+        Assert.IsNotNull(afterBase.NextAttemptAt, "失败后设置退避。");
+        Assert.IsTrue(afterBase.NextAttemptAt > now.AddSeconds(20) && afterBase.NextAttemptAt < now.AddSeconds(45),
+            $"第 1 次失败退避应约为基数 30s，实际 {afterBase.NextAttemptAt - now}。");
+
+        // 第 4 次失败（AttemptCount=3）→ 退避 30s × 2^3 = 240s
+        await store.CreateAsync(BuildRecord("rec-240", "req-240", "bank-transfer") with { AttemptCount = 3 }, cts.Token);
+        var rec240 = (await store.GetAsync("rec-240", cts.Token))!;
+        var lease240 = await store.TryBeginAsync("rec-240", "worker:test", TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsNotNull(lease240);
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => coordinator.ReconcileWithLeaseAsync(rec240, lease240!, new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true }, throwException: true), cts.Token));
+        var after240 = (await store.GetAsync("rec-240", cts.Token))!;
+        Assert.IsTrue(after240.NextAttemptAt > now.AddSeconds(200) && after240.NextAttemptAt < now.AddSeconds(280),
+            $"第 4 次失败退避应约为 240s，实际 {after240.NextAttemptAt - now}。");
+
+        // 第 5 次失败（AttemptCount=4，本次为第 5 次）→ 达上限升级 ManualReviewRequired
+        await store.CreateAsync(BuildRecord("rec-escalate", "req-escalate", "bank-transfer") with { AttemptCount = 4 }, cts.Token);
+        var recEscalate = (await store.GetAsync("rec-escalate", cts.Token))!;
+        var leaseEscalate = await store.TryBeginAsync("rec-escalate", "worker:test", TimeSpan.FromMinutes(5), cts.Token);
+        Assert.IsNotNull(leaseEscalate);
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => coordinator.ReconcileWithLeaseAsync(recEscalate, leaseEscalate!, new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true }, throwException: true), cts.Token));
+        var afterEscalate = (await store.GetAsync("rec-escalate", cts.Token))!;
+        Assert.AreEqual(ToolReconciliationStatus.ManualReviewRequired, afterEscalate.Status,
+            "自动对账达尝试上限 → 升级 ManualReviewRequired，不再自动重试。");
+        Assert.IsNull(afterEscalate.LeaseToken, "升级后租约清空。");
+        Assert.IsNull(afterEscalate.NextAttemptAt, "升级后不再设置退避（已停止自动重试）。");
+    }
+
     // ── 3. Worker 轮询对账测试 ─────────────────────────────────────────────
 
     /// <summary>
@@ -530,6 +700,60 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual(ToolReconciliationStatus.Pending, (await store.GetAsync(recManual.ReconciliationId, cts.Token))!.Status,
             "无匹配 Handler 的记录保持 Pending 等待人工裁决。");
         Assert.AreEqual(ToolDispatchState.Dispatched, (await journal.GetEntryAsync(manualOnly.RequestId, cts.Token))!.State);
+    }
+
+    /// <summary>
+    /// 验证：队头阻塞治理——多条无 Handler 可处理的记录（队首）不阻塞队尾
+    /// 有 Handler 的记录：Worker 单轮仍处理可处理的记录，无 Handler 记录保持
+    /// Pending 等待人工裁决（ListPendingAsync handler 过滤使它们不占用轮询配额）。
+    /// </summary>
+    [TestMethod]
+    public async Task Worker_ReconcileOnce_UnmatchedHeadRecords_DoNotBlockMatchedTail()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var run = BuildRun("worker 队头阻塞验证");
+        await runStore.CreateAsync(run);
+
+        var toolHandler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, _) = CreateExecutor(toolHandler);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        // 3 条无 Handler 记录（队首，仅人工裁决）+ 1 条有 Handler 记录（队尾）
+        var manualOnly = new List<ToolReconciliationRecord>();
+        for (var i = 0; i < 3; i++)
+        {
+            var result = await executor.ExecuteAsync(run.RunId, Ws, BuildToolCall("bank-transfer", $"arg-head-{i}"), 0, cts.Token);
+            manualOnly.Add(await store.CreateAsync(
+                BuildRecord($"rec:manual-{i}", result.RequestId, "bank-transfer", result, runId: run.RunId, reconciliationHandler: null), cts.Token));
+        }
+        var withHandler = await executor.ExecuteAsync(run.RunId, Ws, BuildToolCall("bank-transfer", "arg-tail"), 0, cts.Token);
+        var recWithHandler = await store.CreateAsync(
+            BuildRecord("rec:" + withHandler.RequestId, withHandler.RequestId, "bank-transfer", withHandler, runId: run.RunId), cts.Token);
+
+        var worker = new ToolReconciliationWorker(
+            coordinator,
+            store,
+            new[] { new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-999" }) },
+            kernelHost: null,
+            runStore,
+            new ContextCoreRuntimeOptions(),
+            NullLogger<ToolReconciliationWorker>.Instance);
+
+        await InvokeReconcileOnceAsync(worker, cts.Token);
+
+        // 队尾有 Handler 的记录被处理（未被队首无 Handler 记录阻塞）
+        Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(recWithHandler.ReconciliationId, cts.Token))!.Status,
+            "有 Handler 的记录应被 Worker 裁决，不被队首无 Handler 记录阻塞。");
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(withHandler.RequestId, cts.Token))!.State);
+
+        // 队首无 Handler 记录保持 Pending 等待人工裁决
+        foreach (var manual in manualOnly)
+        {
+            Assert.AreEqual(ToolReconciliationStatus.Pending, (await store.GetAsync(manual.ReconciliationId, cts.Token))!.Status,
+                "无 Handler 的记录保持 Pending 等待人工裁决。");
+        }
     }
 
     /// <summary>

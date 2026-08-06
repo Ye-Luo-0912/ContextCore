@@ -43,9 +43,9 @@ public sealed class R29U_ClusterModelAppliedStateRegistryTests
         var entries = await store.ListBySlotAsync(SlotName);
 
         Assert.AreEqual(3, entries.Count, "应只返回目标槽位 'primary' 的记录。");
-        Assert.AreEqual("node-a", entries[0].NodeId);
-        Assert.AreEqual("node-b", entries[1].NodeId);
-        Assert.AreEqual("node-c", entries[2].NodeId);
+        Assert.AreEqual("node-a", entries[0].NodeGroupId);
+        Assert.AreEqual("node-b", entries[1].NodeGroupId);
+        Assert.AreEqual("node-c", entries[2].NodeGroupId);
     }
 
     [TestMethod]
@@ -187,21 +187,21 @@ public sealed class R29U_ClusterModelAppliedStateRegistryTests
 
         Assert.AreEqual(3, entries.Count);
 
-        var current = entries.Single(e => e.NodeId == "node-current");
+        var current = entries.Single(e => e.NodeGroupId == "node-current");
         Assert.IsTrue(current.IsCurrent);
         Assert.IsFalse(current.IsBehind);
 
-        var behind = entries.Single(e => e.NodeId == "node-behind");
+        var behind = entries.Single(e => e.NodeGroupId == "node-behind");
         Assert.IsFalse(behind.IsCurrent);
         Assert.IsTrue(behind.IsBehind);
 
-        var drifted = entries.Single(e => e.NodeId == "node-drifted");
+        var drifted = entries.Single(e => e.NodeGroupId == "node-drifted");
         Assert.IsFalse(drifted.IsCurrent, "Revision 一致但内容哈希与期望不符不应标记为 IsCurrent。");
         Assert.IsFalse(drifted.IsBehind);
     }
 
     [TestMethod]
-    public async Task Registry_ListNodeStates_SortedByNodeId()
+    public async Task Registry_ListNodeStates_SortedByNodeGroupId()
     {
         var (registry, appliedStore, _) = CreateRegistry(new FixedSlotStore(
             Slot(SlotName, revision: 1, "model-a", "sha256:a", ClusterModelSlotDesiredStatus.Active)));
@@ -211,9 +211,9 @@ public sealed class R29U_ClusterModelAppliedStateRegistryTests
 
         var entries = await registry.ListNodeStatesAsync(SlotName);
 
-        Assert.AreEqual("node-a", entries[0].NodeId);
-        Assert.AreEqual("node-m", entries[1].NodeId);
-        Assert.AreEqual("node-z", entries[2].NodeId);
+        Assert.AreEqual("node-a", entries[0].NodeGroupId);
+        Assert.AreEqual("node-m", entries[1].NodeGroupId);
+        Assert.AreEqual("node-z", entries[2].NodeGroupId);
     }
 
     // =========================================================================
@@ -251,7 +251,8 @@ public sealed class R29U_ClusterModelAppliedStateRegistryTests
         string slotName = "primary",
         DateTimeOffset? appliedAt = null) => new()
     {
-        NodeId = nodeId,
+        NodeGroupId = nodeId,
+        InstanceId = "instance-1",
         SlotName = slotName,
         AppliedRevision = revision,
         ModelArtifactId = modelId,

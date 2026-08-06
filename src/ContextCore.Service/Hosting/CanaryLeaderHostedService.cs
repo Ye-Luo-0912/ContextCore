@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.Evolution;
+using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -58,6 +59,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
     private readonly ILogger<CanaryLeaderHostedService> _logger;
     private readonly string _instanceId;
     private readonly TimeProvider _timeProvider;
+    private readonly ProductionRuntimeWorkerRegistry? _workerRegistry;
 
     // 当前持有的租约（runId → (lease token, fencing token)），用于续租、释放与 fencing 校验
     private readonly Dictionary<string, (string LeaseToken, long FencingToken)> _heldLeases = new(StringComparer.Ordinal);
@@ -80,7 +82,8 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         ICanaryExternalMetricsSource externalMetricsSource,
         ICanaryDecisionApplier decisionApplier,
         IOptionsMonitor<CanaryLeaderOptions> options,
-        ILogger<CanaryLeaderHostedService> logger)
+        ILogger<CanaryLeaderHostedService> logger,
+        ProductionRuntimeWorkerRegistry? workerRegistry = null)
     {
         _services = services;
         _metricsCollector = metricsCollector;
@@ -92,6 +95,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
         _options = options;
         _logger = logger;
         _timeProvider = TimeProvider.System;
+        _workerRegistry = workerRegistry;
 
         // 通过 IOptionsMonitor.CurrentValue 读取，感知 PostConfigure 覆盖。
         var owner = options.CurrentValue.Owner;
@@ -139,6 +143,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            _workerRegistry?.SetLeaseStatus(nameof(CanaryLeaderHostedService), "polling");
             try
             {
                 // 周期性回收过期租约（清理崩溃 leader 持有的租约）
@@ -153,6 +158,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
                 }
 
                 await PollOnceAsync(stoppingToken).ConfigureAwait(false);
+                _workerRegistry?.MarkCycleSucceeded(nameof(CanaryLeaderHostedService));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -161,6 +167,8 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "CanaryLeaderHostedService 轮询循环异常（不中断后续轮询）。");
+                _workerRegistry?.RecordFailure(nameof(CanaryLeaderHostedService), ex.Message, options.RenewInterval);
+                _workerRegistry?.SetLeaseStatus(nameof(CanaryLeaderHostedService), "backoff");
             }
 
             try
@@ -175,6 +183,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
 
         // 关闭时主动释放所有持有的租约
         await ReleaseAllLeasesAsync(stoppingToken).ConfigureAwait(false);
+        _workerRegistry?.SetLeaseStatus(nameof(CanaryLeaderHostedService), "stopped");
         _logger.LogInformation("CanaryLeaderHostedService 已停止。");
     }
 

@@ -139,12 +139,19 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         var hasUnresolved = _records.Values.Any(r =>
             string.Equals(r.WorkspaceId, workspaceId, StringComparison.Ordinal)
             && string.Equals(r.RunId, runId, StringComparison.Ordinal)
-            && (r.Status == ToolReconciliationStatus.Pending || r.Status == ToolReconciliationStatus.Running));
+            && (r.Status == ToolReconciliationStatus.Pending
+                || r.Status == ToolReconciliationStatus.Running
+                || r.Status == ToolReconciliationStatus.ManualReviewRequired));
         return ValueTask.FromResult(hasUnresolved);
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(int take, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(
+        int take,
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<string>? availableHandlers = null,
+        DateTimeOffset? afterCreatedAt = null,
+        string? afterReconciliationId = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var now = DateTimeOffset.UtcNow;
@@ -155,8 +162,17 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                  || (r.Status == ToolReconciliationStatus.Running
                      && (!r.LeaseExpiresAt.HasValue || r.LeaseExpiresAt.Value <= now)))
                 // 退避未到期跳过
-                && (!r.NextAttemptAt.HasValue || r.NextAttemptAt.Value <= now))
+                && (!r.NextAttemptAt.HasValue || r.NextAttemptAt.Value <= now)
+                // 队头阻塞治理：过滤掉无 Handler 可处理的记录（仅人工裁决）
+                && (availableHandlers is null
+                    || (r.ReconciliationHandler is not null && availableHandlers.Contains(r.ReconciliationHandler)))
+                // keyset 游标：只返回 (CreatedAt, ReconciliationId) 之后的记录
+                && (afterCreatedAt is null || afterReconciliationId is null
+                    || r.CreatedAt > afterCreatedAt.Value
+                    || (r.CreatedAt == afterCreatedAt.Value
+                        && string.CompareOrdinal(r.ReconciliationId, afterReconciliationId) > 0)))
             .OrderBy(r => r.CreatedAt)
+            .ThenBy(r => r.ReconciliationId, StringComparer.Ordinal)
             .Take(take)
             .ToList();
         return ValueTask.FromResult<IReadOnlyList<ToolReconciliationRecord>>(records);
@@ -177,11 +193,13 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             _ => throw new InvalidOperationException($"对账记录不存在：{reconciliationId}"),
             (_, existing) =>
             {
-                // 可领取：Pending；或 Running 且租约已过期（P0-4 崩溃恢复接管）。
-                // 终态 / 有效租约持有中 / 退避未到期 → 不领取（返回 null）。
+                // 可领取：Pending / ManualReviewRequired（人工 resolve 端点可接管）；或 Running
+                // 且租约已过期（P0-4 崩溃恢复接管）。终态 / 有效租约持有中 / 退避未到期 → 不领取。
                 var runningLeaseExpired = existing.Status == ToolReconciliationStatus.Running
                     && (!existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now);
-                if (existing.Status != ToolReconciliationStatus.Pending && !runningLeaseExpired)
+                if (existing.Status != ToolReconciliationStatus.Pending
+                    && existing.Status != ToolReconciliationStatus.ManualReviewRequired
+                    && !runningLeaseExpired)
                 {
                     return existing;
                 }
@@ -324,6 +342,43 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 };
             });
         return ValueTask.FromResult(updated);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<bool> MarkManualReviewRequiredAsync(
+        string reconciliationId,
+        string leaseToken,
+        string? lastError,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var now = DateTimeOffset.UtcNow;
+        var upgraded = false;
+        _records.AddOrUpdate(
+            reconciliationId,
+            _ => throw new InvalidOperationException($"对账记录不存在：{reconciliationId}"),
+            (_, existing) =>
+            {
+                // 升级 Running → ManualReviewRequired：仅持有有效租约的 Running 记录可升级。
+                if (existing.Status != ToolReconciliationStatus.Running
+                    || !string.Equals(existing.LeaseToken, leaseToken, StringComparison.Ordinal)
+                    || !existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now)
+                {
+                    return existing;
+                }
+                upgraded = true;
+                return existing with
+                {
+                    Status = ToolReconciliationStatus.ManualReviewRequired,
+                    LeaseOwner = null,
+                    LeaseToken = null,
+                    LeaseExpiresAt = null,
+                    NextAttemptAt = null,
+                    LastError = lastError,
+                    UpdatedAt = now
+                };
+            });
+        return ValueTask.FromResult(upgraded);
     }
 
     /// <inheritdoc />
@@ -500,7 +555,9 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                         string.Equals(r.WorkspaceId, workspaceId, StringComparison.Ordinal)
                         && string.Equals(r.RunId, runId, StringComparison.Ordinal)
                         && !string.Equals(r.RequestId, requestId, StringComparison.Ordinal)
-                        && (r.Status == ToolReconciliationStatus.Pending || r.Status == ToolReconciliationStatus.Running));
+                        && (r.Status == ToolReconciliationStatus.Pending
+                            || r.Status == ToolReconciliationStatus.Running
+                            || r.Status == ToolReconciliationStatus.ManualReviewRequired));
                     if (run.State is AgentRunState.AwaitingReconciliation or AgentRunState.ReconciliationRunning
                         && !hasOtherUnresolved)
                     {
@@ -589,7 +646,9 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 var hasUnresolved = _records.Values.Any(r =>
                     string.Equals(r.WorkspaceId, ws, StringComparison.Ordinal)
                     && string.Equals(r.RunId, runId, StringComparison.Ordinal)
-                    && (r.Status == ToolReconciliationStatus.Pending || r.Status == ToolReconciliationStatus.Running));
+                    && (r.Status == ToolReconciliationStatus.Pending
+                        || r.Status == ToolReconciliationStatus.Running
+                        || r.Status == ToolReconciliationStatus.ManualReviewRequired));
                 if (hasUnresolved)
                 {
                     continue;
@@ -612,10 +671,12 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         }
     }
 
-    /// <summary>过期判定：设置了截止且未裁决（Pending/Running）且已超期。</summary>
+    /// <summary>过期判定：设置了截止且未裁决（Pending/Running/ManualReviewRequired）且已超期。</summary>
     private static bool IsOverdue(ToolReconciliationRecord record, DateTimeOffset now)
         => record.DeadlineUtc.HasValue
-           && (record.Status == ToolReconciliationStatus.Pending || record.Status == ToolReconciliationStatus.Running)
+           && (record.Status == ToolReconciliationStatus.Pending
+               || record.Status == ToolReconciliationStatus.Running
+               || record.Status == ToolReconciliationStatus.ManualReviewRequired)
            && record.DeadlineUtc.Value < now;
 
     private bool MarkTerminal(string reconciliationId, string leaseToken, ToolReconciliationStatus target, ToolReconciliationOutcome outcome)

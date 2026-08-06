@@ -21,13 +21,14 @@ namespace ContextCore.Tests;
 public sealed class R29H_ModelNodeAppliedStateTests
 {
     private const string NodeId = "node-test-1";
+    private const string InstanceId = "instance-test-1";
 
     [TestMethod]
     public async Task InMemoryStore_UpsertNew_ThenGet_ReturnsRecord()
     {
         var store = new InMemoryModelNodeAppliedStateStore();
 
-        var missing = await store.GetAsync(NodeId, "primary");
+        var missing = await store.GetAsync(NodeId, InstanceId, "primary");
         Assert.IsNull(missing, "无记录时应返回 null。");
 
         var state = MakeState(NodeId, "primary", appliedRevision: 1, modelId: "model-a", contentHash: "sha256:a");
@@ -73,7 +74,7 @@ public sealed class R29H_ModelNodeAppliedStateTests
         var store = new InMemoryModelNodeAppliedStateStore();
         await store.UpsertAsync(MakeState(NodeId, "primary", 1, "model-a", "sha256:a"));
 
-        var otherSlot = await store.GetAsync(NodeId, "secondary");
+        var otherSlot = await store.GetAsync(NodeId, InstanceId, "secondary");
 
         Assert.IsNull(otherSlot, "不同 slot 的记录应相互隔离。");
         var primary = await GetRequiredAsync(store, NodeId, "primary");
@@ -86,10 +87,11 @@ public sealed class R29H_ModelNodeAppliedStateTests
         var sql = BuildSql();
 
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_model_node_applied_state");
-        StringAssert.Contains(sql, "node_id text NOT NULL");
+        StringAssert.Contains(sql, "node_group_id text NOT NULL");
+        StringAssert.Contains(sql, "instance_id text NOT NULL");
         StringAssert.Contains(sql, "slot_name text NOT NULL DEFAULT 'primary'");
         StringAssert.Contains(sql, "applied_revision bigint NOT NULL");
-        StringAssert.Contains(sql, "PRIMARY KEY (node_id, slot_name)");
+        StringAssert.Contains(sql, "PRIMARY KEY (node_group_id, instance_id, slot_name)");
     }
 
     [TestMethod]
@@ -149,7 +151,8 @@ public sealed class R29H_ModelNodeAppliedStateTests
         string? modelId,
         string? contentHash) => new()
     {
-        NodeId = nodeId,
+        NodeGroupId = nodeId,
+        InstanceId = InstanceId,
         SlotName = slotName,
         AppliedRevision = appliedRevision,
         ModelArtifactId = modelId,
@@ -162,7 +165,7 @@ public sealed class R29H_ModelNodeAppliedStateTests
         string nodeId,
         string slotName)
     {
-        var state = await store.GetAsync(nodeId, slotName);
+        var state = await store.GetAsync(nodeId, InstanceId, slotName);
         Assert.IsNotNull(state, "应存在节点已应用状态记录。");
         return state!;
     }

@@ -7,6 +7,7 @@ using ContextCore.Inference.Onnx;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Adapters;
 using ContextCore.Service.Hosting;
+using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.InMemory.Stores;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -221,7 +222,8 @@ public sealed class R29H_ModelHAStructuredFailureTests
         var appliedStore = new InMemoryModelNodeAppliedStateStore();
         await appliedStore.UpsertAsync(new ModelNodeAppliedState
         {
-            NodeId = Environment.MachineName,
+            NodeGroupId = Environment.MachineName,
+            InstanceId = NodeIdentity.ResolveInstanceId(),
             SlotName = "primary",
             AppliedRevision = 1,
             ModelArtifactId = modelA,
@@ -263,7 +265,8 @@ public sealed class R29H_ModelHAStructuredFailureTests
         var appliedStore = new InMemoryModelNodeAppliedStateStore();
         await appliedStore.UpsertAsync(new ModelNodeAppliedState
         {
-            NodeId = Environment.MachineName,
+            NodeGroupId = Environment.MachineName,
+            InstanceId = NodeIdentity.ResolveInstanceId(),
             SlotName = "primary",
             AppliedRevision = 1,
             ModelArtifactId = modelA,
@@ -538,14 +541,17 @@ public sealed class R29H_ModelHAStructuredFailureTests
 
     private static async Task<ModelNodeAppliedState> WaitForAppliedAsync(
         IModelNodeAppliedStateStore store,
-        string nodeId,
+        string nodeGroupId,
         string slotName,
         string message)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline)
         {
-            var applied = await store.GetAsync(nodeId, slotName);
+            // 已应用状态按 (NodeGroupId, InstanceId) 键控；测试不知 Worker 自动生成的实例 Id，
+            // 按节点组枚举匹配（单 Worker 场景下组内仅一条记录）。
+            var applied = (await store.ListBySlotAsync(slotName))
+                .FirstOrDefault(n => string.Equals(n.NodeGroupId, nodeGroupId, StringComparison.Ordinal));
             if (applied is not null)
             {
                 return applied;

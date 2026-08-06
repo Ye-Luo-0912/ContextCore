@@ -5,12 +5,12 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
 /// PostgreSQL 持久化 Model Node Applied State Store。
-/// 每个 (node_id, slot_name) 一行，记录节点最后成功应用的集群槽位 Revision 与模型内容，
-/// 供节点重启后查询本节点上次应用了什么（审计 / 漂移分析）。
+/// 每个 (node_group_id, instance_id, slot_name) 一行，记录某实例最后成功应用的
+/// 集群槽位 Revision 与模型内容，供实例重启后查询本实例上次应用了什么（审计 / 漂移分析）。
 /// </summary>
 /// <remarks>
 /// Upsert 通过 AppliedRevision 做乐观并发控制（CAS）：仅当新 Revision ≥ 已存 Revision 时覆盖，
-/// 防止陈旧节点回写覆盖更新的应用记录。
+/// 防止陈旧实例回写覆盖更新的应用记录。
 /// </remarks>
 public sealed class PostgresModelNodeAppliedStateStore : PostgresStoreBase, IModelNodeAppliedStateStore
 {
@@ -23,11 +23,12 @@ public sealed class PostgresModelNodeAppliedStateStore : PostgresStoreBase, IMod
     }
 
     public async ValueTask<ModelNodeAppliedState?> GetAsync(
-        string nodeId,
+        string nodeGroupId,
+        string instanceId,
         string slotName,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(nodeId) || string.IsNullOrWhiteSpace(slotName))
+        if (string.IsNullOrWhiteSpace(nodeGroupId) || string.IsNullOrWhiteSpace(instanceId) || string.IsNullOrWhiteSpace(slotName))
         {
             return null;
         }
@@ -37,11 +38,12 @@ public sealed class PostgresModelNodeAppliedStateStore : PostgresStoreBase, IMod
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
-SELECT node_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at
+SELECT node_group_id, instance_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at
 FROM {Table("model_node_applied_state")}
-WHERE node_id = @node_id AND slot_name = @slot_name;
+WHERE node_group_id = @node_group_id AND instance_id = @instance_id AND slot_name = @slot_name;
 """;
-        command.Parameters.AddWithValue("node_id", nodeId);
+        command.Parameters.AddWithValue("node_group_id", nodeGroupId);
+        command.Parameters.AddWithValue("instance_id", instanceId);
         command.Parameters.AddWithValue("slot_name", slotName);
 
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -55,7 +57,8 @@ WHERE node_id = @node_id AND slot_name = @slot_name;
 
     public async ValueTask<ModelNodeAppliedState> UpsertAsync(ModelNodeAppliedState state, CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(state.NodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.NodeGroupId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.InstanceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.SlotName);
 
         await EnsureMigratedAsync(ct).ConfigureAwait(false);
@@ -66,9 +69,9 @@ WHERE node_id = @node_id AND slot_name = @slot_name;
         // WHERE 不满足时无 RETURNING 行，回退 SELECT 返回已存记录（拒绝陈旧回写）。
         // 成功应用（记录反映本地引擎实际内容）时 is_isolated=false，漂移隔离随之清除。
         command.CommandText = $"""
-INSERT INTO {Table("model_node_applied_state")} (node_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at)
-VALUES (@node_id, @slot_name, @applied_revision, @model_artifact_id, @content_hash, @engine_generation, false, NULL, NULL, now())
-ON CONFLICT (node_id, slot_name) DO UPDATE
+INSERT INTO {Table("model_node_applied_state")} (node_group_id, instance_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at)
+VALUES (@node_group_id, @instance_id, @slot_name, @applied_revision, @model_artifact_id, @content_hash, @engine_generation, false, NULL, NULL, now())
+ON CONFLICT (node_group_id, instance_id, slot_name) DO UPDATE
 SET applied_revision = EXCLUDED.applied_revision,
     model_artifact_id = EXCLUDED.model_artifact_id,
     content_hash = EXCLUDED.content_hash,
@@ -78,9 +81,10 @@ SET applied_revision = EXCLUDED.applied_revision,
     isolation_reason = NULL,
     applied_at = EXCLUDED.applied_at
 WHERE {Table("model_node_applied_state")}.applied_revision <= EXCLUDED.applied_revision
-RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at;
+RETURNING node_group_id, instance_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at;
 """;
-        command.Parameters.AddWithValue("node_id", state.NodeId);
+        command.Parameters.AddWithValue("node_group_id", state.NodeGroupId);
+        command.Parameters.AddWithValue("instance_id", state.InstanceId);
         command.Parameters.AddWithValue("slot_name", state.SlotName);
         command.Parameters.AddWithValue("applied_revision", state.AppliedRevision);
         command.Parameters.AddWithValue("model_artifact_id", (object?)state.ModelArtifactId ?? DBNull.Value);
@@ -94,9 +98,9 @@ RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash,
         }
 
         // CAS 拒绝（新 Revision < 已存 Revision）：返回已存记录。
-        return (await GetAsync(state.NodeId, state.SlotName, ct).ConfigureAwait(false))
+        return (await GetAsync(state.NodeGroupId, state.InstanceId, state.SlotName, ct).ConfigureAwait(false))
             ?? throw new InvalidOperationException(
-                $"ModelNodeAppliedState '{state.NodeId}/{state.SlotName}' 写入失败：既无法 INSERT 也无法 SELECT。");
+                $"ModelNodeAppliedState '{state.NodeGroupId}/{state.InstanceId}/{state.SlotName}' 写入失败：既无法 INSERT 也无法 SELECT。");
     }
 
     public async ValueTask<IReadOnlyList<ModelNodeAppliedState>> ListBySlotAsync(string slotName, CancellationToken ct = default)
@@ -111,10 +115,10 @@ RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash,
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
-SELECT node_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at
+SELECT node_group_id, instance_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at
 FROM {Table("model_node_applied_state")}
 WHERE slot_name = @slot_name
-ORDER BY node_id;
+ORDER BY node_group_id, instance_id;
 """;
         command.Parameters.AddWithValue("slot_name", slotName);
 
@@ -128,12 +132,14 @@ ORDER BY node_id;
     }
 
     public async ValueTask<ModelNodeAppliedState?> MarkIsolatedAsync(
-        string nodeId,
+        string nodeGroupId,
+        string instanceId,
         string slotName,
         string reason,
         CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(nodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeGroupId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
@@ -144,15 +150,16 @@ ORDER BY node_id;
         // 幂等隔离标记：已隔离时仅更新原因与时间；无记录时创建隔离标记（审计链完整）。
         // 不改变 applied_revision / 模型内容（隔离是叠加状态，下一次成功应用自然清除）。
         command.CommandText = $"""
-INSERT INTO {Table("model_node_applied_state")} (node_id, slot_name, applied_revision, applied_at, is_isolated, drift_reported_at, isolation_reason)
-VALUES (@node_id, @slot_name, 0, now(), true, now(), @reason)
-ON CONFLICT (node_id, slot_name) DO UPDATE
+INSERT INTO {Table("model_node_applied_state")} (node_group_id, instance_id, slot_name, applied_revision, applied_at, is_isolated, drift_reported_at, isolation_reason)
+VALUES (@node_group_id, @instance_id, @slot_name, 0, now(), true, now(), @reason)
+ON CONFLICT (node_group_id, instance_id, slot_name) DO UPDATE
 SET is_isolated = true,
     drift_reported_at = now(),
     isolation_reason = EXCLUDED.isolation_reason
-RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at;
+RETURNING node_group_id, instance_id, slot_name, applied_revision, model_artifact_id, content_hash, engine_generation, is_isolated, drift_reported_at, isolation_reason, applied_at;
 """;
-        command.Parameters.AddWithValue("node_id", nodeId);
+        command.Parameters.AddWithValue("node_group_id", nodeGroupId);
+        command.Parameters.AddWithValue("instance_id", instanceId);
         command.Parameters.AddWithValue("slot_name", slotName);
         command.Parameters.AddWithValue("reason", reason);
 
@@ -167,7 +174,8 @@ RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash,
 
     private static ModelNodeAppliedState ReadState(System.Data.Common.DbDataReader reader)
     {
-        var nodeIdOrdinal = reader.GetOrdinal("node_id");
+        var nodeGroupIdOrdinal = reader.GetOrdinal("node_group_id");
+        var instanceIdOrdinal = reader.GetOrdinal("instance_id");
         var slotNameOrdinal = reader.GetOrdinal("slot_name");
         var appliedRevisionOrdinal = reader.GetOrdinal("applied_revision");
         var artifactIdOrdinal = reader.GetOrdinal("model_artifact_id");
@@ -180,7 +188,8 @@ RETURNING node_id, slot_name, applied_revision, model_artifact_id, content_hash,
 
         return new ModelNodeAppliedState
         {
-            NodeId = reader.GetString(nodeIdOrdinal),
+            NodeGroupId = reader.GetString(nodeGroupIdOrdinal),
+            InstanceId = reader.GetString(instanceIdOrdinal),
             SlotName = reader.GetString(slotNameOrdinal),
             AppliedRevision = reader.GetInt64(appliedRevisionOrdinal),
             ModelArtifactId = reader.IsDBNull(artifactIdOrdinal) ? null : reader.GetString(artifactIdOrdinal),

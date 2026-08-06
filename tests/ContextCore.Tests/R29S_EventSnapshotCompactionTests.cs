@@ -62,7 +62,7 @@ public sealed class R29S_EventSnapshotCompactionTests
     [TestMethod]
     public void SchemaVersion_IsV63()
     {
-        Assert.AreEqual("cc-schema-v64", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v66", PostgresMigrationRunner.SchemaVersion);
     }
 
     // =========================================================================
@@ -108,6 +108,20 @@ public sealed class R29S_EventSnapshotCompactionTests
         Assert.AreEqual(0, anchor.Sequence);
         Assert.AreEqual(0, folded);
         Assert.AreEqual(0, archived.Count);
+    }
+
+    [TestMethod]
+    public void ComputeFold_NegativeUpToSequence_FoldsToLastEvent()
+    {
+        var events = BuildEvents(count: 5); // sequence 0..4
+
+        var (anchor, archived, folded) = PostgresAgentRunEventCompactor.ComputeFold(events, upToSequence: -1);
+
+        // 负数显式解释为最后事件：锚点 = sequence 4，前缀 [0..3] 全部归档。
+        Assert.AreEqual(4, anchor.Sequence, "负数应折叠到最后事件。");
+        Assert.AreEqual(4, folded, "负数应归档全部前缀。");
+        Assert.AreEqual(4, archived.Count);
+        Assert.AreEqual(3, archived[^1].Sequence);
     }
 
     [TestMethod]

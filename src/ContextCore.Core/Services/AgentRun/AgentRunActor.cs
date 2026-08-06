@@ -96,6 +96,8 @@ public sealed class AgentRunActor
     private const int ForcedCheckpointEventThreshold = 1000;
     // 对账记录默认截止时长（ToolDescriptor.ReconciliationDeadline 未回传时的兜底）。
     private static readonly TimeSpan DefaultReconciliationDeadline = TimeSpan.FromHours(24);
+    // 自适应检索规划输入的用途维度（与端点派生签名保持同一取值，保证反馈落到同一签名）。
+    private const string AdaptiveAgentContextPurpose = "agent-context";
     // 事件恢复 keyset pagination 页大小（基于 sequence 索引的分页读取）。
     private const int RecoveryEventPageSize = 500;
     // 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
@@ -119,6 +121,9 @@ public sealed class AgentRunActor
     // P0-10 正式方案：事件流压缩器（null = 非 Postgres provider，无快照/归档，走全量重放）。
     // Recovery 按 "Snapshot → validate anchor → replay hot delta" 从可恢复快照恢复折叠状态。
     private readonly IAgentRunEventCompactor? _eventCompactor;
+    // 自适应检索规划器（规划输入 → 受控计划 → 决策请求 TokenBudget；
+    // 执行后记录检索结果反馈，闭环学习信号）。null = 未注册（无自适应层，行为不变）。
+    private readonly IAdaptiveRetrievalPlanner? _adaptivePlanner;
 
     /// <summary>
     /// 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
@@ -200,6 +205,9 @@ public sealed class AgentRunActor
     /// <param name="toolAuthorizationPolicy">
     /// Tool 授权策略（null = 无快照校验的旧路径；Run 已建立授权快照时缺失策略将拒绝执行）。
     /// </param>
+    /// <param name="adaptivePlanner">
+    /// 自适应检索规划器（null = 未注册，ContextBuilding 不应用自适应层）。
+    /// </param>
     public AgentRunActor(
         IAgentRunStore runStore,
         IAgentRunEventStore eventStore,
@@ -219,7 +227,8 @@ public sealed class AgentRunActor
         AgentHostOptions? hostOptions = null,
         IRecoveryAlertSink? alertSink = null,
         IAgentRunEventCompactor? eventCompactor = null,
-        IToolAuthorizationPolicy? toolAuthorizationPolicy = null)
+        IToolAuthorizationPolicy? toolAuthorizationPolicy = null,
+        IAdaptiveRetrievalPlanner? adaptivePlanner = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
@@ -247,6 +256,7 @@ public sealed class AgentRunActor
         _alertSink = alertSink;
         _eventCompactor = eventCompactor;
         _toolAuthorizationPolicy = toolAuthorizationPolicy;
+        _adaptivePlanner = adaptivePlanner;
     }
 
     /// <summary>
@@ -1871,6 +1881,38 @@ public sealed class AgentRunActor
             return (AgentContextBuildStatus.Ready, null);
         }
 
+        // 自适应检索规划器驱动 Agent 上下文构建（planner → Actor）。
+        // - 规划：由 run 派生规划输入（任务 + 工作区 + 集合 + 用途），PlanAsync 产出
+        //   受控计划（自适应模式 Active 时应用预算收敛 / 查询收敛 / 召回增强策略），
+        //   计划 TokenBudget 注入决策请求——自适应策略真实作用于上下文构建。
+        // - 规划失败不阻断主链（自适应是增强层；降级为不设 TokenBudget，走引擎默认）。
+        AgentRetrievalPlannerInput? plannerInput = null;
+        var plannedTokenBudget = 0;
+        if (_adaptivePlanner is not null)
+        {
+            try
+            {
+                plannerInput = new AgentRetrievalPlannerInput
+                {
+                    OriginalTask = run.Task,
+                    WorkspaceId = run.WorkspaceId,
+                    CollectionId = run.WorkspaceId,
+                    Purpose = AdaptiveAgentContextPurpose
+                };
+                var plan = await _adaptivePlanner.PlanAsync(plannerInput, cancellationToken).ConfigureAwait(false);
+                plannedTokenBudget = plan.TokenBudget;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "[AgentRunActor] Adaptive retrieval plan failed for run {0}: {1}", run.RunId, ex.Message);
+            }
+        }
+
         try
         {
             var scope = new ContextDecisionScope(run.WorkspaceId, run.WorkspaceId);
@@ -1888,7 +1930,9 @@ public sealed class AgentRunActor
                 Scope = scope,
                 Purpose = ContextDecisionPurpose.AgentContext,
                 QueryText = run.Task,
-                TokenBudget = 0,
+                // 受控 Token 预算：规划器产出（含自适应收敛）>0 时覆盖引擎默认；
+                // 规划器未接入 / 规划失败时为 0（引擎按 profile 默认预算）。
+                TokenBudget = plannedTokenBudget,
                 TopK = 0,
                 // 激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
                 // Engine 选出 SelectedEnvelopes 后由 ISelectedCandidateHydrator 批量 hydrate 正文，
@@ -1904,6 +1948,10 @@ public sealed class AgentRunActor
             // 使用 ExecuteWithWorkingSetAsync 获取完整 WorkingSet（Envelopes + Materials）
             // 让投影器从 Materials 恢复候选正文，而不只是 CandidateId/Type/Score 摘要
             var result = await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
+
+            // 自适应反馈记录（best-effort，失败不阻断主链）：
+            // 命中数 / 预算超限 / 是否产出候选——闭环学习信号，供后续规划调整预算与查询收敛。
+            await RecordAdaptiveOutcomeAsync(run, plannerInput, result, cancellationToken).ConfigureAwait(false);
 
             // hydration 失败严重度处理。
             // 1) 日志：hydration.failedCount > 0 / hydration.budgetExceeded 时记录 Trace 警告（可观测性）。
@@ -1985,6 +2033,56 @@ public sealed class AgentRunActor
                 "[AgentRunActor] Decision Runtime exception for run {0}; run blocked as dependency unavailable.",
                 run.RunId);
             return (AgentContextBuildStatus.DependencyUnavailable, null);
+        }
+    }
+
+    /// <summary>
+    /// 记录自适应检索反馈（best-effort 学习信号钩子，失败不阻断主链）。
+    /// 命中数取选中候选数；预算超限由决策结果（budget 拦截数 / EffectiveTokens 超预算）判定；
+    /// Effective = 是否产出候选结果（结果被后续投影采用）。
+    /// </summary>
+    private async Task RecordAdaptiveOutcomeAsync(
+        AgentRun run,
+        AgentRetrievalPlannerInput? plannerInput,
+        ContextDecisionExecutionResult? result,
+        CancellationToken cancellationToken)
+    {
+        if (_adaptivePlanner is null || plannerInput is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var outcome = result?.Decision.Outcome;
+            var budgetExceeded = outcome is not null
+                && (outcome.BudgetExceededCount > 0
+                    || (outcome.TokenBudget > 0 && outcome.EffectiveTokens > outcome.TokenBudget));
+
+            await _adaptivePlanner.RecordOutcomeAsync(new RetrievalPlanFeedback
+            {
+                PlanSignature = AdaptiveRetrievalPlanSignature.Compute(plannerInput),
+                WorkspaceId = run.WorkspaceId,
+                CollectionId = run.WorkspaceId,
+                Purpose = AdaptiveAgentContextPurpose,
+                QueryText = run.Task,
+                HitsReturned = Math.Max(0, outcome?.SelectedCount ?? 0),
+                BudgetExceeded = budgetExceeded,
+                Effective = result is not null,
+                RecordedAtUtc = DateTimeOffset.UtcNow,
+                Source = RetrievalFeedbackSource.Runtime,
+                Confidence = 1.0,
+                OutcomeQuality = 1.0
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] Adaptive retrieval outcome record failed for run {0}: {1}", run.RunId, ex.Message);
         }
     }
 

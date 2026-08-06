@@ -191,6 +191,15 @@ public enum AgentRunState : byte
     ClaimExpired = 24,
 
     /// <summary>
+    /// 本地已调度（Scheduler Claim 已消费、Run 已放入本节点执行队列）：
+    /// 入队成功即消费 Claim（<see cref="Claimed"/> → 本状态），排队期间不依赖
+    /// Claim 续租——Claim 过期后其他节点不会重新领取（状态已离开可领取集合）。
+    /// 出队后推进 <see cref="Running"/>；节点崩溃后由 Recovery Worker
+    /// 回退 <see cref="Queued"/> 重新调度。
+    /// </summary>
+    ScheduledLocally = 26,
+
+    /// <summary>
     /// 上下文安全阻断（终态，需人工介入）：上下文构建判定为安全阻断
     /// （mandatory / hard constraint 候选正文缺失或不可用），模型不得在缺失
     /// mandatory 上下文时运行。与 Failed 的区别：本状态明确表达"安全原因终止"，
@@ -1818,6 +1827,26 @@ public interface IPersistentAgentRunStore : IAgentRunStore
         string? expectedClaimOwner,
         string? executionLeaseToken,
         long? executionFencingToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 本地调度（入队后立即消费 Scheduler Claim）：Claimed → ScheduledLocally，清空 claim 字段。
+    /// 校验 DB 中 claim_token / claim_owner 与队列项一致且 claim 未过期——排队期间不再依赖
+    /// Claim 续租（状态已离开可领取集合，其他节点不会重新领取）。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="expectedClaimToken">入队项携带的 claim token（必须与 DB 一致才能消费）。</param>
+    /// <param name="expectedClaimOwner">入队项携带的 claim owner（必须与 DB 一致才能消费）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>本地调度后的 Run（状态=ScheduledLocally，claim 字段已清空）。</returns>
+    /// <exception cref="InvalidOperationException">claim 不匹配 / 已过期 / 状态非 Claimed
+    /// （与 <see cref="ConsumeClaimAsync"/> 的 CAS 失败语义一致）。</exception>
+    ValueTask<AgentRun> ScheduleLocallyAsync(
+        string workspaceId,
+        string runId,
+        string? expectedClaimToken,
+        string? expectedClaimOwner,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -215,7 +215,7 @@ LIMIT @limit OFFSET @offset;
 SELECT EXISTS (
     SELECT 1 FROM {Table("tool_reconciliation_entries")}
     WHERE workspace_id = @workspace_id AND run_id = @run_id
-      AND status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running})
+      AND status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running}, {(byte)ToolReconciliationStatus.ManualReviewRequired})
 );
 """;
         command.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -225,7 +225,12 @@ SELECT EXISTS (
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(int take, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(
+        int take,
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<string>? availableHandlers = null,
+        DateTimeOffset? afterCreatedAt = null,
+        string? afterReconciliationId = null)
     {
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -233,17 +238,36 @@ SELECT EXISTS (
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         // P0-4：Pending 或租约已过期的 Running（Worker 崩溃后重新领取），
         // 并跳过 next_attempt_at 未到期的退避记录。
+        // 队头阻塞治理：availableHandlers 过滤掉无 Handler 可处理的记录（仅人工裁决）；
+        // (created_at, reconciliation_id) keyset 游标逐页推进，保证超配额记录不被队首持续占据。
+        var handlerClause = availableHandlers is not null
+            ? "AND reconciliation_handler = ANY(@handlers)"
+            : string.Empty;
+        var cursorClause = afterCreatedAt.HasValue && afterReconciliationId is not null
+            ? "AND (created_at, reconciliation_id) > (@after_created_at, @after_reconciliation_id)"
+            : string.Empty;
         command.CommandText = $"""
 SELECT {ReadColumns} FROM {Table("tool_reconciliation_entries")}
 WHERE (status = @pending
        OR (status = @running AND (lease_expires_at IS NULL OR lease_expires_at <= clock_timestamp())))
   AND (next_attempt_at IS NULL OR next_attempt_at <= clock_timestamp())
-ORDER BY created_at ASC
+  {handlerClause}
+  {cursorClause}
+ORDER BY created_at ASC, reconciliation_id ASC
 LIMIT @take;
 """;
         command.Parameters.AddWithValue("pending", (byte)ToolReconciliationStatus.Pending);
         command.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
         command.Parameters.AddWithValue("take", TakeOrDefault(take));
+        if (availableHandlers is not null)
+        {
+            command.Parameters.AddWithValue("handlers", availableHandlers.ToArray());
+        }
+        if (afterCreatedAt.HasValue && afterReconciliationId is not null)
+        {
+            command.Parameters.AddWithValue("after_created_at", afterCreatedAt.Value);
+            command.Parameters.AddWithValue("after_reconciliation_id", afterReconciliationId);
+        }
         return await ReadManyAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
@@ -264,7 +288,8 @@ LIMIT @take;
         var expiresAt = now + leaseDuration;
 
         // CTE + FOR UPDATE SKIP LOCKED：原子领取裁决租约（P0-4）。
-        // - Pending → 领取；Running 且租约已过期 → 接管（fencing 递增隔离旧持有者）。
+        // - Pending / ManualReviewRequired → 领取（人工 resolve 端点可接管需人工复核的记录）；
+        //   Running 且租约已过期 → 接管（fencing 递增隔离旧持有者）。
         // - 有效租约持有中 / 终态 / 退避未到期 → 跳过（SKIP LOCKED 不阻塞并发领取者）。
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -274,6 +299,7 @@ WITH claim AS (
     FROM {Table("tool_reconciliation_entries")}
     WHERE reconciliation_id = @reconciliation_id
       AND (status = @pending
+           OR status = @manual_review
            OR (status = @running AND (lease_expires_at IS NULL OR lease_expires_at <= clock_timestamp())))
       AND (next_attempt_at IS NULL OR next_attempt_at <= clock_timestamp())
     FOR UPDATE SKIP LOCKED
@@ -294,6 +320,7 @@ RETURNING t.fencing_token;
 """;
         command.Parameters.AddWithValue("reconciliation_id", reconciliationId);
         command.Parameters.AddWithValue("pending", (byte)ToolReconciliationStatus.Pending);
+        command.Parameters.AddWithValue("manual_review", (byte)ToolReconciliationStatus.ManualReviewRequired);
         command.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
         command.Parameters.AddWithValue("lease_owner", leaseOwner);
         command.Parameters.AddWithValue("lease_token", leaseToken);
@@ -455,6 +482,45 @@ WHERE reconciliation_id = @reconciliation_id
         command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("last_error", (object?)lastError ?? DBNull.Value);
         command.Parameters.AddWithValue("next_attempt_at", retryDelay.HasValue ? (object)(DateTimeOffset.UtcNow + retryDelay.Value) : DBNull.Value);
+        command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
+        var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return affected > 0;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<bool> MarkManualReviewRequiredAsync(
+        string reconciliationId,
+        string leaseToken,
+        string? lastError,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reconciliationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 升级 Running → ManualReviewRequired：必须持有有效租约；清空租约字段并记录 last_error。
+        // 升级后不再被 ListPendingAsync 列出（停止自动重试），仅人工 resolve 端点可接管裁决。
+        command.CommandText = $"""
+UPDATE {Table("tool_reconciliation_entries")}
+SET status = @manual_review,
+    lease_owner = NULL,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    next_attempt_at = NULL,
+    last_error = @last_error,
+    updated_at = @now
+WHERE reconciliation_id = @reconciliation_id
+  AND status = @running
+  AND lease_token = @lease_token
+  AND lease_expires_at > clock_timestamp();
+""";
+        command.Parameters.AddWithValue("reconciliation_id", reconciliationId);
+        command.Parameters.AddWithValue("manual_review", (byte)ToolReconciliationStatus.ManualReviewRequired);
+        command.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
+        command.Parameters.AddWithValue("lease_token", leaseToken);
+        command.Parameters.AddWithValue("last_error", (object?)lastError ?? DBNull.Value);
         command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
         var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return affected > 0;
@@ -792,7 +858,7 @@ WHERE state IN (@awaiting_reconciliation, @reconciliation_running)
       SELECT 1 FROM {Table("tool_reconciliation_entries")} e
       WHERE e.workspace_id = {Table("agent_runs")}.workspace_id
         AND e.run_id = {Table("agent_runs")}.run_id
-        AND e.status IN (@pending, @running))
+        AND e.status IN (@pending, @running, @manual_review))
 LIMIT @limit
 FOR UPDATE SKIP LOCKED;
 """;
@@ -800,6 +866,7 @@ FOR UPDATE SKIP LOCKED;
                 selectCmd.Parameters.AddWithValue("reconciliation_running", (byte)AgentRunState.ReconciliationRunning);
                 selectCmd.Parameters.AddWithValue("pending", (byte)ToolReconciliationStatus.Pending);
                 selectCmd.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
+                selectCmd.Parameters.AddWithValue("manual_review", (byte)ToolReconciliationStatus.ManualReviewRequired);
                 selectCmd.Parameters.AddWithValue("limit", limit);
                 await using var reader = await selectCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -1079,13 +1146,14 @@ SELECT EXISTS (
     SELECT 1 FROM {Table("tool_reconciliation_entries")}
     WHERE workspace_id = @workspace_id AND run_id = @run_id
       AND request_id != @request_id
-      AND status IN (@pending, @running));
+      AND status IN (@pending, @running, @manual_review));
 """;
         cmd.Parameters.AddWithValue("workspace_id", workspaceId);
         cmd.Parameters.AddWithValue("run_id", runId);
         cmd.Parameters.AddWithValue("request_id", requestId);
         cmd.Parameters.AddWithValue("pending", (byte)ToolReconciliationStatus.Pending);
         cmd.Parameters.AddWithValue("running", (byte)ToolReconciliationStatus.Running);
+        cmd.Parameters.AddWithValue("manual_review", (byte)ToolReconciliationStatus.ManualReviewRequired);
         var exists = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return exists is not null && (bool)exists;
     }
@@ -1350,7 +1418,7 @@ ON CONFLICT (workspace_id, run_id, sequence) DO NOTHING;
         if (includeOverduePredicate)
         {
             clauses.Add("deadline_utc IS NOT NULL AND deadline_utc < now()");
-            clauses.Add($"status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running})");
+            clauses.Add($"status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running}, {(byte)ToolReconciliationStatus.ManualReviewRequired})");
         }
 
         return string.Join(" AND ", clauses);

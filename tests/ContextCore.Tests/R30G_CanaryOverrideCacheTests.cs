@@ -59,14 +59,14 @@ public sealed class R30G_CanaryOverrideCacheTests
     [TestMethod]
     public async Task GetActive_AfterTtl_RefreshesFromInner()
     {
-        var inner = new ScriptedOverrideStore();
+        var inner = new ScriptedOverrideStore { ActiveResult = MakeOverride(RunId) };
         var time = new MutableTimeProvider(CanaryAcceptanceHelpers.BaseTime);
         var cache = new CachedCanaryEmergencyOverrideStore(inner, options: null, timeProvider: time);
 
         await cache.GetActiveAsync(RunId);
         Assert.AreEqual(1, inner.GetActiveCallCount);
 
-        // TTL 未过期前：命中缓存
+        // TTL 未过期前：命中缓存（正覆盖缓存）
         time.Advance(TimeSpan.FromSeconds(4));
         await cache.GetActiveAsync(RunId);
         Assert.AreEqual(1, inner.GetActiveCallCount);
@@ -78,10 +78,10 @@ public sealed class R30G_CanaryOverrideCacheTests
     }
 
     // ---------------------------------------------------------------------------
-    // 3. 负缓存：无活跃覆盖（null）同样缓存（命中率最高的路径）
+    // 3. 无覆盖结果不缓存（负缓存会放大 Kill Switch 跨节点传播窗口）
     // ---------------------------------------------------------------------------
     [TestMethod]
-    public async Task GetActive_NegativeResult_IsCachedWithinTtl()
+    public async Task GetActive_NegativeResult_IsNotCached()
     {
         var inner = new ScriptedOverrideStore(); // ActiveResult = null
         var time = new MutableTimeProvider(CanaryAcceptanceHelpers.BaseTime);
@@ -91,9 +91,31 @@ public sealed class R30G_CanaryOverrideCacheTests
         Assert.IsNull(first);
         Assert.AreEqual(1, inner.GetActiveCallCount);
 
+        // 无覆盖不缓存：第二次查询必须重新访问真实存储——
+        // 若另一节点刚触发 Kill Switch，本节点下一请求即可感知（无 TTL 传播窗口）。
         var second = await cache.GetActiveAsync(RunId);
         Assert.IsNull(second);
-        Assert.AreEqual(1, inner.GetActiveCallCount, "无覆盖（负缓存）在 TTL 内不得再次访问内层存储。");
+        Assert.AreEqual(2, inner.GetActiveCallCount, "无覆盖结果不得缓存，必须重新访问真实存储。");
+    }
+
+    // ---------------------------------------------------------------------------
+    // 3b. 无覆盖不缓存 → 另一节点触发覆盖后立即被感知（Kill Switch 无传播窗口）
+    // ---------------------------------------------------------------------------
+    [TestMethod]
+    public async Task GetActive_KillSwitchTriggeredElsewhere_IsObservedImmediately()
+    {
+        var inner = new ScriptedOverrideStore(); // 初始无覆盖
+        var time = new MutableTimeProvider(CanaryAcceptanceHelpers.BaseTime);
+        var cache = new CachedCanaryEmergencyOverrideStore(inner, options: null, timeProvider: time);
+
+        Assert.IsNull(await cache.GetActiveAsync(RunId));
+        Assert.AreEqual(1, inner.GetActiveCallCount);
+
+        // 另一节点触发 Kill Switch（本节点无写穿失效机会）
+        inner.ActiveResult = MakeOverride(RunId);
+        var observed = await cache.GetActiveAsync(RunId);
+        Assert.IsNotNull(observed, "无覆盖不缓存时，新触发的 Kill Switch 应立即被感知。");
+        Assert.AreEqual(2, inner.GetActiveCallCount);
     }
 
     // ---------------------------------------------------------------------------
@@ -300,7 +322,7 @@ public sealed class R30G_CanaryOverrideCacheTests
             }
         };
 
-        // 请求 1：无覆盖 → 负缓存写入，走 V2
+        // 请求 1：无覆盖 → 走 V2（无覆盖不缓存，写穿后下一请求即可感知）
         await runtime.RetrieveAsync(request, CancellationToken.None);
         Assert.AreEqual(1, stubV2.ExecuteCallCount);
         Assert.AreEqual(0, trackingStore.QueryCallCount);

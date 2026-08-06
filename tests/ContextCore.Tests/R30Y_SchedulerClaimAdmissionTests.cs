@@ -121,6 +121,12 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         AgentRunStateMachine.ValidateTransition(AgentRunState.Claimed, AgentRunState.ClaimExpired);
         AgentRunStateMachine.ValidateTransition(AgentRunState.ClaimExpired, AgentRunState.Claimed);
 
+        // 本地调度：Claimed → ScheduledLocally（入队成功即消费 Claim）→ Running（出队执行）
+        // / Queued（节点崩溃后由 Recovery Worker 回退重新调度）。
+        AgentRunStateMachine.ValidateTransition(AgentRunState.Claimed, AgentRunState.ScheduledLocally);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.ScheduledLocally, AgentRunState.Running);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.ScheduledLocally, AgentRunState.Queued);
+
         // 终态：AdmissionRejected 不可再推进；Claimed → Queued 非法（释放是 store 层操作）
         Assert.IsTrue(AgentRunStateMachine.IsTerminalState(AgentRunState.AdmissionRejected),
             "AdmissionRejected 应为终态（配额失败的 Run 永不进入调度队列）。");
@@ -133,6 +139,9 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
         Assert.ThrowsException<InvalidOperationException>(
             () => AgentRunStateMachine.ValidateTransition(AgentRunState.ClaimExpired, AgentRunState.Running),
             "ClaimExpired 不能直接执行——必须先被重新领取（Claimed）。");
+        Assert.ThrowsException<InvalidOperationException>(
+            () => AgentRunStateMachine.ValidateTransition(AgentRunState.ScheduledLocally, AgentRunState.Claimed),
+            "ScheduledLocally 的 Claim 已消费——不能直接重领，必须先回退 Queued 重新调度。");
     }
 
     // ── 3. Claim 契约（忠实模拟 PostgresAgentRunStore 语义的 InMemory 持久化 store）────
@@ -770,6 +779,48 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
             return consumed with
             {
                 State = AgentRunState.Running,
+                ClaimOwner = null,
+                ClaimToken = null,
+                ClaimExpiresAtUtc = null
+            };
+        }
+
+        public async ValueTask<AgentRun> ScheduleLocallyAsync(
+            string workspaceId, string runId, string? expectedClaimToken, string? expectedClaimOwner,
+            CancellationToken cancellationToken = default)
+        {
+            var key = Key(workspaceId, runId);
+            var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null)
+            {
+                throw new InvalidOperationException($"Run 不存在：{workspaceId}/{runId}。");
+            }
+            if (run.State != AgentRunState.Claimed)
+            {
+                throw new InvalidOperationException(
+                    $"本地调度失败：期望 Claimed，实际 {run.State}。");
+            }
+            var claim = _claims.TryGetValue(key, out var existing) ? existing : default;
+            if (claim.Token is null
+                || !string.Equals(claim.Token, expectedClaimToken, StringComparison.Ordinal)
+                || !string.Equals(run.ClaimOwner, expectedClaimOwner, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Scheduler Claim 已被接管（claim_token/owner 不匹配）。");
+            }
+            if (claim.ExpiresAt <= DateTimeOffset.UtcNow)
+            {
+                throw new InvalidOperationException("Scheduler Claim 已过期。");
+            }
+
+            await _inner.TransitionStateAsync(
+                workspaceId, runId, AgentRunState.Claimed, AgentRunState.ScheduledLocally, cancellationToken)
+                .ConfigureAwait(false);
+            _claims.TryRemove(key, out _);
+
+            var scheduled = (await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false))!;
+            return scheduled with
+            {
+                State = AgentRunState.ScheduledLocally,
                 ClaimOwner = null,
                 ClaimToken = null,
                 ClaimExpiresAtUtc = null

@@ -43,6 +43,14 @@ public sealed class ProductionRuntimeWorkerRegistry
     private readonly Lock _gate = new();
     private DateTimeOffset _lastHeartbeatUtc = DateTimeOffset.MinValue;
     private readonly ConcurrentDictionary<string, WorkerRuntimeState> _workerStates = new(StringComparer.Ordinal);
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>构造函数。</summary>
+    /// <param name="timeProvider">时间提供器（测试可注入可控时钟；默认系统时间）。</param>
+    public ProductionRuntimeWorkerRegistry(TimeProvider? timeProvider = null)
+    {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     /// <summary>已注册的 Worker 实现类型全名列表。</summary>
     public IReadOnlyList<string> WorkerTypeNames
@@ -84,7 +92,7 @@ public sealed class ProductionRuntimeWorkerRegistry
     {
         lock (_gate)
         {
-            _lastHeartbeatUtc = DateTimeOffset.UtcNow;
+            _lastHeartbeatUtc = _timeProvider.GetUtcNow();
         }
     }
 
@@ -95,14 +103,25 @@ public sealed class ProductionRuntimeWorkerRegistry
         lock (_gate)
         {
             return _lastHeartbeatUtc != DateTimeOffset.MinValue
-                && DateTimeOffset.UtcNow - _lastHeartbeatUtc <= window;
+                && _timeProvider.GetUtcNow() - _lastHeartbeatUtc <= window;
         }
+    }
+
+    /// <summary>某 Worker 是否在窗口内上报过成功周期（LastCycleAtUtc 非空且未超窗）。</summary>
+    /// <param name="workerType">Worker 类型名。</param>
+    /// <param name="window">新鲜度窗口。</param>
+    /// <returns>true = 已上报成功周期且未超窗；false = 从未上报或已超窗。</returns>
+    public bool IsWorkerCycleFresh(string workerType, TimeSpan window)
+    {
+        var state = GetWorkerRuntimeState(workerType);
+        return state?.LastCycleAtUtc is { } last
+            && _timeProvider.GetUtcNow() - last <= window;
     }
 
     /// <summary>记录某 Worker 一次成功周期（清空上次错误与退避）。</summary>
     public void MarkCycleSucceeded(string workerType)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
             ? prior with { LastCycleAtUtc = now, LastError = null, CurrentBackoff = null, UpdatedAtUtc = now }
             : new WorkerRuntimeState
@@ -116,7 +135,7 @@ public sealed class ProductionRuntimeWorkerRegistry
     /// <summary>记录某 Worker 一次失败周期（错误信息 + 当前退避时长）。</summary>
     public void RecordFailure(string workerType, string? error, TimeSpan? backoff)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
             ? prior with { LastError = error, CurrentBackoff = backoff, UpdatedAtUtc = now }
             : new WorkerRuntimeState
@@ -131,7 +150,7 @@ public sealed class ProductionRuntimeWorkerRegistry
     /// <summary>记录某 Worker 的队列积压量（待处理任务数）。</summary>
     public void SetQueueLag(string workerType, int lag)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
             ? prior with { QueueLag = lag, UpdatedAtUtc = now }
             : new WorkerRuntimeState
@@ -145,7 +164,7 @@ public sealed class ProductionRuntimeWorkerRegistry
     /// <summary>记录某 Worker 的租约状态（如 claimer：领取中/空闲/退避）。</summary>
     public void SetLeaseStatus(string workerType, string? status)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         _workerStates[workerType] = _workerStates.TryGetValue(workerType, out var prior)
             ? prior with { LeaseStatus = status, UpdatedAtUtc = now }
             : new WorkerRuntimeState

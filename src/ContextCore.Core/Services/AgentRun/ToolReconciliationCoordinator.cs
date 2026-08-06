@@ -32,8 +32,14 @@ public sealed class ToolReconciliationCoordinator
     /// <summary>Worker / 端点领取的裁决租约时长（P0-4：过期后其他 Worker 可接管）。</summary>
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
-    /// <summary>Handler 失败后的回退退避时长。</summary>
-    private static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(30);
+    /// <summary>Handler 失败后的退避基数（第 1 次失败后的重试延迟）。</summary>
+    private static readonly TimeSpan RetryBackoffBase = TimeSpan.FromSeconds(30);
+
+    /// <summary>指数退避封顶（避免长时间故障时重试间隔无限增长）。</summary>
+    private static readonly TimeSpan RetryBackoffMax = TimeSpan.FromMinutes(5);
+
+    /// <summary>自动对账尝试次数上限：达到后升级 ManualReviewRequired（停止自动重试，转人工裁决）。</summary>
+    private const int MaxReconciliationAttempts = 5;
 
     private readonly IToolReconciliationStore _store;
     private readonly ILogger<ToolReconciliationCoordinator> _logger;
@@ -94,9 +100,8 @@ public sealed class ToolReconciliationCoordinator
         }
         catch
         {
-            // 原子裁决失败（整体回滚，记录未被终态化）→ 回退 Pending 等待重试 / 人工再裁决。
-            await _store.TryResetToPendingAsync(
-                reconciliationId, lease.LeaseToken, "resolve failed", RetryBackoff, ct).ConfigureAwait(false);
+            // 原子裁决失败（整体回滚，记录未被终态化）→ 达上限升级人工复核，否则回退 Pending 等待重试。
+            await ResetOrEscalateAsync(record, lease, "resolve failed", ct).ConfigureAwait(false);
             throw;
         }
     }
@@ -121,14 +126,41 @@ public sealed class ToolReconciliationCoordinator
         }
         catch
         {
-            // 对账失败不进入终态——回退 Pending（last_error + 退避）等待下轮重试 / 人工裁决。
-            // 若租约已被接管，TryResetToPendingAsync 返回 false（记录由新持有者继续处理），不阻断。
-            await _store.TryResetToPendingAsync(
-                record.ReconciliationId, lease.LeaseToken, "handler failed", RetryBackoff, ct).ConfigureAwait(false);
+            // 对账失败不进入终态——达上限升级人工复核，否则回退 Pending（last_error + 指数退避）
+            // 等待下轮重试 / 人工裁决。若租约已被接管，升级/回退返回 false（记录由新持有者继续处理）。
+            await ResetOrEscalateAsync(record, lease, "handler failed", ct).ConfigureAwait(false);
             throw;
         }
 
         await CommitOutcomeAsync(record, lease, outcome, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 对账失败后的统一处置：本次失败为第 <c>AttemptCount + 1</c> 次，达到
+    /// <see cref="MaxReconciliationAttempts"/> 上限时升级 ManualReviewRequired（停止自动重试，
+    /// 转人工 resolve 端点裁决）；否则按指数退避（基数 × 2^已尝试次数，封顶）回退 Pending。
+    /// 租约已被接管时升级/回退返回 false，记录由新持有者继续处理，不阻断。
+    /// </summary>
+    private async ValueTask ResetOrEscalateAsync(
+        ToolReconciliationRecord record,
+        ToolReconciliationLease lease,
+        string lastError,
+        CancellationToken ct)
+    {
+        if (record.AttemptCount + 1 >= MaxReconciliationAttempts)
+        {
+            await _store.MarkManualReviewRequiredAsync(record.ReconciliationId, lease.LeaseToken, lastError, ct)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        var retryDelay = RetryBackoffBase * Math.Pow(2, record.AttemptCount);
+        if (retryDelay > RetryBackoffMax)
+        {
+            retryDelay = RetryBackoffMax;
+        }
+        await _store.TryResetToPendingAsync(record.ReconciliationId, lease.LeaseToken, lastError, retryDelay, ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

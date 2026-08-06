@@ -125,11 +125,41 @@ public sealed record CanaryProgressionResult
     /// <summary>是否实际推进了百分比（true = 已调用 CutoverController.SetCutoverPercentage）。</summary>
     public bool Applied { get; init; }
 
+    /// <summary>本地路由是否已应用决策（回滚时 = 本地已切 0%，无条件成立）。</summary>
+    public bool LocalApplied { get; init; }
+
+    /// <summary>Canary 真相源（DB snapshot）是否已持久化决策（回滚时 = applier Applied）。</summary>
+    public bool DurableApplied { get; init; }
+
+    /// <summary>Kill Switch（Emergency Override）是否已持久化。</summary>
+    public bool OverridePersisted { get; init; }
+
+    /// <summary>是否需要人工介入（回滚时 = 本地状态含 OperatorAlertRequired）。</summary>
+    public bool OperatorActionRequired { get; init; }
+
     /// <summary>本次推进使用的 transitionId（用于幂等去重与审计）。</summary>
     public required string TransitionId { get; init; }
 
     /// <summary>本次推进使用的 idempotencyKey（用于 stage_transitions 审计表去重）。</summary>
     public string? IdempotencyKey { get; init; }
+}
+
+/// <summary>
+/// Canary 自动回滚执行结果（真实结算语义）。
+/// </summary>
+public sealed record CanaryRollbackOutcome
+{
+    /// <summary>本地路由已切到 0%（无条件成立——安全优先）。</summary>
+    public required bool LocalApplied { get; init; }
+
+    /// <summary>Canary 真相源（DB snapshot）已持久化 0%。</summary>
+    public required bool DurableApplied { get; init; }
+
+    /// <summary>Kill Switch（Emergency Override）已持久化。</summary>
+    public required bool OverridePersisted { get; init; }
+
+    /// <summary>是否需要人工介入（保留 Kill Switch 等待人工清除 / DB 未修复）。</summary>
+    public required bool OperatorActionRequired { get; init; }
 }
 
 /// <summary>
@@ -547,14 +577,20 @@ public sealed class CanaryProgressionService
 
             case CanaryProgressionDecision.Rollback:
                 {
-                    await RollbackAsync(runId, evaluation.RollbackReason!.Value, cancellationToken, transitionId, idempotencyKey).ConfigureAwait(false);
+                    var rollbackOutcome = await RollbackAsync(
+                        runId, evaluation.RollbackReason!.Value, cancellationToken, transitionId, idempotencyKey)
+                        .ConfigureAwait(false);
                     return new CanaryProgressionResult
                     {
                         Decision = CanaryProgressionDecision.Rollback,
                         Rationale = evaluation.Rationale,
                         PreviousPercentage = previousPercentage,
-                        CurrentPercentage = previousPercentage,
-                        Applied = false,
+                        CurrentPercentage = 0, // 实际已回滚到 0%
+                        Applied = rollbackOutcome.LocalApplied,
+                        LocalApplied = rollbackOutcome.LocalApplied,
+                        DurableApplied = rollbackOutcome.DurableApplied,
+                        OverridePersisted = rollbackOutcome.OverridePersisted,
+                        OperatorActionRequired = rollbackOutcome.OperatorActionRequired,
                         TransitionId = transitionId,
                         IdempotencyKey = idempotencyKey
                     };
@@ -634,7 +670,7 @@ public sealed class CanaryProgressionService
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="transitionId">可选的 transition ID（默认生成新 GUID）。</param>
     /// <param name="idempotencyKey">可选的幂等键。</param>
-    public async ValueTask RollbackAsync(
+    public async ValueTask<CanaryRollbackOutcome> RollbackAsync(
         string runId,
         RollbackReason reason,
         CancellationToken cancellationToken = default,
@@ -683,6 +719,9 @@ public sealed class CanaryProgressionService
         // 本地 route = 0%（无条件，安全优先——无论 Kill Switch / DB CAS 结果如何）。
         UpdateInMemoryPercentage(runId, 0);
 
+        // 记录 DB 真相源是否持久化成功（供结果语义返回真实结算状态）。
+        var dbApplied = false;
+
         // 当 _decisionApplier 非空时走 DB 单事务路径（ApplyCanaryDecisionLocalAsync）。
         // P0-12：回滚到 0% 的 snapshot 写入（percentage/revision/epoch）与 transition audit
         // 由 applier 在同一事务内原子完成，服务不再二次写 snapshot。
@@ -692,6 +731,7 @@ public sealed class CanaryProgressionService
                 runId, CanaryDecision.Rollback, 0, previousPercentage,
                 tid, $"Canary 自动回滚：reason={reason}", cancellationToken).ConfigureAwait(false);
 
+            dbApplied = dbResult.Applied;
             _localStates[runId] = ResolveRollbackLocalState(overridePersisted, dbResult.Applied);
 
             if (overridePersisted && dbResult.Applied)
@@ -747,6 +787,7 @@ public sealed class CanaryProgressionService
             await PersistCanaryStateToRunAsync(runId, 0, newEpoch: null, now, cancellationToken).ConfigureAwait(false);
 
             // 回退路径无 DB CAS：视为本地已持久化（dbPersisted=true）。
+            dbApplied = true;
             _localStates[runId] = ResolveRollbackLocalState(overridePersisted, dbPersisted: true);
         }
 
@@ -765,6 +806,16 @@ public sealed class CanaryProgressionService
             };
             await _pipelineRunStore.SaveRollbackRecordAsync(rollbackRecord, cancellationToken).ConfigureAwait(false);
         }
+
+        // 返回真实结算语义：本地已切 0%；DB 持久化 / Kill Switch / 人工介入按实际状态填充。
+        var finalLocalState = GetLocalState(runId);
+        return new CanaryRollbackOutcome
+        {
+            LocalApplied = true,
+            DurableApplied = dbApplied,
+            OverridePersisted = overridePersisted,
+            OperatorActionRequired = (finalLocalState & CanaryLocalState.OperatorAlertRequired) != 0
+        };
     }
 
     /// <summary>

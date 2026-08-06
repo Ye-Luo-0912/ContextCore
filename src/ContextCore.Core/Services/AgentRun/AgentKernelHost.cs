@@ -307,6 +307,29 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         }
         _queueSignal.Release();
 
+        // 入队成功 → 立即消费 Scheduler Claim，转入 ScheduledLocally（独立于 Claim 生命周期）。
+        // 排队期间不再依赖 Claim 续租：状态已离开可领取集合（Claimed），Claim 过期后其他节点
+        // 不会重新领取，避免"队列等待超过 Claim 时长 → 他节点接管 → 本节点出队时仲裁失败"。
+        // 消费失败（claim 已被接管/过期）：Run 仍在本地队列，出队时状态校验会放弃执行
+        // （执行租约保证单执行者，不产生双执行）。
+        if (run.State == AgentRunState.Claimed
+            && run.ClaimToken is not null
+            && _runStore is IPersistentAgentRunStore persistentStore)
+        {
+            try
+            {
+                await persistentStore.ScheduleLocallyAsync(
+                    run.WorkspaceId, run.RunId, run.ClaimToken, run.ClaimOwner,
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex,
+                    "Run {RunId} 入队后消费 Scheduler Claim 失败（Claim 已被接管/过期）；Run 仍在本地队列，出队时按状态放弃执行。",
+                    run.RunId);
+            }
+        }
+
         return BuildEnqueueResult(
             AgentRunEnqueueStatus.Accepted, run.RunId, capacity, null);
     }
@@ -693,6 +716,29 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                     {
                         // 读取失败非致命：Actor 的 resume 路径可容忍状态差异
                     }
+                }
+            }
+            else if (run.State == AgentRunState.ScheduledLocally)
+            {
+                // 入队时已消费 Scheduler Claim（Claimed → ScheduledLocally）：
+                // 直接推进 Running（带执行租约 fencing），无需再次校验 Claim。
+                // 推进失败（恢复 Worker 已将 Run 回退 Queued / Claim 已被他节点接管）→
+                // 放弃本次执行（执行租约保证单执行者，不产生双执行），Run 交由 Durable Claimer 重新调度。
+                try
+                {
+                    await _runStore.TransitionStateAsync(
+                        run.WorkspaceId, run.RunId,
+                        AgentRunState.ScheduledLocally, AgentRunState.Running,
+                        activeRun.Cts.Token, lease?.LeaseToken, lease?.FencingToken).ConfigureAwait(false);
+                    run = run with { State = AgentRunState.Running };
+                }
+                catch (InvalidOperationException)
+                {
+                    // CAS 失败：状态已被恢复 Worker 回退或并发推进，本节点不再持有执行权。
+                    _logger?.LogDebug(
+                        "Run {RunId} ScheduledLocally→Running 推进失败（状态已被恢复/接管），放弃本次执行，由 Durable Claimer 重新调度。",
+                        run.RunId);
+                    return;
                 }
             }
 
@@ -1124,6 +1170,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var eventCompactor = _serviceProvider.GetService(typeof(IAgentRunEventCompactor)) as IAgentRunEventCompactor;
         // 解析 Tool 授权策略（提供授权快照校验；未注册时 Actor 跳过快照校验——旧路径）。
         var toolAuthorizationPolicy = _serviceProvider.GetService(typeof(IToolAuthorizationPolicy)) as IToolAuthorizationPolicy;
+        // 解析自适应检索规划器（未注册时 Actor 的 ContextBuilding 不应用自适应层）。
+        var adaptivePlanner = _serviceProvider.GetService(typeof(IAdaptiveRetrievalPlanner)) as IAdaptiveRetrievalPlanner;
 
         return new AgentRunActor(
             _runStore,
@@ -1144,7 +1192,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             _options,
             recoveryAlertSink,
             eventCompactor,
-            toolAuthorizationPolicy);
+            toolAuthorizationPolicy,
+            adaptivePlanner);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

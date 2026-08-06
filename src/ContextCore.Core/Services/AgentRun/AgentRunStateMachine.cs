@@ -177,9 +177,19 @@ public static class AgentRunStateMachine
             // P0-8：Claimed → Running（Execution/Fencing Lease 已获取，执行权确立）
             // / ContextBuilding（Actor 首次 flush：领取后直接开始执行，跳过显式 Running 推进的兼容路径）。
             // / ClaimExpired（claim 租约过期未续约 → 显式标记失效，等待其他节点接管）。
+            // / ScheduledLocally（本地入队成功即消费 Claim，排队期间不依赖 Claim 续租）。
             AgentRunState.Claimed => to == AgentRunState.Running
                                       || to == AgentRunState.ContextBuilding
-                                      || to == AgentRunState.ClaimExpired,
+                                      || to == AgentRunState.ClaimExpired
+                                      || to == AgentRunState.ScheduledLocally,
+
+            // ScheduledLocally（本地已调度，Claim 已消费）：
+            // → Running（出队后取得执行租约，执行权确立）
+            // / ContextBuilding（Actor 首次 flush 兼容路径：直接开始执行）
+            // / Queued（节点崩溃后由 Recovery Worker 回退重新调度）。
+            AgentRunState.ScheduledLocally => to == AgentRunState.Running
+                                              || to == AgentRunState.ContextBuilding
+                                              || to == AgentRunState.Queued,
 
             // Claim 过期（ClaimExpired）→ Claimed：其他节点重新领取（claim_attempt +1）。
             AgentRunState.ClaimExpired => to == AgentRunState.Claimed,

@@ -209,18 +209,18 @@ public sealed class ProductionAdmissionController
     }
 
     /// <summary>
-    /// P0-14/P0-15：校验当前节点是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
+    /// P0-14/P0-15：校验当前实例是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
     /// </summary>
     /// <remarks>
     /// 原实现只验证 Cluster Slot 的 DesiredStatus==Active 与 ActiveModelArtifactId 非空——
     /// "集群期望 A、本节点尚未加载模型或仍运行 B" 的节点会通过准入并开始接流量。
-    /// 此处把当前节点的 Applied State（<see cref="IModelNodeAppliedStateStore"/>）、真实
+    /// 此处把当前实例的 Applied State（<see cref="IModelNodeAppliedStateStore"/>）、真实
     /// <see cref="IModelActivationManager"/>（引擎 Model ID / ContentHash / ActiveEngine
     /// 可推理）与成员资格租约（<see cref="IModelNodeMembershipStore"/>：活跃成员 + serving
     /// 开关）纳入请求阶段准入：任一不满足即 Fail（中间件 503，节点不接流量）。
-    /// 节点标识与 <see cref="ModelStateReconcilerWorker"/> 的 node_id 约定一致
-    /// （机器名跨进程重启稳定）。未启用模型激活（IModelActivationManager 未注册，
-    /// ModelMode=Deterministic）时保持集群 Desired 语义（无节点级引擎可校验）。
+    /// 实例标识与 <see cref="ModelStateReconcilerWorker"/> 的 (NodeGroupId, InstanceId) 约定一致
+    /// （<see cref="NodeIdentity"/>：环境变量覆盖或机器名/自动生成回退）。未启用模型激活
+    /// （IModelActivationManager 未注册，ModelMode=Deterministic）时保持集群 Desired 语义。
     /// </remarks>
     private async Task<ProductionAdmissionCheck> VerifyNodeModelAppliedAsync(
         ClusterModelSlot slot,
@@ -234,7 +234,9 @@ public sealed class ProductionAdmissionController
                 + "未启用模型激活（IModelActivationManager 未注册），无节点级引擎校验。");
         }
 
-        var nodeId = Environment.MachineName;
+        var nodeGroupId = NodeIdentity.ResolveNodeGroupId();
+        var instanceId = NodeIdentity.ResolveInstanceId();
+        var nodeId = $"{nodeGroupId}/{instanceId}";
         var appliedStateStore = _services.GetService<IModelNodeAppliedStateStore>();
         if (appliedStateStore is null)
         {
@@ -245,7 +247,7 @@ public sealed class ProductionAdmissionController
 
         var failures = new List<string>();
 
-        var applied = await appliedStateStore.GetAsync(nodeId, "primary", cancellationToken).ConfigureAwait(false);
+        var applied = await appliedStateStore.GetAsync(nodeGroupId, instanceId, "primary", cancellationToken).ConfigureAwait(false);
         if (applied is null)
         {
             failures.Add($"节点 {nodeId} 尚未上报已应用状态（无 model_node_applied_state 记录）——模型可能仍在加载或从未应用");
@@ -275,7 +277,7 @@ public sealed class ProductionAdmissionController
                 + $"无法校验节点 {nodeId} 的活跃成员租约。");
         }
 
-        var membership = await membershipStore.GetAsync(nodeId, cancellationToken).ConfigureAwait(false);
+        var membership = await membershipStore.GetAsync(nodeGroupId, instanceId, cancellationToken).ConfigureAwait(false);
         if (membership is null || membership.LeaseExpiresAt <= DateTimeOffset.UtcNow)
         {
             failures.Add($"节点 {nodeId} 无活跃成员租约（未心跳或已下线）——不可接流量");

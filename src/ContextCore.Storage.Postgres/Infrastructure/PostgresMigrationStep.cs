@@ -77,6 +77,8 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationRetrievalPlanFeedbackHardening(),
         new PostgresMigrationToolReconciliationDecisionRequestId(),
         new PostgresMigrationAgentRunClaimAttempt(),
-        new PostgresMigrationWorkspaceQuotaDurability()
+        new PostgresMigrationWorkspaceQuotaDurability(),
+        new PostgresMigrationModelNodeIdentitySplit(),
+        new PostgresMigrationRetrievalPlanFeedbackTenantIsolation()
     ];
 }

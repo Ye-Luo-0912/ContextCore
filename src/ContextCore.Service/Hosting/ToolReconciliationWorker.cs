@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.AgentRunRuntime;
+using ContextCore.Service.Infrastructure;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -38,13 +39,23 @@ public sealed class ToolReconciliationWorker : BackgroundService
     /// <summary>共享批量心跳间隔：远小于租约时长，保证长 Handler 执行期间租约不失效。</summary>
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
+    /// <summary>单轮轮询的待接管记录配额（ListPendingAsync 单页大小）。</summary>
+    private const int PendingBatchSize = 20;
+
     private readonly ToolReconciliationCoordinator _coordinator;
     private readonly IToolReconciliationStore _store;
     private readonly IReadOnlyDictionary<string, IToolReconciliationHandler> _handlers;
+    /// <summary>本节点已注册 Handler 名称集合（ListPendingAsync 过滤参数：无 Handler 可处理的记录不占用轮询配额）。</summary>
+    private readonly HashSet<string> _availableHandlers;
     private readonly AgentKernelHost? _kernelHost;
     private readonly IAgentRunStore _runStore;
     private readonly ILogger<ToolReconciliationWorker> _logger;
     private readonly TimeSpan _interval;
+    private readonly ProductionRuntimeWorkerRegistry? _workerRegistry;
+
+    /// <summary>keyset 游标：上一轮 ListPendingAsync 扫描到的最后一条记录位置（跨轮次持久）。</summary>
+    private DateTimeOffset? _listCursorCreatedAt;
+    private string? _listCursorReconciliationId;
 
     /// <summary>活跃裁决租约注册表（reconciliationId → 条目），供共享批量心跳循环续约。</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ReconciliationLeaseEntry> _leases =
@@ -71,15 +82,18 @@ public sealed class ToolReconciliationWorker : BackgroundService
         AgentKernelHost? kernelHost,
         IAgentRunStore runStore,
         ContextCoreRuntimeOptions options,
-        ILogger<ToolReconciliationWorker> logger)
+        ILogger<ToolReconciliationWorker> logger,
+        ProductionRuntimeWorkerRegistry? workerRegistry = null)
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _kernelHost = kernelHost;
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _workerRegistry = workerRegistry;
         _handlers = (handlers ?? Array.Empty<IToolReconciliationHandler>())
             .ToDictionary(h => h.HandlerName, StringComparer.Ordinal);
+        _availableHandlers = new HashSet<string>(_handlers.Keys, StringComparer.Ordinal);
         _interval = options.RunRecoveryInterval > TimeSpan.Zero
             ? options.RunRecoveryInterval
             : TimeSpan.FromSeconds(30);
@@ -93,6 +107,8 @@ public sealed class ToolReconciliationWorker : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                _workerRegistry?.SetLeaseStatus(nameof(ToolReconciliationWorker), "polling");
+                var cycleSucceeded = true;
                 try
                 {
                     await ReconcileOnceAsync(stoppingToken).ConfigureAwait(false);
@@ -103,6 +119,7 @@ public sealed class ToolReconciliationWorker : BackgroundService
                 }
                 catch (Exception ex)
                 {
+                    cycleSucceeded = false;
                     _logger.LogError(ex, "ToolReconciliationWorker 轮询循环异常（不中断后续轮询）。");
                 }
 
@@ -114,6 +131,16 @@ public sealed class ToolReconciliationWorker : BackgroundService
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
                     break;
+                }
+
+                if (cycleSucceeded)
+                {
+                    _workerRegistry?.MarkCycleSucceeded(nameof(ToolReconciliationWorker));
+                }
+                else
+                {
+                    _workerRegistry?.RecordFailure(nameof(ToolReconciliationWorker), "轮询循环异常", _interval);
+                    _workerRegistry?.SetLeaseStatus(nameof(ToolReconciliationWorker), "backoff");
                 }
 
                 try
@@ -131,6 +158,7 @@ public sealed class ToolReconciliationWorker : BackgroundService
             // 停止共享批量心跳循环（worker 退出时不再续约）
             await StopHeartbeatLoopAsync().ConfigureAwait(false);
         }
+        _workerRegistry?.SetLeaseStatus(nameof(ToolReconciliationWorker), "stopped");
         _logger.LogInformation("ToolReconciliationWorker 已停止。");
     }
 
@@ -146,9 +174,18 @@ public sealed class ToolReconciliationWorker : BackgroundService
 
     private async Task ReconcileOnceAsync(CancellationToken ct)
     {
-        var pending = await _store.ListPendingAsync(20, ct).ConfigureAwait(false);
+        // 队头阻塞治理：
+        // 1. handler 过滤——无 Handler 可处理的记录（含 reconciliation_handler 为 null 的仅人工记录）
+        //    不占用轮询配额，等待人工 resolve 端点裁决；
+        // 2. keyset 游标——单页配额内的记录处理完后推进游标，超配额记录在下轮继续扫描，
+        //    避免队首记录持续占据配额导致队尾记录饥饿（慢/反复失败记录由退避门自然让位）。
+        var pending = await _store.ListPendingAsync(
+            PendingBatchSize, ct, _availableHandlers, _listCursorCreatedAt, _listCursorReconciliationId).ConfigureAwait(false);
         if (pending.Count == 0)
         {
+            // 已扫到队尾（无更多记录）：重置游标，下轮从头续扫（新记录可能已出现）。
+            _listCursorCreatedAt = null;
+            _listCursorReconciliationId = null;
             return;
         }
 
@@ -219,6 +256,20 @@ public sealed class ToolReconciliationWorker : BackgroundService
             }
 
             await MaybeRequeueRunAsync(workspaceId, runId, ct).ConfigureAwait(false);
+        }
+
+        // 推进 keyset 游标：单页配额已满 → 记录本页末条位置，下轮从其后续扫；
+        // 不足配额 → 已扫到队尾，重置游标下轮从头续扫（新记录可能已出现）。
+        var last = pending[^1];
+        if (pending.Count >= PendingBatchSize)
+        {
+            _listCursorCreatedAt = last.CreatedAt;
+            _listCursorReconciliationId = last.ReconciliationId;
+        }
+        else
+        {
+            _listCursorCreatedAt = null;
+            _listCursorReconciliationId = null;
         }
     }
 

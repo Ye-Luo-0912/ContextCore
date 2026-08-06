@@ -960,13 +960,14 @@ WITH eligible AS (
                   AND l.lease_expires_at > clock_timestamp()
             )
             AND NOT EXISTS (
-                -- 排除存在未决对账记录（Pending/Running）的 Run：外部副作用真相未确认前
-                -- 不得被自动重试/调度（含 Failed 重试路径）——先完成对账，避免新 Attempt
-                -- 跨越"真相未确认"边界导致副作用重复或丢失。
+                -- 排除存在未决对账记录（Pending/Running/ManualReviewRequired）的 Run：
+                -- 外部副作用真相未确认前不得被自动重试/调度（含 Failed 重试路径）——
+                -- 先完成对账，避免新 Attempt 跨越"真相未确认"边界导致副作用重复或丢失；
+                -- 达上限升级人工复核的记录同样阻断自动调度，等待人工裁决。
                 SELECT 1 FROM {Table("tool_reconciliation_entries")} r
                 WHERE r.workspace_id = {Table("agent_runs")}.workspace_id
                   AND r.run_id = {Table("agent_runs")}.run_id
-                  AND r.status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running})
+                  AND r.status IN ({(byte)ToolReconciliationStatus.Pending}, {(byte)ToolReconciliationStatus.Running}, {(byte)ToolReconciliationStatus.ManualReviewRequired})
             )
             ORDER BY priority DESC, created_at ASC, run_id ASC
             LIMIT @take
@@ -1273,6 +1274,110 @@ LIMIT 1;
 
             throw new InvalidOperationException(
                 $"Agent Run 不存在：workspace_id={workspaceId}, run_id={runId}。无法消费 Claim。");
+        }
+
+        var data = (string)result;
+        var run = Serializer.Deserialize<AgentRun>(data)
+                  ?? throw new InvalidOperationException(
+                      $"Agent Run 反序列化失败：workspace_id={workspaceId}, run_id={runId}。");
+        return run;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<AgentRun> ScheduleLocallyAsync(
+        string workspaceId,
+        string runId,
+        string? expectedClaimToken,
+        string? expectedClaimOwner,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+UPDATE {Table("agent_runs")}
+SET state = 26,
+    claim_owner = NULL,
+    claim_token = NULL,
+    claim_expires_at = NULL,
+    updated_at = clock_timestamp(),
+    data = data || jsonb_build_object(
+        'State', to_jsonb('ScheduledLocally'::text),
+        'UpdatedAt', to_jsonb(clock_timestamp()),
+        'ClaimOwner', to_jsonb(NULL::text),
+        'ClaimToken', to_jsonb(NULL::text),
+        'ClaimExpiresAtUtc', to_jsonb(NULL::text))
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+  AND state = 22
+  AND claim_token = @claim_token
+  AND claim_owner = @claim_owner
+  AND (claim_expires_at IS NULL OR claim_expires_at > clock_timestamp())
+RETURNING data;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("run_id", runId);
+        command.Parameters.AddWithValue("claim_token", expectedClaimToken ?? string.Empty);
+        command.Parameters.AddWithValue("claim_owner", expectedClaimOwner ?? string.Empty);
+
+        object? result;
+        try
+        {
+            result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new InvalidOperationException(
+                $"Agent Run 本地调度唯一性冲突：workspace_id={workspaceId}, run_id={runId}。");
+        }
+        if (result is null or DBNull)
+        {
+            // 0 行受影响：分诊——先查当前行，区分 claim 不匹配 / 状态已变。
+            await using var selectCommand = connection.CreateCommand();
+            selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+            selectCommand.CommandText = $"""
+SELECT state, claim_token, claim_owner, claim_expires_at FROM {Table("agent_runs")}
+WHERE workspace_id = @workspace_id AND run_id = @run_id
+LIMIT 1;
+""";
+            selectCommand.Parameters.AddWithValue("workspace_id", workspaceId);
+            selectCommand.Parameters.AddWithValue("run_id", runId);
+            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var currentState = (AgentRunState)reader.GetByte(0);
+                var dbClaimToken = reader.IsDBNull(1) ? null : reader.GetString(1);
+                var dbClaimOwner = reader.IsDBNull(2) ? null : reader.GetString(2);
+                var dbClaimExpiresAt = reader.IsDBNull(3) ? (DateTimeOffset?)null : reader.GetDateTime(3);
+
+                if (currentState != AgentRunState.Claimed)
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run 本地调度失败：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"期望当前状态=Claimed，实际={currentState}（Claim 已被推进/释放/接管）。");
+                }
+                if (!string.Equals(dbClaimToken, expectedClaimToken, StringComparison.Ordinal)
+                    || !string.Equals(dbClaimOwner, expectedClaimOwner, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run Scheduler Claim 已被接管：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"队列项 claim_token/owner 与数据库不一致——Claim 过期后他节点已重新领取，本节点不得本地调度。");
+                }
+                if (dbClaimExpiresAt is null || dbClaimExpiresAt <= DateTimeOffset.UtcNow)
+                {
+                    throw new InvalidOperationException(
+                        $"Agent Run Scheduler Claim 已过期：workspace_id={workspaceId}, run_id={runId}。" +
+                        $"claim_expires_at={dbClaimExpiresAt:O}，需重新领取后方可本地调度。");
+                }
+                throw new InvalidOperationException(
+                    $"Agent Run 本地调度失败：workspace_id={workspaceId}, run_id={runId}（未知原因）。");
+            }
+
+            throw new InvalidOperationException(
+                $"Agent Run 不存在：workspace_id={workspaceId}, run_id={runId}。无法本地调度。");
         }
 
         var data = (string)result;

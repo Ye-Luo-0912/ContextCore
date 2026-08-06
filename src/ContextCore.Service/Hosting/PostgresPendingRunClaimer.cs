@@ -218,39 +218,31 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
         var enqueued = 0;
         var retried = 0;
         var recoveryClaimed = 0;
-        foreach (var run in claimed)
+        for (var i = 0; i < claimed.Count; i++)
         {
+            var run = claimed[i];
             var result = await host.TryEnqueueAsync(run, cancellationToken).ConfigureAwait(false);
             if (result.Status == AgentRunEnqueueStatus.QueueFull || result.Status == AgentRunEnqueueStatus.Closed)
             {
-                // 背压：队列已满 → 释放当前 Run 的 Scheduler Claim（回 Queued，其他节点可重新领取），
-                // 并停止本周期领取（Run 已持久化，下周期再取）。
-                // P0-8：必须释放 claim，否则本节点崩溃后该 Run 直到 claim 过期才被重新调度，
-                // 且同一 Run 的 claim 长期占住候选前列。
-                if (run.ClaimToken is not null)
+                // 背压：队列已满 → 释放当前 Run 与本批次剩余未入队 Run 的 Scheduler Claim
+                //（全部回 Queued，其他节点可重新领取），并停止本周期领取（Run 已持久化，下周期再取）。
+                // 只释放当前 Run 会让本批次后续已领取的 Run 保持 Claimed 直到 claim 过期（默认 60s），
+                // 期间阻塞其他节点调度——必须全量释放。
+                for (var j = i; j < claimed.Count; j++)
                 {
-                    try
-                    {
-                        var released = await store.ReleaseClaimAsync(
-                            run.WorkspaceId, run.RunId, run.ClaimToken, cancellationToken).ConfigureAwait(false);
-                        if (!released)
-                        {
-                            _logger.LogDebug(
-                                "PostgresPendingRunClaimer: Run {RunId} 的 Scheduler Claim 释放失败（claim_token 不匹配——已被接管/推进），跳过。",
-                                run.RunId);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex,
-                            "PostgresPendingRunClaimer: 释放 Run {RunId} 的 Scheduler Claim 失败（claim 过期后由其他节点接管）。",
-                            run.RunId);
-                    }
+                    await ReleaseClaimSafelyAsync(store, claimed[j], cancellationToken).ConfigureAwait(false);
                 }
                 _logger.LogInformation(
-                    "PostgresPendingRunClaimer: 调度队列已满（{Depth}/{Capacity}），释放 Run {RunId} 的 Scheduler Claim 并停止本周期领取。",
-                    result.QueueDepth, result.Capacity, run.RunId);
+                    "PostgresPendingRunClaimer: 调度队列已满（{Depth}/{Capacity}），释放本批次 {Count} 个未入队 Run 的 Scheduler Claim 并停止本周期领取。",
+                    result.QueueDepth, result.Capacity, claimed.Count - i);
                 break;
+            }
+            if (result.Status == AgentRunEnqueueStatus.AlreadyActive)
+            {
+                // 同进程已有活跃 Run（重复入队竞争）→ 本次新 Claim 立即释放（回 Queued）。
+                // 不释放会让 Run 保持 Claimed 直到 claim 过期，阻碍其他节点/后续周期重新调度。
+                await ReleaseClaimSafelyAsync(store, run, cancellationToken).ConfigureAwait(false);
+                continue;
             }
             if (result.Status == AgentRunEnqueueStatus.Accepted)
             {
@@ -265,7 +257,6 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
                     recoveryClaimed++;
                 }
             }
-            // AlreadyActive：同进程已有活跃 Run（重复入队竞争）→ 跳过，非错误。
         }
 
         if (enqueued > 0 || retried > 0 || recoveryClaimed > 0)
@@ -273,6 +264,36 @@ internal sealed class PostgresPendingRunClaimer : BackgroundService
             _logger.LogInformation(
                 "PostgresPendingRunClaimer: 本周期入队 {Enqueued} 个 Run（其中重试 {Retried} 个，恢复依赖重试 {RecoveryClaimed} 个）。",
                 enqueued, retried, recoveryClaimed);
+        }
+    }
+
+    /// <summary>
+    /// 释放单个 Run 的 Scheduler Claim（回 Queued）。claim_token 不匹配（已被接管/推进）
+    /// 或释放异常均不致命：claim 过期后由其他节点接管，不阻断本周期。
+    /// </summary>
+    private async Task ReleaseClaimSafelyAsync(
+        IPersistentAgentRunStore store, AgentRun run, CancellationToken cancellationToken)
+    {
+        if (run.ClaimToken is null)
+        {
+            return;
+        }
+        try
+        {
+            var released = await store.ReleaseClaimAsync(
+                run.WorkspaceId, run.RunId, run.ClaimToken, cancellationToken).ConfigureAwait(false);
+            if (!released)
+            {
+                _logger.LogDebug(
+                    "PostgresPendingRunClaimer: Run {RunId} 的 Scheduler Claim 释放失败（claim_token 不匹配——已被接管/推进），跳过。",
+                    run.RunId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "PostgresPendingRunClaimer: 释放 Run {RunId} 的 Scheduler Claim 失败（claim 过期后由其他节点接管）。",
+                run.RunId);
         }
     }
 

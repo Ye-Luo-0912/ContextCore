@@ -427,6 +427,48 @@ public sealed class RetrievalE2EAutoRollbackTests
     }
 
     // ===========================================================================
+    // 3b. AdvanceRollback_ReturnsRealSettlementSemantics
+    // 验证：AdvanceAsync 触发 Rollback 后，返回结果反映真实结算状态
+    // （CurrentPercentage=0 / Applied=true / LocalApplied / DurableApplied /
+    //  OverridePersisted / OperatorActionRequired），而非回滚前档位 + Applied=false。
+    // ===========================================================================
+    [TestMethod]
+    public async Task AdvanceRollback_ReturnsRealSettlementSemantics()
+    {
+        var runId = "run-rollback-semantics";
+        var options = R29C_E2E_Helpers.BuildOptionsWithQuality(minQualityScore: 0.0);
+        var throwingV2 = new ThrowingDecisionRuntime(new InvalidOperationException("V2 down"));
+        var (runtime, collector, cutover, store, service, time) =
+            R29C_E2E_Helpers.BuildRetrievalE2EStack(throwingV2, cutoverPercentage: 99, options);
+        await CanaryAcceptanceHelpers.CreateScopedCanaryRunAsync(store, runId);
+        service.InitializeCanary(runId);
+
+        // 全部 V2 失败 → V2ErrorRate=1.0 → 触发回滚。
+        for (var i = 1; i <= 5; i++)
+        {
+            await runtime.RetrieveAsync(
+                R29C_E2E_Helpers.BuildRetrievalRequest($"op-rs-{i}", runId),
+                CancellationToken.None);
+        }
+
+        var metrics = collector.GetAggregatedMetrics(runId);
+        time.Advance(TimeSpan.FromSeconds(2));
+        var result = await service.AdvanceAsync(
+            runId, "t-rollback-semantics-001", idempotencyKey: null,
+            CanaryAcceptanceHelpers.HealthyBaseline, metrics.ToExperimentMetrics());
+
+        Assert.AreEqual(CanaryProgressionDecision.Rollback, result.Decision,
+            $"V2ErrorRate=1.0 应触发回滚；rationale={result.Rationale}");
+        Assert.AreEqual(0, result.CurrentPercentage, "回滚后 CurrentPercentage 应为 0%（非回滚前档位）。");
+        Assert.IsTrue(result.Applied, "回滚应视为已应用（本地路由已切 0%）。");
+        Assert.IsTrue(result.LocalApplied, "LocalApplied 应为 true（本地已切 0%）。");
+        Assert.IsTrue(result.DurableApplied, "回退路径（无 applier）应视为本地已持久化 0%。");
+        Assert.IsFalse(result.OverridePersisted, "未配置 Kill Switch 存储时 OverridePersisted 应为 false。");
+        Assert.IsFalse(result.OperatorActionRequired, "无覆盖且 DB 已持久化 → 无需人工介入。");
+        Assert.AreEqual(0, cutover.CutoverPercentage, "回滚后本地路由应为 0%。");
+    }
+
+    // ===========================================================================
     // 4. SampledShadowPath_RecordsObservationAndCanRollback
     // 验证：100% cutover + EnableSampledShadow=true + ShadowSampleRate=1.0 时，
     // 所有请求走 V2 权威路径 + 旁路执行 Legacy 对照 + RecordObservation 上报样本。

@@ -159,8 +159,22 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   Actualize 或 Release）。
     /// - 配额预留 + Run 创建 + Run → Queued 收敛为同一数据库事务（原子准入），
     ///   替代「创建 → 预留 → 推进」三步调用；终态结算统一由结算 worker 执行。
+    /// v64 → v65，Model Node 身份拆分（NodeGroupId + InstanceId 主键）：
+    /// - model_node_membership / model_node_applied_state 的 node_id 列改名为 node_group_id，
+    ///   applied_state 新增 instance_id；主键分别改为 (node_group_id, instance_id) 与
+    ///   (node_group_id, instance_id, slot_name)。
+    /// - 同一节点组可驻留多个实例，各实例独立持有成员租约与已应用状态
+    ///   （修复"每节点仅一个活跃实例可入集群"的部署限制）；
+    ///   存量节点级 applied_state 行回填 instance_id = node_group_id（历史审计行）。
+    /// v65 → v66，retrieval_plan_feedback 自适应控制面租户隔离（结构化列）：
+    /// - 新增 workspace_id（NOT NULL DEFAULT ''，隔离边界）+ collection_id / purpose /
+    ///   policy_version / retrieval_profile / task_class 结构化租户维度列 +
+    ///   (workspace_id, plan_signature) 索引。
+    /// - 控制面端点改为服务端派生签名：从规划输入字段 + 请求上下文工作区派生计划签名，
+    ///   不再信任客户端提供的裸签名；查询 / 清除以工作区为作用域（全局重置需更高权限），
+    ///   杜绝跨租户读取 / 污染 / 重置其他工作区的自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v64";
+    public const string SchemaVersion = "cc-schema-v66";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2375,12 +2389,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "
 -- 自适应检索规划器反馈持久化表。
 -- retrieval_plan_feedback：记录每轮检索结果（命中数 / 预算是否超限 / 是否有效 /
 -- 来源 / 置信度 / 结果质量 / 主体），按计划签名聚合自适应策略（预算收敛 / 召回增强），
--- 跨进程重启保留；ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持按签名或全量重置。
+-- 跨进程重启保留；ListRecentAsync 按 recorded_at 倒序返回最新条目，ClearAsync 支持
+-- 按签名 / 按工作区 / 全局重置。
+-- 租户隔离：workspace_id 为隔离边界（结构化列），查询 / 清除以工作区为作用域；
+-- collection_id / purpose / policy_version / retrieval_profile / task_class 为签名
+-- 租户维度的结构化审计列，配合服务端派生签名杜绝跨工作区污染。
 -- P0-16 加固：(plan_signature, idempotency_key) 部分唯一索引实现反馈幂等去重，
 -- 配合 INSERT ... ON CONFLICT DO NOTHING；source / confidence / outcome_quality / subject
 -- 支撑可信度加权与单主体贡献封顶，防跨 Workspace 污染与单源投毒。
 CREATE TABLE IF NOT EXISTS {retrievalPlanFeedback} (
     plan_signature text NOT NULL,
+    workspace_id text NOT NULL DEFAULT '',
+    collection_id text NULL,
+    purpose text NULL,
+    policy_version text NULL,
+    retrieval_profile text NULL,
+    task_class text NULL,
     query_text text NOT NULL DEFAULT '',
     hits_returned integer NOT NULL DEFAULT 0,
     budget_exceeded boolean NOT NULL DEFAULT false,
@@ -2396,6 +2420,9 @@ CREATE TABLE IF NOT EXISTS {retrievalPlanFeedback} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_plan_feedback", "signature")}
     ON {retrievalPlanFeedback} (plan_signature, recorded_at DESC);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_plan_feedback", "workspace")}
+    ON {retrievalPlanFeedback} (workspace_id, plan_signature);
 
 CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_plan_feedback", "idempotency")}
     ON {retrievalPlanFeedback} (plan_signature, idempotency_key) WHERE idempotency_key IS NOT NULL;
@@ -2546,7 +2573,8 @@ CREATE TABLE IF NOT EXISTS {clusterModelSlots} (
 -- 每个 (node_id, slot_name) 一行：记录该节点最后成功应用的集群槽位 Revision 与模型内容。
 -- 节点重启后据此查询本节点上次应用了什么（审计 / 漂移分析），不与本地引擎代次计数混用。
 CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
-    node_id text NOT NULL,
+    node_group_id text NOT NULL,
+    instance_id text NOT NULL,
     slot_name text NOT NULL DEFAULT 'primary',
     applied_revision bigint NOT NULL,
     model_artifact_id text,
@@ -2556,23 +2584,23 @@ CREATE TABLE IF NOT EXISTS {modelNodeAppliedStates} (
     drift_reported_at timestamptz NULL,
     isolation_reason text NULL,
     applied_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (node_id, slot_name)
+    PRIMARY KEY (node_group_id, instance_id, slot_name)
 );
 
 -- Model Node Membership（节点成员资格租约，P0-15）
--- 每 node_id 一行：节点在集群中的活跃成员身份。租约过期即 stale cutoff——
--- Applied-State Registry 的 NodeCount / Converged / RolloutReady 只基于活跃成员，
--- 不再被历史 Applied State 行永久阻止收敛；新启动但尚未写 Applied State 的节点
--- 计入 NodeCount（未就绪，阻止 Rollout Ready）。serving_enabled：Isolated 节点由
+-- 每 (node_group_id, instance_id) 一行：实例在集群中的活跃成员身份。租约过期即 stale
+-- cutoff——Applied-State Registry 的 NodeCount / Converged / RolloutReady 只基于活跃成员，
+-- 不再被历史 Applied State 行永久阻止收敛；新启动但尚未写 Applied State 的实例
+-- 计入 NodeCount（未就绪，阻止 Rollout Ready）。serving_enabled：Isolated 实例由
 -- Reconciler 置 false，Admission/Middleware 据此真正停止接收模型流量（不能只写标志）。
 CREATE TABLE IF NOT EXISTS {modelNodeMemberships} (
-    node_id text NOT NULL,
+    node_group_id text NOT NULL,
     instance_id text NOT NULL,
     lease_token text NOT NULL,
     lease_expires_at timestamptz NOT NULL,
     last_heartbeat timestamptz NOT NULL,
     serving_enabled boolean NOT NULL DEFAULT true,
-    PRIMARY KEY (node_id)
+    PRIMARY KEY (node_group_id, instance_id)
 );
 
 -- Tool Reconciliation Control Plane（对账记录持久化表）

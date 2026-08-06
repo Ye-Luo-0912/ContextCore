@@ -153,6 +153,122 @@ public sealed class R30C_ModelHATruthTests
     }
 
     /// <summary>
+    /// 验证：同 Revision 下本地引擎加载的模型与集群期望不一致（ModelArtifactId 漂移）
+    /// → Reconciler 判为漂移并隔离（全字段漂移检测不只比 ContentHash）。
+    /// </summary>
+    [TestMethod]
+    public async Task Reconciler_ModelArtifactIdDrift_IsolatesNode()
+    {
+        const string modelA = "s4-champion-v1";
+        const string modelB = "s4-champion-v2";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelA, "sha256:" + modelA, ClusterModelSlotDesiredStatus.Active, "control-plane");
+
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        var (manager, _) = BuildActivationManager(modelA, modelB);
+        using var worker = CreateWorker(slotStore, manager, appliedStore);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            // 等待模型 A 应用成功（_appliedClusterSlotRevision = 1）。
+            await WaitForActiveAsync(manager, modelA, "节点应激活期望模型 A。");
+
+            // 外部热切换：把本地引擎切到模型 B（槽位 Revision 不变）→ 模型 ID 漂移。
+            var swap = await manager.ActivateAsync(modelB, new OnnxInferenceEngineOptions
+            {
+                InputTensorName = "input",
+                ScoreOutputName = "score"
+            });
+            Assert.IsTrue(swap.Success, $"热切换模型 B 应成功：{swap.Error}");
+
+            var applied = await WaitForIsolatedAsync(appliedStore, Environment.MachineName, "primary", "模型 ID 漂移后节点应被自动隔离。");
+            Assert.IsTrue(applied.Isolated);
+            StringAssert.Contains(applied.IsolationReason, "模型 ID 不一致",
+                "隔离原因应指出本地模型与期望不一致。");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// 验证：同 Revision 下本地引擎被停用（EngineGeneration=null，未加载模型）而期望 Active
+    /// → Reconciler 判为漂移并隔离（未加载模型却声称已应用 = 错位）。
+    /// </summary>
+    [TestMethod]
+    public async Task Reconciler_EngineDeactivatedAfterApply_IsolatesNode()
+    {
+        const string modelId = "s4-champion-v1";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelId, "sha256:" + modelId, ClusterModelSlotDesiredStatus.Active, "control-plane");
+
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        var (manager, _) = BuildActivationManager(modelId);
+        using var worker = CreateWorker(slotStore, manager, appliedStore);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitForActiveAsync(manager, modelId, "节点应激活期望模型。");
+
+            // 外部停用引擎（模拟实例内部异常回退 fallback）→ 期望 Active 但引擎未加载 → 漂移。
+            var deactivated = await manager.DeactivateAsync();
+            Assert.IsTrue(deactivated.Success, $"停用引擎应成功：{deactivated.Error}");
+
+            var applied = await WaitForIsolatedAsync(appliedStore, Environment.MachineName, "primary", "引擎未加载（期望 Active）应被隔离。");
+            Assert.IsTrue(applied.Isolated);
+            StringAssert.Contains(applied.IsolationReason, "引擎未加载",
+                "隔离原因应指出引擎未加载（EngineGeneration 缺失）。");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// 验证：同 Revision 下本地引擎的特征 schema 与集群注册表中期望模型的描述不一致
+    /// （模拟跨节点注册表不一致）→ Reconciler 判为漂移并隔离。
+    /// </summary>
+    [TestMethod]
+    public async Task Reconciler_FeatureSchemaMismatch_IsolatesNode()
+    {
+        const string modelId = "s4-champion-v1";
+        var slotStore = new InMemoryClusterModelSlotStore();
+        await slotStore.GetOrCreateAsync("primary");
+        await slotStore.TryUpdateAsync("primary", expectedRevision: 0, modelId, "sha256:" + modelId, ClusterModelSlotDesiredStatus.Active, "control-plane");
+
+        var appliedStore = new InMemoryModelNodeAppliedStateStore();
+        var (manager, _) = BuildActivationManager(modelId);
+
+        // 集群侧注册表（注入 Worker）：同一模型工件但 FeatureSchemaVersion 与本地加载时不同
+        // （模拟跨节点注册表不一致）→ 漂移检测应识别 schema 错位。
+        var clusterRegistry = new InMemoryModelArtifactRegistry();
+        await clusterRegistry.RegisterAsync(MakeDescriptor(modelId) with { FeatureSchemaVersion = "v2-drifted" });
+
+        using var worker = CreateWorker(slotStore, manager, appliedStore, registry: clusterRegistry);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitForActiveAsync(manager, modelId, "节点应激活期望模型。");
+
+            var applied = await WaitForIsolatedAsync(appliedStore, Environment.MachineName, "primary", "特征 schema 不一致应被隔离。");
+            Assert.IsTrue(applied.Isolated);
+            StringAssert.Contains(applied.IsolationReason, "特征 schema 不一致",
+                "隔离原因应指出本地特征 schema 与集群注册表描述不一致。");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
     /// 验证：已应用状态携带应用时刻本地引擎代次（EngineGeneration），
     /// 与集群槽位 Revision 分离——"Slot=A、Engine=B"错位可被审计检出。
     /// </summary>
@@ -189,21 +305,23 @@ public sealed class R30C_ModelHATruthTests
     {
         var store = new InMemoryModelNodeAppliedStateStore();
         var node = Environment.MachineName;
+        const string instance = "instance-test-1";
 
-        await store.MarkIsolatedAsync(node, "primary", "测试隔离");
-        var isolated = await store.GetAsync(node, "primary");
+        await store.MarkIsolatedAsync(node, instance, "primary", "测试隔离");
+        var isolated = await store.GetAsync(node, instance, "primary");
         Assert.IsTrue(isolated!.Isolated, "隔离标记应生效。");
 
         await store.UpsertAsync(new ModelNodeAppliedState
         {
-            NodeId = node,
+            NodeGroupId = node,
+            InstanceId = instance,
             SlotName = "primary",
             AppliedRevision = 2,
             ModelArtifactId = "s4-champion-v1",
             ContentHash = "sha256:s4-champion-v1",
             AppliedAt = DateTimeOffset.UtcNow
         });
-        var cleared = await store.GetAsync(node, "primary");
+        var cleared = await store.GetAsync(node, instance, "primary");
         Assert.IsFalse(cleared!.Isolated, "成功应用（记录反映引擎实际内容）应清除漂移隔离。");
         Assert.IsNull(cleared.IsolationReason, "隔离原因应随隔离清除。");
         Assert.IsNull(cleared.DriftReportedAt, "隔离时间应随隔离清除。");
@@ -213,10 +331,10 @@ public sealed class R30C_ModelHATruthTests
     public async Task AppliedStateStore_MarkIsolated_NoPriorRecord_CreatesEntry()
     {
         var store = new InMemoryModelNodeAppliedStateStore();
-        var result = await store.MarkIsolatedAsync("node-x", "primary", "no-prior-record");
+        var result = await store.MarkIsolatedAsync("node-x", "instance-test-1", "primary", "no-prior-record");
         Assert.IsNotNull(result, "无既有记录时隔离标记也应创建（审计链完整）。");
         Assert.IsTrue(result.Isolated);
-        Assert.AreEqual("node-x", result.NodeId);
+        Assert.AreEqual("node-x", result.NodeGroupId);
         Assert.AreEqual("no-prior-record", result.IsolationReason);
     }
 
@@ -294,7 +412,8 @@ public sealed class R30C_ModelHATruthTests
         bool isolated = false,
         string? reason = null) => new()
     {
-        NodeId = "node-" + Guid.NewGuid().ToString("N")[..8],
+        NodeGroupId = "node-" + Guid.NewGuid().ToString("N")[..8],
+        InstanceId = "instance-test-1",
         SlotName = "primary",
         AppliedRevision = revision,
         ModelArtifactId = modelId,
@@ -332,7 +451,8 @@ public sealed class R30C_ModelHATruthTests
         IClusterModelSlotStore slotStore,
         IModelActivationManager manager,
         IModelNodeAppliedStateStore? appliedStateStore = null,
-        ModelStateReconcilerOptions? options = null)
+        ModelStateReconcilerOptions? options = null,
+        ContextCore.Abstractions.IModelArtifactRegistry? registry = null)
     {
         var opts = options ?? new ModelStateReconcilerOptions
         {
@@ -345,7 +465,10 @@ public sealed class R30C_ModelHATruthTests
             new TestOptionsMonitor<ModelStateReconcilerOptions>(opts),
             new ConfigurationBuilder().Build(),
             NullLogger<ModelStateReconcilerWorker>.Instance,
-            appliedStateStore);
+            appliedStateStore,
+            membershipStore: null,
+            healthRegistry: null,
+            modelRegistry: registry);
     }
 
     private static async Task<ModelArtifactDescriptor> WaitForActiveAsync(
@@ -368,14 +491,17 @@ public sealed class R30C_ModelHATruthTests
 
     private static async Task<ModelNodeAppliedState> WaitForAppliedAsync(
         IModelNodeAppliedStateStore store,
-        string nodeId,
+        string nodeGroupId,
         string slotName,
         string message)
     {
         var deadline = DateTime.UtcNow.AddSeconds(8);
         while (DateTime.UtcNow < deadline)
         {
-            var applied = await store.GetAsync(nodeId, slotName);
+            // 已应用状态按 (NodeGroupId, InstanceId) 键控；测试不知 Worker 自动生成的实例 Id，
+            // 按节点组枚举匹配（单 Worker 场景下组内仅一条记录）。
+            var applied = (await store.ListBySlotAsync(slotName))
+                .FirstOrDefault(n => string.Equals(n.NodeGroupId, nodeGroupId, StringComparison.Ordinal));
             if (applied is not null)
             {
                 return applied;
@@ -388,14 +514,15 @@ public sealed class R30C_ModelHATruthTests
 
     private static async Task<ModelNodeAppliedState> WaitForIsolatedAsync(
         IModelNodeAppliedStateStore store,
-        string nodeId,
+        string nodeGroupId,
         string slotName,
         string message)
     {
         var deadline = DateTime.UtcNow.AddSeconds(8);
         while (DateTime.UtcNow < deadline)
         {
-            var applied = await store.GetAsync(nodeId, slotName);
+            var applied = (await store.ListBySlotAsync(slotName))
+                .FirstOrDefault(n => string.Equals(n.NodeGroupId, nodeGroupId, StringComparison.Ordinal));
             if (applied is { Isolated: true })
             {
                 return applied;

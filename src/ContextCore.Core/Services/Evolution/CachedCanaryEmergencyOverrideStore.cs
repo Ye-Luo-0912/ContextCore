@@ -29,7 +29,10 @@ public sealed class CanaryOverrideCacheOptions
 /// 避免每个 Canary 请求增加 DB 往返，同时保持写穿语义：
 /// <list type="bullet">
 /// <item><c>GetActiveAsync</c>：TTL 内命中直接返回；未命中/过期读真实存储后回填。
-/// 负缓存（结果为 null）同样缓存——大多数 run 无活跃覆盖，这是命中率最高的路径。</item>
+/// 只缓存 Positive Override（活跃覆盖），无覆盖结果不缓存——负缓存会放大
+/// Kill Switch 的跨节点传播窗口（本节点刚触发覆盖后，其他节点可能在一个 TTL 内
+/// 继续命中旧的「无覆盖」缓存而继续走 V2）。正缓存即使陈旧也只朝 V1 方向
+/// （fail-closed 安全侧），由 TTL 界定陈旧上限。</item>
 /// <item><c>TrySetOverrideAsync</c> / <c>TryClearOverrideAsync</c>：写穿真实存储，
 /// 无论返回 true/false 都立即失效该 runId 的本地缓存（false 意味着真相已变化：
 /// 已存在覆盖 / 覆盖已清除，缓存可能持有过期方向，必须作废重读）。</item>
@@ -38,8 +41,8 @@ public sealed class CanaryOverrideCacheOptions
 /// 异常语义：内层存储抛出的异常<b>原样传播</b>——不吞、不以过期缓存充当「无覆盖」应答。
 /// fail-safe 由 <c>AuthoritativeRetrievalRuntime</c> / <c>AuthoritativePackageRuntime</c>
 /// 承担：存储故障时按「覆盖活跃」处理强制回退 V1 并告警。
-/// 跨节点传播：本地写穿立即失效；其他节点在 TTL 内可能持有旧值（最坏情况多走 TTL 时长 V2），
-/// 由 TTL 界定并可通过配置缩短。后续如需即时跨节点失效，可在内层实现上叠加
+/// 跨节点传播：本地写穿立即失效；无覆盖不再缓存 → 新触发覆盖在下一请求即被其他节点感知。
+/// 后续如需进一步即时跨节点失效，可在内层实现上叠加
 /// PostgreSQL NOTIFY / 版本号失效（装饰器接口保持不变，无需改动路由层）。
 /// </remarks>
 public sealed class CachedCanaryEmergencyOverrideStore : ICanaryEmergencyOverrideStore
@@ -80,7 +83,17 @@ public sealed class CachedCanaryEmergencyOverrideStore : ICanaryEmergencyOverrid
 
         // 未命中 / 过期：读真实存储。异常原样传播（不吞、不以过期数据充当无覆盖应答）。
         var current = await _inner.GetActiveAsync(runId, cancellationToken).ConfigureAwait(false);
-        _cache[runId] = new CacheEntry(current, now + _ttl);
+        // 只缓存 Positive Override：无覆盖结果不缓存（负缓存会放大 Kill Switch 的
+        // 跨节点传播窗口——本节点刚触发覆盖后，其他节点可能在一个 TTL 内继续命中
+        // 旧的「无覆盖」缓存而继续走 V2）。正缓存即使陈旧也只朝 V1 方向（fail-closed 安全侧）。
+        if (current is not null)
+        {
+            _cache[runId] = new CacheEntry(current, now + _ttl);
+        }
+        else
+        {
+            _cache.TryRemove(runId, out _);
+        }
         return current;
     }
 

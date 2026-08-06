@@ -5,6 +5,7 @@ using ContextCore.Core;
 using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Storage.InMemory.Stores;
+using Npgsql;
 
 namespace ContextCore.Tests;
 
@@ -17,17 +18,13 @@ namespace ContextCore.Tests;
 /// 正式请求结果必须保持不变。"
 ///
 /// 验证范围：
-/// 1. IRuntimeCandidateTraceSink (PackageTraceRecorder 路径) — latency / exception / disk full
+/// 1. IRuntimeCandidateTraceSink (PackageTraceRecorder 路径) — latency / exception / disk full / queue full / shutdown
 /// 2. IContextPackageBuildTraceStore (BasicContextPackageBuilder 路径) — latency / exception
-/// 3. IDecisionTraceStore (Package + Retrieval 路径) — latency / exception
+/// 3. IDecisionTraceStore (Package + Retrieval 路径) — latency / exception（含 NpgsqlException fail-open）
 /// 4. IRetrievalTraceStore (HybridContextRetriever 路径) — latency / exception
 ///
-/// 已知缺口（[Ignore] 文档化）：
-/// - queue full: 当前 IRuntimeCandidateTraceSink 为同步 lock 实现，无 bounded queue
-/// - shutdown during flush: 当前 sink Dispose 仅 flush StreamWriter，无残余队列 drain
-/// - Postgres 不可用: trace sink 无 Postgres 实现；PostgresDecisionTraceStore/PostgresRetrievalTraceStore
-/// 的故障路径已在 IDecisionTraceStore/IRetrievalTraceStore 的 fault injection exception 测试中通过
-/// throwing fake 覆盖（任何异常类型包括 Npgsql.NpgsqlException 均被 fail-open catch 吞掉）。
+/// queue full / shutdown 场景基于 BoundedRuntimeCandidateTraceSink 的有界队列实现；
+/// Postgres 不可用场景由抛 NpgsqlException 的 throwing fake 覆盖（fail-open 语义）。
 /// </summary>
 [TestClass]
 [TestCategory("Trace")]
@@ -362,46 +359,85 @@ public sealed class ContextCoreTraceFaultInjectionTests
     }
 
     // =========================================================================
-    // 5. 已知缺口文档化（[Ignore] — 待 async dispatcher 实现后启用）
+    // 5. queue full / shutdown / Postgres 不可用（基于有界队列与 NpgsqlException）
     // =========================================================================
 
-    [Ignore("当前 IRuntimeCandidateTraceSink 为同步 lock 实现，无 BoundedChannel 队列。" +
-            "queue full 故障注入需要 async dispatcher + bounded capacity 才有意义；" +
-            "当前同步实现下 Write 要么立即成功要么立即失败，无 queue full 概念。" +
-            "参考 BoundedChannelContextEventSink 的 BoundedChannelFullMode 行为。")]
     [TestMethod]
-    public void TraceSink_QueueFull_NotYetImplemented()
+    public async Task TraceSink_QueueFull_MainFlowUnaffected()
     {
         // 期望：bounded queue 满后 TryWrite 返回 false，DroppedCount 递增，主流程不受影响
-        // 当前：无队列，所有 Write 同步执行
-        Assert.Inconclusive("queue full fault injection 需要 async dispatcher 实现");
+        using var gate = new ManualResetEventSlim(false);
+        var blockingInner = new BlockingTraceSink(gate);
+        await using var sink = new BoundedRuntimeCandidateTraceSink(blockingInner, capacity: 2, batchSize: 64);
+        var recorder = new PackageTraceRecorder(sink, () => "op-test", () => "req-test");
+        var candidate = MakeMinimalPackageTraceCandidate("cand-qfull");
+        try
+        {
+            recorder.WriteTraceRow(candidate, "recent_context", RuntimeCandidateOutcome.Accepted, 100, 100, "");
+            await WaitUntilAsync(() => blockingInner.WriteCalls >= 1);
+
+            for (var i = 0; i < 3; i++)
+            {
+                recorder.WriteTraceRow(candidate, "recent_context", RuntimeCandidateOutcome.Accepted, 100, 100, "");
+            }
+            // 主流程不抛异常（到达此处即通过）；超额行被丢弃
+            Assert.AreEqual(3, sink.WriteCount, "成功入队 3 行（首行 + 2 行）");
+            Assert.AreEqual(1, sink.DroppedCount, "通道满后第 4 行被丢弃");
+            Assert.AreEqual(2, sink.PendingCount, "通道保持满");
+        }
+        finally
+        {
+            gate.Set();
+        }
+        await sink.FlushAsync();
     }
 
-    [Ignore("当前 IRuntimeCandidateTraceSink.Dispose 仅 flush StreamWriter，无残余队列 drain。" +
-            "shutdown during flush 故障注入需要：(1) 后台 consumer 在 Dispose 时仍在处理；" +
-            "(2) DisposeAsync 触发 channel.TryComplete + Cancel + 残余循环；" +
-            "参考 BoundedChannelContextEventSink.DisposeAsync 展示了标准 drain 模式。")]
     [TestMethod]
-    public void TraceSink_ShutdownDuringFlush_NotYetImplemented()
+    public async Task TraceSink_ShutdownDuringFlush_DrainsResidualRows()
     {
-        // 期望：DisposeAsync 期间即使 consumer 仍在写入，残余行也能被 drain 完
-        // 当前：Dispose 仅 flush 既有 StreamWriter，无 drain 概念
-        Assert.Inconclusive("shutdown during flush fault injection 需要 async dispatcher 实现");
+        // 期望：DisposeAsync 期间即使 consumer 仍在处理，残余行也能被 drain 完
+        var tempPath = GetTempTracePath();
+        try
+        {
+            var fileSink = new FileRuntimeCandidateTraceSink(tempPath);
+            var sink = new BoundedRuntimeCandidateTraceSink(fileSink, capacity: 16, batchSize: 2);
+            for (var i = 0; i < 7; i++) sink.Write(MakeMinimalRow());
+
+            // 不等待排空即关闭：残余行必须全部落盘
+            await sink.DisposeAsync();
+            fileSink.Dispose();
+
+            var lines = await File.ReadAllLinesAsync(tempPath);
+            Assert.AreEqual(7, lines.Length, "关闭期间残余行应全部落盘");
+        }
+        finally
+        {
+            CleanupTempFile(tempPath);
+        }
     }
 
-    [Ignore("Postgres 不可用场景的 fault injection：trace sink 无 Postgres 实现，" +
-            "IDecisionTraceStore/IRetrievalTraceStore/IContextPackageBuildTraceStore 的 Postgres 实现 " +
-            "(PostgresDecisionTraceStore / PostgresRetrievalTraceStore) 在连接断开时会抛 NpgsqlException，" +
-            "已被上方 throwing fake 测试覆盖（catch (Exception) 包含 NpgsqlException）。" +
-            "如需端到端验证，应在 IntegrationTests 项目中使用 Testcontainers + 显式断开容器场景。")]
     [TestMethod]
-    public void TraceSink_PostgresUnavailable_CoveredByThrowingFakeTests()
+    public async Task TraceSink_PostgresUnavailable_MainFlowUnaffected()
     {
-        // 此场景已被 PackageBuilder_TraceStoreThrows_PackageOutputUnchanged /
-        // Retriever_DecisionTraceThrows_RetrievalOutputUnchanged /
-        // Retriever_RetrievalTraceThrows_RetrievalOutputUnchanged 覆盖
-        // （throwing fake 抛 IOException 等价于 Postgres 连接断开抛 NpgsqlException）
-        Assert.Inconclusive("Postgres 不可用场景由 throwing fake 测试覆盖；端到端验证应在 IntegrationTests");
+        // 期望：Postgres 不可用（连接失败抛 NpgsqlException）时，fail-open 语义下正式输出不变
+        var now = DateTimeOffset.UtcNow;
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(MakeItem("item-a", "pg 不可用测试 A", ["fault"], now));
+        await store.SaveAsync(MakeItem("item-b", "pg 不可用测试 B", ["fault"], now));
+
+        var baselineBuilder = new BasicContextPackageBuilder(store);
+        var pgUnavailableStore = new ThrowingDecisionTraceStore(new NpgsqlException("connection refused"));
+        var builderWithPgDown = new BasicContextPackageBuilder(
+            store, null, null, null, null, null, null, null, pgUnavailableStore);
+
+        var request = MakeMinimalPackageRequest();
+
+        var baselineResult = await baselineBuilder.BuildDetailedAsync(request);
+        var pgDownResult = await builderWithPgDown.BuildDetailedAsync(request);
+
+        Assert.AreEqual(baselineResult.SelectedItems.Count, pgDownResult.SelectedItems.Count);
+        Assert.AreEqual(baselineResult.DroppedItems.Count, pgDownResult.DroppedItems.Count);
+        Assert.IsTrue(pgUnavailableStore.SaveCount > 0, "throwing decision store 应被调用过");
     }
 
     // =========================================================================
@@ -460,6 +496,87 @@ public sealed class ContextCoreTraceFaultInjectionTests
             kind: "recent_context",
             score: 1.0,
             estimatedTokens: 100);
+    }
+
+    private static RuntimeCandidateTraceRow MakeMinimalRow() => new()
+    {
+        OperationId = "op-test",
+        RequestId = "req-test",
+        CandidateId = "cand-1",
+        SourceId = "cand-1",
+        SourceType = RuntimeCandidateSourceType.Memory,
+        Authority = CandidateAuthorityLevel.Unknown,
+        StrategyType = CandidateStrategyType.Recent,
+        RetrievalChannel = RuntimeCandidateRetrievalChannel.Memory,
+        TraceSource = RuntimeCandidateTraceSource.PackageTrace,
+        Section = "recent_context",
+        Outcome = RuntimeCandidateOutcome.Accepted,
+        OriginalTokens = 100,
+        IncludedTokens = 100,
+        TruncationRatio = 1.0
+    };
+
+    // -------------------------------------------------------------------------
+    // 有界队列相关测试辅助
+    // -------------------------------------------------------------------------
+
+    private static string GetTempTracePath()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ctx-trace-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "trace.jsonl");
+    }
+
+    private static void CleanupTempFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && dir.StartsWith(Path.GetTempPath(), StringComparison.Ordinal))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+        catch { /* 测试清理容忍失败 */ }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 5000)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (sw.ElapsedMilliseconds > timeoutMs)
+            {
+                Assert.Fail($"等待条件超时（{timeoutMs}ms）");
+            }
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// 测试 fake：Write 阻塞直到 gate 放行。
+    /// 用于把 BoundedRuntimeCandidateTraceSink 的消费者钉在首行，确定性填满通道。
+    /// </summary>
+    private sealed class BlockingTraceSink : IRuntimeCandidateTraceSink
+    {
+        private readonly ManualResetEventSlim _gate;
+        private int _writeCalls;
+
+        public BlockingTraceSink(ManualResetEventSlim gate) => _gate = gate;
+
+        public bool Enabled => true;
+        public int WriteCount => _writeCalls;
+        public int WriteCalls => _writeCalls;
+
+        public void Write(RuntimeCandidateTraceRow row)
+        {
+            Interlocked.Increment(ref _writeCalls);
+            // 带超时等待：即使测试异常未放行，也不会永久挂起消费者线程
+            _gate.Wait(TimeSpan.FromSeconds(30));
+        }
+
+        public Task FlushAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 
     // -------------------------------------------------------------------------

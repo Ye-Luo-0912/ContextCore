@@ -97,6 +97,27 @@ public sealed record RetrievalPlanFeedback
     /// <summary>计划签名（由输入确定性派生，见 <see cref="IAdaptiveRetrievalPlanner"/>）。</summary>
     public required string PlanSignature { get; init; }
 
+    /// <summary>
+    /// 所属工作区（隔离边界）。控制面记录/查询/清除反馈必须以工作区为作用域——
+    /// 服务端从请求上下文解析，客户端不得伪造其他租户的签名。
+    /// </summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>集合 ID（签名租户维度之一，结构化审计列）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>用途（签名租户维度之一，结构化审计列）。</summary>
+    public string? Purpose { get; init; }
+
+    /// <summary>策略版本（签名租户维度之一，结构化审计列）。</summary>
+    public string? PolicyVersion { get; init; }
+
+    /// <summary>检索画像（签名租户维度之一，结构化审计列）。</summary>
+    public string? RetrievalProfile { get; init; }
+
+    /// <summary>任务类别（签名租户维度之一，结构化审计列）。</summary>
+    public string? TaskClass { get; init; }
+
     /// <summary>本轮主导查询文本（诊断用）。</summary>
     public string QueryText { get; init; } = string.Empty;
 
@@ -174,14 +195,17 @@ public sealed record AdaptiveRetrievalPolicy
 /// </summary>
 public interface IRetrievalPlanFeedbackStore
 {
-    /// <summary>记录一条检索结果反馈（同 (PlanSignature, IdempotencyKey) 幂等去重）。</summary>
+    /// <summary>记录一条检索结果反馈（同 (PlanSignature, IdempotencyKey) 幂等去重）。
+    /// 反馈必须携带 <see cref="RetrievalPlanFeedback.WorkspaceId"/>——按工作区隔离存储。</summary>
     ValueTask RecordAsync(RetrievalPlanFeedback feedback, CancellationToken ct = default);
 
-    /// <summary>列出指定签名最近 N 条反馈（按记录时间倒序，最新在前）。</summary>
-    ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListRecentAsync(string planSignature, int limit = 20, CancellationToken ct = default);
+    /// <summary>列出指定工作区内、指定签名最近 N 条反馈（按记录时间倒序，最新在前）。
+    /// 工作区为隔离边界：跨工作区的相同签名不共享反馈。</summary>
+    ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListRecentAsync(string workspaceId, string planSignature, int limit = 20, CancellationToken ct = default);
 
-    /// <summary>清除反馈（planSignature 为 null 时清除全部；否则仅清除该签名）。返回清除条数。</summary>
-    ValueTask<int> ClearAsync(string? planSignature = null, CancellationToken ct = default);
+    /// <summary>清除反馈。workspaceId 为 null 时清除全部工作区（全局重置，需更高权限）；
+    /// planSignature 为 null 时清除该工作区全部；否则仅清除该工作区内的该签名。返回清除条数。</summary>
+    ValueTask<int> ClearAsync(string? workspaceId, string? planSignature = null, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -216,14 +240,16 @@ public interface IAdaptiveRetrievalPlanner
     /// <summary>按输入派生的签名计算当前自适应策略（供诊断 / 端点查询）。</summary>
     ValueTask<AdaptiveRetrievalPolicy> GetPolicyAsync(AgentRetrievalPlannerInput input, CancellationToken ct = default);
 
-    /// <summary>按显式计划签名计算当前自适应策略（供诊断 / 端点查询）。</summary>
-    ValueTask<AdaptiveRetrievalPolicy> GetPolicyForSignatureAsync(string planSignature, CancellationToken ct = default);
+    /// <summary>按显式计划签名计算当前自适应策略（供诊断 / 端点查询）。
+    /// 工作区为隔离边界：签名已含工作区维度，此处显式传入用于存储层作用域校验（防伪造签名越权）。</summary>
+    ValueTask<AdaptiveRetrievalPolicy> GetPolicyForSignatureAsync(string workspaceId, string planSignature, CancellationToken ct = default);
 
-    /// <summary>列出指定计划签名最近 N 条反馈（按记录时间倒序；供诊断 / 端点查询）。</summary>
-    ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListFeedbackAsync(string planSignature, int limit = 20, CancellationToken ct = default);
+    /// <summary>列出指定工作区内、指定计划签名最近 N 条反馈（按记录时间倒序；供诊断 / 端点查询）。</summary>
+    ValueTask<IReadOnlyList<RetrievalPlanFeedback>> ListFeedbackAsync(string workspaceId, string planSignature, int limit = 20, CancellationToken ct = default);
 
-    /// <summary>清除反馈并重置自适应状态（planSignature 为 null 时清除全部）。返回清除条数。</summary>
-    ValueTask<int> ResetAsync(string? planSignature = null, CancellationToken ct = default);
+    /// <summary>清除反馈并重置自适应状态。workspaceId 为 null 时清除全部工作区（全局重置，需更高权限）；
+    /// planSignature 为 null 时清除该工作区全部。返回清除条数。</summary>
+    ValueTask<int> ResetAsync(string? workspaceId, string? planSignature = null, CancellationToken ct = default);
 }
 
 /// <summary>

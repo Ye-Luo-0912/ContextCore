@@ -146,9 +146,10 @@ public sealed class R29L_AgentRunRecoveryScanTests
         var crashTime = now.AddHours(-2);   // 已超时（> RunExecutionTimeout=1h）
         var deadline = now.AddHours(1);     // 自身超时未到期（Worker 应 continue 而非标记终态）
 
-        // 与 AgentRunRecoveryWorker.RecoverableStates 一致的 7 个可恢复状态
+        // 与 AgentRunRecoveryWorker.RecoverableStates 一致的 8 个可恢复状态
         // （P0-6/P0-8：Created 由 v59 迁移全量转换为 Queued，归属 Claimer；
-        //  Recovery Worker 接管执行中崩溃的 Running Run——执行租约过期后重新入队）。
+        //  Recovery Worker 接管执行中崩溃的 Running Run——执行租约过期后重新入队；
+        //  ScheduledLocally 由本 Worker CAS 回 Queued 重新调度）。
         var states = new[]
         {
             AgentRunState.Running,
@@ -157,7 +158,8 @@ public sealed class R29L_AgentRunRecoveryScanTests
             AgentRunState.ToolDispatching,
             AgentRunState.Observing,
             AgentRunState.Checkpointing,
-            AgentRunState.PendingToolExecution
+            AgentRunState.PendingToolExecution,
+            AgentRunState.ScheduledLocally
         };
 
         const int runsPerState = 60; // > MaxRunsPerStatePerScan=50，迫使 keyset 游标跨轮推进
@@ -174,7 +176,7 @@ public sealed class R29L_AgentRunRecoveryScanTests
                 index++;
             }
         }
-        Assert.AreEqual(states.Length * runsPerState, expected.Count, "应创建 420 个唯一 Run。");
+        Assert.AreEqual(states.Length * runsPerState, expected.Count, "应创建 480 个唯一 Run。");
 
         // 构建 ServiceProvider（与恢复 Worker 测试相同的依赖图）
         var services = new ServiceCollection();
@@ -454,6 +456,27 @@ public sealed class R29L_AgentRunRecoveryScanTests
             return run with
             {
                 State = AgentRunState.Running,
+                ClaimOwner = null,
+                ClaimToken = null,
+                ClaimExpiresAtUtc = null
+            };
+        }
+
+        public async ValueTask<AgentRun> ScheduleLocallyAsync(
+            string workspaceId, string runId, string? expectedClaimToken, string? expectedClaimOwner,
+            CancellationToken cancellationToken = default)
+        {
+            await _inner.TransitionStateAsync(
+                workspaceId, runId, AgentRunState.Claimed, AgentRunState.ScheduledLocally,
+                cancellationToken).ConfigureAwait(false);
+            var run = await _inner.GetAsync(workspaceId, runId, cancellationToken).ConfigureAwait(false);
+            if (run is null)
+            {
+                throw new InvalidOperationException($"Run 不存在：{workspaceId}/{runId}。");
+            }
+            return run with
+            {
+                State = AgentRunState.ScheduledLocally,
                 ClaimOwner = null,
                 ClaimToken = null,
                 ClaimExpiresAtUtc = null

@@ -329,8 +329,11 @@ public interface IClusterModelSlotStore
 /// </summary>
 public sealed record ModelNodeAppliedState
 {
-    /// <summary>节点 Id（稳定节点标识，如机器名；跨进程重启保持同一身份）。</summary>
-    public required string NodeId { get; init; }
+    /// <summary>节点组 Id（稳定节点标识，如机器名或 CONTEXTCORE_NODE_ID 覆盖；跨进程重启保持同一身份）。</summary>
+    public required string NodeGroupId { get; init; }
+
+    /// <summary>实例 Id（节点组内的具体进程实例；CONTEXTCORE_INSTANCE_ID 覆盖或自动生成）。</summary>
+    public required string InstanceId { get; init; }
 
     /// <summary>槽位名（如 "primary"）。</summary>
     public required string SlotName { get; init; }
@@ -365,34 +368,39 @@ public sealed record ModelNodeAppliedState
 }
 
 /// <summary>
-/// 节点已应用状态存储：每个 (node_id, slot_name) 一行，记录该节点最后成功应用的
-/// 集群槽位 Revision 与模型内容。Upsert 通过 AppliedRevision 做乐观并发控制（CAS），
-/// 仅当新 Revision ≥ 已存 Revision 时生效，防止陈旧节点回写覆盖更新的应用记录。
+/// 节点已应用状态存储：每个 (node_group_id, instance_id, slot_name) 一行，记录该实例最后
+/// 成功应用的集群槽位 Revision 与模型内容。Upsert 通过 AppliedRevision 做乐观并发控制（CAS），
+/// 仅当新 Revision ≥ 已存 Revision 时生效，防止陈旧实例回写覆盖更新的应用记录。
 /// </summary>
 public interface IModelNodeAppliedStateStore
 {
-    /// <summary>读取节点对某槽位最后成功应用的状态；无记录返回 null。</summary>
-    ValueTask<ModelNodeAppliedState?> GetAsync(string nodeId, string slotName, CancellationToken ct = default);
+    /// <summary>读取某实例对某槽位最后成功应用的状态；无记录返回 null。</summary>
+    ValueTask<ModelNodeAppliedState?> GetAsync(
+        string nodeGroupId,
+        string instanceId,
+        string slotName,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// 写入节点已应用状态（CAS on AppliedRevision）：仅当新 AppliedRevision 大于等于
+    /// 写入某实例已应用状态（CAS on AppliedRevision）：仅当新 AppliedRevision 大于等于
     /// 已存记录的 AppliedRevision 时生效。返回实际生效的记录（CAS 拒绝时返回已存记录）。
     /// 成功应用（记录反映本地引擎实际内容）时 Isolated=false，漂移隔离随之清除。
     /// </summary>
     ValueTask<ModelNodeAppliedState> UpsertAsync(ModelNodeAppliedState state, CancellationToken ct = default);
 
     /// <summary>
-    /// 将节点标记为隔离（漂移自动隔离）：设置 Isolated=true / DriftReportedAt / IsolationReason。
+    /// 将某实例标记为隔离（漂移自动隔离）：设置 Isolated=true / DriftReportedAt / IsolationReason。
     /// 幂等：已隔离时仅更新原因与时间；无记录时创建隔离标记（保持审计链完整）。
     /// </summary>
     ValueTask<ModelNodeAppliedState?> MarkIsolatedAsync(
-        string nodeId,
+        string nodeGroupId,
+        string instanceId,
         string slotName,
         string reason,
         CancellationToken ct = default);
 
     /// <summary>
-    /// 列出某槽位下所有节点的已应用状态记录（集群注册表聚合用），按 NodeId 字典序排序。
+    /// 列出某槽位下所有实例的已应用状态记录（集群注册表聚合用），按 (NodeGroupId, InstanceId) 字典序排序。
     /// 无记录时返回空列表。
     /// </summary>
     ValueTask<IReadOnlyList<ModelNodeAppliedState>> ListBySlotAsync(string slotName, CancellationToken ct = default);
@@ -415,10 +423,10 @@ public interface IModelNodeAppliedStateStore
 /// </remarks>
 public sealed record ModelNodeMembership
 {
-    /// <summary>节点 Id（稳定节点标识，如机器名；跨进程重启保持同一身份）。</summary>
-    public required string NodeId { get; init; }
+    /// <summary>节点组 Id（稳定节点标识，如机器名或 CONTEXTCORE_NODE_ID 覆盖；跨进程重启保持同一身份）。</summary>
+    public required string NodeGroupId { get; init; }
 
-    /// <summary>实例 Id（同一节点上的具体进程实例；区分同一机器的多个进程）。</summary>
+    /// <summary>实例 Id（同一节点组内的具体进程实例；区分同一机器的多个进程）。</summary>
     public required string InstanceId { get; init; }
 
     /// <summary>租约令牌：SetServingEnabled 等写操作必须携带当前令牌（fencing，隔离过期持有者）。</summary>
@@ -435,35 +443,39 @@ public sealed record ModelNodeMembership
 }
 
 /// <summary>
-/// 节点成员资格存储：维护每个节点的活跃成员租约（P0-15）。
+/// 节点成员资格存储：维护每个实例的活跃成员租约（P0-15）。
 /// </summary>
 /// <remarks>
 /// 租约语义：
 /// <list type="bullet">
-/// <item>领取/续租是原子的：同一 node_id 在同一时刻只允许一个活跃实例持有（租约未过期且 instance_id
-/// 不同时拒绝新实例，待旧租约过期后接管——接管时生成新令牌 fencing 旧持有者）。</item>
+/// <item>领取/续租按 (node_group_id, instance_id) 键控：同一节点组可驻留多个实例，
+/// 各实例独立持有自己的成员租约（互不排斥）——修复"每节点仅一个活跃实例"的部署限制。</item>
 /// <item>过期即 stale cutoff：<see cref="GetActiveMembersAsync"/> 只返回租约未过期的成员，
-/// 集群 Rollout Ready 基于活跃成员而非历史行。</item>
+/// 集群 Rollout Ready 基于活跃实例而非历史行。</item>
 /// <item><see cref="SetServingEnabledAsync"/> 校验 lease_token 且租约未过期，防止过期持有者篡改状态。</item>
 /// </list>
 /// </remarks>
 public interface IModelNodeMembershipStore
 {
     /// <summary>
-    /// 领取或续租节点成员租约。成功返回最新成员资格；被其他活跃实例持有
-    /// （租约未过期且 instance_id 不同）时返回 null（调用方应退避重试，待旧租约过期接管）。
+    /// 领取或续租某实例的成员租约（按 NodeGroupId+InstanceId 键控）。成功返回最新成员资格；
+    /// 仅当同一 (node_group_id, instance_id) 键存在未过期租约且非本实例时……不存在该情况——
+    /// 每实例一行，领取/续租总是作用于本实例行（首次 INSERT，续租 UPDATE），无需跨实例仲裁。
     /// </summary>
     ValueTask<ModelNodeMembership?> TryAcquireOrRenewLeaseAsync(
-        string nodeId,
+        string nodeGroupId,
         string instanceId,
         TimeSpan leaseDuration,
         bool servingEnabled,
         CancellationToken ct = default);
 
-    /// <summary>读取节点成员资格（无记录返回 null）。</summary>
-    ValueTask<ModelNodeMembership?> GetAsync(string nodeId, CancellationToken ct = default);
+    /// <summary>读取某实例的成员资格（无记录返回 null）。</summary>
+    ValueTask<ModelNodeMembership?> GetAsync(
+        string nodeGroupId,
+        string instanceId,
+        CancellationToken ct = default);
 
-    /// <summary>列出当前活跃成员（租约未过期），按 NodeId 字典序排序。</summary>
+    /// <summary>列出当前活跃成员（租约未过期），按 (NodeGroupId, InstanceId) 字典序排序。</summary>
     ValueTask<IReadOnlyList<ModelNodeMembership>> GetActiveMembersAsync(CancellationToken ct = default);
 
     /// <summary>
@@ -471,21 +483,21 @@ public interface IModelNodeMembershipStore
     /// 仅当 lease_token 匹配且租约未过期时生效；返回是否更新成功。
     /// </summary>
     ValueTask<bool> SetServingEnabledAsync(
-        string nodeId,
+        string nodeGroupId,
         string instanceId,
         string leaseToken,
         bool servingEnabled,
         CancellationToken ct = default);
 
     /// <summary>
-    /// 更新 serving 开关并（可选）同步节点已应用模型状态——单次往返完成两处写入，
+    /// 更新 serving 开关并（可选）同步某实例已应用模型状态——单次往返完成两处写入，
     /// 供 Reconciler 在成员心跳轮内合并写（成功应用期望模型后：serving 恢复 + applied state 落库）。
     /// 仅当 lease_token 匹配且租约未过期时生效（fencing 与 <see cref="SetServingEnabledAsync"/> 一致）；
     /// appliedState 为 null 时仅更新 serving 开关。
     /// 返回是否更新成功（租约失效/被接管 → false，两处写入均不生效）。
     /// </summary>
     ValueTask<bool> SetServingAndAppliedStateAsync(
-        string nodeId,
+        string nodeGroupId,
         string instanceId,
         string leaseToken,
         bool servingEnabled,

@@ -516,7 +516,14 @@ public enum ToolReconciliationStatus : byte
     /// 已损坏：Journal 状态非法（Prepared / 缺失）或与既有已提交结果不一致（指纹冲突），
     /// 无法安全裁决。不视为 Resolved，需人工修复（ControlRoom 可见），禁止自动重放。
     /// </summary>
-    Corrupted = 4
+    Corrupted = 4,
+
+    /// <summary>
+    /// 需人工复核：自动对账尝试达上限后升级（Running → ManualReviewRequired）。
+    /// 不再参与 Worker 轮询（ListPendingAsync 排除），仅可由人工 resolve 端点裁决；
+    /// Run 保持停车（计为未决），直到人工给出裁决。
+    /// </summary>
+    ManualReviewRequired = 5
 }
 
 /// <summary>
@@ -777,7 +784,7 @@ public interface IToolReconciliationStore
     /// <summary>ControlRoom 分页列表：按过滤条件（workspace/run/status/overdue）分页返回，附总数与过期告警计数。</summary>
     ValueTask<ReconciliationListResult> ListAsync(ReconciliationQuery query, CancellationToken cancellationToken = default);
 
-    /// <summary>指定 Workspace + Run 是否存在未裁决（Pending/Running）对账记录。</summary>
+    /// <summary>指定 Workspace + Run 是否存在未裁决（Pending/Running/ManualReviewRequired）对账记录。</summary>
     ValueTask<bool> HasUnresolvedForRunAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -785,7 +792,22 @@ public interface IToolReconciliationStore
     /// Pending 记录 + 租约已过期的 Running 记录（P0-4：Worker 崩溃后重新领取，
     /// 避免永久卡死在 Running）；并跳过 next_attempt_at 未到期的退避记录。
     /// </summary>
-    ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(int take, CancellationToken cancellationToken = default);
+    /// <param name="take">单页最大条数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="availableHandlers">
+    /// 本节点已注册的 Handler 名称集合（null = 不过滤）。记录声明的
+    /// <see cref="ToolReconciliationRecord.ReconciliationHandler"/> 不在集合内时被排除
+    /// （该记录只能由人工 resolve 端点裁决，不占用 Worker 轮询配额——避免无 Handler
+    /// 记录长期占据队首造成队头阻塞）。
+    /// </param>
+    /// <param name="afterCreatedAt">keyset 游标：只返回创建时间在此之后的记录（配合 <paramref name="afterReconciliationId"/> 决胜）。</param>
+    /// <param name="afterReconciliationId">keyset 游标决胜键：与 <paramref name="afterCreatedAt"/> 同值时按 ID 字典序续扫。</param>
+    ValueTask<IReadOnlyList<ToolReconciliationRecord>> ListPendingAsync(
+        int take,
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<string>? availableHandlers = null,
+        DateTimeOffset? afterCreatedAt = null,
+        string? afterReconciliationId = null);
 
     /// <summary>
     /// 领取裁决租约（P0-4）：Pending → Running 并写入租约字段
@@ -830,6 +852,18 @@ public interface IToolReconciliationStore
         string leaseToken,
         string? lastError,
         TimeSpan? retryDelay,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 升级 Running → ManualReviewRequired（自动对账尝试达上限后停止自动重试）：
+    /// 必须持有有效租约；记录 last_error 并清空租约字段。升级后记录不再被
+    /// <see cref="ListPendingAsync"/> 列出，仅可由人工 resolve 端点接管裁决，
+    /// Run 保持停车（<see cref="HasUnresolvedForRunAsync"/> 计为未决）。
+    /// </summary>
+    ValueTask<bool> MarkManualReviewRequiredAsync(
+        string reconciliationId,
+        string leaseToken,
+        string? lastError,
         CancellationToken cancellationToken = default);
 
     /// <summary>裁决为已发生并提交（记录 → Resolved）：必须持有有效租约（P0-4）。</summary>

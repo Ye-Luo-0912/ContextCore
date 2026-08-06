@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.MemoryEvolution;
+using ContextCore.Service.Infrastructure;
 using Microsoft.Extensions.Options;
 
 namespace ContextCore.Service.Hosting;
@@ -44,6 +45,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
     private readonly IOptions<LearningMaterializationOptions> _options;
     private readonly LearningMaterializationMetrics _metrics;
     private readonly ILogger<LearningMaterializationWorker> _logger;
+    private readonly ProductionRuntimeWorkerRegistry? _workerRegistry;
 
     // 批量 heartbeat 协调器——单个后台任务为所有活跃 lease 续约，替代每 record 一个 heartbeat 任务。
     // eventId → (leaseToken, per-record CTS for signaling lease loss to the owning worker)
@@ -54,12 +56,14 @@ public sealed class LearningMaterializationWorker : BackgroundService
         IServiceProvider services,
         IOptions<LearningMaterializationOptions> options,
         LearningMaterializationMetrics metrics,
-        ILogger<LearningMaterializationWorker> logger)
+        ILogger<LearningMaterializationWorker> logger,
+        ProductionRuntimeWorkerRegistry? workerRegistry = null)
     {
         _services = services;
         _options = options;
         _metrics = metrics;
         _logger = logger;
+        _workerRegistry = workerRegistry;
     }
 
     /// <inheritdoc />
@@ -144,8 +148,31 @@ public sealed class LearningMaterializationWorker : BackgroundService
                     break;
                 }
 
-                await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
-                    .ConfigureAwait(false);
+                _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "polling");
+                try
+                {
+                    var polled = await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
+                        .ConfigureAwait(false);
+                    if (polled)
+                    {
+                        _workerRegistry?.MarkCycleSucceeded(nameof(LearningMaterializationWorker));
+                    }
+                    else
+                    {
+                        _workerRegistry?.RecordFailure(nameof(LearningMaterializationWorker), "outbox 轮询失败", interval);
+                        _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "backoff");
+                    }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Learning materialization poll loop failed.");
+                    _workerRegistry?.RecordFailure(nameof(LearningMaterializationWorker), ex.Message, interval);
+                    _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "backoff");
+                }
             }
         }
         finally
@@ -186,6 +213,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
             try { await metricsTask.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None).ConfigureAwait(false); }
             catch { /* metrics task 超时忽略 */ }
 
+            _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "stopped");
             _logger.LogInformation("Learning materialization worker stopped.");
         }
     }
@@ -195,7 +223,8 @@ public sealed class LearningMaterializationWorker : BackgroundService
     /// 每个 record 入 Channel 前在 _activeLeases 注册——批量 heartbeat 协调器周期性续约，
     /// 排队期间 lease 也会被续约，避免被其他 worker 抢占。
     /// </summary>
-    private async Task PollAndDispatchAsync(
+    /// <returns>true = 本轮轮询成功（含空批次）；false = 拉取失败或已取消。</returns>
+    private async Task<bool> PollAndDispatchAsync(
         ILearningEventOutboxStore outboxStore,
         ChannelWriter<LearningMaterializationQueueItem> writer,
         int batchSize,
@@ -212,15 +241,15 @@ public sealed class LearningMaterializationWorker : BackgroundService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return;
+            return false;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to acquire pending learning event outbox records.");
-            return;
+            return false;
         }
 
-        if (batch.Count == 0) return;
+        if (batch.Count == 0) return true;
 
         _logger.LogDebug("Acquired {Count} learning event outbox records for materialization.", batch.Count);
 
@@ -250,6 +279,8 @@ public sealed class LearningMaterializationWorker : BackgroundService
                 break;
             }
         }
+
+        return true;
     }
 
     /// <summary>

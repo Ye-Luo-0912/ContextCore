@@ -56,7 +56,7 @@ public sealed class R30I_ModelNodeMembershipTests
             "node-a", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: true);
 
         Assert.IsNotNull(membership);
-        Assert.AreEqual("node-a", membership.NodeId);
+        Assert.AreEqual("node-a", membership.NodeGroupId);
         Assert.AreEqual("instance-1", membership.InstanceId);
         Assert.IsFalse(string.IsNullOrWhiteSpace(membership.LeaseToken));
         Assert.IsTrue(membership.LeaseExpiresAt > DateTimeOffset.UtcNow.AddMinutes(4), "租约过期时间应约为 now + duration。");
@@ -79,34 +79,37 @@ public sealed class R30I_ModelNodeMembershipTests
     }
 
     [TestMethod]
-    public async Task Acquire_ConflictingLiveInstance_ReturnsNull()
+    public async Task Acquire_DifferentInstances_SameGroup_EachOwnLease()
     {
         var store = new InMemoryModelNodeMembershipStore();
-        await store.TryAcquireOrRenewLeaseAsync(
-            "node-a", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: true);
 
-        // 同节点另一活跃实例（租约未过期）→ 拒绝领取，调用方退避重试。
-        var conflicting = await store.TryAcquireOrRenewLeaseAsync(
+        // 同一节点组的两个实例各自领取自己的成员租约（互不排斥）——修复
+        // "每节点仅一个活跃实例可入集群"的部署限制。
+        var first = await store.TryAcquireOrRenewLeaseAsync(
+            "node-a", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: true);
+        var second = await store.TryAcquireOrRenewLeaseAsync(
             "node-a", "instance-2", TimeSpan.FromMinutes(5), servingEnabled: true);
 
-        Assert.IsNull(conflicting, "租约未过期且 instance_id 不同时不得领取。");
+        Assert.IsNotNull(first, "实例 1 领取自身租约成功。");
+        Assert.IsNotNull(second, "同节点组另一实例 2 领取自身租约成功（不再互相排斥）。");
+        Assert.AreNotEqual(first!.LeaseToken, second!.LeaseToken, "不同实例各自持有独立租约令牌。");
     }
 
     [TestMethod]
-    public async Task Acquire_ExpiredLease_TakeoverGeneratesNewToken()
+    public async Task Acquire_ExpiredLease_RenewGeneratesNewToken()
     {
         var store = new InMemoryModelNodeMembershipStore();
         var first = await store.TryAcquireOrRenewLeaseAsync(
             "node-a", "instance-1", TimeSpan.Zero, servingEnabled: true);
         Assert.IsNotNull(first);
 
-        // 零时长租约立即过期（stale cutoff）→ 新实例可接管，且生成新令牌 fencing 旧持有者。
-        var takeover = await store.TryAcquireOrRenewLeaseAsync(
-            "node-a", "instance-2", TimeSpan.FromMinutes(5), servingEnabled: true);
+        // 零时长租约立即过期（stale cutoff）→ 同实例续租时生成新令牌（fencing 旧令牌失效）。
+        var renewed = await store.TryAcquireOrRenewLeaseAsync(
+            "node-a", "instance-1", TimeSpan.FromMinutes(5), servingEnabled: true);
 
-        Assert.IsNotNull(takeover, "旧租约过期后新实例应能接管。");
-        Assert.AreNotEqual(first!.LeaseToken, takeover.LeaseToken, "过期接管必须生成新令牌（fencing）。");
-        Assert.AreEqual("instance-2", takeover.InstanceId);
+        Assert.IsNotNull(renewed, "过期后同实例续租应成功。");
+        Assert.AreNotEqual(first!.LeaseToken, renewed.LeaseToken, "租约过期后必须生成新令牌（fencing）。");
+        Assert.AreEqual("instance-1", renewed.InstanceId);
     }
 
     [TestMethod]
@@ -120,7 +123,7 @@ public sealed class R30I_ModelNodeMembershipTests
             "node-a", "instance-1", membership!.LeaseToken, servingEnabled: false);
 
         Assert.IsTrue(updated);
-        var current = await store.GetAsync("node-a");
+        var current = await store.GetAsync("node-a", "instance-1");
         Assert.IsNotNull(current);
         Assert.IsFalse(current.ServingEnabled, "有效令牌 + 未过期租约应能翻转 serving 开关。");
     }
@@ -137,7 +140,7 @@ public sealed class R30I_ModelNodeMembershipTests
             "node-a", "instance-1", "forged-token", servingEnabled: false);
 
         Assert.IsFalse(updated, "lease_token 不匹配时不得更新 serving 开关。");
-        var current = await store.GetAsync("node-a");
+        var current = await store.GetAsync("node-a", "instance-1");
         Assert.IsTrue(current!.ServingEnabled, "失败写入不得改变既有状态。");
     }
 
@@ -167,7 +170,8 @@ public sealed class R30I_ModelNodeMembershipTests
             "node-a", "instance-1", membership!.LeaseToken, servingEnabled: true,
             new ModelNodeAppliedState
             {
-                NodeId = "node-a",
+                NodeGroupId = "node-a",
+                InstanceId = "instance-1",
                 SlotName = SlotName,
                 AppliedRevision = 7,
                 ModelArtifactId = "model-a",
@@ -177,9 +181,9 @@ public sealed class R30I_ModelNodeMembershipTests
             });
 
         Assert.IsTrue(updated, "有效令牌 + 未过期租约应合并写成功。");
-        var current = await store.GetAsync("node-a");
+        var current = await store.GetAsync("node-a", "instance-1");
         Assert.IsTrue(current!.ServingEnabled, "serving 开关应被置 true。");
-        var applied = await appliedStore.GetAsync("node-a", SlotName);
+        var applied = await appliedStore.GetAsync("node-a", "instance-1", SlotName);
         Assert.IsNotNull(applied, "已应用状态应一并写入。");
         Assert.AreEqual(7, applied!.AppliedRevision);
         Assert.AreEqual("model-a", applied.ModelArtifactId);
@@ -197,16 +201,17 @@ public sealed class R30I_ModelNodeMembershipTests
             "node-a", "instance-1", "forged-token", servingEnabled: true,
             new ModelNodeAppliedState
             {
-                NodeId = "node-a",
+                NodeGroupId = "node-a",
+                InstanceId = "instance-1",
                 SlotName = SlotName,
                 AppliedRevision = 7,
                 AppliedAt = DateTimeOffset.UtcNow
             });
 
         Assert.IsFalse(updated, "lease_token 不匹配时合并写必须整体失败（fail-closed）。");
-        var current = await store.GetAsync("node-a");
+        var current = await store.GetAsync("node-a", "instance-1");
         Assert.IsFalse(current!.ServingEnabled, "失败写入不得改变既有 serving 状态。");
-        Assert.IsNull(await appliedStore.GetAsync("node-a", SlotName), "serving 更新失败时已应用状态不得写入。");
+        Assert.IsNull(await appliedStore.GetAsync("node-a", "instance-1", SlotName), "serving 更新失败时已应用状态不得写入。");
     }
 
     [TestMethod]
@@ -220,8 +225,8 @@ public sealed class R30I_ModelNodeMembershipTests
         var active = await store.GetActiveMembersAsync();
 
         Assert.AreEqual(2, active.Count, "租约已过期的成员不得计入活跃成员。");
-        Assert.AreEqual("node-a", active[0].NodeId);
-        Assert.AreEqual("node-c", active[1].NodeId);
+        Assert.AreEqual("node-a", active[0].NodeGroupId);
+        Assert.AreEqual("node-c", active[1].NodeGroupId);
     }
 
     // =========================================================================
@@ -331,12 +336,14 @@ public sealed class R30I_ModelNodeMembershipTests
 
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_model_node_membership (",
             "基线 DDL 应含 model_node_membership 建表语句。");
-        StringAssert.Contains(sql, "node_id text NOT NULL", "基线 DDL 应含 node_id 列（节点稳定标识）。");
+        StringAssert.Contains(sql, "node_group_id text NOT NULL", "基线 DDL 应含 node_group_id 列（节点组稳定标识）。");
         StringAssert.Contains(sql, "instance_id text NOT NULL", "基线 DDL 应含 instance_id 列（进程实例）。");
         StringAssert.Contains(sql, "lease_token text NOT NULL", "基线 DDL 应含 lease_token 列（fencing）。");
         StringAssert.Contains(sql, "lease_expires_at timestamptz NOT NULL", "基线 DDL 应含 lease_expires_at 列（stale cutoff）。");
         StringAssert.Contains(sql, "last_heartbeat timestamptz NOT NULL", "基线 DDL 应含 last_heartbeat 列。");
         StringAssert.Contains(sql, "serving_enabled boolean NOT NULL DEFAULT true", "基线 DDL 应含 serving_enabled 列（Isolated 停止接流量）。");
+        StringAssert.Contains(sql, "PRIMARY KEY (node_group_id, instance_id)",
+            "基线 DDL 主键应为 (node_group_id, instance_id)——同一节点组可驻留多个实例。");
     }
 
     [TestMethod]
@@ -345,6 +352,27 @@ public sealed class R30I_ModelNodeMembershipTests
         CollectionAssert.Contains(
             PostgresMigrationRunner.RequiredOperationalTableSuffixes.ToList(),
             "model_node_membership");
+    }
+
+    [TestMethod]
+    public void Migration_ModelNodeIdentitySplit_DeclaresV64ToV65()
+    {
+        var step = PostgresMigrationStepRegistry.Steps
+            .OfType<PostgresMigrationModelNodeIdentitySplit>()
+            .Single();
+
+        Assert.AreEqual("0012_model_node_identity_split", step.MigrationId);
+        Assert.AreEqual("cc-schema-v64", step.FromSchemaVersion);
+        Assert.AreEqual("cc-schema-v65", step.ToSchemaVersion);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                PostgresMigrationStage.Online,
+                PostgresMigrationStage.Backfill,
+                PostgresMigrationStage.ConstraintValidate
+            },
+            step.Stages.ToArray(),
+            "v64→v65 应为 列改名/加列 + 数据回填 + 主键切换 三阶段（幂等重入）。");
     }
 
     // =========================================================================
@@ -378,7 +406,8 @@ public sealed class R30I_ModelNodeMembershipTests
                     "node-pg", "instance-1", lease!.LeaseToken, servingEnabled: true,
                     new ModelNodeAppliedState
                     {
-                        NodeId = "node-pg",
+                        NodeGroupId = "node-pg",
+                        InstanceId = "instance-1",
                         SlotName = SlotName,
                         AppliedRevision = 9,
                         ModelArtifactId = "model-pg",
@@ -388,9 +417,9 @@ public sealed class R30I_ModelNodeMembershipTests
                     });
 
                 Assert.IsTrue(updated, "有效令牌 + 未过期租约应合并写成功。");
-                var current = await membershipStore.GetAsync("node-pg");
+                var current = await membershipStore.GetAsync("node-pg", "instance-1");
                 Assert.IsTrue(current!.ServingEnabled, "serving 开关应被置 true。");
-                var applied = await appliedStore.GetAsync("node-pg", SlotName);
+                var applied = await appliedStore.GetAsync("node-pg", "instance-1", SlotName);
                 Assert.IsNotNull(applied, "已应用状态应一并写入。");
                 Assert.AreEqual(9, applied!.AppliedRevision);
                 Assert.AreEqual("model-pg", applied.ModelArtifactId);
@@ -422,16 +451,17 @@ public sealed class R30I_ModelNodeMembershipTests
                     "node-pg", "instance-1", "forged-token", servingEnabled: true,
                     new ModelNodeAppliedState
                     {
-                        NodeId = "node-pg",
+                        NodeGroupId = "node-pg",
+                        InstanceId = "instance-1",
                         SlotName = SlotName,
                         AppliedRevision = 9,
                         AppliedAt = DateTimeOffset.UtcNow
                     });
 
                 Assert.IsFalse(updated, "令牌不匹配时合并写必须整体失败。");
-                var current = await membershipStore.GetAsync("node-pg");
+                var current = await membershipStore.GetAsync("node-pg", "instance-1");
                 Assert.IsFalse(current!.ServingEnabled, "失败写入不得改变既有 serving 状态。");
-                Assert.IsNull(await appliedStore.GetAsync("node-pg", SlotName),
+                Assert.IsNull(await appliedStore.GetAsync("node-pg", "instance-1", SlotName),
                     "serving 更新失败时已应用状态不得写入。");
             }
         }
@@ -496,7 +526,7 @@ public sealed class R30I_ModelNodeMembershipTests
     private static ModelNodeMembership Member(string nodeId)
         => new()
         {
-            NodeId = nodeId,
+            NodeGroupId = nodeId,
             InstanceId = "instance-1",
             LeaseToken = "token-" + nodeId,
             LeaseExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
@@ -527,7 +557,8 @@ public sealed class R30I_ModelNodeMembershipTests
         string? contentHash,
         bool isolated = false) => new()
     {
-        NodeId = nodeId,
+        NodeGroupId = nodeId,
+        InstanceId = "instance-1",
         SlotName = SlotName,
         AppliedRevision = revision,
         ModelArtifactId = modelId,
@@ -544,21 +575,26 @@ public sealed class R30I_ModelNodeMembershipTests
         public FixedMembershipStore(IReadOnlyList<ModelNodeMembership> members) => _members = members;
 
         public ValueTask<ModelNodeMembership?> TryAcquireOrRenewLeaseAsync(
-            string nodeId,
+            string nodeGroupId,
             string instanceId,
             TimeSpan leaseDuration,
             bool servingEnabled,
             CancellationToken ct = default)
             => throw new NotImplementedException("注册表聚合测试不领取租约。");
 
-        public ValueTask<ModelNodeMembership?> GetAsync(string nodeId, CancellationToken ct = default)
-            => new(_members.FirstOrDefault(m => m.NodeId == nodeId));
+        public ValueTask<ModelNodeMembership?> GetAsync(
+            string nodeGroupId,
+            string instanceId,
+            CancellationToken ct = default)
+            => new(_members.FirstOrDefault(m =>
+                string.Equals(m.NodeGroupId, nodeGroupId, StringComparison.Ordinal)
+                && string.Equals(m.InstanceId, instanceId, StringComparison.Ordinal)));
 
         public ValueTask<IReadOnlyList<ModelNodeMembership>> GetActiveMembersAsync(CancellationToken ct = default)
             => new(_members);
 
         public ValueTask<bool> SetServingEnabledAsync(
-            string nodeId,
+            string nodeGroupId,
             string instanceId,
             string leaseToken,
             bool servingEnabled,
@@ -566,7 +602,7 @@ public sealed class R30I_ModelNodeMembershipTests
             => throw new NotImplementedException("注册表聚合测试不更新 serving。");
 
         public ValueTask<bool> SetServingAndAppliedStateAsync(
-            string nodeId,
+            string nodeGroupId,
             string instanceId,
             string leaseToken,
             bool servingEnabled,
