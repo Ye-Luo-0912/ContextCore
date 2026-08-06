@@ -20,6 +20,7 @@ namespace ContextCore.Tests;
 [TestClass]
 [TestCategory("Storage")]
 [TestCategory("R31")]
+[TestCategory("Integration")]
 public sealed class R31E_PostgresTraceStoreTests
 {
     [TestMethod]
