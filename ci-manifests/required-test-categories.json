@@ -8,12 +8,7 @@
       "name": "unit",
       "filter": "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract",
       "minExecuted": 1,
-      "allowNotExecuted": [
-        "R29H_AgentRunProcessRestartTests.Restart_Postgres_PersistentRecovery",
-        "R29H_CanaryMultiInstanceWindowTests.MultiInstance_Postgres_PersistentAggregation",
-        "R29H_LearningEventAcceptanceTests.DatasetSnapshot_HasCompleteness_AndLineageReport",
-        "R29H_ModelActivationProductionTests.Production_Postgres_PersistentActivation"
-      ]
+      "allowNotExecuted": []
     },
     {
       "job": "integration-postgres",
@@ -29,9 +24,7 @@
       "name": "architecture",
       "filter": "TestCategory=Architecture",
       "minExecuted": 1,
-      "allowNotExecuted": [
-        "ContextCoreDiArchitectureTests.ProductionComposition_Postgres_IContextStateVersionStore_ResolvesToPostgresImplementation"
-      ]
+      "allowNotExecuted": []
     },
     {
       "job": "public-api",

@@ -361,6 +361,7 @@ public sealed class R29H_CanaryMultiInstanceWindowTests
     /// 此测试验证 Postgres 连接可用性，完整集成测试由 ContextCore.IntegrationTests 覆盖。
     /// </summary>
     [TestMethod]
+    [TestCategory("Integration")]
     public async Task MultiInstance_Postgres_PersistentAggregation()
     {
         var connectionString = GetPostgresConnectionString();

@@ -549,6 +549,7 @@ public sealed class R29H_AgentRunProcessRestartTests
     /// Postgres 不可用时跳过（Assert.Inconclusive）。
     /// </summary>
     [TestMethod]
+    [TestCategory("Integration")]
     public async Task Restart_Postgres_PersistentRecovery()
     {
         var connectionString = GetPostgresConnectionString();

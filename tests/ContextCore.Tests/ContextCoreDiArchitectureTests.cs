@@ -132,17 +132,13 @@ public sealed class ContextCoreDiArchitectureTests
         Assert.IsInstanceOfType(versionStore, typeof(PostgresContextStateVersionStore));
     }
 
-    [Ignore("已知缺陷：CoreExtensions.cs:62 无条件 AddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>()，" +
-            "覆盖了 AddContextStorage 在 Postgres provider 下注册的 PostgresContextStateVersionStore。" +
-            "Program.cs 调用顺序为 AddContextStorage → AddContextCore，故生产环境下" +
-            "IContextStateVersionStore 实际解析为 InMemoryContextStateVersionStore（非 Postgres），" +
-            "PostgresServiceCollectionExtensions.cs:134 注释声明的覆盖意图未生效。" +
-            "修复方案：将 CoreExtensions.cs:62 改为 TryAddSingleton，或调整 Program.cs 调用顺序使 AddContextCore 先于 AddContextStorage。")]
     [TestMethod]
     public async Task ProductionComposition_Postgres_IContextStateVersionStore_ResolvesToPostgresImplementation()
     {
         // 完整生产组合：AddContextStorage → AddContextCore（与 Program.cs:87-88 一致）
         // 期望：Postgres 注册应胜出（符合 PostgresServiceCollectionExtensions.cs:134 注释意图）
+        // 当前 CoreExtensions 以 TryAddSingleton 注册 InMemory 默认实现，
+        // 不会覆盖 Postgres provider 已注册的分布式实现。
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddContextStorage(MakePostgresOptions());

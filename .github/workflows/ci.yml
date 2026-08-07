@@ -71,6 +71,20 @@ jobs:
             find "$d" -type d -empty -delete
           done < <(find . -type d -name obj -print0)
 
+      # 记录上传前的实际工件大小（上传路径 = tests/**/bin + **/obj 资产），
+      # 避免只依赖本地估计（注释中的 724MB 等数字随依赖变化会漂移）。
+      - name: Record actual artifact size
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN_BYTES=$(find tests -type d -name bin -exec du -sb {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')
+          OBJ_BYTES=$(find . -type d -name obj -exec du -sb {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')
+          echo "## Actual build artifact size (pre-upload)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- tests/**/bin: $(numfmt --to=iec "$BIN_BYTES")" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **/obj (incl. non-uploaded intermediates): $(numfmt --to=iec "$OBJ_BYTES")" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Largest test bin directories" >> "$GITHUB_STEP_SUMMARY"
+          du -sh $(find tests -type d -name bin | tr '\n' ' ') 2>/dev/null | sort -rh | head -10 >> "$GITHUB_STEP_SUMMARY" || true
+
       # 上传时 obj 资产必须保持 `**/obj/**` 全库范围：upload-artifact 会按所有匹配
       # 文件的公共根目录裁剪存储路径。若把 obj 收窄到 tests/**，公共根变为 tests/，
       # bin 文件也会被剥掉 tests/ 前缀，下游 --no-build 将找不到测试程序集。
@@ -162,6 +176,7 @@ jobs:
     env:
       ConnectionStrings__Postgres: "Host=localhost;Port=5432;Database=context_test;Username=postgres;Password=postgres"
       POSTGRES_TEST_CONNECTION_STRING: "Host=localhost;Port=5432;Database=context_test;Username=postgres;Password=postgres"
+      CONTEXT_TEST_POSTGRES: "Host=localhost;Port=5432;Database=context_test;Username=postgres;Password=postgres"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -184,14 +199,38 @@ jobs:
         with:
           name: build-output
 
-      - name: Run Postgres integration tests
+      # 按测试项目拆分执行，避免 Solution 级过滤的不确定性（某项目匹配 0 条时
+      # TreatNoTestsAsError 会导致整个 job 误报失败）。三个测试项目均有
+      # TestCategory=Integration 用例（ContextCore.Tests 的 Postgres 持久化测试
+      # 依赖 CONTEXT_TEST_POSTGRES 直连 service 容器；IntegrationTests 用 Testcontainers）。
+      - name: Run Postgres integration tests (ContextCore.Tests)
         env:
           # Testcontainers 需要 Docker socket
           DOCKER_HOST: unix:///var/run/docker.sock
         run: >
-          dotnet test ContextCore.sln -c Release --no-build --no-restore
+          dotnet test tests/ContextCore.Tests/ContextCore.Tests.csproj -c Release --no-build --no-restore
           --filter "TestCategory=Integration"
-          --logger "console;verbosity=normal"
+          --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=integration-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
+
+      - name: Run Postgres integration tests (ContextCore.IntegrationTests)
+        env:
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: >
+          dotnet test tests/ContextCore.IntegrationTests/ContextCore.IntegrationTests.csproj -c Release --no-build --no-restore
+          --filter "TestCategory=Integration"
+          --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=integration-tests.trx"
+          -- RunConfiguration.TreatNoTestsAsError=true
+
+      - name: Run Postgres integration tests (ContextCore.Service.Tests)
+        env:
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: >
+          dotnet test tests/ContextCore.Service.Tests/ContextCore.Service.Tests.csproj -c Release --no-build --no-restore
+          --filter "TestCategory=Integration"
+          --logger "console;verbosity=minimal"
           --logger "trx;LogFileName=integration-tests.trx"
           -- RunConfiguration.TreatNoTestsAsError=true
 

@@ -93,7 +93,9 @@ internal static class CoreExtensions
 		});
 		// 状态版本存储（进程内单调递增）。Decorator 在写入成功后 bump 版本，
 		// ContextStateCache 据版本号判断是否命中。多实例场景需替换为持久化实现。
-		services.AddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>();
+		// 用 TryAddSingleton：Postgres provider（AddContextStorage 先注册）提供分布式实现时
+		// 保留其注册，仅当无任何已有注册时才回退到进程内实现。
+		services.TryAddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>();
 		services.AddSingleton<BasicContextIngestionService>();
 		services.AddSingleton<ContextInputNormalizer>();
 		services.AddSingleton<ContextInputValidator>();

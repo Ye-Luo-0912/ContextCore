@@ -234,6 +234,7 @@ public sealed class R29H_LearningEventAcceptanceTests
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
+    [TestCategory("Integration")]
     public async Task DatasetSnapshot_HasCompleteness_AndLineageReport()
     {
         // 项目当前仅有 TrainingDataExporter（JSONL + SHA-256 manifest，文件级完整性），

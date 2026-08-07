@@ -445,6 +445,7 @@ public sealed class R29H_ModelActivationProductionTests
     /// 此测试验证 Postgres 连接可用性，完整集成测试由 ContextCore.IntegrationTests 覆盖。
     /// </summary>
     [TestMethod]
+    [TestCategory("Integration")]
     public async Task Production_Postgres_PersistentActivation()
     {
         var connectionString = GetPostgresConnectionString();
