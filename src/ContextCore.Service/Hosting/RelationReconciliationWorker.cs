@@ -111,8 +111,13 @@ public sealed class RelationReconciliationWorker : BackgroundService
 
         if (options.RunOnStartup)
         {
-            await RunReconciliationBatchAsync(probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
-                .ConfigureAwait(false);
+            // 启动即处理：满批立即续扫到队尾，不等间隔（积压时启动即排空）。
+            var startupHasMore = true;
+            while (startupHasMore && !stoppingToken.IsCancellationRequested)
+            {
+                startupHasMore = await RunReconciliationBatchAsync(
+                    probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken).ConfigureAwait(false);
+            }
         }
 
         try
@@ -128,8 +133,15 @@ public sealed class RelationReconciliationWorker : BackgroundService
                     break;
                 }
 
-                await RunReconciliationBatchAsync(probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
-                    .ConfigureAwait(false);
+                // 满批续扫：本批取满说明仍有积压，立即处理下一批，不等间隔（吞吐优先）；
+                // 空批/不足一批说明队列已清空，回到外层按间隔休眠。
+                var hasMore = true;
+                while (hasMore && !stoppingToken.IsCancellationRequested)
+                {
+                    hasMore = await RunReconciliationBatchAsync(
+                        probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
+                        .ConfigureAwait(false);
+                }
             }
         }
         finally
@@ -139,7 +151,11 @@ public sealed class RelationReconciliationWorker : BackgroundService
         }
     }
 
-    private async Task RunReconciliationBatchAsync(
+    /// <summary>
+    /// 处理一批 outbox 记录。返回 true 表示本批取满（仍有积压），调用方应立即续扫；
+    /// false 表示队列已清空或本轮无法继续（异常/依赖缺失），调用方可按间隔休眠。
+    /// </summary>
+    private async Task<bool> RunReconciliationBatchAsync(
         IRelationOutboxStore outboxStore,
         int batchSize,
         string owner,
@@ -155,15 +171,15 @@ public sealed class RelationReconciliationWorker : BackgroundService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return;
+            return false;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to acquire pending outbox records.");
-            return;
+            return false;
         }
 
-        if (batch.Count == 0) return;
+        if (batch.Count == 0) return false;
 
         _logger.LogInformation("Acquired {Count} outbox records for reconciliation.", batch.Count);
 
@@ -176,7 +192,7 @@ public sealed class RelationReconciliationWorker : BackgroundService
             _logger.LogWarning(
                 "IRelationStore unavailable — cannot reconcile {Count} outbox records. They will be retried after lease expiry.",
                 batch.Count);
-            return;
+            return false;
         }
 
         var appliedCount = 0;
@@ -212,7 +228,7 @@ public sealed class RelationReconciliationWorker : BackgroundService
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // host 关闭——剩余记录由其他 worker 通过 AcquirePendingAsync 抢占（lease 过期后）。
-                return;
+                return false;
             }
             catch (Exception ex)
             {
@@ -237,6 +253,9 @@ public sealed class RelationReconciliationWorker : BackgroundService
         _logger.LogInformation(
             "Reconciliation batch complete: applied={Applied}, replayed={Replayed}, failed={Failed}, leaseLost={LeaseLost}.",
             appliedCount, replayedCount, failedCount, leaseLostCount);
+
+        // 本批取满 = 仍有积压，立即续扫；否则等下一轮间隔。
+        return batch.Count >= batchSize;
     }
 
     /// <summary>

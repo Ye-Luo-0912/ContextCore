@@ -166,8 +166,7 @@ public sealed class RelationReconciliationWorkerTests
     }
 
     /// <summary>RenewHeartbeatAsync 返回 false（租约丢失）→ 不调用 MarkApplied/MarkFailed。</summary>
-    /// <remarks>
-    /// 验证租约丢失时 worker 中止当前记录处理——保留 state='Dispatched'，
+    /// <remarks>    /// 验证租约丢失时 worker 中止当前记录处理——保留 state='Dispatched'，
     /// 让其他 worker 通过 AcquirePendingAsync 抢占（Dispatched + lease_expired）。
     /// </remarks>
     [TestMethod]
@@ -206,6 +205,43 @@ public sealed class RelationReconciliationWorkerTests
         Assert.AreEqual(0, fakeOutbox.MarkFailedCalls, "租约丢失时不应调用 MarkFailedAsync");
     }
 
+    /// <summary>
+    /// 验证满批续扫：outbox 积压超过一批时，worker 在启动首轮内连续排空全部批次，
+    /// 不等待轮询间隔（IntervalSeconds 配置为 60s，排空发生在数秒内）。
+    /// </summary>
+    [TestMethod]
+    [Timeout(15000)]
+    public async Task Worker_WhenBacklogExceedsBatch_DrainsWithoutWaitingInterval()
+    {
+        const int batchSize = 10;
+        const int fullBatches = 3;
+        var fakeOutbox = new MultiBatchRelationOutboxStore(fullBatches, batchSize);
+        var fakeRelationStore = new FakeRelationStore(SampleRelation);
+        var fakeProjectionWriter = new FakeRelationProjectionWriter();
+
+        using var cts = new CancellationTokenSource();
+        using var provider = BuildServiceProvider(fakeOutbox, fakeRelationStore, fakeProjectionWriter, enabled: true);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var worker = provider.GetRequiredService<RelationReconciliationWorker>();
+        await worker.StartAsync(cts.Token);
+
+        // 满批 3 次 + 队尾探测 1 次 = 4 次 AcquirePending；全部应在 10s 窗口内完成。
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        while (DateTimeOffset.UtcNow < deadline && Volatile.Read(ref fakeOutbox.AcquirePendingCalls) < fullBatches + 1)
+        {
+            await Task.Delay(50);
+        }
+        stopwatch.Stop();
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.IsTrue(fakeOutbox.AcquirePendingCalls >= fullBatches + 1,
+            "满批后应立即续扫到队尾探测（不应等待 60s 轮询间隔）。");
+        Assert.IsTrue(stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+            "积压应在启动后数秒内排空，而非等待一个轮询间隔。");
+        Assert.AreEqual(fullBatches * batchSize, fakeOutbox.MarkAppliedCalls, "全部积压记录应被标记 Applied。");
+    }
+
     private static ServiceProvider BuildServiceProvider(
         IRelationOutboxStore? outboxStore,
         IRelationStore? relationStore,
@@ -233,6 +269,72 @@ public sealed class RelationReconciliationWorkerTests
     }
 
     // ── Fakes ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 多批 outbox：前 <see cref="_fullBatches"/> 次 AcquirePendingAsync 各返回满批
+    /// <see cref="_batchSize"/> 条记录，之后返回空批——模拟积压场景。
+    /// </summary>
+    private sealed class MultiBatchRelationOutboxStore : IRelationOutboxStore
+    {
+        private readonly RelationOutboxRecord _record;
+        private readonly int _fullBatches;
+        private readonly int _batchSize;
+        private int _batchesServed;
+        public int AcquirePendingCalls;
+        public int MarkAppliedCalls;
+
+        public MultiBatchRelationOutboxStore(int fullBatches, int batchSize)
+        {
+            _fullBatches = fullBatches;
+            _batchSize = batchSize;
+            _record = CreateOutboxRecord(SampleRelation);
+        }
+
+        public Task EnqueueAsync(RelationOutboxRecord record, IWriteTransactionScope? scope = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task EnqueueBatchAsync(IReadOnlyList<RelationOutboxRecord> records, IWriteTransactionScope? scope = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<RelationOutboxRecord>> AcquirePendingAsync(int limit, string owner, TimeSpan leaseDuration, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref AcquirePendingCalls);
+            var served = Interlocked.Increment(ref _batchesServed);
+            if (served <= _fullBatches)
+            {
+                var batch = new List<RelationOutboxRecord>(_batchSize);
+                for (var i = 0; i < _batchSize; i++)
+                {
+                    batch.Add(CreateOutboxRecord(SampleRelation, outboxId: _record.OutboxId + "-" + served + "-" + i));
+                }
+                return Task.FromResult<IReadOnlyList<RelationOutboxRecord>>(batch);
+            }
+            return Task.FromResult<IReadOnlyList<RelationOutboxRecord>>(Array.Empty<RelationOutboxRecord>());
+        }
+
+        public Task<bool> MarkAppliedAsync(string outboxId, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref MarkAppliedCalls);
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> MarkFailedAsync(string outboxId, string errorMessage, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<bool> RenewHeartbeatAsync(string outboxId, string owner, TimeSpan leaseDuration, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<IReadOnlyList<string>> RenewHeartbeatBatchAsync(
+            IReadOnlyList<RelationOutboxHeartbeat> heartbeats, TimeSpan leaseDuration,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+
+        public Task<int> CountStaleLeasesAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(0);
+
+        public Task<IReadOnlyDictionary<string, int>> CountByStateAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());
+    }
 
     private sealed class FakeRelationOutboxStore : IRelationOutboxStore
     {
