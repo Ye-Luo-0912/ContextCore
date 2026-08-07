@@ -14,7 +14,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// recorded_at, feedback_id, idempotency_key, source, confidence, outcome_quality, subject)；
 /// 查询以工作区为隔离边界（WHERE workspace_id = @ws），配合 <see cref="ClearAsync"/>
 /// 支持按签名 / 按工作区 / 全局重置自适应状态。
-/// 幂等（P0-16）：<c>(plan_signature, idempotency_key)</c> 部分唯一索引
+/// 幂等：<c>(plan_signature, idempotency_key)</c> 部分唯一索引
 /// （WHERE idempotency_key IS NOT NULL）+ INSERT ... ON CONFLICT DO NOTHING——
 /// 重放 / 重复提交不产生重复反馈。
 /// </remarks>

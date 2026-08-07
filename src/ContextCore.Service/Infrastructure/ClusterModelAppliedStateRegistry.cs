@@ -10,7 +10,7 @@ namespace ContextCore.Service.Infrastructure;
 /// 纯计算逻辑，不执行任何写入；对存储实现无 Postgres 特化要求，任何 provider 均可。
 /// </summary>
 /// <remarks>
-/// P0-15：当注册了 <see cref="IModelNodeMembershipStore"/> 时，集群当前节点集合 =
+/// 当注册了 <see cref="IModelNodeMembershipStore"/> 时，集群当前节点集合 =
 /// 活跃成员（租约未过期），而非 Applied State 历史行——
 /// <list type="bullet">
 /// <item>已下线节点记录不再永久阻止 Converged（租约过期即退出集群）；</item>
@@ -44,7 +44,7 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
         var slot = await _slotStore.GetAsync(slotName, ct).ConfigureAwait(false);
         var nodes = await _appliedStateStore.ListBySlotAsync(slotName, ct).ConfigureAwait(false);
 
-        // P0-15：活跃成员集合（租约未过期）。无成员存储 → 全部已上报记录视为节点（旧语义）。
+        // 活跃成员集合（租约未过期）。无成员存储 → 全部已上报记录视为节点（旧语义）。
         var activeMembers = _membershipStore is null
             ? null
             : await _membershipStore.GetActiveMembersAsync(ct).ConfigureAwait(false);
@@ -98,7 +98,7 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
     /// <remarks>
     /// 展开视图保留全部 Applied State 记录（含已下线节点的历史行），供运维审计"谁曾经/现在
     /// 在集群中、应用过什么"；集群当前规模与收敛判定以 <see cref="GetSlotSummaryAsync"/>
-    /// 的活跃成员口径为准（P0-15）。
+    /// 的活跃成员口径为准。
     /// </remarks>
     public async ValueTask<IReadOnlyList<ClusterNodeAppliedEntry>> ListNodeStatesAsync(string slotName = "primary", CancellationToken ct = default)
     {
@@ -143,7 +143,7 @@ public sealed class ClusterModelAppliedStateRegistry : IClusterModelAppliedState
             nodes.Count(n => n.AppliedRevision < desiredRevision));
 
     /// <summary>
-    /// 基于活跃成员的收敛判定（P0-15）：
+    /// 基于活跃成员的收敛判定：
     /// 每个活跃成员都必须已有 Applied State 记录且 AppliedRevision == 期望（尚未上报应用的
     /// 新实例视为未就绪 → 不收敛）；NodesBehind 含"无记录"与"记录落后"两类成员。
     /// </summary>

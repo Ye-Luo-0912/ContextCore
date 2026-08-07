@@ -4,13 +4,13 @@ namespace ContextCore.Core.Services.Retrieval;
 
 // ===========================================================================
 // AdaptiveRetrievalPlanner —— 自适应检索规划器（反馈驱动的策略调整装饰器）
-//
+// 
 // 目标：
 // 在确定性受控规划器（IAgentRetrievalQueryPlanner）之上叠加反馈驱动的自适应层：
 // 按计划签名聚合近期检索结果（命中数 / 预算超限 / 有效性），计算自适应策略
 // （Token 预算乘数 / 查询收敛乘数 / 召回增强乘数），后续规划时应用该策略。
-//
-// 自适应语义（Effective 样本数 ≥ MinFeedbackSamples 才生效；P0-16 加固）：
+// 
+// 自适应语义（Effective 样本数 ≥ MinFeedbackSamples 才生效；加固）：
 // 1. 只采用 Effective 样本（未被实际采用的结果不参与学习）。
 // 2. 加权指标：权重 = 置信度 × 结果质量 × 时间衰减（0.5^(age/半衰期)），
 // 单主体（Subject）贡献封顶（默认 5 条），防止单源低质量 / 恶意反馈主导策略。
@@ -18,12 +18,12 @@ namespace ContextCore.Core.Services.Retrieval;
 // （收敛预算与查询集，避免反复撞墙）。
 // 4. 加权平均命中数 < 1.0 → RecallBoostMultiplier=1.25（增强查询权重扩大召回）。
 // 5. 样本不足或指标未达阈值 → 中性默认（1.0 / 1.0 / 1.0）。
-//
+// 
 // 运行模式（AdaptiveRetrievalOptions.Mode）：
 // - Disabled（默认，fail-closed）：PlanAsync 完全透传底层计划，不读写反馈存储。
 // - Shadow：计算策略但不应用，仅观察学习信号（验证无副作用后再启用）。
 // - Active：计算并应用策略。
-//
+// 
 // 设计原则：
 // - 底层规划器保持确定性 / 幂等：自适应仅调整规划参数；给定相同输入 +
 // 相同反馈状态，仍产生相同计划（可审计、可回归）。
@@ -119,7 +119,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
             return;
         }
 
-        // P0-16 清洗：保证 FeedbackId / 数值字段在合法范围内、Source 为合法枚举值，
+        // 清洗：保证 FeedbackId / 数值字段在合法范围内、Source 为合法枚举值，
         // 防止脏数据 / 恶意大值扭曲加权策略；WorkspaceId 归一为 trim 后的非空值
         // （隔离边界：记录必须归属到具体工作区，缺失按全局默认工作区处理）。
         var sanitized = feedback with

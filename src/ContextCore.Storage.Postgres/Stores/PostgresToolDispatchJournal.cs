@@ -28,7 +28,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 不自动创建 stub 条目</b>——缺失记录意味着审计链不完整，必须让调用方感知冲突，
 /// 而不是补造高级状态（旧版的 auto-create 允许 不存在→Committed，破坏 exactly-once 审计）。
 /// 4. <see cref="GetEntryAsync"/> 通过主键读取整行并映射回 <see cref="ToolDispatchJournalEntry"/>。
-///
+/// 
 /// <b>外部副作用 exactly-once 边界</b>：
 /// 本 Journal 仅保证 ContextCore 内部的"恰好一次编排记录"——同一 request_id 的状态机只向前推进一次。
 /// 但完整的外部副作用 exactly-once 还需要：
@@ -353,7 +353,7 @@ WHERE request_id = @request_id AND state = @expected_state;
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        // 1. CAS UPDATE: Prepared → DispatchingIntent
+        // 1. CAS UPDATE Prepared → DispatchingIntent
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -739,7 +739,7 @@ LIMIT 1;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // 完整租户键（workspace_id + run_id + request_id）——P0-1：异常路径必须读取真实状态。
+        // 完整租户键（workspace_id + run_id + request_id）——：异常路径必须读取真实状态。
         command.CommandText = $"""
 SELECT state
 FROM {Table("tool_dispatch_journal_entries")}

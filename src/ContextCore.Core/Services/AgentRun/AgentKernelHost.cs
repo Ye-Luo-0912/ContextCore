@@ -6,15 +6,15 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // AgentKernelHost — 多 Session 隔离的 Kernel Host（生产化）
-//
+// 
 // 替代旧单例 Kernel 平面的全局状态，实现真正的多 Session 隔离：
 // 1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
 // 2. 通过 IServiceProvider 解析 Actor 所需依赖（与 DI 容器集成）；
-// 3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceId:runId）；
+// 3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceIdrunId）；
 // 4. StartRunAsync 创建 Actor 并写入 bounded 优先级队列（fire-and-forget）；
 // 5. GetRunStatusAsync 查询 Run 状态（通过 IAgentRunStore）；
 // 6. CancelRunAsync 取消指定 Run（TransitionState → Cancelled + CTS 触发）。
-//
+// 
 // 子问题 9 生产化增强：
 // - HA Run Lease： 方案 A — Worker 取到 Run + 获得执行槽之后再
 // IAgentRunLease.TryAcquireAsync 获取租约，然后立即启动 heartbeat；入队前不获取 lease。
@@ -22,7 +22,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 处理完成后 Release；
 // - 全局并发上限：SemaphoreSlim(MaxGlobalRuns)；
 // - Workspace 级并发上限：per-workspace SemaphoreSlim(MaxWorkspaceRuns)；
-//
+// 
 // B3 Durable Scheduler 增强（替代 Task.Factory.StartNew / FIFO Channel）：
 // - bounded 优先级队列（PriorityQueue + SemaphoreSlim 背压）+ 固定 worker 池：
 // 消除每 Run 一个 Task 的 Task 风暴风险；
@@ -64,7 +64,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
 
     // weighted fair queue + 固定 worker 池（替代 Task.Factory.StartNew / FIFO Channel）
     // B3：调度从 FIFO 升级为按 Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）。
-    // 公平性（P1-3）：队列按 Workspace 分桶（weighted fair queue——出队选
+    // 公平性：队列按 Workspace 分桶（weighted fair queue——出队选
     // min(ServiceCount / Weight) 的 Workspace，等权重 = 严格轮转），单 Workspace 排队上限
     // 防止独占全部槽位；出队时按 aged priority（原始优先级 + 排队时长老化提升）取桶内最优，
     // 防止低优先级饿死；保留容量（ReservedQueueCapacity）保障高优先级/系统路径在饱和时仍能入队；
@@ -670,7 +670,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 }
             }
 
-            // P0-8：Scheduler Claim Lease → Execution/Fencing Lease 交接（Claimed → Running）。
+            // Scheduler Claim Lease → Execution/Fencing Lease 交接（Claimed → Running）。
             // Run 被 Claimer/端点领取（Claimed）并放入本地队列后，本节点取得执行租约即宣告
             // "开始执行"——将状态推进为 Running。持久化路径使用 ConsumeClaimAsync：
             // 单事务校验 DB 中 claim_token / claim_owner 与队列项一致且 claim 未过期
@@ -1165,7 +1165,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var toolCatalog = _serviceProvider.GetService(typeof(IToolCatalog)) as IToolCatalog;
         // Recovery Integrity State：解析人工介入告警接收器（未注册时 Actor 不告警，best-effort 钩子）。
         var recoveryAlertSink = _serviceProvider.GetService(typeof(IRecoveryAlertSink)) as IRecoveryAlertSink;
-        // P0-10 正式方案：解析事件流压缩器（未注册时 Actor 无快照/归档，走全量重放）。
+        // 正式方案：解析事件流压缩器（未注册时 Actor 无快照/归档，走全量重放）。
         // 仅 Postgres provider 注册 IAgentRunEventCompactor。
         var eventCompactor = _serviceProvider.GetService(typeof(IAgentRunEventCompactor)) as IAgentRunEventCompactor;
         // 解析 Tool 授权策略（提供授权快照校验；未注册时 Actor 跳过快照校验——旧路径）。

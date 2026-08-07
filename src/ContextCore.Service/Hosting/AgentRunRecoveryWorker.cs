@@ -7,18 +7,18 @@ namespace ContextCore.Service.Hosting;
 
 // ===========================================================================
 // 生产 Composition Root — AgentRun Recovery Worker
-//
+// 
 // 目标：
 // 周期性扫描 <see cref="IAgentRunStore"/> 中处于非终态的 Run（崩溃前未完成），
 // 做完整性判断 / LeaseLost 识别 / 状态修复：把可恢复 Run CAS 回 Queued，
 // 由 Durable Scheduler（PostgresPendingRunClaimer）统一领取入队执行。
-//
+// 
 // 运行时能力补齐：
 // 1. 超时检测：Run 在非终态停留超过 RunExecutionTimeout 且无活跃租约时原子标记为 LeaseLost
 // （原 owner 丢租后未被接管；进程崩溃后 CTS 随进程消失，Run 永远不会自动取消；recovery worker 兜底）。
 // 2. Checkpoint resume：扫描时记录 Run 是否有 checkpoint（日志），
 // AgentRunActor.ExecuteAsync 通过 run.State + 事件流自动重建上下文。
-//
+// 
 // 设计边界：
 // 1. 仅对持久化 <see cref="IAgentRunStore"/> 生效（IPersistentAgentRunStore 标记）。
 // InMemory store 在进程重启后数据丢失，无 Run 可恢复——worker 检测到非持久化
@@ -33,7 +33,7 @@ namespace ContextCore.Service.Hosting;
 // 5. 扫描防饥饿：每状态 keyset 游标（ORDER BY updated_at, run_id）跨轮次推进，
 // 每轮每状态最多扫描 MaxRunsPerStatePerScan 条，且状态按 round-robin 轮转起始——
 // 早期富状态无法独占扫描预算，后续状态与状态内后进 Run 都能持续获得超时检测/恢复机会。
-//
+// 
 // 调度边界（单一调度所有者）：本 Worker 只做状态修复（CAS → Queued），
 // 绝不直接入队；只有 PostgresPendingRunClaimer 能把 Run 放入 Host 队列。
 // ===========================================================================
@@ -73,21 +73,21 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
     /// 审批决策由外部 POST /approvals/{approvalId} 端点提交，端点将状态推进到
     /// PendingToolExecution（批准）或 Failed（拒绝）后才由 Recovery Worker 重新入队执行。
     /// 周期性重启 AwaitingApproval 会导致 Actor 重复加载审批状态、重复持久化 ApprovalRequested 事件。
-    ///
-    /// Queued / Claimed（P0-6/P0-8 执行前状态）不在此列表中——它们由
+    /// 
+    /// Queued / Claimed（执行前状态）不在此列表中——它们由
     /// PostgresPendingRunClaimer 专属接管（Scheduler Claim Lease），Recovery Worker
     /// 不与其竞争入队，避免双调度真源；Created 同理（v59 迁移已全量转换为 Queued）。
     /// 被领取后崩溃的 Run（Claimed 且 claim 过期）由 Claimer 重新领取。
-    ///
-    /// Running（P0-8 新增）：Execution/Fencing Lease 已获取后推进到 Running；
+    /// 
+    /// Running（新增）：Execution/Fencing Lease 已获取后推进到 Running；
     /// Worker 崩溃后执行租约过期，Run 停留 Running，由本 Worker 扫描并重新入队，
     /// 新节点取得过期执行租约后继续执行（Running 且已 flush 的 Run 走 resume 路径；
     /// 尚未 flush 的 Running 走全新启动——两种路径均安全）。
-    ///
+    /// 
     /// RecoveryDependencyUnavailable（恢复依赖不可用）为可重试非终态，加入扫描列表——
     /// 由本 Worker 在退避门（NextRetryAtUtc）通过后 CAS 回 Queued（退避期内跳过，不触发
     /// 超时→LeaseLost 逻辑；LeaseLost 会把等待退避的 Run 误判为卡死并移出恢复路径）。
-    ///
+    /// 
     /// ScheduledLocally（本地调度，入队成功即消费 Scheduler Claim）：Run 已离开可领取集合，
     /// 排队期间不依赖 Claim 续租。节点崩溃后本地队列随进程消失，Run 滞留 ScheduledLocally
     /// 无人接管——由本 Worker 直接 CAS 回 Queued（无退避门；排队等待执行槽不是卡死，

@@ -11,7 +11,7 @@ namespace ContextCore.Storage.InMemory.Stores;
 /// 下自适应检索规划器的反馈记录仍可用（数据在进程重启后丢失）。
 /// 按 (工作区, 计划签名) 分组保存反馈——工作区为隔离边界：跨工作区的相同签名
 /// 不共享反馈；ListRecentAsync 返回按记录时间倒序的最新条目。
-/// 幂等（P0-16）：同一 (PlanSignature, IdempotencyKey) 只保留首条——与 Postgres
+/// 幂等：同一 (PlanSignature, IdempotencyKey) 只保留首条——与 Postgres
 /// 部分唯一索引 + INSERT ... ON CONFLICT DO NOTHING 语义保持一致。
 /// </remarks>
 public sealed class InMemoryRetrievalPlanFeedbackStore : IRetrievalPlanFeedbackStore

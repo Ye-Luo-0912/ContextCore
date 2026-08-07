@@ -196,9 +196,9 @@ internal static class CoreExtensions
 		services.AddSingleton<UserFeedbackService>();
 	// Embedding provider 注册由 AddEmbeddingProviders 扩展方法在 Program.cs 中显式调用，
 	// 根据 EmbeddingProviderOptions.ProviderType 条件注册 IEmbeddingGenerator / IEmbeddingProvider。
-	// - DeterministicHash: 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false
-	// - OnnxLocal: 注册 IEmbeddingGenerator + IEmbeddingProvider（真正语义检索），需配置模型路径
-	// - Disabled: 不注册任何 embedding 服务
+	// - DeterministicHash 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false
+	// - OnnxLocal 注册 IEmbeddingGenerator + IEmbeddingProvider（真正语义检索），需配置模型路径
+	// - Disabled 不注册任何 embedding 服务
 	services.AddSingleton(sp => new VectorReindexPlanner(
 			sp.GetService<IContextStore>(),
 			sp.GetService<IMemoryStore>(),
@@ -265,7 +265,7 @@ internal static class CoreExtensions
 			sp.GetRequiredService<RelationTypeRegistry>(),
 			backfillPolicy: null));
 		services.AddSingleton<IContextTokenizerResolver, DefaultContextTokenizerResolver>();
-		// Tokenizer 画像解析器（：CJK 画像按内容脚本分类选择 tokenizer）。
+		// Tokenizer 画像解析器（CJK 画像按内容脚本分类选择 tokenizer）。
 		services.TryAddSingleton<ITokenizerProfileResolver, DefaultTokenizerProfileResolver>();
 		services.AddSingleton<IContextCompressor>(sp =>
 		{
@@ -377,7 +377,7 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPolicyValidator);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationTraversalEngine);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPreviewService);
-		// Selected 关系批量水合服务（：探测 IRelationHydrationStore，未实现时回退逐条查询）。
+		// Selected 关系批量水合服务（探测 IRelationHydrationStore，未实现时回退逐条查询）。
 		services.TryAddSingleton<ISelectedRelationHydrationService, DefaultSelectedRelationHydrationService>();
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton<IMemoryPromotionService>(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
@@ -776,7 +776,7 @@ internal static class CoreExtensions
 		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，Postgres 持久化实现生效。
 		services.TryAddSingleton<IModelNodeAppliedStateStore, InMemoryModelNodeAppliedStateStore>();
 
-		// IModelNodeMembershipStore 默认实现（InMemory）—— 节点成员资格租约（P0-15）。
+		// IModelNodeMembershipStore 默认实现（InMemory）—— 节点成员资格租约。
 		// 供 ModelStateReconcilerWorker 心跳续租/标记 serving_enabled，
 		// 供 Admission 校验节点是否仍是活跃成员（租约未过期且未被隔离）。
 		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，Postgres 持久化实现生效。
@@ -899,7 +899,7 @@ internal static class CoreExtensions
 
 		// 自适应检索规划器（装饰确定性受控规划器）：按计划签名聚合近期检索反馈，
 		// 计算自适应策略（Token 预算乘数 / 查询收敛乘数 / 召回增强乘数）并应用于后续规划。
-		// P0-16 加固：默认 Disabled（fail-closed，自适应不生效），运维经 "AdaptiveRetrieval"
+		// 加固：默认 Disabled（fail-closed，自适应不生效），运维经 "AdaptiveRetrieval"
 		// 配置节显式开启 Shadow / Active；签名含租户维度（workspace/collection/purpose/
 		// policy/profile/taskClass），反馈带幂等键与可信度字段，杜绝跨 Workspace 污染与单源投毒。
 		services.AddSingleton<IAdaptiveRetrievalPlanner>(sp =>

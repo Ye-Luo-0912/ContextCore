@@ -2,7 +2,7 @@ namespace ContextCore.Abstractions;
 
 // ===========================================================================
 // Agent Run 契约层 — 模型驱动的 Agent 执行循环
-//
+// 
 // 目标（补齐四、Agent 下一步核心功能）：
 // 1. 定义 Agent Run 状态机：Created → ContextBuilding → ModelCalling →
 // AwaitingApproval → ToolDispatching → Observing → Checkpointing →
@@ -16,7 +16,7 @@ namespace ContextCore.Abstractions;
 // - IAgentRunEventStore：Run 事件流持久化（复用 Checkpoint 哈希链模式）
 // 3. 定义数据契约：AgentRun / AgentRunEvent / AgentModelResponse /
 // AgentToolCallRequest / AgentLoopDecision / AgentTurnBudget / AgentCostBudget。
-//
+// 
 // 设计原则：
 // 1. 状态机复用 ToolDispatchState 的 expected-state CAS + 不可逆前向推进模式。
 // 2. 事件流复用 Checkpoint 哈希链（ContentHash / PrevChainHash）防篡改。
@@ -145,7 +145,7 @@ public enum AgentRunState : byte
 
     /// <summary>
     /// 等待准入（Admission）：Run 已持久化，但配额预留（IWorkspaceQuotaService.TryConsumeAsync）
-    /// 尚未完成。P0-6 Admission 边界——<see cref="PostgresPendingRunClaimer"/> 永不领取本状态，
+    /// 尚未完成。Admission 边界——<see cref="PostgresPendingRunClaimer"/> 永不领取本状态，
     /// 配额失败前 Run 不可能被调度执行；创建进程在配额判定前崩溃时由领取周期兜底
     /// 标记为 <see cref="AdmissionRejected"/>（fail-closed，不伪装成可执行）。
     /// </summary>
@@ -167,7 +167,7 @@ public enum AgentRunState : byte
 
     /// <summary>
     /// 已领取（Scheduler Claim Lease 持有中）：本节点负责将该 Run 放入本地执行队列
-    /// （P0-8 两种租约分离——Scheduler Claim 控制"谁负责入队"，Execution/Fencing Lease
+    /// （两种租约分离——Scheduler Claim 控制"谁负责入队"，Execution/Fencing Lease
     /// 控制"谁能执行副作用"）。claim 过期后其他节点可重新领取（崩溃恢复）。
     /// Actor 以本状态为全新启动（事件流为空，从 ContextBuilding 开始）。
     /// </summary>
@@ -416,7 +416,7 @@ public sealed record AgentRun
     public int RecoveryAttempt { get; init; }
 
     /// <summary>
-    /// Scheduler Claim Lease 持有者标识（P0-8：控制"谁负责把 Run 放入本地队列"）。
+    /// Scheduler Claim Lease 持有者标识（控制"谁负责把 Run 放入本地队列"）。
     /// 仅 <see cref="AgentRunState.Claimed"/> 时非空；claim 释放/过期后置空。
     /// 区别于 Execution/Fencing Lease（agent_run_leases 表，控制"谁能执行副作用"）。
     /// </summary>
@@ -547,7 +547,7 @@ public enum AgentRunEventType : byte
     RunCancelled = 12,
 
     /// <summary>
-    /// Tool 对账裁决完成（P0-3：与记录终态同一事务追加的审计事件，
+    /// Tool 对账裁决完成（与记录终态同一事务追加的审计事件，
     /// 记录 reconciliationId / requestId / sideEffectOccurred / result / error）。
     /// </summary>
     ToolReconciliationResolved = 13,
@@ -681,7 +681,7 @@ public sealed record AgentToolCallRequest
 /// 与 ModelCallCompleted 事件 payload）与实际分派（DispatchToolsAsync 中的 toolCallId）原本
 /// 各自生成 fallback ToolCallId（<c>Guid.NewGuid().ToString("N")</c>）。Provider 未返回 ID 时，
 /// 两条路径会得到不同 ID；同轮多个同名 Tool 还可能因 Guid 随机性无法稳定关联。
-///
+/// 
 /// 本 record 在模型响应进入 Actor 后立刻生成一次（不可变），后续审批 / 事件 / Journal / Tool Message
 /// 全部引用 <see cref="InvocationId"/>，确保整个生命周期内 ID 一致且确定性可重建。
 /// </remarks>
@@ -839,7 +839,7 @@ public sealed record AgentToolCallEntry
 /// 长会话产生接近 O(total_context²) 的字符复制与 LOH/Gen2 压力。
 /// 改为 <c>List&lt;AgentMessage&gt;</c> 后，仅追加引用，不再复制既有内容；
 /// 模型调用前由 <c>BuildContextString</c> 一次性序列化。
-///
+/// 
 /// <b>与事件流的关系</b>：<see cref="EventId"/> 关联生成此消息的审计事件，
 /// 便于从事件流重建上下文（崩溃恢复 / 离线回放）。
 /// </remarks>
@@ -1005,7 +1005,7 @@ public sealed record MemoryReference
 /// <item><see cref="StableMemoryReferences"/>：稳定记忆引用（投影为 System 消息）。</item>
 /// <item><see cref="LastModelTurn"/>：最近一次模型响应（元数据，不直接投影；用于循环策略与审计）。</item>
 /// </list>
-///
+/// 
 /// <b>与 ContextCore 已有能力的关系</b>：
 /// - Token 预算：<see cref="ProjectForModel"/> 内部使用字符估算（与
 /// <c>LegacyCharacterTokenizer</c> 对齐）；生产环境可由调用方传入精确预算并
@@ -1354,7 +1354,7 @@ public sealed record AgentCostBudget
 /// 此外 ProjectForModel(tokenBudget: 0) 等价于关闭预算控制。
 /// 本投影器在投影阶段从 ContextDecisionExecutionResult.WorkingSet.Materials
 /// 取出候选正文内容，并按 Run.ModelContextTokenBudget 截断。
-///
+/// 
 /// <b>投影顺序</b>（高优先级在前，截断从最旧开始）：
 /// <list type="number">
 /// <item>System Prompt</item>
@@ -1734,7 +1734,7 @@ public interface IPersistentAgentRunStore : IAgentRunStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置与 Scheduler Claim（P0-8）。
+    /// 原子领取一批待执行 Run（SKIP LOCKED），并同步执行重试重置与 Scheduler Claim。
     /// 单条 SQL 事务内完成，真正写入 claim 租约（不再只打 UpdatedAt 补丁）：
     /// - Queued（state=21）且退避门通过（next_retry_at 为 null 或已到期）→ 领取 → Claimed（state=22）
     ///   + claim_owner / claim_token / claim_expires_at；
@@ -1742,10 +1742,10 @@ public interface IPersistentAgentRunStore : IAgentRunStore
     ///   （节点领取后崩溃的恢复路径，claim_token 轮换 + 过期时间前移）；
     /// - Failed（state=8）且 max_retries &gt; 0 且 retry_count &lt; max_retries 且退避门通过
     ///   → 重置为 Queued + retry_count+1 + next_retry_at=退避时间，再领取 → Claimed
-    ///   （事件流同步清空，作为全新启动重试；不可变 Attempt 化见 WP-C2/P0-9）；
+    ///   （事件流同步清空，作为全新启动重试；不可变 Attempt 化）；
     /// - RecoveryDependencyUnavailable（state=17）且退避门通过 → 领取 → Claimed；
     /// - Created（state=0）/ PendingAdmission（state=19）/ AdmissionRejected（state=20）永不领取
-    ///   （P0-6 Admission 边界：配额未通过的 Run 不得进入可调度状态）。
+    ///   （Admission 边界：配额未通过的 Run 不得进入可调度状态）。
     /// 排序 (Priority DESC, CreatedAt ASC, RunId ASC)，LIMIT take；
     /// 每 workspace 最多领取 <paramref name="perWorkspace"/> 个（ROW_NUMBER PARTITION BY，
     /// 公平轮转防止单 workspace 独占批次）。
@@ -1772,7 +1772,7 @@ public interface IPersistentAgentRunStore : IAgentRunStore
     /// 原子领取单个 Run（端点 201/202 路径专用）：Queued（state=21）且退避门通过
     /// → Claimed + Scheduler Claim Lease（claim_owner / claim_token / claim_expires_at）。
     /// 与 <see cref="ClaimPendingBatchAsync"/> 同一 claim 语义——端点直接入队前必须先
-    /// 取得 Scheduler Claim，防止 Claimer 在另一节点重复领取同一 Run（P0-8 双真源）。
+    /// 取得 Scheduler Claim，防止 Claimer 在另一节点重复领取同一 Run（双真源）。
     /// </summary>
     /// <param name="workspaceId">Workspace ID。</param>
     /// <param name="runId">Run ID。</param>
@@ -1788,7 +1788,7 @@ public interface IPersistentAgentRunStore : IAgentRunStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 释放 Scheduler Claim（P0-8）：Claimed → Queued，清空 claim 字段。
+    /// 释放 Scheduler Claim：Claimed → Queued，清空 claim 字段。
     /// 必须校验 claim_token 匹配（fencing——过期节点不得释放新持有者的 claim）。
     /// 入队失败（本地队列满）与领取周期背压时调用，让其他节点可重新领取。
     /// </summary>
@@ -1922,7 +1922,7 @@ public interface IAgentToolCallValidator
 /// - 审计追踪（完整重现 Run 的每一步）。
 /// - 崩溃恢复（从事件流重建 Run 状态）。
 /// - 调试/回放（离线分析 Run 行为）。
-///
+/// 
 /// 哈希链防篡改：
 /// - 写入时计算 ContentHash = SHA-256(payload, ContentHash=null)。
 /// - PrevChainHash = 前一事件的 ContentHash。
@@ -1974,7 +1974,7 @@ public interface IAgentRunEventStore
     /// 8-15 次事务/网络往返。新路径在一个 Turn 内收集所有事件到缓冲，Turn 结束时一次性批量提交，
     /// 将往返次数降到 1（Postgres 单事务：BEGIN → INSERT all events → UPDATE run state (CAS) →
     /// UPDATE checkpoint cursor → INSERT checkpoint body → COMMIT）。
-    ///
+    /// 
     /// <b>幂等性</b>：调用方负责保证 <paramref name="events"/> 的 Sequence 单调递增、
     /// PrevChainHash 正确链接；实现层在事务内校验首事件 Sequence = 当前 MAX(sequence) + 1、
     /// PrevChainHash = 前一事件 ContentHash。
@@ -2113,7 +2113,7 @@ public interface IPersistentAgentRunEventStore : IAgentRunEventStore
 /// <b>引入背景</b>：SSE 端点原先以 500ms 固定轮询 <see cref="IAgentRunEventStore.ReadAsync"/>，
 /// 既增加 DB 负载又引入最高 500ms 的推送延迟。本抽象在事件追加提交后通过进程内 Channel
 /// 推送最新 sequence，让 SSE 端点在事件到达时立即唤醒读取（push），无事件时回退到轮询。
-///
+/// 
 /// <b>语义</b>：
 /// <list type="bullet">
 /// <item><see cref="Notify"/>：事件批量提交事务 COMMIT 后由 Event Store 调用，写入最新 sequence。</item>
@@ -2176,7 +2176,7 @@ public interface IAgentRunEventSubscription : IAsyncEnumerable<long>, IDisposabl
 /// 导致崩溃恢复时无法判断 tool 是否真正执行、无法重放已 commit 的结果。
 /// 本接口封装 Tool 调用的完整 durable 编排流程，
 /// 让 Actor 复用同一套 durable 流程。
-///
+/// 
 /// 与 IToolDispatcher 的区别：
 /// - IToolDispatcher 仅负责单次 tool 调用（无 journal / 无 outbox / 无审批）。
 /// - IDurableToolExecutor 负责完整生命周期（journal 状态机推进 + result outbox + 审批集成）。
@@ -2267,7 +2267,7 @@ public sealed record ToolExecutionResult
     public DispatchErrorKind ErrorKind { get; init; } = DispatchErrorKind.None;
 
     /// <summary>
-    /// 失败阶段（P0-1）：定位失败发生在 Journal 生命周期中的位置。
+    /// 失败阶段：定位失败发生在 Journal 生命周期中的位置。
     /// 失败发生在 <see cref="ToolDispatchState.DispatchingIntent"/> 之后
     /// （<see cref="ToolFailurePhase.AfterIntentBeforeProvider"/> 及以后）时，
     /// 调用方<b>必须进入对账（Reconciliation）</b>，不得按普通失败处理——
@@ -2583,7 +2583,7 @@ public sealed class AgentHostOptions
     public int PendingClaimPerWorkspace { get; set; } = 10;
 
     /// <summary>
-    /// Scheduler Claim Lease 时长（P0-8：领取后到 Run 被放入本地执行队列的有效窗口）。
+    /// Scheduler Claim Lease 时长（领取后到 Run 被放入本地执行队列的有效窗口）。
     /// 默认 60 秒——应远大于 领取→入队 的本地延迟，且远小于 Run 执行租约（LeaseDuration），
     /// 确保节点在领取后崩溃时其他节点能快速重新领取（Claimed 且过期 → 可重新领取）。
     /// </summary>
@@ -2757,7 +2757,7 @@ public sealed record AgentApproval
 /// 实现层：
 /// - <c>InMemoryAgentApprovalStore</c>：开发/测试用，进程内 ConcurrentDictionary。
 /// - <c>PostgresAgentApprovalStore</c>：生产持久化，agent_run_approals 表。
-///
+/// 
 /// <b>与 <see cref="IAgentApprovalGate"/> 的关系</b>：
 /// Gate 负责决策（自动/人工）；Store 负责持久化状态。
 /// DurableAgentApprovalGate 在 RequestApprovalAsync 时先 Store.CreateAsync(Pending)，
@@ -2998,12 +2998,12 @@ public sealed record AgentRunEventSnapshot
     public required int FoldedEventCount { get; init; }
 
     /// <summary>
-    /// 折叠状态摘要（JSON）。<b>P0-10 正式方案</b>：此字段存
+    /// 折叠状态摘要（JSON）。<b>正式方案</b>：此字段存
     /// <see cref="AgentRunRecoverableState"/>（<see cref="AgentRunEventStateRebuilder.Rebuild"/>
     /// 从折叠前缀 [0..anchor] 重建的完整可恢复状态：Conversation / ToolObservations /
     /// ExecutionModelTurn / PendingToolCommands + Sequence/ChainHeadHash），
     /// Recovery 按 "Snapshot → validate anchor → replay hot delta" 恢复。
-    /// 旧版本（WP-C1）曾存锚点事件的完整 data 序列化，无法解析为可恢复状态。
+    /// 旧版本曾存锚点事件的完整 data 序列化，无法解析为可恢复状态。
     /// </summary>
     public required string StateJson { get; init; }
 

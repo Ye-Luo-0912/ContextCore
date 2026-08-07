@@ -9,14 +9,14 @@ namespace ContextCore.Core.Services.DecisionEngine;
 
 // ===========================================================================
 // Authoritative Cutover — Retrieval → Package → AgentContext
-//
+// 
 // 目标（B-4 阶段：V2 Runtime 成为权威路径，Legacy 降级为可选 fallback）：
 // 1. AuthoritativeRetrievalRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
 // 2. AuthoritativePackageRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
 // 3. AuthoritativeAgentContextRuntime：V2 执行 + AgentContextProjector 投影。
 // 4. CutoverController：控制 Legacy → V2 切换比例（0% = Legacy only，
 // 100% = V2 only，中间值 = 按 requestId 哈希分流）。
-//
+// 
 // 设计原则：
 // 1. 渐进切换：CutoverController 按 percentage 控制流量比例，支持灰度。
 // 2. Fallback 安全：V2 失败时自动回退到 Legacy（fail-open）。
@@ -107,12 +107,12 @@ internal static class CanaryRunIdResolver
 
 // ===========================================================================
 // Canary 质量分计算器
-//
+// 
 // 目标：
 // 从 ContextDecisionExecutionResult 计算 0.0-1.0 范围的质量分，
 // 综合 section 覆盖率（token 预算利用率）与候选相关性（FinalScore 均值）：
 // quality_score = SectionCoverageWeight × SectionCoverage + RelevanceWeight × AvgRelevance
-//
+// 
 // 设计边界：
 // - 输入为 null（V2 失败/未执行）时返回 0.0（无质量信号）。
 // - 权重默认 0.5 / 0.5，可通过 CanaryGateOptions 配置。
@@ -272,7 +272,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     // 可选的集群级 Canary Kill Switch 存储。非空时在 canary 命中 V2 后检查活跃紧急覆盖，
     // 存在则强制回退 V1（Emergency Override 优先级高于 canary DB 百分比与 Cutover 配置）。
     private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
-    // P0-13：Kill Switch 查询故障告警日志（可选注入；测试可传 null）。
+    // Kill Switch 查询故障告警日志（可选注入；测试可传 null）。
     private readonly ILogger<AuthoritativeRetrievalRuntime>? _logger;
 
     /// <summary>构造 Retrieval 权威路径运行时。</summary>
@@ -307,7 +307,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     /// 存储为 null 或请求未携带 canaryRunId 时返回 false（不拦截非 canary 流量）。
     /// </summary>
     /// <remarks>
-    /// P0-13：Override Store 查询失败必须 fail-closed——按「覆盖活跃」处理强制回退 V1 并告警，
+    /// Override Store 查询失败必须 fail-closed——按「覆盖活跃」处理强制回退 V1 并告警，
     /// 绝不让在线请求因 Kill Switch 存储故障直接失败。取消异常仍原样传播。
     /// </remarks>
     private async ValueTask<bool> IsEmergencyOverrideActiveAsync(
@@ -693,7 +693,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
     // 可选的集群级 Canary Kill Switch 存储（语义同 Retrieval 运行时）。
     private readonly ICanaryEmergencyOverrideStore? _emergencyOverrideStore;
-    // P0-13：Kill Switch 查询故障告警日志（可选注入；测试可传 null）。
+    // Kill Switch 查询故障告警日志（可选注入；测试可传 null）。
     private readonly ILogger<AuthoritativePackageRuntime>? _logger;
 
     /// <summary>构造 Package 权威路径运行时。</summary>
@@ -727,7 +727,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     /// 检查请求所属 canary run 是否存在活跃紧急覆盖（Kill Switch，语义同 Retrieval 运行时）。
     /// </summary>
     /// <remarks>
-    /// P0-13：Override Store 查询失败必须 fail-closed——按「覆盖活跃」处理强制回退 V1 并告警，
+    /// Override Store 查询失败必须 fail-closed——按「覆盖活跃」处理强制回退 V1 并告警，
     /// 绝不让在线请求因 Kill Switch 存储故障直接失败。取消异常仍原样传播。
     /// </remarks>
     private async ValueTask<bool> IsEmergencyOverrideActiveAsync(

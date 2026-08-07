@@ -5,22 +5,22 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // ToolReconciliationCoordinator — Tool 对账协调器（Worker 与 resolve 端点共用）
-//
+// 
 // 集中封装对账记录裁决的唯一入口：
 // - ResolveAsync：人工/自动裁决（POST /runs/{runId}/reconciliations/{id}/resolve 与
 // ToolReconciliationWorker 共用），返回 0=成功（含幂等重试）/ 1=不存在 / 2=已裁决 /
 // 3=仲裁权被占用 / 4=决策冲突（相同 DecisionRequestId 但相反 outcome）；
-// - ReconcileWithLeaseAsync：Worker 路径——调用方已领取裁决租约（P0-4/P0-5），
+// - ReconcileWithLeaseAsync：Worker 路径——调用方已领取裁决租约，
 // 本方法执行 Handler 确认外部副作用真相 → 原子提交裁决；Handler 异常回退 Pending 重试。
 // 心跳续租由 ToolReconciliationWorker 的共享批量心跳循环负责（单次往返续约整批记录）；
 // - CommitOutcomeAsync：先原子取得裁决权（租约）再提交——调用
 // IToolReconciliationStore.ResolveReconciliationAtomicallyAsync 单事务完成
-// journal 推进 + 结果 UPSERT + 记录终态 + 可选 Run 推进 + 审计事件（P0-3）。
-//
+// journal 推进 + 结果 UPSERT + 记录终态 + 可选 Run 推进 + 审计事件。
+// 
 // 不变量：任何记录从 Pending/Running 变为 Resolved/Rejected 的唯一路径都经过本协调器，
 // 且先持有有效租约（唯一裁决者），再经单事务原子提交——绝不出现
 // "记录 Resolved 而 Journal 仍 DispatchingIntent" 的撕裂，也杜绝
-// 人工裁决与自动 Handler 竞争写入相反结果（P0-5 仲裁权）。
+// 人工裁决与自动 Handler 竞争写入相反结果（仲裁权）。
 // ===========================================================================
 
 /// <summary>
@@ -29,7 +29,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// </summary>
 public sealed class ToolReconciliationCoordinator
 {
-    /// <summary>Worker / 端点领取的裁决租约时长（P0-4：过期后其他 Worker 可接管）。</summary>
+    /// <summary>Worker / 端点领取的裁决租约时长（过期后其他 Worker 可接管）。</summary>
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
     /// <summary>Handler 失败后的退避基数（第 1 次失败后的重试延迟）。</summary>
@@ -86,7 +86,7 @@ public sealed class ToolReconciliationCoordinator
             return 2;
         }
 
-        // P0-5：先原子取得裁决权（租约），再执行 Journal 提交——人工裁决与自动 Handler
+        // 先原子取得裁决权（租约），再执行 Journal 提交——人工裁决与自动 Handler
         // 竞争时只有一个赢家持有租约，输家无法再修改 Journal。
         var lease = await _store.TryBeginAsync(reconciliationId, "manual:endpoint", LeaseDuration, ct).ConfigureAwait(false);
         if (lease is null)
@@ -164,11 +164,11 @@ public sealed class ToolReconciliationCoordinator
     }
 
     /// <summary>
-    /// 原子提交对账真相（P0-3）：单事务完成 journal 状态推进（DispatchingIntent/Dispatched →
+    /// 原子提交对账真相：单事务完成 journal 状态推进（DispatchingIntent/Dispatched →
     /// Reconciling → Committed + 对账结果）、Durable Result UPSERT、记录终态（Resolved/Rejected）、
     /// Run 状态推进（Run 停车且无其他未决记录时 → Queued，同一事务，杜绝崩溃后永久停车）与
     /// 审计事件追加——任意一步失败整体回滚，绝不出现撕裂。
-    /// 调用方必须先持有有效租约（P0-5 唯一裁决者）。
+    /// 调用方必须先持有有效租约（唯一裁决者）。
     /// </summary>
     public async Task<int> CommitOutcomeAsync(
         ToolReconciliationRecord record,

@@ -4,16 +4,16 @@ using System.Text.Json.Serialization;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// 可恢复快照状态（P0-10 正式方案：Recoverable Snapshot + Anchor + Hot Delta）
-//
+// 可恢复快照状态（正式方案：Recoverable Snapshot + Anchor + Hot Delta）
+// 
 // 折叠前缀 [0..anchor] 的事件在压缩时归档到 agent_run_events_archive 并从热表删除，
 // 热表只保留锚点事件 + 之后的增量。Recovery 不能再依赖"从 Sequence 0 全量重放"，
 // 因此压缩器把折叠前缀重建出的完整执行状态序列化为快照 state_json：
-//
+// 
 //   Snapshot（本记录）→ validate anchor（热表锚点 ContentHash == ChainHeadHash）
 //   → replay hot delta（重放 sequence > Sequence 的热表增量）
-//
-// 覆盖范围（P0-10 快照清单）说明：
+// 
+// 覆盖范围（快照清单）说明：
 // - Conversation / Tool Observations / ExecutionModelTurn / Pending Tool Commands：
 //   直接存入本快照（由 AgentRunEventStateRebuilder.Rebuild 从折叠事件重建）。
 // - Budget（TurnBudget / CostBudget / ModelCallsUsed）：从 Run 元数据恢复，不重复存储。
@@ -43,7 +43,7 @@ public sealed record AgentRunRecoverableState
 
     /// <summary>
     /// 折叠覆盖最后事件的 ContentHash（链头；增量首事件的 PrevChainHash 必须等于它）。
-    /// required：与 <see cref="Sequence"/> 共同拒绝旧格式快照（WP-C1 仅序列化锚点事件，
+    /// required：与 <see cref="Sequence"/> 共同拒绝旧格式快照（仅序列化锚点事件，
     /// 不含可恢复状态成员）——旧格式 JSON 即使命中 Sequence 也会因缺少本成员解析失败。
     /// </summary>
     public required string? ChainHeadHash { get; init; }

@@ -3,7 +3,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
-/// v60 → v61：retrieval_plan_feedback 自适应反馈加固（P0-16）。
+/// v60 → v61：retrieval_plan_feedback 自适应反馈加固。
 /// 新增 feedback_id / idempotency_key / source / confidence / outcome_quality / subject 列，
 /// 并建立 (plan_signature, idempotency_key) 部分唯一索引（WHERE idempotency_key IS NOT NULL），
 /// 配合 INSERT ... ON CONFLICT DO NOTHING 实现反馈幂等去重——重放 / 重复提交

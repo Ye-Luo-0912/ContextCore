@@ -601,7 +601,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
         var leaseValidated = leaseToken is not null && fencingToken is not null;
 
         var now = DateTimeOffset.UtcNow;
-        // 终态集合与 AgentRunStateMachine.IsTerminalState 对齐（P0-6：AdmissionRejected 亦是终态，
+        // 终态集合与 AgentRunStateMachine.IsTerminalState 对齐（AdmissionRejected 亦是终态，
         // 配额拒绝后记录 finished_at 供审计/列举）。RecoveryBlocked/RecoveryCorrupted/
         // ReconciliationRejected 由各自专用路径写 finished_at，此处不重复覆盖。
         var isTerminal = newState == AgentRunState.Completed
@@ -841,7 +841,7 @@ LIMIT @take;
 
     /// <inheritdoc />
     /// <remarks>
-    /// 单条 SQL 事务内完成"领取 + 真正写入 Scheduler Claim（P0-8）"：
+    /// 单条 SQL 事务内完成"领取 + 真正写入 Scheduler Claim"：
     /// 1. 三层嵌套（Postgres 限制：FOR UPDATE 不能与窗口函数同层）：
     /// 内层 SELECT ... FOR UPDATE SKIP LOCKED（锁定候选行，被锁行跳过下轮再取）；
     /// 中层 ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY priority DESC, created_at ASC, run_id ASC)
@@ -858,7 +858,7 @@ LIMIT @take;
     ///     （新 Attempt 全新启动，不复用前序 Attempt 的 checkpoint 上下文）；
     ///   - RecoveryDependencyUnavailable（state=17）退避门通过 → 领取（事件流保留，按哈希链重放）。
     ///   - Created（state=0）/ PendingAdmission（state=19）/ AdmissionRejected（state=20）永不领取
-    ///     （P0-6 Admission 边界：配额未通过的 Run 不得进入可调度状态）。
+    ///     （Admission 边界：配额未通过的 Run 不得进入可调度状态）。
     /// 4. 不可变 Attempt：重试**不删除** agent_run_events（前序 Attempt 历史保留，不可变审计）。
     ///    RunRetryScheduled / AttemptStarted 边界标记由 Actor 在重试 Attempt 开始时
     ///    于既有事件链上续写；恢复重放以最后一个 RunRetryScheduled 为界只重放当前 Attempt。

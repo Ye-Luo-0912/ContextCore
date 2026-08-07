@@ -18,7 +18,7 @@ namespace ContextCore.Service.Extensions;
 
 // ===========================================================================
 // 生产 Composition Root — 统一所有生产服务的注册入口
-//
+// 
 // 目标：
 // 1. 提供 AddContextCoreRuntime 扩展方法（新入口），作为生产服务的唯一显式入口。
 // 该方法一次性决定 ModelMode / AgentModelMode / ToolMode / Store / Transport /
@@ -27,11 +27,11 @@ namespace ContextCore.Service.Extensions;
 // 2. 根据 RuntimeProfile（Development / SingleNode / ProductionHA）完成所有生产服务
 // 注册（Run Recovery worker、Canary Progression / Leader 模式切换等）。
 // 3. 启动时验证配置组合，不允许出现静默半配置状态。
-//
+// 
 // 调用顺序（Program.cs）：
 // AddContextStorage → AddContextModelGateway → AddEmbeddingProviders
 // → AddContextCoreRuntime（唯一入口，按 Profile + ModelMode 分发）
-//
+// 
 // 修复：
 // CanarySchedulerOptions / CanaryLeaderOptions 统一通过 IOptionsMonitor<T> 消费。
 // ProductionHA 模式通过 PostConfigure 覆盖 Enabled 标志，而非 RemoveService + AddSingleton
@@ -91,7 +91,7 @@ internal static class ProductionRuntimeExtensions
 
         // 按ModelMode 选择 ModelExecutionOptions，调用 AddContextCore 注册 Core 服务。
         // 核心修复：不再使用无参数 AddContextCore()（强制 Deterministic），
-        // 而是根据 ContextCoreRuntime:ModelMode 显式选择 RealModel / Deterministic。
+        // 而是根据 ContextCoreRuntimeModelMode 显式选择 RealModel / Deterministic。
         var modelExecutionOptions = BuildModelExecutionOptions(runtimeOptions);
         CoreExtensions.AddContextCore(services, modelExecutionOptions);
 
@@ -108,7 +108,7 @@ internal static class ProductionRuntimeExtensions
         ApplyAgentModelModeOverride(services, runtimeOptions.AgentModelMode);
         ApplyToolModeOverride(services, runtimeOptions.ToolMode);
 
-        // P0-13：Canary Kill Switch 查询加进程内 TTL 缓存装饰器。
+        // Canary Kill Switch 查询加进程内 TTL 缓存装饰器。
         // 在线请求路径（AuthoritativeRuntime.IsEmergencyOverrideActiveAsync）不再每请求访问
         // Override Store；本地 TrySet/TryClear 写穿后立即失效；存储异常原样传播，
         // 由运行时按「覆盖活跃」回退 V1 + 告警（fail-closed，请求不失败）。
@@ -561,7 +561,7 @@ internal static class ProductionRuntimeExtensions
     }
 
     /// <summary>
-    /// 用 TTL 缓存装饰器替换 <see cref="ICanaryEmergencyOverrideStore"/> 注册（P0-13）。
+    /// 用 TTL 缓存装饰器替换 <see cref="ICanaryEmergencyOverrideStore"/> 注册。
     /// </summary>
     /// <remarks>
     /// 包装当前最后一个注册（Postgres 实现或 InMemory 默认实现）为装饰器的内层，并保持

@@ -2,7 +2,7 @@ namespace ContextCore.Abstractions;
 
 // ===========================================================================
 // Model Artifact Registry 契约
-//
+// 
 // 目标（对齐 Production Intelligence Spec Workstream A）：
 // 1. 把 ModelExecutionSnapshot 中的 ModelArtifactId / ModelVersion / FeatureSchemaVersion /
 // CalibrationVersion / InferenceEngineKind / ContentHash 提升为可注册、可查询的工件元数据，
@@ -14,7 +14,7 @@ namespace ContextCore.Abstractions;
 // 4. IPersistentModelArtifactRegistry 标记接口（不添加成员），让消费方显式区分
 // 持久化能力与 in-memory 回退，与 IPersistentToolDispatchJournal /
 // IPersistentAgentCheckpointStore 模式对齐。
-//
+// 
 // 设计边界：
 // - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
 // - 不与 IBatchInferenceEngine 耦合：descriptor 描述"模型工件应是什么"，
@@ -154,13 +154,13 @@ public interface IPersistentModelArtifactRegistry : IModelArtifactRegistry
 
 // ===========================================================================
 // Desired Model State Store 契约（HA 多节点一致性）
-//
+// 
 // 目标（对齐 Production Intelligence Spec Workstream A）：
 // 1. 在 HA 部署中，Model Control Plane 的 Activate/Deactivate 操作需跨节点同步。
 // 2. DesiredModelStateStore 存储"期望状态"（Active/Inactive），由各节点的
 // ReconcilerWorker 定期拉取并应用到本地 ModelActivationManager。
 // 3. Generation 字段用于乐观并发控制：仅当本地 Generation < 远端 Generation 时才应用。
-//
+// 
 // 设计边界：
 // - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
 // - 不与 IModelActivationManager 耦合：store 仅负责存储/查询期望状态，
@@ -216,7 +216,7 @@ public sealed record DesiredModelState
 /// UpdatedAt = DateTimeOffset.UtcNow,
 /// UpdatedBy = "node-1"
 /// });
-///
+/// 
 /// // ReconcilerWorker 读取并应用
 /// var state = await store.GetAsync("model-v1");
 /// if (state != null && state.Generation > localGeneration) {
@@ -241,7 +241,7 @@ public interface IDesiredModelStateStore
 
 // ===========================================================================
 // Cluster Model Slot 契约（单一 Champion 真相源）
-//
+// 
 // 目标：
 // 1. 替代按 ModelId 分别保存 Active/Inactive 的 DesiredModelState 模型——
 // 旧模型允许同一时刻多条 Active 记录并存，激活新模型时也没有同事务把旧模型改为 Inactive，
@@ -250,7 +250,7 @@ public interface IDesiredModelStateStore
 // 激活新模型 = 单次 CAS UPDATE，旧模型自然失效（不再有"旧 Active 记录"）。
 // 3. Revision 字段单调递增，作为 CAS token：TryUpdateAsync 仅当 expectedRevision 匹配当前 revision 时成功。
 // 消除"Get generation → +1 → SetAsync"非原子窗口。
-//
+// 
 // 设计边界：
 // - 契约层不引入存储 I/O：所有抽象为进程内接口，实现层可注入持久化 store。
 // - 保留 IDesiredModelStateStore / PostgresDesiredModelStateStore 向后兼容（不再走生产路径）。
@@ -407,7 +407,7 @@ public interface IModelNodeAppliedStateStore
 }
 
 /// <summary>
-/// 节点成员资格租约（P0-15）：节点在集群中的活跃成员身份。
+/// 节点成员资格租约：节点在集群中的活跃成员身份。
 /// </summary>
 /// <remarks>
 /// 解决 Applied-State Registry 把"数据库中所有历史行"当作当前节点的问题：
@@ -443,7 +443,7 @@ public sealed record ModelNodeMembership
 }
 
 /// <summary>
-/// 节点成员资格存储：维护每个实例的活跃成员租约（P0-15）。
+/// 节点成员资格存储：维护每个实例的活跃成员租约。
 /// </summary>
 /// <remarks>
 /// 租约语义：

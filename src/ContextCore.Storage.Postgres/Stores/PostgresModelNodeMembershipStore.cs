@@ -4,7 +4,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// PostgreSQL 持久化 Model Node Membership Store（P0-15）。
+/// PostgreSQL 持久化 Model Node Membership Store。
 /// </summary>
 /// <remarks>
 /// 每 (node_group_id, instance_id) 一行，维护实例的成员资格租约：

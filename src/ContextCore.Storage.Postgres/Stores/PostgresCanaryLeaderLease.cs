@@ -10,7 +10,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// <remarks>
 /// 确保 <see cref="ContextCore.Core.Services.Evolution.CanaryProgressionHostedService"/>
 /// 同一时刻仅一个实例处理同一 run，避免多实例同时推进/回滚同一 Canary。
-///
+/// 
 /// <b>租约模型</b>（每个 run_id 至多一条行）：
 /// <code>
 /// TryAcquireAsync:
@@ -24,20 +24,20 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// - 现有行过期 → ON CONFLICT DO UPDATE WHERE 子句命中，更新并返回 token
 /// - 现有行未过期 → ON CONFLICT DO UPDATE WHERE 子句不命中，0 行返回，返回 null
 /// </code>
-///
+/// 
 /// <b>RenewAsync</b>：UPDATE WHERE lease_token = @token，延长 lease_expires_at。
 /// <b>ReleaseAsync</b>：DELETE WHERE lease_token = @token（主动让出）。
 /// <b>ReapExpiredAsync</b>：DELETE WHERE lease_expires_at &lt; now（崩溃 leader 持有的过期租约最终释放）。
-///
+/// 
 /// 复用租约模式（CAS + token 匹配），但状态机更简单：
 /// leader 租约无需 Pending → Leased → Acked 流转，只有 "持有" 与 "未持有" 两个状态。
-///
+/// 
 /// <b>Perf-7 严格 HA 单事务接口</b>：本类同时实现 <see cref="ICanaryDecisionApplier"/>，
 /// 将 lease/fencing 校验 + pipeline revision CAS + transition audit 写入 + epoch 递增
 /// 合并为单一 PostgreSQL 事务，修复旧路径 <c>AdvanceAsync</c> → <c>AdvanceEpochAsync</c>
 /// 分两步导致的 HA 正确性问题（旧 Leader 可能已推进 rollout 后 fencing 才失败）。
-///
-/// <b>P0-12 单一真相源</b>：Canary 的 percentage/revision/epoch 直接 CAS 写入
+/// 
+/// <b>单一真相源</b>：Canary 的 percentage/revision/epoch 直接 CAS 写入
 /// <c>pipeline_runs</c>（<see cref="PipelineRunSnapshot"/> 的 Canary* 字段 + 专用列），
 /// transition audit 与 snapshot CAS 同事务提交，<c>canary_pipelines</c> 不再有任何
 /// 生产写入——仅 <see cref="GetAllActivePipelineStatesAsync"/> 保留 legacy 一次性迁移读取。
@@ -221,7 +221,7 @@ WHERE lease_expires_at < @now;
 
     /// <inheritdoc />
     /// <remarks>
-    /// <b>事务流程</b>（P0-12：Canary 真相源 = pipeline_runs snapshot）：
+    /// <b>事务流程</b>（Canary 真相源 = pipeline_runs snapshot）：
     /// <code>
     /// BEGIN;
     /// -- 1. lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行，防止并发续约/释放）
@@ -230,11 +230,11 @@ WHERE lease_expires_at < @now;
     /// AND lease_expires_at > clock_timestamp()
     /// FOR UPDATE;
     /// -- 无行 → ROLLBACK，返回 LeaseLost
-    ///
+    /// 
     /// -- 2. 读取当前 pipeline run snapshot（单一真相源：CanaryPercentage/CanaryRevision）
     /// SELECT data FROM pipeline_runs WHERE run_id = @runId;
     /// -- CanaryRevision != @expectedRevision（或行不存在）→ ROLLBACK，返回 RevisionMismatch
-    ///
+    /// 
     /// -- 3. snapshot CAS（修补 data jsonb + 专用列，WHERE canary_revision 双保险）
     /// UPDATE pipeline_runs
     /// SET canary_percentage = @newPct, canary_revision = canary_revision + 1,
@@ -242,10 +242,10 @@ WHERE lease_expires_at < @now;
     /// WHERE run_id = @runId AND canary_revision = @expectedRevision
     /// RETURNING canary_revision;
     /// -- 0 行 → ROLLBACK，返回 RevisionMismatch
-    ///
+    /// 
     /// -- 4. transition audit 写入（同事务，与 snapshot CAS 强一致）
     /// INSERT INTO canary_transition_audit (...) VALUES (...);
-    ///
+    /// 
     /// -- 5. epoch 更新（UPSERT，同事务）
     /// INSERT INTO canary_run_epochs (run_id, current_epoch, advanced_at)
     /// VALUES (@runId, @newEpoch, now())
@@ -255,7 +255,7 @@ WHERE lease_expires_at < @now;
     /// COMMIT;
     /// </code>
     /// 任一步骤失败则整个事务 ROLLBACK，确保旧 Leader 无法在 lease 失效后修改 rollout，
-    /// 且 audit 与 snapshot 状态不会撕裂（P0-12：删除对 canary_pipelines 的生产写入）。
+    /// 且 audit 与 snapshot 状态不会撕裂（删除对 canary_pipelines 的生产写入）。
     /// </remarks>
     public async ValueTask<CanaryDecisionResult> ApplyCanaryDecisionAsync(
         CanaryDecisionRequest request,
@@ -527,7 +527,7 @@ ON CONFLICT (run_id) DO UPDATE SET
     /// <remarks>
     /// 单节点/本地模式——跳过 lease/fencing 校验（步骤 1），仅执行步骤 2-5
     /// （pipeline_runs snapshot CAS + transition audit + epoch update），
-    /// 确保单节点模式也写 DB 真相源（P0-12：Canary 状态直接 CAS 进 pipeline_runs）。
+    /// 确保单节点模式也写 DB 真相源（Canary 状态直接 CAS 进 pipeline_runs）。
     /// </remarks>
     public async ValueTask<CanaryDecisionResult> ApplyCanaryDecisionLocalAsync(
         CanaryDecisionRequest request,
@@ -741,7 +741,7 @@ ON CONFLICT (run_id) DO UPDATE SET
     }
     /// <inheritdoc />
     /// <remarks>
-    /// P0-12：从 <c>pipeline_runs</c> snapshot（单一真相源）读取 Canary 状态，
+    /// 从 <c>pipeline_runs</c> snapshot（单一真相源）读取 Canary 状态，
     /// 不再读取 legacy <c>canary_pipelines</c> 表。snapshot CanaryRevision == 0 表示
     /// 尚未推进（或 legacy 数据，恢复时由 <see cref="GetAllActivePipelineStatesAsync"/>
     /// 一次性迁移读取兜底），返回 Revision=0 / Percentage=0。
@@ -820,7 +820,7 @@ WHERE run_id = @run_id;
 
     /// <inheritdoc />
     /// <remarks>
-    /// <b>legacy 一次性迁移读取</b>（P0-12）：仍从 <c>canary_pipelines</c> 表读取，
+    /// <b>legacy 一次性迁移读取</b>：仍从 <c>canary_pipelines</c> 表读取，
     /// 仅用于 <c>RecoverFromStoreAsync</c> 对 snapshot CanaryRevision == 0 的 legacy run
     /// 恢复 in-memory 路由状态。生产路径（<see cref="ApplyCanaryDecisionAsync"/> /
     /// <see cref="ApplyCanaryDecisionLocalAsync"/>）已不再写入该表；本表只读不写。

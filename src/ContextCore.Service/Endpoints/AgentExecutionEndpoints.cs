@@ -12,7 +12,7 @@ namespace ContextCore.Service.Endpoints;
 
 // ===========================================================================
 // Agent Execution API — Agent Run 的 HTTP 入口
-//
+// 
 // 提供正式的 REST API 以驱动 Agent 执行循环：
 // POST /api/agents/runs — 创建并启动 AgentRun
 // GET /api/agents/runs/{id} — 获取 Run 状态
@@ -21,7 +21,7 @@ namespace ContextCore.Service.Endpoints;
 // POST /api/agents/runs/{id}/approvals/{approvalId} — 提交 approval 决策
 // POST /api/agents/runs/{id}/compact — 压缩事件流前缀（Operator；折叠为快照并归档）
 // GET /api/agents/runs/{id}/events/snapshot — 读取压缩快照（Operator；未压缩时 404）
-//
+// 
 // 设计原则：
 // 1. 遵循 ContextCore Minimal API 模式（IEndpointRouteBuilder 扩展方法）。
 // 2. Workspace 隔离：workspaceId 优先从 IWorkspaceContextAccessor（认证上下文）读取，
@@ -363,7 +363,7 @@ internal static class AgentExecutionEndpoints
         // 管理员需要完整 Payload 进行审计/调试时通过此端点获取原始 AgentRunEvent。
         // 需要 WorkspaceRole.Admin 角色（RBAC 强制校验未启用时自动放行，仅记录审计日志）。
         // 分页参数：after = 上一页 NextSequence（省略或 -1 = 从头）；limit = 页大小（服务端 clamp 到上限）。
-        // 事件流压缩（P0-10）后折叠前缀已归档到 agent_run_events_archive，热表只保留
+        // 事件流压缩后折叠前缀已归档到 agent_run_events_archive，热表只保留
         // 锚点 + 增量：端点按 Sequence 合并归档 + 热表，保证管理员始终能看到完整历史
         // （修复审计缺口；非 Postgres provider 未注册 compactor 时仅读热表）。
         group.MapGet("/{id}/events/raw", async Task<IResult> (
@@ -392,7 +392,7 @@ internal static class AgentExecutionEndpoints
             var pageSize = Math.Clamp(limit ?? DefaultRawEventsPageSize, 1, MaxRawEventsPageSize);
 
             // 审计拼接：归档（折叠前缀，sequence < 锚点）+ 热表（锚点 + 增量）按 Sequence 合并，
-            // 保证压缩后管理员仍能看到完整事件历史（P0-10 审计缺口修复）。
+            // 保证压缩后管理员仍能看到完整事件历史（审计缺口修复）。
             // 非 Postgres provider 未注册 compactor → 仅读热表（与压缩不可用的部署一致）。
             var merged = await ReadUnifiedEventsAsync(
                 compactor, eventStore, workspaceId, id, fromSequence, pageSize + 1, ct).ConfigureAwait(false);
@@ -558,7 +558,7 @@ internal static class AgentExecutionEndpoints
                     }
 
                     // c：批准且 Run 已推进到 PendingToolExecution 时，立即入队 AgentKernelHost
-                    //（不等 RecoveryWorker 轮询，缩短审批通过到 Tool 执行的延迟）。
+                    // （不等 RecoveryWorker 轮询，缩短审批通过到 Tool 执行的延迟）。
                     if (result.RunStateChanged
                         && result.NewRunState == AgentRunState.PendingToolExecution
                         && host is not null)
@@ -848,8 +848,8 @@ internal static class AgentExecutionEndpoints
                     $"未找到 RunId='{id}'。");
             }
 
-            // R30.1 保守策略：仅终态（或重试已耗尽）的 Run 允许压缩。可恢复快照
-            // （P0-10 正式方案：Snapshot + Anchor + Hot Delta）已支持非终态 Run 的崩溃恢复，
+            // 保守策略：仅终态（或重试已耗尽）的 Run 允许压缩。可恢复快照
+            // （正式方案：Snapshot + Anchor + Hot Delta）已支持非终态 Run 的崩溃恢复，
             // 但保留终态限制避免意外压缩活跃 Run；与 PostgresAgentRunEventCompactor
             // FindCandidatesAsync 的候选过滤保持一致。
             if (!PostgresAgentRunEventCompactor.IsCompactableRunState(run.State, run.RetryCount, run.MaxRetries))
@@ -929,7 +929,7 @@ internal static class AgentExecutionEndpoints
 
     /// <summary>
     /// 按 Sequence 合并归档事件（折叠前缀）与热表事件（锚点 + 增量），供管理员 raw 事件
-    /// 端点分页读取（P0-10 审计缺口修复：压缩后仍能看到完整事件历史）。
+    /// 端点分页读取（审计缺口修复：压缩后仍能看到完整事件历史）。
     /// </summary>
     /// <remarks>
     /// 两个输入各自按 Sequence 升序；归档（sequence &lt; 锚点）与热表（sequence ≥ 锚点）
@@ -1103,9 +1103,9 @@ internal static class AgentExecutionEndpoints
         foreach (var evt in events)
         {
             // SSE 序列化公开 DTO（隐藏 Tool 参数/结果、原始模型输出、异常堆栈等敏感信息）。
-            // id: {sequence}
-            // event: {eventType}
-            // data: {json}
+            // id {sequence}
+            // event {eventType}
+            // data {json}
             // (空行结束事件)
             await writer.WriteLineAsync($"id: {evt.Sequence}").ConfigureAwait(false);
             await writer.WriteLineAsync($"event: {evt.EventType}").ConfigureAwait(false);
@@ -1160,7 +1160,7 @@ internal static class AgentExecutionEndpoints
     /// <item>错误类别与短消息（用于状态显示），但隐藏完整异常堆栈。</item>
     /// </list>
     /// Payload 解析失败或字段缺失时静默降级（返回已知字段 + null 敏感字段），
-    /// 不影响 SSE 流的连续性。原始 Payload 仅通过管理员审计端点（/events/raw）暴露。
+    /// 不影响 SSE 流的连续性。原始 Payload 仅通过管理员审计端点（events/raw）暴露。
     /// </summary>
     private static AgentRunEventPublicDto ToPublicDto(AgentRunEvent evt)
     {
@@ -1284,13 +1284,13 @@ internal static class AgentExecutionEndpoints
     /// 创建并启动 AgentRun 的处理逻辑（internal static，供端点单元测试直接调用）。
     /// </summary>
     /// <remarks>
-    /// P0-6/P0-7/P0-8 严格 Admission 语义（持久化 store 路径）：
+    /// 严格 Admission 语义（持久化 store 路径）：
     /// <list type="number">
     /// <item>以 PendingAdmission 状态原子创建（Claimer 永不领取；配额判定前 Run 永不进入可调度状态）；</item>
     /// <item>幂等重放（IdempotencyKey 命中）→ 200 OK；</item>
     /// <item>配额预留（TryConsumeAsync）失败 → 推进 AdmissionRejected（终态）→ <b>429</b>
     /// （请求不会被执行——AdmissionRejected 不在 Claimer 候选集，保留行仅作审计）；</item>
-    /// <item>配额成功 → 推进 Queued → TryClaimSingleAsync 取得 Scheduler Claim Lease（P0-8）；</item>
+    /// <item>配额成功 → 推进 Queued → TryClaimSingleAsync 取得 Scheduler Claim Lease；</item>
     /// <item>入队成功 → <b>201</b>（已持久化并成功排入执行队列）；</item>
     /// <item>本地队列饱和（QueueFull/Closed）→ 释放 Scheduler Claim（回 Queued，其他节点/下周期接管）
     /// → <b>202</b>（已持久化、等待后台调度）；</item>
@@ -1357,7 +1357,7 @@ internal static class AgentExecutionEndpoints
             ? new HashSet<string>(toolIds, StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
 
-        // P0-6 Admission 边界：持久化路径以 PendingAdmission 创建（Claimer 永不领取），
+        // Admission 边界：持久化路径以 PendingAdmission 创建（Claimer 永不领取），
         // 配额预留成功才推进 Queued；InMemory/FileSystem 路径保持 Created（进程重启后数据即失，
         // 无需 Admission 状态机——Created 仍由 Actor 判定为全新启动）。
         var persistentStore = runStore as IPersistentAgentRunStore;
@@ -1428,7 +1428,7 @@ internal static class AgentExecutionEndpoints
 
             if (admitResult.WasExisting)
             {
-                // Idempotent replay: return existing run (200 OK)
+                // Idempotent replay return existing run (200 OK)
                 return Results.Ok(ToRunResponse(admitResult.Run));
             }
             if (admitResult.QuotaDenied)
@@ -1462,7 +1462,7 @@ internal static class AgentExecutionEndpoints
 
             if (createResult.WasExisting)
             {
-                // Idempotent replay: return existing run (200 OK)
+                // Idempotent replay return existing run (200 OK)
                 return Results.Ok(ToRunResponse(createResult.Run));
             }
 
@@ -1490,7 +1490,7 @@ internal static class AgentExecutionEndpoints
             admittedRun = createResult.Run;
         }
 
-        // P0-8：入队前先取得 Scheduler Claim Lease（TryClaimSingleAsync）——防止 Claimer 在
+        // 入队前先取得 Scheduler Claim Lease（TryClaimSingleAsync）——防止 Claimer 在
         // 另一节点重复领取同一 Run（双调度真源）。领取成功 → 入队 → 201。
         var enqueueTarget = admittedRun;
         if (persistentStore is not null)
@@ -1515,7 +1515,7 @@ internal static class AgentExecutionEndpoints
 
         // 入队调度：成功 → 201（已持久化并成功排入执行队列）。
         // 本地队列饱和（QueueFull/Closed）→ 释放 Scheduler Claim（回 Queued，其他节点/
-        // 下周期接管）→ 202（P0-7：202 = 已持久化、等待后台调度；429 仅保留给配额拒绝/未持久化）。
+        // 下周期接管）→ 202（202 = 已持久化、等待后台调度；429 仅保留给配额拒绝/未持久化）。
         var enqueue = await host.TryEnqueueAsync(enqueueTarget, CancellationToken.None).ConfigureAwait(false);
         if (enqueue.Status == AgentRunEnqueueStatus.QueueFull || enqueue.Status == AgentRunEnqueueStatus.Closed)
         {
@@ -1696,7 +1696,7 @@ internal static class AgentExecutionEndpoints
     }
 
     /// <summary>
-    /// 解析 Scheduler Claim Lease 参数（P0-8）：Owner 优先取 AgentHostOptions.Owner，
+    /// 解析 Scheduler Claim Lease 参数：Owner 优先取 AgentHostOptions.Owner，
     /// 否则生成 host-{MachineName}-{guid}；Duration 取 AgentHostOptions.SchedulerClaimDuration（默认 60s）。
     /// </summary>
     private static (string Owner, TimeSpan Duration) ResolveSchedulerClaim(HttpContext httpContext)

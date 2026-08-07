@@ -4,10 +4,10 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
 /// v58 → v59：agent_runs 追加 Scheduler Claim Lease 列，并把既有 Created Run 转换为 Queued。
-/// - 新增 claim_owner / claim_token / claim_expires_at 列（P0-8：Scheduler Claim 真正落库——
+/// - 新增 claim_owner / claim_token / claim_expires_at 列（Scheduler Claim 真正落库——
 ///   领取后写入 claim 持有者/令牌/过期时间，事务提交后行锁释放也不允许其他节点重复领取；
 ///   节点在领取后崩溃时，claim 过期后其他节点可重新领取）。
-/// - Created（state=0）→ Queued（state=21）批量转换（P0-6 Admission 边界）：
+/// - Created（state=0）→ Queued（state=21）批量转换（Admission 边界）：
 ///   新语义下 Created 只属于 InMemory/FileSystem provider；Postgres 持久化的待调度 Run
 ///   必须处于 Queued（Admission 已通过），否则 Durable Scheduler 不再领取（防止绕过配额）。
 ///   state 列与 data JSON.State 同步更新（单真源约束）。

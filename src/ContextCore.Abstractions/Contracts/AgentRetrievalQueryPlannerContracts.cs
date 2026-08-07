@@ -2,12 +2,12 @@ namespace ContextCore.Abstractions;
 
 // ===========================================================================
 // Agent 受控检索查询规划器契约（Agent Retrieval Query Planner Contracts）
-//
+// 
 // 目标：
 // 在 Agent 执行循环中，将（原始任务、最新意图、Tool 观察、未解决目标、
 // 上一轮检索诊断、Turn 预算）解析为<b>受控</b>的检索计划：
 // 有界查询集 + 必需/排除 ID + 图种子 + Token 预算。
-//
+// 
 // 设计原则：
 // 1. 受控优先：无论输入多嘈杂，规划器只产出有界的查询集（MaxControlledQueries
 // 上限），绝不让检索查询随对话膨胀为自由检索（uncontrolled）——每次检索的
@@ -99,24 +99,24 @@ public sealed record AgentRetrievalPlannerInput
     /// <summary>Turn 预算（剩余轮次决定 Token 预算上限；null = 未配置）。</summary>
     public AgentTurnBudget? TurnBudget { get; init; }
 
-    // ── 租户隔离维度（P0-16：自适应计划签名必须包含以下维度，防止跨 Workspace 污染）──
+    // ── 租户隔离维度（自适应计划签名必须包含以下维度，防止跨 Workspace 污染）──
 
-    /// <summary>工作区标识（P0-16：签名必须包含 workspace，跨租户相同任务文本不得共享反馈状态）。</summary>
+    /// <summary>工作区标识（签名必须包含 workspace，跨租户相同任务文本不得共享反馈状态）。</summary>
     public string? WorkspaceId { get; init; }
 
-    /// <summary>集合标识（P0-16：签名必须包含 collection）。</summary>
+    /// <summary>集合标识（签名必须包含 collection）。</summary>
     public string? CollectionId { get; init; }
 
-    /// <summary>检索用途（P0-16：签名必须包含 purpose）。</summary>
+    /// <summary>检索用途（签名必须包含 purpose）。</summary>
     public string? Purpose { get; init; }
 
-    /// <summary>策略版本（P0-16：签名必须包含 policy version，策略演进即隔离）。</summary>
+    /// <summary>策略版本（签名必须包含 policy version，策略演进即隔离）。</summary>
     public string? PolicyVersion { get; init; }
 
-    /// <summary>检索画像 / Provider profile（P0-16：签名必须包含 retrieval profile）。</summary>
+    /// <summary>检索画像 / Provider profile（签名必须包含 retrieval profile）。</summary>
     public string? RetrievalProfile { get; init; }
 
-    /// <summary>任务类别（P0-16：签名必须包含 task class）。</summary>
+    /// <summary>任务类别（签名必须包含 task class）。</summary>
     public string? TaskClass { get; init; }
 }
 

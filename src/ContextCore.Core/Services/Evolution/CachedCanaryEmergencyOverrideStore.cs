@@ -21,7 +21,7 @@ public sealed class CanaryOverrideCacheOptions
 }
 
 /// <summary>
-/// P0-13：<see cref="ICanaryEmergencyOverrideStore"/> 的进程内 TTL 缓存装饰器。
+/// <see cref="ICanaryEmergencyOverrideStore"/> 的进程内 TTL 缓存装饰器。
 /// </summary>
 /// <remarks>
 /// 目的：Authoritative Runtime 在决定是否走 V2 时同步查询 Override Store，该查询位于

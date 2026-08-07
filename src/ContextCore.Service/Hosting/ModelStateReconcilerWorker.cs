@@ -20,11 +20,11 @@ namespace ContextCore.Service.Hosting;
 /// <item>Revision 更高且 DesiredStatus=Inactive：停用模型，回退到 fallback 引擎。</item>
 /// <item>Revision 相同但 ContentHash 不匹配：记录漂移告警（检测跨节点内容不一致）。</item>
 /// </list>
-///
+/// 
 /// <b>启动恢复</b>：首次执行全量同步时立即应用期望状态（激活/停用），
 /// 而非仅记录 Revision 等待后续变更——全新节点启动后马上加载集群 Champion 模型。
 /// 本地已激活同一 ContentHash 的模型（同进程内重复同步）由匹配检查跳过。
-///
+/// 
 /// <b>并发控制</b>：Revision 字段用于乐观并发控制（CAS），仅当远端 Revision > 本地 Revision 时才应用。
 /// HA 场景下由 <see cref="IClusterModelSlotStore.TryUpdateAsync"/> 的 CAS 保证单写者不回滚。
 /// </remarks>
@@ -54,7 +54,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     private long _appliedClusterSlotRevision = -1;
     private int _initialSyncDone;
 
-    // P0-15：节点成员资格租约（最近一次成功心跳的成员资格，含 LeaseToken 供 serving 开关写操作）；
+    // 节点成员资格租约（最近一次成功心跳的成员资格，含 LeaseToken 供 serving 开关写操作）；
     // _servingEnabled 反映本地健康状态——初始为 false（未完成首次完整 Apply 前不得接流量），
     // 漂移隔离时置 false（Admission 据此阻断流量），成功应用期望模型后置 true（恢复服务）。
     // 心跳以该状态刷新成员租约的 serving_enabled。
@@ -183,7 +183,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     /// </summary>
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
-        // P0-15：先心跳节点成员租约（领取/续租 + 刷新 serving_enabled）。
+        // 先心跳节点成员租约（领取/续租 + 刷新 serving_enabled）。
         // 心跳失败（存储异常 / 被其他活跃实例持有）→ 本轮失败退避重试：无法维持成员资格的
         // 节点不应报告收敛成功（fail-closed，避免"节点已下线但仍计入集群"）。
         if (!await HeartbeatMembershipAsync(ct).ConfigureAwait(false))
@@ -435,7 +435,7 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
     }
 
     /// <summary>
-    /// 心跳节点成员租约（P0-15）：领取/续租并刷新 serving_enabled。
+    /// 心跳节点成员租约：领取/续租并刷新 serving_enabled。
     /// 返回 true = 租约已持有（或未配置成员存储）；false = 被其他活跃实例持有或心跳异常
     /// （调用方应退避重试）。
     /// </summary>
@@ -594,7 +594,7 @@ public sealed class ModelStateReconcilerOptions
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// 节点成员租约时长（P0-15）：每轮心跳领取/续租，租约过期即 stale cutoff——
+    /// 节点成员租约时长：每轮心跳领取/续租，租约过期即 stale cutoff——
     /// 超过该时长未心跳的节点被集群视为下线（不再计入 Rollout Ready）。
     /// 默认 60 秒（≈ 6 个心跳周期），应大于 PollInterval 的数倍以容忍瞬时抖动。
     /// </summary>

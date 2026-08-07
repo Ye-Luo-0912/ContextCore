@@ -9,18 +9,18 @@ namespace ContextCore.Storage.Postgres.Stores;
 
 // ===========================================================================
 // PostgresToolReconciliationStore — Tool 对账记录存储（PostgreSQL 持久化实现）
-//
+// 
 // Tool Reconciliation Control Plane（-B1）：对账记录跨进程持久化，
 // 替代 InMemoryToolReconciliationStore 成为 ProductionHA 组合根下的真相源：
 // - 多实例 ToolReconciliationWorker / 人工 resolve 端点共享同一数据库，
 // 杜绝"对账记录只在创建它的实例内存中"导致的裁决丢失；
-// - CreateAsync 按 (workspace_id, run_id, request_id) UNIQUE 幂等（P0-5 完整租户键）；
-// - TryBeginAsync 领取裁决租约（P0-4）：CTE + FOR UPDATE SKIP LOCKED 原子领取，
+// - CreateAsync 按 (workspace_id, run_id, request_id) UNIQUE 幂等（完整租户键）；
+// - TryBeginAsync 领取裁决租约：CTE + FOR UPDATE SKIP LOCKED 原子领取，
 //   Pending → Running 并写入 lease_owner / lease_token / lease_expires_at /
 //   fencing_token+1 / attempt_count+1；租约过期的 Running 记录可被重新接管；
 // - RenewLeaseAsync / TryResetToPendingAsync / MarkResolvedAsync / MarkRejectedAsync
-//   全部校验 lease_token = @token AND lease_expires_at > clock_timestamp()（P0-4）；
-// - ResolveReconciliationAtomicallyAsync（P0-3）单事务完成：锁定对账记录 →
+//   全部校验 lease_token = @token AND lease_expires_at > clock_timestamp()；
+// - ResolveReconciliationAtomicallyAsync单事务完成：锁定对账记录 →
 //   验证唯一裁决者（lease + fencing）→ 锁定 Journal 行并按状态分支
 //   （仅 DispatchingIntent/Dispatched/Reconciling 可推进 Committed；Committed/ResultDelivered
 //   按结果指纹幂等判定，Prepared/缺失 → Corrupted）→ Durable Result UPSERT（含指纹）→
@@ -236,7 +236,7 @@ SELECT EXISTS (
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // P0-4：Pending 或租约已过期的 Running（Worker 崩溃后重新领取），
+        // Pending 或租约已过期的 Running（Worker 崩溃后重新领取），
         // 并跳过 next_attempt_at 未到期的退避记录。
         // 队头阻塞治理：availableHandlers 过滤掉无 Handler 可处理的记录（仅人工裁决）；
         // (created_at, reconciliation_id) keyset 游标逐页推进，保证超配额记录不被队首持续占据。
@@ -287,7 +287,7 @@ LIMIT @take;
         var leaseToken = Guid.NewGuid().ToString("N");
         var expiresAt = now + leaseDuration;
 
-        // CTE + FOR UPDATE SKIP LOCKED：原子领取裁决租约（P0-4）。
+        // CTE + FOR UPDATE SKIP LOCKED：原子领取裁决租约。
         // - Pending / ManualReviewRequired → 领取（人工 resolve 端点可接管需人工复核的记录）；
         //   Running 且租约已过期 → 接管（fencing 递增隔离旧持有者）。
         // - 有效租约持有中 / 终态 / 退避未到期 → 跳过（SKIP LOCKED 不阻塞并发领取者）。
@@ -534,7 +534,7 @@ WHERE reconciliation_id = @reconciliation_id
     public ValueTask<bool> MarkRejectedAsync(string reconciliationId, string leaseToken, ToolReconciliationOutcome outcome, CancellationToken cancellationToken = default)
         => MarkTerminalAsync(reconciliationId, leaseToken, ToolReconciliationStatus.Rejected, outcome, cancellationToken);
 
-    /// <summary>CAS 推进到终态（Resolved/Rejected）：必须持有有效租约（P0-4）。已终态（幂等冲突）返回 false。</summary>
+    /// <summary>CAS 推进到终态（Resolved/Rejected）：必须持有有效租约。已终态（幂等冲突）返回 false。</summary>
     private async ValueTask<bool> MarkTerminalAsync(
         string reconciliationId,
         string leaseToken,
@@ -604,7 +604,7 @@ WHERE reconciliation_id = @reconciliation_id
 
         try
         {
-            // 1. 锁定 Reconciliation Record（完整租户键 (workspace_id, run_id, request_id)，P0-5）。
+            // 1. 锁定 Reconciliation Record（完整租户键 (workspace_id, run_id, request_id)）。
             ToolReconciliationRecord? record;
             await using (var lockCmd = connection.CreateCommand())
             {
@@ -645,7 +645,7 @@ FOR UPDATE;
                 return new ToolReconciliationResolution { Status = ToolReconciliationResolutionStatus.AlreadyTerminal };
             }
 
-            // 2. 验证唯一裁决者（P0-5）：租约匹配 + 未过期 + fencing 版本一致。
+            // 2. 验证唯一裁决者：租约匹配 + 未过期 + fencing 版本一致。
             if (!string.Equals(record.LeaseToken, leaseToken, StringComparison.Ordinal)
                 || !record.LeaseExpiresAt.HasValue || record.LeaseExpiresAt.Value <= now)
             {

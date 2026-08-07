@@ -26,7 +26,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 的状态。压缩期间对 agent_runs 行加 <c>FOR UPDATE</c>，串行化同 Run 的并发压缩。
 /// 6. 快照 state_json 存 <see cref="ContextCore.Abstractions.AgentRunRecoverableState"/>
 /// （完整可恢复状态），Recovery 按 "Snapshot → validate anchor → replay hot delta" 恢复。
-/// 7. <b>自动压缩仍仅限终态 Run（R30.1 保守策略）</b>：<see cref="FindCandidatesAsync"/>
+/// 7. <b>自动压缩仍仅限终态 Run（保守策略）</b>：<see cref="FindCandidatesAsync"/>
 /// 只选取终态（或重试已耗尽）的 Run。可恢复快照已支持非终态 Run 的崩溃恢复，但保留
 /// 终态限制避免意外压缩活跃 Run；操作员端点同样仅允许终态 Run 压缩。
 /// </remarks>

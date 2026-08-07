@@ -7,7 +7,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // AgentRunActor — 单个 Agent Run 的执行者（per-run 实例）
-//
+// 
 // 负责单个 Run 的完整生命周期：
 // 1. ContextBuilding → 调用 IContextDecisionRuntime 或直接构造上下文（子问题 1）
 // 2. IAgentLoopPolicy.DecideAsync → 决定下一步（含 ModelCallsUsed 预检，子问题 2）
@@ -18,7 +18,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 6. Checkpointing → IAgentCheckpointFactory.CreateAsync → IAgentCheckpointStore.SaveAsync
 // （子问题 4）→ 记录事件
 // 7. 循环回到 1，直到 Complete/Failed/Cancelled
-//
+// 
 // 设计决策：
 // - 通过 IAgentRunStore.TransitionStateAsync 推进状态（CAS expected-state）
 // - 通过 IAgentRunEventStore.AppendAsync 写入审计事件（哈希链）
@@ -30,7 +30,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // - 子问题 4：Checkpoint 先 SaveAsync 再记录事件（顺序保证）
 // - 子问题 5：通过 IDurableToolExecutor 走 Durable Journal（不再直接调 IToolDispatcher）
 // - 子问题 6：ToolCallCompleted payload 含完整 Tool 身份（RequestId/SideEffect/IdempotencyKey）
-//
+// 
 // 修复：
 // - 引入 AgentRunExecutionState 统一管理执行期可变状态（Run/Messages/LastModelResponse/
 // LastCheckpoint/EventSequence/EventChainHash），消除散落实例字段
@@ -118,7 +118,7 @@ public sealed class AgentRunActor
     private readonly AgentHostOptions? _hostOptions;
     // Recovery Integrity State：人工介入告警接收器（null = 不告警，best-effort 钩子）。
     private readonly IRecoveryAlertSink? _alertSink;
-    // P0-10 正式方案：事件流压缩器（null = 非 Postgres provider，无快照/归档，走全量重放）。
+    // 正式方案：事件流压缩器（null = 非 Postgres provider，无快照/归档，走全量重放）。
     // Recovery 按 "Snapshot → validate anchor → replay hot delta" 从可恢复快照恢复折叠状态。
     private readonly IAgentRunEventCompactor? _eventCompactor;
     // 自适应检索规划器（规划输入 → 受控计划 → 决策请求 TokenBudget；
@@ -199,7 +199,7 @@ public sealed class AgentRunActor
     /// <param name="hostOptions">Host 选项（提供恢复退避参数；null 时用默认值 30s base / 30min cap）。</param>
     /// <param name="alertSink">人工介入告警接收器（null = 不告警；best-effort 钩子）。</param>
     /// <param name="eventCompactor">
-    /// 事件流压缩器（null = 非 Postgres provider；P0-10 正式方案：Recovery 读取
+    /// 事件流压缩器（null = 非 Postgres provider；正式方案：Recovery 读取
     /// 可恢复快照 + 归档审计，按 "Snapshot → validate anchor → replay hot delta" 恢复）。
     /// </param>
     /// <param name="toolAuthorizationPolicy">
@@ -298,7 +298,7 @@ public sealed class AgentRunActor
         _leaseExpiresAtProvider = leaseExpiresAtProvider;
 
         // 运行时能力补齐：检测 resume 场景
-        // 全新启动状态集 = Created（旧路径）+ Queued/Claimed/Running（P0-6/P0-8 引入的
+        // 全新启动状态集 = Created（旧路径）+ Queued/Claimed/Running（引入的
         // 执行前交接状态）：这些状态代表 Run 尚未产生任何持久化事件（首次 flush 才原子
         // CAS 到 ContextBuilding 并落库 RunCreated），必须走全新启动路径。
         // 其余非终态（ContextBuilding/ModelCalling/...）为崩溃恢复场景（resume）。
@@ -550,7 +550,7 @@ public sealed class AgentRunActor
     /// <remarks>
     /// <b>重建策略</b>（优先级从高到低）：
     /// <list type="bullet">
-    /// <item>可恢复快照（P0-10 正式方案）：存在可解析的 Recoverable Snapshot 且覆盖范围
+    /// <item>可恢复快照（正式方案）：存在可解析的 Recoverable Snapshot 且覆盖范围
     /// 超过重放起点时，按 "Snapshot → validate anchor → replay hot delta" 恢复——
     /// 快照还原折叠前缀 [0..anchor] 的状态（对话流 / 工具观察 / 模型轮次 / Pending 命令），
     /// 校验热表锚点 ContentHash == 快照 ChainHeadHash，再重放锚点后的热表增量事件。</item>
@@ -562,17 +562,17 @@ public sealed class AgentRunActor
     /// <item>LastModelResponse 置为 null（事件流中不含完整模型响应内容），强制重新调用模型。</item>
     /// <item>本地状态规范化为 ContextBuilding（LoopPolicy 会决定 CallModel）。</item>
     /// </list>
-    ///
+    /// 
     /// <b>状态一致性</b>：
     /// - 本地状态（ContextBuilding）用于状态机校验（TransitionStateLocal）。
     /// - Store 状态（run.State）用于 CAS（_turnStartState = run.State）。
     /// - 两者可以不同：本地状态决定状态机校验是否通过，store 状态决定 CAS 是否匹配。
     /// - 首次 FlushPendingEventsAsync 时 CAS 从 store 状态推进到新状态（store 不校验状态机流转）。
-    ///
+    /// 
     /// <b>幂等性保证</b>：
     /// 重新调用模型后若返回相同 ToolCalls，IDurableToolExecutor 通过 journal 保证
     /// 已 commit 的 Tool 不会被重复执行（返回缓存结果）。
-    ///
+    /// 
     /// <b>降级处理</b>：
     /// 快路径/快照路径读取失败时降级为全量事件重放；若事件流为空（崩溃发生在首次 flush 之前）
     /// 或无事件可读，回退为全新启动路径。快照缺失/不可解析（旧格式）时，压缩过的热表
@@ -634,7 +634,7 @@ public sealed class AgentRunActor
         // 区分恢复失败原因：事件数据损坏（哈希链/序列号/ContentHash） vs 存储不可用。
         var recoveryCorruptionDetected = false;
 
-        // ── 可恢复快照探测（P0-10 正式方案）────────────────────────────
+        // ── 可恢复快照探测（正式方案）────────────────────────────
         // 折叠前缀已归档到 agent_run_events_archive，热表只保留锚点 + 增量事件，
         // Recovery 不能依赖"从 Sequence 0 全量重放"。存在可解析的 Recoverable
         // Snapshot 且覆盖范围超过当前重放起点（fromSequence）时，启用快照路径：
@@ -915,7 +915,7 @@ public sealed class AgentRunActor
     /// RecoveryDependencyUnavailable 时存储本身不可用）时静默降级并记录警告——Run 保持原
     /// 非终态，由 RecoveryWorker 在依赖恢复后重试恢复；不抛给 FailAsync，避免把恢复失败
     /// 误标为 Failed 而丢失 Recovery* 语义。
-    ///
+    /// 
     /// Recovery Integrity State：
     /// - RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入），每次进入均告警；
     /// - RecoveryDependencyUnavailable 可重试：按指数退避（base × 2^(attempt-1)，封顶 cap）
@@ -951,7 +951,7 @@ public sealed class AgentRunActor
                 : TimeSpan.FromMinutes(30);
             var baseDelay = backoffBase > backoffCap ? backoffCap : backoffBase;
             // attempt 从 1 开始：首次失败等待 1×base，与 Durable Scheduler 的重试退避语义对齐
-            //（retry_count 从 0 起算时同样 base × 2^(retry_count)）。
+            // （retry_count 从 0 起算时同样 base × 2^(retry_count)）。
             var delay = baseDelay * Math.Pow(2, Math.Max(0, recoveryAttempt - 1));
             if (delay > backoffCap)
             {
@@ -1132,7 +1132,7 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// 尝试从事件流压缩器读取可恢复快照（P0-10 正式方案）。
+    /// 尝试从事件流压缩器读取可恢复快照（正式方案）。
     /// </summary>
     /// <returns>
     /// 快照可解析为 <see cref="AgentRunRecoverableState"/> 时返回 (状态, 快照记录链头)；
@@ -1184,7 +1184,7 @@ public sealed class AgentRunActor
     /// 从可恢复快照还原的状态 + 锚点后的热表增量事件构建恢复状态（快照快路径）。
     /// </summary>
     /// <remarks>
-    /// P0-10 正式方案（Snapshot → validate anchor → replay hot delta）的最后一步：
+    /// 正式方案（Snapshot → validate anchor → replay hot delta）的最后一步：
     /// 快照覆盖折叠前缀 [0..anchor] 的重建状态（Conversation / ToolObservations /
     /// ExecutionModelTurn / PendingToolCommands），在此之上重放锚点后的热表增量事件；
     /// 锚点一致性已由调用方（RebuildStateFromEventsAsync 边界读取）按 ChainHeadHash 校验。
@@ -2696,7 +2696,7 @@ public sealed class AgentRunActor
             // 3c：checkpoint 本体不再单独 SaveAsync，而是缓冲到 _pendingTurnCheckpoint，
             // 随 Turn 结束的 AppendBatchAsync 在同一事务内持久化（Postgres：INSERT agent_checkpoints；
             // InMemory：委托注入的 IAgentCheckpointStore）。事件与 checkpoint 原子提交，顺序保证更强。
-            //
+            // 
             // Bug 4 修复语义保留：若批量提交（含 checkpoint INSERT）失败，CheckpointSaved 事件
             // 也在同一批中回滚，不会出现"事件已记录但 checkpoint 未保存"的不一致。
 
@@ -2795,7 +2795,7 @@ public sealed class AgentRunActor
 
         var newStateObj = state with { Run = updatedRun };
 
-        // 缓冲 StateTransition 事件。恢复失败路径（bufferEvent: false）不缓冲：
+        // 缓冲 StateTransition 事件。恢复失败路径（bufferEvent false）不缓冲：
         // 事件流可能已损坏或不可用，且恢复失败状态采用状态直写（见 EnterRecoveryFailureStateAsync）。
         return bufferEvent
             ? BufferEvent(newStateObj, AgentRunEventType.StateTransition, JsonSerializer.Serialize(new

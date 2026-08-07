@@ -8,12 +8,12 @@ namespace ContextCore.Core.Services.AgentKernel;
 
 // ===========================================================================
 // RealToolDispatcher — IToolDispatcher 的真实分派实现
-//
+// 
 // 目标：
 // 替代 EchoToolDispatcher 作为生产环境的 IToolDispatcher 实现。
 // 通过 Tool 处理器注册表（IToolHandler）将 Tool 调用分派到真实实现，
 // 而非简单 echo payload。
-//
+// 
 // 设计原则：
 // 1. 注册表模式：维护 ConcurrentDictionary<string, IToolHandler>，按 ToolName 分派。
 // 调用方通过 AddHandler / 构造函数注入注册真实 Tool 处理器。
@@ -23,7 +23,7 @@ namespace ContextCore.Core.Services.AgentKernel;
 // 所有 Tool 调用返回 "tool not registered" 错误。
 // 生产部署应通过 DI 工厂注册所需 Handler（如 search / read_file / calculator）。
 // 4. 线程安全：ConcurrentDictionary + 不可变 ToolHandler 注册后不替换。
-//
+// 
 // 修复要点：
 // - IToolHandler.HandleAsync 改为接收 ToolExecutionContext（携带 WorkspaceId/RunId/
 // RequestId/IdempotencyKey/Payload/DeadlineAt/LeaseFence），而非仅裸 JSON Payload。
@@ -93,7 +93,7 @@ public sealed record ToolHandlerResult
     public string? ExternalOperationId { get; init; }
 
     /// <summary>
-    /// Provider 是否明确确认本次失败未产生外部副作用（P0-2）。
+    /// Provider 是否明确确认本次失败未产生外部副作用。
     /// 失败响应中显式置 true 时，<see cref="ToolRetrySafety.ProviderConfirmedNoEffect"/> 的自动重试才被允许；
     /// 否则"失败"不构成"未发生"的证据，禁止自动重试。
     /// </summary>

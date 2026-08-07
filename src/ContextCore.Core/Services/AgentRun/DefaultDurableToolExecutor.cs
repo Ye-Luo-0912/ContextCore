@@ -6,10 +6,10 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // DefaultDurableToolExecutor — Durable Tool 执行器默认实现
-//
+// 
 // 封装 Tool 调用的完整 durable 流程，
 // 让 AgentRunActor 不再直接调用 IToolDispatcher。
-//
+// 
 // 流程：
 // 1. 生成稳定 RequestId（基于 runId + toolCall 哈希，确保可重放时一致）
 // + 框架生成 ExternalOperationId（外部操作 ID，Prepare 时落库，重放稳定）
@@ -28,17 +28,17 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 并写入 IDurableToolResultStore（若注入，供 Postgres 路径缓存查询）
 // - Unknown → 不提交（等待调用方裁决，返回 JournalState=Dispatched）
 // 8. 返回 ToolExecutionResult（含完整 Tool 身份信息）
-//
+// 
 // 修复要点：
 // - PrepareAsync 返回值决定是否 Dispatch，避免对 Committed/ResultDelivered 重复 Dispatch
 // - Dispatched 模糊状态返回对账结果，不盲目重新执行外部副作用
 // - MarkCommittedWithResultAsync 原子提交 state + result，确保崩溃恢复时缓存可读
 // - IDurableToolResultStore 作为 Postgres 路径的结果缓存（InMemory journal 自带缓存）
 // - ToolDescriptor 前置副作用声明参与执行前决策与提交分类（声明权威，运行时验证）
-//
+// 
 // 设计决策：
 // - RequestId 由本执行器生成（稳定哈希），确保 Actor 与 Dispatcher 共享同一 ID。
-// - ExternalOperationId 由本执行器从稳定 RequestId 派生（"cc:" + requestId），
+// - ExternalOperationId 由本执行器从稳定 RequestId 派生（"cc" + requestId），
 // Prepare 时随 journal 条目持久化；Handler 返回真实外部系统 ID 时在 MarkDispatchedAsync 覆盖。
 // - Journal / Outbox / ResultStore 为可选依赖（null 时降级为直接 dispatch，无 durable 保证）。
 // - 审批：Actor 在调用本执行器前通过 IAgentApprovalGate 完成审批，并经
@@ -58,7 +58,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// <remarks>
 /// 封装 Tool 调用的完整 durable 编排流程，
 /// 让 <see cref="AgentRunActor"/> 不再直接调用 <see cref="IToolDispatcher"/>。
-///
+/// 
 /// 根据 <see cref="IToolDispatchJournal.PrepareAsync"/> 返回的
 /// <see cref="ToolDispatchPrepareResult"/> 决策是否 Dispatch、对账或返回缓存结果，
 /// 防止对已 Committed/ResultDelivered 的 Tool 重复执行外部副作用。
@@ -119,7 +119,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         // toolCallId 优先使用模型分配的 ToolCallId，缺失时回退到 RequestId
         var toolCallId = !string.IsNullOrWhiteSpace(toolCall.ToolCallId) ? toolCall.ToolCallId! : requestId;
 
-        // 外部操作 ID 从稳定 RequestId 派生（"cc:" + requestId），不使用 GUID。
+        // 外部操作 ID 从稳定 RequestId 派生（"cc" + requestId），不使用 GUID。
         // 崩溃恢复时同一 (runId, modelTurn, toolCallId, toolName, arguments) 产出相同 RequestId，
         // 派生值即恢复值；Journal 条目持久化的也是该派生值，外部 Provider 幂等记录恢复后可命中。
         // 若 Handler 在 Dispatch 后返回真实外部系统 ID，MarkDispatchedAsync 时以真实 ID 覆盖。
@@ -130,7 +130,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         var descriptor = _toolDispatcher.GetDescriptor(toolCall.ToolName);
 
         // 幂等键兜底：声明要求幂等键但调用方未提供 → 从稳定 RequestId 派生
-        // （providerNamespace + ":" + requestId，providerNamespace 取 ToolName 命名空间）。
+        // （providerNamespace + "" + requestId，providerNamespace 取 ToolName 命名空间）。
         // 派生值随 journal 持久化，重放时从 Prepare 结果读回，保证同一次调用键稳定。
         var effectiveIdempotencyKey = descriptor is { RequiresIdempotencyKey: true } && string.IsNullOrWhiteSpace(idempotencyKey)
             ? toolCall.ToolName + ":" + requestId
@@ -188,7 +188,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             catch (InvalidOperationException ex)
             {
                 // PrepareWithIntentAsync 失败（如 RequestId 复用检测 / 语义等价校验失败）。
-                // P0-1：不得无条件伪造 Prepared——若既有条目已处于更高级状态
+                // 不得无条件伪造 Prepared——若既有条目已处于更高级状态
                 // （复用检测命中历史调用），必须按真实状态返回并进入对账。
                 var prepareState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
                 var afterIntent = prepareState > ToolDispatchState.Prepared;
@@ -256,7 +256,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
                 // 4b. Journal = DispatchingIntent/Dispatched/Reconciling 模糊态 → 返回对账结果，不重新 Dispatch。
                 // 外部副作用可能已执行但未提交，调用方需经 BeginReconciliationAsync 显式对账或人工裁决。
-                // P0-1：JournalState 回传真实状态（prepareResult.CurrentState），不伪造。
+                // JournalState 回传真实状态（prepareResult.CurrentState），不伪造。
                 case ToolDispatchRecoveryDecision.Reconcile:
                     stopwatch.Stop();
                     return BuildReconciliationResult(
@@ -284,7 +284,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         // 5. Dispatch（携带 RequestId + 执行上下文：WorkspaceId/RunId/IdempotencyKey/ExternalOperationId）
         // Intent 已在 PrepareWithIntentAsync 中前置落库（DispatchingIntent = durable 边界），
         // 此处无需再单独标记；若进程在此之后崩溃，恢复时知道外部调用可能已开始，需对账而非盲目重放。
-        //
+        // 
         // 失败重试（策略驱动）：Dispatch 失败且副作用重试安全、未达 Descriptor.MaxRetries 上限时，
         // 按策略 Retry.Delay 退避后重试——同一 RequestId/幂等键/ExternalOperationId
         // （journal 条目与外部 Provider 幂等记录保持一致，重放安全）。
@@ -313,7 +313,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 // NonIdempotentWrite 在 ProductionHA 下无外部幂等或 fencing 支持时必须 fail-closed。
                 if (leaseFence is not null && DateTimeOffset.UtcNow >= leaseFence.ExpiresAt)
                 {
-                    // P0-1：Intent 已在 PrepareWithIntentAsync 中持久化（journal=DispatchingIntent），
+                    // Intent 已在 PrepareWithIntentAsync 中持久化（journal=DispatchingIntent），
                     // 必须按真实状态返回并进入对账（确认外部无副作用后裁决），不得伪造 Prepared。
                     var fenceState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
                     return BuildFailedResult(
@@ -331,7 +331,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 // 声明要求 lease fence 但调用方未提供 → fail-closed（副作用 Tool 无 fencing 保护时禁止执行）
                 if (descriptor is { RequiresLeaseFence: true } && leaseFence is null)
                 {
-                    // P0-1：同 fence 过期——Intent 已持久化，按真实状态返回并进入对账。
+                    // 同 fence 过期——Intent 已持久化，按真实状态返回并进入对账。
                     var fenceState = await QueryJournalStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
                     return BuildFailedResult(
                         requestId, effectiveIdempotencyKey, ToolSideEffect.Unknown,
@@ -392,11 +392,11 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 ErrorKind = dispatchException is not null
                     ? DispatchErrorKind.HandlerException
                     : dispatchResult?.ErrorKind ?? DispatchErrorKind.Unknown,
-                // P0-1：异常 → Provider 调用结果不明确（可能已发生副作用）；返回确定失败 → ProviderReturned。
+                // 异常 → Provider 调用结果不明确（可能已发生副作用）；返回确定失败 → ProviderReturned。
                 FailurePhase = dispatchException is not null
                     ? ToolFailurePhase.ProviderCallAmbiguous
                     : ToolFailurePhase.ProviderReturned,
-                // P0-2：仅当 Provider 明确确认无副作用时才允许 ProviderConfirmedNoEffect 重试。
+                // 仅当 Provider 明确确认无副作用时才允许 ProviderConfirmedNoEffect 重试。
                 NoEffectConfirmed = dispatchResult?.NoEffectConfirmed ?? false,
                 Duration = stopwatch.Elapsed
             };
@@ -420,7 +420,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             await Task.Delay(retryPolicy.Retry.Delay, cancellationToken).ConfigureAwait(false);
         }
 
-        // 重试耗尽仍为异常 → 返回失败。P0-1：Intent 已持久化，必须查询并返回真实 Journal 状态
+        // 重试耗尽仍为异常 → 返回失败。：Intent 已持久化，必须查询并返回真实 Journal 状态
         // （库里是 DispatchingIntent 就返回 DispatchingIntent，使 Actor 创建对账记录），
         // 不得伪造 Prepared——外部副作用可能已发生。
         if (dispatchException is not null)
@@ -508,7 +508,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             prepareResult, policyResult, finalAttempt, approvalGranted);
 
         ToolDispatchState finalJournalState;
-        // P0-1：Journal 提交失败标记——MarkCommittedWithResultAsync CAS 失败时置位，
+        // Journal 提交失败标记——MarkCommittedWithResultAsync CAS 失败时置位，
         // 最终结果携带 FailurePhase=JournalCommitFailed（外部副作用已发生但 journal 未达 Committed，必须对账）。
         var journalCommitFailed = false;
         switch (policy.Disposition)
@@ -681,7 +681,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     /// <summary>
     /// 构建对账结果（Journal = DispatchingIntent/Dispatched 模糊状态，外部副作用可能已执行但未提交）。
     /// 调用方需查询外部系统或人工裁决后决定是否重新执行。
-    /// P0-1：JournalState 必须反映真实状态（调用方据此决定是否创建对账记录）。
+    /// JournalState 必须反映真实状态（调用方据此决定是否创建对账记录）。
     /// </summary>
     private static ToolExecutionResult BuildReconciliationResult(
         string requestId,
@@ -762,7 +762,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     }
 
     /// <summary>
-    /// 查询 Journal 真实状态（P0-1）：Intent 持久化后的失败路径必须返回数据库真实状态，不得伪造 Prepared。
+    /// 查询 Journal 真实状态：Intent 持久化后的失败路径必须返回数据库真实状态，不得伪造 Prepared。
     /// 查询失败或条目缺失 → fail-closed：按最高安全级别返回 <see cref="ToolDispatchState.DispatchingIntent"/>
     /// （强制对账，避免外部副作用真相悬空），并保留在错误信息中供审计。
     /// 无 journal（降级直连）→ 返回 Prepared（无 durable 边界，视为从未开始）。

@@ -4,7 +4,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // DefaultToolEffectPolicy — Tool 执行策略默认实现
-//
+// 
 // 严格提交矩阵（Descriptor.DeclaredSideEffect → 执行后处置）：
 // None / ReadOnly → 结果确定后 Commit（只读，重放安全）
 // Write → 执行成功时 Commit；失败时 Hold（副作用是否发生未知）
@@ -13,7 +13,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // NonIdempotentWrite → 永不自动提交：Approval + 外部操作身份确认后经对账提交
 // RequiresReconciliation → 永不自动提交：必须经 Reconciliation Handler 确认后提交
 // Unknown → 永不自动提交（保守策略）
-//
+// 
 // 该矩阵替代执行器旧的"effectiveSideEffect != Unknown → MarkCommittedWithResultAsync"
 // 判定，杜绝以下危险状态被错误自动提交：
 // - NonIdempotentWrite（外部副作用不可重放，必须对账）
@@ -21,14 +21,14 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // - 外部调用失败但副作用是否发生未知（Succeeded=false）
 // - Handler 返回失败但 DeclaredSideEffect 为写（部分副作用可能已发生）
 // - Fence 未得到外部系统确认的写操作
-//
+// 
 // 审批门扩展（Actor 门 → 策略层）：
 // RequiresApproval=true + 写副作用 + 未确认审批（approvalGranted=false）→
 // 禁止自动提交（Hold + RequiresApprovalBeforeCommit=true），
 // 防止绕过 Actor 审批门的直连调用自动执行外部写副作用。
 // Actor 经 IAgentApprovalGate 放行后传 approvalGranted=true，保持既有提交流程。
-//
-// 重试决策（Dispatch 失败时，P0-2 安全契约）：
+// 
+// 重试决策（Dispatch 失败时，安全契约）：
 // 外部写调用失败/超时 ≠ 副作用没有发生（请求发送成功 → 外部系统完成写入 → 返回包丢失）。
 // 因此普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，不能依据本地 retry 配置自动重试。
 // 允许自动重试的唯一条件（Descriptor.RetrySafety 显式声明 + 运行时验证）：
@@ -208,7 +208,7 @@ public sealed class DefaultToolEffectPolicy : IToolEffectPolicy
             return ToolRetryDecision.Abort($"已达最大重试次数（MaxRetries={descriptor.MaxRetries}）");
         }
 
-        // 重试安全门（P0-2）：普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，
+        // 重试安全门：普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，
         // 不能依据本地 retry 配置自动重试——外部写失败/超时 ≠ 副作用未发生。
         // 允许自动重试的唯一条件：None/ReadOnly；或 Descriptor 显式声明 ProviderIdempotent
         // （Provider 支持稳定幂等键）且本次携带稳定键；或 ProviderConfirmedNoEffect
@@ -249,7 +249,7 @@ public sealed class DefaultToolEffectPolicy : IToolEffectPolicy
                 break;
 
             case ToolSideEffect.Write:
-                // 普通写（P0-2）：默认 RetrySafety=Never → 即使 MaxRetries>0 也不自动重试。
+                // 普通写：默认 RetrySafety=Never → 即使 MaxRetries>0 也不自动重试。
                 // 仅当 Descriptor 显式声明 ProviderIdempotent（+ 稳定幂等键）或
                 // ProviderConfirmedNoEffect（+ 本次 NoEffectConfirmed=true）时允许。
                 if (descriptor.RetrySafety == ToolRetrySafety.ProviderIdempotent)

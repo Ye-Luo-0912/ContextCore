@@ -4,7 +4,7 @@ using ContextCore.Abstractions;
 namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>
-/// IModelNodeMembershipStore 的 in-memory 实现（P0-15）。
+/// IModelNodeMembershipStore 的 in-memory 实现。
 /// </summary>
 /// <remarks>
 /// 与 PostgresModelNodeMembershipStore 实现同一契约，让 FileSystem / InMemory provider

@@ -5,16 +5,16 @@
 // 自适应层：记录每轮检索的实际结果（命中数 / 预算是否超限 / 是否有效），
 // 按计划签名聚合为自适应策略（Token 预算乘数 / 查询收敛乘数 / 召回增强乘数），
 // 后续规划时应用该策略调整输出，让检索策略随真实执行效果收敛，而非静态启发式。
-//
+// 
 // 设计决策：
 // 1. 底层规划器保持确定性 / 幂等：自适应仅调整规划参数（预算 / 查询收敛 /
 // 权重），给定相同输入 + 相同反馈状态，仍产生相同计划（可审计、可回归）。
-// 2. 反馈按"计划签名"聚合（P0-16 加固）：签名由输入（任务 + 意图 + 未解决目标
+// 2. 反馈按"计划签名"聚合（加固）：签名由输入（任务 + 意图 + 未解决目标
 // + 工作区 + 集合 + 用途 + 策略版本 + 检索画像 + 任务类别）经 SHA-256 确定性派生，
 // 带标签字段以控制字符分隔拼接，杜绝字段边界混淆；同一租户 / 用途 / 策略形态
 // 的检索任务共享自适应状态，跨 Workspace 的相同任务文本绝不共享反馈——
 // 一个租户无法通过低质量 / 恶意反馈改变另一个租户的 Token Budget 与检索权重。
-// 3. 反馈可信度（P0-16 加固）：每条反馈携带 FeedbackId / IdempotencyKey /
+// 3. 反馈可信度（加固）：每条反馈携带 FeedbackId / IdempotencyKey /
 // Source / Confidence / OutcomeQuality / Effective / Subject；策略计算只采用
 // Effective 样本，按 置信度 × 结果质量 × 时间衰减 加权，单主体（Subject）贡献
 // 封顶，防止单个低质量 / 恶意来源主导策略。
@@ -28,7 +28,7 @@
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// 反馈来源（P0-16 Source 字段：审计反馈由谁产生，防止匿名 / 外部来源污染）。
+/// 反馈来源（Source 字段：审计反馈由谁产生，防止匿名 / 外部来源污染）。
 /// </summary>
 public enum RetrievalFeedbackSource
 {
@@ -43,7 +43,7 @@ public enum RetrievalFeedbackSource
 }
 
 /// <summary>
-/// 自适应层运行模式（P0-16：保护就绪前默认关闭或仅 Shadow，由运维显式开启）。
+/// 自适应层运行模式（保护就绪前默认关闭或仅 Shadow，由运维显式开启）。
 /// </summary>
 public enum AdaptiveRetrievalMode
 {
@@ -138,7 +138,7 @@ public sealed record RetrievalPlanFeedback
 
     /// <summary>
     /// 幂等键（可选）：相同 (PlanSignature, IdempotencyKey) 只保留首条，
-    /// 重放 / 重复提交不产生重复反馈（P0-16）。
+    /// 重放 / 重复提交不产生重复反馈。
     /// </summary>
     public string? IdempotencyKey { get; init; }
 
@@ -257,7 +257,7 @@ public interface IAdaptiveRetrievalPlanner
 /// 规划器 / 运维端点 / 测试共用同一算法，保证反馈记录与策略查询落到同一签名。
 /// </summary>
 /// <remarks>
-/// P0-16 加固：签名覆盖租户隔离维度（Workspace / Collection / Purpose / PolicyVersion /
+/// 加固：签名覆盖租户隔离维度（Workspace / Collection / Purpose / PolicyVersion /
 /// RetrievalProfile / TaskClass）+ 任务形态维度（任务 / 意图 / 未解决目标），
 /// 使用带标签字段以 <c>\u001F</c> 分隔拼接后做 SHA-256，杜绝字段边界混淆与跨
 /// Workspace 污染；不同租户输入相同任务产生不同签名，绝不共享反馈状态。

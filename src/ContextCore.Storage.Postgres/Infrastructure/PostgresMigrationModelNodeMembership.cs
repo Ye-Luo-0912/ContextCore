@@ -3,7 +3,7 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>
-/// v59 → v60：新增 model_node_membership 表（P0-15 节点成员资格租约）。
+/// v59 → v60：新增 model_node_membership 表（节点成员资格租约）。
 /// </summary>
 /// <remarks>
 /// 列：
@@ -15,7 +15,7 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 /// - last_heartbeat：最后心跳时间；
 /// - serving_enabled：是否允许承接模型流量（Isolated 节点由 Reconciler 置 false，
 ///   Admission/Middleware 据此真正停止接收模型流量，不能只写 Applied State 数据库标志）。
-///
+/// 
 /// 单 Online 阶段：CREATE TABLE IF NOT EXISTS（幂等）；新数据库由基线 DDL 直接建好，
 /// PreCheck 检测表存在即跳过。
 /// </remarks>

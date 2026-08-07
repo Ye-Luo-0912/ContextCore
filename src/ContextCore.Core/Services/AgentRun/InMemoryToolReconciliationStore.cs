@@ -6,17 +6,17 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // InMemoryToolReconciliationStore — Tool 对账记录存储（进程内默认实现）
-//
+// 
 // 支撑 Run 级"未裁决不完成"约束与 ToolReconciliationWorker 轮询：
-// - CreateAsync 按 (WorkspaceId, RunId, RequestId) 幂等（P0-5 完整租户键）；
+// - CreateAsync 按 (WorkspaceId, RunId, RequestId) 幂等（完整租户键）；
 // - HasUnresolvedForRunAsync 供 CompleteAsync 门禁查询（Pending/Running 存在 → 禁止 Completed）；
 // - TryBeginAsync 领取裁决租约（Pending → Running + lease/fencing，含过期 Running 接管，
-//   P0-4 崩溃恢复；所有 Resolve/Fail/Renew 校验 lease_token + 未过期）；
+//   崩溃恢复；所有 Resolve/Fail/Renew 校验 lease_token + 未过期）；
 // - RenewLeaseAsync 心跳续租；TryResetToPendingAsync 失败回退（携带 last_error + 退避）；
 // - ResolveReconciliationAtomicallyAsync 锁等价原子裁决：进程内单门串行化
 //   journal 推进（状态分支：Prepared/缺失 → Corrupted；Committed/ResultDelivered →
 //   指纹幂等判定）+ 结果 UPSERT + 记录终态 + Run 推进（停车且无未决 → Queued）
-//   + 审计事件（P0-3）。
+//   + 审计事件。
 // ===========================================================================
 
 /// <summary>
@@ -57,7 +57,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 按 (WorkspaceId, RunId, RequestId) 幂等（P0-5 完整租户键）：同一 Tool 调用只保留一条对账记录。
+        // 按 (WorkspaceId, RunId, RequestId) 幂等（完整租户键）：同一 Tool 调用只保留一条对账记录。
         var existing = _records.Values.FirstOrDefault(r =>
             string.Equals(r.WorkspaceId, record.WorkspaceId, StringComparison.Ordinal)
             && string.Equals(r.RunId, record.RunId, StringComparison.Ordinal)
@@ -157,7 +157,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         var now = DateTimeOffset.UtcNow;
         var records = _records.Values
             .Where(r =>
-                // Pending 或租约已过期的 Running（P0-4：Worker 崩溃后重新领取）
+                // Pending 或租约已过期的 Running（Worker 崩溃后重新领取）
                 (r.Status == ToolReconciliationStatus.Pending
                  || (r.Status == ToolReconciliationStatus.Running
                      && (!r.LeaseExpiresAt.HasValue || r.LeaseExpiresAt.Value <= now)))
@@ -194,7 +194,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             (_, existing) =>
             {
                 // 可领取：Pending / ManualReviewRequired（人工 resolve 端点可接管）；或 Running
-                // 且租约已过期（P0-4 崩溃恢复接管）。终态 / 有效租约持有中 / 退避未到期 → 不领取。
+                // 且租约已过期（崩溃恢复接管）。终态 / 有效租约持有中 / 退避未到期 → 不领取。
                 var runningLeaseExpired = existing.Status == ToolReconciliationStatus.Running
                     && (!existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now);
                 if (existing.Status != ToolReconciliationStatus.Pending
@@ -245,7 +245,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             _ => throw new InvalidOperationException($"对账记录不存在：{reconciliationId}"),
             (_, existing) =>
             {
-                // P0-4：续租必须校验 lease_token 匹配且未过期。
+                // 续租必须校验 lease_token 匹配且未过期。
                 if (existing.Status != ToolReconciliationStatus.Running
                     || !string.Equals(existing.LeaseToken, leaseToken, StringComparison.Ordinal)
                     || !existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now)
@@ -322,7 +322,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             _ => throw new InvalidOperationException($"对账记录不存在：{reconciliationId}"),
             (_, existing) =>
             {
-                // P0-4：仅持有有效租约的 Running 记录可回退。
+                // 仅持有有效租约的 Running 记录可回退。
                 if (existing.Status != ToolReconciliationStatus.Running
                     || !string.Equals(existing.LeaseToken, leaseToken, StringComparison.Ordinal)
                     || !existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now)
@@ -420,7 +420,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
         cancellationToken.ThrowIfCancellationRequested();
 
         // 锁等价：进程内单门串行化所有对账原子裁决——journal 推进、结果 UPSERT、
-        // 记录终态、Run 推进、审计事件追加在同一临界区内完成（P0-3 不撕裂）。
+        // 记录终态、Run 推进、审计事件追加在同一临界区内完成（不撕裂）。
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -447,7 +447,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 return new ToolReconciliationResolution { Status = ToolReconciliationResolutionStatus.AlreadyTerminal };
             }
 
-            // 验证唯一裁决者（P0-5）：租约匹配 + 未过期 + fencing 版本一致。
+            // 验证唯一裁决者：租约匹配 + 未过期 + fencing 版本一致。
             var now = DateTimeOffset.UtcNow;
             if (!string.Equals(record.LeaseToken, leaseToken, StringComparison.Ordinal)
                 || !record.LeaseExpiresAt.HasValue || record.LeaseExpiresAt.Value <= now)
@@ -543,7 +543,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             };
             _records[record.ReconciliationId] = terminal;
 
-            // 4. Run 状态推进（P0-3）：Run 处于停车状态且无其他未决对账记录 → Queued（同一临界区，原子）。
+            // 4. Run 状态推进：Run 处于停车状态且无其他未决对账记录 → Queued（同一临界区，原子）。
             AgentRunState? auditState = null;
             if (_runStore is not null)
             {
@@ -692,7 +692,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 {
                     return existing; // 已裁决 → 幂等
                 }
-                // P0-4：裁决必须持有有效租约。
+                // 裁决必须持有有效租约。
                 if (!string.Equals(existing.LeaseToken, leaseToken, StringComparison.Ordinal)
                     || !existing.LeaseExpiresAt.HasValue || existing.LeaseExpiresAt.Value <= now)
                 {

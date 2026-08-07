@@ -4,7 +4,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 
 // ===========================================================================
 // AgentRunStateMachine — Agent Run 状态机校验器
-//
+// 
 // 校验 AgentRunState 的合法状态流转（参考 AgentRunState 注释中的合法流转图）。
 // 状态机复用 ToolDispatchState 的 expected-state CAS + 不可逆前向推进模式：
 // - 任意非终态可单向流转到下一阶段；
@@ -70,7 +70,7 @@ public static class AgentRunStateMachine
         {
             // LeaseLost 仅可由新 owner/recovery worker 写入，且源状态不得为 Completed/Cancelled/ReconciliationRejected/AdmissionRejected。
             // Completed/Cancelled 是确定终态，不应被丢租覆盖；ReconciliationRejected 是裁决终态，也不应被丢租覆盖；
-            // AdmissionRejected 是准入拒绝终态（P0-6），同样不应被丢租覆盖。
+            // AdmissionRejected 是准入拒绝终态，同样不应被丢租覆盖。
             if (from == AgentRunState.Completed || from == AgentRunState.Cancelled
                 || from == AgentRunState.ReconciliationRejected || from == AgentRunState.AdmissionRejected)
             {
@@ -120,7 +120,7 @@ public static class AgentRunStateMachine
     /// <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 不是终态：它表示恢复依赖（事件存储）
     /// 暂时不可用，fail-closed 下不得回退为全新启动，但依赖恢复后由恢复 Worker 在退避门
     /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（退避重试）。
-    /// <see cref="AgentRunState.AdmissionRejected"/> 是终态（P0-6 Admission 边界）：
+    /// <see cref="AgentRunState.AdmissionRejected"/> 是终态（Admission 边界）：
     /// 配额预留失败的 Run 永不进入调度队列，保留行仅作审计。
     /// <see cref="AgentRunState.ContextSafetyBlocked"/> 是终态：mandatory 上下文安全阻断，
     /// 模型未运行，等待人工介入（不自动重试）。
@@ -163,18 +163,18 @@ public static class AgentRunStateMachine
             // Created → ContextBuilding（启动；InMemory / FileSystem provider 路径）
             AgentRunState.Created => to == AgentRunState.ContextBuilding,
 
-            // P0-6 Admission：PendingAdmission → Queued（配额预留成功）/ AdmissionRejected（配额失败，终态）。
+            // Admission：PendingAdmission → Queued（配额预留成功）/ AdmissionRejected（配额失败，终态）。
             // 两者均不进入 Claimer 候选集；AdmissionRejected 不可再推进（终态已短路）。
             AgentRunState.PendingAdmission => to == AgentRunState.Queued
                                                || to == AgentRunState.AdmissionRejected,
 
-            // P0-8 Scheduler Claim：Queued → Claimed（领取 Scheduler Claim Lease）。
+            // Scheduler Claim：Queued → Claimed（领取 Scheduler Claim Lease）。
             // 入队失败释放后回到 Queued，其他节点可再次领取。
             // / ContextBuilding（防御：Queued 直接到达 Actor 时按全新启动处理——执行前状态）。
             AgentRunState.Queued => to == AgentRunState.Claimed
                                     || to == AgentRunState.ContextBuilding,
 
-            // P0-8：Claimed → Running（Execution/Fencing Lease 已获取，执行权确立）
+            // Claimed → Running（Execution/Fencing Lease 已获取，执行权确立）
             // / ContextBuilding（Actor 首次 flush：领取后直接开始执行，跳过显式 Running 推进的兼容路径）。
             // / ClaimExpired（claim 租约过期未续约 → 显式标记失效，等待其他节点接管）。
             // / ScheduledLocally（本地入队成功即消费 Claim，排队期间不依赖 Claim 续租）。

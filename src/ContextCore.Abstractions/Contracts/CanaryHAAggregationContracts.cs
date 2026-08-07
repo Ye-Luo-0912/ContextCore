@@ -2,7 +2,7 @@ namespace ContextCore.Abstractions;
 
 // ===========================================================================
 // Canary HA 聚合与外部指标契约
-//
+// 
 // 目标（补齐 Canary 三-1 / 三-2 缺失）：
 // 1. ExternalResultMetrics：外部结果指标（TaskSuccessRate / ToolSuccessRate /
 // RepairRate / SafetyViolationRate / ContextPrecision / ContextRecallProxy /
@@ -14,7 +14,7 @@ namespace ContextCore.Abstractions;
 // CanaryProgressionService 在多节点部署时消费全局聚合视图而非进程内局部视图。
 // 4. ICanaryLeaderLease：Leader 租约契约，确保 CanaryProgressionHostedService
 // 同一时刻仅一个实例处理同一 run（复用租约模式）。
-//
+// 
 // 设计原则：
 // 1. 契约层不引入存储 I/O：聚合与租约的实现层可注入 Postgres rollup /
 // Prometheus 查询 / Redis stream 等。
@@ -167,9 +167,9 @@ public sealed record CanaryAggregatedMetrics
 /// - Postgres rollup：各节点写入指标表，聚合器 SELECT SUM/AVG 合并。
 /// - Prometheus/OTel 查询：通过 PromQL 合并跨实例指标。
 /// - Redis/stream：各节点上报到 stream，聚合器消费合并。
-///
+/// 
 /// 单节点部署时实现层可直接返回进程内 CanaryMetricsCollector 的快照（InstanceCount=1）。
-///
+/// 
 /// <b>Stage Epoch 模型</b>（修复 HA 聚合数据重复累计问题）：
 /// <list type="bullet">
 /// <item>每个 Canary run 维护一个单调递增的 <c>stage_epoch</c>，存储在 <c>canary_run_epochs</c> 表。</item>
@@ -430,7 +430,7 @@ public sealed record CanaryDecisionResult
 /// <code>
 /// BEGIN;
 /// -- 1. lease/fencing 验证（SELECT FOR UPDATE 锁住 lease 行）
-/// -- 2. pipeline_runs snapshot CAS（P0-12 单一真相源：UPDATE ... WHERE canary_revision = @expectedRevision）
+/// -- 2. pipeline_runs snapshot CAS（单一真相源：UPDATE ... WHERE canary_revision = @expectedRevision）
 /// -- 3. transition audit 写入（INSERT canary_transition_audit，与 snapshot CAS 同事务）
 /// -- 4. epoch 更新（UPSERT canary_run_epochs）
 /// COMMIT;
@@ -464,7 +464,7 @@ public interface ICanaryDecisionApplier
     /// <c>CutoverController</c>），不写 DB，导致进程重启后 <c>RecoverFromStoreAsync</c>
     /// 读不到真实百分比。本方法跳过 lease 校验（单节点无 Leader），
     /// 但仍走 pipeline_runs snapshot CAS + transition audit + epoch update 单事务，
-    /// 确保 DB 与审计一致（P0-12 单一真相源）。
+    /// 确保 DB 与审计一致（单一真相源）。
     /// <para>
     /// <b>与 <see cref="ApplyCanaryDecisionAsync"/> 的区别</b>：仅省略步骤 1（lease/fencing 校验），
     /// 步骤 2-5（snapshot CAS + audit + epoch）完全一致。
@@ -512,7 +512,7 @@ public interface ICanaryDecisionApplier
     /// <remarks>
     /// <b>用途</b>：服务启动时从 DB 恢复 in-memory 状态（CutoverController 百分比 +
     /// <c>CanaryProgressionService._runStates</c>）。进程重启后这两个 in-memory 真值源丢失。
-    /// P0-12 后生产不再写入 <c>canary_pipelines</c>，本方法仅作为 legacy 一次性迁移读取，
+    /// 后生产不再写入 <c>canary_pipelines</c>，本方法仅作为 legacy 一次性迁移读取，
     /// 供 <c>RecoverFromStoreAsync</c> 对 snapshot CanaryRevision == 0 的旧 run 重建进程内路由状态。
     /// </remarks>
     ValueTask<IReadOnlyList<CanaryPipelineState>> GetAllActivePipelineStatesAsync(

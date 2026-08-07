@@ -131,18 +131,18 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// 重启后可从 run snapshot 直接恢复，不再依赖 canary_pipelines 表恢复。
     /// v57 → v58，Tool Reconciliation 裁决租约 + 完整租户键：
     /// - tool_reconciliation_entries 追加 lease_owner / lease_token / lease_expires_at /
-    ///   fencing_token / attempt_count / next_attempt_at / last_error 列（P0-4）：
+    ///   fencing_token / attempt_count / next_attempt_at / last_error 列：
     ///   Reconciliation Running 必须有租约，Worker 崩溃后 ListPendingAsync 重新领取
     ///   过期 Running，杜绝永久卡死；所有 Resolve/Fail/Renew 校验 lease_token + 未过期。
-    /// - 唯一键 (run_id, request_id) → (workspace_id, run_id, request_id)（P0-5 完整租户键）。
-    /// v58 → v59，Scheduler Claim Lease + Admission 边界（P0-6/P0-8）：
+    /// - 唯一键 (run_id, request_id) → (workspace_id, run_id, request_id)（完整租户键）。
+    /// v58 → v59，Scheduler Claim Lease + Admission 边界：
     /// - agent_runs 追加 claim_owner / claim_token / claim_expires_at 列：Scheduler Claim
     ///   Lease 真正落库（领取即写入持有者/令牌/过期时间，行锁释放后其他节点不得重复领取；
     ///   节点领取后崩溃时 claim 过期后其他节点重新领取）。
     /// - 既有 Created（state=0）Run 批量转换为 Queued（state=21）：新语义下 Created 只属于
     ///   InMemory/FileSystem provider，持久化待调度 Run 必须处于 Queued（Admission 已通过），
-    ///   否则 Durable Scheduler 永不领取（P0-6：配额失败的 Run 不得进入可调度状态）。
-    /// v59 → v60，model_node_membership 节点成员资格租约（P0-15）：
+    ///   否则 Durable Scheduler 永不领取（配额失败的 Run 不得进入可调度状态）。
+    /// v59 → v60，model_node_membership 节点成员资格租约：
     /// - 新增 model_node_membership 表（node_id / instance_id / lease_token /
     ///   lease_expires_at / last_heartbeat / serving_enabled）：节点在集群中的活跃成员身份。
     /// - 租约过期即 stale cutoff——Applied-State Registry 的 NodeCount / Converged /
@@ -284,7 +284,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "cluster_model_slots",
         // Model Node Applied State（节点已应用状态：每节点记录最后成功应用的集群槽位 Revision 与模型内容）
         "model_node_applied_state",
-        // Model Node Membership（P0-15 节点成员资格租约：活跃成员 + stale cutoff + serving 开关）
+        // Model Node Membership（节点成员资格租约：活跃成员 + stale cutoff + serving 开关）
         "model_node_membership",
         // Tool Reconciliation Control Plane（对账记录跨进程持久化 + ExternalOperationId 反查 + deadline 高亮）
         "tool_reconciliation_entries",
@@ -478,7 +478,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Desired Model State Store 索引（按 updated_at 倒序列举全部状态）
         ("desired_model_states", "updated"),
         // Tool Reconciliation Control Plane 索引
-        //（workspace 列表 + run 列表 + pending 轮询 + externalOperationId 反查）
+        // （workspace 列表 + run 列表 + pending 轮询 + externalOperationId 反查）
         ("tool_reconciliation_entries", "workspace"),
         ("tool_reconciliation_entries", "run"),
         ("tool_reconciliation_entries", "status"),
@@ -624,7 +624,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var clusterModelSlots = Infrastructure.PostgresNames.Table(options, "cluster_model_slots");
         // Model Node Applied State（节点已应用状态）
         var modelNodeAppliedStates = Infrastructure.PostgresNames.Table(options, "model_node_applied_state");
-        // Model Node Membership（P0-15 节点成员资格租约）
+        // Model Node Membership（节点成员资格租约）
         var modelNodeMemberships = Infrastructure.PostgresNames.Table(options, "model_node_membership");
         // Tool Reconciliation Control Plane（对账记录持久化表）
         var toolReconciliationEntries = Infrastructure.PostgresNames.Table(options, "tool_reconciliation_entries");

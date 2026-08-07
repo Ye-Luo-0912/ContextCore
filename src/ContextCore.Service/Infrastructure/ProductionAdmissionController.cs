@@ -9,22 +9,22 @@ namespace ContextCore.Service.Infrastructure;
 
 // ===========================================================================
 // 生产准入控制器（实时探针 + TTL 缓存）
-//
+// 
 // 目标：
 // 1. 在启动时一次性校验（ProductionAdmissionValidator）之上，提供请求阶段的
 // 运行时准入判定：启动后运行时降级（Postgres 断连 / Model Slot 停用 /
 // 应用重启窗口）不再静默放行业务流量。
 // 2. 为请求阶段 admission 中间件提供缓存报告（TTL 内复用，避免每个请求
 // 都执行全量校验），为 /api/admission/status 提供强制刷新入口。
-//
+// 
 // 实时探针（仅 ProductionHA）：
 // 1. postgres-live — IPostgresConnectionFactory.PingAsync 实时连通性。
 // 2. model-slot-live — 重新查询 cluster model slot 'primary' 是否仍处于 Active，
-//    并校验当前节点的 Applied State 与真实 IModelActivationManager（P0-14）：
+//    并校验当前节点的 Applied State 与真实 IModelActivationManager：
 //    仅集群 Desired 正常不足以放行——节点必须已上报应用状态、未隔离、且本地引擎
 //    实际加载了期望模型（Model ID / ContentHash / ActiveEngine 可推理）。
 // 3. application-started-live — 应用是否已完成启动（所有 HostedService.StartAsync）。
-//
+// 
 // 缓存语义：
 // - 非 ProductionHA：直接透传 validator 的 Skipped 报告（AllPassed=true），不执行实时探针。
 // - TTL 内返回缓存报告；TTL 到期或 forceRefresh=true 时执行全量刷新。
@@ -184,7 +184,7 @@ public sealed class ProductionAdmissionController
                 }
                 else
                 {
-                    // P0-14：节点级真相——当前节点 Applied State + 真实 IModelActivationManager。
+                    // 节点级真相——当前节点 Applied State + 真实 IModelActivationManager。
                     checks.Add(await VerifyNodeModelAppliedAsync(slot, cts.Token).ConfigureAwait(false));
                 }
             }
@@ -209,7 +209,7 @@ public sealed class ProductionAdmissionController
     }
 
     /// <summary>
-    /// P0-14/P0-15：校验当前实例是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
+    /// /：校验当前实例是否真正应用并加载了期望模型（而非仅集群 Desired 状态）。
     /// </summary>
     /// <remarks>
     /// 原实现只验证 Cluster Slot 的 DesiredStatus==Active 与 ActiveModelArtifactId 非空——
@@ -264,7 +264,7 @@ public sealed class ProductionAdmissionController
             }
         }
 
-        // P0-15：节点必须是活跃成员（成员租约未过期）且 serving_enabled=true 才可接流量。
+        // 节点必须是活跃成员（成员租约未过期）且 serving_enabled=true 才可接流量。
         // 租约过期即 stale cutoff（节点已下线）；serving_enabled=false 由漂移隔离触发
         // （Reconciler 置位）——不能只写 Applied State 的 Isolated 标志，成员租约是流量的第二道闸。
         // 与 IModelNodeAppliedStateStore 一致 fail-closed：已启用模型激活的集群必须能校验

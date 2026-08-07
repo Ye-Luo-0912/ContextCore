@@ -16,7 +16,7 @@ namespace ContextCore.Service.Hosting;
 /// <remarks>
 /// 包装 <see cref="CanaryProgressionService"/> 的 leader 选举层，确保多实例部署时
 /// 同一 Canary run 同一时刻仅由一个 leader 实例推进/回滚。
-///
+/// 
 /// <b>运行模式</b>：
 /// <list type="bullet">
 /// <item><see cref="CanaryLeaderOptions.Enabled"/> = false：立即退出（单节点模式，
@@ -24,7 +24,7 @@ namespace ContextCore.Service.Hosting;
 /// <item><see cref="CanaryLeaderOptions.Enabled"/> = true：周期性轮询所有 ScopedCanary run，
 /// 每个实例都记录本地指标样本到共享表；仅 leader 实例聚合跨实例指标并驱动推进/回滚。</item>
 /// </list>
-///
+/// 
 /// <b>Leader 选举流程</b>（per run）：
 /// <code>
 /// TryAcquire(runId, leaseDuration, owner)
@@ -33,7 +33,7 @@ namespace ContextCore.Service.Hosting;
 /// Renew(runId, token, extension) → 续租；失败则放弃 leader 身份
 /// Release(runId, token) → run 终态时主动释放
 /// </code>
-///
+/// 
 /// <b>Perf-7 严格 HA 单事务推进</b>：
 /// 推进/回滚不再调用 <see cref="CanaryProgressionService.AdvanceAsync"/> +
 /// <see cref="ICanaryMetricsAggregator.AdvanceEpochAsync"/> 两步，而是调用
@@ -41,7 +41,7 @@ namespace ContextCore.Service.Hosting;
 /// 在事务内完成 lease/fencing 校验 → pipeline revision CAS → transition audit 写入 →
 /// epoch 递增四步。任一步骤失败则整个事务回滚，确保旧 Leader 在 lease 失效后无法修改 rollout。
 /// Rollback 路径也经过同一事务接口（旧路径完全无 fencing 校验）。
-///
+/// 
 /// <b>与 <see cref="CanaryProgressionHostedService"/> 的关系</b>：
 /// 两者互斥注册。HA 部署注册本服务；单节点部署注册 <see cref="CanaryProgressionHostedService"/>。
 /// 本服务复用 <see cref="CanaryProgressionService"/> 做评估（EvaluateAsync），推进/回滚改走单事务接口。
@@ -362,7 +362,7 @@ internal sealed class CanaryLeaderHostedService : BackgroundService
 
                         // 同步 in-memory CutoverController + _runStates（保持进程内路由状态一致）
                         // DB 状态已由事务原子更新（pipeline_runs snapshot + canary_transition_audit + canary_run_epochs；
-                        // P0-12 单一真相源，不再写 canary_pipelines），此处仅更新进程本地状态，不重复写入 DB。
+                        // 单一真相源，不再写 canary_pipelines），此处仅更新进程本地状态，不重复写入 DB。
                         _progressionService.UpdateInMemoryPercentage(runId, newPercentage);
 
                         // 周期性清理旧 epoch 数据，控制表增长

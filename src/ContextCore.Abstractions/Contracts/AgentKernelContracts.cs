@@ -6,12 +6,12 @@ namespace ContextCore.Abstractions;
 
 // ===========================================================================
 // Tool Dispatch 与 Agent Checkpoint 契约
-//
+// 
 // 历史：本文件原为旧 Agent Kernel 契约（IAgentKernel / IAgentKernelTransport /
 // IDurableTransport / IKernelResultOutbox 等旧指令平面契约）。执行平面已收敛到
 // AgentRunStore → AgentKernelHost → AgentRunActor 单一平面，旧平面契约已删除
 // （删除双执行平面）。
-//
+// 
 // 当前保留：
 // 1. Tool Dispatch 契约（IToolDispatcher / IToolCatalog / IToolDispatchJournal /
 // IDurableToolResultStore / ToolDispatchState 状态机等）——
@@ -239,7 +239,7 @@ public sealed record ToolDescriptor
     public bool RequiresLeaseFence { get; init; } = false;
 
     /// <summary>
-    /// 自动重试安全契约（P0-2）：普通 Write 失败/超时 ≠ 副作用未发生，
+    /// 自动重试安全契约：普通 Write 失败/超时 ≠ 副作用未发生，
     /// 不能仅凭 <see cref="MaxRetries"/> &gt; 0 自动重试。默认 <see cref="ToolRetrySafety.Never"/>——
     /// 描述符作者必须显式声明 Provider 幂等键能力（<see cref="ToolRetrySafety.ProviderIdempotent"/>）
     /// 或无副作用确认能力（<see cref="ToolRetrySafety.ProviderConfirmedNoEffect"/>）后才允许自动重试。
@@ -304,7 +304,7 @@ public enum ToolRetryBackoffPolicy : byte
 }
 
 /// <summary>
-/// Tool 失败阶段（P0-1）：定位失败发生在 Durable Journal 生命周期中的位置。
+/// Tool 失败阶段：定位失败发生在 Durable Journal 生命周期中的位置。
 /// 失败发生在 <see cref="ToolDispatchState.DispatchingIntent"/> 之后
 /// （<see cref="AfterIntentBeforeProvider"/> 及以后）时，外部副作用可能已发生，
 /// 调用方<b>必须进入对账（Reconciliation）</b>，不得按普通失败处理。
@@ -331,7 +331,7 @@ public enum ToolFailurePhase : byte
 }
 
 /// <summary>
-/// Tool 自动重试安全契约（P0-2）。
+/// Tool 自动重试安全契约。
 /// 外部写调用失败或超时 ≠ 副作用没有发生（例如：请求发送成功 → 外部系统完成写入 → 返回包丢失）。
 /// 因此普通 Write 没有稳定 IdempotencyKey 或 Provider Fence 时，不能依据本地 retry 配置自动重试。
 /// 描述符作者必须显式声明本契约，策略引擎（<see cref="IToolEffectPolicy"/>）才允许自动重试。
@@ -573,7 +573,7 @@ public sealed record ToolReconciliationRecord
     public string? LeaseOwner { get; init; }
 
     /// <summary>
-    /// 裁决租约令牌（唯一随机值；P0-4：所有 Resolve/Fail/Renew 必须校验
+    /// 裁决租约令牌（唯一随机值：所有 Resolve/Fail/Renew 必须校验
     /// <c>lease_token = @token</c> 且 <c>lease_expires_at &gt; clock_timestamp()</c>）。
     /// </summary>
     public string? LeaseToken { get; init; }
@@ -582,7 +582,7 @@ public sealed record ToolReconciliationRecord
     public DateTimeOffset? LeaseExpiresAt { get; init; }
 
     /// <summary>
-    /// 裁决栅栏令牌（每次成功领取租约单调递增；P0-5：原子裁决验证
+    /// 裁决栅栏令牌（每次成功领取租约单调递增：原子裁决验证
     /// <c>fencing_token = 领取时的版本</c>，防止人工裁决与自动 Handler 双裁决竞争）。
     /// </summary>
     public long FencingToken { get; init; }
@@ -634,7 +634,7 @@ public sealed record ToolReconciliationOutcome
 }
 
 /// <summary>
-/// Tool 对账裁决租约（P0-4/P0-5）：<see cref="IToolReconciliationStore.TryBeginAsync"/> 成功领取时
+/// Tool 对账裁决租约：<see cref="IToolReconciliationStore.TryBeginAsync"/> 成功领取时
 /// 返回的裁决权凭证。持有者凭 LeaseToken + FencingToken 执行 Resolve/Fail/Renew；
 /// 任何裁决操作都必须携带有效租约，防止过期持有者与并发接管者竞争。
 /// </summary>
@@ -651,7 +651,7 @@ public sealed record ToolReconciliationLease
 }
 
 /// <summary>
-/// 对账原子裁决结果状态（P0-3：<see cref="IToolReconciliationStore.ResolveReconciliationAtomicallyAsync"/>）。
+/// 对账原子裁决结果状态（<see cref="IToolReconciliationStore.ResolveReconciliationAtomicallyAsync"/>）。
 /// </summary>
 public enum ToolReconciliationResolutionStatus : byte
 {
@@ -667,7 +667,7 @@ public enum ToolReconciliationResolutionStatus : byte
     /// <summary>裁决权丢失：租约令牌不匹配或租约已过期（被并发接管/过期）。</summary>
     ArbitrationLost = 3,
 
-    /// <summary>记录版本不匹配：fencing_token 已被并发接管递增（P0-5 双裁决竞争）。</summary>
+    /// <summary>记录版本不匹配：fencing_token 已被并发接管递增（双裁决竞争）。</summary>
     VersionMismatch = 4,
 
     /// <summary>
@@ -684,7 +684,7 @@ public enum ToolReconciliationResolutionStatus : byte
 }
 
 /// <summary>
-/// 对账原子裁决结果（P0-3）。<see cref="Record"/> 在 Resolved 时返回裁决后的最新记录。
+/// 对账原子裁决结果。<see cref="Record"/> 在 Resolved 时返回裁决后的最新记录。
 /// </summary>
 public sealed record ToolReconciliationResolution
 {
@@ -763,7 +763,7 @@ public sealed record ToolReconciliationHeartbeat
 /// <summary>
 /// Tool 对账记录存储：持久化 <see cref="ToolReconciliationRecord"/>，
 /// 支撑 Run 级"未裁决不完成"约束与 ToolReconciliationWorker 轮询。
-/// 完整租户键为 (workspace_id, run_id, request_id)（P0-5）。
+/// 完整租户键为 (workspace_id, run_id, request_id)。
 /// </summary>
 public interface IToolReconciliationStore
 {
@@ -789,7 +789,7 @@ public interface IToolReconciliationStore
 
     /// <summary>
     /// 列出待接管记录（ToolReconciliationWorker 轮询用，按创建时间升序）：
-    /// Pending 记录 + 租约已过期的 Running 记录（P0-4：Worker 崩溃后重新领取，
+    /// Pending 记录 + 租约已过期的 Running 记录（Worker 崩溃后重新领取，
     /// 避免永久卡死在 Running）；并跳过 next_attempt_at 未到期的退避记录。
     /// </summary>
     /// <param name="take">单页最大条数。</param>
@@ -810,7 +810,7 @@ public interface IToolReconciliationStore
         string? afterReconciliationId = null);
 
     /// <summary>
-    /// 领取裁决租约（P0-4）：Pending → Running 并写入租约字段
+    /// 领取裁决租约：Pending → Running 并写入租约字段
     /// （lease_owner / lease_token / lease_expires_at / fencing_token+1 / attempt_count+1）；
     /// 租约已过期的 Running 记录可被重新接管（fencing 递增隔离旧持有者）。
     /// 返回 null = 无法领取（记录不存在抛 <see cref="InvalidOperationException"/>；
@@ -823,7 +823,7 @@ public interface IToolReconciliationStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 续租（心跳，P0-4）：校验 <c>lease_token = @token</c> 且未过期后延长租期。
+    /// 续租（心跳）：校验 <c>lease_token = @token</c> 且未过期后延长租期。
     /// 返回 false = 租约已失效（过期/被接管），调用方应停止执行并放弃裁决。
     /// </summary>
     ValueTask<bool> RenewLeaseAsync(
@@ -845,7 +845,7 @@ public interface IToolReconciliationStore
 
     /// <summary>
     /// CAS 回退 Running → Pending（Handler 对账失败时重置，等待下轮重试）：
-    /// 必须持有有效租约（P0-4）；记录 last_error 并设置 next_attempt_at 退避。
+    /// 必须持有有效租约；记录 last_error 并设置 next_attempt_at 退避。
     /// </summary>
     ValueTask<bool> TryResetToPendingAsync(
         string reconciliationId,
@@ -866,14 +866,14 @@ public interface IToolReconciliationStore
         string? lastError,
         CancellationToken cancellationToken = default);
 
-    /// <summary>裁决为已发生并提交（记录 → Resolved）：必须持有有效租约（P0-4）。</summary>
+    /// <summary>裁决为已发生并提交（记录 → Resolved）：必须持有有效租约。</summary>
     ValueTask<bool> MarkResolvedAsync(
         string reconciliationId,
         string leaseToken,
         ToolReconciliationOutcome outcome,
         CancellationToken cancellationToken = default);
 
-    /// <summary>裁决为未发生/拒绝（记录 → Rejected）：必须持有有效租约（P0-4）。</summary>
+    /// <summary>裁决为未发生/拒绝（记录 → Rejected）：必须持有有效租约。</summary>
     ValueTask<bool> MarkRejectedAsync(
         string reconciliationId,
         string leaseToken,
@@ -1018,11 +1018,11 @@ public sealed record ToolDispatchResult
 /// <remarks>
 /// 状态流转（不可逆，只能向前）：
 /// <see cref="Prepared"/> → <see cref="DispatchingIntent"/> → <see cref="Dispatched"/> → <see cref="Committed"/> → <see cref="ResultDelivered"/>
-///
+/// 
 /// DispatchingIntent 外部副作用边界</b>。
 /// <see cref="DispatchingIntent"/> 在外部 Tool 调用发起<b>前</b>持久化，创建一个 durable 边界：
 /// 若进程在此之后崩溃，恢复时知道外部调用可能已开始。
-///
+/// 
 /// 恢复语义：
 /// - 无 journal 记录 → 安全重新执行（tool 从未被调用）。
 /// - <see cref="Prepared"/>（无 DispatchingIntent）→ 安全重新执行（tool 未真正调用）。
@@ -1036,7 +1036,7 @@ public sealed record ToolDispatchResult
 /// <see cref="Committed"/>；对账未完成前绝不静默重放。
 /// - <see cref="Committed"/> 但未 <see cref="ResultDelivered"/> → 结果已持久化，可安全重发。
 /// - <see cref="ResultDelivered"/> → 完全完成，无需任何动作。
-///
+/// 
 /// <b>注意</b>：<see cref="DispatchingIntent"/> 使用数值 4（而非 1），
 /// 以避免破坏数据库中已有的 Dispatched=1 / Committed=2 / ResultDelivered=3 的 byte 映射。
 /// 状态机的"前向推进"判断基于逻辑顺序
@@ -1228,7 +1228,7 @@ public sealed record DurableToolResult
 /// <remarks>
 /// <b>引入背景</b>：<see cref="DefaultDurableToolExecutor"/> 在 Journal 已 Committed/ResultDelivered 时
 /// 应从缓存返回结果而非重新 Dispatch。本抽象提供按 toolCallId 查询/保存缓存结果的能力。
-///
+/// 
 /// <b>与 <see cref="IToolDispatchJournal"/> 的关系</b>：
 /// 写入路径优先走 <see cref="IToolDispatchJournal.MarkCommittedWithResultAsync"/>（同一事务持久化 state + result）；
 /// 本接口的 <see cref="SaveAsync"/> 用于无 journal 路径或独立缓存场景。
@@ -1358,7 +1358,7 @@ public sealed record ToolDispatchPrepareResult
 /// <remarks>
 /// <b>journal 是可选依赖</b>。未注入时执行器退回到仅进程内去重，
 /// 不保证崩溃恢复的 exactly-once。生产部署应注入持久化实现（如基于 DB/WAL 的 journal）。
-///
+/// 
 /// Journal 写入顺序（与 <see cref="ContextCore.Core.Services.AgentRunRuntime.DefaultDurableToolExecutor"/> 调用点对应）：
 /// 1. <see cref="PrepareWithIntentAsync"/>（Prepare + 前置 Intent 单次原子写）：
 /// 在调用 <see cref="IToolDispatcher.DispatchAsync"/> 之前。也可用
@@ -1366,7 +1366,7 @@ public sealed record ToolDispatchPrepareResult
 /// 2. <see cref="MarkDispatchedAsync"/>：tool 返回后、提交结果前。
 /// 3. <see cref="MarkCommittedAsync"/>：结果写入 durable result store 后。
 /// 4. <see cref="MarkResultDeliveredAsync"/>：结果成功送达后。
-///
+/// 
 /// <b>expected-state 精确匹配（state = @expected）</b>。
 /// Mark* 方法使用精确前驱状态 CAS 推进状态机（而非旧版 <c>state &lt; @target</c> 宽松匹配），
 /// <b>不自动创建 stub 条目</b>，且<b>禁止跨级跳跃</b>（如 Prepared → Committed）：
@@ -1378,7 +1378,7 @@ public sealed record ToolDispatchPrepareResult
 /// <item>request_id 不存在（缺失前驱记录） → 抛 <see cref="InvalidOperationException"/>（MissingPredecessor），
 /// 而非补造高级状态。这保证审计链完整：不存在 → Committed 这样的跳跃不再可能。</item>
 /// </list>
-///
+/// 
 /// <b>PrepareAsync 语义等价校验</b>。
 /// <see cref="PrepareAsync"/> 对同一 request_id 重复写入时不再静默沿用旧记录：
 /// 既有行必须与新条目在 <see cref="ToolDispatchJournalEntry.ToolName"/> /
@@ -1387,7 +1387,7 @@ public sealed record ToolDispatchPrepareResult
 /// <see cref="ToolDispatchJournalEntry.WorkspaceId"/> /
 /// <see cref="ToolDispatchJournalEntry.RunId"/> 上语义等价；
 /// 否则抛 <see cref="InvalidOperationException"/>（RequestIdReuseDetected）。
-///
+/// 
 /// <b>外部副作用 exactly-once 边界</b>。
 /// Journal 仅保证 ContextCore 内部的"恰好一次编排记录"——同一 request_id 的状态机只向前推进一次。
 /// 完整的外部副作用 exactly-once 还需要：
@@ -1418,7 +1418,7 @@ public interface IToolDispatchJournal
     /// <remarks>
     /// 幂等：重复 Prepare 同一 request_id 不覆盖已推进的状态（ON CONFLICT DO NOTHING / TryAdd 语义）。
     /// 持久化实现要求 <see cref="ToolDispatchJournalEntry.IdempotencyKey"/> 全局唯一（UNIQUE partial index）。
-    ///
+    /// 
     /// 返回值决策矩阵</b>：
     /// <list type="bullet">
     /// <item>Journal 不存在（新插入）→ <see cref="ToolDispatchPrepareResult.ShouldDispatch"/>=true。</item>
@@ -1532,7 +1532,7 @@ public interface IToolDispatchJournal
 
     /// <summary>
     /// 查询指定调用（完整租户键 workspace_id + run_id + request_id）的当前 journal 状态。
-    /// 用于异常/失败路径返回<b>真实</b> journal 状态（P0-1）——执行器在 Intent 持久化后的
+    /// 用于异常/失败路径返回<b>真实</b> journal 状态——执行器在 Intent 持久化后的
     /// 失败不得伪造 <see cref="ToolDispatchState.Prepared"/>，必须按数据库真实状态返回，
     /// 使调用方（Actor）正确进入对账（Reconciliation）。
     /// </summary>

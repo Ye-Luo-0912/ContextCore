@@ -5,9 +5,9 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 /// <summary>
 /// v57 → v58：tool_reconciliation_entries 追加对账裁决租约列，并将唯一键改为完整租户键。
 /// - 新增 lease_owner / lease_token / lease_expires_at / fencing_token / attempt_count /
-///   next_attempt_at / last_error 列（P0-4：Reconciliation Running 必须有租约，
+///   next_attempt_at / last_error 列（Reconciliation Running 必须有租约，
 ///   Worker 崩溃后 ListPendingAsync 重新领取过期 Running，杜绝永久卡死）。
-/// - 唯一键 (run_id, request_id) → (workspace_id, run_id, request_id)（P0-5 完整租户键）。
+/// - 唯一键 (run_id, request_id) → (workspace_id, run_id, request_id)（完整租户键）。
 /// 两个阶段：
 ///   Online：ADD COLUMN IF NOT EXISTS（幂等，非破坏性）；
 ///   ConstraintValidate：DROP 旧唯一约束 + ADD 新唯一约束（先删后建，重入安全）。
