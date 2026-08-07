@@ -785,6 +785,57 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State);
     }
 
+    /// <summary>
+    /// 验证：单页取满（仍有积压）时 ReconcileOnceAsync 返回 true（调用方应立即续扫，
+    /// 不等轮询间隔）；扫到队尾时返回 false（调用方按间隔休眠）。这是积压吞吐的关键信号。
+    /// </summary>
+    [TestMethod]
+    public async Task Worker_ReconcileOnce_ReturnsTrueWhileBacklogRemains_ThenFalseAtTail()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var run = BuildRun("worker 吞吐信号验证");
+        await runStore.CreateAsync(run);
+
+        var toolHandler = CreateHandler("bank-transfer", ToolSideEffect.NonIdempotentWrite, "bank-recon");
+        var (_, executor, journal, _) = CreateExecutor(toolHandler);
+        var store = new InMemoryToolReconciliationStore(journal: journal);
+        var coordinator = new ToolReconciliationCoordinator(store, NullLogger<ToolReconciliationCoordinator>.Instance);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        // 21 条可处理 Pending 记录：超过单页配额（20）一条，形成两页积压。
+        var created = new List<ToolReconciliationRecord>();
+        for (var i = 0; i < 21; i++)
+        {
+            var result = await executor.ExecuteAsync(run.RunId, Ws, BuildToolCall("bank-transfer", $"arg-backlog-{i}"), 0, cts.Token);
+            created.Add(await store.CreateAsync(
+                BuildRecord($"rec:backlog-{i}", result.RequestId, "bank-transfer", result, runId: run.RunId), cts.Token));
+        }
+
+        var worker = new ToolReconciliationWorker(
+            coordinator,
+            store,
+            new[] { new FakeReconciliationHandler("bank-recon", new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-999" }) },
+            kernelHost: null,
+            runStore,
+            new ContextCoreRuntimeOptions(),
+            NullLogger<ToolReconciliationWorker>.Instance);
+
+        // 第一页取满 20 条 → 返回 true（仍有积压，应立即续扫而不是等间隔）。
+        var firstPage = await InvokeReconcileOnceAsync(worker, cts.Token);
+        Assert.IsTrue(firstPage, "单页取满时应返回 true（还有更多待处理记录）。");
+
+        // 第二页只剩 1 条 → 返回 false（已扫到队尾，可休眠等待新记录）。
+        var secondPage = await InvokeReconcileOnceAsync(worker, cts.Token);
+        Assert.IsFalse(secondPage, "扫到队尾时应返回 false（无更多记录）。");
+
+        // 两页记录全部裁决完成。
+        foreach (var rec in created)
+        {
+            Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(rec.ReconciliationId, cts.Token))!.Status,
+                "积压记录应全部被裁决。");
+        }
+    }
+
     // ── 4. Actor 集成测试（核心验收）──────────────────────────────────
 
     /// <summary>
@@ -1167,13 +1218,13 @@ public sealed class R29H_ToolReconciliationTests
         ToolCallId = $"toolcall-{toolName}-0"
     };
 
-    /// <summary>通过反射调用 Worker 的私有单轮对账方法（BackgroundService 无公开触发入口）。</summary>
-    private static Task InvokeReconcileOnceAsync(ToolReconciliationWorker worker, CancellationToken ct)
+    /// <summary>通过反射调用 Worker 的私有单轮对账方法（BackgroundService 无公开触发入口），返回是否仍有积压。</summary>
+    private static Task<bool> InvokeReconcileOnceAsync(ToolReconciliationWorker worker, CancellationToken ct)
     {
         var method = typeof(ToolReconciliationWorker).GetMethod(
             "ReconcileOnceAsync", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("未找到 ReconcileOnceAsync。");
-        return (Task)method.Invoke(worker, new object[] { ct })!;
+        return (Task<bool>)method.Invoke(worker, new object[] { ct })!;
     }
 
     /// <summary>按顺序返回预设响应序列的 IAgentModelTransport stub（超出序列返回最后一个）。</summary>

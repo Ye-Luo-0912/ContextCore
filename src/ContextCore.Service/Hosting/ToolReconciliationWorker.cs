@@ -109,9 +109,10 @@ public sealed class ToolReconciliationWorker : BackgroundService
             {
                 _workerRegistry?.SetLeaseStatus(nameof(ToolReconciliationWorker), "polling");
                 var cycleSucceeded = true;
+                var hasMore = false;
                 try
                 {
-                    await ReconcileOnceAsync(stoppingToken).ConfigureAwait(false);
+                    hasMore = await ReconcileOnceAsync(stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -123,14 +124,18 @@ public sealed class ToolReconciliationWorker : BackgroundService
                     _logger.LogError(ex, "ToolReconciliationWorker 轮询循环异常（不中断后续轮询）。");
                 }
 
-                // 补偿扫描：恢复"停车且无未决对账记录"的 Run（兜底原子推进未覆盖的历史/异常路径）。
-                try
+                // 队尾（无积压）才执行补偿扫描：停车 Run 恢复是低优先级维护任务，
+                // 积压时应把时间让给对账裁决；队尾时顺带兜底恢复历史/异常路径的停车 Run。
+                if (!hasMore)
                 {
-                    await RecoverParkedRunsAsync(stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
+                    try
+                    {
+                        await RecoverParkedRunsAsync(stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
                 }
 
                 if (cycleSucceeded)
@@ -141,6 +146,12 @@ public sealed class ToolReconciliationWorker : BackgroundService
                 {
                     _workerRegistry?.RecordFailure(nameof(ToolReconciliationWorker), "轮询循环异常", _interval);
                     _workerRegistry?.SetLeaseStatus(nameof(ToolReconciliationWorker), "backoff");
+                }
+
+                if (hasMore)
+                {
+                    // 单页取满：还有更多待处理记录，立即续扫，不等间隔（吞吐优先）。
+                    continue;
                 }
 
                 try
@@ -172,7 +183,11 @@ public sealed class ToolReconciliationWorker : BackgroundService
     public Task<int> ResolveAsync(string workspaceId, string runId, string reconciliationId, ToolReconciliationOutcome outcome, CancellationToken ct)
         => _coordinator.ResolveAsync(workspaceId, runId, reconciliationId, outcome, ct);
 
-    private async Task ReconcileOnceAsync(CancellationToken ct)
+    /// <summary>
+    /// 单轮对账：处理一页 Pending 记录。返回 true 表示本页取满（仍有积压），
+    /// 调用方应立即续扫；false 表示已扫到队尾，调用方可按间隔休眠。
+    /// </summary>
+    private async Task<bool> ReconcileOnceAsync(CancellationToken ct)
     {
         // 队头阻塞治理：
         // 1. handler 过滤——无 Handler 可处理的记录（含 reconciliation_handler 为 null 的仅人工记录）
@@ -186,7 +201,7 @@ public sealed class ToolReconciliationWorker : BackgroundService
             // 已扫到队尾（无更多记录）：重置游标，下轮从头续扫（新记录可能已出现）。
             _listCursorCreatedAt = null;
             _listCursorReconciliationId = null;
-            return;
+            return false;
         }
 
         // 告警钩子：超期未决（DeadlineUtc < now 且 Pending/Running）→ 告警日志。
@@ -261,7 +276,8 @@ public sealed class ToolReconciliationWorker : BackgroundService
         // 推进 keyset 游标：单页配额已满 → 记录本页末条位置，下轮从其后续扫；
         // 不足配额 → 已扫到队尾，重置游标下轮从头续扫（新记录可能已出现）。
         var last = pending[^1];
-        if (pending.Count >= PendingBatchSize)
+        var hasMore = pending.Count >= PendingBatchSize;
+        if (hasMore)
         {
             _listCursorCreatedAt = last.CreatedAt;
             _listCursorReconciliationId = last.ReconciliationId;
@@ -271,6 +287,7 @@ public sealed class ToolReconciliationWorker : BackgroundService
             _listCursorCreatedAt = null;
             _listCursorReconciliationId = null;
         }
+        return hasMore;
     }
 
     /// <summary>
