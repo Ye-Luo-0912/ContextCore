@@ -216,17 +216,17 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
 
             // ── 断言 3：租约随进程消失，真实过期后无人持有 ──
             var leaseExpired = await WaitForConditionAsync(
-                async () => !await leaseStore.HasActiveLeaseAsync(runId),
+                async () => !await leaseStore.HasActiveLeaseAsync(Harness.KillWorkspaceId, runId),
                 TimeSpan.FromSeconds(60));
             Assert.IsTrue(leaseExpired, "harness 进程的租约应在真实过期后被释放（无人续约）。");
 
             // ── 恢复节点（本测试进程）接管：抢占租约，fencing token 递增 ──
-            var leaseB = await leaseStore.TryAcquireAsync(runId, TimeSpan.FromMinutes(2), "recovery-node", CancellationToken.None);
+            var leaseB = await leaseStore.TryAcquireAsync(Harness.KillWorkspaceId, runId, TimeSpan.FromMinutes(2), "recovery-node", CancellationToken.None);
             Assert.IsNotNull(leaseB, "租约过期后恢复节点应能抢占。");
             Assert.AreEqual(2, leaseB!.FencingToken, "恢复节点抢占后 fencing token 应为 2（旧 owner 的 fence 写入会被拒绝）。");
 
             // 旧 owner 的续约必须失败（token 已失效）。
-            var oldRenew = await leaseStore.RenewAsync(runId, "stale-harness-token", TimeSpan.FromMinutes(2));
+            var oldRenew = await leaseStore.RenewAsync(Harness.KillWorkspaceId, runId, "stale-harness-token", TimeSpan.FromMinutes(2));
             Assert.IsFalse(oldRenew, "已失效的旧租约 token 续约必须失败。");
 
             // ── 断言 4：恢复执行 —— Tool 不重复执行（exactly-once 对账语义）──
@@ -273,7 +273,7 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
                 $"恢复后 journal 应保持 DispatchingIntent（等待对账/人工裁决），实际 {journalStateAfter}。");
 
             // 清理：释放恢复节点的租约。
-            await leaseStore.ReleaseAsync(runId, leaseB.LeaseToken, CancellationToken.None);
+            await leaseStore.ReleaseAsync(Harness.KillWorkspaceId, runId, leaseB.LeaseToken, CancellationToken.None);
 
             // 输出 harness 日志供诊断（若异常路径）。
             var harnessStdout = await stdoutTask;
@@ -309,7 +309,7 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
             await runStore.CreateAsync(run);
 
             // owner A 获取短租约（5s）。
-            var leaseA = await leaseStore.TryAcquireAsync(run.RunId, TimeSpan.FromSeconds(5), "host-A", CancellationToken.None);
+            var leaseA = await leaseStore.TryAcquireAsync(run.WorkspaceId, run.RunId, TimeSpan.FromSeconds(5), "host-A", CancellationToken.None);
             Assert.IsNotNull(leaseA, "owner A 应获取租约。");
             Assert.AreEqual(1, leaseA!.FencingToken, "首次获取的 fencing token 应为 1。");
 
@@ -344,7 +344,7 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
             {
                 try
                 {
-                    renewed = await leaseStore.RenewAsync(run.RunId, leaseA.LeaseToken, TimeSpan.FromMinutes(2));
+                    renewed = await leaseStore.RenewAsync(run.WorkspaceId, run.RunId, leaseA.LeaseToken, TimeSpan.FromMinutes(2));
                     break;
                 }
                 catch (NpgsqlException) when (attempt < 9)
@@ -356,7 +356,7 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
             Assert.IsFalse(renewed, "分区后旧 owner 的续约必须失败（租约已真实过期）。");
 
             // ── 断言 2：新 owner 抢占，fencing token 递增 ──
-            var leaseB = await leaseStore.TryAcquireAsync(run.RunId, TimeSpan.FromMinutes(2), "host-B", CancellationToken.None);
+            var leaseB = await leaseStore.TryAcquireAsync(run.WorkspaceId, run.RunId, TimeSpan.FromMinutes(2), "host-B", CancellationToken.None);
             Assert.IsNotNull(leaseB, "分区恢复后新 owner 应能抢占过期租约。");
             Assert.AreEqual(leaseA.FencingToken + 1, leaseB!.FencingToken,
                 "抢占后 fencing token 必须递增（旧 owner 的副作用写入会被 fence 拒绝）。");
@@ -371,8 +371,8 @@ public sealed class R29H_ProductionEvidenceKillAndPartitionE2ETests : IAsyncDisp
             Assert.AreEqual(run.Task, runAfter!.Task, "分区后 Run 内容应一致。");
 
             // 新 owner 正常释放。
-            await leaseStore.ReleaseAsync(run.RunId, leaseB.LeaseToken, CancellationToken.None);
-            var released = await leaseStore.HasActiveLeaseAsync(run.RunId);
+            await leaseStore.ReleaseAsync(run.WorkspaceId, run.RunId, leaseB.LeaseToken, CancellationToken.None);
+            var released = await leaseStore.HasActiveLeaseAsync(run.WorkspaceId, run.RunId);
             Assert.IsFalse(released, "新 owner 释放后不应有活跃租约。");
         }
         finally

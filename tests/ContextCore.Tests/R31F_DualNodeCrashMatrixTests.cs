@@ -37,8 +37,9 @@ public sealed class R31F_DualNodeCrashMatrixTests
         {
             var (providerA, leaseA) = ResolveLease(container, "cm_claim_");
             var runId = "run-cm-" + Guid.NewGuid().ToString("N")[..8];
+            const string ws = "ws-cm-claim";
 
-            var acquired = await leaseA.TryAcquireAsync(runId, TimeSpan.FromSeconds(1), "node-a", default);
+            var acquired = await leaseA.TryAcquireAsync(ws, runId, TimeSpan.FromSeconds(1), "node-a", default);
             Assert.IsNotNull(acquired, "节点 A 应能领取 Run 租约。");
 
             // 节点 A 崩溃：关闭连接，租约留在数据库中（不释放）
@@ -48,20 +49,20 @@ public sealed class R31F_DualNodeCrashMatrixTests
             await using (providerB)
             {
                 // 租约未过期：B 不得抢占（ClaimToken 保护）
-                var blocked = await leaseB.TryAcquireAsync(runId, TimeSpan.FromSeconds(5), "node-b", default);
+                var blocked = await leaseB.TryAcquireAsync(ws, runId, TimeSpan.FromSeconds(5), "node-b", default);
                 Assert.IsNull(blocked, "A 租约未过期时节点 B 不得抢占。");
 
                 // 等待 A 的短租约过期，然后 B 接管
                 await Task.Delay(1600);
-                var taken = await leaseB.TryAcquireAsync(runId, TimeSpan.FromSeconds(5), "node-b", default);
+                var taken = await leaseB.TryAcquireAsync(ws, runId, TimeSpan.FromSeconds(5), "node-b", default);
                 Assert.IsNotNull(taken, "A 崩溃且租约过期后节点 B 应能接管。");
                 Assert.AreEqual("node-b", taken!.Owner);
 
-                var renewed = await leaseB.RenewAsync(runId, taken.LeaseToken, TimeSpan.FromSeconds(5), default);
+                var renewed = await leaseB.RenewAsync(ws, runId, taken.LeaseToken, TimeSpan.FromSeconds(5), default);
                 Assert.IsTrue(renewed, "接管后 B 续租应成功。");
 
-                await leaseB.ReleaseAsync(runId, taken.LeaseToken, default);
-                var stillActive = await leaseB.HasActiveLeaseAsync(runId, default);
+                await leaseB.ReleaseAsync(ws, runId, taken.LeaseToken, default);
+                var stillActive = await leaseB.HasActiveLeaseAsync(ws, runId, default);
                 Assert.IsFalse(stillActive, "B 释放后租约应消失。");
             }
         }

@@ -129,23 +129,24 @@ public sealed class R29H_ProductionHACompositionRootTests
             var leaseA = providerA.GetRequiredService<IAgentRunLease>();
             var leaseB = providerB.GetRequiredService<IAgentRunLease>();
             var runId = "run-fence-" + Guid.NewGuid().ToString("N");
+            const string ws = "ws-ha-fence";
 
             // node-A 获取短租约（2s）
-            var leaseAValue = await leaseA.TryAcquireAsync(runId, TimeSpan.FromSeconds(2), "node-A");
+            var leaseAValue = await leaseA.TryAcquireAsync(ws, runId, TimeSpan.FromSeconds(2), "node-A");
             Assert.IsNotNull(leaseAValue, "node-A 应获取租约。");
             Assert.AreEqual(1, leaseAValue!.FencingToken, "首次获取的 fencing token 应为 1。");
 
             // node-B（独立组合根）尝试获取同一 run 的租约 → 必须失败（fencing 互斥）
-            var leaseBValue = await leaseB.TryAcquireAsync(runId, TimeSpan.FromMinutes(2), "node-B");
+            var leaseBValue = await leaseB.TryAcquireAsync(ws, runId, TimeSpan.FromMinutes(2), "node-B");
             Assert.IsNull(leaseBValue,
                 "node-B 在 node-A 持有时不应获取租约（组合根解析的 Postgres lease fencing）。");
 
             // ── 真实过期：node-A 租约到期后，旧 token 续约失败，node-B 抢占且 fencing 递增 ──
             await Task.Delay(TimeSpan.FromSeconds(3));
-            var renewed = await leaseA.RenewAsync(runId, leaseAValue.LeaseToken, TimeSpan.FromMinutes(2));
+            var renewed = await leaseA.RenewAsync(ws, runId, leaseAValue.LeaseToken, TimeSpan.FromMinutes(2));
             Assert.IsFalse(renewed, "过期租约的旧 token 续约必须失败（旧 owner 无法再执行副作用）。");
 
-            var leaseBValue2 = await leaseB.TryAcquireAsync(runId, TimeSpan.FromMinutes(2), "node-B");
+            var leaseBValue2 = await leaseB.TryAcquireAsync(ws, runId, TimeSpan.FromMinutes(2), "node-B");
             Assert.IsNotNull(leaseBValue2, "node-A 租约过期后 node-B 应能抢占租约。");
             Assert.AreEqual(2, leaseBValue2!.FencingToken,
                 "抢占后 fencing token 必须递增（旧 owner 的副作用写入会被 fence 拒绝）。");

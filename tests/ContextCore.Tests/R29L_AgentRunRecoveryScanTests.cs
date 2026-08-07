@@ -267,7 +267,7 @@ public sealed class R29L_AgentRunRecoveryScanTests
 
         // 给 runWithLease 一个活跃执行租约（模拟其他实例正在执行——无需恢复）。
         var lease = await leaseStore.TryAcquireAsync(
-            runWithLease.RunId, TimeSpan.FromMinutes(5), "host-other");
+            runWithLease.WorkspaceId, runWithLease.RunId, TimeSpan.FromMinutes(5), "host-other");
         Assert.IsNotNull(lease, "模拟其他实例持有执行租约。");
 
         var services = new ServiceCollection();

@@ -340,7 +340,7 @@ public sealed class R29P_DurableRunSchedulerTests
                 // 给 runA 一个活跃执行租约（模拟其他实例正在执行）。
                 var leaseStore = provider.GetRequiredService<IAgentRunLease>();
                 var lease = await leaseStore.TryAcquireAsync(
-                    runA.RunId, TimeSpan.FromMinutes(5), "host-other").ConfigureAwait(false);
+                    runA.WorkspaceId, runA.RunId, TimeSpan.FromMinutes(5), "host-other").ConfigureAwait(false);
                 Assert.IsNotNull(lease, "runA 应成功获取执行租约。");
 
                 var claimed = await store.ClaimPendingBatchAsync(

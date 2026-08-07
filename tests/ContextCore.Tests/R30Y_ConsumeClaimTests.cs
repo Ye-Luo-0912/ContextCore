@@ -256,7 +256,7 @@ public sealed class R30Y_ConsumeClaimTests
 
                 // 取得执行租约 → 消费成功。
                 var lease = await leaseStore.TryAcquireAsync(
-                    RunId, TimeSpan.FromMinutes(5), "host-1", default);
+                    Ws, RunId, TimeSpan.FromMinutes(5), "host-1", default);
                 Assert.IsNotNull(lease, "执行租约获取成功。");
 
                 var consumed = await store.ConsumeClaimAsync(

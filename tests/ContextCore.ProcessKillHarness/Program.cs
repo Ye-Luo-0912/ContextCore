@@ -67,7 +67,7 @@ try
     // 获取 Run Lease。进程被 Kill 后无续约，到期自动释放（与生产一致）。
     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
     var lease = await leaseStore.TryAcquireAsync(
-        run.RunId, TimeSpan.FromSeconds(options.LeaseSeconds), "kill-harness-owner", cts.Token).ConfigureAwait(false);
+        run.WorkspaceId, run.RunId, TimeSpan.FromSeconds(options.LeaseSeconds), "kill-harness-owner", cts.Token).ConfigureAwait(false);
     if (lease is null)
     {
         Console.Error.WriteLine("[harness] 无法获取 Run Lease（可能已被其他实例持有）。");
@@ -85,7 +85,7 @@ try
         .ConfigureAwait(false);
 
     // 未被 Kill 的兜底路径：释放 lease 并写完成 marker（测试应断言此文件不存在）。
-    await leaseStore.ReleaseAsync(run.RunId, lease.LeaseToken, CancellationToken.None).ConfigureAwait(false);
+    await leaseStore.ReleaseAsync(run.WorkspaceId, run.RunId, lease.LeaseToken, CancellationToken.None).ConfigureAwait(false);
     File.WriteAllText(completedMarker, DateTimeOffset.UtcNow.ToString("O"));
     return 0;
 }

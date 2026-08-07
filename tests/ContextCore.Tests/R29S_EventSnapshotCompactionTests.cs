@@ -62,7 +62,7 @@ public sealed class R29S_EventSnapshotCompactionTests
     [TestMethod]
     public void SchemaVersion_IsV63()
     {
-        Assert.AreEqual("cc-schema-v66", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v67", PostgresMigrationRunner.SchemaVersion);
     }
 
     // =========================================================================

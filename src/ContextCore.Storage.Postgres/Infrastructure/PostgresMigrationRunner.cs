@@ -174,7 +174,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   不再信任客户端提供的裸签名；查询 / 清除以工作区为作用域（全局重置需更高权限），
     ///   杜绝跨租户读取 / 污染 / 重置其他工作区的自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v66";
+    public const string SchemaVersion = "cc-schema-v67";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2522,13 +2522,14 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_r
 -- 修复双执行：新增 fencing_token bigint 列（单调递增），用于副作用 UPDATE 的 lease 校验。
 -- 每次 TryAcquireAsync 成功获取（含抢占过期）时 fencing_token = 旧值 + 1；RenewAsync 不递增。
 CREATE TABLE IF NOT EXISTS {agentRunLeases} (
+    workspace_id text NOT NULL DEFAULT '',
     run_id text NOT NULL,
     owner text NOT NULL,
     lease_token text NOT NULL,
     fencing_token bigint NOT NULL DEFAULT 1,
     acquired_at timestamptz NOT NULL,
     lease_expires_at timestamptz NOT NULL,
-    PRIMARY KEY (run_id)
+    PRIMARY KEY (workspace_id, run_id)
 );
 
 -- 为已有 agent_run_leases 表补充 fencing_token 列（新表已在上方 CREATE TABLE 中包含；ALTER 仅对已存在的旧表生效）

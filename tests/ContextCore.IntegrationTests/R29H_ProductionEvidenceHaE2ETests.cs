@@ -154,7 +154,7 @@ public sealed class R29H_ProductionEvidenceHaE2ETests : IAsyncDisposable
             var runId = "run-ha2-" + Guid.NewGuid().ToString("N");
 
             // ── Host A 获取短租约（3s）──
-            var leaseA = await leaseStore.TryAcquireAsync(runId, TimeSpan.FromSeconds(3), "host-A", CancellationToken.None);
+            var leaseA = await leaseStore.TryAcquireAsync("ws-ha2", runId, TimeSpan.FromSeconds(3), "host-A", CancellationToken.None);
             Assert.IsNotNull(leaseA, "Host A 应获取租约。");
             Assert.AreEqual(1, leaseA!.FencingToken, "首次获取的 fencing token 应为 1。");
 
@@ -162,25 +162,25 @@ public sealed class R29H_ProductionEvidenceHaE2ETests : IAsyncDisposable
             await Task.Delay(TimeSpan.FromSeconds(4));
 
             // 旧 owner 续约必须失败（lease_expires_at 已过 + token 校验）。
-            var renewed = await leaseStore.RenewAsync(runId, leaseA.LeaseToken, TimeSpan.FromMinutes(2));
+            var renewed = await leaseStore.RenewAsync("ws-ha2", runId, leaseA.LeaseToken, TimeSpan.FromMinutes(2));
             Assert.IsFalse(renewed, "过期租约的旧 token 续约必须失败。");
 
             // ── Host B 抢占：fencing token 递增 ──
-            var leaseB = await leaseStore.TryAcquireAsync(runId, TimeSpan.FromMinutes(2), "host-B", CancellationToken.None);
+            var leaseB = await leaseStore.TryAcquireAsync("ws-ha2", runId, TimeSpan.FromMinutes(2), "host-B", CancellationToken.None);
             Assert.IsNotNull(leaseB, "过期后新 owner 应能抢占租约。");
             Assert.AreEqual(2, leaseB!.FencingToken, "抢占后 fencing token 必须递增（旧 owner 的副作用写入会被 fence 拒绝）。");
 
             // 旧 owner 用旧 token 释放：0 行受影响，不影响新 owner 的租约。
-            await leaseStore.ReleaseAsync(runId, leaseA.LeaseToken, CancellationToken.None);
-            var stillHeld = await leaseStore.HasActiveLeaseAsync(runId);
+            await leaseStore.ReleaseAsync("ws-ha2", runId, leaseA.LeaseToken, CancellationToken.None);
+            var stillHeld = await leaseStore.HasActiveLeaseAsync("ws-ha2", runId);
             Assert.IsTrue(stillHeld, "旧 owner 用过期 token 释放不应影响新 owner 的活跃租约。");
 
             // 旧 fence 已真实过期 → 旧 owner 的任何 fence 校验都会拒绝副作用。
             Assert.IsTrue(leaseA.ExpiresAt < DateTimeOffset.UtcNow, "旧 owner 的 lease fence 应已过期。");
 
             // ── 新 owner 正常释放 ──
-            await leaseStore.ReleaseAsync(runId, leaseB.LeaseToken, CancellationToken.None);
-            var released = await leaseStore.HasActiveLeaseAsync(runId);
+            await leaseStore.ReleaseAsync("ws-ha2", runId, leaseB.LeaseToken, CancellationToken.None);
+            var released = await leaseStore.HasActiveLeaseAsync("ws-ha2", runId);
             Assert.IsFalse(released, "新 owner 释放后不应有活跃租约。");
         }
         finally

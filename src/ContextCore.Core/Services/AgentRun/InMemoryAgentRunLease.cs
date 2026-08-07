@@ -47,11 +47,13 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 
     /// <inheritdoc />
     public ValueTask<LeasedAgentRun?> TryAcquireAsync(
+        string workspaceId,
         string runId,
         TimeSpan leaseDuration,
         string owner,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         if (leaseDuration <= TimeSpan.Zero)
         {
@@ -93,6 +95,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         {
             return ValueTask.FromResult<LeasedAgentRun?>(new LeasedAgentRun
             {
+                WorkspaceId = workspaceId,
                 RunId = runId,
                 LeaseToken = leaseToken,
                 Owner = owner,
@@ -106,11 +109,13 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 
     /// <inheritdoc />
     public ValueTask<bool> RenewAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         TimeSpan extension,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
         if (extension <= TimeSpan.Zero)
@@ -184,10 +189,12 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 
     /// <inheritdoc />
     public ValueTask ReleaseAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
 
@@ -226,8 +233,9 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
 
     /// <inheritdoc />
     /// <remarks>查询指定 Run 是否存在未过期租约（InMemory 实现）。</remarks>
-    public ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
+    public ValueTask<bool> HasActiveLeaseAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         var now = DateTimeOffset.UtcNow;
         if (_leases.TryGetValue(runId, out var entry))

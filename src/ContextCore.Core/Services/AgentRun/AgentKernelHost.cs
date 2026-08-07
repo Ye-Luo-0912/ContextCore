@@ -660,7 +660,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             {
                 var owner = _options.Owner ?? BuildDefaultOwner();
                 lease = await _runLease.TryAcquireAsync(
-                    run.RunId, _options.LeaseDuration, owner, activeRun.Cts.Token).ConfigureAwait(false);
+                    run.WorkspaceId, run.RunId, _options.LeaseDuration, owner, activeRun.Cts.Token).ConfigureAwait(false);
                 if (lease is null)
                 {
                     // 租约被其他实例持有 → 释放执行槽并退出（其他实例正在处理）
@@ -1037,7 +1037,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         }
         try
         {
-            await _runLease.ReleaseAsync(lease.RunId, lease.LeaseToken, cancellationToken).ConfigureAwait(false);
+            await _runLease.ReleaseAsync(lease.WorkspaceId, lease.RunId, lease.LeaseToken, cancellationToken).ConfigureAwait(false);
         }
         catch
         {

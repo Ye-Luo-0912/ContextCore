@@ -319,28 +319,29 @@ public sealed class R29H_AgentRunProcessRestartTests
         var lease = new InMemoryAgentRunLease();
         var runId = "run-restart-lease-" + Guid.NewGuid().ToString("N");
         var leaseDuration = TimeSpan.FromMinutes(5);
+        const string ws = "ws-restart-lease";
 
         // ── 模拟进程 A 获取租约 ──
-        var leaseA = await lease.TryAcquireAsync(runId, leaseDuration, owner: "process-A");
+        var leaseA = await lease.TryAcquireAsync(ws, runId, leaseDuration, owner: "process-A");
         Assert.IsNotNull(leaseA, "进程 A 应成功获取租约。");
         Assert.AreEqual("process-A", leaseA!.Owner);
 
         // ── 模拟进程 B 尝试获取同一 Run 的租约 ──
-        var leaseB = await lease.TryAcquireAsync(runId, leaseDuration, owner: "process-B");
+        var leaseB = await lease.TryAcquireAsync(ws, runId, leaseDuration, owner: "process-B");
         Assert.IsNull(leaseB,
             "进程 B 不应获取已被进程 A 持有的租约（防止并发恢复）。");
 
         // ── 模拟进程 A 崩溃后租约过期 / 释放 ──
-        await lease.ReleaseAsync(runId, leaseA.LeaseToken);
+        await lease.ReleaseAsync(ws, runId, leaseA.LeaseToken);
         Assert.AreEqual(0, lease.ActiveLeaseCount, "释放后活跃租约应为 0。");
 
         // ── 模拟进程 B 重新获取租约（接管恢复）──
-        var leaseB2 = await lease.TryAcquireAsync(runId, leaseDuration, owner: "process-B");
+        var leaseB2 = await lease.TryAcquireAsync(ws, runId, leaseDuration, owner: "process-B");
         Assert.IsNotNull(leaseB2, "进程 A 释放后，进程 B 应能获取租约接管恢复。");
         Assert.AreEqual("process-B", leaseB2!.Owner);
 
         // 清理
-        await lease.ReleaseAsync(runId, leaseB2.LeaseToken);
+        await lease.ReleaseAsync(ws, runId, leaseB2.LeaseToken);
     }
 
     /// <summary>
@@ -531,7 +532,7 @@ public sealed class R29H_AgentRunProcessRestartTests
         var active = BuildRun("持有租约的 Run");
         active = active with { State = AgentRunState.Observing };
         await runStore.CreateAsync(active);
-        var acquired = await lease.TryAcquireAsync(active.RunId, TimeSpan.FromMinutes(5), "owner-test");
+        var acquired = await lease.TryAcquireAsync(active.WorkspaceId, active.RunId, TimeSpan.FromMinutes(5), "owner-test");
         Assert.IsNotNull(acquired, "测试租约应获取成功。");
 
         var affected2 = await lease.MarkLeaseLostIfLeaseExpiredAsync(
@@ -601,9 +602,10 @@ public sealed class R29H_AgentRunProcessRestartTests
     {
         var lease = new InMemoryAgentRunLease();
         var duration = TimeSpan.FromMinutes(5);
+        const string ws = "ws-heartbeat-batch";
 
-        var a = await lease.TryAcquireAsync("run-batch-a", duration, owner: "host-1");
-        var b = await lease.TryAcquireAsync("run-batch-b", duration, owner: "host-1");
+        var a = await lease.TryAcquireAsync(ws, "run-batch-a", duration, owner: "host-1");
+        var b = await lease.TryAcquireAsync(ws, "run-batch-b", duration, owner: "host-1");
         Assert.IsNotNull(a, "租约 A 应获取成功。");
         Assert.IsNotNull(b, "租约 B 应获取成功。");
 
@@ -614,8 +616,8 @@ public sealed class R29H_AgentRunProcessRestartTests
             new AgentRunLeaseRenewal { RunId = b!.RunId, LeaseToken = b.LeaseToken }
         }, TimeSpan.FromMinutes(5));
         Assert.AreEqual(0, ok.Count, "全部有效租约应续约成功。");
-        Assert.IsTrue(await lease.HasActiveLeaseAsync(a.RunId), "续约后租约 A 应仍活跃。");
-        Assert.IsTrue(await lease.HasActiveLeaseAsync(b.RunId), "续约后租约 B 应仍活跃。");
+        Assert.IsTrue(await lease.HasActiveLeaseAsync(ws, a.RunId), "续约后租约 A 应仍活跃。");
+        Assert.IsTrue(await lease.HasActiveLeaseAsync(ws, b.RunId), "续约后租约 B 应仍活跃。");
 
         // 混合：一条有效 + 一条 token 错误 → 仅 token 错误的报告失败
         var mixed = await lease.RenewBatchAsync(new[]
@@ -956,17 +958,17 @@ public sealed class R29H_AgentRunProcessRestartTests
         public void FailRenewals() => Volatile.Write(ref _failRenewals, 1);
 
         public ValueTask<LeasedAgentRun?> TryAcquireAsync(
-            string runId, TimeSpan leaseDuration, string owner, CancellationToken cancellationToken = default)
-            => _inner.TryAcquireAsync(runId, leaseDuration, owner, cancellationToken);
+            string workspaceId, string runId, TimeSpan leaseDuration, string owner, CancellationToken cancellationToken = default)
+            => _inner.TryAcquireAsync(workspaceId, runId, leaseDuration, owner, cancellationToken);
 
         public ValueTask<bool> RenewAsync(
-            string runId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default)
+            string workspaceId, string runId, string leaseToken, TimeSpan extension, CancellationToken cancellationToken = default)
         {
             if (Volatile.Read(ref _failRenewals) != 0)
             {
                 return ValueTask.FromResult(false);
             }
-            return _inner.RenewAsync(runId, leaseToken, extension, cancellationToken);
+            return _inner.RenewAsync(workspaceId, runId, leaseToken, extension, cancellationToken);
         }
 
         public async ValueTask<IReadOnlyList<string>> RenewBatchAsync(
@@ -986,14 +988,14 @@ public sealed class R29H_AgentRunProcessRestartTests
             return await _inner.RenewBatchAsync(leases, extension, cancellationToken).ConfigureAwait(false);
         }
 
-        public ValueTask ReleaseAsync(string runId, string leaseToken, CancellationToken cancellationToken = default)
-            => _inner.ReleaseAsync(runId, leaseToken, cancellationToken);
+        public ValueTask ReleaseAsync(string workspaceId, string runId, string leaseToken, CancellationToken cancellationToken = default)
+            => _inner.ReleaseAsync(workspaceId, runId, leaseToken, cancellationToken);
 
         public ValueTask<int> ReapExpiredAsync(CancellationToken cancellationToken = default)
             => _inner.ReapExpiredAsync(cancellationToken);
 
-        public ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
-            => _inner.HasActiveLeaseAsync(runId, cancellationToken);
+        public ValueTask<bool> HasActiveLeaseAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
+            => _inner.HasActiveLeaseAsync(workspaceId, runId, cancellationToken);
 
         public ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
             IReadOnlyList<string> runIds, CancellationToken cancellationToken = default)

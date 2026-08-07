@@ -2298,12 +2298,14 @@ public interface IAgentRunLease
     /// <summary>
     /// 尝试获取指定 Run 的处理租约。
     /// </summary>
+    /// <param name="workspaceId">Run 所属工作区 ID（租约按工作区 + Run 复合键寻址）。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="leaseDuration">租约有效期。</param>
     /// <param name="owner">候选持有者标识（如实例 ID）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>租约信息；已被其他实例持有时返回 null。</returns>
     ValueTask<LeasedAgentRun?> TryAcquireAsync(
+        string workspaceId,
         string runId,
         TimeSpan leaseDuration,
         string owner,
@@ -2313,12 +2315,14 @@ public interface IAgentRunLease
     /// 续租约（心跳）。续约失败（租约被抢占或过期）时返回 false，
     /// 调用方应立即停止处理该 Run。
     /// </summary>
+    /// <param name="workspaceId">Run 所属工作区 ID。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="leaseToken">租约 token（来自 TryAcquireAsync）。</param>
     /// <param name="extension">延长时间量。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>true = 续约成功；false = 租约已丢失，应停止处理。</returns>
     ValueTask<bool> RenewAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         TimeSpan extension,
@@ -2327,7 +2331,11 @@ public interface IAgentRunLease
     /// <summary>
     /// 释放租约（主动让出）。通常在 Run 完成（Completed/Failed/Cancelled）后调用。
     /// </summary>
+    /// <param name="workspaceId">Run 所属工作区 ID。</param>
+    /// <param name="runId">Agent Run ID。</param>
+    /// <param name="leaseToken">租约 token。</param>
     ValueTask ReleaseAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         CancellationToken cancellationToken = default);
@@ -2342,10 +2350,11 @@ public interface IAgentRunLease
     /// 查询指定 Run 是否存在有效（未过期）的活跃租约。
     /// Recovery Worker 在原子标记 Run 为 LeaseLost 前校验，避免误杀正被活跃 Actor 持有合法租约的 Run。
     /// </summary>
+    /// <param name="workspaceId">Run 所属工作区 ID。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>true = 存在未过期租约；false = 无租约或已过期。</returns>
-    ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default);
+    ValueTask<bool> HasActiveLeaseAsync(string workspaceId, string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 批量查询指定 Run 中哪些存在未过期（活跃）执行租约——供 Recovery Worker
@@ -2404,6 +2413,9 @@ public interface IAgentRunLease
 /// </remarks>
 public sealed record LeasedAgentRun
 {
+    /// <summary>Run 所属工作区 ID（租约复合键的一部分）。</summary>
+    public required string WorkspaceId { get; init; }
+
     /// <summary>Agent Run ID。</summary>
     public required string RunId { get; init; }
 

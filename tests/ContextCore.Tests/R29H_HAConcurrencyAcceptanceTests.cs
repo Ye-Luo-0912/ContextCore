@@ -33,32 +33,33 @@ public sealed class R29H_HAConcurrencyAcceptanceTests
         var lease = new InMemoryAgentRunLease();
         var runId = "run-1";
         var leaseDuration = TimeSpan.FromMinutes(5);
+        const string ws = "ws-ha-concurrency";
 
         // 实例A 获取 lease
-        var leaseA = await lease.TryAcquireAsync(runId, leaseDuration, owner: "instance-A");
+        var leaseA = await lease.TryAcquireAsync(ws, runId, leaseDuration, owner: "instance-A");
         Assert.IsNotNull(leaseA, "实例A 应成功获取 lease");
         Assert.AreEqual("instance-A", leaseA!.Owner);
         Assert.AreEqual(runId, leaseA.RunId);
         Assert.IsFalse(string.IsNullOrEmpty(leaseA.LeaseToken));
 
         // 实例B 尝试获取同一 runId 的 lease
-        var leaseB = await lease.TryAcquireAsync(runId, leaseDuration, owner: "instance-B");
+        var leaseB = await lease.TryAcquireAsync(ws, runId, leaseDuration, owner: "instance-B");
 
         // 断言实例B 获取失败（返回 null）
         Assert.IsNull(leaseB, "实例B 不应获取已被实例A 持有的 lease");
 
         // 验证实例A 仍持有 lease（续约成功）
-        var renewed = await lease.RenewAsync(runId, leaseA.LeaseToken, leaseDuration);
+        var renewed = await lease.RenewAsync(ws, runId, leaseA.LeaseToken, leaseDuration);
         Assert.IsTrue(renewed, "实例A 应仍能续约 lease，证明其仍持有租约");
 
         // 验证 ActiveLeaseCount 仍为 1（实例B 未创建新租约）
         Assert.AreEqual(1, lease.ActiveLeaseCount, "应只有 1 个活跃租约");
 
         // 实例A 释放 lease 后，实例B 应能获取
-        await lease.ReleaseAsync(runId, leaseA.LeaseToken);
+        await lease.ReleaseAsync(ws, runId, leaseA.LeaseToken);
         Assert.AreEqual(0, lease.ActiveLeaseCount, "释放后活跃租约应为 0");
 
-        var leaseB2 = await lease.TryAcquireAsync(runId, leaseDuration, owner: "instance-B");
+        var leaseB2 = await lease.TryAcquireAsync(ws, runId, leaseDuration, owner: "instance-B");
         Assert.IsNotNull(leaseB2, "实例A 释放后，实例B 应能获取 lease");
         Assert.AreEqual("instance-B", leaseB2!.Owner);
     }

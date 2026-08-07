@@ -45,11 +45,13 @@ public sealed class PostgresAgentRunLease : PostgresStoreBase, IAgentRunLease
     /// 供调用方在副作用 UPDATE 的 WHERE 子句中校验。续约（RenewAsync）不递增 fencing_token。
     /// </remarks>
     public async ValueTask<LeasedAgentRun?> TryAcquireAsync(
+        string workspaceId,
         string runId,
         TimeSpan leaseDuration,
         string owner,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(owner);
         if (leaseDuration <= TimeSpan.Zero)
@@ -68,10 +70,11 @@ public sealed class PostgresAgentRunLease : PostgresStoreBase, IAgentRunLease
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         // fencing_token 在 ON CONFLICT DO UPDATE 时 = agent_run_leases.fencing_token + 1（抢占过期），
         // 新插入时 = 1（VALUES 中指定）。RETURNING 同时返回 lease_token 与 fencing_token 以便调用方使用。
+        // 复合键 (workspace_id, run_id) 保证租约按工作区隔离寻址。
         command.CommandText = $"""
-INSERT INTO {Table("agent_run_leases")} (run_id, owner, lease_token, fencing_token, acquired_at, lease_expires_at)
-VALUES (@run_id, @owner, @token, 1, @now, @expires_at)
-ON CONFLICT (run_id) DO UPDATE
+INSERT INTO {Table("agent_run_leases")} (workspace_id, run_id, owner, lease_token, fencing_token, acquired_at, lease_expires_at)
+VALUES (@workspace_id, @run_id, @owner, @token, 1, @now, @expires_at)
+ON CONFLICT (workspace_id, run_id) DO UPDATE
 SET owner = EXCLUDED.owner,
     lease_token = EXCLUDED.lease_token,
     fencing_token = {Table("agent_run_leases")}.fencing_token + 1,
@@ -80,6 +83,7 @@ SET owner = EXCLUDED.owner,
 WHERE {Table("agent_run_leases")}.lease_expires_at < @now
 RETURNING lease_token, fencing_token;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("owner", owner);
         command.Parameters.AddWithValue("token", token);
@@ -101,6 +105,7 @@ RETURNING lease_token, fencing_token;
 
         return new LeasedAgentRun
         {
+            WorkspaceId = workspaceId,
             RunId = runId,
             LeaseToken = returnedToken,
             Owner = owner,
@@ -116,11 +121,13 @@ RETURNING lease_token, fencing_token;
     /// 过期检查防止 stale 实例续租已过期的租约（fencing 安全边界）。
     /// </remarks>
     public async ValueTask<bool> RenewAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         TimeSpan extension,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
         if (extension <= TimeSpan.Zero)
@@ -137,10 +144,12 @@ RETURNING lease_token, fencing_token;
         command.CommandText = $"""
 UPDATE {Table("agent_run_leases")}
 SET lease_expires_at = @new_expires_at
-WHERE run_id = @run_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
   AND lease_token = @token
   AND lease_expires_at > clock_timestamp();
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("token", leaseToken);
         command.Parameters.AddWithValue("new_expires_at", newExpiresAt);
@@ -226,10 +235,12 @@ RETURNING {Table("agent_run_leases")}.run_id;
     /// 通常在 run 完成（Completed/Failed/Cancelled）后调用。0 行受影响不抛异常。
     /// </remarks>
     public async ValueTask ReleaseAsync(
+        string workspaceId,
         string runId,
         string leaseToken,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
 
@@ -239,9 +250,11 @@ RETURNING {Table("agent_run_leases")}.run_id;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 DELETE FROM {Table("agent_run_leases")}
-WHERE run_id = @run_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
   AND lease_token = @token;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("token", leaseToken);
 
@@ -277,8 +290,9 @@ WHERE lease_expires_at < @now;
     /// 查询是否存在未过期租约：SELECT 1 WHERE lease_expires_at &gt;= now LIMIT 1。
     /// 用于 Recovery Worker 在标记 Run 为 Failed 前校验是否有活跃 Owner。
     /// </remarks>
-    public async ValueTask<bool> HasActiveLeaseAsync(string runId, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> HasActiveLeaseAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
@@ -288,9 +302,10 @@ WHERE lease_expires_at < @now;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 SELECT 1 FROM {Table("agent_run_leases")}
-WHERE run_id = @run_id AND lease_expires_at >= @now
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND lease_expires_at >= @now
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("run_id", runId);
         command.Parameters.AddWithValue("now", now);
 
