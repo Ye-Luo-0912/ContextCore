@@ -1860,7 +1860,7 @@ public sealed class AgentRunActor
             return (AgentContextBuildStatus.Ready, state);
         }
 
-        var (status, decisionResult) = await TryExecuteDecisionAsync(state.Run, cancellationToken).ConfigureAwait(false);
+        var (status, decisionResult) = await TryExecuteDecisionAsync(state, cancellationToken).ConfigureAwait(false);
         // 阻断状态一律清空上轮决策结果（避免投影器使用过期 Materials），交由调用方终止本轮；
         // 可继续的状态把决策结果存入供投影器使用。
         state = status is AgentContextBuildStatus.Ready or AgentContextBuildStatus.OptionalRetrievalDegraded
@@ -1874,16 +1874,17 @@ public sealed class AgentRunActor
     /// 仅 Ready / OptionalRetrievalDegraded 允许调用模型；其余状态终止本轮
     /// （模型绝不能在缺失 mandatory 上下文时运行）。
     /// </summary>
-    private async Task<(AgentContextBuildStatus Status, ContextDecisionExecutionResult? Result)> TryExecuteDecisionAsync(AgentRun run, CancellationToken cancellationToken)
+    private async Task<(AgentContextBuildStatus Status, ContextDecisionExecutionResult? Result)> TryExecuteDecisionAsync(AgentRunExecutionState state, CancellationToken cancellationToken)
     {
+        var run = state.Run;
         if (_decisionRuntime is null)
         {
             return (AgentContextBuildStatus.Ready, null);
         }
 
         // 自适应检索规划器驱动 Agent 上下文构建（planner → Actor）。
-        // - 规划：由 run 派生规划输入（任务 + 工作区 + 集合 + 用途），PlanAsync 产出
-        //   受控计划（自适应模式 Active 时应用预算收敛 / 查询收敛 / 召回增强策略），
+        // - 规划：由 run 派生规划输入（任务 + 当前意图 + 未解决目标 + 工作区 + 集合 + 用途），
+        //   PlanAsync 产出受控计划（自适应模式 Active 时应用预算收敛 / 查询收敛 / 召回增强策略），
         //   计划 TokenBudget 注入决策请求——自适应策略真实作用于上下文构建。
         // - 规划失败不阻断主链（自适应是增强层；降级为不设 TokenBudget，走引擎默认）。
         AgentRetrievalPlannerInput? plannerInput = null;
@@ -1892,9 +1893,16 @@ public sealed class AgentRunActor
         {
             try
             {
+                var currentIntent = string.IsNullOrWhiteSpace(state.Context.CurrentTask)
+                    ? run.Task
+                    : state.Context.CurrentTask;
                 plannerInput = new AgentRetrievalPlannerInput
                 {
                     OriginalTask = run.Task,
+                    LatestAssistantIntent = currentIntent,
+                    UnresolvedGoals = string.IsNullOrWhiteSpace(run.Task)
+                        ? Array.Empty<string>()
+                        : new[] { run.Task },
                     WorkspaceId = run.WorkspaceId,
                     CollectionId = run.WorkspaceId,
                     Purpose = AdaptiveAgentContextPurpose

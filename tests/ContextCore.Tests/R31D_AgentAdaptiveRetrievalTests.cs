@@ -58,6 +58,8 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
             AdaptiveRetrievalPlanSignature.Compute(new AgentRetrievalPlannerInput
             {
                 OriginalTask = run.Task,
+                LatestAssistantIntent = run.Task,
+                UnresolvedGoals = new[] { run.Task },
                 WorkspaceId = run.WorkspaceId,
                 CollectionId = run.WorkspaceId,
                 Purpose = Purpose

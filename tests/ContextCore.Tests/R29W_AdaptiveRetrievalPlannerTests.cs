@@ -475,6 +475,22 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         Assert.IsFalse(plan.Reason.Contains("[自适应]", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证：Disabled 模式不仅不应用策略，记录反馈也被拒绝写入存储——
+    /// 自适应层完全旁路，不产生任何学习信号（与 PlanAsync 的 fail-closed 透传对称）。
+    /// </summary>
+    [TestMethod]
+    public async Task Record_DisabledMode_DoesNotWriteFeedback()
+    {
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Disabled });
+        var signature = AdaptiveRetrievalPlanSignature.Compute(Input());
+
+        await planner.RecordOutcomeAsync(Feedback(signature, hits: 4, budgetExceeded: true));
+
+        var records = await store.ListRecentAsync(DefaultWorkspace, signature, 100);
+        Assert.AreEqual(0, records.Count, "Disabled 模式不应写反馈存储（真正不读写）。");
+    }
+
     [TestMethod]
     public async Task Plan_ShadowMode_ComputesPolicyButDoesNotApply()
     {
@@ -497,7 +513,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task Planner_SanitizesFeedback_OnRecord()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         const string signature = "sig:sanitize";
 
         await planner.RecordOutcomeAsync(new RetrievalPlanFeedback
@@ -793,7 +809,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     [TestMethod]
     public async Task RecordFeedbackEndpoint_ServerDerivesSignature_AndReturns200()
     {
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var httpContext = HttpWithWorkspace(DefaultWorkspace);
         var expectedSignature = AdaptiveRetrievalPlanSignature.Compute(Input(workspaceId: DefaultWorkspace));
 
@@ -825,7 +841,7 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
     public async Task RecordFeedbackEndpoint_SubjectDefaultsToCallerIdentity()
     {
         // Subject 缺省时由服务端归属到调用方身份（API Key 名）——客户端不得伪造主体归属。
-        var (planner, store) = CreatePlanner();
+        var (planner, store) = CreatePlanner(new AdaptiveRetrievalOptions { Mode = AdaptiveRetrievalMode.Active });
         var httpContext = HttpWithWorkspace(DefaultWorkspace);
         var expectedSignature = AdaptiveRetrievalPlanSignature.Compute(Input(workspaceId: DefaultWorkspace));
 

@@ -112,6 +112,13 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         ArgumentNullException.ThrowIfNull(feedback);
         ct.ThrowIfCancellationRequested();
 
+        // Disabled 模式不写反馈存储：自适应层完全旁路，不产生任何学习信号
+        // （与 PlanAsync 的 fail-closed 透传语义一致，避免"不应用策略却仍收集反馈"的隐式副作用）。
+        if (_options.Mode == AdaptiveRetrievalMode.Disabled)
+        {
+            return;
+        }
+
         // P0-16 清洗：保证 FeedbackId / 数值字段在合法范围内、Source 为合法枚举值，
         // 防止脏数据 / 恶意大值扭曲加权策略；WorkspaceId 归一为 trim 后的非空值
         // （隔离边界：记录必须归属到具体工作区，缺失按全局默认工作区处理）。

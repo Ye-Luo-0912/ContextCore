@@ -632,3 +632,27 @@ public sealed class WorkspaceApprovalOverride
     /// <summary>覆盖全局 TokenThreshold（null = 继承全局配置）。</summary>
     public long? TokenThreshold { get; init; }
 }
+
+// ── 服务端 Tool 成本估算 ──────────────────────────────────────────────────
+
+/// <summary>服务端 Tool 调用成本估算结果（token 与费用 USD）。</summary>
+public sealed record ToolCostEstimate
+{
+    /// <summary>估算 token 消耗。</summary>
+    public required long Tokens { get; init; }
+
+    /// <summary>估算费用（美元）。</summary>
+    public required double CostUsd { get; init; }
+}
+
+/// <summary>
+/// 服务端 Tool 成本估算器：在 Tool 派发 / 审批前按服务端规则估算调用成本，
+/// 不依赖模型在 <see cref="AgentToolCallRequest.EstimatedCostUsd"/> 中填写（模型填写值不可信，
+/// 可被用于绕过审批成本阈值）。
+/// </summary>
+public interface IToolCostEstimator
+{
+    /// <summary>估算指定 Tool 调用的成本（token 与费用 USD）。</summary>
+    ToolCostEstimate Estimate(string toolName, AgentToolCallRequest toolCall);
+}
+

@@ -48,6 +48,7 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
     private readonly IReadOnlyList<AgentToolDefinition>? _toolDefinitions;
     private readonly IReadOnlySet<string> _dangerousTools;
     private readonly ApprovalPolicyOptions? _approvalPolicy;
+    private readonly IToolCostEstimator? _costEstimator;
 
     /// <summary>
     /// 构造默认校验器。
@@ -59,16 +60,18 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
     /// <param name="dangerousTools">危险 Tool 黑名单（null 时使用 <see cref="DefaultDangerousTools"/>）。</param>
     /// <param name="approvalPolicy">
     /// Approval Policy 配置（SecurityOptions.ApprovalPolicy）。非 null 且 Enabled=true 时，
-    /// Tool 调用携带 <see cref="AgentToolCallRequest.EstimatedCostUsd"/> /
-    /// <see cref="AgentToolCallRequest.EstimatedTokens"/> 且超过全局 CostThresholdUsd /
-    /// TokenThreshold 时标记 RequiresApproval（费用/token 阈值的校验器侧触发；
-    /// workspace 覆盖由 IAgentApprovalGate 在裁决时合并——校验器无 workspace 上下文）。
+    /// 费用/token 阈值触发审批；workspace 覆盖由 IAgentApprovalGate 在裁决时合并——校验器无 workspace 上下文）。
+    /// </param>
+    /// <param name="costEstimator">
+    /// 服务端成本估算器（null 时回退到请求携带的模型填写估算值，兼容旧路径；
+    /// 生产应注入估算器，成本阈值判定不依赖模型填写）。
     /// </param>
     public DefaultAgentToolCallValidator(
         IToolDispatcher? dispatcher = null,
         IToolCatalog? catalog = null,
         IReadOnlySet<string>? dangerousTools = null,
-        ApprovalPolicyOptions? approvalPolicy = null)
+        ApprovalPolicyOptions? approvalPolicy = null,
+        IToolCostEstimator? costEstimator = null)
     {
         _dispatcher = dispatcher;
         // 与 AgentRunActor 的 Tool 定义解析策略保持一致：显式 Catalog 优先，
@@ -77,6 +80,7 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
             ?? (dispatcher as IToolCatalog)?.GetToolDefinitions();
         _dangerousTools = dangerousTools ?? DefaultDangerousTools;
         _approvalPolicy = approvalPolicy;
+        _costEstimator = costEstimator;
     }
 
     /// <inheritdoc />
@@ -164,18 +168,27 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
 
             // 8. 费用 / token 审批阈值（ApprovalPolicyOptions 全局阈值，仅校验器侧触发；
             // workspace 覆盖由 IAgentApprovalGate 在裁决时合并——校验器无 workspace 上下文）。
+            // 成本判定优先使用服务端估算（不依赖模型填写）；估算器缺失时回退请求携带值（兼容旧路径）。
             if (_approvalPolicy is { Enabled: true })
             {
-                if (_approvalPolicy.CostThresholdUsd > 0 && (toolCall.EstimatedCostUsd ?? 0) >= _approvalPolicy.CostThresholdUsd)
+                var estimate = _costEstimator is not null
+                    ? _costEstimator.Estimate(toolCall.ToolName, toolCall)
+                    : new ToolCostEstimate
+                    {
+                        Tokens = toolCall.EstimatedTokens ?? 0,
+                        CostUsd = toolCall.EstimatedCostUsd ?? 0
+                    };
+
+                if (_approvalPolicy.CostThresholdUsd > 0 && estimate.CostUsd >= _approvalPolicy.CostThresholdUsd)
                 {
                     return Approval(
-                        $"Tool '{toolCall.ToolName}' 预估费用 {toolCall.EstimatedCostUsd:F2} USD " +
+                        $"Tool '{toolCall.ToolName}' 预估费用 {estimate.CostUsd:F2} USD " +
                         $"超过审批阈值 {_approvalPolicy.CostThresholdUsd:F2} USD，需人工审批。");
                 }
-                if (_approvalPolicy.TokenThreshold > 0 && (toolCall.EstimatedTokens ?? 0) >= _approvalPolicy.TokenThreshold)
+                if (_approvalPolicy.TokenThreshold > 0 && estimate.Tokens >= _approvalPolicy.TokenThreshold)
                 {
                     return Approval(
-                        $"Tool '{toolCall.ToolName}' 预估 token 消耗 {toolCall.EstimatedTokens} " +
+                        $"Tool '{toolCall.ToolName}' 预估 token 消耗 {estimate.Tokens} " +
                         $"超过审批阈值 {_approvalPolicy.TokenThreshold}，需人工审批。");
                 }
             }

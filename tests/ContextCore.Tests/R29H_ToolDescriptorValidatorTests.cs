@@ -425,6 +425,69 @@ public sealed class R29H_ToolDescriptorValidatorTests
         Assert.IsFalse(unknown.IsValid, "Echo 模式下未注册 Tool 应被成员校验拒绝。");
     }
 
+    // ── 7. 服务端成本估算（不依赖模型填写）────────────────────────────────
+
+    /// <summary>
+    /// 验证：注入服务端估算器后，审批成本判定使用服务端估算——模型在请求中填写的高估算值
+    /// （EstimatedCostUsd=999）被服务端估算覆盖，参数小时不触发成本审批。
+    /// </summary>
+    [TestMethod]
+    public void Validator_ServerSideEstimate_OverridesModelFilledHighCost()
+    {
+        var validator = new DefaultAgentToolCallValidator(
+            new ValidatorDispatcher().Add("echo"),
+            approvalPolicy: new ApprovalPolicyOptions { Enabled = true, CostThresholdUsd = 0.001 },
+            costEstimator: new DefaultToolCostEstimator());
+
+        // 参数极短（服务端估算 < 阈值），但模型谎报高费用——服务端估算覆盖后不应触发审批。
+        var result = validator.ValidateAsync(
+            "run-validator",
+            new AgentToolCallRequest { ToolName = "echo", Arguments = """{"text":"x"}""", EstimatedCostUsd = 999 },
+            CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+        Assert.IsTrue(result.IsValid, "服务端估算覆盖模型填写值：短参数不应触发成本审批。");
+        Assert.IsFalse(result.RequiresApproval, "模型高估不应绕过服务端估算。");
+    }
+
+    /// <summary>
+    /// 验证：模型不填写估算值时，服务端估算仍能按参数大小触发成本审批。
+    /// </summary>
+    [TestMethod]
+    public void Validator_ServerSideEstimate_TriggersOnLargeArguments()
+    {
+        var validator = new DefaultAgentToolCallValidator(
+            new ValidatorDispatcher().Add("echo"),
+            approvalPolicy: new ApprovalPolicyOptions { Enabled = true, CostThresholdUsd = 0.001 },
+            costEstimator: new DefaultToolCostEstimator());
+
+        // 参数足够大（服务端估算 tokens=2500 → cost=0.005 > 0.001），模型未填估算值。
+        var largeArgs = new string('x', 10_000);
+        var result = validator.ValidateAsync(
+            "run-validator",
+            new AgentToolCallRequest { ToolName = "echo", Arguments = "{\"text\":\"" + largeArgs + "\"}" },
+            CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+        Assert.IsTrue(result.RequiresApproval, "服务端估算超过成本阈值应触发审批（不依赖模型填写）。");
+    }
+
+    /// <summary>
+    /// 验证：未注入估算器时回退到请求携带的模型填写值（兼容旧路径）。
+    /// </summary>
+    [TestMethod]
+    public void Validator_WithoutEstimator_FallsBackToModelFilledValues()
+    {
+        var validator = new DefaultAgentToolCallValidator(
+            new ValidatorDispatcher().Add("echo"),
+            approvalPolicy: new ApprovalPolicyOptions { Enabled = true, CostThresholdUsd = 1.0 });
+
+        var result = validator.ValidateAsync(
+            "run-validator",
+            new AgentToolCallRequest { ToolName = "echo", Arguments = """{"text":"x"}""", EstimatedCostUsd = 999 },
+            CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+        Assert.IsTrue(result.RequiresApproval, "无估算器时回退模型填写值触发成本审批（旧行为）。");
+    }
+
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
 
     private static AgentToolCallValidationResult Validate(

@@ -314,7 +314,11 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                         _logger.LogError(
                             "激活模型 {ModelId} 失败：{Error}（Revision {Revision}）",
                             modelId, result.Error, slot.Revision);
-                        // 不更新 AppliedClusterSlotRevision，下次轮询重试（退避）
+                        // 应用失败立即关闭 serving（fail-closed）：本地引擎未按期望切换，
+                        // 不得继续接流量；关闭结果同步到成员租约（Admission 据此阻断），
+                        // 不更新 AppliedClusterSlotRevision，下次轮询重试（退避）。
+                        _servingEnabled = false;
+                        await DisableServingAsync(ct).ConfigureAwait(false);
                         return false;
                     }
                     // 记录本次激活实际使用的 Execution Provider：配置变更但引擎未随之重载 → 漂移检测。
@@ -333,6 +337,9 @@ internal sealed class ModelStateReconcilerWorker : BackgroundService
                     _logger.LogError(
                         "停用模型失败：{Error}（Revision {Revision}）",
                         result.Error, slot.Revision);
+                    // 停用失败同样 fail-closed：期望 Inactive 但引擎仍活跃，关闭 serving 阻断流量。
+                    _servingEnabled = false;
+                    await DisableServingAsync(ct).ConfigureAwait(false);
                     return false;
                 }
             }
