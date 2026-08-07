@@ -88,7 +88,7 @@ LIMIT 1;
 
         // 幂等快路径：预留已存在 → 直接成功（不重复占容量，与进程内实现一致）。
         await using var probeConnection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        if (await ReservationExistsAsync(probeConnection, reservationId, cancellationToken).ConfigureAwait(false))
+        if (await ReservationExistsAsync(probeConnection, workspaceId, reservationId, cancellationToken).ConfigureAwait(false))
         {
             return new QuotaReservationResult
             {
@@ -174,7 +174,7 @@ WHERE workspace_id = @workspace_id;
             }
 
             // 4. 锁定后复查预留是否已存在（并发幂等重放：等待锁期间另一事务已插入）。
-            if (await ReservationExistsAsync(connection, reservationId, cancellationToken, transaction).ConfigureAwait(false))
+            if (await ReservationExistsAsync(connection, workspaceId, reservationId, cancellationToken, transaction).ConfigureAwait(false))
             {
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
                 return new QuotaReservationResult
@@ -218,7 +218,7 @@ WHERE workspace_id = @workspace_id;
 INSERT INTO {Table("workspace_quota_reservations")} (
     reservation_id, workspace_id, tokens, cost_usd, created_at)
 VALUES (@reservation_id, @workspace_id, @tokens, @cost_usd, @now)
-ON CONFLICT (reservation_id) DO NOTHING;
+ON CONFLICT (workspace_id, reservation_id) DO NOTHING;
 """;
                 reserveCmd.Parameters.AddWithValue("reservation_id", reservationId);
                 reserveCmd.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -290,9 +290,11 @@ WHERE workspace_id = @workspace_id;
                 delCmd.CommandTimeout = Options.CommandTimeoutSeconds;
                 delCmd.CommandText = $"""
 DELETE FROM {Table("workspace_quota_reservations")}
-WHERE reservation_id = @reservation_id
+WHERE workspace_id = @workspace_id
+  AND reservation_id = @reservation_id
 RETURNING workspace_id, tokens, cost_usd;
 """;
+                delCmd.Parameters.AddWithValue("workspace_id", workspaceId);
                 delCmd.Parameters.AddWithValue("reservation_id", reservationId);
                 await using var reader = await delCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -358,9 +360,11 @@ WHERE workspace_id = @workspace_id;
                 delCmd.CommandTimeout = Options.CommandTimeoutSeconds;
                 delCmd.CommandText = $"""
 DELETE FROM {Table("workspace_quota_reservations")}
-WHERE reservation_id = @reservation_id
+WHERE workspace_id = @workspace_id
+  AND reservation_id = @reservation_id
 RETURNING workspace_id, tokens, cost_usd;
 """;
+                delCmd.Parameters.AddWithValue("workspace_id", workspaceId);
                 delCmd.Parameters.AddWithValue("reservation_id", reservationId);
                 await using var reader = await delCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -511,6 +515,7 @@ ON CONFLICT (workspace_id) DO UPDATE SET
 
     private async ValueTask<bool> ReservationExistsAsync(
         NpgsqlConnection connection,
+        string workspaceId,
         string reservationId,
         CancellationToken cancellationToken,
         NpgsqlTransaction? transaction = null)
@@ -520,9 +525,11 @@ ON CONFLICT (workspace_id) DO UPDATE SET
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 SELECT 1 FROM {Table("workspace_quota_reservations")}
-WHERE reservation_id = @reservation_id
+WHERE workspace_id = @workspace_id
+  AND reservation_id = @reservation_id
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("reservation_id", reservationId);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is not null and not DBNull;

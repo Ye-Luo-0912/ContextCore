@@ -96,7 +96,7 @@ public sealed class PostgresAgentRunEventStore : PostgresStoreBase, IAgentRunEve
         await using var insertCommand = connection.CreateCommand();
         insertCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         var leaseClause = leaseValidated
-            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
+            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.workspace_id = @workspace_id AND l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
             : string.Empty;
         insertCommand.CommandText = $"""
 WITH last_event AS (
@@ -162,10 +162,11 @@ RETURNING sequence;
             leaseCheckCommand.CommandTimeout = Options.CommandTimeoutSeconds;
             leaseCheckCommand.CommandText = $"""
 SELECT 1 FROM {Table("agent_run_leases")}
-WHERE run_id = @run_id AND lease_token = @lease_token AND fencing_token = @fencing_token
+WHERE workspace_id = @workspace_id AND run_id = @run_id AND lease_token = @lease_token AND fencing_token = @fencing_token
   AND lease_expires_at > clock_timestamp()
 LIMIT 1;
 """;
+            leaseCheckCommand.Parameters.AddWithValue("workspace_id", @event.WorkspaceId);
             leaseCheckCommand.Parameters.AddWithValue("run_id", @event.RunId);
             leaseCheckCommand.Parameters.AddWithValue("lease_token", leaseToken!);
             leaseCheckCommand.Parameters.AddWithValue("fencing_token", fencingToken!.Value);

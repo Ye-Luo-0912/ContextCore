@@ -52,7 +52,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     // 共享批量心跳：租约注册表（runId → 活跃租约条目）。
     // 所有启用租约的 Run 在此登记，由单一心跳循环每周期批量续约一次，
     // 替代"每个 Run 一个独立续约任务"（N 个 Run = N 次 DB 往返/周期 → 1 次）。
-    private readonly ConcurrentDictionary<string, ActiveLeaseEntry> _leaseRegistry = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<TenantRunKey, ActiveLeaseEntry> _leaseRegistry = new();
     private readonly object _heartbeatLock = new();
     private Task? _heartbeatLoopTask;
     private CancellationTokenSource? _heartbeatLoopCts;
@@ -748,7 +748,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             if (lease is not null && _runLease is not null)
             {
                 RegisterLease(lease, activeRun.Cts);
-                var leaseEntry = _leaseRegistry[lease.RunId];
+                var leaseEntry = _leaseRegistry[lease.Key];
                 // 读取共享心跳维护的最新确认租约过期时间，让 Tool 副作用 fence
                 // 与数据库 lease_expires_at 保持一致（每次续约后自动前移）。
                 leaseExpiryProvider = () =>
@@ -776,7 +776,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             // 先从共享心跳注册表移除（停止续约；避免循环对已释放的 CTS 发起取消）
             if (lease is not null && _runLease is not null)
             {
-                UnregisterLease(run.RunId);
+                UnregisterLease(lease.Key);
             }
 
             // 按标志位释放 permit，确保任何路径下已获取的 permit 都被释放
@@ -806,9 +806,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// </summary>
     private void RegisterLease(LeasedAgentRun lease, CancellationTokenSource actorCts)
     {
-        _leaseRegistry[lease.RunId] = new ActiveLeaseEntry
+        _leaseRegistry[lease.Key] = new ActiveLeaseEntry
         {
-            RunId = lease.RunId,
+            Key = lease.Key,
             LeaseToken = lease.LeaseToken,
             ActorCts = actorCts,
             // 初始为租约获取时的 ExpiresAt；续约成功后更新为 UtcNow + extension
@@ -828,9 +828,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     }
 
     /// <summary>从共享批量心跳注册表移除租约（Run 结束后停止续约）。</summary>
-    private void UnregisterLease(string runId)
+    private void UnregisterLease(TenantRunKey key)
     {
-        _leaseRegistry.TryRemove(runId, out _);
+        _leaseRegistry.TryRemove(key, out _);
     }
 
     /// <summary>
@@ -873,7 +873,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             }
 
             var now = DateTimeOffset.UtcNow;
-            var cancelSet = new HashSet<string>(StringComparer.Ordinal);
+            var cancelSet = new HashSet<TenantRunKey>();
 
             // 本地 watchdog：最后一次确认的租约已过期 → 取消 Actor（不发起续约）
             foreach (var entry in entries)
@@ -881,17 +881,17 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 if (now.UtcTicks >= Interlocked.Read(ref entry.LastConfirmedExpiresTicks))
                 {
                     _logger?.LogError(
-                        "Run {RunId} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消 Actor。",
-                        entry.RunId, new DateTimeOffset(entry.LastConfirmedExpiresTicks, TimeSpan.Zero));
+                        "Run {RunKey} 本地确认的租约已过期（ExpiresAt={ExpiresAt}），取消 Actor。",
+                        entry.Key, new DateTimeOffset(entry.LastConfirmedExpiresTicks, TimeSpan.Zero));
                     CancelActor(entry.ActorCts);
-                    cancelSet.Add(entry.RunId);
+                    cancelSet.Add(entry.Key);
                 }
             }
 
             // 批量续约剩余租约（单次 DB 往返）
             var toRenew = entries
-                .Where(e => !cancelSet.Contains(e.RunId))
-                .Select(e => new AgentRunLeaseRenewal { RunId = e.RunId, LeaseToken = e.LeaseToken })
+                .Where(e => !cancelSet.Contains(e.Key))
+                .Select(e => new AgentRunLeaseRenewal { Key = e.Key, LeaseToken = e.LeaseToken })
                 .ToList();
 
             if (toRenew.Count > 0)
@@ -901,19 +901,19 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                     var renewFailed = await _runLease.RenewBatchAsync(toRenew, extension, cancellationToken).ConfigureAwait(false);
                     foreach (var entry in entries)
                     {
-                        if (cancelSet.Contains(entry.RunId))
+                        if (cancelSet.Contains(entry.Key))
                         {
                             continue;
                         }
-                        if (renewFailed.Contains(entry.RunId, StringComparer.Ordinal))
+                        if (renewFailed.Contains(entry.Key))
                         {
                             // 丢租后旧 owner 不写任何终态（无 fencing token 的写入会破坏新 owner 状态），
                             // 仅本地取消 Actor 防止双执行。Run 保持非终态由 RecoveryWorker 重新入队恢复
                             // （resume from checkpoint）；超时无人接管时由 RecoveryWorker 原子标记 LeaseLost。
                             _logger?.LogWarning(
-                                "Run {RunId} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", entry.RunId);
+                                "Run {RunKey} 租约续约失败，其他实例可能已接管；取消 Actor 执行。", entry.Key);
                             CancelActor(entry.ActorCts);
-                            cancelSet.Add(entry.RunId);
+                            cancelSet.Add(entry.Key);
                         }
                         else
                         {
@@ -934,20 +934,20 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                     // 连续异常 watchdog：超过阈值后取消 Actor，防止无 lease 的副作用
                     foreach (var entry in entries)
                     {
-                        if (cancelSet.Contains(entry.RunId))
+                        if (cancelSet.Contains(entry.Key))
                         {
                             continue;
                         }
                         var failures = Interlocked.Increment(ref entry.ConsecutiveFailures);
-                        _logger?.LogWarning("Run {RunId} heartbeat 续约异常（连续 {Count}/{Max}）。",
-                            entry.RunId, failures, MaxConsecutiveFailures);
+                        _logger?.LogWarning("Run {RunKey} heartbeat 续约异常（连续 {Count}/{Max}）。",
+                            entry.Key, failures, MaxConsecutiveFailures);
                         if (failures >= MaxConsecutiveFailures)
                         {
                             _logger?.LogError(
-                                "Run {RunId} heartbeat 连续 {Count} 次异常，触发本地 watchdog 取消 Actor。",
-                                entry.RunId, failures);
+                                "Run {RunKey} heartbeat 连续 {Count} 次异常，触发本地 watchdog 取消 Actor。",
+                                entry.Key, failures);
                             CancelActor(entry.ActorCts);
-                            cancelSet.Add(entry.RunId);
+                            cancelSet.Add(entry.Key);
                         }
                     }
                 }
@@ -956,9 +956,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             // 移除已取消的条目（Run 的 finally 也会移除；此处提前清理避免下一周期重复续约/重复取消）
             foreach (var entry in entries)
             {
-                if (cancelSet.Contains(entry.RunId))
+                if (cancelSet.Contains(entry.Key))
                 {
-                    _leaseRegistry.TryRemove(entry.RunId, out _);
+                    _leaseRegistry.TryRemove(entry.Key, out _);
                 }
             }
         }
@@ -1271,7 +1271,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// </summary>
     private sealed class ActiveLeaseEntry
     {
-        public required string RunId { get; init; }
+        public required TenantRunKey Key { get; init; }
         public required string LeaseToken { get; init; }
         public required CancellationTokenSource ActorCts { get; init; }
         /// <summary>最后一次确认的租约过期时间（UTC ticks；续约异常时不更新）。</summary>

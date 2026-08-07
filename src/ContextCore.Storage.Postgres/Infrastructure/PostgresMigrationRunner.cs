@@ -174,7 +174,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   不再信任客户端提供的裸签名；查询 / 清除以工作区为作用域（全局重置需更高权限），
     ///   杜绝跨租户读取 / 污染 / 重置其他工作区的自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v67";
+    public const string SchemaVersion = "cc-schema-v68";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2673,15 +2673,16 @@ CREATE TABLE IF NOT EXISTS {workspaceQuotaLedger} (
     PRIMARY KEY (workspace_id)
 );
 
--- 持久化预留行：reservation_id 幂等（重复预留不重复占容量），
--- 跨节点共享（节点重启不丢失预留，另一节点可对同一预留执行 Release / Actualize）。
+-- 持久化预留行：(workspace_id, reservation_id) 复合主键幂等（同一工作区重复预留不重复占容量），
+-- 与 agent_runs 的 (workspace_id, run_id) 身份模型对齐（预留 id 即 run id），
+-- 跨工作区相同预留 id 互不干扰；跨节点共享（节点重启不丢失预留，另一节点可对同一预留执行 Release / Actualize）。
 CREATE TABLE IF NOT EXISTS {workspaceQuotaReservations} (
     reservation_id text NOT NULL,
     workspace_id text NOT NULL,
     tokens bigint NOT NULL,
     cost_usd double precision NOT NULL,
     created_at timestamptz NOT NULL,
-    PRIMARY KEY (reservation_id)
+    PRIMARY KEY (workspace_id, reservation_id)
 );
 
 -- 按 workspace 反查预留（释放/结算按 workspace 维度审计）

@@ -239,7 +239,7 @@ RETURNING sequence;
                 // 与 Run Store 的 TransitionStateAsync 行为一致；调用方快照可能未显式携带 FinishedAt）。
                 var dataMergeFinishedAt = isTerminal ? " || jsonb_build_object('FinishedAt', @finished_at)" : string.Empty;
                 var leaseClause = leaseValidated
-                    ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
+                    ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.workspace_id = @workspace_id AND l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
                     : string.Empty;
                 updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}
@@ -329,7 +329,8 @@ INSERT INTO {Table("terminal_run_settlement_outbox")} (
 SELECT @workspace_id, @run_id, @run_id, @new_state, @now, @now
 WHERE EXISTS (
     SELECT 1 FROM {Table("workspace_quota_reservations")}
-    WHERE reservation_id = @run_id
+    WHERE workspace_id = @workspace_id
+      AND reservation_id = @run_id
 );
 """;
                     outboxCommand.Parameters.AddWithValue("workspace_id", commit.WorkspaceId);

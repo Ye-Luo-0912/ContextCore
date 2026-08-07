@@ -80,6 +80,7 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationWorkspaceQuotaDurability(),
         new PostgresMigrationModelNodeIdentitySplit(),
         new PostgresMigrationRetrievalPlanFeedbackTenantIsolation(),
-        new PostgresMigrationAgentRunLeaseWorkspaceKey()
+        new PostgresMigrationAgentRunLeaseWorkspaceKey(),
+        new PostgresMigrationQuotaReservationWorkspaceKey()
     ];
 }

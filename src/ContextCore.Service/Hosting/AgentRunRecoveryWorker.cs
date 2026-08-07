@@ -221,16 +221,16 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
             // 批量过滤活跃执行租约：正被其他实例执行的 Run 无需恢复——
             // 避免把无法取得 Execution Lease 的 Run 反复放入本地队列（入队后丢执行槽空转）。
-            HashSet<string>? activeLeaseRunIds = null;
+            HashSet<TenantRunKey>? activeLeaseKeys = null;
             if (runLease is not null)
             {
                 try
                 {
                     var active = await runLease.GetActiveLeaseRunIdsAsync(
-                        runs.Select(r => r.RunId).ToList(), cancellationToken).ConfigureAwait(false);
+                        runs.Select(r => new TenantRunKey(r.WorkspaceId, r.RunId)).ToList(), cancellationToken).ConfigureAwait(false);
                     if (active.Count > 0)
                     {
-                        activeLeaseRunIds = new HashSet<string>(active, StringComparer.Ordinal);
+                        activeLeaseKeys = new HashSet<TenantRunKey>(active);
                     }
                 }
                 catch (Exception ex)
@@ -242,7 +242,7 @@ internal sealed class AgentRunRecoveryWorker : BackgroundService
 
             foreach (var run in runs)
             {
-                if (activeLeaseRunIds is not null && activeLeaseRunIds.Contains(run.RunId))
+                if (activeLeaseKeys is not null && activeLeaseKeys.Contains(new TenantRunKey(run.WorkspaceId, run.RunId)))
                 {
                     // 该 Run 存在活跃执行租约（其他实例正在执行）→ 跳过恢复，等待其完成/租约过期。
                     continue;

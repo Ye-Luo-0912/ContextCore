@@ -334,7 +334,7 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
     }
 
     [TestMethod]
-    public async Task TerminalTransition_Cancelled_SettlementReleases()
+    public async Task TerminalTransition_Cancelled_SettlementActualizes()
     {
         var container = await TryStartPostgresAsync();
         if (container is null)
@@ -350,8 +350,9 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
             {
                 await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
 
+                // 取消前可能已产生消费（模拟已用 40k token）——不因终态名字而退回全部预留。
                 var admitted = await store.AdmitRunAtomicallyAsync(
-                    BuildPendingAdmissionRun(tokensUsed: 0), BuildAdmission(100, 100), default);
+                    BuildPendingAdmissionRun(tokensUsed: 40), BuildAdmission(100, 100), default);
                 Assert.IsTrue(admitted.Created);
 
                 // 取消 → Cancelled 终态 → outbox。
@@ -361,8 +362,8 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
                 await RunSettlementWorkerOnceAsync(provider);
 
                 var quota = await quotaService.GetQuotaAsync(Ws, default);
-                Assert.AreEqual(0, quota.ReservedTokens, "取消类终态应退回容量。");
-                Assert.AreEqual(0, quota.TokensUsed, "取消类终态不计入消耗。");
+                Assert.AreEqual(40, quota.TokensUsed, "取消类终态应按实际用量转正（不无条件退回）。");
+                Assert.AreEqual(0, quota.ReservedTokens, "结算后预留释放。");
             }
         }
     }
@@ -624,6 +625,55 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
 
                 var events = await provider.GetRequiredService<IAgentRunEventStore>().ReadAsync(Ws, admitted.Run.RunId, default);
                 Assert.AreEqual(1, events.Count, "事件应落库。");
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task Reservation_CompositeKey_IsolatesWorkspaces()
+    {
+        // 预留表复合主键 (workspace_id, reservation_id)：不同工作区使用相同预留 id
+        // （即相同 run id）互不干扰——与 agent_runs 的 (workspace_id, run_id) 身份模型一致。
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, quotaService) = await ResolveAsync(container, "resv_key_");
+            await using (provider)
+            {
+                const string wsA = "ws-resv-key-a";
+                const string wsB = "ws-resv-key-b";
+                const string sharedRunId = "run-same-id";
+                await quotaService.SetLimitAsync(wsA, 100, 0, TimeSpan.FromHours(1), default);
+                await quotaService.SetLimitAsync(wsB, 100, 0, TimeSpan.FromHours(1), default);
+
+                var runA = BuildPendingAdmissionRun(tokensUsed: 0) with { WorkspaceId = wsA, RunId = sharedRunId };
+                var runB = BuildPendingAdmissionRun(tokensUsed: 0) with { WorkspaceId = wsB, RunId = sharedRunId };
+
+                var admittedA = await store.AdmitRunAtomicallyAsync(runA, BuildAdmission(100, 100), default);
+                var admittedB = await store.AdmitRunAtomicallyAsync(runB, BuildAdmission(100, 100), default);
+                Assert.IsTrue(admittedA.Created, "工作区 A 准入应成功。");
+                Assert.IsTrue(admittedB.Created, "工作区 B 同 run id 准入应成功（复合键隔离）。");
+
+                var quotaA = await quotaService.GetQuotaAsync(wsA, default);
+                var quotaB = await quotaService.GetQuotaAsync(wsB, default);
+                Assert.AreEqual(100, quotaA.ReservedTokens, "A 预留 100 应落库。");
+                Assert.AreEqual(100, quotaB.ReservedTokens, "B 预留 100 应落库（与 A 互不覆盖）。");
+
+                // 结算 A（Completed）不影响 B 的预留。
+                await store.TransitionStateAsync(
+                    wsA, sharedRunId, AgentRunState.Queued, AgentRunState.Completed, default);
+                await RunSettlementWorkerOnceAsync(provider);
+
+                quotaA = await quotaService.GetQuotaAsync(wsA, default);
+                quotaB = await quotaService.GetQuotaAsync(wsB, default);
+                Assert.AreEqual(0, quotaA.ReservedTokens, "A 结算后预留释放。");
+                Assert.AreEqual(100, quotaB.ReservedTokens, "B 预留不受 A 结算影响。");
             }
         }
     }

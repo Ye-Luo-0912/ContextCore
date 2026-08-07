@@ -2361,11 +2361,11 @@ public interface IAgentRunLease
     /// 跳过正被其他实例执行的 Run，避免把无法取得 Execution Lease 的 Run 反复放入本地队列。
     /// 空输入返回空列表。
     /// </summary>
-    /// <param name="runIds">待过滤的 Run ID 集合。</param>
+    /// <param name="keys">待过滤的 Run 复合身份键集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>存在未过期租约的 Run ID 子集（无则空列表）。</returns>
-    ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
-        IReadOnlyList<string> runIds,
+    /// <returns>存在未过期租约的 Run 复合身份键子集（无则空列表）。</returns>
+    ValueTask<IReadOnlyList<TenantRunKey>> GetActiveLeaseRunIdsAsync(
+        IReadOnlyList<TenantRunKey> keys,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -2389,14 +2389,14 @@ public interface IAgentRunLease
     /// 批量续租约（心跳）：单次调用续约多个 Run 的租约，减少高频心跳下的数据库往返次数。
     /// 由 Host 的共享心跳循环在每周期调用一次，替代每个 Run 一个独立续约任务。
     /// </summary>
-    /// <param name="leases">待续约的租约条目（runId + leaseToken）。</param>
+    /// <param name="leases">待续约的租约条目（复合身份键 + leaseToken）。</param>
     /// <param name="extension">延长时间量。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>
-    /// 续约失败的 RunId 集合（租约已被抢占或已过期）。
+    /// 续约失败的 Run 复合身份键集合（租约已被抢占或已过期）。
     /// 返回集合中的每个 Run，调用方应立即停止处理（取消对应 Actor）。
     /// </returns>
-    ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+    ValueTask<IReadOnlyList<TenantRunKey>> RenewBatchAsync(
         IReadOnlyList<AgentRunLeaseRenewal> leases,
         TimeSpan extension,
         CancellationToken cancellationToken = default);
@@ -2435,16 +2435,19 @@ public sealed record LeasedAgentRun
     /// lease 被抢占时 0 行受影响，调用方检测并中止。
     /// </summary>
     public required long FencingToken { get; init; }
+
+    /// <summary>Run 复合身份键（工作区 + Run）。</summary>
+    public TenantRunKey Key => new(WorkspaceId, RunId);
 }
 
 /// <summary>
-/// 批量续约的租约条目（runId + leaseToken）。
+/// 批量续约的租约条目（复合身份键 + leaseToken）。
 /// 由 <see cref="IAgentRunLease.RenewBatchAsync"/> 使用；LeaseToken 来自 <see cref="IAgentRunLease.TryAcquireAsync"/>。
 /// </summary>
 public sealed record AgentRunLeaseRenewal
 {
-    /// <summary>Agent Run ID。</summary>
-    public required string RunId { get; init; }
+    /// <summary>Run 复合身份键（工作区 + Run；批量续约必须携带工作区，跨工作区同 RunId 互不干扰）。</summary>
+    public required TenantRunKey Key { get; init; }
 
     /// <summary>租约 token（来自 TryAcquireAsync）。</summary>
     public required string LeaseToken { get; init; }

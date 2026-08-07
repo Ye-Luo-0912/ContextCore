@@ -371,7 +371,7 @@ WHERE workspace_id = @workspace_id;
 INSERT INTO {Table("workspace_quota_reservations")} (
     reservation_id, workspace_id, tokens, cost_usd, created_at)
 VALUES (@reservation_id, @workspace_id, @tokens, @cost_usd, @now)
-ON CONFLICT (reservation_id) DO NOTHING;
+ON CONFLICT (workspace_id, reservation_id) DO NOTHING;
 """;
                 reserveCmd.Parameters.AddWithValue("reservation_id", run.RunId);
                 reserveCmd.Parameters.AddWithValue("workspace_id", run.WorkspaceId);
@@ -632,7 +632,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             // 同时校验 lease_expires_at > clock_timestamp()，防止已过期但未被 reaper 清理的租约
             // 仍能通过 fencing 校验（fencing_token 匹配但租约实际已过期 → 仍应拒绝写入）。
             var leaseClause = leaseValidated
-                ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
+                ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.workspace_id = @workspace_id AND l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
                 : string.Empty;
             updateCommand.CommandText = $"""
 UPDATE {Table("agent_runs")}
@@ -672,7 +672,8 @@ INSERT INTO {Table("terminal_run_settlement_outbox")} (
 SELECT @workspace_id, @run_id, @run_id, @new_state, @now, @now
 WHERE EXISTS (
     SELECT 1 FROM {Table("workspace_quota_reservations")}
-    WHERE reservation_id = @run_id
+    WHERE workspace_id = @workspace_id
+      AND reservation_id = @run_id
 );
 """;
                         outboxCommand.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -952,7 +953,8 @@ WITH eligible AS (
                 -- 排除存在活跃执行租约的 Run：正被其他实例执行（或崩溃后租约尚未过期），
                 -- 领取只会入队后因无法取得 Execution Lease 被丢弃（反复空转）。
                 SELECT 1 FROM {Table("agent_run_leases")} l
-                WHERE l.run_id = {Table("agent_runs")}.run_id
+                WHERE l.workspace_id = {Table("agent_runs")}.workspace_id
+                  AND l.run_id = {Table("agent_runs")}.run_id
                   AND l.lease_expires_at > clock_timestamp()
             )
             AND NOT EXISTS (
@@ -1177,7 +1179,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var leaseClause = leaseValidated
-            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
+            ? $" AND EXISTS (SELECT 1 FROM {Table("agent_run_leases")} l WHERE l.workspace_id = @workspace_id AND l.run_id = @run_id AND l.lease_token = @lease_token AND l.fencing_token = @fencing_token AND l.lease_expires_at > clock_timestamp())"
             : string.Empty;
         command.CommandText = $"""
 UPDATE {Table("agent_runs")}

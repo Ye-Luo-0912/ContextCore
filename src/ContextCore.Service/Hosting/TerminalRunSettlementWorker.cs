@@ -10,10 +10,10 @@ namespace ContextCore.Service.Hosting;
 //
 // 轮询 ITerminalRunSettlementStore 中待结算的 Run 终态条目，
 // 对每个条目执行配额结算（exactly-once）：
-// - Completed / Failed / DeadLettered / LeaseLost → Actualize
-//   （Run 实际执行，按最终持久化的实际用量转正，多退少补）；
-// - Cancelled / AdmissionRejected → Release
-//   （Run 未执行或取消退回容量）。
+// - 准入即拒绝（AdmissionRejected，从未执行）→ Release 退回容量；
+// - 其余终态（Completed / Failed / Cancelled / LeaseLost / DeadLettered /
+//   ContextSafetyBlocked / RecoveryBlocked / RecoveryCorrupted / ReconciliationRejected）
+//   → Actualize 按最终持久化的实际用量转正（多退少补，actualUsage=0 自然等价释放）。
 //
 // 结算目标（IWorkspaceQuotaService）与写入方（PostgresAgentRunStore 的
 // TransitionStateAsync 事务内 outbox 写入）解耦：worker 只负责消费，
@@ -169,8 +169,8 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
             actualCostUsd = budget.CostUsedUsd;
         }
 
-        // 终态语义统一来自 AgentRunStateSemantics：未执行类终态（Cancelled / AdmissionRejected）
-        // 退回容量；执行类终态按实际用量转正（多退少补）。
+        // 终态语义统一来自 AgentRunStateSemantics：准入即拒绝（AdmissionRejected，从未执行）
+        // 退回容量；其余终态按实际用量转正（多退少补，actualUsage=0 自然等价释放）。
         var settlementPolicy = AgentRunStateSemantics.Get(entry.TerminalState).QuotaSettlementPolicy;
         if (settlementPolicy == QuotaSettlementPolicy.Release)
         {

@@ -17,10 +17,17 @@ public sealed class AgentRunCommitTests
     }
 
     [TestMethod]
-    public void SettlementIntent_NonExecutingTerminalState_IsRelease()
+    public void SettlementIntent_AdmissionRejected_IsRelease()
+    {
+        var commit = BuildCommit(AgentRunState.AdmissionRejected);
+        Assert.AreEqual(QuotaSettlementPolicy.Release, commit.SettlementIntent, "准入即拒绝（从未执行）应退回预留容量。");
+    }
+
+    [TestMethod]
+    public void SettlementIntent_Cancelled_IsActualize()
     {
         var commit = BuildCommit(AgentRunState.Cancelled);
-        Assert.AreEqual(QuotaSettlementPolicy.Release, commit.SettlementIntent, "未执行类终态应退回预留容量。");
+        Assert.AreEqual(QuotaSettlementPolicy.Actualize, commit.SettlementIntent, "取消前可能已产生消费，应按实际用量转正。");
     }
 
     [TestMethod]

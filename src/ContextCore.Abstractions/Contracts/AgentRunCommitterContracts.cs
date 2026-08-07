@@ -52,8 +52,9 @@ public sealed record AgentRunCommit
     public long? FencingToken { get; init; }
 
     /// <summary>
-    /// 结算意图（由状态语义层权威派生）：执行类终态按实际用量转正、未执行类终态退回容量、
-    /// 非终态不结算。提交器在终态 CAS 成功后按此写结算 outbox（仅预留存在才入队）。
+    /// 结算意图（由状态语义层权威派生）：可能产生过消费的终态按实际用量转正、
+    /// 准入即拒绝（从未执行）退回容量、非终态不结算。提交器在终态 CAS 成功后按此写
+    /// 结算 outbox（仅预留存在才入队）。
     /// </summary>
     public QuotaSettlementPolicy SettlementIntent
         => NewRunSnapshot is null

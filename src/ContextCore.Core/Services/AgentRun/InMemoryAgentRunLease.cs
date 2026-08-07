@@ -7,7 +7,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // 子问题 9：InMemoryAgentRunLease — 进程内 Agent Run 租约实现（开发/测试用）
 //
 // 实现 IAgentRunLease 的进程内默认实现，复用 ICanaryLeaderLease 模式：
-// - ConcurrentDictionary 维护 runId → LeaseEntry 映射；
+// - ConcurrentDictionary 维护 TenantRunKey（工作区 + Run）→ LeaseEntry 映射；
 // - TryAcquireAsync 原子 CAS：未持有或已过期 → 获取成功；
 // - RenewAsync 校验 leaseToken + 未过期 → 延长；
 // - ReleaseAsync 校验 leaseToken → 移除；
@@ -17,6 +17,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 // - 不持久化到磁盘：进程崩溃后租约丢失（多实例下其他实例可立即接管）。
 // - 线程安全：所有读写通过 ConcurrentDictionary 原子操作。
 // - 仅供开发/测试；生产部署应注入基于 Postgres FOR UPDATE SKIP LOCKED 的持久化实现。
+// - 身份键统一为 TenantRunKey（工作区 + Run），跨工作区同 RunId 互不覆盖。
 // ===========================================================================
 
 /// <summary>
@@ -29,7 +30,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// </remarks>
 public sealed class InMemoryAgentRunLease : IAgentRunLease
 {
-    private readonly ConcurrentDictionary<string, LeaseEntry> _leases = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<TenantRunKey, LeaseEntry> _leases = new();
     private readonly object _reapLock = new();
     // 全局 fencing token 计数器（单调递增）。每次成功获取租约（含抢占过期）时递增。
     private long _globalFencingToken;
@@ -63,6 +64,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now + leaseDuration;
         var leaseToken = Guid.NewGuid().ToString("N");
+        var key = new TenantRunKey(workspaceId, runId);
 
         // 预分配 fencing token（仅当实际获取成功时才生效）。
         // 使用 Interlocked.Increment 保证单调递增；即使并发获取失败也不会回退（可接受，fencing token 只需单调）。
@@ -70,7 +72,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         var acquired = false;
 
         _leases.AddOrUpdate(
-            runId,
+            key,
             // 不存在 → 直接获取
             _ =>
             {
@@ -124,10 +126,11 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         }
 
         var now = DateTimeOffset.UtcNow;
+        var key = new TenantRunKey(workspaceId, runId);
         var success = false;
 
         _leases.AddOrUpdate(
-            runId,
+            key,
             // 不存在 → 创建空条目（后续判断会失败）
             _ => new LeaseEntry(string.Empty, string.Empty, now, 0),
             (_, existing) =>
@@ -152,7 +155,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     /// 续约失败不创建空条目（与单条 <see cref="RenewAsync"/> 不同，避免高频心跳下字典膨胀）；
     /// CAS 更新失败按续约失败处理（fail-closed：调用方取消 Actor 更安全）。
     /// </remarks>
-    public ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+    public ValueTask<IReadOnlyList<TenantRunKey>> RenewBatchAsync(
         IReadOnlyList<AgentRunLeaseRenewal> leases,
         TimeSpan extension,
         CancellationToken cancellationToken = default)
@@ -164,27 +167,27 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         }
 
         var now = DateTimeOffset.UtcNow;
-        var failed = new List<string>();
+        var failed = new List<TenantRunKey>();
         foreach (var lease in leases)
         {
-            if (lease is null || string.IsNullOrWhiteSpace(lease.RunId) || string.IsNullOrWhiteSpace(lease.LeaseToken))
+            if (lease is null || string.IsNullOrWhiteSpace(lease.Key.WorkspaceId) || string.IsNullOrWhiteSpace(lease.Key.RunId) || string.IsNullOrWhiteSpace(lease.LeaseToken))
             {
                 continue;
             }
 
             // 读取 + CAS 更新：token 匹配且未过期 → 延长；否则不续约
-            if (_leases.TryGetValue(lease.RunId, out var existing)
+            if (_leases.TryGetValue(lease.Key, out var existing)
                 && existing.LeaseToken == lease.LeaseToken
                 && existing.ExpiresAt > now
-                && _leases.TryUpdate(lease.RunId, existing with { ExpiresAt = now + extension }, existing))
+                && _leases.TryUpdate(lease.Key, existing with { ExpiresAt = now + extension }, existing))
             {
                 continue;
             }
 
-            failed.Add(lease.RunId);
+            failed.Add(lease.Key);
         }
 
-        return ValueTask.FromResult<IReadOnlyList<string>>(failed);
+        return ValueTask.FromResult<IReadOnlyList<TenantRunKey>>(failed);
     }
 
     /// <inheritdoc />
@@ -197,11 +200,12 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
+        var key = new TenantRunKey(workspaceId, runId);
 
         // 仅当 token 匹配时才移除（避免误释放他人租约）
-        if (_leases.TryGetValue(runId, out var existing) && existing.LeaseToken == leaseToken)
+        if (_leases.TryGetValue(key, out var existing) && existing.LeaseToken == leaseToken)
         {
-            _leases.TryRemove(runId, out _);
+            _leases.TryRemove(key, out _);
         }
 
         return ValueTask.CompletedTask;
@@ -238,7 +242,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         var now = DateTimeOffset.UtcNow;
-        if (_leases.TryGetValue(runId, out var entry))
+        if (_leases.TryGetValue(new TenantRunKey(workspaceId, runId), out var entry))
         {
             return ValueTask.FromResult(entry.ExpiresAt > now);
         }
@@ -246,26 +250,26 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
-        IReadOnlyList<string> runIds,
+    public ValueTask<IReadOnlyList<TenantRunKey>> GetActiveLeaseRunIdsAsync(
+        IReadOnlyList<TenantRunKey> keys,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (runIds.Count == 0)
+        if (keys.Count == 0)
         {
-            return ValueTask.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+            return ValueTask.FromResult<IReadOnlyList<TenantRunKey>>(Array.Empty<TenantRunKey>());
         }
 
         var now = DateTimeOffset.UtcNow;
-        var active = new List<string>(runIds.Count);
-        foreach (var runId in runIds)
+        var active = new List<TenantRunKey>(keys.Count);
+        foreach (var key in keys)
         {
-            if (_leases.TryGetValue(runId, out var entry) && entry.ExpiresAt > now)
+            if (_leases.TryGetValue(key, out var entry) && entry.ExpiresAt > now)
             {
-                active.Add(runId);
+                active.Add(key);
             }
         }
-        return ValueTask.FromResult<IReadOnlyList<string>>(active);
+        return ValueTask.FromResult<IReadOnlyList<TenantRunKey>>(active);
     }
 
     /// <inheritdoc />
@@ -285,7 +289,7 @@ public sealed class InMemoryAgentRunLease : IAgentRunLease
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
 
         var now = DateTimeOffset.UtcNow;
-        if (_leases.TryGetValue(runId, out var entry) && entry.ExpiresAt > now)
+        if (_leases.TryGetValue(new TenantRunKey(workspaceId, runId), out var entry) && entry.ExpiresAt > now)
         {
             return 0;
         }

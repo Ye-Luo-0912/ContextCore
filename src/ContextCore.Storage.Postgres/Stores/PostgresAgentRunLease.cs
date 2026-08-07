@@ -160,12 +160,12 @@ WHERE workspace_id = @workspace_id
 
     /// <inheritdoc />
     /// <remarks>
-    /// 批量续租约（心跳）：单条 SQL 续约全部租约——<c>UPDATE ... FROM unnest(@run_ids, @tokens)</c>，
+    /// 批量续租约（心跳）：单条 SQL 续约全部租约——<c>UPDATE ... FROM unnest(@workspace_ids, @run_ids, @tokens)</c>，
     /// 将整批续约压缩为一次数据库往返（替代 N 次单条 RenewAsync）。
-    /// 校验与单条路径一致：lease_token 匹配且 lease_expires_at &gt; clock_timestamp()。
-    /// RETURNING 返回成功续约的 run_id；未返回的即失败（租约被抢占或已过期）。
+    /// 校验与单条路径一致：workspace_id + lease_token 匹配且 lease_expires_at &gt; clock_timestamp()。
+    /// RETURNING 返回成功续约的复合身份键；未返回的即失败（租约被抢占或已过期）。
     /// </remarks>
-    public async ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+    public async ValueTask<IReadOnlyList<TenantRunKey>> RenewBatchAsync(
         IReadOnlyList<AgentRunLeaseRenewal> leases,
         TimeSpan extension,
         CancellationToken cancellationToken = default)
@@ -177,36 +177,41 @@ WHERE workspace_id = @workspace_id
         }
         if (leases.Count == 0)
         {
-            return Array.Empty<string>();
+            return Array.Empty<TenantRunKey>();
         }
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         var newExpiresAt = DateTimeOffset.UtcNow.Add(extension);
 
+        var workspaceIds = new string[leases.Count];
         var runIds = new string[leases.Count];
         var tokens = new string[leases.Count];
         for (var i = 0; i < leases.Count; i++)
         {
             var lease = leases[i];
-            ArgumentException.ThrowIfNullOrWhiteSpace(lease.RunId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(lease.Key.WorkspaceId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(lease.Key.RunId);
             ArgumentException.ThrowIfNullOrWhiteSpace(lease.LeaseToken);
-            runIds[i] = lease.RunId;
+            workspaceIds[i] = lease.Key.WorkspaceId;
+            runIds[i] = lease.Key.RunId;
             tokens[i] = lease.LeaseToken;
         }
 
-        var renewedIds = new HashSet<string>(StringComparer.Ordinal);
+        var renewedKeys = new HashSet<TenantRunKey>();
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 UPDATE {Table("agent_run_leases")}
 SET lease_expires_at = @new_expires_at
-FROM unnest(@run_ids, @tokens) AS req(run_id, lease_token)
-WHERE {Table("agent_run_leases")}.run_id = req.run_id
+FROM unnest(@workspace_ids, @run_ids, @tokens) AS req(workspace_id, run_id, lease_token)
+WHERE {Table("agent_run_leases")}.workspace_id = req.workspace_id
+  AND {Table("agent_run_leases")}.run_id = req.run_id
   AND {Table("agent_run_leases")}.lease_token = req.lease_token
   AND {Table("agent_run_leases")}.lease_expires_at > clock_timestamp()
-RETURNING {Table("agent_run_leases")}.run_id;
+RETURNING {Table("agent_run_leases")}.workspace_id, {Table("agent_run_leases")}.run_id;
 """;
+        command.Parameters.AddWithValue("workspace_ids", workspaceIds);
         command.Parameters.AddWithValue("run_ids", runIds);
         command.Parameters.AddWithValue("tokens", tokens);
         command.Parameters.AddWithValue("new_expires_at", newExpiresAt);
@@ -214,16 +219,16 @@ RETURNING {Table("agent_run_leases")}.run_id;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            renewedIds.Add(reader.GetString(0));
+            renewedKeys.Add(new TenantRunKey(reader.GetString(0), reader.GetString(1)));
         }
 
-        // 未出现在 RETURNING 中的 runId 即续约失败（租约被抢占/已过期）
-        var failed = new List<string>(leases.Count - renewedIds.Count);
+        // 未出现在 RETURNING 中的复合键即续约失败（租约被抢占/已过期）。
+        var failed = new List<TenantRunKey>(leases.Count - renewedKeys.Count);
         foreach (var lease in leases)
         {
-            if (!renewedIds.Contains(lease.RunId))
+            if (!renewedKeys.Contains(lease.Key))
             {
-                failed.Add(lease.RunId);
+                failed.Add(lease.Key);
             }
         }
         return failed;
@@ -314,33 +319,44 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
-        IReadOnlyList<string> runIds,
+    public async ValueTask<IReadOnlyList<TenantRunKey>> GetActiveLeaseRunIdsAsync(
+        IReadOnlyList<TenantRunKey> keys,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(runIds);
-        if (runIds.Count == 0)
+        ArgumentNullException.ThrowIfNull(keys);
+        if (keys.Count == 0)
         {
-            return Array.Empty<string>();
+            return Array.Empty<TenantRunKey>();
         }
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        var workspaceIds = new string[keys.Count];
+        var runIds = new string[keys.Count];
+        for (var i = 0; i < keys.Count; i++)
+        {
+            workspaceIds[i] = keys[i].WorkspaceId;
+            runIds[i] = keys[i].RunId;
+        }
+
         command.CommandText = $"""
-SELECT l.run_id
-FROM unnest(@run_ids) AS ids(run_id)
-JOIN {Table("agent_run_leases")} l ON l.run_id = ids.run_id
+SELECT l.workspace_id, l.run_id
+FROM unnest(@workspace_ids, @run_ids) AS ids(workspace_id, run_id)
+JOIN {Table("agent_run_leases")} l
+  ON l.workspace_id = ids.workspace_id AND l.run_id = ids.run_id
 WHERE l.lease_expires_at > clock_timestamp();
 """;
-        command.Parameters.AddWithValue("run_ids", runIds.ToArray());
+        command.Parameters.AddWithValue("workspace_ids", workspaceIds);
+        command.Parameters.AddWithValue("run_ids", runIds);
 
-        var active = new List<string>();
+        var active = new List<TenantRunKey>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            active.Add(reader.GetString(0));
+            active.Add(new TenantRunKey(reader.GetString(0), reader.GetString(1)));
         }
         return active;
     }
@@ -379,7 +395,8 @@ WHERE workspace_id = @workspace_id
   AND state = @expected_state
   AND NOT EXISTS (
       SELECT 1 FROM {Table("agent_run_leases")}
-      WHERE run_id = @run_id
+      WHERE workspace_id = @workspace_id
+        AND run_id = @run_id
         AND lease_expires_at >= clock_timestamp()
   );
 """;

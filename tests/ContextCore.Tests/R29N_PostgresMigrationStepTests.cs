@@ -167,7 +167,7 @@ public sealed class R29N_PostgresMigrationStepTests
             var runner = new PostgresMigrationRunner(factory);
             var result = await runner.ApplyMigrationsAsync(confirm: true, CancellationToken.None);
             Assert.IsTrue(result.Applied, "迁移应成功应用。");
-            Assert.AreEqual("cc-schema-v67", await runner.GetAppliedVersionAsync(CancellationToken.None));
+            Assert.AreEqual("cc-schema-v68", await runner.GetAppliedVersionAsync(CancellationToken.None));
 
             // 回填：run-legacy-1 的 workspace_id 来自 agent_runs。
             await using (var conn = await factory.OpenConnectionAsync(CancellationToken.None))

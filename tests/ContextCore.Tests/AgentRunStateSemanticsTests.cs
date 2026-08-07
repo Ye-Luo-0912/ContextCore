@@ -76,7 +76,7 @@ public sealed class AgentRunStateSemanticsTests
         }
     }
 
-    /// <summary>结算策略：Cancelled / AdmissionRejected → Release；其余终态 → Actualize；非终态 → None。</summary>
+    /// <summary>结算策略：仅 AdmissionRejected（准入即拒绝，从未执行）→ Release；其余终态 → Actualize；非终态 → None。</summary>
     [TestMethod]
     public void QuotaSettlementPolicy_ClassifiesTerminals()
     {
@@ -90,15 +90,15 @@ public sealed class AgentRunStateSemanticsTests
                 continue;
             }
 
-            if (state is AgentRunState.Cancelled or AgentRunState.AdmissionRejected)
+            if (state is AgentRunState.AdmissionRejected)
             {
                 Assert.AreEqual(QuotaSettlementPolicy.Release, info.QuotaSettlementPolicy,
-                    "未执行类终态应退回容量：{0}。", state);
+                    "准入即拒绝（从未执行）应退回容量：{0}。", state);
             }
             else
             {
                 Assert.AreEqual(QuotaSettlementPolicy.Actualize, info.QuotaSettlementPolicy,
-                    "执行类终态应按实际用量转正：{0}。", state);
+                    "可能产生过消费的终态应按实际用量转正：{0}。", state);
             }
         }
     }

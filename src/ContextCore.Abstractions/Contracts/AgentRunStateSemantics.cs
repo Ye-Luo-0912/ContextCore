@@ -1,18 +1,18 @@
 namespace ContextCore.Abstractions;
 
 /// <summary>
-/// Run 终态配额结算策略：执行类终态按最终持久化实际用量转正（多退少补）；
-/// 未执行类终态退回预留容量；非终态无需结算。
+/// Run 终态配额结算策略：可能产生过消费的终态按最终持久化实际用量转正（多退少补）；
+/// 准入即拒绝（从未执行）退回预留容量；非终态无需结算。
 /// </summary>
 public enum QuotaSettlementPolicy : byte
 {
     /// <summary>非终态，不结算。</summary>
     None = 0,
 
-    /// <summary>执行类终态：按实际用量转正。</summary>
+    /// <summary>可能产生过消费的终态：按实际用量转正（actualUsage=0 自然等价释放）。</summary>
     Actualize = 1,
 
-    /// <summary>未执行类终态：退回预留容量。</summary>
+    /// <summary>准入即拒绝（从未执行）：退回预留容量。</summary>
     Release = 2
 }
 
@@ -85,11 +85,12 @@ public static class AgentRunStateSemantics
     public static AgentRunStateSemanticsInfo Get(AgentRunState state) => state switch
     {
         // ── 终态（10）：不再流转、不再执行，需要写 finished_at ──────────────
-        // 执行类终态（已尝试执行）→ Actualize 按实际用量转正；Cancelled / AdmissionRejected
-        // 为未执行类 → Release 退回预留容量。
+        // 只有准入即拒绝（AdmissionRejected，从未获得执行机会）才退回预留容量；
+        // 其余终态（含 Cancelled——调用方可能已消耗模型/Tool 用量）统一按实际用量转正，
+        // actualUsage=0 时自然等价于释放，不依据终态名字猜测是否发生过消费。
         AgentRunState.Completed => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.Failed => Terminal(state, retryable: true, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: false),
-        AgentRunState.Cancelled => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Release, compactable: true),
+        AgentRunState.Cancelled => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.LeaseLost => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.ReconciliationRejected => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.RecoveryBlocked => Terminal(state, retryable: false, manual: true, settlement: QuotaSettlementPolicy.Actualize, compactable: true),

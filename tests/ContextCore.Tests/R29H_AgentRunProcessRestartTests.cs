@@ -612,8 +612,8 @@ public sealed class R29H_AgentRunProcessRestartTests
         // 两条有效租约 → 批量续约无失败
         var ok = await lease.RenewBatchAsync(new[]
         {
-            new AgentRunLeaseRenewal { RunId = a!.RunId, LeaseToken = a.LeaseToken },
-            new AgentRunLeaseRenewal { RunId = b!.RunId, LeaseToken = b.LeaseToken }
+            new AgentRunLeaseRenewal { Key = new TenantRunKey(ws, a!.RunId), LeaseToken = a.LeaseToken },
+            new AgentRunLeaseRenewal { Key = new TenantRunKey(ws, b!.RunId), LeaseToken = b.LeaseToken }
         }, TimeSpan.FromMinutes(5));
         Assert.AreEqual(0, ok.Count, "全部有效租约应续约成功。");
         Assert.IsTrue(await lease.HasActiveLeaseAsync(ws, a.RunId), "续约后租约 A 应仍活跃。");
@@ -622,16 +622,16 @@ public sealed class R29H_AgentRunProcessRestartTests
         // 混合：一条有效 + 一条 token 错误 → 仅 token 错误的报告失败
         var mixed = await lease.RenewBatchAsync(new[]
         {
-            new AgentRunLeaseRenewal { RunId = a.RunId, LeaseToken = a.LeaseToken },
-            new AgentRunLeaseRenewal { RunId = b.RunId, LeaseToken = "wrong-token" }
+            new AgentRunLeaseRenewal { Key = new TenantRunKey(ws, a.RunId), LeaseToken = a.LeaseToken },
+            new AgentRunLeaseRenewal { Key = new TenantRunKey(ws, b.RunId), LeaseToken = "wrong-token" }
         }, TimeSpan.FromMinutes(5));
         Assert.AreEqual(1, mixed.Count, "错误 token 的租约应续约失败。");
-        Assert.AreEqual(b.RunId, mixed[0], "失败集合应含错误 token 的 RunId。");
+        Assert.AreEqual(new TenantRunKey(ws, b.RunId), mixed[0], "失败集合应含错误 token 的复合键。");
 
         // 不存在的 Run → 续约失败
         var missing = await lease.RenewBatchAsync(new[]
         {
-            new AgentRunLeaseRenewal { RunId = "run-batch-nonexistent", LeaseToken = "x" }
+            new AgentRunLeaseRenewal { Key = new TenantRunKey(ws, "run-batch-nonexistent"), LeaseToken = "x" }
         }, TimeSpan.FromMinutes(5));
         Assert.AreEqual(1, missing.Count, "不存在的租约应续约失败。");
     }
@@ -971,17 +971,17 @@ public sealed class R29H_AgentRunProcessRestartTests
             return _inner.RenewAsync(workspaceId, runId, leaseToken, extension, cancellationToken);
         }
 
-        public async ValueTask<IReadOnlyList<string>> RenewBatchAsync(
+        public async ValueTask<IReadOnlyList<TenantRunKey>> RenewBatchAsync(
             IReadOnlyList<AgentRunLeaseRenewal> leases, TimeSpan extension, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _renewBatchCalls);
             if (Volatile.Read(ref _failRenewals) != 0)
             {
                 // 全部续约失败（模拟租约丢失）
-                var failed = new List<string>(leases.Count);
+                var failed = new List<TenantRunKey>(leases.Count);
                 foreach (var l in leases)
                 {
-                    failed.Add(l.RunId);
+                    failed.Add(l.Key);
                 }
                 return failed;
             }
@@ -997,9 +997,9 @@ public sealed class R29H_AgentRunProcessRestartTests
         public ValueTask<bool> HasActiveLeaseAsync(string workspaceId, string runId, CancellationToken cancellationToken = default)
             => _inner.HasActiveLeaseAsync(workspaceId, runId, cancellationToken);
 
-        public ValueTask<IReadOnlyList<string>> GetActiveLeaseRunIdsAsync(
-            IReadOnlyList<string> runIds, CancellationToken cancellationToken = default)
-            => _inner.GetActiveLeaseRunIdsAsync(runIds, cancellationToken);
+        public ValueTask<IReadOnlyList<TenantRunKey>> GetActiveLeaseRunIdsAsync(
+            IReadOnlyList<TenantRunKey> keys, CancellationToken cancellationToken = default)
+            => _inner.GetActiveLeaseRunIdsAsync(keys, cancellationToken);
 
         public ValueTask<int> MarkLeaseLostIfLeaseExpiredAsync(
             string workspaceId, string runId, AgentRunState expectedCurrentState, CancellationToken ct = default)
