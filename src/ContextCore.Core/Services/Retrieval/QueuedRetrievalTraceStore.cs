@@ -18,6 +18,9 @@ public sealed class QueuedRetrievalTraceStore : IRetrievalTraceStore, IDisposabl
     private readonly Task _drainTask;
     private int _disposed;
 
+    /// <summary>内层持久化 store（File / InMemory / Postgres），供诊断与测试直接访问。</summary>
+    public IRetrievalTraceStore Inner => _inner;
+
     /// <summary>
     /// 初始化队列化 trace store。
     /// </summary>

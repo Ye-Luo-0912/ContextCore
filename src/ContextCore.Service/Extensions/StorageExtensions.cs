@@ -297,6 +297,12 @@ internal static class StorageExtensions
 		services.AddForwardedService<IRelationReviewStore, PostgresRelationReviewStore>();
 		services.AddForwardedService<IContextPackageBuildTraceStore, PostgresContextPackageBuildTraceStore>();
 		services.AddForwardedService<IContextPackagePolicyStore, PostgresContextPackagePolicyStore>();
+
+		// 检索 trace 写队列化：热路径 SaveAsync 入队即返回，后台 drain 持久化到 Postgres
+		// （诊断数据可丢弃，关闭时尽力排空；与 File/InMemory 路径一致）。
+		// 先移除 AddContextCorePostgresStorage 的原始注册，避免产生意外重复注册。
+		ProductionRuntimeExtensions.RemoveService(services, typeof(IRetrievalTraceStore));
+		services.AddQueuedRetrievalTraceStore<PostgresRetrievalTraceStore>();
 	}
 
 	private static void RegisterFileSystem(IServiceCollection services, StorageOptions options)

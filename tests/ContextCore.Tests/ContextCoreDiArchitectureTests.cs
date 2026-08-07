@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.Service;
 using ContextCore.Service.Extensions;
 using ContextCore.Storage.Postgres.Stores;
@@ -394,6 +395,25 @@ public sealed class ContextCoreDiArchitectureTests
 
         Assert.AreEqual(0, violations.Count,
             "Postgres Control Plane 接口不应包装 Invalidating*Decorator。实际发现:\n" + string.Join("\n", violations));
+    }
+
+    [TestMethod]
+    public async Task ProductionComposition_Postgres_IRetrievalTraceStore_WrappedInQueuedPostgresStore()
+    {
+        // 生产组合（AddContextStorage + AddContextCore）下，IRetrievalTraceStore 应为队列化包装：
+        // 热路径 SaveAsync 入队即返回（不阻塞检索），内层仍是 Postgres 实现（HA 持久化语义保留）。
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddContextStorage(MakePostgresOptions());
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
+
+        await using var sp = services.BuildServiceProvider();
+        var retrieval = sp.GetRequiredService<IRetrievalTraceStore>();
+        Assert.IsInstanceOfType(retrieval, typeof(QueuedRetrievalTraceStore),
+            "生产组合下 IRetrievalTraceStore 应包装为 QueuedRetrievalTraceStore（热路径不阻塞）。");
+        var queued = (QueuedRetrievalTraceStore)retrieval;
+        Assert.IsInstanceOfType(queued.Inner, typeof(PostgresRetrievalTraceStore),
+            "队列化包装的内层应为 Postgres 实现（HA 持久化语义保留）。");
     }
 
     [TestMethod]

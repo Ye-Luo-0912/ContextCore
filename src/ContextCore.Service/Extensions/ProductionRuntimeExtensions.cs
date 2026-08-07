@@ -615,7 +615,7 @@ internal static class ProductionRuntimeExtensions
     }
 
     /// <summary>从 DI 容器中移除指定服务类型的所有注册。</summary>
-    private static void RemoveService(IServiceCollection services, Type serviceType)
+    internal static void RemoveService(IServiceCollection services, Type serviceType)
     {
         for (var i = services.Count - 1; i >= 0; i--)
         {
