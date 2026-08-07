@@ -105,7 +105,9 @@ jobs:
     name: Unit tests
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 分钟在 GitHub runner 冷启动 + Testcontainers 镜像冷拉时不够（曾触发超时取消）；
+    # 调大到 40 分钟吸收冷启动波动，正常完成约 8-10 分钟。
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -69,9 +69,10 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             var succeeded = false;
+            var hasMore = false;
             try
             {
-                succeeded = await RunCompactionPassAsync(options, stoppingToken).ConfigureAwait(false);
+                (succeeded, hasMore) = await RunCompactionPassAsync(options, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -94,6 +95,12 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
                     consecutiveFailures);
             }
 
+            if (hasMore)
+            {
+                // 候选取满：还有更多可压缩 Run，立即续扫，不等轮询间隔（吞吐优先）。
+                continue;
+            }
+
             var delay = consecutiveFailures == 0
                 ? options.PollInterval
                 : WorkerBackoff.Compute(
@@ -112,9 +119,10 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
 
     /// <summary>
     /// 执行一轮压缩：扫描候选 Run 并逐个折叠到其当前最后事件。
-    /// 返回 false 表示本轮存在失败项（由调用方驱动退避重试）。
+    /// 返回 (Succeeded, HasMore)：Succeeded=false 表示本轮存在失败项（调用方退避重试）；
+    /// HasMore=true 表示候选取满（调用方应立即续扫）。
     /// </summary>
-    private async Task<bool> RunCompactionPassAsync(AgentRunEventCompactionOptions options, CancellationToken ct)
+    private async Task<(bool Succeeded, bool HasMore)> RunCompactionPassAsync(AgentRunEventCompactionOptions options, CancellationToken ct)
     {
         var candidates = await _compactor!
             .FindCandidatesAsync(options.MinEventCount, options.MaxRunsPerPass, ct)
@@ -122,7 +130,7 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
 
         if (candidates.Count == 0)
         {
-            return true;
+            return (true, false);
         }
 
         var anyFailed = false;
@@ -150,7 +158,7 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
             }
         }
 
-        return !anyFailed;
+        return (!anyFailed, candidates.Count >= options.MaxRunsPerPass);
     }
 }
 

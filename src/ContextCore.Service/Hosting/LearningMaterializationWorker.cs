@@ -133,8 +133,15 @@ public sealed class LearningMaterializationWorker : BackgroundService
         {
             if (options.RunOnStartup)
             {
-                await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
-                    .ConfigureAwait(false);
+                // 启动即分发：取满立即续扫到队尾（积压时启动即排空，不等第一个轮询间隔）。
+                var startupHasMore = true;
+                while (startupHasMore && !stoppingToken.IsCancellationRequested)
+                {
+                    var startupPoll = await PollAndDispatchAsync(
+                        probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
+                        .ConfigureAwait(false);
+                    startupHasMore = startupPoll.HasMore;
+                }
             }
 
             while (!stoppingToken.IsCancellationRequested)
@@ -149,29 +156,39 @@ public sealed class LearningMaterializationWorker : BackgroundService
                 }
 
                 _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "polling");
-                try
+                // 满批续扫：取满说明仍有积压，立即再取下一批分发（Channel 写自然背压，
+                // 下游 worker 处理不过来时 WriteAsync 阻塞，不会忙循环）；
+                // 空批/不足一批说明队列已清空，回到外层按间隔休眠。
+                var hasMore = true;
+                while (hasMore && !stoppingToken.IsCancellationRequested)
                 {
-                    var polled = await PollAndDispatchAsync(probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
-                        .ConfigureAwait(false);
-                    if (polled)
+                    try
                     {
-                        _workerRegistry?.MarkCycleSucceeded(nameof(LearningMaterializationWorker));
+                        var pollResult = await PollAndDispatchAsync(
+                            probeOutbox, channel.Writer, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
+                            .ConfigureAwait(false);
+                        if (pollResult.Succeeded)
+                        {
+                            _workerRegistry?.MarkCycleSucceeded(nameof(LearningMaterializationWorker));
+                        }
+                        else
+                        {
+                            _workerRegistry?.RecordFailure(nameof(LearningMaterializationWorker), "outbox 轮询失败", interval);
+                            _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "backoff");
+                        }
+                        hasMore = pollResult.HasMore;
                     }
-                    else
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {
-                        _workerRegistry?.RecordFailure(nameof(LearningMaterializationWorker), "outbox 轮询失败", interval);
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Learning materialization poll loop failed.");
+                        _workerRegistry?.RecordFailure(nameof(LearningMaterializationWorker), ex.Message, interval);
                         _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "backoff");
+                        break;
                     }
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Learning materialization poll loop failed.");
-                    _workerRegistry?.RecordFailure(nameof(LearningMaterializationWorker), ex.Message, interval);
-                    _workerRegistry?.SetLeaseStatus(nameof(LearningMaterializationWorker), "backoff");
                 }
             }
         }
@@ -218,13 +235,16 @@ public sealed class LearningMaterializationWorker : BackgroundService
         }
     }
 
+    /// <summary>单轮拉取结果：Succeeded=本轮轮询成功（含空批次）；HasMore=本批取满（仍有积压）。</summary>
+    private readonly record struct PollResult(bool Succeeded, bool HasMore);
+
     /// <summary>
     /// 从 outbox 拉取一批 pending 记录并写入 bounded Channel。
     /// 每个 record 入 Channel 前在 _activeLeases 注册——批量 heartbeat 协调器周期性续约，
     /// 排队期间 lease 也会被续约，避免被其他 worker 抢占。
     /// </summary>
-    /// <returns>true = 本轮轮询成功（含空批次）；false = 拉取失败或已取消。</returns>
-    private async Task<bool> PollAndDispatchAsync(
+    /// <returns>Succeeded=true 表示轮询成功；HasMore=true 表示本批取满（调用方应立即续扫）。</returns>
+    private async Task<PollResult> PollAndDispatchAsync(
         ILearningEventOutboxStore outboxStore,
         ChannelWriter<LearningMaterializationQueueItem> writer,
         int batchSize,
@@ -241,15 +261,15 @@ public sealed class LearningMaterializationWorker : BackgroundService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return false;
+            return new PollResult(false, false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to acquire pending learning event outbox records.");
-            return false;
+            return new PollResult(false, false);
         }
 
-        if (batch.Count == 0) return true;
+        if (batch.Count == 0) return new PollResult(true, false);
 
         _logger.LogDebug("Acquired {Count} learning event outbox records for materialization.", batch.Count);
 
@@ -280,7 +300,7 @@ public sealed class LearningMaterializationWorker : BackgroundService
             }
         }
 
-        return true;
+        return new PollResult(true, batch.Count >= batchSize);
     }
 
     /// <summary>
