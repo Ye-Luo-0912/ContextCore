@@ -296,7 +296,8 @@ LIMIT 1;
         var newState = targetRunState ?? (decision == AgentApprovalStatus.Approved
             ? AgentRunState.PendingToolExecution
             : AgentRunState.Failed);
-        var isTerminal = newState == AgentRunState.Failed;
+        // 终态语义统一来自 AgentRunStateSemantics：目标状态为终态时写 finished_at。
+        var isTerminal = AgentRunStateSemantics.Get(newState).FinishedAtRequired;
         var now = DateTimeOffset.UtcNow;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);

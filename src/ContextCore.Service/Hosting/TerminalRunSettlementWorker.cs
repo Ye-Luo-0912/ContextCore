@@ -169,9 +169,10 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
             actualCostUsd = budget.CostUsedUsd;
         }
 
-        // 终态语义：执行类终态按实际用量转正；未执行类终态退回容量。
-        // Cancelled 走 Release 与取消端点即时释放语义一致（不向 workspace 计费）。
-        if (entry.TerminalState is AgentRunState.AdmissionRejected or AgentRunState.Cancelled)
+        // 终态语义统一来自 AgentRunStateSemantics：未执行类终态（Cancelled / AdmissionRejected）
+        // 退回容量；执行类终态按实际用量转正（多退少补）。
+        var settlementPolicy = AgentRunStateSemantics.Get(entry.TerminalState).QuotaSettlementPolicy;
+        if (settlementPolicy == QuotaSettlementPolicy.Release)
         {
             await _quotaService.ReleaseAsync(entry.WorkspaceId, entry.ReservationId, ct).ConfigureAwait(false);
         }

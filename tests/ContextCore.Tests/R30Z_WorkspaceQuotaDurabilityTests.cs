@@ -429,6 +429,80 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         }
     }
 
+    [TestMethod]
+    public async Task EventStoreAppendBatch_TerminalState_WritesOutbox_AndSettlementActualizes()
+    {
+        // Agent Actor 正常主路径：事件 + Run 状态 CAS + outbox 经 AppendBatchAsync 同事务提交，
+        // 与 Run Store 的 TransitionStateAsync 保持一致的结算语义（仅预留存在才入队，exactly-once）。
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, quotaService) = await ResolveAsync(container, "settle_evt_");
+            await using (provider)
+            {
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
+
+                // 创建 Run（预留 100，实际执行消耗 40）。
+                var admitted = await store.AdmitRunAtomicallyAsync(
+                    BuildPendingAdmissionRun(tokensUsed: 40), BuildAdmission(100, 100), default);
+                Assert.IsTrue(admitted.Created);
+                Assert.AreEqual(AgentRunState.Queued, admitted.Run.State);
+
+                // 事件链（RunCreated → RunCompleted）随终态提交。
+                var eventStore = provider.GetRequiredService<PostgresAgentRunEventStore>();
+                var seq0 = AgentRunEventChain.BuildEvent(
+                    admitted.Run.RunId, Ws, sequence: 0,
+                    type: AgentRunEventType.RunCreated,
+                    state: AgentRunState.Queued,
+                    payload: """{"runId":"admit"}""",
+                    prevChainHash: null);
+                var seq1 = AgentRunEventChain.BuildEvent(
+                    admitted.Run.RunId, Ws, sequence: 1,
+                    type: AgentRunEventType.RunCompleted,
+                    state: AgentRunState.Completed,
+                    payload: """{"from":"Queued","to":"Completed"}""",
+                    prevChainHash: seq0.ContentHash);
+
+                var runStateUpdate = new AgentRunStateUpdate
+                {
+                    WorkspaceId = Ws,
+                    RunId = admitted.Run.RunId,
+                    ExpectedCurrentState = AgentRunState.Queued,
+                    NewState = AgentRunState.Completed,
+                    RunSnapshot = admitted.Run with
+                    {
+                        State = AgentRunState.Completed,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    }
+                };
+                await eventStore.AppendBatchAsync([seq0, seq1], runStateUpdate, null, null, default);
+
+                var outboxCount = await QueryScalarAsync(
+                    container, provider,
+                    $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}' AND status = 0;");
+                Assert.AreEqual("1", outboxCount, "Agent 主路径（AppendBatchAsync）终态应写入待结算 outbox。");
+
+                // 结算 worker 消费：Actualize（执行类终态）→ MarkProcessed。
+                await RunSettlementWorkerOnceAsync(provider);
+
+                var quota = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(40, quota.TokensUsed, "结算应按实际用量转正。");
+                Assert.AreEqual(0, quota.ReservedTokens, "结算后预留释放。");
+
+                var processed = await QueryScalarAsync(
+                    container, provider,
+                    $"SELECT status FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';");
+                Assert.AreEqual("1", processed, "outbox 应标记为已结算。");
+            }
+        }
+    }
+
     // ── 辅助 ─────────────────────────────────────────────────────────────
 
     private static AgentRun BuildPendingAdmissionRun(int tokensUsed) => new()

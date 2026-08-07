@@ -80,6 +80,10 @@ F:ContextCore.Abstractions.AgentRunEventType.StateTransition
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallCompleted
 F:ContextCore.Abstractions.AgentRunEventType.ToolCallStarted
 F:ContextCore.Abstractions.AgentRunEventType.ToolReconciliationResolved
+F:ContextCore.Abstractions.AgentRunRecoveryPolicy.Block
+F:ContextCore.Abstractions.AgentRunRecoveryPolicy.NewStart
+F:ContextCore.Abstractions.AgentRunRecoveryPolicy.Resume
+F:ContextCore.Abstractions.AgentRunRecoveryPolicy.Retry
 F:ContextCore.Abstractions.AgentRunState.AdmissionRejected
 F:ContextCore.Abstractions.AgentRunState.AwaitingApproval
 F:ContextCore.Abstractions.AgentRunState.AwaitingReconciliation
@@ -971,6 +975,9 @@ F:ContextCore.Abstractions.PromotionDecision.Hold
 F:ContextCore.Abstractions.PromotionDecision.Promote
 F:ContextCore.Abstractions.PromotionDecision.Reject
 F:ContextCore.Abstractions.PromotionDecision.Rollback
+F:ContextCore.Abstractions.QuotaSettlementPolicy.Actualize
+F:ContextCore.Abstractions.QuotaSettlementPolicy.None
+F:ContextCore.Abstractions.QuotaSettlementPolicy.Release
 F:ContextCore.Abstractions.RelationDirection.Both
 F:ContextCore.Abstractions.RelationDirection.Incoming
 F:ContextCore.Abstractions.RelationDirection.Outgoing
@@ -1429,6 +1436,19 @@ M:ContextCore.Abstractions.AgentRunRecoverableState.Equals(System.Object)
 M:ContextCore.Abstractions.AgentRunRecoverableState.GetHashCode()
 M:ContextCore.Abstractions.AgentRunRecoverableState.GetType()
 M:ContextCore.Abstractions.AgentRunRecoverableState.ToString()
+M:ContextCore.Abstractions.AgentRunStateSemantics.Equals(System.Object)
+M:ContextCore.Abstractions.AgentRunStateSemantics.GetHashCode()
+M:ContextCore.Abstractions.AgentRunStateSemantics.GetType()
+M:ContextCore.Abstractions.AgentRunStateSemantics.ToString()
+M:ContextCore.Abstractions.AgentRunStateSemantics.static Get(ContextCore.Abstractions.AgentRunState)
+M:ContextCore.Abstractions.AgentRunStateSemantics.static IsCompactable(ContextCore.Abstractions.AgentRunState, System.Int32, System.Int32)
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.#ctor()
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.<Clone>$()
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.Equals(ContextCore.Abstractions.AgentRunStateSemanticsInfo)
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.Equals(System.Object)
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.GetHashCode()
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.GetType()
+M:ContextCore.Abstractions.AgentRunStateSemanticsInfo.ToString()
 M:ContextCore.Abstractions.AgentRunStateUpdate.#ctor()
 M:ContextCore.Abstractions.AgentRunStateUpdate.<Clone>$()
 M:ContextCore.Abstractions.AgentRunStateUpdate.Equals(ContextCore.Abstractions.AgentRunStateUpdate)
@@ -6137,6 +6157,14 @@ P:ContextCore.Abstractions.AgentRunRecoverableState.ExecutionModelTurn (get|init
 P:ContextCore.Abstractions.AgentRunRecoverableState.PendingToolCommands (get|init)
 P:ContextCore.Abstractions.AgentRunRecoverableState.Sequence (get|init)
 P:ContextCore.Abstractions.AgentRunRecoverableState.ToolObservations (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.EventCompactable (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.FinishedAtRequired (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.IsTerminal (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.QuotaSettlementPolicy (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.RecoveryPolicy (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.RequiresManualIntervention (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.Retryable (get|init)
+P:ContextCore.Abstractions.AgentRunStateSemanticsInfo.State (get|init)
 P:ContextCore.Abstractions.AgentRunStateUpdate.ExpectedCurrentState (get|init)
 P:ContextCore.Abstractions.AgentRunStateUpdate.FencingToken (get|init)
 P:ContextCore.Abstractions.AgentRunStateUpdate.LeaseToken (get|init)
@@ -11769,7 +11797,10 @@ T:ContextCore.Abstractions.AgentRunEventType (Enum)
 T:ContextCore.Abstractions.AgentRunLeaseRenewal
 T:ContextCore.Abstractions.AgentRunRawEventsPage
 T:ContextCore.Abstractions.AgentRunRecoverableState
+T:ContextCore.Abstractions.AgentRunRecoveryPolicy (Enum)
 T:ContextCore.Abstractions.AgentRunState (Enum)
+T:ContextCore.Abstractions.AgentRunStateSemantics
+T:ContextCore.Abstractions.AgentRunStateSemanticsInfo
 T:ContextCore.Abstractions.AgentRunStateUpdate
 T:ContextCore.Abstractions.AgentRuntimeKind (Enum)
 T:ContextCore.Abstractions.AgentSessionId
@@ -12662,6 +12693,7 @@ T:ContextCore.Abstractions.ProviderOutputSnapshot
 T:ContextCore.Abstractions.QuotaAdmissionRequest
 T:ContextCore.Abstractions.QuotaConsumptionResult
 T:ContextCore.Abstractions.QuotaReservationResult
+T:ContextCore.Abstractions.QuotaSettlementPolicy (Enum)
 T:ContextCore.Abstractions.ReconciliationListResult
 T:ContextCore.Abstractions.ReconciliationQuery
 T:ContextCore.Abstractions.RelationDirection (Enum)

@@ -409,10 +409,11 @@ RETURNING sequence;
             {
                 var snapshot = runStateUpdate.RunSnapshot;
                 var now = DateTimeOffset.UtcNow;
-                var isTerminal = runStateUpdate.NewState == AgentRunState.Completed
-                                 || runStateUpdate.NewState == AgentRunState.Failed
-                                 || runStateUpdate.NewState == AgentRunState.Cancelled
-                                 || runStateUpdate.NewState == AgentRunState.LeaseLost;
+                // 终态语义统一来自 AgentRunStateSemantics（与 Run Store / Compactor / Settlement
+                // 共享同一来源）：终态写 finished_at；有结算策略的终态在 CAS 成功后写结算 outbox。
+                var semantics = AgentRunStateSemantics.Get(runStateUpdate.NewState);
+                var isTerminal = semantics.FinishedAtRequired;
+                var requiresSettlement = semantics.QuotaSettlementPolicy != QuotaSettlementPolicy.None;
                 var leaseValidated = runStateUpdate.LeaseToken is not null && runStateUpdate.FencingToken is not null;
 
                 await using var updateCommand = connection.CreateCommand();
@@ -496,6 +497,30 @@ LIMIT 1;
                     throw new InvalidOperationException(
                         $"Agent Run 不存在（批量提交）：workspace_id={runStateUpdate.WorkspaceId}, run_id={runStateUpdate.RunId}。" +
                         $"无法推进状态机（缺失 Run 元数据）。");
+                }
+
+                // CAS 成功：有结算策略的终态写结算 outbox（主路径修复——
+                // Actor 通过批量提交落库终态时与 Run Store 的 TransitionStateAsync 一致，
+                // 在同一事务内写 outbox，仅当预留行存在才入队，exactly-once）。
+                if (requiresSettlement)
+                {
+                    await using var outboxCommand = connection.CreateCommand();
+                    outboxCommand.Transaction = transaction;
+                    outboxCommand.CommandTimeout = Options.CommandTimeoutSeconds;
+                    outboxCommand.CommandText = $"""
+INSERT INTO {Table("terminal_run_settlement_outbox")} (
+    workspace_id, run_id, reservation_id, terminal_state, created_at, updated_at)
+SELECT @workspace_id, @run_id, @run_id, @new_state, @now, @now
+WHERE EXISTS (
+    SELECT 1 FROM {Table("workspace_quota_reservations")}
+    WHERE reservation_id = @run_id
+);
+""";
+                    outboxCommand.Parameters.AddWithValue("workspace_id", runStateUpdate.WorkspaceId);
+                    outboxCommand.Parameters.AddWithValue("run_id", runStateUpdate.RunId);
+                    outboxCommand.Parameters.AddWithValue("new_state", (byte)runStateUpdate.NewState);
+                    outboxCommand.Parameters.AddWithValue("now", now);
+                    await outboxCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
 

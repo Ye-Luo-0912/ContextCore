@@ -117,6 +117,8 @@ public static class AgentRunStateMachine
     /// RecoveryBlocked / RecoveryCorrupted / ContextSafetyBlocked / DeadLettered / AdmissionRejected）。
     /// </summary>
     /// <remarks>
+    /// 权威判定委托 <see cref="AgentRunStateSemantics.Get"/>：终态集合与 Storage / Compactor /
+    /// Settlement 共享同一语义来源，避免各处列表漂移。
     /// <see cref="AgentRunState.RecoveryDependencyUnavailable"/> 不是终态：它表示恢复依赖（事件存储）
     /// 暂时不可用，fail-closed 下不得回退为全新启动，但依赖恢复后由恢复 Worker 在退避门
     /// （<c>NextRetryAtUtc</c>）通过后重新入队执行（退避重试）。
@@ -128,16 +130,7 @@ public static class AgentRunStateMachine
     /// <param name="state">待判断的状态。</param>
     /// <returns>终态返回 true；非终态返回 false。</returns>
     public static bool IsTerminalState(AgentRunState state)
-        => state == AgentRunState.Completed
-           || state == AgentRunState.Failed
-           || state == AgentRunState.Cancelled
-           || state == AgentRunState.LeaseLost
-           || state == AgentRunState.ReconciliationRejected
-           || state == AgentRunState.RecoveryBlocked
-           || state == AgentRunState.RecoveryCorrupted
-           || state == AgentRunState.ContextSafetyBlocked
-           || state == AgentRunState.DeadLettered
-           || state == AgentRunState.AdmissionRejected;
+        => AgentRunStateSemantics.Get(state).IsTerminal;
 
     /// <summary>
     /// 判断指定状态是否为恢复失败状态（RecoveryBlocked / RecoveryCorrupted / RecoveryDependencyUnavailable）。

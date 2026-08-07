@@ -298,14 +298,12 @@ public sealed class AgentRunActor
         _leaseExpiresAtProvider = leaseExpiresAtProvider;
 
         // 运行时能力补齐：检测 resume 场景
-        // 全新启动状态集 = Created（旧路径）+ Queued/Claimed/Running（引入的
-        // 执行前交接状态）：这些状态代表 Run 尚未产生任何持久化事件（首次 flush 才原子
+        // 全新启动状态集由 AgentRunStateSemantics 权威定义（RecoveryPolicy = NewStart：
+        // Created / Queued / Claimed / Running / PendingAdmission / ClaimExpired / ScheduledLocally）——
+        // 这些状态代表 Run 尚未产生任何持久化事件（首次 flush 才原子
         // CAS 到 ContextBuilding 并落库 RunCreated），必须走全新启动路径。
         // 其余非终态（ContextBuilding/ModelCalling/...）为崩溃恢复场景（resume）。
-        var isResume = run.State != AgentRunState.Created
-            && run.State != AgentRunState.Queued
-            && run.State != AgentRunState.Claimed
-            && run.State != AgentRunState.Running;
+        var isResume = AgentRunStateSemantics.Get(run.State).RecoveryPolicy != AgentRunRecoveryPolicy.NewStart;
 
         // 锛氭寜 Run.AllowedToolIds 杩囨护妯″瀷鍙鐨?Tool Definitions锛堝湪妯″瀷璋冪敤鍓嶈繃婊わ級
         if (run.AllowedToolIds.Count > 0 && _toolDefinitions.Count > 0)
@@ -935,10 +933,10 @@ public sealed class AgentRunActor
             _ => "RecoveryDependencyUnavailable：事件存储不可用，等待依赖恢复后由恢复 Worker 重试。"
         };
 
-        // 退避重试：仅 RecoveryDependencyUnavailable 可重试（依赖暂时不可用，非数据损坏）。
-        // 计算本次恢复失败尝试序号与下次重试门（指数退避 base × 2^(attempt-1)，封顶 cap）。
-        // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏），不计算退避、不自动重试。
-        var isRetryable = recoveryState == AgentRunState.RecoveryDependencyUnavailable;
+        // 退避重试：仅可重试的恢复状态（依赖暂时不可用，非数据损坏）计算退避。
+        // 可重试性统一来自 AgentRunStateSemantics（RecoveryDependencyUnavailable 可重试；
+        // RecoveryBlocked / RecoveryCorrupted 为终态，不计算退避、不自动重试）。
+        var isRetryable = AgentRunStateSemantics.Get(recoveryState).Retryable;
         var recoveryAttempt = isRetryable ? state.Run.RecoveryAttempt + 1 : 0;
         DateTimeOffset? nextRetryAtUtc = null;
         if (isRetryable)

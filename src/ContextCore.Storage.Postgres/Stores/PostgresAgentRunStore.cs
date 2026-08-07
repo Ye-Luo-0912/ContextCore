@@ -241,7 +241,7 @@ RETURNING data;
                 await UpdateRunStateCoreAsync(
                     connection, transaction, run.WorkspaceId, run.RunId,
                     AgentRunState.PendingAdmission, AgentRunState.Queued, now,
-                    isTerminal: false, cancellationToken).ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
                 return new AgentRunAdmitResult
                 {
@@ -345,7 +345,7 @@ WHERE workspace_id = @workspace_id;
                 await UpdateRunStateCoreAsync(
                     connection, transaction, run.WorkspaceId, run.RunId,
                     AgentRunState.PendingAdmission, AgentRunState.AdmissionRejected, now,
-                    isTerminal: true, cancellationToken).ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
                 return new AgentRunAdmitResult
                 {
@@ -402,7 +402,7 @@ WHERE workspace_id = @workspace_id;
             await UpdateRunStateCoreAsync(
                 connection, transaction, run.WorkspaceId, run.RunId,
                 AgentRunState.PendingAdmission, AgentRunState.Queued, now,
-                isTerminal: false, cancellationToken).ConfigureAwait(false);
+                cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -551,9 +551,10 @@ LIMIT 1;
         AgentRunState expectedCurrentState,
         AgentRunState newState,
         DateTimeOffset now,
-        bool isTerminal,
         CancellationToken cancellationToken)
     {
+        // 终态语义统一来自 AgentRunStateSemantics：终态写 finished_at（审计时间戳）。
+        var isTerminal = AgentRunStateSemantics.Get(newState).FinishedAtRequired;
         await using var updateCommand = connection.CreateCommand();
         updateCommand.Transaction = transaction;
         updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -601,15 +602,10 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
         var leaseValidated = leaseToken is not null && fencingToken is not null;
 
         var now = DateTimeOffset.UtcNow;
-        // 终态集合与 AgentRunStateMachine.IsTerminalState 对齐（AdmissionRejected 亦是终态，
-        // 配额拒绝后记录 finished_at 供审计/列举）。RecoveryBlocked/RecoveryCorrupted/
-        // ReconciliationRejected 由各自专用路径写 finished_at，此处不重复覆盖。
-        var isTerminal = newState == AgentRunState.Completed
-                         || newState == AgentRunState.Failed
-                         || newState == AgentRunState.Cancelled
-                         || newState == AgentRunState.LeaseLost
-                         || newState == AgentRunState.DeadLettered
-                         || newState == AgentRunState.AdmissionRejected;
+        // 终态语义统一来自 AgentRunStateSemantics（与状态机 / Event Store / Compactor /
+        // Settlement 共享同一来源）：终态写 finished_at；有结算策略的终态写结算 outbox。
+        var semantics = AgentRunStateSemantics.Get(newState);
+        var isTerminal = semantics.IsTerminal;
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -664,7 +660,7 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             {
                 // CAS 成功：终态且存在对应预留时，写入结算 outbox（同一事务，exactly-once）。
                 // 仅当预留行存在才入队——配额未启用 / 预留已被释放的 Run 无需结算。
-                if (isTerminal)
+                if (semantics.QuotaSettlementPolicy != QuotaSettlementPolicy.None)
                 {
                     await using (var outboxCommand = connection.CreateCommand())
                     {

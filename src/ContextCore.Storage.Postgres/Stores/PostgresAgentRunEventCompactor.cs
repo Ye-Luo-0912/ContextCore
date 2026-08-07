@@ -33,34 +33,15 @@ namespace ContextCore.Storage.Postgres.Stores;
 public sealed class PostgresAgentRunEventCompactor : PostgresStoreBase, IAgentRunEventCompactor
 {
     /// <summary>
-    /// 可压缩的终态集合（与 <see cref="ContextCore.Abstractions.AgentRunState"/> 字节值一致）：
-    /// 这些状态不会再被 Recovery 重放。Failed 单独处理（重试耗尽才可压缩）。
-    /// </summary>
-    private static readonly byte[] CompactableTerminalStates =
-    [
-        (byte)AgentRunState.Completed,
-        (byte)AgentRunState.Cancelled,
-        (byte)AgentRunState.LeaseLost,
-        (byte)AgentRunState.ReconciliationRejected,
-        (byte)AgentRunState.RecoveryBlocked,
-        (byte)AgentRunState.RecoveryCorrupted,
-        (byte)AgentRunState.DeadLettered
-    ];
-
-    /// <summary>
-    /// 判定 Run 是否可压缩（仅限终态）：终态直接可压缩；Failed 只有在重试已耗尽
-    /// （<paramref name="retryCount"/> &gt;= <paramref name="maxRetries"/>）时才可压缩，
-    /// 因为仍可重试的 Failed 会被调度器重新领取并全量重放事件流。
+    /// 判定 Run 是否可压缩（仅限终态）：终态语义统一来自
+    /// <see cref="AgentRunStateSemantics.IsCompactable"/>（与状态机 / Event Store /
+    /// Settlement 共享同一语义来源）。可压缩状态不会再被 Recovery 重放；
+    /// Failed 单独处理（重试耗尽才可压缩，因为仍可重试的 Failed 会被调度器
+    /// 重新领取并全量重放事件流）。
     /// </summary>
     public static bool IsCompactableRunState(AgentRunState state, int retryCount, int maxRetries)
-    {
-        if (CompactableTerminalStates.Contains((byte)state))
-        {
-            return true;
-        }
+        => AgentRunStateSemantics.IsCompactable(state, retryCount, maxRetries);
 
-        return state == AgentRunState.Failed && retryCount >= maxRetries;
-    }
     /// <summary>初始化 Postgres 持久化 Agent Run 事件流压缩器。</summary>
     public PostgresAgentRunEventCompactor(
         PostgresConnectionFactory connectionFactory,
@@ -294,7 +275,12 @@ LIMIT @take;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        var terminalStateList = string.Join(", ", CompactableTerminalStates);
+        // 可压缩终态列表由 AgentRunStateSemantics 权威生成（EventCompactable 状态 +
+        // Failed 重试耗尽），避免与语义层漂移；IN 列表随语义层自动包含新终态。
+        var terminalStateList = string.Join(", ",
+            Enum.GetValues<AgentRunState>()
+                .Where(s => AgentRunStateSemantics.Get(s).EventCompactable)
+                .Select(s => (byte)s));
         command.CommandText = $"""
 SELECT e.workspace_id, e.run_id, COUNT(*) AS event_count, MAX(e.sequence) AS last_sequence
 FROM {Table("agent_run_events")} e
