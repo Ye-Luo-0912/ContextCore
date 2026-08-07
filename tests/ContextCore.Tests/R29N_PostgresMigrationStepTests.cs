@@ -208,6 +208,67 @@ public sealed class R29N_PostgresMigrationStepTests
         }
     }
 
+    /// <summary>
+    /// 回归：全新数据库 + public schema（表名带 schema 限定）执行全量迁移。
+    /// 版本化步骤在基线 DDL 前运行：配额持久化步骤先建出单键预留表，
+    /// 预留复合键步骤再切换主键——约束名必须用非限定名，否则 DROP CONSTRAINT
+    /// 会把 schema 限定误当约束名导致语法错误（备份集成测试在带 schema 的源库上曾因此失败）。
+    /// 迁移后两张表的主键均为复合键。
+    /// </summary>
+    [TestMethod]
+    public async Task FreshDatabaseWithPublicSchema_MigratesToCompositeKeys()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 全新库迁移测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var options = new PostgresOptions
+            {
+                ConnectionString = container.GetConnectionString(),
+                AutoMigrate = true,
+                EnablePgVectorExtension = true,
+                SchemaName = "public",
+                TablePrefix = "cc_"
+            };
+            var factory = new PostgresConnectionFactory(options);
+            var runner = new PostgresMigrationRunner(factory);
+
+            // 与备份集成测试一致的入口：全新数据库上先跑版本化步骤再跑基线 DDL。
+            await runner.MigrateAsync(CancellationToken.None);
+            Assert.AreEqual("cc-schema-v68", await runner.GetAppliedVersionAsync(CancellationToken.None));
+
+            await using (var conn = await factory.OpenConnectionAsync(CancellationToken.None))
+            {
+                var cmd = conn.CreateCommand();
+                cmd.CommandText = """
+                    SELECT c.relname, array_length(pk.conkey, 1)
+                    FROM pg_class c
+                    JOIN pg_constraint pk ON pk.conrelid = c.oid AND pk.contype = 'p'
+                    WHERE c.relname IN ('cc_workspace_quota_reservations', 'cc_agent_run_leases')
+                    ORDER BY c.relname;
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync(CancellationToken.None);
+                var pkeyColumns = new Dictionary<string, int>();
+                while (await reader.ReadAsync(CancellationToken.None))
+                {
+                    pkeyColumns[reader.GetString(0)] = reader.GetInt32(1);
+                }
+
+                Assert.AreEqual(2, pkeyColumns["cc_workspace_quota_reservations"],
+                    "预留表主键应为 (workspace_id, reservation_id) 复合键。");
+                Assert.AreEqual(2, pkeyColumns["cc_agent_run_leases"],
+                    "租约表主键应为 (workspace_id, run_id) 复合键。");
+            }
+
+            await factory.DisposeAsync();
+        }
+    }
+
     private static async Task<PostgreSqlContainer?> TryStartPostgresAsync()
     {
         const string pgVectorImage = "pgvector/pgvector:pg17";

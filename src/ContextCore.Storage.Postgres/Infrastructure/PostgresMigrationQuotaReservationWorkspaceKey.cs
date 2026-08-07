@@ -100,8 +100,11 @@ public sealed class PostgresMigrationQuotaReservationWorkspaceKey : IPostgresMig
                 break;
 
             case PostgresMigrationStage.ConstraintValidate:
+                // Postgres 默认主键约束名 {table}_pkey；约束名不参与 schema 限定，
+                // 表名带 schema 前缀时不能直接用 {table}_pkey（会变成限定名导致语法错误）。
+                var pkey = $"{options.TablePrefix}workspace_quota_reservations_pkey";
                 command.CommandText = $"""
-                    ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_pkey;
+                    ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {pkey};
                     ALTER TABLE {table} ADD PRIMARY KEY (workspace_id, reservation_id);
                     """;
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

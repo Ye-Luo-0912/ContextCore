@@ -102,9 +102,12 @@ public sealed class PostgresMigrationAgentRunLeaseWorkspaceKey : IPostgresMigrat
                 break;
 
             case PostgresMigrationStage.ConstraintValidate:
+                // Postgres 默认主键约束名 {table}_pkey；约束名不参与 schema 限定，
+                // 表名带 schema 前缀时不能直接用 {table}_pkey（会变成限定名导致语法错误）。
+                var pkey = $"{options.TablePrefix}agent_run_leases_pkey";
                 command.CommandText = $"""
                     ALTER TABLE {table} ALTER COLUMN workspace_id SET NOT NULL;
-                    ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_pkey;
+                    ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {pkey};
                     ALTER TABLE {table} ADD PRIMARY KEY (workspace_id, run_id);
                     """;
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
