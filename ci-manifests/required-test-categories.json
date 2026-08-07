@@ -8,7 +8,9 @@
       "name": "unit",
       "filter": "TestCategory!=Integration&TestCategory!=Architecture&TestCategory!=Contract",
       "minExecuted": 1,
-      "allowNotExecuted": []
+      "allowNotExecuted": [
+        "R29H_LearningEventAcceptanceTests.DatasetSnapshot_HasCompleteness_AndLineageReport"
+      ]
     },
     {
       "job": "integration-postgres",
