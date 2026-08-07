@@ -181,7 +181,7 @@ WHERE workspace_id = @workspace_id;
                 {
                     Allowed = true,
                     ReservationId = reservationId,
-                    UpdatedQuota = await GetQuotaAsync(workspaceId, cancellationToken).ConfigureAwait(false)
+                    UpdatedQuota = QuotaFromLedger(workspaceId, ledger)
                 };
             }
 
@@ -194,7 +194,7 @@ WHERE workspace_id = @workspace_id;
                     Allowed = false,
                     ReservationId = reservationId,
                     FailureReason = $"Token 配额不足：已用 {ledger.TokensUsed}、已预留 {ledger.ReservedTokens}、上限 {ledger.MaxTokens}，本次预留 {tokens}。",
-                    UpdatedQuota = await GetQuotaAsync(workspaceId, cancellationToken).ConfigureAwait(false)
+                    UpdatedQuota = QuotaFromLedger(workspaceId, ledger)
                 };
             }
             if (ledger.MaxCostUsd > 0 && ledger.CostUsedUsd + ledger.ReservedCostUsd + costUsd > ledger.MaxCostUsd)
@@ -205,7 +205,7 @@ WHERE workspace_id = @workspace_id;
                     Allowed = false,
                     ReservationId = reservationId,
                     FailureReason = $"费用配额不足：已用 {ledger.CostUsedUsd:F2}、已预留 {ledger.ReservedCostUsd:F2}、上限 {ledger.MaxCostUsd:F2} USD，本次预留 {costUsd:F2}。",
-                    UpdatedQuota = await GetQuotaAsync(workspaceId, cancellationToken).ConfigureAwait(false)
+                    UpdatedQuota = QuotaFromLedger(workspaceId, ledger)
                 };
             }
 
@@ -251,7 +251,11 @@ WHERE workspace_id = @workspace_id;
             {
                 Allowed = true,
                 ReservationId = reservationId,
-                UpdatedQuota = await GetQuotaAsync(workspaceId, cancellationToken).ConfigureAwait(false)
+                UpdatedQuota = QuotaFromLedger(workspaceId, ledger with
+                {
+                    ReservedTokens = ledger.ReservedTokens + tokens,
+                    ReservedCostUsd = ledger.ReservedCostUsd + costUsd
+                })
             };
         }
         catch
@@ -538,21 +542,21 @@ LIMIT 1;
     };
 
     private static WorkspaceQuota ReadQuota(string workspaceId, NpgsqlDataReader reader)
+        => QuotaFromLedger(workspaceId, ReadLedger(reader));
+
+    /// <summary>由 ledger 状态构造配额快照（事务内锁定/更新后的状态，避免额外查询）。</summary>
+    private static WorkspaceQuota QuotaFromLedger(string workspaceId, LedgerState ledger) => new()
     {
-        var ledger = ReadLedger(reader);
-        return new WorkspaceQuota
-        {
-            WorkspaceId = workspaceId,
-            MaxTokens = ledger.MaxTokens,
-            TokensUsed = ledger.TokensUsed,
-            ReservedTokens = ledger.ReservedTokens,
-            MaxCostUsd = ledger.MaxCostUsd,
-            CostUsedUsd = ledger.CostUsedUsd,
-            ReservedCostUsd = ledger.ReservedCostUsd,
-            Period = TimeSpan.FromSeconds(ledger.PeriodSeconds),
-            PeriodStartedAt = ledger.PeriodStartedAt
-        };
-    }
+        WorkspaceId = workspaceId,
+        MaxTokens = ledger.MaxTokens,
+        TokensUsed = ledger.TokensUsed,
+        ReservedTokens = ledger.ReservedTokens,
+        MaxCostUsd = ledger.MaxCostUsd,
+        CostUsedUsd = ledger.CostUsedUsd,
+        ReservedCostUsd = ledger.ReservedCostUsd,
+        Period = TimeSpan.FromSeconds(ledger.PeriodSeconds),
+        PeriodStartedAt = ledger.PeriodStartedAt
+    };
 
     private static LedgerState ReadLedger(NpgsqlDataReader reader) => new()
     {

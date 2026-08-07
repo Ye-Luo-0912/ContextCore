@@ -74,9 +74,10 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                var hasMore = false;
                 try
                 {
-                    await SettleOnceAsync(store, stoppingToken).ConfigureAwait(false);
+                    hasMore = await SettleOnceAsync(store, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -85,6 +86,12 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "TerminalRunSettlementWorker 轮询循环异常（不中断后续轮询）。");
+                }
+
+                if (hasMore)
+                {
+                    // 满批领取：还有更多待结算条目，立即续扫，不等间隔（吞吐优先）。
+                    continue;
                 }
 
                 try
@@ -103,7 +110,11 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
         }
     }
 
-    private async Task SettleOnceAsync(ITerminalRunSettlementStore store, CancellationToken ct)
+    /// <summary>
+    /// 单轮结算：领取并处理一批条目。返回 true 表示本批取满（仍有积压），
+    /// 调用方应立即续扫；false 表示队列已空，调用方可按间隔休眠。
+    /// </summary>
+    private async Task<bool> SettleOnceAsync(ITerminalRunSettlementStore store, CancellationToken ct)
     {
         var claimed = await store.ClaimBatchAsync(BatchSize, _owner, LeaseDuration, ct).ConfigureAwait(false);
         foreach (var entry in claimed)
@@ -141,6 +152,8 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
         {
             _logger.LogWarning(ex, "终态结算死信清理异常（非致命）。");
         }
+
+        return claimed.Count >= BatchSize;
     }
 
     private async Task SettleEntryAsync(ITerminalRunSettlementStore store, TerminalSettlementEntry entry, CancellationToken ct)
