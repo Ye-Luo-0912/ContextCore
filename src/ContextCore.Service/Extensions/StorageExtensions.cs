@@ -4,6 +4,7 @@ using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.MemoryEvolution;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.Runtime;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
@@ -94,6 +95,29 @@ internal static class StorageExtensions
 	{
 		services.AddSingleton(implFactory);
 		services.AddSingleton<TService>(sp => sp.GetRequiredService<TImpl>());
+		return services;
+	}
+
+	/// <summary>注册 IRetrievalTraceStore 为队列化包装（SaveAsync 入队即返回，后台 drain 持久化）——检索热路径不被 trace 写入阻塞。</summary>
+	private static IServiceCollection AddQueuedRetrievalTraceStore<TImpl>(
+		this IServiceCollection services,
+		Func<IServiceProvider, TImpl> implFactory)
+		where TImpl : class, IRetrievalTraceStore
+	{
+		services.AddSingleton(implFactory);
+		services.AddSingleton<IRetrievalTraceStore>(sp =>
+			new QueuedRetrievalTraceStore(sp.GetRequiredService<TImpl>()));
+		return services;
+	}
+
+	/// <summary>注册 IRetrievalTraceStore 为队列化包装（默认 DI 构造的 TImpl）。</summary>
+	private static IServiceCollection AddQueuedRetrievalTraceStore<TImpl>(
+		this IServiceCollection services)
+		where TImpl : class, IRetrievalTraceStore
+	{
+		services.AddSingleton<TImpl>();
+		services.AddSingleton<IRetrievalTraceStore>(sp =>
+			new QueuedRetrievalTraceStore(sp.GetRequiredService<TImpl>()));
 		return services;
 	}
 
@@ -323,7 +347,7 @@ internal static class StorageExtensions
 		services.AddPlain<IContextPackagePolicyStore, FileContextPackagePolicyStore>(
 			sp => new FileContextPackagePolicyStore(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()));
 
-		services.AddPlain<IRetrievalTraceStore, FileRetrievalTraceStore>(
+		services.AddQueuedRetrievalTraceStore<FileRetrievalTraceStore>(
 			sp => new FileRetrievalTraceStore(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()));
 
 		services.AddPlain<IDecisionTraceStore, FileDecisionTraceStore>(
@@ -493,7 +517,7 @@ internal static class StorageExtensions
 		services.AddPlain<IVectorLifecycleMetadataReviewStore, InMemoryVectorLifecycleMetadataReviewStore>();
 		services.AddPlain<IVectorLifecycleSidecarMetadataStore, InMemoryVectorLifecycleSidecarMetadataStore>();
 
-		services.AddPlain<IRetrievalTraceStore, InMemoryRetrievalTraceStore>();
+		services.AddQueuedRetrievalTraceStore<InMemoryRetrievalTraceStore>();
 		services.AddPlain<IDecisionTraceStore, InMemoryDecisionTraceStore>();
 		services.AddPlain<IContextPackagePolicyStore, InMemoryContextPackagePolicyStore>();
 
