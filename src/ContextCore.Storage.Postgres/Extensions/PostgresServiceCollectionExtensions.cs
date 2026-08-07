@@ -276,11 +276,16 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IAgentRunStore>(sp => sp.GetRequiredService<PostgresAgentRunStore>());
         services.AddSingleton<IPersistentAgentRunStore>(sp => sp.GetRequiredService<PostgresAgentRunStore>());
         // 2c：注入可选 IAgentRunEventNotifier（SSE push 通道）；未注册时为 null，回退 500ms 轮询。
+        // 统一提交入口：Actor 主路径与 Event Store 批量追加均经提交器单事务落库
+        // （事件 + 状态 CAS + checkpoint + 结算 outbox），Event Store 不再承担 Run Store 状态事务。
+        services.AddSingleton<PostgresAgentRunCommitter>();
+        services.AddSingleton<IPersistentAgentRunCommitter>(sp => sp.GetRequiredService<PostgresAgentRunCommitter>());
         services.AddSingleton<PostgresAgentRunEventStore>(sp => new PostgresAgentRunEventStore(
             sp.GetRequiredService<PostgresConnectionFactory>(),
             sp.GetRequiredService<PostgresJsonSerializer>(),
             sp.GetRequiredService<PostgresMigrationRunner>(),
-            sp.GetService<IAgentRunEventNotifier>()));
+            sp.GetService<IAgentRunEventNotifier>(),
+            sp.GetRequiredService<IPersistentAgentRunCommitter>()));
         services.AddSingleton<IAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
         services.AddSingleton<IPersistentAgentRunEventStore>(sp => sp.GetRequiredService<PostgresAgentRunEventStore>());
         // Agent Run 事件流快照与压缩（Event Snapshot & Compaction）。

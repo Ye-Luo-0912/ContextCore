@@ -503,6 +503,131 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         }
     }
 
+    [TestMethod]
+    public async Task Committer_TerminalCommit_WritesOutbox_AndSettlementActualizes()
+    {
+        // 提交器直测：AgentRunCommit 单事务提交（事件 + 状态 CAS + 结算 outbox），
+        // 验证统一提交入口的终态语义（finished_at + outbox + 结算转正）与 Actor 主路径一致。
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, quotaService) = await ResolveAsync(container, "settle_cmt_");
+            await using (provider)
+            {
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
+
+                var admitted = await store.AdmitRunAtomicallyAsync(
+                    BuildPendingAdmissionRun(tokensUsed: 40), BuildAdmission(100, 100), default);
+                Assert.IsTrue(admitted.Created);
+
+                var committer = provider.GetRequiredService<IPersistentAgentRunCommitter>();
+                var seq0 = AgentRunEventChain.BuildEvent(
+                    admitted.Run.RunId, Ws, sequence: 0,
+                    type: AgentRunEventType.RunCreated,
+                    state: AgentRunState.Queued,
+                    payload: """{"runId":"admit"}""",
+                    prevChainHash: null);
+                var seq1 = AgentRunEventChain.BuildEvent(
+                    admitted.Run.RunId, Ws, sequence: 1,
+                    type: AgentRunEventType.RunCompleted,
+                    state: AgentRunState.Completed,
+                    payload: """{"from":"Queued","to":"Completed"}""",
+                    prevChainHash: seq0.ContentHash);
+
+                var commit = new AgentRunCommit
+                {
+                    WorkspaceId = Ws,
+                    RunId = admitted.Run.RunId,
+                    Events = new[] { seq0, seq1 },
+                    ExpectedCurrentState = AgentRunState.Queued,
+                    NewRunSnapshot = admitted.Run with
+                    {
+                        State = AgentRunState.Completed,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    },
+                    UsageSnapshot = admitted.Run.CostBudget
+                };
+                await committer.CommitAsync(commit, default);
+
+                var outboxCount = await QueryScalarAsync(
+                    container, provider,
+                    $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}' AND status = 0;");
+                Assert.AreEqual("1", outboxCount, "提交器终态提交应写入待结算 outbox。");
+
+                var stored = await store.GetAsync(Ws, admitted.Run.RunId, default);
+                Assert.AreEqual(AgentRunState.Completed, stored!.State, "状态应 CAS 到 Completed。");
+                Assert.IsNotNull(stored.FinishedAt, "终态应记录 finished_at。");
+
+                var events = await provider.GetRequiredService<IAgentRunEventStore>().ReadAsync(Ws, admitted.Run.RunId, default);
+                Assert.AreEqual(2, events.Count, "事件流应落库两事件。");
+
+                // 结算 worker 消费后预留释放（提交器写入的 outbox 与 Run Store 路径同源）。
+                await RunSettlementWorkerOnceAsync(provider);
+                var quota = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(40, quota.TokensUsed, "结算应按实际用量转正。");
+                Assert.AreEqual(0, quota.ReservedTokens, "结算后预留释放。");
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task Committer_EventOnlyCommit_NoStateChange_NoOutbox()
+    {
+        // 纯事件提交（NewRunSnapshot null）：只插事件，不推进状态、不写 outbox。
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, quotaService) = await ResolveAsync(container, "settle_cevt_");
+            await using (provider)
+            {
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
+
+                var admitted = await store.AdmitRunAtomicallyAsync(
+                    BuildPendingAdmissionRun(tokensUsed: 0), BuildAdmission(100, 100), default);
+                Assert.IsTrue(admitted.Created);
+
+                var committer = provider.GetRequiredService<IPersistentAgentRunCommitter>();
+                var seq0 = AgentRunEventChain.BuildEvent(
+                    admitted.Run.RunId, Ws, sequence: 0,
+                    type: AgentRunEventType.RunCreated,
+                    state: AgentRunState.Queued,
+                    payload: """{"runId":"admit"}""",
+                    prevChainHash: null);
+
+                var commit = new AgentRunCommit
+                {
+                    WorkspaceId = Ws,
+                    RunId = admitted.Run.RunId,
+                    Events = new[] { seq0 }
+                };
+                await committer.CommitAsync(commit, default);
+
+                var stored = await store.GetAsync(Ws, admitted.Run.RunId, default);
+                Assert.AreEqual(AgentRunState.Queued, stored!.State, "纯事件提交不应推进状态。");
+
+                var outboxCount = await QueryScalarAsync(
+                    container, provider,
+                    $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';");
+                Assert.AreEqual("0", outboxCount, "纯事件提交不应写 outbox。");
+
+                var events = await provider.GetRequiredService<IAgentRunEventStore>().ReadAsync(Ws, admitted.Run.RunId, default);
+                Assert.AreEqual(1, events.Count, "事件应落库。");
+            }
+        }
+    }
+
     // ── 辅助 ─────────────────────────────────────────────────────────────
 
     private static AgentRun BuildPendingAdmissionRun(int tokensUsed) => new()

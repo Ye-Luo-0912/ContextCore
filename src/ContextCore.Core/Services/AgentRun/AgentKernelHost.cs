@@ -1172,6 +1172,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var toolAuthorizationPolicy = _serviceProvider.GetService(typeof(IToolAuthorizationPolicy)) as IToolAuthorizationPolicy;
         // 解析自适应检索规划器（未注册时 Actor 的 ContextBuilding 不应用自适应层）。
         var adaptivePlanner = _serviceProvider.GetService(typeof(IAdaptiveRetrievalPlanner)) as IAdaptiveRetrievalPlanner;
+        // 解析统一提交入口（Postgres provider 注册；InMemory provider 未注册 → null，Actor 回退 Event Store 批量追加）。
+        var committer = _serviceProvider.GetService(typeof(IPersistentAgentRunCommitter)) as IPersistentAgentRunCommitter;
 
         return new AgentRunActor(
             _runStore,
@@ -1193,7 +1195,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             recoveryAlertSink,
             eventCompactor,
             toolAuthorizationPolicy,
-            adaptivePlanner);
+            adaptivePlanner,
+            committer);
     }
 
     private static string ActiveRunKey(string workspaceId, string runId)

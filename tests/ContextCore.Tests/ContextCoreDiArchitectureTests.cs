@@ -152,6 +152,22 @@ public sealed class ContextCoreDiArchitectureTests
     }
 
     [TestMethod]
+    public async Task ProductionComposition_Postgres_IPersistentAgentRunCommitter_ResolvesToPostgresImplementation()
+    {
+        // 统一提交入口在生产组合下必须解析为 PostgresAgentRunCommitter：
+        // Actor 主路径与 Event Store 批量追加均经提交器单事务落库。
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddContextStorage(MakePostgresOptions());
+        services.AddContextCore(ContextCore.Abstractions.ModelExecutionOptions.Default);
+
+        await using var sp = services.BuildServiceProvider();
+        var committer = sp.GetRequiredService<IPersistentAgentRunCommitter>();
+        Assert.IsInstanceOfType(committer, typeof(PostgresAgentRunCommitter),
+            "生产组合下 IPersistentAgentRunCommitter 应解析为 PostgresAgentRunCommitter，实际为: " + committer.GetType().Name);
+    }
+
+    [TestMethod]
     public void AddContextCore_Alone_IContextStateVersionStore_ResolvesToInMemoryImplementation()
     {
         // 验证：仅调用 AddContextCore（无 AddContextStorage）时，IContextStateVersionStore 应解析为 InMemoryContextStateVersionStore

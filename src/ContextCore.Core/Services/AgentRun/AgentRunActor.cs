@@ -50,6 +50,10 @@ public sealed class AgentRunActor
 {
     private readonly IAgentRunStore _runStore;
     private readonly IAgentRunEventStore _eventStore;
+    // 统一提交入口（可选）：非 null 时 Turn 批量提交走 IPersistentAgentRunCommitter
+    // 单事务落库（事件 + 状态 CAS + checkpoint + 结算 outbox）；null 时回退 _eventStore.AppendBatchAsync
+    // （测试 InMemory 装配等无提交器场景，行为等价）。
+    private readonly IPersistentAgentRunCommitter? _committer;
     private readonly IAgentModelTransport? _modelTransport;
     private readonly IAgentLoopPolicy _loopPolicy;
     private readonly IToolDispatcher _toolDispatcher;
@@ -228,10 +232,12 @@ public sealed class AgentRunActor
         IRecoveryAlertSink? alertSink = null,
         IAgentRunEventCompactor? eventCompactor = null,
         IToolAuthorizationPolicy? toolAuthorizationPolicy = null,
-        IAdaptiveRetrievalPlanner? adaptivePlanner = null)
+        IAdaptiveRetrievalPlanner? adaptivePlanner = null,
+        IPersistentAgentRunCommitter? committer = null)
     {
         _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
+        _committer = committer;
         _modelTransport = modelTransport;
         _loopPolicy = loopPolicy ?? throw new ArgumentNullException(nameof(loopPolicy));
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
@@ -2871,8 +2877,29 @@ public sealed class AgentRunActor
 
         try
         {
-            await _eventStore.AppendBatchAsync(
-                _pendingTurnEvents, runStateUpdate, checkpointCursor, _pendingTurnCheckpoint, cancellationToken).ConfigureAwait(false);
+            if (_committer is not null)
+            {
+                // 统一提交入口：事件流 + 状态 CAS + checkpoint + 结算意图作为一次原子提交。
+                // 终态语义（finished_at / 结算 outbox）由提交器从状态语义层派生，与 Run Store 一致。
+                var commit = new AgentRunCommit
+                {
+                    WorkspaceId = run.WorkspaceId,
+                    RunId = run.RunId,
+                    Events = _pendingTurnEvents,
+                    ExpectedCurrentState = _turnStartState,
+                    NewRunSnapshot = run,
+                    Checkpoint = _pendingTurnCheckpoint,
+                    UsageSnapshot = run.CostBudget,
+                    LeaseToken = _leaseToken,
+                    FencingToken = _fencingToken
+                };
+                await _committer.CommitAsync(commit, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _eventStore.AppendBatchAsync(
+                    _pendingTurnEvents, runStateUpdate, checkpointCursor, _pendingTurnCheckpoint, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch
         {
