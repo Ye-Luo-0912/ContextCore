@@ -97,7 +97,7 @@ CREATE INDEX IF NOT EXISTS {PostgresNames.Index(options, "workspace_quota_reserv
 
 -- Run 终态结算 outbox：Run 推进终态时在状态转换事务内写入，
 -- 结算 worker 按租约领取并执行 Actualize / Release（exactly-once）。
--- status：0 = 待结算，1 = 已结算，2 = 结算中（持有租约），3 = 死信（尝试耗尽）。
+-- status：0 = 待结算，1 = 已结算，2 = 结算中（持有租约），3 = 卡住（低频无限重试，供运维排查）。
 CREATE TABLE IF NOT EXISTS {outbox} (
     outbox_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     workspace_id text NOT NULL,

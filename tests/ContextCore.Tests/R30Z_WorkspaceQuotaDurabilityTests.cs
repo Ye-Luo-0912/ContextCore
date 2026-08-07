@@ -678,6 +678,132 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         }
     }
 
+    [TestMethod]
+    public async Task Settlement_ExhaustedAttempts_StuckThenRecovers()
+    {
+        // 结算连续失败达到阈值后不放弃：转入卡住（低频重试闸门），闸门过后仍可被领取，
+        // 尝试次数无上限，最终在底层故障恢复后完成结算——配额不被永久锁死。
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, quotaService) = await ResolveAsync(container, "settle_stuck_");
+            await using (provider)
+            {
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
+
+                var admitted = await store.AdmitRunAtomicallyAsync(
+                    BuildPendingAdmissionRun(tokensUsed: 40), BuildAdmission(100, 100), default);
+                Assert.IsTrue(admitted.Created);
+
+                await store.TransitionStateAsync(
+                    Ws, admitted.Run.RunId, AgentRunState.Queued, AgentRunState.Completed, default);
+
+                // 模拟已达阈值（10 次）的失败现场：结算中 + 有效租约。
+                // 用普通插值字符串而非原始字符串：原始字符串的单美元下不允许 {{ 转义。
+                await ExecuteAsync(container, provider,
+                    $"UPDATE {{prefix}}terminal_run_settlement_outbox SET status = 2, attempts = 10, " +
+                    $"lease_owner = 'node-stuck', lease_token = 'tok-stuck', " +
+                    $"lease_expires_at = now() + interval '1 hour', last_error = 'boom' " +
+                    $"WHERE run_id = '{admitted.Run.RunId}';");
+
+                var settlementStore = provider.GetRequiredService<ITerminalRunSettlementStore>();
+                var outboxId = long.Parse(await QueryScalarAsync(container, provider,
+                    $"SELECT outbox_id FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';"));
+
+                // 再次失败：尝试达到阈值 → 转入卡住（不进入终止死信）。
+                var failed = await settlementStore.MarkFailedAsync(outboxId, "tok-stuck", "boom", default);
+                Assert.IsTrue(failed, "持有租约的失败标记应生效。");
+
+                var statusAfterFail = await QueryScalarAsync(container, provider,
+                    $"SELECT status FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';");
+                Assert.AreEqual("3", statusAfterFail, "尝试达到阈值后应转入卡住（结算永不放弃）。");
+
+                // 低频闸门：卡住退避期内不可被领取。
+                var claimedDuringBackoff = await settlementStore.ClaimBatchAsync(
+                    10, "node-x", TimeSpan.FromMinutes(5), default);
+                Assert.AreEqual(0, claimedDuringBackoff.Count, "卡住退避期内不应被领取（低频重试）。");
+
+                // 闸门过后（模拟等待或运维修复）：仍可领取并完成结算，尝试次数无上限。
+                await ExecuteAsync(container, provider,
+                    $"UPDATE {{prefix}}terminal_run_settlement_outbox SET lease_expires_at = now() - interval '1 minute' WHERE run_id = '{admitted.Run.RunId}';");
+
+                await RunSettlementWorkerOnceAsync(provider);
+
+                var attempts = await QueryScalarAsync(container, provider,
+                    $"SELECT attempts FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';");
+                Assert.AreEqual("11", attempts, "尝试次数应继续累加（不设上限）。");
+
+                var quota = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(40, quota.TokensUsed, "恢复后结算应按实际用量转正。");
+                Assert.AreEqual(0, quota.ReservedTokens, "恢复后预留释放（配额不被锁死）。");
+
+                var finalStatus = await QueryScalarAsync(container, provider,
+                    $"SELECT status FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';");
+                Assert.AreEqual("1", finalStatus, "恢复后应最终标记已结算。");
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task Settlement_Reconciler_RepairsMissingOutboxEntry()
+    {
+        // 周期对账：终态 Run + 有效预留 + 无结算记录 → 补写待结算条目，
+        // 兜底覆盖状态转换事务漏写 outbox / 结算记录丢失等缺口，配额最终仍被结算。
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 配额持久化测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, store, quotaService) = await ResolveAsync(container, "settle_rcn_");
+            await using (provider)
+            {
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
+
+                var admitted = await store.AdmitRunAtomicallyAsync(
+                    BuildPendingAdmissionRun(tokensUsed: 40), BuildAdmission(100, 100), default);
+                Assert.IsTrue(admitted.Created);
+
+                // 推进终态后删除结算记录，模拟主事务漏写 / 记录丢失缺口。
+                await store.TransitionStateAsync(
+                    Ws, admitted.Run.RunId, AgentRunState.Queued, AgentRunState.Completed, default);
+                await ExecuteAsync(container, provider,
+                    $"DELETE FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}';");
+
+                var reservation = await QueryScalarAsync(container, provider,
+                    $"SELECT COUNT(1) FROM {{prefix}}workspace_quota_reservations WHERE reservation_id = '{admitted.Run.RunId}';");
+                Assert.AreEqual("1", reservation, "预留应仍存在（结算缺口）。");
+
+                // 对账补写 + 幂等。
+                var settlementStore = provider.GetRequiredService<ITerminalRunSettlementStore>();
+                var repaired = await settlementStore.ReconcileSettlementGapsAsync(default);
+                Assert.AreEqual(1, repaired, "对账应补写 1 条缺失的结算记录。");
+                var repairedAgain = await settlementStore.ReconcileSettlementGapsAsync(default);
+                Assert.AreEqual(0, repairedAgain, "对账应幂等——已有记录不再补写。");
+
+                var outboxCount = await QueryScalarAsync(container, provider,
+                    $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE run_id = '{admitted.Run.RunId}' AND status = 0;");
+                Assert.AreEqual("1", outboxCount, "对账后应有待结算条目。");
+
+                // 补写条目被正常结算。
+                await RunSettlementWorkerOnceAsync(provider);
+
+                var quota = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(40, quota.TokensUsed, "对账补写后结算应按实际用量转正。");
+                Assert.AreEqual(0, quota.ReservedTokens, "对账补写后预留释放。");
+            }
+        }
+    }
+
     // ── 辅助 ─────────────────────────────────────────────────────────────
 
     private static AgentRun BuildPendingAdmissionRun(int tokensUsed) => new()
@@ -712,7 +838,8 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         PeriodSeconds = 3600
     };
 
-    /// <summary>驱动结算 worker 执行一轮（领取 + 结算 + 标记）。</summary>
+    /// <summary>驱动结算 worker 执行一轮（领取 + 结算 + 标记）。等待全部条目最终已结算
+    /// （含卡住条目——卡住不是终点，闸门过后仍被领取直至已结算）。</summary>
     private static async Task RunSettlementWorkerOnceAsync(ServiceProvider provider)
     {
         var store = provider.GetRequiredService<PostgresAgentRunStore>();
@@ -724,13 +851,13 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         await worker.StartAsync(CancellationToken.None);
         try
         {
-            // 等待 outbox 被消费（首轮立即执行）。
+            // 等待 outbox 全部消费（首轮立即执行）：待结算 / 结算中 / 卡住均须收敛到已结算。
             var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
             while (DateTimeOffset.UtcNow < deadline)
             {
                 var pending = await QueryScalarAsync(
                     provider,
-                    $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE status IN (0, 2);");
+                    $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE status IN (0, 2, 3);");
                 if (pending == "0")
                 {
                     break;
@@ -740,7 +867,7 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
 
             var remaining = await QueryScalarAsync(
                 provider,
-                $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE status IN (0, 2);");
+                $"SELECT COUNT(1) FROM {{prefix}}terminal_run_settlement_outbox WHERE status IN (0, 2, 3);");
             Assert.AreEqual("0", remaining, "结算 worker 应在超时前消费全部 outbox 条目。");
         }
         finally
@@ -779,6 +906,19 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         command.CommandText = sql;
         var result = await command.ExecuteScalarAsync();
         return result?.ToString() ?? string.Empty;
+    }
+
+    private static async Task ExecuteAsync(
+        PostgreSqlContainer container, ServiceProvider provider, string sqlTemplate)
+    {
+        var options = provider.GetRequiredService<PostgresOptions>();
+        var prefix = options.TablePrefix ?? string.Empty;
+        var sql = sqlTemplate.Replace("{prefix}", prefix);
+        await using var connection = new NpgsqlConnection(container.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<string> QueryScalarAsync(ServiceProvider provider, string sqlTemplate)

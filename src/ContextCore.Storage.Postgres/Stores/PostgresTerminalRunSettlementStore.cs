@@ -10,11 +10,16 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// 事务内写入（仅当对应预留存在）；本 store 供结算 worker 按租约领取并标记结算结果。
 /// 领取语义与 <see cref="PostgresLearningEventOutboxStore.AcquirePendingAsync"/> 对齐：
 /// FOR UPDATE SKIP LOCKED + lease_token CAS，多实例并发安全（被锁行跳过，下轮再取）。
+/// 结算按账本一致性设计：尝试次数不设上限，多次失败只转入卡住（低频重试），
+/// 绝不放弃——放弃意味着预留与 reserved_tokens 永久占用 Workspace 可用额度。
 /// </summary>
 public sealed class PostgresTerminalRunSettlementStore : PostgresStoreBase, ITerminalRunSettlementStore
 {
-    /// <summary>结算尝试上限：超过后转死信（不再自动重试）。</summary>
-    private const int MaxAttempts = 5;
+    /// <summary>尝试达到该次数后转入卡住（status=3，低频重试闸门）；此后仍无限重试。</summary>
+    private const int StuckAttemptThreshold = 5;
+
+    /// <summary>卡住状态的重试闸门：转入卡住后至少等待该时长才可被再次领取。</summary>
+    private static readonly TimeSpan StuckRetryBackoff = TimeSpan.FromMinutes(15);
 
     /// <summary>初始化 Postgres 终态结算 outbox store。</summary>
     public PostgresTerminalRunSettlementStore(
@@ -60,11 +65,12 @@ public sealed class PostgresTerminalRunSettlementStore : PostgresStoreBase, ITer
             claimCmd.Parameters.AddWithValue("lease_token", leaseToken);
             claimCmd.Parameters.AddWithValue("updated_at", now);
             claimCmd.Parameters.AddWithValue("limit", limit);
+            // 待结算 / 结算中租约过期 / 卡住且重试闸门已过 均可领取；
+            // 尝试次数不设上限——卡住条目在闸门过后继续被领取，结算永不放弃。
             claimCmd.CommandText = $$"""
 WITH pending AS (
     SELECT outbox_id FROM {{Table("terminal_run_settlement_outbox")}}
-    WHERE status IN (0, 2)
-      AND attempts < {{MaxAttempts}}
+    WHERE status IN (0, 2, 3)
       AND (lease_expires_at IS NULL OR lease_expires_at <= @now)
     ORDER BY created_at ASC
     LIMIT @limit
@@ -152,11 +158,20 @@ WHERE outbox_id = @outbox_id
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // CAS——仅当 status=结算中 且 lease_token 匹配且租约未过期时记录失败；
-        // 状态保持结算中（租约到期后可被重新领取重试），失败原因写入 last_error。
+        // CAS——仅当 status=结算中 且 lease_token 匹配且租约未过期时记录失败。
+        // 尝试未达阈值：状态保持结算中（租约到期后可重新领取重试）。
+        // 尝试达到阈值：转入卡住（status=3）并设置低频重试闸门（lease_expires_at =
+        // 当前时间 + 卡住退避），闸门过后仍可被领取——结算永不放弃，只降低频率。
         command.CommandText = $"""
 UPDATE {Table("terminal_run_settlement_outbox")}
 SET last_error = @error_message,
+    status = CASE WHEN attempts >= {StuckAttemptThreshold} THEN 3 ELSE 2 END,
+    lease_expires_at = CASE
+        WHEN attempts >= {StuckAttemptThreshold} THEN @stuck_retry_at
+        ELSE lease_expires_at
+    END,
+    lease_owner = CASE WHEN attempts >= {StuckAttemptThreshold} THEN NULL ELSE lease_owner END,
+    lease_token = CASE WHEN attempts >= {StuckAttemptThreshold} THEN NULL ELSE lease_token END,
     updated_at = @updated_at
 WHERE outbox_id = @outbox_id
   AND lease_token = @lease_token
@@ -167,11 +182,12 @@ WHERE outbox_id = @outbox_id
         command.Parameters.AddWithValue("lease_token", leaseToken);
         command.Parameters.AddWithValue("error_message", errorMessage ?? string.Empty);
         command.Parameters.AddWithValue("updated_at", now);
+        command.Parameters.AddWithValue("stuck_retry_at", now.Add(StuckRetryBackoff));
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
     }
 
     /// <inheritdoc />
-    public async ValueTask<int> DeadLetterExhaustedAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<int> TransitionStuckAsync(CancellationToken cancellationToken = default)
     {
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
 
@@ -179,19 +195,60 @@ WHERE outbox_id = @outbox_id
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
-        // 尝试耗尽（attempts >= MaxAttempts）且租约已过期的结算中条目 → 死信（不再自动重试）。
+        // 兜底过渡：尝试达到阈值且租约已过期的结算中条目（worker 崩溃等未走 MarkFailed
+        // 的路径）→ 卡住 + 低频重试闸门。卡住不是终点，闸门过后仍可被领取重试。
         command.CommandText = $"""
 UPDATE {Table("terminal_run_settlement_outbox")}
 SET status = 3,
     lease_owner = NULL,
-    lease_expires_at = NULL,
+    lease_expires_at = @stuck_retry_at,
     lease_token = NULL,
     updated_at = @updated_at
 WHERE status = 2
-  AND attempts >= {MaxAttempts}
+  AND attempts >= {StuckAttemptThreshold}
   AND lease_expires_at <= clock_timestamp();
 """;
         command.Parameters.AddWithValue("updated_at", now);
+        command.Parameters.AddWithValue("stuck_retry_at", now.Add(StuckRetryBackoff));
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<int> ReconcileSettlementGapsAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        var now = DateTimeOffset.UtcNow;
+        // 需结算的终态集合：终态且结算策略非 None（执行类转正 + 准入拒绝退回）。
+        // 准入拒绝的 Run 无预留，对账 join 自然排除，仅作语义完整性保留。
+        var terminalStates = Enum.GetValues<AgentRunState>()
+            .Where(s => AgentRunStateSemantics.Get(s) is { IsTerminal: true, QuotaSettlementPolicy: not QuotaSettlementPolicy.None })
+            .Select(s => (int)s)
+            .ToArray();
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 终态 Run + 有效预留 + 无任何结算记录 → 补写待结算条目（status=0）。
+        // 与正常写入路径同一结构：reservation_id = run_id；幂等——已有记录（含卡住）
+        // 的 Run 不再补写，卡住条目由低频重试自行收敛。
+        command.CommandText = $"""
+INSERT INTO {Table("terminal_run_settlement_outbox")} (
+    workspace_id, run_id, reservation_id, terminal_state, created_at, updated_at)
+SELECT r.workspace_id, r.run_id, r.run_id, r.state, @now, @now
+FROM {Table("agent_runs")} r
+JOIN {Table("workspace_quota_reservations")} res
+  ON res.workspace_id = r.workspace_id
+ AND res.reservation_id = r.run_id
+WHERE r.state = ANY(@terminal_states)
+  AND NOT EXISTS (
+      SELECT 1 FROM {Table("terminal_run_settlement_outbox")} o
+      WHERE o.workspace_id = r.workspace_id
+        AND o.run_id = r.run_id
+  );
+""";
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("terminal_states", terminalStates);
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 

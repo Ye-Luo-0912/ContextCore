@@ -18,6 +18,10 @@ namespace ContextCore.Service.Hosting;
 // 结算目标（IWorkspaceQuotaService）与写入方（PostgresAgentRunStore 的
 // TransitionStateAsync 事务内 outbox 写入）解耦：worker 只负责消费，
 // 使「仅取消端点释放配额、其余终态无结算入口」的路径收敛为统一结算入口。
+//
+// 结算按账本一致性设计，不设终止状态：连续失败只把条目转入卡住（低频无限重试），
+// 绝不放弃——放弃意味着预留与 reserved_tokens 永久占用 Workspace 可用额度；
+// 同时按固定周期执行对账，补写终态 Run + 有效预留但缺失结算记录的条目。
 // ===========================================================================
 
 /// <summary>
@@ -31,12 +35,16 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
     /// <summary>每批次最多领取数。</summary>
     private const int BatchSize = 20;
 
+    /// <summary>周期对账间隔：终态 Run + 有效预留 + 无结算记录 → 补写待结算条目。</summary>
+    private static readonly TimeSpan ReconcileInterval = TimeSpan.FromMinutes(5);
+
     private readonly IServiceProvider _services;
     private readonly IWorkspaceQuotaService _quotaService;
     private readonly IAgentRunStore _runStore;
     private readonly ILogger<TerminalRunSettlementWorker> _logger;
     private readonly TimeSpan _interval;
     private readonly string _owner;
+    private DateTimeOffset _nextReconcileAt = DateTimeOffset.UtcNow;
 
     /// <summary>初始化终态结算工作器。</summary>
     public TerminalRunSettlementWorker(
@@ -74,6 +82,31 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                // 周期对账：终态 Run + 有效预留 + 无结算记录 → 补写待结算条目。
+                // 兜底覆盖状态转换事务漏写 outbox / 结算记录丢失等缺口，
+                // 与领取节奏解耦，按固定周期执行。
+                var now = DateTimeOffset.UtcNow;
+                if (now >= _nextReconcileAt)
+                {
+                    try
+                    {
+                        var repaired = await store.ReconcileSettlementGapsAsync(stoppingToken).ConfigureAwait(false);
+                        if (repaired > 0)
+                        {
+                            _logger.LogWarning("终态结算对账补写：{Count} 条缺失的结算记录。", repaired);
+                        }
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "终态结算对账异常（非致命，下轮重试）。");
+                    }
+                    _nextReconcileAt = DateTimeOffset.UtcNow + ReconcileInterval;
+                }
+
                 var hasMore = false;
                 try
                 {
@@ -139,18 +172,18 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
             }
         }
 
-        // 尝试耗尽的条目转死信（不再自动重试）。
+        // 尝试达到阈值的条目转卡住（低频无限重试，绝不放弃——结算放弃会锁死配额）。
         try
         {
-            var deadLettered = await store.DeadLetterExhaustedAsync(ct).ConfigureAwait(false);
-            if (deadLettered > 0)
+            var stuck = await store.TransitionStuckAsync(ct).ConfigureAwait(false);
+            if (stuck > 0)
             {
-                _logger.LogWarning("Run 终态结算死信：{Count} 个条目尝试耗尽。", deadLettered);
+                _logger.LogWarning("Run 终态结算卡住：{Count} 个条目转入低频重试（不再以正常频率轮询）。", stuck);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "终态结算死信清理异常（非致命）。");
+            _logger.LogWarning(ex, "终态结算卡住过渡异常（非致命）。");
         }
 
         return claimed.Count >= BatchSize;

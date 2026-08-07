@@ -1665,13 +1665,17 @@ public sealed record TerminalSettlementEntry
 /// Run 终态结算 outbox 持久化抽象（Postgres 实现）。
 /// 所有终态（Completed / Failed / Cancelled / LeaseLost / DeadLettered / AdmissionRejected）
 /// 统一经 outbox 由结算 worker 执行 Actualize 或 Release，保证 exactly-once。
+/// 结算按账本一致性设计，不设终止状态：连续失败只降低重试频率（卡住），
+/// 绝不放弃——一旦放弃，预留行与 reserved_tokens 将永久占用 Workspace 可用额度。
 /// </summary>
 public interface ITerminalRunSettlementStore
 {
     /// <summary>
     /// 领取一批待结算条目（FOR UPDATE SKIP LOCKED + 租约）：
-    /// 待结算（status=0）或结算中但租约已过期（worker 崩溃）的条目可被领取，
+    /// 待结算（status=0）、结算中但租约已过期（worker 崩溃）或卡住但重试闸门已过
+    /// （status=3，低频无限重试）的条目可被领取；
     /// 领取后 status=结算中 + lease_token / lease_expires_at（防双结算）。
+    /// 尝试次数不设上限——结算永不放弃，只按卡住状态降频。
     /// </summary>
     /// <param name="limit">本批次最多领取数。</param>
     /// <param name="owner">领取者标识（节点实例）。</param>
@@ -1693,7 +1697,10 @@ public interface ITerminalRunSettlementStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 记录结算失败（CAS：仅持有租约者可记录；租约保持至过期，之后可被重新领取重试）。
+    /// 记录结算失败（CAS：仅持有租约者可记录）。
+    /// 尝试未达阈值时保持结算中（租约到期后可重新领取重试）；
+    /// 尝试达到阈值后转入卡住（status=3）并设置低频重试闸门（lease_expires_at =
+    /// 当前时间 + 卡住退避），闸门过后仍可被领取——结算永不放弃，只降低频率。
     /// </summary>
     ValueTask<bool> MarkFailedAsync(
         long outboxId,
@@ -1701,8 +1708,17 @@ public interface ITerminalRunSettlementStore
         string errorMessage,
         CancellationToken cancellationToken = default);
 
-    /// <summary>把尝试耗尽的结算中条目转死信（不再重试，供运维排查）。</summary>
-    ValueTask<int> DeadLetterExhaustedAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 把尝试达到阈值且租约已过期的结算中条目转入卡住（status=3，低频重试闸门）。
+    /// 兜底覆盖 worker 崩溃等未走 MarkFailed 的路径；返回转入条数。
+    /// </summary>
+    ValueTask<int> TransitionStuckAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 周期对账：终态 Run + 有效预留 + 无任何结算记录 → 补写待结算条目。
+    /// 兜底覆盖状态转换事务漏写 outbox / 结算记录丢失等缺口；返回补写的条数。
+    /// </summary>
+    ValueTask<int> ReconcileSettlementGapsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
