@@ -137,6 +137,50 @@ public sealed record DatasetSnapshotReport
 }
 
 /// <summary>
+/// 数据集快照工件（Learning Artifact Plane）：DatasetSnapshot 的持久化形态。
+/// 携带快照报告（完整性 / 血缘 / 可重现）+ 物化产物文件路径。
+/// </summary>
+public sealed record DatasetSnapshotArtifact
+{
+    /// <summary>快照报告（SnapshotId / Completeness / Lineage / ContentHash / 版本追责）。</summary>
+    public required DatasetSnapshotReport Snapshot { get; init; }
+
+    /// <summary>物化数据文件路径（JSONL；可为 null = 仅报告未物化文件）。</summary>
+    public string? DataFilePath { get; init; }
+
+    /// <summary>manifest 文件路径（可为 null）。</summary>
+    public string? ManifestFilePath { get; init; }
+
+    /// <summary>工件入库时间（UTC）。</summary>
+    public required DateTimeOffset StoredAt { get; init; }
+}
+
+/// <summary>
+/// Learning Artifact Plane 存储：持久化数据集快照工件（DatasetSnapshot + Lineage +
+/// Completeness + Replay Manifest），按 (workspace_id, snapshot_id) 点查——
+/// Learning 数据可被严格证明"完整、可重建、可追责"。
+/// </summary>
+public interface ILearningArtifactStore
+{
+    /// <summary>保存数据集快照工件（同 (workspace_id, snapshot_id) 幂等覆盖）。</summary>
+    ValueTask SaveAsync(
+        DatasetSnapshotArtifact artifact,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>按稳定主键点查快照工件（可重建入口：SnapshotId 确定性 → 相同输入重现相同工件）。</summary>
+    ValueTask<DatasetSnapshotArtifact?> GetAsync(
+        string workspaceId,
+        string snapshotId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>列出指定工作区最近 N 个快照工件（按入库时间倒序）。</summary>
+    ValueTask<IReadOnlyList<DatasetSnapshotArtifact>> ListRecentAsync(
+        string workspaceId,
+        int take = 20,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// 训练数据导出结果。
 /// </summary>
 public sealed record TrainingDataExportResult

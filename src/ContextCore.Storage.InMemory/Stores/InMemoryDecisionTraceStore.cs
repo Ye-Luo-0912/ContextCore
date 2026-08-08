@@ -44,4 +44,21 @@ public sealed class InMemoryDecisionTraceStore : IDecisionTraceStore
                 .ToArray());
         }
     }
+
+    public Task<ContextDecisionRecord?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string decisionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_gate)
+        {
+            return Task.FromResult(_records.FirstOrDefault(item =>
+                string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(item.DecisionId, decisionId, StringComparison.OrdinalIgnoreCase)));
+        }
+    }
 }

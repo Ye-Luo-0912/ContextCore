@@ -72,6 +72,117 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         Assert.AreEqual(AgentRunState.Completed, finalRun!.State);
     }
 
+    /// <summary>
+    /// 验证（P1-十六）：Decision Runtime 原生消费受控计划——
+    /// 受控查询文本（非 run.Task）、TopK、RequiredIds 全部注入决策请求，
+    /// 不再"只拿 TokenBudget 后仍以 run.Task 检索"。
+    /// </summary>
+    [TestMethod]
+    public async Task ContextBuilding_ConsumesControlledQuery_TopK_AndRequiredIds()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun();
+        await runStore.CreateAsync(run);
+
+        var planner = new FakeAdaptivePlanner(new AgentRetrievalPlan
+        {
+            TokenBudget = 2048,
+            TopK = 12,
+            ControlledQueries = new[]
+            {
+                new AgentRetrievalQuery { Text = "受控查询-任务分解", Type = AgentRetrievalQueryType.Hybrid, Weight = 1.0 },
+                new AgentRetrievalQuery { Text = "受控查询-意图补充", Type = AgentRetrievalQueryType.Keyword, Weight = 0.5 }
+            },
+            RequiredIds = new[] { "entity-required-1" }
+        });
+        var decisionRuntime = new FakeDecisionRuntime(selectedCount: 2, effectiveTokens: 1500, tokenBudget: 2048);
+        var actor = new AgentRunActor(
+            runStore, eventStore, new FinalAnswerTransport(),
+            new DefaultAgentLoopPolicy(), new EchoToolDispatcher(),
+            decisionRuntime: decisionRuntime, adaptivePlanner: planner);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        Assert.IsNotNull(decisionRuntime.LastRequest);
+        Assert.AreEqual("受控查询-任务分解", decisionRuntime.LastRequest!.QueryText,
+            "QueryText 应为受控计划的首条查询（而非 run.Task 原文）。");
+        Assert.AreNotEqual(run.Task, decisionRuntime.LastRequest.QueryText,
+            "受控计划存在时不得回退 run.Task。");
+        Assert.AreEqual(12, decisionRuntime.LastRequest.TopK,
+            "TopK 应为受控计划产出值（非 0）。");
+        CollectionAssert.Contains(
+            decisionRuntime.LastRequest.AgentInput?.RequiredIds?.ToList() ?? new List<string>(), "entity-required-1",
+            "RequiredIds 应注入决策请求（mandatory recall）。");
+
+        // 反馈 QueryText 也应记录实际使用的受控查询文本。
+        Assert.AreEqual("受控查询-任务分解", planner.OutcomeRecords[0].QueryText,
+            "反馈应记录实际执行的受控查询文本。");
+    }
+
+    /// <summary>
+    /// 验证（P1-十六）：反馈质量信号从选中候选真实分数派生——
+    /// 不再用占位常量（Effective=result!=null / Confidence=1.0 / OutcomeQuality=1.0）
+    /// 学习"有没有召回东西"；以"这些 Context 是否被采用及其质量"为学习信号。
+    /// </summary>
+    [TestMethod]
+    public async Task ContextBuilding_FeedbackUsesSelectedQualitySignals()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun();
+        await runStore.CreateAsync(run);
+
+        var planner = new FakeAdaptivePlanner(new AgentRetrievalPlan { TokenBudget = 2048 });
+        // 两个选中候选：分数 0.9 与 0.5 → Confidence=0.9（最高）、OutcomeQuality=0.7（平均）。
+        var decisionRuntime = new FakeDecisionRuntime(
+            selectedCount: 2, effectiveTokens: 1500, tokenBudget: 2048,
+            selectedScores: new[] { 0.9, 0.5 });
+        var actor = new AgentRunActor(
+            runStore, eventStore, new FinalAnswerTransport(),
+            new DefaultAgentLoopPolicy(), new EchoToolDispatcher(),
+            decisionRuntime: decisionRuntime, adaptivePlanner: planner);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        var record = planner.OutcomeRecords[0];
+        Assert.IsTrue(record.Effective, "产出且被采用的候选 → 有效信号（非 result!=null 恒真）。");
+        Assert.AreEqual(0.9, record.Confidence, 0.0001,
+            "Confidence 应为最高选中候选分数（不再恒 1.0）。");
+        Assert.AreEqual(0.7, record.OutcomeQuality, 0.0001,
+            "OutcomeQuality 应为选中候选平均分（不再恒 1.0）。");
+    }
+
+    /// <summary>
+    /// 验证（P1-十六）：未产出被采用候选时 Effective=false 且质量信号为中性/零——
+    /// "召回为空"与"召回了但没有帮助"都不得伪造有效信号。
+    /// </summary>
+    [TestMethod]
+    public async Task ContextBuilding_FeedbackNoSelected_NotEffective()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun();
+        await runStore.CreateAsync(run);
+
+        var planner = new FakeAdaptivePlanner(new AgentRetrievalPlan { TokenBudget = 2048 });
+        var decisionRuntime = new FakeDecisionRuntime(selectedCount: 0, effectiveTokens: 0, tokenBudget: 2048);
+        var actor = new AgentRunActor(
+            runStore, eventStore, new FinalAnswerTransport(),
+            new DefaultAgentLoopPolicy(), new EchoToolDispatcher(),
+            decisionRuntime: decisionRuntime, adaptivePlanner: planner);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        var record = planner.OutcomeRecords[0];
+        Assert.IsFalse(record.Effective, "无被采用候选时不得视为有效信号。");
+        Assert.AreEqual(0.0, record.OutcomeQuality, 0.0001, "无候选时质量为零。");
+        Assert.AreEqual(0.5, record.Confidence, 0.0001, "无分数时置信度为中性 0.5。");
+    }
+
     [TestMethod]
     public async Task ContextBuilding_RecordsBudgetExceeded_FromDecisionOutcome()
     {
@@ -263,7 +374,9 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
     {
         private readonly ContextDecisionResult _result;
 
-        public FakeDecisionRuntime(int selectedCount, int effectiveTokens, int tokenBudget, int budgetExceededCount = 0)
+        public FakeDecisionRuntime(
+            int selectedCount, int effectiveTokens, int tokenBudget, int budgetExceededCount = 0,
+            double[]? selectedScores = null)
         {
             var selected = new List<ContextCandidateEnvelope>();
             for (var i = 0; i < selectedCount; i++)
@@ -272,7 +385,12 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
                 {
                     CandidateId = "cand-" + i,
                     Source = ContextCandidateSource.WorkingMemory,
-                    CanonicalKey = CanonicalCandidateKey.Create("ws-adaptive", "ws-adaptive", "memory", "cand-" + i, "v1")
+                    CanonicalKey = CanonicalCandidateKey.Create("ws-adaptive", "ws-adaptive", "memory", "cand-" + i, "v1"),
+                    Utility = new CandidateUtilityScore
+                    {
+                        DeterministicScore = selectedScores is not null && i < selectedScores.Length ? selectedScores[i] : 0.0,
+                        FinalScore = selectedScores is not null && i < selectedScores.Length ? selectedScores[i] : 0.0
+                    }
                 });
             }
 

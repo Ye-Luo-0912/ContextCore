@@ -68,6 +68,32 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
         return [.. records.OrderByDescending(item => item.CreatedAt).Take(count)];
     }
 
+    public async Task<ContextDecisionRecord?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string decisionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(decisionId))
+        {
+            return null;
+        }
+
+        // 稳定主键点查（Decision Evidence Plane：Durable / Point Lookup）。
+        var paths = EnumerateTraceFiles(workspaceId, collectionId);
+        var records = await TraceQueryHelper.ReadRecentAsync<ContextDecisionRecord>(
+            paths,
+            int.MaxValue,
+            _jsonLines,
+            r => r.DecisionId ?? string.Empty,
+            r => string.Equals(r.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase)
+                 && string.Equals(r.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase)
+                 && string.Equals(r.DecisionId, decisionId, StringComparison.OrdinalIgnoreCase),
+            cancellationToken).ConfigureAwait(false);
+
+        return records.FirstOrDefault();
+    }
+
     private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)
     {
         var files = new List<string>();

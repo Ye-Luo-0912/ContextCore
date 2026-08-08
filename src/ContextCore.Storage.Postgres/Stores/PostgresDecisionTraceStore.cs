@@ -63,6 +63,34 @@ LIMIT @take;
         return await ExecuteReaderJsonAsync<ContextDecisionRecord>(command, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<ContextDecisionRecord?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string decisionId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 稳定主键 (workspace_id, collection_id, decision_id) 点查
+        // （Decision Evidence Plane：Durable / Point Lookup，不依赖"最近 N 条"窗口）。
+        command.CommandText = $"""
+SELECT data
+FROM {Table("decision_traces")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND decision_id = @decision_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("decision_id", decisionId);
+
+        var data = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+        return data is null ? null : Serializer.Deserialize<ContextDecisionRecord>(data);
+    }
+
     private static ContextDecisionRecord Normalize(ContextDecisionRecord record)
     {
         return new ContextDecisionRecord

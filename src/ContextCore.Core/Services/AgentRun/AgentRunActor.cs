@@ -1898,6 +1898,9 @@ public sealed class AgentRunActor
         // - 规划失败不阻断主链（自适应是增强层；降级为不设 TokenBudget，走引擎默认）。
         AgentRetrievalPlannerInput? plannerInput = null;
         var plannedTokenBudget = 0;
+        var controlledQueryText = string.Empty;
+        var plannedTopK = 0;
+        IReadOnlyList<string> plannedRequiredIds = Array.Empty<string>();
         if (_adaptivePlanner is not null)
         {
             try
@@ -1918,6 +1921,14 @@ public sealed class AgentRunActor
                 };
                 var plan = await _adaptivePlanner.PlanAsync(plannerInput, cancellationToken).ConfigureAwait(false);
                 plannedTokenBudget = plan.TokenBudget;
+                // 受控计划原生消费（P1-十六）：首条受控查询作为 QueryText（fallback 原始任务）、
+                // TopK 与 RequiredIds 注入决策请求——自适应策略（查询收敛/召回增强/预算收缩）
+                // 真实作用于 Decision Runtime，而非只拿 TokenBudget 后仍以 run.Task 检索。
+                controlledQueryText = plan.ControlledQueries.Count > 0
+                    ? plan.ControlledQueries[0].Text
+                    : run.Task;
+                plannedTopK = plan.TopK;
+                plannedRequiredIds = plan.RequiredIds;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -1946,11 +1957,13 @@ public sealed class AgentRunActor
                 RequestId = $"{run.WorkspaceId}/{run.RunId}-ctx-{_modelCallsUsed}",
                 Scope = scope,
                 Purpose = ContextDecisionPurpose.AgentContext,
-                QueryText = run.Task,
+                // 受控查询文本（自适应计划首条查询；规划器未接入时回退原始任务）。
+                QueryText = string.IsNullOrWhiteSpace(controlledQueryText) ? run.Task : controlledQueryText,
                 // 受控 Token 预算：规划器产出（含自适应收敛）>0 时覆盖引擎默认；
                 // 规划器未接入 / 规划失败时为 0（引擎按 profile 默认预算）。
                 TokenBudget = plannedTokenBudget,
-                TopK = 0,
+                // 受控 TopK：规划器产出（0 = 引擎按 profile 默认）。
+                TopK = plannedTopK,
                 // 激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
                 // Engine 选出 SelectedEnvelopes 后由 ISelectedCandidateHydrator 批量 hydrate 正文，
                 // 避免对未选中候选做无用正文 I/O。
@@ -1958,7 +1971,7 @@ public sealed class AgentRunActor
                 AgentInput = new AgentInput
                 {
                     Session = agentSession,
-                    RequiredIds = Array.Empty<string>()
+                    RequiredIds = plannedRequiredIds
                 }
             };
 
@@ -1968,7 +1981,7 @@ public sealed class AgentRunActor
 
             // 自适应反馈记录（best-effort，失败不阻断主链）：
             // 命中数 / 预算超限 / 是否产出候选——闭环学习信号，供后续规划调整预算与查询收敛。
-            await RecordAdaptiveOutcomeAsync(run, plannerInput, result, cancellationToken).ConfigureAwait(false);
+            await RecordAdaptiveOutcomeAsync(run, plannerInput, controlledQueryText, result, cancellationToken).ConfigureAwait(false);
 
             // hydration 失败严重度处理。
             // 1) 日志：hydration.failedCount > 0 / hydration.budgetExceeded 时记录 Trace 警告（可观测性）。
@@ -2061,6 +2074,7 @@ public sealed class AgentRunActor
     private async Task RecordAdaptiveOutcomeAsync(
         AgentRun run,
         AgentRetrievalPlannerInput? plannerInput,
+        string controlledQueryText,
         ContextDecisionExecutionResult? result,
         CancellationToken cancellationToken)
     {
@@ -2076,20 +2090,37 @@ public sealed class AgentRunActor
                 && (outcome.BudgetExceededCount > 0
                     || (outcome.TokenBudget > 0 && outcome.EffectiveTokens > outcome.TokenBudget));
 
+            // 反馈质量信号（P1-十六）：不再用占位常量（Effective=result!=null /
+            // Confidence=1.0 / OutcomeQuality=1.0）学习"有没有召回东西"——
+            // 以选中候选的实际质量为信号（这些 Context 是否被上下文构建采用）：
+            // - Effective：产出且被采用（选中候选数 > 0——结果真正进入投影，而非仅非空）；
+            // - Confidence：最高选中候选分数（无分数时 0.5 中性，避免 1.0 恒真）；
+            // - OutcomeQuality：选中候选平均分（钳制 0-1；反映召回内容与任务的相关度）。
+            var selectedCount = Math.Max(0, outcome?.SelectedCount ?? 0);
+            var effective = result is not null && selectedCount > 0;
+            var selectedScores = result?.Decision.SelectedEnvelopes
+                .Select(e => e.Utility.FinalScore)
+                .Where(s => s > 0)
+                .ToArray() ?? Array.Empty<double>();
+            var confidence = selectedScores.Length > 0 ? Math.Clamp(selectedScores.Max(), 0.0, 1.0) : 0.5;
+            var outcomeQuality = selectedScores.Length > 0
+                ? Math.Clamp(selectedScores.Average(), 0.0, 1.0)
+                : 0.0;
+
             await _adaptivePlanner.RecordOutcomeAsync(new RetrievalPlanFeedback
             {
                 PlanSignature = AdaptiveRetrievalPlanSignature.Compute(plannerInput),
                 WorkspaceId = run.WorkspaceId,
                 CollectionId = run.WorkspaceId,
                 Purpose = AdaptiveAgentContextPurpose,
-                QueryText = run.Task,
-                HitsReturned = Math.Max(0, outcome?.SelectedCount ?? 0),
+                QueryText = string.IsNullOrWhiteSpace(controlledQueryText) ? run.Task : controlledQueryText,
+                HitsReturned = selectedCount,
                 BudgetExceeded = budgetExceeded,
-                Effective = result is not null,
+                Effective = effective,
                 RecordedAtUtc = DateTimeOffset.UtcNow,
                 Source = RetrievalFeedbackSource.Runtime,
-                Confidence = 1.0,
-                OutcomeQuality = 1.0
+                Confidence = confidence,
+                OutcomeQuality = outcomeQuality
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

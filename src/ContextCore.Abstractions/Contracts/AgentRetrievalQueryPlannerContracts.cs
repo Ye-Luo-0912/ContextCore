@@ -140,6 +140,19 @@ public sealed record AgentRetrievalPlan
     /// <summary>本轮检索 Token 预算（受控：由 Turn 预算推导并按上限收敛）。</summary>
     public int TokenBudget { get; init; }
 
+    /// <summary>
+    /// 本轮检索 TopK（候选召回上限；0 = 引擎按 profile 默认）。
+    /// Decision Runtime 原生消费——检索不再以"不设 TopK"运行。
+    /// </summary>
+    public int TopK { get; init; }
+
+    /// <summary>
+    /// 计划签名（自适应层派生；Diagnostic/审计用）。底层确定性规划器不计算，
+    /// 由自适应层（<see cref="IAdaptiveRetrievalPlanner"/>）在应用策略后填充；
+    /// 未接入自适应层时为 null。
+    /// </summary>
+    public string? PlanSignature { get; init; }
+
     /// <summary>计划说明（中文，解释为何如此规划；用于审计与调试）。</summary>
     public string Reason { get; init; } = string.Empty;
 }

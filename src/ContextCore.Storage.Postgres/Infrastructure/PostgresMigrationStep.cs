@@ -84,6 +84,7 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationQuotaReservationWorkspaceKey(),
         new PostgresMigrationToolDispatchWorkspaceKey(),
         new PostgresMigrationSettlementOutboxExactlyOnce(),
-        new PostgresMigrationToolIdempotencyKeyNamespace()
+        new PostgresMigrationToolIdempotencyKeyNamespace(),
+        new PostgresMigrationLearningArtifact()
     ];
 }

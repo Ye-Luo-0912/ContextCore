@@ -108,6 +108,10 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresDecisionTraceStore>();
         services.AddSingleton<IDecisionTraceStore>(sp => sp.GetRequiredService<PostgresDecisionTraceStore>());
 
+        // Learning Artifact Plane：数据集快照工件持久化（DatasetSnapshot / Lineage / Completeness）。
+        services.AddSingleton<PostgresLearningArtifactStore>();
+        services.AddSingleton<ILearningArtifactStore>(sp => sp.GetRequiredService<PostgresLearningArtifactStore>());
+
         // Short-term memory / promotion / candidate review stores。
         // 替代 Unsupported 占位，让 HA 场景下短期记忆与晋升审核可持久化。
         services.AddSingleton<PostgresShortTermMemoryStore>();

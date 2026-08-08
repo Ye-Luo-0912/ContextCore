@@ -700,6 +700,9 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextDecisionRecord>>(Array.Empty<ContextDecisionRecord>());
+        public Task<ContextDecisionRecord?> GetAsync(
+            string workspaceId, string collectionId, string decisionId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextDecisionRecord?>(null);
     }
 
     private sealed class ThrowingDecisionTraceStore : IDecisionTraceStore
@@ -720,6 +723,9 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextDecisionRecord>>(Array.Empty<ContextDecisionRecord>());
+        public Task<ContextDecisionRecord?> GetAsync(
+            string workspaceId, string collectionId, string decisionId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextDecisionRecord?>(null);
     }
 
     // -------------------------------------------------------------------------

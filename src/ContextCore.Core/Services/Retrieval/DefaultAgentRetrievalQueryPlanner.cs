@@ -103,7 +103,13 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
             ? MinTokenBudget
             : ComputeTokenBudget(input.TurnBudget, diagnostics);
 
-        // 6. 计划说明（中文，供审计与调试）
+        // 6. TopK：候选召回上限（由 Token 预算确定性推导并钳制——检索不再以
+        //    "不设 TopK"运行；Decision Runtime 原生消费计划值）。
+        var topK = string.IsNullOrWhiteSpace(task)
+            ? 4
+            : Math.Clamp(tokenBudget / 512, 4, 20);
+
+        // 7. 计划说明（中文，供审计与调试）
         var reason = BuildReason(
             queries.Count, requiredIds.Count, excludedIds.Count,
             graphSeeds.Count, tokenBudget, diagnostics, string.IsNullOrWhiteSpace(task));
@@ -115,6 +121,7 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
             ExcludedIds = excludedIds,
             GraphSeeds = graphSeeds,
             TokenBudget = tokenBudget,
+            TopK = topK,
             Reason = reason
         };
     }

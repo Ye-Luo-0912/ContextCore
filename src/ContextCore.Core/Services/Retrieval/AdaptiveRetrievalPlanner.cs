@@ -103,7 +103,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
             return basePlan;
         }
 
-        return ApplyPolicy(basePlan, policy);
+        return ApplyPolicy(basePlan, policy, signature);
     }
 
     /// <inheritdoc />
@@ -363,7 +363,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
 
     // ── 策略应用 ─────────────────────────────────────────────────────────────
 
-    private static AgentRetrievalPlan ApplyPolicy(AgentRetrievalPlan basePlan, AdaptiveRetrievalPolicy policy)
+    private static AgentRetrievalPlan ApplyPolicy(AgentRetrievalPlan basePlan, AdaptiveRetrievalPolicy policy, string signature)
     {
         var queries = basePlan.ControlledQueries;
         var note = string.Empty;
@@ -410,6 +410,8 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         {
             ControlledQueries = queries,
             TokenBudget = tokenBudget,
+            TopK = basePlan.TopK,
+            PlanSignature = signature,
             Reason = reason
         };
     }

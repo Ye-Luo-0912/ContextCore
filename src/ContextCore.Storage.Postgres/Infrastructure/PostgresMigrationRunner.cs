@@ -174,7 +174,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   不再信任客户端提供的裸签名；查询 / 清除以工作区为作用域（全局重置需更高权限），
     ///   杜绝跨租户读取 / 污染 / 重置其他工作区的自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v71";
+    public const string SchemaVersion = "cc-schema-v72";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2735,6 +2735,19 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "termina
 -- 过期租约回收索引：结算中但租约过期（worker 崩溃）可被重新领取
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "terminal_run_settlement_outbox", "lease")}
     ON {terminalRunSettlementOutbox} (status, lease_expires_at);
+
+-- Learning Artifact Plane：数据集快照工件持久化（DatasetSnapshot + Lineage +
+-- Completeness + Replay Manifest；(workspace_id, snapshot_id) 复合主键点查）。
+CREATE TABLE IF NOT EXISTS {Infrastructure.PostgresNames.Table(options, "dataset_snapshots")} (
+    workspace_id text NOT NULL,
+    snapshot_id text NOT NULL,
+    schema_version text NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, snapshot_id));
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "dataset_snapshots", "created")}
+    ON {Infrastructure.PostgresNames.Table(options, "dataset_snapshots")} (workspace_id, created_at DESC);
 """;
     }
 
