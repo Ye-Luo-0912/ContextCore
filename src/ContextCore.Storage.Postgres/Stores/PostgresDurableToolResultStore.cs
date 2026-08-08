@@ -94,37 +94,48 @@ ON CONFLICT (request_id) DO UPDATE SET
     }
 
     /// <inheritdoc />
-    public async Task<DurableToolResult?> GetByRequestIdAsync(string requestId, CancellationToken ct)
+    public async Task<DurableToolResult?> GetByRequestIdAsync(TenantRunKey key, string requestId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return null;
         }
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         await EnsureMigratedAsync(ct).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 完整租户键寻址（workspace_id + run_id + request_id 复合主键）。
         command.CommandText = $"""
 SELECT result
 FROM {Table("tool_dispatch_results")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        command.Parameters.AddWithValue("run_id", key.RunId);
         command.Parameters.AddWithValue("request_id", requestId);
         return await ExecuteScalarJsonAsync<DurableToolResult>(command, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async Task SaveByRequestIdAsync(DurableToolResult result, CancellationToken ct)
+    public async Task SaveByRequestIdAsync(TenantRunKey key, DurableToolResult result, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentException.ThrowIfNullOrWhiteSpace(result.RequestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         await EnsureMigratedAsync(ct).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 复合主键 (workspace_id, run_id, request_id)：以租户键为准写入隔离键列，
+        // 不依赖 result 负载携带（防负载与键不一致时插入失败）。
         command.CommandText = $"""
 INSERT INTO {Table("tool_dispatch_results")} (
     tool_call_id, request_id, workspace_id, run_id, invocation_id, idempotency_key,
@@ -132,10 +143,8 @@ INSERT INTO {Table("tool_dispatch_results")} (
 VALUES (
     @tool_call_id, @request_id, @workspace_id, @run_id, @invocation_id, @idempotency_key,
     @side_effect, @external_operation_id, @result, @succeeded, @error, @duration_ms, @created_at)
-ON CONFLICT (request_id) DO UPDATE SET
+ON CONFLICT (workspace_id, run_id, request_id) DO UPDATE SET
     tool_call_id = EXCLUDED.tool_call_id,
-    workspace_id = EXCLUDED.workspace_id,
-    run_id = EXCLUDED.run_id,
     invocation_id = EXCLUDED.invocation_id,
     idempotency_key = EXCLUDED.idempotency_key,
     side_effect = EXCLUDED.side_effect,
@@ -148,8 +157,8 @@ ON CONFLICT (request_id) DO UPDATE SET
 """;
         command.Parameters.AddWithValue("tool_call_id", result.ToolCallId);
         command.Parameters.AddWithValue("request_id", result.RequestId);
-        command.Parameters.AddWithValue("workspace_id", (object?)result.WorkspaceId ?? DBNull.Value);
-        command.Parameters.AddWithValue("run_id", (object?)result.RunId ?? DBNull.Value);
+        command.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        command.Parameters.AddWithValue("run_id", key.RunId);
         command.Parameters.AddWithValue("invocation_id", (object?)result.InvocationId ?? DBNull.Value);
         command.Parameters.AddWithValue("idempotency_key", (object?)result.IdempotencyKey ?? DBNull.Value);
         command.Parameters.AddWithValue("side_effect", result.SideEffect.ToString());

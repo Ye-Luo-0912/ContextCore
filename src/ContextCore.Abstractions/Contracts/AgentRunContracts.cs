@@ -1920,11 +1920,13 @@ public interface IAgentToolCallValidator
     /// <summary>
     /// 校验一个 Tool 调用请求。
     /// </summary>
+    /// <param name="workspaceId">Workspace ID（隔离边界；供审批/权限策略按工作区解析覆盖）。</param>
     /// <param name="runId">Agent Run ID。</param>
     /// <param name="toolCall">待校验的 Tool 调用。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>校验结果（含是否需要审批）。</returns>
     ValueTask<AgentToolCallValidationResult> ValidateAsync(
+        string workspaceId,
         string runId,
         AgentToolCallRequest toolCall,
         CancellationToken cancellationToken = default);

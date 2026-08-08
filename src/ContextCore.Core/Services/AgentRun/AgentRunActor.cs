@@ -1359,7 +1359,7 @@ public sealed class AgentRunActor
                 // Tool Schema 校验
                 if (_toolCallValidator is not null)
                 {
-                    var validation = await _toolCallValidator.ValidateAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
+                    var validation = await _toolCallValidator.ValidateAsync(state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
                     if (!validation.IsValid)
                     {
                         state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
@@ -1440,8 +1440,9 @@ public sealed class AgentRunActor
             }
 
             // 先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
+            // workspaceId 参与哈希（跨工作区同 RunId 的相同 Tool 调用互不冲突）。
             var requestId = (_durableToolExecutor is not null)
-                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
+                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.WorkspaceId, state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
                 : pendingCommand.ToolCallId;
 
             // ToolCallStarted 携带 arguments + modelTurnRevision：
@@ -1938,7 +1939,7 @@ public sealed class AgentRunActor
 
             var request = new ContextDecisionRuntimeRequest
             {
-                RequestId = $"{run.RunId}-ctx-{_modelCallsUsed}",
+                RequestId = $"{run.WorkspaceId}/{run.RunId}-ctx-{_modelCallsUsed}",
                 Scope = scope,
                 Purpose = ContextDecisionPurpose.AgentContext,
                 QueryText = run.Task,
@@ -2237,7 +2238,7 @@ public sealed class AgentRunActor
             // 1. 校验
             if (_toolCallValidator is not null)
             {
-                var validation = await _toolCallValidator.ValidateAsync(state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
+                var validation = await _toolCallValidator.ValidateAsync(state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
                 if (!validation.IsValid)
                 {
                     // 子问题 6：校验失败的 ToolCallCompleted 也含 toolCallId（便于恢复时定位）
@@ -2371,7 +2372,7 @@ public sealed class AgentRunActor
             // 恢复节点重放原 Tool 时能命中同一 journal 条目（durable 去重）。
             var effectiveToolCall = toolCall with { ToolCallId = toolCallId };
             var requestIdForStart = (_durableToolExecutor is not null)
-                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.RunId, effectiveToolCall, _executionModelTurn)
+                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.WorkspaceId, state.Run.RunId, effectiveToolCall, _executionModelTurn)
                 : toolCallId;
 
             // ToolCallStarted 携带 arguments + modelTurnRevision：

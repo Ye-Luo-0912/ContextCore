@@ -161,7 +161,7 @@ public sealed class R30B_ApprovalThresholdTests
                 TokenThreshold = 0
             });
 
-        var result = await validator.ValidateAsync("run-1", ToolCall(costUsd: 5.0), CancellationToken.None);
+        var result = await validator.ValidateAsync(Ws, "run-1", ToolCall(costUsd: 5.0), CancellationToken.None);
 
         Assert.IsTrue(result.IsValid, "阈值触发不影响合法性。");
         Assert.IsTrue(result.RequiresApproval, "超过费用阈值应标记 RequiresApproval。");
@@ -182,7 +182,7 @@ public sealed class R30B_ApprovalThresholdTests
                 TokenThreshold = 0
             });
 
-        var result = await validator.ValidateAsync("run-1", ToolCall(costUsd: 0.2), CancellationToken.None);
+        var result = await validator.ValidateAsync(Ws, "run-1", ToolCall(costUsd: 0.2), CancellationToken.None);
 
         Assert.IsTrue(result.IsValid);
         Assert.IsFalse(result.RequiresApproval, "低于阈值不应要求审批。");
@@ -194,7 +194,7 @@ public sealed class R30B_ApprovalThresholdTests
         // 向后兼容：未注入 ApprovalPolicyOptions 时阈值不生效（即使调用携带预估费用）。
         var validator = new DefaultAgentToolCallValidator();
 
-        var result = await validator.ValidateAsync("run-1", ToolCall(costUsd: 999.0), CancellationToken.None);
+        var result = await validator.ValidateAsync(Ws, "run-1", ToolCall(costUsd: 999.0), CancellationToken.None);
 
         Assert.IsTrue(result.IsValid);
         Assert.IsFalse(result.RequiresApproval, "无策略配置时不应因阈值触发审批。");

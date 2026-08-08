@@ -18,6 +18,11 @@ namespace ContextCore.IntegrationTests;
 public sealed class PostgresToolDispatchJournalTests
 {
     private const string PgVectorImage = "pgvector/pgvector:pg17";
+    private const string Ws = "ws-pg-journal";
+    private const string RunId = "run-pg-journal";
+
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
 
     private static PostgreSqlContainer? _container;
     private static string? _connectionString;
@@ -87,6 +92,8 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = "req-prepare-1",
                 ToolName = "search_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 IdempotencyKey = "idem-1",
                 UpdatedAt = DateTimeOffset.UtcNow,
                 DiagnosticNote = "test-prepare"
@@ -94,7 +101,7 @@ public sealed class PostgresToolDispatchJournalTests
 
             await journal.PrepareAsync(entry);
 
-            var fetched = await journal.GetEntryAsync("req-prepare-1");
+            var fetched = await journal.GetEntryAsync(Key, "req-prepare-1");
             Assert.IsNotNull(fetched, "Prepare 后 GetEntry 应返回条目。");
             Assert.AreEqual("req-prepare-1", fetched!.RequestId);
             Assert.AreEqual("search_tool", fetched.ToolName);
@@ -124,23 +131,25 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "forward_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
 
             // Prepared → Dispatched（带 externalOperationId）
-            await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-1");
-            var afterDispatch = await journal.GetEntryAsync(requestId);
+            await journal.MarkDispatchedAsync(Key, requestId, externalOperationId: "ext-op-1");
+            var afterDispatch = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.Dispatched, afterDispatch!.State);
             Assert.AreEqual("ext-op-1", afterDispatch.ExternalOperationId);
 
             // Dispatched → Committed
-            await journal.MarkCommittedAsync(requestId);
-            var afterCommit = await journal.GetEntryAsync(requestId);
+            await journal.MarkCommittedAsync(Key, requestId);
+            var afterCommit = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.Committed, afterCommit!.State);
 
             // Committed → ResultDelivered
-            await journal.MarkResultDeliveredAsync(requestId);
-            var afterDelivered = await journal.GetEntryAsync(requestId);
+            await journal.MarkResultDeliveredAsync(Key, requestId);
+            var afterDelivered = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.ResultDelivered, afterDelivered!.State);
         }
         finally
@@ -165,18 +174,20 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "backward_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
-            await journal.MarkDispatchedAsync(requestId);
-            await journal.MarkCommittedAsync(requestId);
-            await journal.MarkResultDeliveredAsync(requestId);
+            await journal.MarkDispatchedAsync(Key, requestId);
+            await journal.MarkCommittedAsync(Key, requestId);
+            await journal.MarkResultDeliveredAsync(Key, requestId);
 
             // 幂等契约：状态已越过目标（ResultDelivered > Committed/Dispatched）时
             // 逆退调用视为 AlreadyAdvanced，幂等成功、不报错，且状态不倒退。
-            await journal.MarkCommittedAsync(requestId);
-            await journal.MarkDispatchedAsync(requestId);
+            await journal.MarkCommittedAsync(Key, requestId);
+            await journal.MarkDispatchedAsync(Key, requestId);
 
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.ResultDelivered, fetched!.State,
                 "逆退调用不应使状态倒退（幂等契约：AlreadyAdvanced）。");
         }
@@ -202,15 +213,17 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
-            await journal.MarkDispatchedAsync(requestId);
-            await journal.MarkCommittedAsync(requestId);
+            await journal.MarkDispatchedAsync(Key, requestId);
+            await journal.MarkCommittedAsync(Key, requestId);
 
             // 幂等契约：Committed 已越过 Dispatched，重复 MarkDispatched 幂等成功、状态不倒退。
-            await journal.MarkDispatchedAsync(requestId);
+            await journal.MarkDispatchedAsync(Key, requestId);
 
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.Committed, fetched!.State,
                 "Committed 状态下重复 MarkDispatched 不应使状态倒退（幂等契约：AlreadyAdvanced）。");
         }
@@ -236,9 +249,11 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "original_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
-            await journal.MarkDispatchedAsync(requestId, "ext-1");
+            await journal.MarkDispatchedAsync(Key, requestId, "ext-1");
 
             // 重复 Prepare（同一操作的幂等重放，语义字段一致）：不应覆盖已推进的 Dispatched 状态。
             // 注意：语义字段（ToolName/IdempotencyKey/WorkspaceId/RunId）必须与首次一致，
@@ -248,10 +263,12 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "original_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
 
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.Dispatched, fetched!.State, "重复 Prepare 不应覆盖已推进的状态。");
             Assert.AreEqual("original_tool", fetched.ToolName, "重复 Prepare 不应覆盖 ToolName。");
             Assert.AreEqual("ext-1", fetched.ExternalOperationId);
@@ -279,16 +296,18 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "crash_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 IdempotencyKey = "idem-crash-1",
                 UpdatedAt = DateTimeOffset.UtcNow
             });
-            await journal1.MarkDispatchedAsync(requestId, "ext-crash-1");
+            await journal1.MarkDispatchedAsync(Key, requestId, "ext-crash-1");
 
             // 模拟进程崩溃：丢弃 journal1，创建新实例（同一数据库）
             var journal2 = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
 
             // 新实例应能读取持久化的 Dispatched 状态
-            var fetched = await journal2.GetEntryAsync(requestId);
+            var fetched = await journal2.GetEntryAsync(Key, requestId);
             Assert.IsNotNull(fetched, "崩溃恢复后应能读取持久化条目。");
             Assert.AreEqual(ToolDispatchState.Dispatched, fetched!.State);
             Assert.AreEqual("crash_tool", fetched.ToolName);
@@ -296,8 +315,8 @@ public sealed class PostgresToolDispatchJournalTests
             Assert.AreEqual("idem-crash-1", fetched.IdempotencyKey);
 
             // 新实例可继续推进到 Committed（恢复后继续执行）
-            await journal2.MarkCommittedAsync(requestId);
-            var afterRecover = await journal2.GetEntryAsync(requestId);
+            await journal2.MarkCommittedAsync(Key, requestId);
+            var afterRecover = await journal2.GetEntryAsync(Key, requestId);
             Assert.AreEqual(ToolDispatchState.Committed, afterRecover!.State);
         }
         finally
@@ -320,12 +339,12 @@ public sealed class PostgresToolDispatchJournalTests
             // 未 Prepare 直接 MarkDispatched → 抛冲突异常（不再 auto-create stub）
             // 保证审计链完整：不存在 → Dispatched 这样的跳跃不再可能。
             var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkDispatchedAsync(requestId, "ext-auto-1"));
+                async () => await journal.MarkDispatchedAsync(Key, requestId, "ext-auto-1"));
             StringAssert.Contains(ex.Message, "缺失前驱记录");
             StringAssert.Contains(ex.Message, requestId);
 
             // 验证确实没有插入任何条目
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.IsNull(fetched, "冲突时不应插入任何条目。");
         }
         finally
@@ -347,11 +366,11 @@ public sealed class PostgresToolDispatchJournalTests
 
             // 未 Prepare/Dispatch 直接 MarkCommitted → 抛冲突异常
             var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkCommittedAsync(requestId));
+                async () => await journal.MarkCommittedAsync(Key, requestId));
             StringAssert.Contains(ex.Message, "缺失前驱记录");
             StringAssert.Contains(ex.Message, "Committed");
 
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.IsNull(fetched, "冲突时不应插入任何条目。");
         }
         finally
@@ -373,11 +392,11 @@ public sealed class PostgresToolDispatchJournalTests
 
             // 未 Prepare/Dispatch/Commit 直接 MarkResultDelivered → 抛冲突异常
             var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-                async () => await journal.MarkResultDeliveredAsync(requestId));
+                async () => await journal.MarkResultDeliveredAsync(Key, requestId));
             StringAssert.Contains(ex.Message, "缺失前驱记录");
             StringAssert.Contains(ex.Message, "ResultDelivered");
 
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.IsNull(fetched, "冲突时不应插入任何条目。");
         }
         finally
@@ -402,6 +421,8 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = "req-idem-a",
                 ToolName = "tool_a",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 IdempotencyKey = "shared-idem-key",
                 UpdatedAt = DateTimeOffset.UtcNow
             });
@@ -414,14 +435,16 @@ public sealed class PostgresToolDispatchJournalTests
                     RequestId = "req-idem-b",
                     ToolName = "tool_b",
                     State = ToolDispatchState.Prepared,
+                    WorkspaceId = Ws,
+                    RunId = RunId,
                     IdempotencyKey = "shared-idem-key",
                     UpdatedAt = DateTimeOffset.UtcNow
                 }));
 
             // 验证第一条仍然存在，第二条未写入
-            var a = await journal.GetEntryAsync("req-idem-a");
+            var a = await journal.GetEntryAsync(Key, "req-idem-a");
             Assert.IsNotNull(a, "第一条 Prepare 应保留。");
-            var b = await journal.GetEntryAsync("req-idem-b");
+            var b = await journal.GetEntryAsync(Key, "req-idem-b");
             Assert.IsNull(b, "第二条 Prepare（重复幂等键）不应写入。");
         }
         finally
@@ -447,6 +470,8 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = "req-null-idem-1",
                 ToolName = "tool_1",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 IdempotencyKey = null,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
@@ -455,12 +480,14 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = "req-null-idem-2",
                 ToolName = "tool_2",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 IdempotencyKey = null,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
 
-            var e1 = await journal.GetEntryAsync("req-null-idem-1");
-            var e2 = await journal.GetEntryAsync("req-null-idem-2");
+            var e1 = await journal.GetEntryAsync(Key, "req-null-idem-1");
+            var e2 = await journal.GetEntryAsync(Key, "req-null-idem-2");
             Assert.IsNotNull(e1, "NULL 幂等键的第一条应写入。");
             Assert.IsNotNull(e2, "NULL 幂等键的第二条应写入。");
         }
@@ -480,7 +507,7 @@ public sealed class PostgresToolDispatchJournalTests
         {
             var journal = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
 
-            var fetched = await journal.GetEntryAsync("nonexistent-request");
+            var fetched = await journal.GetEntryAsync(Key, "nonexistent-request");
             Assert.IsNull(fetched, "不存在的 RequestId 应返回 null。");
         }
         finally
@@ -505,18 +532,20 @@ public sealed class PostgresToolDispatchJournalTests
                 RequestId = requestId,
                 ToolName = "merge_tool",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
 
             // 首次 MarkDispatched 带 externalOperationId
-            await journal.MarkDispatchedAsync(requestId, "ext-original");
+            await journal.MarkDispatchedAsync(Key, requestId, "ext-original");
 
             // 幂等重放：再次 MarkDispatched（null externalOperationId）幂等成功（AlreadyApplied），
             // 不应把已有 externalOperationId 覆盖为 null（CAS 未命中时 COALESCE 语义）。
-            await journal.MarkDispatchedAsync(requestId, externalOperationId: null);
+            await journal.MarkDispatchedAsync(Key, requestId, externalOperationId: null);
 
             // 验证 externalOperationId 未被覆盖
-            var fetched = await journal.GetEntryAsync(requestId);
+            var fetched = await journal.GetEntryAsync(Key, requestId);
             Assert.AreEqual("ext-original", fetched!.ExternalOperationId, "externalOperationId 不应被幂等重放覆盖。");
         }
         finally

@@ -30,6 +30,9 @@ public sealed class R29H_ToolEffectPolicyTests
     private const string Ws = "ws-policy";
     private const string RunId = "run-policy";
 
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     // ── 策略引擎单元矩阵（直接 Resolve）────────────────────────────────────
 
     [TestMethod]
@@ -137,7 +140,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.Committed, result.JournalState, "写副作用成功应提交。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 
@@ -158,7 +161,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "写副作用失败 → 不得自动提交（P0-2：失败但副作用是否发生未知）。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "journal 应保持 Dispatched 等待对账。");
         Assert.AreEqual(1, handler.InvocationCount, "外部副作用已执行一次（结果未知，不能重放）。");
     }
@@ -180,7 +183,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "非幂等写成功也不得自动提交（P0-2 严格矩阵）。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State,
             "journal 应保持 Dispatched：非幂等写需对账确认外部副作用真相后提交。");
     }
@@ -201,7 +204,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "RequiresReconciliation 声明 → 必须经 Reconciliation Handler 确认后提交。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
     }
 
@@ -222,7 +225,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "副作用未知 → 不自动提交（保守策略）。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
     }
 
@@ -240,7 +243,7 @@ public sealed class R29H_ToolEffectPolicyTests
 
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.Committed, result.JournalState);
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 
@@ -535,7 +538,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.Committed, result.JournalState, "重试后成功 → 自动提交。");
         Assert.AreEqual(3, handler.InvocationCount, "1 次初始 + 2 次重试 = 3 次分派。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 
@@ -559,7 +562,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.AreEqual(ToolFailurePhase.ProviderReturned, result.FailurePhase,
             "Provider 返回确定失败 → FailurePhase=ProviderReturned。");
         Assert.AreEqual(3, handler.InvocationCount, "1 次初始 + 2 次重试后放弃。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
     }
 
@@ -598,7 +601,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.ResultDelivered, result.JournalState,
             "AsyncDurable → Commit 后显式推进 ResultDelivered。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.ResultDelivered, entry!.State);
     }
 
@@ -616,7 +619,7 @@ public sealed class R29H_ToolEffectPolicyTests
 
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.Committed, result.JournalState, "默认 Synchronous → 停留在 Committed。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 
@@ -636,7 +639,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.IsFalse(result.Succeeded, "P1-1：审批未确认 → Journal 保持 Dispatched，未 Commit 前不得呈现成功。");
         Assert.AreEqual(ToolDispatchState.Dispatched, result.JournalState,
             "RequiresApproval 写副作用未确认审批 → 禁止自动提交（fail-safe）。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
     }
 
@@ -657,7 +660,7 @@ public sealed class R29H_ToolEffectPolicyTests
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(ToolDispatchState.Committed, result.JournalState,
             "审批已确认 → 提交（不破坏 Actor 审批后的正常提交流程）。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 

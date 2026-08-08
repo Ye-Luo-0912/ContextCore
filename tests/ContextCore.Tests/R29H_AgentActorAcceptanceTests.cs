@@ -362,7 +362,7 @@ public sealed class R29H_AgentActorAcceptanceTests
                 && !string.IsNullOrEmpty(reqIdEl.GetString()))
             {
                 var requestId = reqIdEl.GetString()!;
-                var entry = await journal.GetEntryAsync(requestId);
+                var entry = await journal.GetEntryAsync(new TenantRunKey(run.WorkspaceId, run.RunId), requestId);
                 Assert.IsNotNull(entry,
                     $"Journal 应有 RequestId={requestId} 的条目（说明走了 DurableToolExecutor 流程，而非直接调 dispatcher）。");
                 Assert.AreEqual(

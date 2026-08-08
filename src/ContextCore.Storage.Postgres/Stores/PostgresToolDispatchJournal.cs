@@ -172,8 +172,9 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
         // 3. 既有 Prepared 前驱（旧两步流程崩溃残留）→ CAS 原子推进到 DispatchingIntent
         if (existingState == ToolDispatchState.Prepared)
         {
+            var key = new TenantRunKey(entry.WorkspaceId ?? string.Empty, entry.RunId ?? string.Empty);
             var advanced = await TryAdvanceToDispatchingIntentAsync(
-                connection, entry.RequestId, entry.ExternalOperationId, cancellationToken).ConfigureAwait(false);
+                connection, key, entry.RequestId, entry.ExternalOperationId, cancellationToken).ConfigureAwait(false);
             if (advanced)
             {
                 return new ToolDispatchPrepareResult
@@ -213,7 +214,11 @@ public sealed class PostgresToolDispatchJournal : PostgresStoreBase, IPersistent
         };
     }
 
-    /// <summary>单条 INSERT（ON CONFLICT DO NOTHING），返回受影响行数（0 = request_id 已存在）。</summary>
+    /// <summary>单条 INSERT（ON CONFLICT DO NOTHING），返回受影响行数（0 = 复合键已存在）。</summary>
+    /// <remarks>
+    /// 冲突目标为 (workspace_id, run_id, request_id) 复合主键——跨工作区/跨 Run 可复用
+    /// 相同 request_id 而互不干扰（与 agent_run_leases 复合键模式一致）。
+    /// </remarks>
     private async Task<int> InsertEntryAsync(
         NpgsqlConnection connection,
         ToolDispatchJournalEntry entry,
@@ -228,7 +233,7 @@ INSERT INTO {Table("tool_dispatch_journal_entries")} (
 VALUES (
     @request_id, @tool_name, @state, @idempotency_key, @external_operation_id, @updated_at, @diagnostic_note,
     @payload_digest, @workspace_id, @run_id)
-ON CONFLICT (request_id) DO NOTHING;
+ON CONFLICT (workspace_id, run_id, request_id) DO NOTHING;
 """;
         insertCommand.Parameters.AddWithValue("request_id", entry.RequestId);
         insertCommand.Parameters.AddWithValue("tool_name", entry.ToolName);
@@ -246,6 +251,7 @@ ON CONFLICT (request_id) DO NOTHING;
     /// <summary>
     /// 读取既有行并验证与本次条目语义等价（ToolName/IdempotencyKey/PayloadDigest/WorkspaceId/RunId）。
     /// 任一不等价 → 抛 RequestIdReuseDetected；行缺失（并发删除）→ 抛审计链断裂异常。
+    /// 查询按 (workspace_id, run_id, request_id) 复合键寻址。
     /// </summary>
     private async Task<(ToolDispatchState State, string? ExternalOperationId, string? IdempotencyKey)> ReadAndValidateExistingAsync(
         NpgsqlConnection connection,
@@ -257,9 +263,13 @@ ON CONFLICT (request_id) DO NOTHING;
         selectCommand.CommandText = $"""
 SELECT tool_name, state, idempotency_key, external_operation_id, payload_digest, workspace_id, run_id
 FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        selectCommand.Parameters.AddWithValue("workspace_id", (object?)entry.WorkspaceId ?? DBNull.Value);
+        selectCommand.Parameters.AddWithValue("run_id", (object?)entry.RunId ?? DBNull.Value);
         selectCommand.Parameters.AddWithValue("request_id", entry.RequestId);
         await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -313,9 +323,11 @@ LIMIT 1;
     /// <remarks>
     /// 推进时以 COALESCE 写入 external_operation_id——框架在 Prepare 时生成的
     /// 外部操作 ID 需随 Prepared 前驱推进一并落库（旧两步流程的 Prepared 残留可能无该值）。
+    /// 按 (workspace_id, run_id, request_id) 复合键寻址。
     /// </remarks>
     private async Task<bool> TryAdvanceToDispatchingIntentAsync(
         NpgsqlConnection connection,
+        TenantRunKey key,
         string requestId,
         string? externalOperationId,
         CancellationToken cancellationToken)
@@ -325,8 +337,13 @@ LIMIT 1;
         updateCommand.CommandText = $"""
 UPDATE {Table("tool_dispatch_journal_entries")}
 SET state = @target_state, external_operation_id = COALESCE(external_operation_id, @external_operation_id), updated_at = @updated_at
-WHERE request_id = @request_id AND state = @expected_state;
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
+  AND state = @expected_state;
 """;
+        updateCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        updateCommand.Parameters.AddWithValue("run_id", key.RunId);
         updateCommand.Parameters.AddWithValue("request_id", requestId);
         updateCommand.Parameters.AddWithValue("expected_state", (byte)ToolDispatchState.Prepared);
         updateCommand.Parameters.AddWithValue("target_state", (byte)ToolDispatchState.DispatchingIntent);
@@ -342,26 +359,30 @@ WHERE request_id = @request_id AND state = @expected_state;
     /// 与 MarkDispatchedAsync 不同，本方法在状态已超过 DispatchingIntent 时抛异常（而非幂等成功），
     /// 因为继续 Dispatch 会导致外部副作用重复执行。
     /// </remarks>
-    public async ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default)
+    public async ValueTask MarkDispatchingIntentAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        // 1. CAS UPDATE Prepared → DispatchingIntent
+        // 1. CAS UPDATE Prepared → DispatchingIntent（复合键寻址）
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
             updateCommand.CommandText = $"""
 UPDATE {Table("tool_dispatch_journal_entries")}
 SET state = @target_state, updated_at = @updated_at
-WHERE request_id = @request_id AND state = @expected_state;
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
+  AND state = @expected_state;
 """;
+            updateCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+            updateCommand.Parameters.AddWithValue("run_id", key.RunId);
             updateCommand.Parameters.AddWithValue("request_id", requestId);
             updateCommand.Parameters.AddWithValue("expected_state", (byte)ToolDispatchState.Prepared);
             updateCommand.Parameters.AddWithValue("target_state", (byte)ToolDispatchState.DispatchingIntent);
@@ -374,14 +395,18 @@ WHERE request_id = @request_id AND state = @expected_state;
             }
         }
 
-        // 2. 0 行受影响：读取当前行状态
+        // 2. 0 行受影响：读取当前行状态（复合键寻址）
         await using var selectCommand = connection.CreateCommand();
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
 SELECT state FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        selectCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        selectCommand.Parameters.AddWithValue("run_id", key.RunId);
         selectCommand.Parameters.AddWithValue("request_id", requestId);
         await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -417,7 +442,7 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
-    public async ValueTask MarkDispatchedAsync(string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default)
+    public async ValueTask MarkDispatchedAsync(TenantRunKey key, string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
@@ -425,6 +450,7 @@ LIMIT 1;
         }
 
         await TransitionStateAsync(
+            key,
             requestId,
             expectedStates: new[] { ToolDispatchState.Prepared, ToolDispatchState.DispatchingIntent },
             targetState: ToolDispatchState.Dispatched,
@@ -433,7 +459,7 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
-    public async ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default)
+    public async ValueTask MarkCommittedAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
@@ -441,6 +467,7 @@ LIMIT 1;
         }
 
         await TransitionStateAsync(
+            key,
             requestId,
             expectedStates: new[] { ToolDispatchState.Dispatched },
             targetState: ToolDispatchState.Committed,
@@ -449,12 +476,12 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
-    public ValueTask MarkCommittedWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
-        => CommitWithResultCoreAsync(requestId, result, new[] { ToolDispatchState.Dispatched }, cancellationToken);
+    public ValueTask MarkCommittedWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+        => CommitWithResultCoreAsync(key, requestId, result, new[] { ToolDispatchState.Dispatched }, cancellationToken);
 
     /// <inheritdoc />
-    public ValueTask MarkReconciledWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
-        => CommitWithResultCoreAsync(requestId, result, new[] { ToolDispatchState.Reconciling }, cancellationToken);
+    public ValueTask MarkReconciledWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+        => CommitWithResultCoreAsync(key, requestId, result, new[] { ToolDispatchState.Reconciling }, cancellationToken);
 
     /// <summary>
     /// 在单个 DB 事务内同时推进 journal 状态机到 Committed（CAS，期望前驱可配置）与
@@ -462,6 +489,7 @@ LIMIT 1;
     /// 正常提交路径期望前驱 = Dispatched；对账提交路径期望前驱 = Reconciling。
     /// </summary>
     private async ValueTask CommitWithResultCoreAsync(
+        TenantRunKey key,
         string requestId,
         DurableToolResult result,
         IReadOnlyList<ToolDispatchState> expectedStates,
@@ -472,6 +500,8 @@ LIMIT 1;
             throw new ArgumentException("requestId 不能为空。", nameof(requestId));
         }
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         // 在单个 DB 事务内同时推进 journal 状态机到 Committed（CAS）与 UPSERT 结果到
         // tool_dispatch_results，确保崩溃恢复时不会出现 "state=Committed 但 result 缺失" 的不一致状态。
@@ -482,7 +512,7 @@ LIMIT 1;
 
         try
         {
-            // 1. 精确前驱状态 CAS：UPDATE WHERE request_id = @id AND state = @expected_state (Dispatched / Reconciling)
+            // 1. 精确前驱状态 CAS：UPDATE WHERE (workspace_id, run_id, request_id) 复合键 AND state = @expected_state
             bool stateAdvanced;
             await using (var stateCmd = connection.CreateCommand())
             {
@@ -493,8 +523,13 @@ LIMIT 1;
                 stateCmd.CommandText = $"""
 UPDATE {Table("tool_dispatch_journal_entries")}
 SET state = @target_state, updated_at = @updated_at
-WHERE request_id = @request_id AND state IN ({inClause});
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
+  AND state IN ({inClause});
 """;
+                stateCmd.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+                stateCmd.Parameters.AddWithValue("run_id", key.RunId);
                 stateCmd.Parameters.AddWithValue("request_id", requestId);
                 for (int i = 0; i < expectedStates.Count; i++)
                 {
@@ -514,9 +549,13 @@ WHERE request_id = @request_id AND state IN ({inClause});
                 selectCmd.CommandTimeout = Options.CommandTimeoutSeconds;
                 selectCmd.CommandText = $"""
 SELECT state FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+                selectCmd.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+                selectCmd.Parameters.AddWithValue("run_id", key.RunId);
                 selectCmd.Parameters.AddWithValue("request_id", requestId);
                 await using var reader = await selectCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -553,10 +592,8 @@ INSERT INTO {Table("tool_dispatch_results")} (
 VALUES (
     @tool_call_id, @request_id, @workspace_id, @run_id, @invocation_id, @idempotency_key,
     @side_effect, @external_operation_id, @result, @succeeded, @error, @duration_ms, @created_at)
-ON CONFLICT (request_id) DO UPDATE SET
+ON CONFLICT (workspace_id, run_id, request_id) DO UPDATE SET
     tool_call_id = EXCLUDED.tool_call_id,
-    workspace_id = EXCLUDED.workspace_id,
-    run_id = EXCLUDED.run_id,
     invocation_id = EXCLUDED.invocation_id,
     idempotency_key = EXCLUDED.idempotency_key,
     side_effect = EXCLUDED.side_effect,
@@ -569,8 +606,10 @@ ON CONFLICT (request_id) DO UPDATE SET
 """;
                 resultCmd.Parameters.AddWithValue("tool_call_id", result.ToolCallId);
                 resultCmd.Parameters.AddWithValue("request_id", result.RequestId);
-                resultCmd.Parameters.AddWithValue("workspace_id", (object?)result.WorkspaceId ?? DBNull.Value);
-                resultCmd.Parameters.AddWithValue("run_id", (object?)result.RunId ?? DBNull.Value);
+                // 复合主键 (workspace_id, run_id, request_id) 以租户键为准（与 journal 条目一致），
+                // 不依赖 result 负载携带（防负载与键不一致时插入失败）。
+                resultCmd.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+                resultCmd.Parameters.AddWithValue("run_id", key.RunId);
                 resultCmd.Parameters.AddWithValue("invocation_id", (object?)result.InvocationId ?? DBNull.Value);
                 resultCmd.Parameters.AddWithValue("idempotency_key", (object?)result.IdempotencyKey ?? DBNull.Value);
                 resultCmd.Parameters.AddWithValue("side_effect", result.SideEffect.ToString());
@@ -598,26 +637,33 @@ ON CONFLICT (request_id) DO UPDATE SET
     /// 表示外部副作用真相正在确认。CAS 原子推进；已 Reconciling/已提交（>Reconciling）幂等成功；
     /// Prepared（外部调用从未开始）抛 InvalidTransition——它应被重新 Dispatch 而非对账。
     /// </remarks>
-    public async ValueTask BeginReconciliationAsync(string requestId, CancellationToken cancellationToken = default)
+    public async ValueTask BeginReconciliationAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
             throw new ArgumentException("requestId 不能为空。", nameof(requestId));
         }
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        // 1. CAS：DispatchingIntent/Dispatched → Reconciling
+        // 1. CAS：DispatchingIntent/Dispatched → Reconciling（复合键寻址）
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
             updateCommand.CommandText = $"""
 UPDATE {Table("tool_dispatch_journal_entries")}
 SET state = @target_state, updated_at = @updated_at
-WHERE request_id = @request_id AND state IN (@expected_0, @expected_1);
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
+  AND state IN (@expected_0, @expected_1);
 """;
+            updateCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+            updateCommand.Parameters.AddWithValue("run_id", key.RunId);
             updateCommand.Parameters.AddWithValue("request_id", requestId);
             updateCommand.Parameters.AddWithValue("expected_0", (byte)ToolDispatchState.DispatchingIntent);
             updateCommand.Parameters.AddWithValue("expected_1", (byte)ToolDispatchState.Dispatched);
@@ -635,9 +681,13 @@ WHERE request_id = @request_id AND state IN (@expected_0, @expected_1);
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
 SELECT state FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        selectCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        selectCommand.Parameters.AddWithValue("run_id", key.RunId);
         selectCommand.Parameters.AddWithValue("request_id", requestId);
         await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -670,7 +720,7 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
-    public async ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default)
+    public async ValueTask MarkResultDeliveredAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
@@ -678,6 +728,7 @@ LIMIT 1;
         }
 
         await TransitionStateAsync(
+            key,
             requestId,
             expectedStates: new[] { ToolDispatchState.Committed },
             targetState: ToolDispatchState.ResultDelivered,
@@ -686,24 +737,31 @@ LIMIT 1;
     }
 
     /// <inheritdoc />
-    public async ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(string requestId, CancellationToken cancellationToken = default)
+    public async ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return null;
         }
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 完整租户键寻址（workspace_id + run_id + request_id）。
         command.CommandText = $"""
 SELECT tool_name, state, idempotency_key, external_operation_id, updated_at, diagnostic_note,
        payload_digest, workspace_id, run_id
 FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        command.Parameters.AddWithValue("run_id", key.RunId);
         command.Parameters.AddWithValue("request_id", requestId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -728,12 +786,14 @@ LIMIT 1;
 
     /// <inheritdoc />
     public async ValueTask<ToolDispatchState?> GetStateAsync(
-        string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default)
+        TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return null;
         }
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -743,14 +803,14 @@ LIMIT 1;
         command.CommandText = $"""
 SELECT state
 FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
-  AND workspace_id = @workspace_id
+WHERE workspace_id = @workspace_id
   AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        command.Parameters.AddWithValue("run_id", key.RunId);
         command.Parameters.AddWithValue("request_id", requestId);
-        command.Parameters.AddWithValue("workspace_id", workspaceId);
-        command.Parameters.AddWithValue("run_id", runId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -762,7 +822,7 @@ LIMIT 1;
 
     /// <summary>
     /// 原子推进状态机（精确前驱状态 CAS）：
-    /// <c>UPDATE ... WHERE request_id = @id AND state = @expected_state</c>。
+    /// <c>UPDATE ... WHERE (workspace_id, run_id, request_id) 复合键 AND state = @expected_state</c>。
     /// <list type="bullet">
     /// <item>1 行受影响（state = expected） → 成功前向推进（Applied）。</item>
     /// <item>0 行受影响且行存在（state = target） → 幂等成功（AlreadyApplied，不报错）。</item>
@@ -773,17 +833,21 @@ LIMIT 1;
     /// 不自动创建 stub 条目。缺失记录意味着审计链不完整，必须让调用方感知冲突。
     /// </summary>
     private async Task TransitionStateAsync(
+        TenantRunKey key,
         string requestId,
         IReadOnlyList<ToolDispatchState> expectedStates,
         ToolDispatchState targetState,
         string? externalOperationId,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
+
         var now = DateTimeOffset.UtcNow;
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        // 1. 精确前驱状态 CAS：UPDATE WHERE request_id = @id AND state = @expected_state
+        // 1. 精确前驱状态 CAS：UPDATE WHERE 复合键 AND state = @expected_state
         await using (var updateCommand = connection.CreateCommand())
         {
             updateCommand.CommandTimeout = Options.CommandTimeoutSeconds;
@@ -795,8 +859,13 @@ LIMIT 1;
             updateCommand.CommandText = $"""
 UPDATE {Table("tool_dispatch_journal_entries")}
 SET state = @target_state{setExternalOp}, updated_at = @updated_at
-WHERE request_id = @request_id AND state IN ({inClause});
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
+  AND state IN ({inClause});
 """;
+            updateCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+            updateCommand.Parameters.AddWithValue("run_id", key.RunId);
             updateCommand.Parameters.AddWithValue("request_id", requestId);
             for (int i = 0; i < expectedStates.Count; i++)
             {
@@ -821,9 +890,13 @@ WHERE request_id = @request_id AND state IN ({inClause});
         selectCommand.CommandTimeout = Options.CommandTimeoutSeconds;
         selectCommand.CommandText = $"""
 SELECT state FROM {Table("tool_dispatch_journal_entries")}
-WHERE request_id = @request_id
+WHERE workspace_id = @workspace_id
+  AND run_id = @run_id
+  AND request_id = @request_id
 LIMIT 1;
 """;
+        selectCommand.Parameters.AddWithValue("workspace_id", key.WorkspaceId);
+        selectCommand.Parameters.AddWithValue("run_id", key.RunId);
         selectCommand.Parameters.AddWithValue("request_id", requestId);
         await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

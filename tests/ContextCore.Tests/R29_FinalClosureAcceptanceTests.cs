@@ -38,6 +38,12 @@ namespace ContextCore.Tests;
 [TestCategory("Workflow-B")]
 public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
 {
+    private const string Ws = "ws-closure-b";
+    private const string RunId = "run-closure-b";
+
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     [TestMethod]
     public async Task Journal_PrepareAsync_StoresEntryInPreparedState()
     {
@@ -47,7 +53,7 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
 
         await journal.PrepareAsync(entry);
 
-        var stored = await journal.GetEntryAsync("req-B1");
+        var stored = await journal.GetEntryAsync(Key, "req-B1");
         Assert.IsNotNull(stored, "PrepareAsync 后应能读出条目。");
         Assert.AreEqual(ToolDispatchState.Prepared, stored!.State);
         Assert.AreEqual(entry.ToolName, stored.ToolName);
@@ -61,17 +67,17 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
         var requestId = "req-B2";
         await journal.PrepareAsync(BuildEntry(requestId, ToolDispatchState.Prepared));
 
-        await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-B2");
-        var afterDispatch = await journal.GetEntryAsync(requestId);
+        await journal.MarkDispatchedAsync(Key, requestId, externalOperationId: "ext-op-B2");
+        var afterDispatch = await journal.GetEntryAsync(Key, requestId);
         Assert.AreEqual(ToolDispatchState.Dispatched, afterDispatch!.State);
         Assert.AreEqual("ext-op-B2", afterDispatch.ExternalOperationId);
 
-        await journal.MarkCommittedAsync(requestId);
-        var afterCommit = await journal.GetEntryAsync(requestId);
+        await journal.MarkCommittedAsync(Key, requestId);
+        var afterCommit = await journal.GetEntryAsync(Key, requestId);
         Assert.AreEqual(ToolDispatchState.Committed, afterCommit!.State);
 
-        await journal.MarkResultDeliveredAsync(requestId);
-        var afterDelivered = await journal.GetEntryAsync(requestId);
+        await journal.MarkResultDeliveredAsync(Key, requestId);
+        var afterDelivered = await journal.GetEntryAsync(Key, requestId);
         Assert.AreEqual(ToolDispatchState.ResultDelivered, afterDelivered!.State);
     }
 
@@ -82,7 +88,7 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
         var journal = new InMemoryToolDispatchJournal();
 
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.MarkDispatchedAsync("req-B3-no-prepare").AsTask());
+            () => journal.MarkDispatchedAsync(Key, "req-B3-no-prepare").AsTask());
     }
 
     [TestMethod]
@@ -93,7 +99,7 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
         var journal = new InMemoryToolDispatchJournal();
 
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.MarkResultDeliveredAsync("req-B4-no-prepare").AsTask());
+            () => journal.MarkResultDeliveredAsync(Key, "req-B4-no-prepare").AsTask());
     }
 
     [TestMethod]
@@ -107,14 +113,14 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
 
         // Prepared → Committed 跨级跳跃（缺少 Dispatched 前驱）→ 抛异常
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.MarkCommittedAsync(requestId).AsTask());
+            () => journal.MarkCommittedAsync(Key, requestId).AsTask());
 
         // 逐级推进 Prepared → Dispatched → Committed
-        await journal.MarkDispatchedAsync(requestId);
-        await journal.MarkCommittedAsync(requestId);
+        await journal.MarkDispatchedAsync(Key, requestId);
+        await journal.MarkCommittedAsync(Key, requestId);
 
         // 已 Committed 再次 MarkCommitted → 幂等成功（重试安全，不修改）
-        await journal.MarkCommittedAsync(requestId);
+        await journal.MarkCommittedAsync(Key, requestId);
     }
 
     private static ToolDispatchJournalEntry BuildEntry(string requestId, ToolDispatchState state) => new()
@@ -123,6 +129,8 @@ public sealed class WorkflowB_ToolEffectSafetyAcceptanceTests
         ToolName = "echo",
         State = state,
         IdempotencyKey = "idem-" + requestId,
+        WorkspaceId = Ws,
+        RunId = RunId,
         UpdatedAt = DateTimeOffset.UtcNow
     };
 }
@@ -164,9 +172,9 @@ public sealed class WorkflowC_CanaryTruthAcceptanceTests
         var runId = "run-C2";
         var windowStart = DateTimeOffset.UtcNow;
 
-        await source.RegisterToolResultAsync(runId, "req-C2-1", succeeded: true);
-        await source.RegisterToolResultAsync(runId, "req-C2-2", succeeded: true);
-        await source.RegisterToolResultAsync(runId, "req-C2-3", succeeded: false);
+        await source.RegisterToolResultAsync("ws-final", runId, "req-C2-1", succeeded: true);
+        await source.RegisterToolResultAsync("ws-final", runId, "req-C2-2", succeeded: true);
+        await source.RegisterToolResultAsync("ws-final", runId, "req-C2-3", succeeded: false);
 
         var metrics = await source.CollectAsync(runId, windowStart, DateTimeOffset.UtcNow);
 

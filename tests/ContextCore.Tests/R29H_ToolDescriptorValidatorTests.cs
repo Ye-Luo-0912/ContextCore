@@ -441,7 +441,7 @@ public sealed class R29H_ToolDescriptorValidatorTests
 
         // 参数极短（服务端估算 < 阈值），但模型谎报高费用——服务端估算覆盖后不应触发审批。
         var result = validator.ValidateAsync(
-            "run-validator",
+            Ws, "run-validator",
             new AgentToolCallRequest { ToolName = "echo", Arguments = """{"text":"x"}""", EstimatedCostUsd = 999 },
             CancellationToken.None).AsTask().GetAwaiter().GetResult();
 
@@ -463,7 +463,7 @@ public sealed class R29H_ToolDescriptorValidatorTests
         // 参数足够大（服务端估算 tokens=2500 → cost=0.005 > 0.001），模型未填估算值。
         var largeArgs = new string('x', 10_000);
         var result = validator.ValidateAsync(
-            "run-validator",
+            Ws, "run-validator",
             new AgentToolCallRequest { ToolName = "echo", Arguments = "{\"text\":\"" + largeArgs + "\"}" },
             CancellationToken.None).AsTask().GetAwaiter().GetResult();
 
@@ -481,7 +481,7 @@ public sealed class R29H_ToolDescriptorValidatorTests
             approvalPolicy: new ApprovalPolicyOptions { Enabled = true, CostThresholdUsd = 1.0 });
 
         var result = validator.ValidateAsync(
-            "run-validator",
+            Ws, "run-validator",
             new AgentToolCallRequest { ToolName = "echo", Arguments = """{"text":"x"}""", EstimatedCostUsd = 999 },
             CancellationToken.None).AsTask().GetAwaiter().GetResult();
 
@@ -496,7 +496,7 @@ public sealed class R29H_ToolDescriptorValidatorTests
         string arguments,
         string? idempotencyKey = null)
         => validator.ValidateAsync(
-            "run-validator",
+            Ws, "run-validator",
             new AgentToolCallRequest
             {
                 ToolName = toolName,

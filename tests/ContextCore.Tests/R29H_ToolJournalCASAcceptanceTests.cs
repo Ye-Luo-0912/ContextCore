@@ -43,11 +43,11 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         // 2. 尝试直接 MarkCommittedAsync（跳过 MarkDispatchedAsync）→ 应抛 InvalidOperationException（InvalidTransition）
         // expected-state 精确匹配，禁止跨级跳跃
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.MarkCommittedAsync(requestId, cts.Token).AsTask(),
+            () => journal.MarkCommittedAsync(Key, requestId, cts.Token).AsTask(),
             "Prepared → Committed 跨级跳跃必须被拒绝（InvalidTransition）。");
 
         // 3. 验证状态仍为 Prepared（未被错误推进到 Committed）
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(entry, "条目应仍存在。");
         Assert.AreEqual(
             ToolDispatchState.Prepared,
@@ -88,7 +88,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
 
         // 3. 验证原始记录未被覆盖
         // PayloadDigest 仍是 digest-A；IdempotencyKey 仍是 idem-original
-        var stored = await journal.GetEntryAsync(requestId, cts.Token);
+        var stored = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(stored, "原始条目应仍存在（未被冲突请求覆盖）。");
         Assert.AreEqual(
             "digest-A",
@@ -121,11 +121,11 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, idempotencyKey: idempotencyKey, payloadDigest: "digest-shared"),
             cts.Token);
-        await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-1", cancellationToken: cts.Token);
-        await journal.MarkCommittedAsync(requestId, cts.Token);
+        await journal.MarkDispatchedAsync(Key, requestId, externalOperationId: "ext-op-1", cancellationToken: cts.Token);
+        await journal.MarkCommittedAsync(Key, requestId, cts.Token);
 
         // 验证第一次推进到 Committed
-        var entryAfterFirstRun = await journal.GetEntryAsync(requestId, cts.Token);
+        var entryAfterFirstRun = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(entryAfterFirstRun);
         Assert.AreEqual(ToolDispatchState.Committed, entryAfterFirstRun!.State);
         Assert.AreEqual("ext-op-1", entryAfterFirstRun.ExternalOperationId);
@@ -138,7 +138,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
 
         // 3. 验证返回的是原始操作的状态（Committed，未被重置为 Prepared）
         // 说明：PrepareAsync 重复时不重置状态，原始操作推进的 Committed 状态被保留
-        var entryAfterSecondPrepare = await journal.GetEntryAsync(requestId, cts.Token);
+        var entryAfterSecondPrepare = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(entryAfterSecondPrepare, "条目应仍存在。");
         Assert.AreEqual(
             ToolDispatchState.Committed,
@@ -151,8 +151,8 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
 
         // 4. 二次 MarkDispatchedAsync 也应幂等命中（AlreadyApplied，不抛异常）
         // 说明状态机不会重复推进
-        await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-should-be-ignored", cancellationToken: cts.Token);
-        var entryAfterSecondMark = await journal.GetEntryAsync(requestId, cts.Token);
+        await journal.MarkDispatchedAsync(Key, requestId, externalOperationId: "ext-op-should-be-ignored", cancellationToken: cts.Token);
+        var entryAfterSecondMark = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(entryAfterSecondMark);
         Assert.AreEqual(
             ToolDispatchState.Committed,
@@ -183,7 +183,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, result.CurrentState,
             "CurrentState 应为 DispatchingIntent（Intent 已前置落库）。");
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(entry, "条目应已写入。");
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State,
             "journal 条目应直接处于 DispatchingIntent（Prepare + Intent 单次原子写）。");
@@ -233,7 +233,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         Assert.IsTrue(result.ShouldDispatch, "既有 Prepared（外部调用未开始）应返回 ShouldDispatch=true。");
         Assert.IsFalse(result.NeedsReconciliation);
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.IsNotNull(entry);
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State,
             "既有 Prepared 前驱应被原子推进到 DispatchingIntent。");
@@ -253,8 +253,8 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         // 完整执行到 Committed（带结果）
         await journal.PrepareAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"), cts.Token);
-        await journal.MarkDispatchedAsync(requestId, externalOperationId: "ext-op-1", cancellationToken: cts.Token);
-        await journal.MarkCommittedWithResultAsync(requestId, new DurableToolResult
+        await journal.MarkDispatchedAsync(Key, requestId, externalOperationId: "ext-op-1", cancellationToken: cts.Token);
+        await journal.MarkCommittedWithResultAsync(Key, requestId, new DurableToolResult
         {
             ToolCallId = "call-1",
             RequestId = requestId,
@@ -309,11 +309,11 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareWithIntentAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A", externalOperationId: "ext-op-1"),
             cts.Token);
-        await journal.MarkDispatchedAsync(requestId, "ext-op-1", cts.Token);
+        await journal.MarkDispatchedAsync(Key, requestId, "ext-op-1", cts.Token);
 
-        await journal.BeginReconciliationAsync(requestId, cts.Token);
+        await journal.BeginReconciliationAsync(Key, requestId, cts.Token);
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Reconciling, entry!.State, "Dispatched 模糊态应原子推进到 Reconciling。");
         Assert.AreEqual("ext-op-1", entry.ExternalOperationId, "ExternalOperationId 应在对账状态下保留。");
     }
@@ -333,10 +333,10 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             cts.Token);
 
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.BeginReconciliationAsync(requestId, cts.Token).AsTask(),
+            () => journal.BeginReconciliationAsync(Key, requestId, cts.Token).AsTask(),
             "Prepared（外部调用从未开始）进入对账必须被拒绝（InvalidTransition）。");
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Prepared, entry!.State, "状态必须保持 Prepared。");
     }
 
@@ -353,10 +353,10 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareWithIntentAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
             cts.Token);
-        await journal.BeginReconciliationAsync(requestId, cts.Token);
-        await journal.BeginReconciliationAsync(requestId, cts.Token); // 幂等重入
+        await journal.BeginReconciliationAsync(Key, requestId, cts.Token);
+        await journal.BeginReconciliationAsync(Key, requestId, cts.Token); // 幂等重入
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Reconciling, entry!.State, "重复进入对账应幂等，状态保持 Reconciling。");
     }
 
@@ -373,7 +373,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareWithIntentAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
             cts.Token);
-        await journal.BeginReconciliationAsync(requestId, cts.Token);
+        await journal.BeginReconciliationAsync(Key, requestId, cts.Token);
 
         var reconciledResult = new DurableToolResult
         {
@@ -388,9 +388,9 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             Succeeded = true,
             DurationMs = 1.0
         };
-        await journal.MarkReconciledWithResultAsync(requestId, reconciledResult, cts.Token);
+        await journal.MarkReconciledWithResultAsync(Key, requestId, reconciledResult, cts.Token);
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "对账完成后应推进到 Committed。");
 
         // 对账结果进入缓存：后续 Prepare 应返回 CachedResult（禁止重放）
@@ -415,7 +415,7 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
         await journal.PrepareWithIntentAsync(
             BuildEntry(requestId, ToolDispatchState.Prepared, payloadDigest: "digest-A"),
             cts.Token);
-        await journal.MarkDispatchedAsync(requestId, "ext-op-5", cts.Token);
+        await journal.MarkDispatchedAsync(Key, requestId, "ext-op-5", cts.Token);
 
         var result = new DurableToolResult
         {
@@ -427,14 +427,17 @@ public sealed class R29H_ToolJournalCASAcceptanceTests
             DurationMs = 1.0
         };
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => journal.MarkReconciledWithResultAsync(requestId, result, cts.Token).AsTask(),
+            () => journal.MarkReconciledWithResultAsync(Key, requestId, result, cts.Token).AsTask(),
             "未进入 Reconciling 直接提交对账结果必须被拒绝（InvalidTransition）。");
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key, requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "状态必须保持 Dispatched。");
     }
 
     // ── 测试辅助 ─────────────────────────────────────────────────────────────
+
+    /// <summary>测试 Run 复合身份键（与 BuildEntry 的双键一致）。</summary>
+    private static readonly TenantRunKey Key = new("ws-test-journal", "run-test-journal");
 
     private static ToolDispatchJournalEntry BuildEntry(
         string requestId,

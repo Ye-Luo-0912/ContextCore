@@ -111,10 +111,16 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentNullException.ThrowIfNull(toolCall);
 
-        // 生成稳定 RequestId（基于 runId + modelTurn + toolCallId + toolName + arguments 哈希）。
+        // Run 复合身份键（工作区 + Run）——journal / 结果缓存一律以完整租户键寻址，
+        // 跨工作区同 RunId 与同 RequestId 互不干扰。
+        var runKey = new TenantRunKey(workspaceId, runId);
+
+        // 生成稳定 RequestId（基于 workspaceId + runId + modelTurn + toolCallId + toolName + arguments 哈希）。
+        // workspaceId 参与哈希——不同工作区可使用相同 RunId 与相同 Tool 调用而互不冲突
+        // （journal 以 (workspace_id, run_id, request_id) 复合键寻址，跨工作区隔离）。
         // IdempotencyKey 不参与 RequestId 计算——它是业务级去重键，单独存储于 journal 条目，
         // 不应影响调用身份（InvocationId）。这避免同一 Run 内不同轮次的相同 Tool 调用被误判为重复。
-        var requestId = ComputeRequestId(runId, toolCall, modelTurn);
+        var requestId = ComputeRequestId(workspaceId, runId, toolCall, modelTurn);
         var idempotencyKey = toolCall.IdempotencyKey;
         // toolCallId 优先使用模型分配的 ToolCallId，缺失时回退到 RequestId
         var toolCallId = !string.IsNullOrWhiteSpace(toolCall.ToolCallId) ? toolCall.ToolCallId! : requestId;
@@ -229,7 +235,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                         DurableToolResult? cached = null;
                         try
                         {
-                            cached = await _resultStore.GetByRequestIdAsync(requestId, cancellationToken).ConfigureAwait(false);
+                            cached = await _resultStore.GetByRequestIdAsync(runKey, requestId, cancellationToken).ConfigureAwait(false);
                         }
                         catch
                         {
@@ -464,7 +470,7 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
             try
             {
                 await _dispatchJournal.MarkDispatchedAsync(
-                    requestId, dispatchResult.ExternalOperationId ?? externalOperationId, cancellationToken).ConfigureAwait(false);
+                    runKey, requestId, dispatchResult.ExternalOperationId ?? externalOperationId, cancellationToken).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
             {
@@ -540,14 +546,14 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                     try
                     {
                         await _dispatchJournal.MarkCommittedWithResultAsync(
-                            requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                            runKey, requestId, durableResult, cancellationToken).ConfigureAwait(false);
                         finalJournalState = ToolDispatchState.Committed;
                     }
                     catch (InvalidOperationException)
                     {
                         // MarkCommitted 失败 → 查询实际状态（外部副作用已发生，journal 未达 Committed → 对账）
                         journalCommitFailed = true;
-                        var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        var entry = await _dispatchJournal.GetEntryAsync(runKey, requestId, cancellationToken).ConfigureAwait(false);
                         finalJournalState = entry?.State ?? ToolDispatchState.Dispatched;
                     }
                 }
@@ -560,13 +566,13 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 // Postgres journal 的 MarkCommittedWithResultAsync 已在同事务内 UPSERT 结果到 tool_dispatch_results，
                 // 此处冗余写入可跳过；InMemory journal 自带缓存但 PersistsResults=false，仍需走 resultStore（若注入）。
                 // 无 journal 路径（_dispatchJournal=null）也走 resultStore（若注入）。
-                // 使用按 request_id 的新路径（Result 主键），写入全部隔离键列。
+                // 使用按 request_id 的新路径（复合主键），写入全部隔离键列。
                 var journalPersistsResults = _dispatchJournal?.PersistsResults ?? false;
                 if (!journalPersistsResults && _resultStore is not null)
                 {
                     try
                     {
-                        await _resultStore.SaveByRequestIdAsync(durableResult, cancellationToken).ConfigureAwait(false);
+                        await _resultStore.SaveByRequestIdAsync(runKey, durableResult, cancellationToken).ConfigureAwait(false);
                     }
                     catch
                     {
@@ -580,13 +586,13 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
                 {
                     try
                     {
-                        await _dispatchJournal.MarkResultDeliveredAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        await _dispatchJournal.MarkResultDeliveredAsync(runKey, requestId, cancellationToken).ConfigureAwait(false);
                         finalJournalState = ToolDispatchState.ResultDelivered;
                     }
                     catch (InvalidOperationException)
                     {
                         // MarkResultDelivered 失败（如状态已被并发推进）→ 查询实际状态
-                        var entry = await _dispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
+                        var entry = await _dispatchJournal.GetEntryAsync(runKey, requestId, cancellationToken).ConfigureAwait(false);
                         finalJournalState = entry?.State ?? ToolDispatchState.Committed;
                     }
                 }
@@ -711,18 +717,21 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
     }
 
     /// <summary>
-    /// 基于 runId + modelTurn + toolCallId + toolName + arguments 生成稳定 RequestId（SHA-256 截断）。
+    /// 基于 workspaceId + runId + modelTurn + toolCallId + toolName + arguments 生成稳定 RequestId（SHA-256 截断）。
     /// </summary>
     /// <remarks>
     /// RequestId 唯一标识一次具体调用（InvocationId），确保同一 Run 内不同轮次（modelTurn）
     /// 或不同 toolCallId 的相同 Tool 调用产生不同 RequestId，避免误将第二次调用作为重复去重。
-    /// 崩溃恢复时同一 (runId, modelTurn, toolCallId, toolName, arguments) 产出相同 RequestId，确保可重放。
+    /// workspaceId 参与哈希：跨工作区可复用相同 RunId 与相同 Tool 调用而不产生相同 RequestId，
+    /// 与 journal/结果表的 (workspace_id, run_id, request_id) 复合键对齐。
+    /// 崩溃恢复时同一 (workspaceId, runId, modelTurn, toolCallId, toolName, arguments) 产出相同
+    /// RequestId，确保可重放。
     /// <b>IdempotencyKey 不参与哈希</b>——它是业务级去重键，单独存储于 journal 条目，
     /// 不影响调用身份；业务级 IdempotencyKey 去重为未来增强。
     /// </remarks>
-    internal static string ComputeRequestId(string runId, AgentToolCallRequest toolCall, int modelTurn)
+    internal static string ComputeRequestId(string workspaceId, string runId, AgentToolCallRequest toolCall, int modelTurn)
     {
-        var raw = $"{runId}|{modelTurn}|{toolCall.ToolCallId ?? string.Empty}|{toolCall.ToolName}|{toolCall.Arguments ?? string.Empty}";
+        var raw = $"{workspaceId}|{runId}|{modelTurn}|{toolCall.ToolCallId ?? string.Empty}|{toolCall.ToolName}|{toolCall.Arguments ?? string.Empty}";
         var bytes = System.Text.Encoding.UTF8.GetBytes(raw);
         var hash = System.Security.Cryptography.SHA256.HashData(bytes);
         // 取前 16 字节（128 位）作为 hex 字符串（32 字符）
@@ -777,7 +786,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
 
         try
         {
-            var state = await _dispatchJournal.GetStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
+            var state = await _dispatchJournal.GetStateAsync(
+                new TenantRunKey(workspaceId, runId), requestId, cancellationToken).ConfigureAwait(false);
             if (state is not null)
             {
                 return state.Value;

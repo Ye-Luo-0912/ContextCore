@@ -47,6 +47,8 @@ public class ToolDispatchJournalBenchmarks
                 RequestId = $"req-{i}",
                 ToolName = "echo",
                 State = ToolDispatchState.Prepared,
+                WorkspaceId = "bench-ws",
+                RunId = $"run-{i}",
                 UpdatedAt = now
             });
         }
@@ -58,10 +60,11 @@ public class ToolDispatchJournalBenchmarks
         var journal = new InMemoryToolDispatchJournal();
         foreach (var entry in _entries)
         {
+            var key = new TenantRunKey(entry.WorkspaceId!, entry.RunId!);
             await journal.PrepareAsync(entry).ConfigureAwait(false);
-            await journal.MarkDispatchedAsync(entry.RequestId, externalOperationId: $"ext-{entry.RequestId}").ConfigureAwait(false);
-            await journal.MarkCommittedAsync(entry.RequestId).ConfigureAwait(false);
-            await journal.MarkResultDeliveredAsync(entry.RequestId).ConfigureAwait(false);
+            await journal.MarkDispatchedAsync(key, entry.RequestId, externalOperationId: $"ext-{entry.RequestId}").ConfigureAwait(false);
+            await journal.MarkCommittedAsync(key, entry.RequestId).ConfigureAwait(false);
+            await journal.MarkResultDeliveredAsync(key, entry.RequestId).ConfigureAwait(false);
         }
     }
 
@@ -74,7 +77,8 @@ public class ToolDispatchJournalBenchmarks
             await journal.PrepareAsync(entry).ConfigureAwait(false);
         }
         // 查询最后一个 entry
-        _ = await journal.GetEntryAsync(_entries[^1].RequestId).ConfigureAwait(false);
+        var last = _entries[^1];
+        _ = await journal.GetEntryAsync(new TenantRunKey(last.WorkspaceId!, last.RunId!), last.RequestId).ConfigureAwait(false);
     }
 }
 

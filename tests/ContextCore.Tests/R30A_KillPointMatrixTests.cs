@@ -26,6 +26,9 @@ public sealed class R30A_KillPointMatrixTests
     private const string Ws = "ws-r30a";
     private const string RunId = "run-r30a";
 
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     // ── Kill Point：Prepare 前（journal 无记录，全新启动）────────────────────
 
     /// <summary>
@@ -42,8 +45,8 @@ public sealed class R30A_KillPointMatrixTests
         var toolCall = BuildToolCall("weather", "arg-prepare-before");
 
         // 崩溃于 Prepare 前：journal 无任何条目。
-        var before = await journal.GetEntryAsync(
-            DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0), cts.Token);
+        var before = await journal.GetEntryAsync(Key,
+            DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0), cts.Token);
         Assert.IsNull(before, "前置：journal 应无任何记录（崩溃于 Prepare 前）。");
 
         var result = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
@@ -67,7 +70,7 @@ public sealed class R30A_KillPointMatrixTests
         var (_, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("weather", "arg-effect-before");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         // 崩溃于 Intent 持久化之后、Dispatch（外部副作用）之前。
         await journal.PrepareWithIntentAsync(
@@ -95,7 +98,7 @@ public sealed class R30A_KillPointMatrixTests
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("weather", "arg-dispatched-before");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         // 模拟完整 Dispatch 已发生（外部副作用执行 1 次），但崩溃于 MarkDispatchedAsync 持久化之前。
         await journal.PrepareWithIntentAsync(
@@ -140,7 +143,7 @@ public sealed class R30A_KillPointMatrixTests
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("email", "arg-delivered-before");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         // 模拟崩溃于 Committed 之后、ResultDelivered 之前：
         // 完整执行 Dispatch（外部副作用 1 次）+ MarkDispatched + MarkCommittedWithResult，
@@ -155,8 +158,8 @@ public sealed class R30A_KillPointMatrixTests
             WorkspaceId = Ws,
             RunId = RunId
         }, cts.Token);
-        await journal.MarkDispatchedAsync(requestId, "ext-delivered", cts.Token);
-        await journal.MarkCommittedWithResultAsync(requestId, new DurableToolResult
+        await journal.MarkDispatchedAsync(Key, requestId, "ext-delivered", cts.Token);
+        await journal.MarkCommittedWithResultAsync(Key, requestId, new DurableToolResult
         {
             ToolCallId = "toolcall-email-0",
             RequestId = requestId,
@@ -170,7 +173,7 @@ public sealed class R30A_KillPointMatrixTests
             DurationMs = 1.0
         }, cts.Token);
         Assert.AreEqual(1, handler.InvocationCount, "前置：外部副作用已执行 1 次（崩溃窗口内）。");
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(requestId, cts.Token))!.State,
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(Key,requestId, cts.Token))!.State,
             "前置：journal 应停留在 Committed（送达标记前崩溃残留）。");
 
         var result = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
@@ -206,7 +209,7 @@ public sealed class R30A_KillPointMatrixTests
             var (dispatcher, executor, journal, _) = CreateExecutor(handler);
 
             var toolCall = BuildToolCall("weather", args);
-            var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+            var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
             await journal.PrepareWithIntentAsync(
                 BuildJournalEntry(requestId, ToolDispatchState.Prepared, ToolDispatchJournalEntry.ComputePayloadDigest(args)), cts.Token);
@@ -220,10 +223,10 @@ public sealed class R30A_KillPointMatrixTests
                     WorkspaceId = Ws,
                     RunId = RunId
                 }, cts.Token);
-                await journal.MarkDispatchedAsync(requestId, "ext-matrix", cts.Token);
+                await journal.MarkDispatchedAsync(Key, requestId, "ext-matrix", cts.Token);
                 if (state == ToolDispatchState.Reconciling)
                 {
-                    await journal.BeginReconciliationAsync(requestId, cts.Token);
+                    await journal.BeginReconciliationAsync(Key, requestId, cts.Token);
                 }
             }
 

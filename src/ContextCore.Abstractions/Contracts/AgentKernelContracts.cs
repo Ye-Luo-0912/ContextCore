@@ -1262,20 +1262,23 @@ public interface IDurableToolResultStore
 
     /// <summary>
     /// 按 RequestId 获取缓存结果（推荐路径）。
-    /// request_id 为 tool_dispatch_results 主键，保证跨 Run/Provider 不覆盖。
+    /// request_id 在 (workspace_id, run_id, request_id) 复合主键下寻址——同一 RequestId
+    /// 可存在于不同工作区/Run 而不互相覆盖（复合键完整租户寻址）。
     /// </summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；HA 身份寻址必须携带，跨工作区隔离）。</param>
     /// <param name="requestId">Tool 调用 RequestId（与 Journal request_id 一致）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>缓存结果；不存在时返回 null。</returns>
-    Task<DurableToolResult?> GetByRequestIdAsync(string requestId, CancellationToken ct);
+    Task<DurableToolResult?> GetByRequestIdAsync(TenantRunKey key, string requestId, CancellationToken ct);
 
     /// <summary>
     /// 保存缓存结果（推荐路径；按 RequestId 幂等覆盖）。
     /// 写入 workspace_id / run_id / invocation_id 等隔离键字段，供 UNIQUE 隔离约束与对账查询使用。
     /// </summary>
-    /// <param name="result">待缓存的结果（RequestId 作为主键）。</param>
+    /// <param name="key">Run 复合身份键（工作区 + Run；复合主键的一部分）。</param>
+    /// <param name="result">待缓存的结果（RequestId 作为复合主键一部分）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    Task SaveByRequestIdAsync(DurableToolResult result, CancellationToken ct);
+    Task SaveByRequestIdAsync(TenantRunKey key, DurableToolResult result, CancellationToken ct);
 }
 
 /// <summary>
@@ -1455,27 +1458,31 @@ public interface IToolDispatchJournal
     /// Transitions state from Prepared to DispatchingIntent (CAS). Throws InvalidOperationException if state has already
     /// advanced past DispatchingIntent (e.g., Dispatched), indicating a concurrent dispatch may have occurred.
     /// </summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId (must already have a Prepared entry).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="InvalidOperationException">request_id missing (MissingPredecessor), or state already past DispatchingIntent (AlreadyAdvanced).</exception>
-    ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default);
+    ValueTask MarkDispatchingIntentAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 Dispatched（tool 已返回结果）。</summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId（必须已存在 Prepared 条目）。</param>
     /// <param name="externalOperationId">可选的外部操作 ID（tool 返回）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Prepared 前驱）或当前 state ≥ Dispatched（逆退）。</exception>
-    ValueTask MarkDispatchedAsync(string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default);
+    ValueTask MarkDispatchedAsync(TenantRunKey key, string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 Committed（结果已提交）。</summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId（必须已存在 Dispatched 条目）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Dispatched 前驱）或当前 state ≥ Committed（逆退）。</exception>
-    ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default);
+    ValueTask MarkCommittedAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 将指定 RequestId 的状态推进到 Committed，并在<b>同一事务</b>内持久化 Tool 结果缓存。
     /// </summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId（必须已存在 Dispatched 条目）。</param>
     /// <param name="result">待缓存的结果（含 ToolCallId 作为主键；与 Committed 状态原子写入）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -1486,18 +1493,20 @@ public interface IToolDispatchJournal
     /// "state=Committed 但 result 缺失"的不一致状态。
     /// 进程内实现使用原子字典更新模拟事务语义。
     /// </remarks>
-    ValueTask MarkCommittedWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default);
+    ValueTask MarkCommittedWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default);
 
     /// <summary>将指定 RequestId 的状态推进到 ResultDelivered（结果已送达）。</summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId（必须已存在 Committed 条目）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <exception cref="InvalidOperationException">request_id 不存在（缺失 Committed 前驱）或当前 state ≥ ResultDelivered（逆退）。</exception>
-    ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default);
+    ValueTask MarkResultDeliveredAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 将对账目标条目（DispatchingIntent/Dispatched 模糊态）显式推进到
     /// <see cref="ToolDispatchState.Reconciling"/>。
     /// </summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId（必须已存在 DispatchingIntent 或 Dispatched 条目）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
@@ -1508,12 +1517,13 @@ public interface IToolDispatchJournal
     /// 对账确认后经 <see cref="MarkReconciledWithResultAsync"/> 提交；失败保持 Reconciling 等待重试或人工介入，
     /// 绝不静默重放外部副作用。
     /// </remarks>
-    ValueTask BeginReconciliationAsync(string requestId, CancellationToken cancellationToken = default);
+    ValueTask BeginReconciliationAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 对账完成——将 <see cref="ToolDispatchState.Reconciling"/> 条目推进到
     /// <see cref="ToolDispatchState.Committed"/> 并在同一事务内写入对账得到的结果。
     /// </summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId（必须已存在 Reconciling 条目）。</param>
     /// <param name="result">对账确认后的外部副作用结果（Succeeded=true 表示确认副作用已发生并取得结果）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -1522,13 +1532,14 @@ public interface IToolDispatchJournal
     /// 将对账结果提交为最终真相，后续调用返回缓存结果、禁止重放。
     /// 持久化实现应保证状态推进与结果写入同事务（与 <see cref="MarkCommittedWithResultAsync"/> 一致）。
     /// </remarks>
-    ValueTask MarkReconciledWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default);
+    ValueTask MarkReconciledWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default);
 
     /// <summary>查询指定 RequestId 的当前 journal 状态（用于恢复时判断）。</summary>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>journal 条目；不存在时返回 null（表示 tool 从未被调用，可安全重新执行）。</returns>
-    ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(string requestId, CancellationToken cancellationToken = default);
+    ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 查询指定调用（完整租户键 workspace_id + run_id + request_id）的当前 journal 状态。
@@ -1536,12 +1547,11 @@ public interface IToolDispatchJournal
     /// 失败不得伪造 <see cref="ToolDispatchState.Prepared"/>，必须按数据库真实状态返回，
     /// 使调用方（Actor）正确进入对账（Reconciliation）。
     /// </summary>
-    /// <param name="workspaceId">Workspace ID。</param>
-    /// <param name="runId">Run ID。</param>
+    /// <param name="key">Run 复合身份键（工作区 + Run；journal 以完整租户键寻址）。</param>
     /// <param name="requestId">Tool RequestId。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>当前状态；条目不存在（或租户键不匹配）时返回 null。</returns>
-    ValueTask<ToolDispatchState?> GetStateAsync(string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default);
+    ValueTask<ToolDispatchState?> GetStateAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

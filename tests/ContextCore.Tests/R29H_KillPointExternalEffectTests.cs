@@ -26,6 +26,9 @@ public sealed class R29H_KillPointExternalEffectTests
     private const string Ws = "ws-killpoint";
     private const string RunId = "run-killpoint";
 
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     // ── Kill Point 1：崩溃于 Prepared（外部调用从未开始）──────────────────────
 
     /// <summary>
@@ -40,7 +43,7 @@ public sealed class R29H_KillPointExternalEffectTests
         var (_, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("weather", "arg-A");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         // 模拟崩溃在两步流程的 Prepare 之后（旧残留：Prepared 条目）
         await journal.PrepareAsync(
@@ -53,7 +56,7 @@ public sealed class R29H_KillPointExternalEffectTests
         Assert.AreEqual(ToolDispatchState.Committed, result.JournalState);
         Assert.AreEqual(1, handler.InvocationCount, "Prepared kill point：外部副作用应恰好执行一次。");
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "journal 应推进到 Committed。");
     }
 
@@ -71,7 +74,7 @@ public sealed class R29H_KillPointExternalEffectTests
         var (_, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("weather", "arg-B");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         // 模拟崩溃在 PrepareWithIntentAsync 之后、Dispatch 之前
         await journal.PrepareWithIntentAsync(
@@ -85,7 +88,7 @@ public sealed class R29H_KillPointExternalEffectTests
             "P0-1：对账结果必须回传真实 Journal 状态（DispatchingIntent），不伪造。");
         Assert.AreEqual(0, handler.InvocationCount, "DispatchingIntent kill point：不得静默调用外部副作用。");
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State, "journal 状态应保持 DispatchingIntent 等待对账。");
     }
 
@@ -103,7 +106,7 @@ public sealed class R29H_KillPointExternalEffectTests
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("weather", "arg-C");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         // 模拟完整 Dispatch 已发生（外部副作用执行 1 次）但进程崩溃于 MarkCommitted 之前
         await journal.PrepareWithIntentAsync(
@@ -116,7 +119,7 @@ public sealed class R29H_KillPointExternalEffectTests
             WorkspaceId = Ws,
             RunId = RunId
         }, cts.Token);
-        await journal.MarkDispatchedAsync(requestId, "ext-op-1", cts.Token);
+        await journal.MarkDispatchedAsync(Key, requestId, "ext-op-1", cts.Token);
         Assert.AreEqual(1, handler.InvocationCount, "前置：外部副作用已执行 1 次。");
 
         // 恢复重跑：应识别为 Dispatched 模糊态，返回对账结果，不重跑外部副作用
@@ -169,7 +172,7 @@ public sealed class R29H_KillPointExternalEffectTests
         var (dispatcher, executor, journal, _) = CreateExecutor(handler);
 
         var toolCall = BuildToolCall("weather", "arg-E");
-        var requestId = DefaultDurableToolExecutor.ComputeRequestId(RunId, toolCall, 0);
+        var requestId = DefaultDurableToolExecutor.ComputeRequestId(Ws, RunId, toolCall, 0);
 
         await journal.PrepareWithIntentAsync(
             BuildJournalEntry(requestId, ToolDispatchState.Prepared, ToolDispatchJournalEntry.ComputePayloadDigest("arg-E")), cts.Token);
@@ -181,11 +184,11 @@ public sealed class R29H_KillPointExternalEffectTests
             WorkspaceId = Ws,
             RunId = RunId
         }, cts.Token);
-        await journal.MarkDispatchedAsync(requestId, "ext-op-5", cts.Token);
+        await journal.MarkDispatchedAsync(Key, requestId, "ext-op-5", cts.Token);
 
         // 对账：确认外部副作用已发生，提交对账结果（以外部系统查询到的真相为准）
-        await journal.BeginReconciliationAsync(requestId, cts.Token);
-        await journal.MarkReconciledWithResultAsync(requestId, new DurableToolResult
+        await journal.BeginReconciliationAsync(Key, requestId, cts.Token);
+        await journal.MarkReconciledWithResultAsync(Key, requestId, new DurableToolResult
         {
             ToolCallId = "toolcall-weather-0",
             RequestId = requestId,
@@ -205,7 +208,7 @@ public sealed class R29H_KillPointExternalEffectTests
         Assert.AreEqual("reconciled-truth", result.Result);
         Assert.AreEqual(1, handler.InvocationCount, "对账流：外部副作用不得重复执行。");
 
-        var entry = await journal.GetEntryAsync(requestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,requestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "对账完成后 journal 应处于 Committed。");
     }
 
@@ -230,7 +233,7 @@ public sealed class R29H_KillPointExternalEffectTests
         Assert.AreEqual("cc:" + result.RequestId, result.ExternalOperationId, "外部操作 ID 应从稳定 RequestId 派生（cc: 前缀），不使用 GUID。");
         Assert.AreEqual(result.ExternalOperationId, handler.LastContext!.ExternalOperationId, "外部操作 ID 应下发给 Tool Handler。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(result.ExternalOperationId, entry!.ExternalOperationId, "外部操作 ID 应持久化到 journal 条目。");
     }
 
@@ -250,7 +253,7 @@ public sealed class R29H_KillPointExternalEffectTests
 
         Assert.AreEqual("ext-custom-123", result.ExternalOperationId, "Handler 返回的外部操作 ID 应优先。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual("ext-custom-123", entry!.ExternalOperationId, "覆盖后的外部操作 ID 应持久化到 journal。");
     }
 
@@ -318,7 +321,7 @@ public sealed class R29H_KillPointExternalEffectTests
         Assert.AreEqual(1, handler.InvocationCount, "外部副作用不得重复执行。");
 
         // Journal 条目持久化身份与派生值一致
-        var entry = await journal.GetEntryAsync(first.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,first.RequestId, cts.Token);
         Assert.AreEqual("cc:" + first.RequestId, entry!.ExternalOperationId);
         Assert.AreEqual("charge:" + first.RequestId, entry.IdempotencyKey);
     }
@@ -426,7 +429,7 @@ public sealed class R29H_KillPointExternalEffectTests
         var result = await executor.ExecuteAsync(RunId, Ws, toolCall, 0, cts.Token);
         Assert.IsTrue(result.Succeeded);
 
-        var stored = await resultStore.GetByRequestIdAsync(result.RequestId, cts.Token);
+        var stored = await resultStore.GetByRequestIdAsync(Key, result.RequestId, cts.Token);
         Assert.IsNotNull(stored, "结果应按 request_id 主键可查。");
         Assert.AreEqual(result.RequestId, stored!.RequestId);
         Assert.AreEqual(Ws, stored.WorkspaceId, "结果应写入隔离键列（workspace_id）。");

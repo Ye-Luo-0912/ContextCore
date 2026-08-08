@@ -468,7 +468,8 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             var journalParticipates = _journal is not null;
             if (journalParticipates)
             {
-                journalState = await _journal!.GetStateAsync(workspaceId, runId, requestId, cancellationToken).ConfigureAwait(false);
+                journalState = await _journal!.GetStateAsync(
+                    new TenantRunKey(workspaceId, runId), requestId, cancellationToken).ConfigureAwait(false);
             }
 
             var incomingFingerprint = durableResult.ComputeFingerprint();
@@ -477,13 +478,13 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             {
                 case ToolDispatchState.DispatchingIntent:
                 case ToolDispatchState.Dispatched:
-                    await _journal!.BeginReconciliationAsync(requestId, cancellationToken).ConfigureAwait(false);
-                    await _journal.MarkReconciledWithResultAsync(requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                    await _journal!.BeginReconciliationAsync(new TenantRunKey(workspaceId, runId), requestId, cancellationToken).ConfigureAwait(false);
+                    await _journal.MarkReconciledWithResultAsync(new TenantRunKey(workspaceId, runId), requestId, durableResult, cancellationToken).ConfigureAwait(false);
                     writeResult = true;
                     break;
 
                 case ToolDispatchState.Reconciling:
-                    await _journal!.MarkReconciledWithResultAsync(requestId, durableResult, cancellationToken).ConfigureAwait(false);
+                    await _journal!.MarkReconciledWithResultAsync(new TenantRunKey(workspaceId, runId), requestId, durableResult, cancellationToken).ConfigureAwait(false);
                     writeResult = true;
                     break;
 
@@ -491,7 +492,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
                 case ToolDispatchState.ResultDelivered:
                 {
                     var existing = _resultStore is not null
-                        ? await _resultStore.GetByRequestIdAsync(requestId, cancellationToken).ConfigureAwait(false)
+                        ? await _resultStore.GetByRequestIdAsync(new TenantRunKey(workspaceId, runId), requestId, cancellationToken).ConfigureAwait(false)
                         : null;
                     if (existing is null
                         || !string.Equals(existing.ComputeFingerprint(), incomingFingerprint, StringComparison.Ordinal))
@@ -522,7 +523,7 @@ public sealed class InMemoryToolReconciliationStore : IToolReconciliationStore
             // 2. Durable Result UPSERT（愉快/重试路径）。
             if (writeResult && _resultStore is not null)
             {
-                await _resultStore.SaveByRequestIdAsync(durableResult, cancellationToken).ConfigureAwait(false);
+                await _resultStore.SaveByRequestIdAsync(new TenantRunKey(workspaceId, runId), durableResult, cancellationToken).ConfigureAwait(false);
             }
 
             // 3. 记录终态 + 清除租约。

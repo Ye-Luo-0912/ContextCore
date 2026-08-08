@@ -32,6 +32,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
     private const string Ws = "ws-recon-lease";
     private const string RunId = "run-recon-lease";
 
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     // ── 1. 裁决租约 ────────────────────────────────────────────────────
 
     /// <summary>验证：TryBeginAsync 领取租约——返回 token/fencing/expiry，记录进入 Running 并写入租约字段。</summary>
@@ -263,11 +266,11 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(ToolReconciliationStatus.Resolved, resolution.Record!.Status);
 
         // 1. journal 推进到 Committed（含真相结果）
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "journal Committed。");
 
         // 2. Durable Result UPSERT（按 RequestId 可读）
-        var saved = await resultStore.GetByRequestIdAsync(result.RequestId, cts.Token);
+        var saved = await resultStore.GetByRequestIdAsync(Key,result.RequestId, cts.Token);
         Assert.IsNotNull(saved, "对账结果已持久化。");
         Assert.AreEqual("txn-atomic", saved!.Result);
 
@@ -309,7 +312,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             cts.Token);
 
         Assert.AreEqual(ToolReconciliationResolutionStatus.ArbitrationLost, resolution.Status);
-        Assert.AreEqual(ToolDispatchState.Dispatched, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State,
+        Assert.AreEqual(ToolDispatchState.Dispatched, (await journal.GetEntryAsync(Key,result.RequestId, cts.Token))!.State,
             "仲裁权失效 → journal 不被污染。");
         Assert.AreEqual(ToolReconciliationStatus.Running, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
             "仲裁权失效 → 记录不被终态化。");
@@ -490,6 +493,8 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             RequestId = "req-prepared",
             ToolName = "bank-transfer",
             State = ToolDispatchState.Prepared,
+            WorkspaceId = Ws,
+            RunId = RunId,
             UpdatedAt = DateTimeOffset.UtcNow
         }, cts.Token);
         var record = await store.CreateAsync(BuildRecord("rec-prepared", "req-prepared", "bank-transfer"), cts.Token);
@@ -504,8 +509,8 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(ToolReconciliationResolutionStatus.Corrupted, resolution.Status, "Prepared Journal 无法裁决 → Corrupted。");
         Assert.AreEqual(ToolReconciliationStatus.Corrupted, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
             "记录标记损坏，不标为 Resolved。");
-        Assert.IsNull(await resultStore.GetByRequestIdAsync("req-prepared", cts.Token), "损坏路径不写 Durable Result。");
-        Assert.AreEqual(ToolDispatchState.Prepared, await journal.GetStateAsync(Ws, RunId, "req-prepared", cts.Token),
+        Assert.IsNull(await resultStore.GetByRequestIdAsync(Key,"req-prepared", cts.Token), "损坏路径不写 Durable Result。");
+        Assert.AreEqual(ToolDispatchState.Prepared, await journal.GetStateAsync(Key, "req-prepared", cts.Token),
             "损坏路径不推进 Journal。");
     }
 
@@ -530,7 +535,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(ToolReconciliationResolutionStatus.Corrupted, resolution.Status, "缺失 Journal 行无法裁决 → Corrupted。");
         Assert.AreEqual(ToolReconciliationStatus.Corrupted, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
             "记录标记损坏，不标为 Resolved。");
-        Assert.IsNull(await resultStore.GetByRequestIdAsync("req-missing", cts.Token), "损坏路径不写 Durable Result。");
+        Assert.IsNull(await resultStore.GetByRequestIdAsync(Key,"req-missing", cts.Token), "损坏路径不写 Durable Result。");
     }
 
     /// <summary>验证：Journal 已 Committed 且指纹一致 → 幂等成功，复用既有已交付结果、绝不覆盖。</summary>
@@ -552,8 +557,8 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-committed" };
         var durableResult = BuildDurableResult(record, outcome);
         // 既有结果已交付（Journal Committed + 结果落库），对账记录仍 Running。
-        await journal.MarkCommittedWithResultAsync(result.RequestId, durableResult, cts.Token);
-        await resultStore.SaveByRequestIdAsync(durableResult, cts.Token);
+        await journal.MarkCommittedWithResultAsync(Key,result.RequestId, durableResult, cts.Token);
+        await resultStore.SaveByRequestIdAsync(Key,durableResult, cts.Token);
 
         var resolution = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, result.RequestId, lease!.LeaseToken, lease.FencingToken, outcome,
@@ -561,9 +566,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
 
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status, "指纹一致 → 幂等成功。");
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
-        Assert.AreEqual(ToolDispatchState.Committed, await journal.GetStateAsync(Ws, RunId, result.RequestId, cts.Token),
+        Assert.AreEqual(ToolDispatchState.Committed, await journal.GetStateAsync(Key, result.RequestId, cts.Token),
             "Journal 保持 Committed。");
-        Assert.AreEqual("txn-committed", (await resultStore.GetByRequestIdAsync(result.RequestId, cts.Token))!.Result,
+        Assert.AreEqual("txn-committed", (await resultStore.GetByRequestIdAsync(Key,result.RequestId, cts.Token))!.Result,
             "既有已交付结果内容保持不变。");
     }
 
@@ -584,8 +589,8 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
 
         var deliveredOutcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-original" };
         var deliveredResult = BuildDurableResult(record, deliveredOutcome);
-        await journal.MarkCommittedWithResultAsync(result.RequestId, deliveredResult, cts.Token);
-        await resultStore.SaveByRequestIdAsync(deliveredResult, cts.Token);
+        await journal.MarkCommittedWithResultAsync(Key,result.RequestId, deliveredResult, cts.Token);
+        await resultStore.SaveByRequestIdAsync(Key,deliveredResult, cts.Token);
 
         var conflictingOutcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-overwrite-attempt" };
         var resolution = await store.ResolveReconciliationAtomicallyAsync(
@@ -595,9 +600,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(ToolReconciliationResolutionStatus.Corrupted, resolution.Status, "指纹不一致 → 拒绝，标记损坏。");
         Assert.AreEqual(ToolReconciliationStatus.Corrupted, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
             "记录不标为 Resolved。");
-        Assert.AreEqual("txn-original", (await resultStore.GetByRequestIdAsync(result.RequestId, cts.Token))!.Result,
+        Assert.AreEqual("txn-original", (await resultStore.GetByRequestIdAsync(Key,result.RequestId, cts.Token))!.Result,
             "既有已交付结果不被覆盖。");
-        Assert.AreEqual(ToolDispatchState.Committed, await journal.GetStateAsync(Ws, RunId, result.RequestId, cts.Token),
+        Assert.AreEqual(ToolDispatchState.Committed, await journal.GetStateAsync(Key, result.RequestId, cts.Token),
             "Journal 保持 Committed。");
     }
 
@@ -618,9 +623,9 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
 
         var outcome = new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-delivered" };
         var durableResult = BuildDurableResult(record, outcome);
-        await journal.MarkCommittedWithResultAsync(result.RequestId, durableResult, cts.Token);
-        await journal.MarkResultDeliveredAsync(result.RequestId, cts.Token);
-        await resultStore.SaveByRequestIdAsync(durableResult, cts.Token);
+        await journal.MarkCommittedWithResultAsync(Key,result.RequestId, durableResult, cts.Token);
+        await journal.MarkResultDeliveredAsync(Key,result.RequestId, cts.Token);
+        await resultStore.SaveByRequestIdAsync(Key,durableResult, cts.Token);
 
         var resolution = await store.ResolveReconciliationAtomicallyAsync(
             Ws, RunId, result.RequestId, lease!.LeaseToken, lease.FencingToken, outcome,
@@ -628,7 +633,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
 
         Assert.AreEqual(ToolReconciliationResolutionStatus.Resolved, resolution.Status, "指纹一致 → 幂等成功。");
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
-        Assert.AreEqual(ToolDispatchState.ResultDelivered, await journal.GetStateAsync(Ws, RunId, result.RequestId, cts.Token),
+        Assert.AreEqual(ToolDispatchState.ResultDelivered, await journal.GetStateAsync(Key, result.RequestId, cts.Token),
             "已送达状态不被回退。");
     }
 
@@ -768,7 +773,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
             Ws, RunId, record.ReconciliationId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token);
         Assert.AreEqual(3, code, "仲裁权被占用 → 3。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "人工裁决不污染自动 Handler 的 Journal。");
         Assert.AreEqual(ToolReconciliationStatus.Running, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
     }
@@ -795,7 +800,7 @@ public sealed class R30X_ReconciliationLeaseAtomicTests
         Assert.AreEqual(ToolReconciliationStatus.Resolved, stored!.Status);
         Assert.IsNull(stored.LeaseToken, "提交后租约清除。");
         Assert.IsNull(stored.LeaseOwner, "提交后租约持有者清除。");
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(Key,result.RequestId, cts.Token))!.State);
         Assert.AreEqual(1, reconHandler.InvocationCount);
     }
 

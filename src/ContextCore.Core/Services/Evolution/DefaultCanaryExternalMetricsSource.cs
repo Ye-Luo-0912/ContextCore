@@ -69,10 +69,12 @@ public sealed class DefaultCanaryExternalMetricsSource : ICanaryExternalMetricsS
     /// 若注入了 <see cref="IToolDispatchJournal"/>，会通过 GetEntryAsync 验证 requestId
     /// 存在（仅诊断；不影响计数）。未注入或 requestId 不存在时直接累加计数器。
     /// </summary>
+    /// <param name="workspaceId">Agent Run 所属工作区 ID（journal 复合键寻址）。</param>
     /// <param name="runId">Canary run ID。</param>
     /// <param name="requestId">Tool 调用 RequestId。</param>
     /// <param name="succeeded">Tool 是否成功。</param>
     public async ValueTask RegisterToolResultAsync(
+        string workspaceId,
         string runId,
         string requestId,
         bool succeeded,
@@ -86,7 +88,8 @@ public sealed class DefaultCanaryExternalMetricsSource : ICanaryExternalMetricsS
         {
             try
             {
-                var entry = await _toolDispatchJournal.GetEntryAsync(requestId, cancellationToken).ConfigureAwait(false);
+                var entry = await _toolDispatchJournal.GetEntryAsync(
+                    new TenantRunKey(workspaceId, runId), requestId, cancellationToken).ConfigureAwait(false);
                 if (entry is null)
                 {
                     // requestId 不在 journal 中——仅记录诊断，不抛异常（外部信号源可能晚于 journal 写入）

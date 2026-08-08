@@ -28,6 +28,9 @@ public sealed class R30X_ToolFailurePhaseTests
     private const string Ws = "ws-r30x";
     private const string RunId = "run-r30x";
 
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     // ── P0-1：异常路径必须返回真实 Journal 状态（不得伪造 Prepared）─────────
 
     /// <summary>
@@ -59,7 +62,7 @@ public sealed class R30X_ToolFailurePhaseTests
         Assert.AreEqual("cc:" + result.RequestId, result.ExternalOperationId,
             "异常路径必须保留 ExternalOperationId（对账 Handler 据此查询外部系统身份）。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State,
             "journal 实际状态保持 DispatchingIntent（外部副作用可能已发生）。");
     }
@@ -87,7 +90,7 @@ public sealed class R30X_ToolFailurePhaseTests
         Assert.AreEqual(ToolFailurePhase.ProviderCallAmbiguous, result.FailurePhase);
         StringAssert.Contains(result.Error!, "重试 2 次后仍异常", "错误信息应保留重试计数（审计）。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State);
     }
 
@@ -144,7 +147,7 @@ public sealed class R30X_ToolFailurePhaseTests
             "Fence 失败在 Provider 调用之前 → AfterIntentBeforeProvider（强制对账确认无副作用）。");
         Assert.AreEqual(0, handler.InvocationCount, "fail-closed 时不得触碰外部副作用。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.DispatchingIntent, entry!.State);
     }
 
@@ -170,7 +173,7 @@ public sealed class R30X_ToolFailurePhaseTests
         Assert.AreEqual("recon-charge", result.ReconciliationHandler, "对账处理程序必须回传。");
         Assert.AreEqual(TimeSpan.FromHours(4), result.ReconciliationDeadline, "对账截止时长必须回传。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
     }
 
@@ -200,7 +203,7 @@ public sealed class R30X_ToolFailurePhaseTests
         Assert.AreEqual(ToolFailurePhase.ProviderReturned, result.FailurePhase);
         Assert.IsTrue(result.NoEffectConfirmed, "Provider 的 NoEffectConfirmed 必须贯通到最终结果。");
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State);
     }
 
@@ -329,31 +332,31 @@ public sealed class R30X_ToolFailurePhaseTests
         public ValueTask<ToolDispatchPrepareResult> PrepareWithIntentAsync(ToolDispatchJournalEntry entry, CancellationToken cancellationToken = default)
             => _inner.PrepareWithIntentAsync(entry, cancellationToken);
 
-        public ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default)
-            => _inner.MarkDispatchingIntentAsync(requestId, cancellationToken);
+        public ValueTask MarkDispatchingIntentAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
+            => _inner.MarkDispatchingIntentAsync(key, requestId, cancellationToken);
 
-        public ValueTask MarkDispatchedAsync(string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default)
-            => _inner.MarkDispatchedAsync(requestId, externalOperationId, cancellationToken);
+        public ValueTask MarkDispatchedAsync(TenantRunKey key, string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default)
+            => _inner.MarkDispatchedAsync(key, requestId, externalOperationId, cancellationToken);
 
-        public ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default)
-            => _inner.MarkCommittedAsync(requestId, cancellationToken);
+        public ValueTask MarkCommittedAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
+            => _inner.MarkCommittedAsync(key, requestId, cancellationToken);
 
-        public ValueTask MarkCommittedWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
-            => _inner.MarkCommittedWithResultAsync(requestId, result, cancellationToken);
+        public ValueTask MarkCommittedWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+            => _inner.MarkCommittedWithResultAsync(key, requestId, result, cancellationToken);
 
-        public ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default)
-            => _inner.MarkResultDeliveredAsync(requestId, cancellationToken);
+        public ValueTask MarkResultDeliveredAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
+            => _inner.MarkResultDeliveredAsync(key, requestId, cancellationToken);
 
-        public ValueTask BeginReconciliationAsync(string requestId, CancellationToken cancellationToken = default)
-            => _inner.BeginReconciliationAsync(requestId, cancellationToken);
+        public ValueTask BeginReconciliationAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
+            => _inner.BeginReconciliationAsync(key, requestId, cancellationToken);
 
-        public ValueTask MarkReconciledWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
-            => _inner.MarkReconciledWithResultAsync(requestId, result, cancellationToken);
+        public ValueTask MarkReconciledWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+            => _inner.MarkReconciledWithResultAsync(key, requestId, result, cancellationToken);
 
-        public ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(string requestId, CancellationToken cancellationToken = default)
-            => _inner.GetEntryAsync(requestId, cancellationToken);
+        public ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
+            => _inner.GetEntryAsync(key, requestId, cancellationToken);
 
-        public ValueTask<ToolDispatchState?> GetStateAsync(string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default)
+        public ValueTask<ToolDispatchState?> GetStateAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("simulated-state-query-failure");
     }
 

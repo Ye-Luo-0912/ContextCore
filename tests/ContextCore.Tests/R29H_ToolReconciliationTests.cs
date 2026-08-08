@@ -33,6 +33,9 @@ public sealed class R29H_ToolReconciliationTests
     private const string Ws = "ws-recon";
     private const string RunId = "run-recon";
 
+    /// <summary>测试 Run 复合身份键（与 Ws/RunId 常量一致）。</summary>
+    private static readonly TenantRunKey Key = new(Ws, RunId);
+
     // ── 1. 对账记录存储单元测试 ────────────────────────────────────────────
 
     /// <summary>
@@ -496,7 +499,7 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual(0, code);
 
         // journal 已提交真相结果
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "对账确认已发生 → journal Committed。");
 
         // 记录终态
@@ -536,7 +539,7 @@ public sealed class R29H_ToolReconciliationTests
             cts.Token);
         Assert.AreEqual(0, code);
 
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State, "未发生 → journal 提交 void 结果后 Committed。");
 
         var record = await store.GetAsync("rec:" + result.RequestId, cts.Token);
@@ -571,7 +574,7 @@ public sealed class R29H_ToolReconciliationTests
         await coordinator.ReconcileWithLeaseAsync(record, lease!, reconHandler, cts.Token);
 
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status);
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
         Assert.AreEqual(1, reconHandler.InvocationCount);
     }
@@ -600,7 +603,7 @@ public sealed class R29H_ToolReconciliationTests
 
         Assert.AreEqual(ToolReconciliationStatus.Pending, (await store.GetAsync(record.ReconciliationId, cts.Token))!.Status,
             "Handler 异常 → 记录回退 Pending 等待重试。");
-        var entry = await journal.GetEntryAsync(result.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(Key,result.RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "对账失败不得污染 journal 状态。");
     }
 
@@ -694,12 +697,12 @@ public sealed class R29H_ToolReconciliationTests
 
         // 匹配到 Handler → Resolved + journal Committed
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(recWithHandler.ReconciliationId, cts.Token))!.Status);
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(withHandler.RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), withHandler.RequestId, cts.Token))!.State);
 
         // 未匹配 Handler → 保持 Pending + journal 保持 Dispatched
         Assert.AreEqual(ToolReconciliationStatus.Pending, (await store.GetAsync(recManual.ReconciliationId, cts.Token))!.Status,
             "无匹配 Handler 的记录保持 Pending 等待人工裁决。");
-        Assert.AreEqual(ToolDispatchState.Dispatched, (await journal.GetEntryAsync(manualOnly.RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Dispatched, (await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), manualOnly.RequestId, cts.Token))!.State);
     }
 
     /// <summary>
@@ -746,7 +749,7 @@ public sealed class R29H_ToolReconciliationTests
         // 队尾有 Handler 的记录被处理（未被队首无 Handler 记录阻塞）
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync(recWithHandler.ReconciliationId, cts.Token))!.Status,
             "有 Handler 的记录应被 Worker 裁决，不被队首无 Handler 记录阻塞。");
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(withHandler.RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), withHandler.RequestId, cts.Token))!.State);
 
         // 队首无 Handler 记录保持 Pending 等待人工裁决
         foreach (var manual in manualOnly)
@@ -782,7 +785,7 @@ public sealed class R29H_ToolReconciliationTests
         var code = await worker.ResolveAsync(Ws, run.RunId, "rec:" + result.RequestId, new ToolReconciliationOutcome { SideEffectOccurred = true, Result = "txn-manual" }, cts.Token);
         Assert.AreEqual(0, code);
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await store.GetAsync("rec:" + result.RequestId, cts.Token))!.Status);
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(result.RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), result.RequestId, cts.Token))!.State);
     }
 
     /// <summary>
@@ -901,7 +904,7 @@ public sealed class R29H_ToolReconciliationTests
         Assert.IsFalse(string.IsNullOrEmpty(record.ExternalOperationId), "记录携带外部操作 ID 供对账查询。");
 
         // journal 保持 Dispatched（模糊态）
-        var entry = await journal.GetEntryAsync(record.RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), record.RequestId, cts.Token);
         Assert.IsNotNull(entry);
         Assert.AreEqual(ToolDispatchState.Dispatched, entry!.State, "外部副作用已执行但未提交 → journal Dispatched。");
 
@@ -976,7 +979,7 @@ public sealed class R29H_ToolReconciliationTests
             cts.Token);
         Assert.AreEqual(0, code);
         Assert.AreEqual(ToolReconciliationStatus.Resolved, (await reconciliationStore.GetAsync(records[0].ReconciliationId, cts.Token))!.Status);
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(records[0].RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), records[0].RequestId, cts.Token))!.State);
 
         // 阶段 3：恢复执行（Worker 重新入队 → 新 Actor 从事件流恢复）
         var resumeTransport = new SequenceModelTransport(new[]
@@ -1008,7 +1011,7 @@ public sealed class R29H_ToolReconciliationTests
         Assert.AreEqual(1, handler.InvocationCount, "对账确认真相后恢复执行不得重放外部调用。");
 
         // journal 保留对账提交的真相结果
-        var entry = await journal.GetEntryAsync(records[0].RequestId, cts.Token);
+        var entry = await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), records[0].RequestId, cts.Token);
         Assert.AreEqual(ToolDispatchState.Committed, entry!.State);
     }
 
@@ -1072,7 +1075,7 @@ public sealed class R29H_ToolReconciliationTests
             cts.Token);
         Assert.AreEqual(0, code);
         Assert.AreEqual(ToolReconciliationStatus.Rejected, (await reconciliationStore.GetAsync(records[0].ReconciliationId, cts.Token))!.Status);
-        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(records[0].RequestId, cts.Token))!.State);
+        Assert.AreEqual(ToolDispatchState.Committed, (await journal.GetEntryAsync(new TenantRunKey(Ws, run.RunId), records[0].RequestId, cts.Token))!.State);
 
         // 恢复执行 → Completed
         var resumeTransport = new SequenceModelTransport(new[]

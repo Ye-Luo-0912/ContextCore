@@ -1846,7 +1846,8 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflic
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "candidate")} ON {conflictSets} USING gin ((data->'Entries'));
 
 -- Tool Dispatch Journal 持久化表（HA 崩溃恢复 exactly-once）
--- tool_dispatch_journal_entries: request_id 主键 — 每个 tool 调用一条 journal 条目
+-- tool_dispatch_journal_entries: (workspace_id, run_id, request_id) 复合主键 — 每个 tool 调用一条 journal 条目
+-- 跨工作区可复用相同 RunId 与相同 request_id 而互不干扰（租户隔离，与 agent_run_leases 复合键对齐）
 -- state 为 smallint（ToolDispatchState byte 枚举：0=Prepared, 1=Dispatched, 2=Committed, 3=ResultDelivered）
 -- 前向推进由 UPDATE ... WHERE state = :expected_state 保证原子性（精确前驱匹配，禁止跨级跳跃）
 CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
@@ -1858,9 +1859,9 @@ CREATE TABLE IF NOT EXISTS {toolDispatchJournalEntries} (
     updated_at timestamptz NOT NULL,
     diagnostic_note text,
     payload_digest text,
-    workspace_id text,
-    run_id text,
-    PRIMARY KEY (request_id)
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    PRIMARY KEY (workspace_id, run_id, request_id)
 );
 
 -- 为已有数据库（v32 及更早）补加 payload_digest / workspace_id / run_id 列。
@@ -1870,15 +1871,16 @@ ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS workspace_id t
 ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS run_id text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
--- idempotency_key 升级为 UNIQUE partial index。
+-- idempotency_key 升级为 (workspace_id, run_id) 前缀的 UNIQUE partial index。
 -- 旧版本（v21）创建的是普通 index；此处先 DROP 旧 index（若存在）再创建 UNIQUE index，
--- 保证已有数据库升级后幂等键全局唯一，防止不同 request_id 复用同一幂等键分别执行。
+-- 保证已有数据库升级后幂等键按工作区 + Run 唯一，防止不同 request_id 复用同一幂等键分别执行，
+-- 同时允许不同工作区/不同 Run 使用相同幂等键（业务去重键的隔离边界为工作区 + Run）。
 -- partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
 DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")};
-CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (workspace_id, run_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- Durable Tool Result 缓存持久化表（HA 崩溃恢复 exactly-once 结果读取）
--- tool_dispatch_results: tool_call_id 主键 — 每个 tool 调用的结果缓存一条行
+-- tool_dispatch_results: (workspace_id, run_id, request_id) 复合主键 — 每个 tool 调用的结果缓存一条行
 -- result jsonb 存储完整 DurableToolResult（供 GetAsync 反序列化）；
 -- succeeded / side_effect / request_id 为反规范化列，供 SQL 查询/对账。
 CREATE TABLE IF NOT EXISTS {toolDispatchResults} (
@@ -1892,12 +1894,16 @@ CREATE TABLE IF NOT EXISTS {toolDispatchResults} (
     error text,
     duration_ms bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (tool_call_id)
+    workspace_id text NOT NULL,
+    run_id text NOT NULL,
+    invocation_id text,
+    PRIMARY KEY (workspace_id, run_id, request_id)
 );
 
 -- 修复 Durable Tool Result 主键结构
 -- 原主键为 tool_call_id（模型生成，不保证跨 Run/Provider 唯一、JSON fallback 可能重复），
--- 改为 request_id（稳定调用身份哈希），并添加 workspace_id/run_id/invocation_id 列与 UNIQUE 约束。
+-- 改为 (workspace_id, run_id, request_id) 复合主键（稳定调用身份哈希 + 租户隔离），
+-- 并添加 workspace_id/run_id/invocation_id 列与 UNIQUE 约束。
 -- 1. 添加新列（幂等）
 ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS workspace_id text;
 ALTER TABLE {toolDispatchResults} ADD COLUMN IF NOT EXISTS run_id text;
@@ -1909,12 +1915,12 @@ UPDATE {toolDispatchResults} SET workspace_id = COALESCE(workspace_id, '') WHERE
 UPDATE {toolDispatchResults} SET run_id = COALESCE(run_id, '') WHERE run_id IS NULL;
 UPDATE {toolDispatchResults} SET invocation_id = COALESCE(invocation_id, '') WHERE invocation_id IS NULL;
 
--- 3. 删除旧主键约束与旧 request 索引（request_id 将成为新主键，自动建索引，旧索引冗余）
+-- 3. 删除旧主键约束与旧 request 索引（复合主键将自动建索引，旧索引冗余）
 ALTER TABLE {toolDispatchResults} DROP CONSTRAINT IF EXISTS {toolDispatchResultsPkey};
 DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_results", "request")};
 
--- 4. 设置新主键：request_id（稳定调用身份，确保跨 Run/Provider 不覆盖）
-ALTER TABLE {toolDispatchResults} ADD PRIMARY KEY (request_id);
+-- 4. 设置新主键：(workspace_id, run_id, request_id)（稳定调用身份 + 租户隔离，跨工作区互不覆盖）
+ALTER TABLE {toolDispatchResults} ADD PRIMARY KEY (workspace_id, run_id, request_id);
 
 -- 5. UNIQUE 约束：(workspace_id, run_id, invocation_id) — Workspace 隔离键，防止另一 Run 覆盖已有 Tool Result
 -- partial index：仅 invocation_id != '' 时参与唯一约束（兼容旧数据空字符串 + 未提供 invocation 的调用）

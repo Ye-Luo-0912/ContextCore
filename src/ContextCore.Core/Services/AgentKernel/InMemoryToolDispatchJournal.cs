@@ -7,14 +7,16 @@ namespace ContextCore.Core.Services.AgentKernel;
 // InMemoryToolDispatchJournal
 //
 // 进程内 Tool Dispatch Journal 默认实现。
-// 维护每个 RequestId 的状态机进度（Prepared → Dispatched → Committed → ResultDelivered）。
+// 维护每个 (workspace_id, run_id, request_id) 复合键的状态机进度
+// （Prepared → Dispatched → Committed → ResultDelivered）。
 //
 // 设计决策：
-// - 使用 ConcurrentDictionary 支持多线程并发访问。
+// - 使用 ConcurrentDictionary 支持多线程并发访问，键为工作区 + Run + RequestId 复合键
+//   （与 Postgres 复合主键对齐，跨工作区同 RequestId 互不干扰）。
 // - 状态推进使用精确前驱状态匹配（state == expected），
 // 禁止跨级跳跃（如 Prepared → Committed）；违反时抛 InvalidOperationException（InvalidTransition）。
 // 当前已到达/超过目标状态时幂等成功（AlreadyApplied/AlreadyAdvanced，不报错）。
-// - PrepareAsync 对已存在的 request_id 验证语义等价
+// - PrepareAsync 对已存在的复合键验证语义等价
 // （ToolName / IdempotencyKey / PayloadDigest / WorkspaceId / RunId），
 // 不等价时抛 InvalidOperationException（RequestIdReuseDetected）。
 // - 缺失前驱记录时抛 InvalidOperationException（不再 auto-create stub），
@@ -36,6 +38,10 @@ namespace ContextCore.Core.Services.AgentKernel;
 /// </remarks>
 public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
 {
+    /// <summary>复合身份键（工作区 + Run + RequestId），与 Postgres 复合主键对齐。</summary>
+    private static string Key(TenantRunKey key, string requestId)
+        => $"{key.WorkspaceId}\u001f{key.RunId}\u001f{requestId}";
+
     private readonly ConcurrentDictionary<string, ToolDispatchJournalEntry> _entries = new(StringComparer.Ordinal);
     // 结果缓存（MarkCommittedWithResultAsync 写入，PrepareAsync 读取）
     private readonly ConcurrentDictionary<string, DurableToolResult> _results = new(StringComparer.Ordinal);
@@ -68,11 +74,12 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                 $"PrepareAsync 入口的 State 必须为 Prepared，实际为 {entry.State}。", nameof(entry));
         }
 
+        var key = Key(EntryTenantKey(entry), entry.RequestId);
         // AddOrUpdate 原子语义：
         // - key 不存在 → 写入新条目（add factory）。
         // - key 已存在 → 验证语义等价后保留既有状态（update factory，不覆盖已推进的状态）。
         _entries.AddOrUpdate(
-            entry.RequestId,
+            key,
             _ => entry,
             (_, existing) =>
             {
@@ -81,12 +88,12 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
             });
 
         // 根据当前 journal 状态构建 Prepare 结果
-        _entries.TryGetValue(entry.RequestId, out var current);
+        _entries.TryGetValue(key, out var current);
         var currentState = current?.State ?? entry.State;
         DurableToolResult? cachedResult = null;
         if (currentState >= ToolDispatchState.Committed)
         {
-            _results.TryGetValue(entry.RequestId, out cachedResult);
+            _results.TryGetValue(key, out cachedResult);
         }
 
         return new ValueTask<ToolDispatchPrepareResult>(new ToolDispatchPrepareResult
@@ -129,9 +136,10 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
         var now = DateTimeOffset.UtcNow;
         var inserted = false;
         var advancedFromPrepared = false;
+        var key = Key(EntryTenantKey(entry), entry.RequestId);
         // AddOrUpdate 原子语义：新插入 → DispatchingIntent；已存在 → 语义等价校验 + Prepared 前驱推进。
         _entries.AddOrUpdate(
-            entry.RequestId,
+            key,
             _ =>
             {
                 inserted = true;
@@ -155,12 +163,12 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                 return existing; // 幂等：不覆盖已推进的状态
             });
 
-        _entries.TryGetValue(entry.RequestId, out var current);
+        _entries.TryGetValue(key, out var current);
         var currentState = current?.State ?? ToolDispatchState.DispatchingIntent;
         DurableToolResult? cachedResult = null;
         if (currentState >= ToolDispatchState.Committed)
         {
-            _results.TryGetValue(entry.RequestId, out cachedResult);
+            _results.TryGetValue(key, out cachedResult);
         }
 
         return new ValueTask<ToolDispatchPrepareResult>(new ToolDispatchPrepareResult
@@ -197,16 +205,16 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     /// 与 MarkDispatchedAsync 不同，本方法在状态已超过 DispatchingIntent 时抛异常（而非幂等成功），
     /// 因为继续 Dispatch 会导致外部副作用重复执行。
     /// </remarks>
-    public ValueTask MarkDispatchingIntentAsync(string requestId, CancellationToken cancellationToken = default)
+    public ValueTask MarkDispatchingIntentAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             _ =>
             {
                 throw new InvalidOperationException(
@@ -248,16 +256,16 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     }
 
     /// <inheritdoc />
-    public ValueTask MarkDispatchedAsync(string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default)
+    public ValueTask MarkDispatchedAsync(TenantRunKey key, string requestId, string? externalOperationId = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             // 缺失 Prepared 前驱 → 抛异常（MissingPredecessor，不再 auto-create stub）
             _ =>
             {
@@ -273,16 +281,16 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     }
 
     /// <inheritdoc />
-    public ValueTask MarkCommittedAsync(string requestId, CancellationToken cancellationToken = default)
+    public ValueTask MarkCommittedAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             // 缺失 Dispatched 前驱 → 抛异常（MissingPredecessor，不再 auto-create stub）
             _ =>
             {
@@ -298,18 +306,18 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     }
 
     /// <inheritdoc />
-    public ValueTask MarkCommittedWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+    public ValueTask MarkCommittedWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
         ArgumentNullException.ThrowIfNull(result);
 
         // 推进状态机到 Committed（复用 MarkCommittedAsync 的 CAS 逻辑）
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             _ =>
             {
                 throw new InvalidOperationException(
@@ -321,7 +329,7 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                 requestId, existing, new[] { ToolDispatchState.Dispatched }, ToolDispatchState.Committed, null, now));
 
         // 同事务语义：原子写入结果缓存（InMemory 用 ConcurrentDictionary 模拟）
-        _results[requestId] = result;
+        _results[composite] = result;
 
         return ValueTask.CompletedTask;
     }
@@ -332,16 +340,16 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     /// 已 Reconciling/已提交（>Reconciling）幂等成功；Prepared（外部调用从未开始）抛
     /// InvalidTransition——它应被重新 Dispatch 而非对账。
     /// </remarks>
-    public ValueTask BeginReconciliationAsync(string requestId, CancellationToken cancellationToken = default)
+    public ValueTask BeginReconciliationAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             _ =>
             {
                 throw new InvalidOperationException(
@@ -361,18 +369,18 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     }
 
     /// <inheritdoc />
-    public ValueTask MarkReconciledWithResultAsync(string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
+    public ValueTask MarkReconciledWithResultAsync(TenantRunKey key, string requestId, DurableToolResult result, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
         ArgumentNullException.ThrowIfNull(result);
 
         // 推进状态机到 Committed（期望前驱=Reconciling）
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             _ =>
             {
                 throw new InvalidOperationException(
@@ -384,22 +392,22 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
                 requestId, existing, new[] { ToolDispatchState.Reconciling }, ToolDispatchState.Committed, null, now));
 
         // 同事务语义：原子写入结果缓存（InMemory 用 ConcurrentDictionary 模拟）
-        _results[requestId] = result;
+        _results[composite] = result;
 
         return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />
-    public ValueTask MarkResultDeliveredAsync(string requestId, CancellationToken cancellationToken = default)
+    public ValueTask MarkResultDeliveredAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(requestId))
-        {
-            throw new ArgumentException("requestId 不能为空。", nameof(requestId));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key.RunId);
 
         var now = DateTimeOffset.UtcNow;
+        var composite = Key(key, requestId);
         _entries.AddOrUpdate(
-            requestId,
+            composite,
             // 缺失 Committed 前驱 → 抛异常（MissingPredecessor，不再 auto-create stub）
             _ =>
             {
@@ -415,36 +423,40 @@ public sealed class InMemoryToolDispatchJournal : IToolDispatchJournal
     }
 
     /// <inheritdoc />
-    public ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(string requestId, CancellationToken cancellationToken = default)
+    public ValueTask<ToolDispatchJournalEntry?> GetEntryAsync(TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return ValueTask.FromResult<ToolDispatchJournalEntry?>(null);
         }
 
-        _entries.TryGetValue(requestId, out var entry);
+        _entries.TryGetValue(Key(key, requestId), out var entry);
         return ValueTask.FromResult(entry);
     }
 
     /// <inheritdoc />
     public ValueTask<ToolDispatchState?> GetStateAsync(
-        string workspaceId, string runId, string requestId, CancellationToken cancellationToken = default)
+        TenantRunKey key, string requestId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return ValueTask.FromResult<ToolDispatchState?>(null);
         }
 
-        // 完整租户键匹配（workspace_id + run_id + request_id）；条目缺失或租户不匹配 → null。
-        if (_entries.TryGetValue(requestId, out var entry)
-            && (string.IsNullOrWhiteSpace(entry.WorkspaceId) || string.IsNullOrWhiteSpace(entry.RunId)
-                || (entry.WorkspaceId == workspaceId && entry.RunId == runId)))
+        // 完整租户键寻址（workspace_id + run_id + request_id）；条目缺失 → null。
+        if (_entries.TryGetValue(Key(key, requestId), out var entry))
         {
             return ValueTask.FromResult<ToolDispatchState?>(entry.State);
         }
 
         return ValueTask.FromResult<ToolDispatchState?>(null);
     }
+
+    /// <summary>
+    /// 从 journal 条目提取复合身份键（Prepare 路径条目自带双键）。
+    /// </summary>
+    private static TenantRunKey EntryTenantKey(ToolDispatchJournalEntry entry)
+        => new(entry.WorkspaceId ?? string.Empty, entry.RunId ?? string.Empty);
 
     /// <summary>
     /// 应用精确前驱状态转换。

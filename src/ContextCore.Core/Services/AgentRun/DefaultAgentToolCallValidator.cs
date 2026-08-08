@@ -85,6 +85,7 @@ public sealed class DefaultAgentToolCallValidator : IAgentToolCallValidator
 
     /// <inheritdoc />
     public ValueTask<AgentToolCallValidationResult> ValidateAsync(
+        string workspaceId,
         string runId,
         AgentToolCallRequest toolCall,
         CancellationToken cancellationToken = default)
