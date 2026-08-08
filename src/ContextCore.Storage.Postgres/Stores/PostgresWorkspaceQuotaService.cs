@@ -152,7 +152,9 @@ FOR UPDATE;
                 ledger = ReadLedger(reader);
             }
 
-            // 3. 周期过期 → 惰性重置（已用 / 已预留清零，周期起点前移）。
+            // 3. 周期过期 → 惰性轮转：新周期已用归零，但已预留必须按现存 reservation 行
+            //    重新求和（跨周期长 Run 的预留继续保留、继续计入新周期容量），
+            //    否则周期切换后已预留被清零 → 过度放行 + Actualize 时跨周期错误归属。
             if (ledger.PeriodSeconds > 0 && now >= ledger.PeriodStartedAt.AddSeconds(ledger.PeriodSeconds))
             {
                 await using (var resetCmd = connection.CreateCommand())
@@ -161,8 +163,14 @@ FOR UPDATE;
                     resetCmd.CommandTimeout = Options.CommandTimeoutSeconds;
                     resetCmd.CommandText = $"""
 UPDATE {Table("workspace_quota_ledger")}
-SET tokens_used = 0, reserved_tokens = 0,
-    cost_used_usd = 0, reserved_cost_usd = 0,
+SET tokens_used = 0,
+    cost_used_usd = 0,
+    reserved_tokens = COALESCE((
+        SELECT SUM(tokens) FROM {Table("workspace_quota_reservations")}
+        WHERE workspace_id = @workspace_id), 0),
+    reserved_cost_usd = COALESCE((
+        SELECT SUM(cost_usd) FROM {Table("workspace_quota_reservations")}
+        WHERE workspace_id = @workspace_id), 0),
     period_started_at = @now, updated_at = @now
 WHERE workspace_id = @workspace_id;
 """;
@@ -170,7 +178,14 @@ WHERE workspace_id = @workspace_id;
                     resetCmd.Parameters.AddWithValue("now", now);
                     await resetCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
-                ledger = ledger with { TokensUsed = 0, ReservedTokens = 0, CostUsedUsd = 0, ReservedCostUsd = 0, PeriodStartedAt = now };
+                ledger = ledger with
+                {
+                    TokensUsed = 0,
+                    CostUsedUsd = 0,
+                    ReservedTokens = await SumReservedAsync(connection, workspaceId, cancellationToken, transaction),
+                    ReservedCostUsd = await SumReservedCostAsync(connection, workspaceId, cancellationToken, transaction),
+                    PeriodStartedAt = now
+                };
             }
 
             // 4. 锁定后复查预留是否已存在（并发幂等重放：等待锁期间另一事务已插入）。
@@ -477,6 +492,10 @@ WHERE workspace_id = @workspace_id;
             await using var upsertCmd = connection.CreateCommand();
             upsertCmd.Transaction = transaction;
             upsertCmd.CommandTimeout = Options.CommandTimeoutSeconds;
+            // 只更新上限（max_tokens / max_cost_usd / period_seconds）与更新时间戳：
+            // 绝不清零 usage / reserved / period_started_at——SetLimit 是"改上限"不是 Reset。
+            // 若兼做 Reset，旧 reservation 行不清除却把 reserved 清零，会同时产生
+            // 过度放行与跨周期错误归属；显式重置应走 ResetQuotaAsync（清 ledger + 删预留）。
             upsertCmd.CommandText = $"""
 INSERT INTO {Table("workspace_quota_ledger")} (
     workspace_id, max_tokens, tokens_used, reserved_tokens,
@@ -490,11 +509,6 @@ ON CONFLICT (workspace_id) DO UPDATE SET
     max_tokens = EXCLUDED.max_tokens,
     max_cost_usd = EXCLUDED.max_cost_usd,
     period_seconds = EXCLUDED.period_seconds,
-    tokens_used = 0,
-    reserved_tokens = 0,
-    cost_used_usd = 0,
-    reserved_cost_usd = 0,
-    period_started_at = EXCLUDED.period_started_at,
     updated_at = EXCLUDED.updated_at;
 """;
             upsertCmd.Parameters.AddWithValue("workspace_id", workspaceId);
@@ -533,6 +547,44 @@ LIMIT 1;
         command.Parameters.AddWithValue("reservation_id", reservationId);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is not null and not DBNull;
+    }
+
+    /// <summary>当前工作区现存预留行 token 总和（周期轮转后保留跨周期长 Run 的预留容量）。</summary>
+    private async ValueTask<long> SumReservedAsync(
+        NpgsqlConnection connection,
+        string workspaceId,
+        CancellationToken cancellationToken,
+        NpgsqlTransaction? transaction = null)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT COALESCE(SUM(tokens), 0) FROM {Table("workspace_quota_reservations")}
+WHERE workspace_id = @workspace_id;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is null or DBNull ? 0 : Convert.ToInt64(result);
+    }
+
+    /// <summary>当前工作区现存预留行 cost 总和（周期轮转后保留跨周期长 Run 的预留容量）。</summary>
+    private async ValueTask<double> SumReservedCostAsync(
+        NpgsqlConnection connection,
+        string workspaceId,
+        CancellationToken cancellationToken,
+        NpgsqlTransaction? transaction = null)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT COALESCE(SUM(cost_usd), 0) FROM {Table("workspace_quota_reservations")}
+WHERE workspace_id = @workspace_id;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is null or DBNull ? 0 : Convert.ToDouble(result);
     }
 
     private WorkspaceQuota DefaultQuota(string workspaceId) => new()

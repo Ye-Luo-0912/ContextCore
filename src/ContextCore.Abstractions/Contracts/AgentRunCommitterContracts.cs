@@ -17,11 +17,12 @@ namespace ContextCore.Abstractions;
 /// </remarks>
 public sealed record AgentRunCommit
 {
-    /// <summary>Workspace ID（隔离边界）。</summary>
-    public required string WorkspaceId { get; init; }
-
-    /// <summary>所属 Run ID。</summary>
-    public required string RunId { get; init; }
+    /// <summary>
+    /// Run 复合身份键（工作区 + Run）——提交负载内所有身份（事件流 / 状态快照 /
+    /// checkpoint 游标 / checkpoint 会话）必须以本键为准，提交器在 SQL 执行前
+    /// 统一校验一致性，杜绝"给 Run A 追加事件、把 Run B 推进终态"的跨 Run 污染。
+    /// </summary>
+    public required TenantRunKey Key { get; init; }
 
     /// <summary>待追加的事件流（同 Run、Sequence 从 0 起连续、哈希链完整）。</summary>
     public required IReadOnlyList<AgentRunEvent> Events { get; init; }
@@ -73,4 +74,70 @@ public interface IPersistentAgentRunCommitter
     /// <param name="commit">提交负载（事件流 + 可选状态 CAS + 可选 checkpoint）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     ValueTask CommitAsync(AgentRunCommit commit, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// AgentRunCommit 身份不变量校验器：提交负载内所有身份（事件流 / 状态快照 /
+/// checkpoint 游标 / checkpoint 会话）必须与复合键一致。
+/// 提交器在 SQL 执行前调用，任何不一致立即抛 <see cref="ArgumentException"/>——
+/// 杜绝"给 Run A 追加事件、把 Run B 推进终态 + 结算"的跨 Run 污染。
+/// </summary>
+public static class AgentRunCommitIdentityValidator
+{
+    /// <summary>
+    /// 校验提交负载的身份一致性；不一致时抛 <see cref="ArgumentException"/>。
+    /// </summary>
+    public static void ValidateIdentityConsistency(AgentRunCommit commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        var (workspaceId, runId) = (commit.Key.WorkspaceId, commit.Key.RunId);
+
+        // 1. 事件流：每条事件的工作区 + Run 必须与复合键一致。
+        for (var i = 0; i < commit.Events.Count; i++)
+        {
+            var evt = commit.Events[i];
+            if (!string.Equals(evt.WorkspaceId, workspaceId, StringComparison.Ordinal)
+                || !string.Equals(evt.RunId, runId, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"AgentRunCommit 身份不变量校验失败：事件流第 {i} 条归属" +
+                    $"(workspace_id={evt.WorkspaceId}, run_id={evt.RunId})，与复合键" +
+                    $"(workspace_id={workspaceId}, run_id={runId}) 不一致。" +
+                    "同一提交负载不得混入其他 Run 的事件。");
+            }
+        }
+
+        // 2. 状态快照：Run 归属必须与复合键一致。
+        if (commit.NewRunSnapshot is not null
+            && (!string.Equals(commit.NewRunSnapshot.WorkspaceId, workspaceId, StringComparison.Ordinal)
+                || !string.Equals(commit.NewRunSnapshot.RunId, runId, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                $"AgentRunCommit 身份不变量校验失败：状态快照归属" +
+                $"(workspace_id={commit.NewRunSnapshot.WorkspaceId}, run_id={commit.NewRunSnapshot.RunId})，" +
+                $"与复合键 (workspace_id={workspaceId}, run_id={runId}) 不一致。" +
+                "禁止同一提交把 Run A 的事件与 Run B 的状态推进混在一起。");
+        }
+
+        // 3. Checkpoint 游标：归属必须与复合键一致。
+        if (commit.CheckpointCursor is not null
+            && (!string.Equals(commit.CheckpointCursor.WorkspaceId, workspaceId, StringComparison.Ordinal)
+                || !string.Equals(commit.CheckpointCursor.RunId, runId, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                $"AgentRunCommit 身份不变量校验失败：checkpoint 游标归属" +
+                $"(workspace_id={commit.CheckpointCursor.WorkspaceId}, run_id={commit.CheckpointCursor.RunId})，" +
+                $"与复合键 (workspace_id={workspaceId}, run_id={runId}) 不一致。");
+        }
+
+        // 4. Checkpoint 本体：会话工作区必须与复合键的工作区一致。
+        if (commit.Checkpoint is not null
+            && !string.Equals(commit.Checkpoint.Session.WorkspaceId, workspaceId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"AgentRunCommit 身份不变量校验失败：checkpoint 会话工作区" +
+                $"(workspace_id={commit.Checkpoint.Session.WorkspaceId})，" +
+                $"与复合键工作区 (workspace_id={workspaceId}) 不一致。");
+        }
+    }
 }

@@ -44,4 +44,21 @@ public sealed class InMemoryRetrievalTraceStore : IRetrievalTraceStore
                 .ToArray());
         }
     }
+
+    public Task<ContextRetrievalTrace?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string retrievalId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_gate)
+        {
+            return Task.FromResult(_traces.FirstOrDefault(item =>
+                string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(item.RetrievalId, retrievalId, StringComparison.OrdinalIgnoreCase)));
+        }
+    }
 }

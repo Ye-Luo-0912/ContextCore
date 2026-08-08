@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.Storage.InMemory;
 
 namespace ContextCore.Tests;
@@ -16,6 +17,126 @@ public sealed class TraceBackedDecisionEvidenceProviderTests
 {
     private const string WorkspaceId = "workspace-evidence";
     private const string CollectionId = "collection-evidence";
+
+    /// <summary>
+    /// 验证（十三）：Decision Evidence 使用稳定主键点查，不受"最近 N 条"可见窗口限制——
+    /// 目标 trace 落库后即使又产生 101+ 条更新 trace，审计仍能命中（数据存在即可查，
+    /// 不因 QueryRecent(take=100) 窗口滚动而丢失可见性）。
+    /// </summary>
+    [TestMethod]
+    public async Task Resolve_RetrievalBeyondRecentWindow_StillResolvableByStableKey()
+    {
+        var retrievalStore = new InMemoryRetrievalTraceStore();
+        var provider = new TraceBackedDecisionEvidenceProvider(
+            retrievalTraceStore: retrievalStore,
+            packageBuildTraceStore: null);
+
+        // 目标决策（Decision A）的 trace 最早落库（CreatedAt 最早）。
+        await retrievalStore.SaveAsync(new ContextRetrievalTrace
+        {
+            RetrievalId = "decision-A",
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+            Stages = Array.Empty<ContextRetrievalStageTrace>(),
+            SelectedItems = new[]
+            {
+                new ContextRetrievalDecision
+                {
+                    CandidateId = "cand-A",
+                    SourceId = "src-A",
+                    Kind = ContextRetrievalCandidateKind.ContextItem,
+                    Type = "note",
+                    Reason = "top-score",
+                    Score = 0.9
+                }
+            },
+            DroppedItems = Array.Empty<ContextRetrievalDecision>()
+        });
+
+        // 之后产生 101+ 条更新 trace（把 Decision A 挤出最近 100 条窗口）。
+        for (var i = 0; i < 101; i++)
+        {
+            await retrievalStore.SaveAsync(new ContextRetrievalTrace
+            {
+                RetrievalId = $"later-{i}",
+                WorkspaceId = WorkspaceId,
+                CollectionId = CollectionId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Stages = Array.Empty<ContextRetrievalStageTrace>(),
+                SelectedItems = Array.Empty<ContextRetrievalDecision>(),
+                DroppedItems = Array.Empty<ContextRetrievalDecision>()
+            });
+        }
+
+        var record = new ContextDecisionRecord
+        {
+            DecisionId = "decision-A",
+            Source = ContextDecisionSource.Retrieval,
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Candidates = new[] { new ContextDecisionCandidate { ItemId = "cand-A" } }
+        };
+
+        var result = await provider.ResolveEvidenceAsync(record);
+
+        Assert.IsTrue(result.IsComplete,
+            "稳定主键点查：窗口外的决策 trace 仍可审计（数据存在即可查）。");
+        Assert.AreEqual(1, result.Evidence.Count);
+        Assert.AreEqual("top-score", result.Evidence[0].PrimaryRationale);
+    }
+
+    /// <summary>
+    /// 验证（十二）：QueuedRetrievalTraceStore 下，审计前 Flush 确保"已接受"即"已可查证"——
+    /// 队列异步窗口不造成 Evidence 缺失（诊断 trace 可丢，但 Evidence 查证不依赖竞态窗口）。
+    /// </summary>
+    [TestMethod]
+    public async Task Resolve_QueuedStore_FlushBeforeRead_EvidenceComplete()
+    {
+        var inner = new InMemoryRetrievalTraceStore();
+        using var queued = new QueuedRetrievalTraceStore(inner, capacity: 16);
+        var provider = new TraceBackedDecisionEvidenceProvider(
+            retrievalTraceStore: queued,
+            packageBuildTraceStore: null);
+
+        // Save 入队即返回（不等待落库）。
+        await queued.SaveAsync(new ContextRetrievalTrace
+        {
+            RetrievalId = "queued-001",
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            Stages = Array.Empty<ContextRetrievalStageTrace>(),
+            SelectedItems = new[]
+            {
+                new ContextRetrievalDecision
+                {
+                    CandidateId = "cand-Q",
+                    SourceId = "src-Q",
+                    Kind = ContextRetrievalCandidateKind.ContextItem,
+                    Type = "note",
+                    Reason = "queued-hit",
+                    Score = 0.8
+                }
+            },
+            DroppedItems = Array.Empty<ContextRetrievalDecision>()
+        });
+
+        var record = new ContextDecisionRecord
+        {
+            DecisionId = "queued-001",
+            Source = ContextDecisionSource.Retrieval,
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Candidates = new[] { new ContextDecisionCandidate { ItemId = "cand-Q" } }
+        };
+
+        var result = await provider.ResolveEvidenceAsync(record);
+
+        Assert.IsTrue(result.IsComplete,
+            "审计路径应先排空队列再读取——已接受的 trace 必须可查证。");
+        Assert.AreEqual("queued-hit", result.Evidence[0].PrimaryRationale);
+    }
 
     [TestMethod]
     public async Task Resolve_RetrievalWithMatchingTrace_ReturnsCompleteEvidence()
@@ -399,6 +520,19 @@ public sealed class TraceBackedDecisionEvidenceProviderTests
                 .ToArray();
             return Task.FromResult(result);
         }
+
+        public Task<ContextPackageBuildResult?> GetAsync(
+            string workspaceId,
+            string collectionId,
+            string buildId,
+            CancellationToken cancellationToken = default)
+        {
+            var result = _builds.FirstOrDefault(b =>
+                string.Equals(b.Package.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(b.Package.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(b.BuildId, buildId, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult(result);
+        }
     }
 
     /// <summary>始终抛 InvalidOperationException 的 retrieval trace store，用于测试 Failed 路径。</summary>
@@ -413,5 +547,12 @@ public sealed class TraceBackedDecisionEvidenceProviderTests
             int take,
             CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("test: QueryRecentAsync");
+
+        public Task<ContextRetrievalTrace?> GetAsync(
+            string workspaceId,
+            string collectionId,
+            string retrievalId,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("test: GetAsync");
     }
 }

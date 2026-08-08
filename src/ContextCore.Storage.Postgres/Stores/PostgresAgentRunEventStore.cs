@@ -259,12 +259,14 @@ LIMIT 1;
             return;
         }
 
-        // 还原为 AgentRunCommit 并委托提交器。WorkspaceId/RunId 优先取状态更新负载，
-        // 纯事件提交（runStateUpdate 为 null）时取首事件归属。
+        // 还原为 AgentRunCommit 并委托提交器。复合键优先取状态更新负载，
+        // 纯事件提交（runStateUpdate 为 null）时取首事件归属；提交器入口
+        // 还会对事件流 / 快照 / 游标 / checkpoint 执行身份一致性校验。
         var commit = new AgentRunCommit
         {
-            WorkspaceId = runStateUpdate?.WorkspaceId ?? events[0].WorkspaceId,
-            RunId = runStateUpdate?.RunId ?? events[0].RunId,
+            Key = new TenantRunKey(
+                runStateUpdate?.WorkspaceId ?? events[0].WorkspaceId,
+                runStateUpdate?.RunId ?? events[0].RunId),
             Events = events,
             ExpectedCurrentState = runStateUpdate?.ExpectedCurrentState,
             NewRunSnapshot = runStateUpdate?.RunSnapshot,

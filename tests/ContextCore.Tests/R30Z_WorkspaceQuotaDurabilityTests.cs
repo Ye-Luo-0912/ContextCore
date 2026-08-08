@@ -285,6 +285,97 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
         }
     }
 
+    // ── 2b. 周期轮转 / SetLimit 语义（P0-5）────────────────────────────
+
+    /// <summary>
+    /// 验证：周期轮转只清零"已用"，已预留必须按现存 reservation 行重新求和——
+    /// 跨周期长 Run 的预留保留并继续计入新周期容量（过度放行阻断），
+    /// 而非把 reserved 直接置 0。
+    /// </summary>
+    [TestMethod]
+    public async Task PeriodRollover_KeepsActiveReservations_NoOverAdmission()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — 周期轮转测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, _, quotaService) = await ResolveAsync(container, "quota_roll_");
+            await using (provider)
+            {
+                // 短周期（1 秒）便于触发惰性轮转。
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromSeconds(1), default);
+
+                // 周期 1：Run A 预留 80。
+                var reserveA = await quotaService.ReserveAsync(Ws, "run-A", 80, 0, default);
+                Assert.IsTrue(reserveA.Allowed);
+                Assert.AreEqual(80, reserveA.UpdatedQuota.ReservedTokens);
+
+                // 等待周期过期（惰性轮转在下次预留时触发）。
+                await Task.Delay(TimeSpan.FromSeconds(1.5));
+
+                // 周期 2：Run B 再预留 40 → 必须被拒：Run A 的 80 仍在（reserved 按 SUM 恢复），
+                // 80 + 40 > 100。若旧实现把 reserved 置 0，这里会错误放行（过度放行）。
+                var reserveB = await quotaService.ReserveAsync(Ws, "run-B", 40, 0, default);
+                Assert.IsFalse(reserveB.Allowed, "周期轮转后 Run A 的预留必须保留并计入新周期容量（80+40>100 拒绝）。");
+
+                var quota = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(80, quota.ReservedTokens,
+                    "轮转后 reserved 应按现存 reservation 行重新求和（=80），不得置 0。");
+                Assert.AreEqual(0, quota.TokensUsed, "轮转后新周期已用归零。");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证：SetLimitAsync 只更新上限（max / period），绝不清零 usage 与 reservation——
+    /// 它是"改上限"不是 Reset；旧实现把 usage/reserved 清零但保留 reservation 行，
+    /// 同时产生过度放行与跨周期错误归属（不完整的 Reset）。
+    /// </summary>
+    [TestMethod]
+    public async Task SetLimit_UpdatesLimitsOnly_DoesNotResetUsageOrReservation()
+    {
+        var container = await TryStartPostgresAsync();
+        if (container is null)
+        {
+            Assert.Inconclusive("Docker 不可用 — SetLimit 语义测试已跳过。");
+            return;
+        }
+
+        await using (container)
+        {
+            var (provider, _, quotaService) = await ResolveAsync(container, "quota_setlim_");
+            await using (provider)
+            {
+                await quotaService.SetLimitAsync(Ws, 100, 0, TimeSpan.FromHours(1), default);
+
+                // 制造消耗：Run A 结算 40（usage），Run B 预留 50（reservation）。
+                await quotaService.ReserveAsync(Ws, "run-A", 40, 0, default);
+                await quotaService.ActualizeAsync(Ws, "run-A", 30, 0, default);
+                await quotaService.ReserveAsync(Ws, "run-B", 50, 0, default);
+                var before = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(30, before.TokensUsed);
+                Assert.AreEqual(50, before.ReservedTokens);
+
+                // 修改上限（不换周期、不重置）→ usage / reservation 必须保留。
+                await quotaService.SetLimitAsync(Ws, 200, 0, TimeSpan.FromHours(2), default);
+
+                var after = await quotaService.GetQuotaAsync(Ws, default);
+                Assert.AreEqual(200, after.MaxTokens, "上限应更新。");
+                Assert.AreEqual(TimeSpan.FromHours(2), after.Period, "周期应更新。");
+                Assert.AreEqual(30, after.TokensUsed, "SetLimit 不得清零已用（改上限 ≠ Reset）。");
+                Assert.AreEqual(50, after.ReservedTokens, "SetLimit 不得清除预留（旧 reservation 行保留）。");
+
+                // 预留容量仍然生效：Run B 的 50 继续占容量（200 - 30 - 50 = 120 剩余）。
+                Assert.AreEqual(120, after.RemainingTokens, "SetLimit 后剩余容量 = 上限 - 已用 - 已预留。");
+            }
+        }
+    }
+
     // ── 3. 终态结算 outbox ──────────────────────────────────────────────
 
     [TestMethod]
@@ -543,8 +634,7 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
 
                 var commit = new AgentRunCommit
                 {
-                    WorkspaceId = Ws,
-                    RunId = admitted.Run.RunId,
+                    Key = new TenantRunKey(Ws, admitted.Run.RunId),
                     Events = new[] { seq0, seq1 },
                     ExpectedCurrentState = AgentRunState.Queued,
                     NewRunSnapshot = admitted.Run with
@@ -609,8 +699,7 @@ public sealed class R30Z_WorkspaceQuotaDurabilityTests
 
                 var commit = new AgentRunCommit
                 {
-                    WorkspaceId = Ws,
-                    RunId = admitted.Run.RunId,
+                    Key = new TenantRunKey(Ws, admitted.Run.RunId),
                     Events = new[] { seq0 }
                 };
                 await committer.CommitAsync(commit, default);

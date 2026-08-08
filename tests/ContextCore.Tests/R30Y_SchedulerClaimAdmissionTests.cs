@@ -890,11 +890,11 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
                 }
             }
 
-            // 3. Failed 且配置了重试且未耗尽（退避门通过）→ 重置为 Queued 再领取
+            // 3. RetryPending 且配置了重试且未耗尽（退避门通过）→ 重置为 Queued 再领取
             //    （事件流清空等重试语义由 Postgres 实现承担，此处仅验证 Claim 契约）
-            var failed = await _inner.ListByStateAsync(AgentRunState.Failed, take: 1000, cancellationToken: cancellationToken)
+            var retryPending = await _inner.ListByStateAsync(AgentRunState.RetryPending, take: 1000, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
-            foreach (var run in failed)
+            foreach (var run in retryPending)
             {
                 if (claimed.Count >= take)
                 {
@@ -911,7 +911,7 @@ public sealed class R30Y_SchedulerClaimAdmissionTests
                 try
                 {
                     await _inner.TransitionStateAsync(
-                        run.WorkspaceId, run.RunId, AgentRunState.Failed, AgentRunState.Queued, cancellationToken)
+                        run.WorkspaceId, run.RunId, AgentRunState.RetryPending, AgentRunState.Queued, cancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (InvalidOperationException)

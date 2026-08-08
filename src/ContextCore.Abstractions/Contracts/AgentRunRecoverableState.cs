@@ -388,6 +388,7 @@ public static class AgentRunEventStateRebuilder
                 var toolName = root.TryGetProperty("toolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
                 var arguments = root.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() ?? string.Empty : string.Empty;
                 var idempotencyKey = root.TryGetProperty("idempotencyKey", out var ikProp) ? ikProp.GetString() : null;
+                var requestId = root.TryGetProperty("requestId", out var ridProp) ? ridProp.GetString() : null;
                 var modelTurnRevision = root.TryGetProperty("modelTurnRevision", out var mtrProp) && mtrProp.ValueKind == JsonValueKind.Number
                     ? mtrProp.GetInt32()
                     : 0;
@@ -403,6 +404,7 @@ public static class AgentRunEventStateRebuilder
                     ToolName = toolName,
                     ArgumentsJson = arguments,
                     IdempotencyKey = idempotencyKey,
+                    RequestId = requestId,
                     ModelTurnRevision = modelTurnRevision
                 });
             }
@@ -424,6 +426,7 @@ public static class AgentRunEventStateRebuilder
         var toolName = ptc.TryGetProperty("ToolName", out var tnProp) ? tnProp.GetString() ?? string.Empty : string.Empty;
         var argumentsJson = ptc.TryGetProperty("ArgumentsJson", out var ajProp) ? ajProp.GetString() ?? string.Empty : string.Empty;
         var idempotencyKey = ptc.TryGetProperty("IdempotencyKey", out var ikProp) ? ikProp.GetString() : null;
+        var requestId = ptc.TryGetProperty("RequestId", out var ridProp) ? ridProp.GetString() : null;
         var modelTurnRevision = ptc.TryGetProperty("ModelTurnRevision", out var mtrProp) && mtrProp.ValueKind == JsonValueKind.Number ? mtrProp.GetInt32() : 0;
 
         if (string.IsNullOrEmpty(toolCallId) && string.IsNullOrEmpty(toolName))
@@ -437,6 +440,7 @@ public static class AgentRunEventStateRebuilder
             ToolName = toolName,
             ArgumentsJson = argumentsJson,
             IdempotencyKey = idempotencyKey,
+            RequestId = requestId,
             ModelTurnRevision = modelTurnRevision
         };
     }

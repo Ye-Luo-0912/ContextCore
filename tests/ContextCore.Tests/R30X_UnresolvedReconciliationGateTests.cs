@@ -107,8 +107,8 @@ public sealed class R30X_UnresolvedReconciliationGateTests
             var (provider, runStore, reconciliationStore) = await ResolveStoresAsync(container, "claim_recon_");
             await using (provider)
             {
-                // 可重试的 Failed Run（max_retries=1）+ 一条 Pending 对账记录。
-                await runStore.CreateAsync(BuildFailedRun(), default);
+                // 可重试的 Run（RetryPending，max_retries=1）+ 一条 Pending 对账记录。
+                await runStore.CreateAsync(BuildRetryPendingRun(), default);
                 await reconciliationStore.CreateAsync(new ToolReconciliationRecord
                 {
                     ReconciliationId = "rec:" + Ws + ":req-1",
@@ -123,12 +123,12 @@ public sealed class R30X_UnresolvedReconciliationGateTests
                     UpdatedAt = DateTimeOffset.UtcNow
                 }, default);
 
-                // 未决对账存在 → 不得被领取（Failed 自动重试被真相边界阻断）。
+                // 未决对账存在 → 不得被领取（RetryPending 自动重试被真相边界阻断）。
                 var batch1 = await runStore.ClaimPendingBatchAsync(
                     10, 5, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(30),
                     "claimer-1", TimeSpan.FromMinutes(5), default);
                 CollectionAssert.DoesNotContain(batch1.Select(r => r.RunId).ToList(), RunId,
-                    "存在未决对账记录的 Failed Run 不得被领取。");
+                    "存在未决对账记录的 RetryPending Run 不得被领取。");
 
                 // 对账裁决完毕（Resolved）→ 可被领取重试。
                 var lease = await reconciliationStore.TryBeginAsync(
@@ -142,7 +142,7 @@ public sealed class R30X_UnresolvedReconciliationGateTests
                     10, 5, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(30),
                     "claimer-1", TimeSpan.FromMinutes(5), default);
                 CollectionAssert.Contains(batch2.Select(r => r.RunId).ToList(), RunId,
-                    "对账完成后 Failed Run 可被领取重试。");
+                    "对账完成后 RetryPending Run 可被领取重试。");
             }
         }
     }
@@ -165,13 +165,13 @@ public sealed class R30X_UnresolvedReconciliationGateTests
         TurnBudget = new AgentTurnBudget { MaxTurns = 10, TurnsUsed = 0, MaxModelCalls = 10 }
     };
 
-    private static AgentRun BuildFailedRun() => new()
+    private static AgentRun BuildRetryPendingRun() => new()
     {
         RunId = RunId,
         WorkspaceId = Ws,
         SessionId = "session-unresolved-gate",
         Task = "可重试失败 Run",
-        State = AgentRunState.Failed,
+        State = AgentRunState.RetryPending,
         Turn = 0,
         ModelCallsUsed = 0,
         CreatedAt = DateTimeOffset.UtcNow,

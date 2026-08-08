@@ -30,7 +30,7 @@ public sealed class AgentRunStateSemanticsTests
     public void Get_CoversAllEnumValues()
     {
         var all = Enum.GetValues<AgentRunState>();
-        Assert.AreEqual(27, all.Length, "AgentRunState 应恰好 27 个枚举值。");
+        Assert.AreEqual(28, all.Length, "AgentRunState 应恰好 28 个枚举值。");
 
         foreach (var state in all)
         {
@@ -103,16 +103,19 @@ public sealed class AgentRunStateSemanticsTests
         }
     }
 
-    /// <summary>可重试：Failed（调度器可在重试预算内重试）与 RecoveryDependencyUnavailable（退避重试）。</summary>
+    /// <summary>可重试：RetryPending（Attempt 失败待重试）与 RecoveryDependencyUnavailable（退避重试）。</summary>
     [TestMethod]
     public void Retryable_OnlyForRetryableCategories()
     {
         foreach (var state in Enum.GetValues<AgentRunState>())
         {
-            var expected = state is AgentRunState.Failed or AgentRunState.RecoveryDependencyUnavailable;
+            var expected = state is AgentRunState.RetryPending or AgentRunState.RecoveryDependencyUnavailable;
             Assert.AreEqual(expected, AgentRunStateSemantics.Get(state).Retryable,
                 "Retryable 判定错误：{0} 期望 {1}。", state, expected);
         }
+
+        Assert.IsFalse(AgentRunStateSemantics.Get(AgentRunState.Failed).Retryable,
+            "Failed 是重试预算耗尽后的真终态，不可重试（可重试的 Attempt 失败进入 RetryPending）。");
     }
 
     /// <summary>需人工介入：数据损坏 / 安全阻断 / 死信类终态。</summary>
@@ -130,13 +133,14 @@ public sealed class AgentRunStateSemanticsTests
         }
     }
 
-    /// <summary>默认可压缩：终态中除 Failed（依赖重试预算）与 AdmissionRejected（无事件流）外均可压缩。</summary>
+    /// <summary>默认可压缩：终态（含 Failed——重试预算耗尽才到达）可压缩；RetryPending 等非终态不可。</summary>
     [TestMethod]
-    public void EventCompactable_IncludesContextSafetyBlocked_ExcludesFailedAndAdmissionRejected()
+    public void EventCompactable_IncludesFailed_ExcludesRetryPendingAndAdmissionRejected()
     {
         foreach (var state in Enum.GetValues<AgentRunState>())
         {
             var expected = state is AgentRunState.Completed
+                or AgentRunState.Failed
                 or AgentRunState.Cancelled
                 or AgentRunState.LeaseLost
                 or AgentRunState.ReconciliationRejected
@@ -147,27 +151,123 @@ public sealed class AgentRunStateSemanticsTests
             Assert.AreEqual(expected, AgentRunStateSemantics.Get(state).EventCompactable,
                 "EventCompactable 判定错误：{0} 期望 {1}。", state, expected);
         }
+
+        Assert.IsFalse(AgentRunStateSemantics.Get(AgentRunState.RetryPending).EventCompactable,
+            "RetryPending 会被调度器重新领取并全量重放，不可压缩。");
     }
 
-    /// <summary>完整压缩判定：Failed 仅在重试耗尽时可压缩。</summary>
+    /// <summary>完整压缩判定：Failed 无条件可压缩（到达时重试已耗尽）；RetryPending 无条件不可压缩。</summary>
     [TestMethod]
-    public void IsCompactable_FailedDependsOnRetryBudget()
+    public void IsCompactable_FailedAlways_RetryPendingNever()
     {
         foreach (var state in ExpectedTerminalStates)
         {
-            // 终态压缩判定应与 EventCompactable 一致（Failed 走重试预算分支）。
-            var expected = AgentRunStateSemantics.Get(state).EventCompactable
-                || (state == AgentRunState.Failed);
-            Assert.AreEqual(expected, AgentRunStateSemantics.IsCompactable(state, retryCount: 5, maxRetries: 5),
-                "重试耗尽时终态应可压缩：{0}。", state);
+            Assert.AreEqual(
+                AgentRunStateSemantics.Get(state).EventCompactable,
+                AgentRunStateSemantics.IsCompactable(state, retryCount: 5, maxRetries: 5),
+                "终态压缩判定应与 EventCompactable 一致：{0}。", state);
         }
 
-        Assert.IsFalse(AgentRunStateSemantics.IsCompactable(AgentRunState.Failed, retryCount: 2, maxRetries: 5),
-            "重试未耗尽的 Failed 不可压缩（会被调度器重新领取并全量重放）。");
+        Assert.IsTrue(AgentRunStateSemantics.IsCompactable(AgentRunState.Failed, retryCount: 2, maxRetries: 5),
+            "Failed 是重试预算耗尽的真终态，可压缩（不依赖运行时重试计数）。");
         Assert.IsTrue(AgentRunStateSemantics.IsCompactable(AgentRunState.Failed, retryCount: 5, maxRetries: 5),
-            "重试耗尽的 Failed 可压缩。");
+            "Failed 可压缩。");
+        Assert.IsFalse(AgentRunStateSemantics.IsCompactable(AgentRunState.RetryPending, retryCount: 1, maxRetries: 5),
+            "RetryPending 非终态（会被重新领取重放），不可压缩。");
         Assert.IsFalse(AgentRunStateSemantics.IsCompactable(AgentRunState.Running, retryCount: 0, maxRetries: 0),
             "非终态不可压缩。");
+    }
+
+    // ── 状态语义性质不变量（P0-3）────────────────────────────────────────
+
+    /// <summary>
+    /// 性质 1：任何可重试状态（Retryable=true）都不得有配额结算策略（Settlement=None）。
+    /// 可重试 = 还有下一次 Attempt = 预留必须保留给下一次执行，提前结算会打穿配额约束。
+    /// </summary>
+    [TestMethod]
+    public void Invariant_RetryableImpliesNoSettlement()
+    {
+        foreach (var state in Enum.GetValues<AgentRunState>())
+        {
+            var info = AgentRunStateSemantics.Get(state);
+            if (info.Retryable)
+            {
+                Assert.AreEqual(QuotaSettlementPolicy.None, info.QuotaSettlementPolicy,
+                    "可重试状态不得结算配额：{0}（预留必须保留给下一 Attempt）。", state);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 性质 2：任何可被调度器领取的状态（Retryable）都不得是终态结算状态——
+    /// 即"可重试"与"IsTerminal"互斥（IsTerminal ⇒ !Retryable）。
+    /// </summary>
+    [TestMethod]
+    public void Invariant_TerminalImpliesNotRetryable()
+    {
+        foreach (var state in Enum.GetValues<AgentRunState>())
+        {
+            var info = AgentRunStateSemantics.Get(state);
+            if (info.IsTerminal)
+            {
+                Assert.IsFalse(info.Retryable,
+                    "终态不得可重试（终态不再被 Scheduler 领取）：{0}。", state);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 性质 3：终态结算（Settlement != None）的状态不得被 Scheduler 领取（Retryable=false）；
+    /// 反过来说，任何可领取状态都不产生结算 outbox。这保证"结算恰好发生一次且只在真正终结时"。
+    /// </summary>
+    [TestMethod]
+    public void Invariant_FinalSettlementNeverSchedulerClaimable()
+    {
+        foreach (var state in Enum.GetValues<AgentRunState>())
+        {
+            var info = AgentRunStateSemantics.Get(state);
+            if (info.QuotaSettlementPolicy != QuotaSettlementPolicy.None)
+            {
+                Assert.IsTrue(info.IsTerminal, "有结算策略的状态必须是终态：{0}。", state);
+                Assert.IsFalse(info.Retryable, "有结算策略的状态不得被调度器重新领取：{0}。", state);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 性质 4（终态不可逆）：终态不得被 Failed / Cancelled 短路改写。
+    /// 幂等收尾只允许 from == to（同状态停留），绝不允许一个终态改写成另一个终态——
+    /// Completed → Failed / Completed → Cancelled / ContextSafetyBlocked → Failed /
+    /// RecoveryCorrupted → Cancelled 全部必须抛异常。
+    /// </summary>
+    [TestMethod]
+    public void Invariant_TerminalStateCannotBeOverwrittenByFailedOrCancelled()
+    {
+        foreach (var terminal in ExpectedTerminalStates)
+        {
+            // 同状态停留（幂等收尾）合法：跳过 Failed→Failed / Cancelled→Cancelled。
+            if (terminal is AgentRunState.Failed or AgentRunState.Cancelled)
+            {
+                continue;
+            }
+
+            Assert.ThrowsException<InvalidOperationException>(
+                () => AgentRunStateMachine.ValidateTransition(terminal, AgentRunState.Failed),
+                $"终态 {terminal} 不得被 Failed 覆盖。");
+            Assert.ThrowsException<InvalidOperationException>(
+                () => AgentRunStateMachine.ValidateTransition(terminal, AgentRunState.Cancelled),
+                $"终态 {terminal} 不得被 Cancelled 覆盖。");
+        }
+
+        // 同状态停留（幂等收尾）仍允许。
+        AgentRunStateMachine.ValidateTransition(AgentRunState.Completed, AgentRunState.Completed);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.Failed, AgentRunState.Failed);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.Cancelled, AgentRunState.Cancelled);
+
+        // 非终态 → Failed / Cancelled 仍合法（异常/取消短路）。
+        AgentRunStateMachine.ValidateTransition(AgentRunState.Running, AgentRunState.Failed);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.ContextBuilding, AgentRunState.Cancelled);
+        AgentRunStateMachine.ValidateTransition(AgentRunState.RetryPending, AgentRunState.Failed);
     }
 
     /// <summary>恢复策略：终态阻断；依赖不可用退避重试；执行前状态全新启动；执行中状态事件流恢复。</summary>

@@ -17,6 +17,7 @@ public sealed class QueuedRetrievalTraceStore : IRetrievalTraceStore, IDisposabl
     private readonly CancellationTokenSource _cts;
     private readonly Task _drainTask;
     private int _disposed;
+    private long _drainedCount;
 
     /// <summary>内层持久化 store（File / InMemory / Postgres），供诊断与测试直接访问。</summary>
     public IRetrievalTraceStore Inner => _inner;
@@ -60,6 +61,37 @@ public sealed class QueuedRetrievalTraceStore : IRetrievalTraceStore, IDisposabl
         CancellationToken cancellationToken = default)
         => _inner.QueryRecentAsync(workspaceId, collectionId, take, cancellationToken);
 
+    /// <inheritdoc />
+    public Task<ContextRetrievalTrace?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string retrievalId,
+        CancellationToken cancellationToken = default)
+        => _inner.GetAsync(workspaceId, collectionId, retrievalId, cancellationToken);
+
+    /// <summary>
+    /// 同步排空队列：等待当前已接受但尚未落库的 trace 全部写入内层持久化 store。
+    /// Decision Evidence 审计在读取前调用——确保"已接受"即"已可查证"，
+    /// 消除队列异步窗口（diagnostic trace 可丢，但 Evidence 查证不得依赖竞态窗口）。
+    /// 仅等待调用时刻的积压；期间新入队的 trace 不阻塞本调用。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        // 快照调用时刻的积压条数；drain 每成功落库一条递增 _drainedCount。
+        var backlog = _channel.Reader.Count;
+        var drainedAtStart = Volatile.Read(ref _drainedCount);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        while (Volatile.Read(ref _drainedCount) - drainedAtStart < backlog)
+        {
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new TimeoutException("QueuedRetrievalTraceStore 排空超时（内层持久化 store 写入过慢）。");
+            }
+            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>后台 drain：从队列取 trace 串行写入内层 store。</summary>
     private async Task DrainAsync(CancellationToken ct)
     {
@@ -76,6 +108,12 @@ public sealed class QueuedRetrievalTraceStore : IRetrievalTraceStore, IDisposabl
                     catch
                     {
                         // 后台写失败静默（诊断数据可丢弃），不中断 drain 循环。
+                        // 注意：FlushAsync 的排空计数含失败路径——失败也算"已处理"
+                        // （不再重试该条；Evidence 审计以持久化 store 的实况为准）。
+                    }
+                    finally
+                    {
+                        Interlocked.Increment(ref _drainedCount);
                     }
                 }
             }

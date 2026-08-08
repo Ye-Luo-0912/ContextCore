@@ -54,6 +54,11 @@ public sealed class PostgresAgentRunCommitter : PostgresStoreBase, IPersistentAg
                 nameof(commit));
         }
 
+        // 身份不变量校验（系统级安全原语）：提交负载内所有身份必须与复合键一致。
+        // 在 SQL 执行前 fail——杜绝"给 Run A 追加事件、把 Run B 推进终态 + 结算"
+        // 的跨 Run 污染（事件 / 快照 / 游标 / checkpoint 各持一套身份时极易漂移）。
+        AgentRunCommitIdentityValidator.ValidateIdentityConsistency(commit);
+
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -253,8 +258,8 @@ SET state = @new_state,
     data = @data{dataMergeFinishedAt}{setFinished}
 WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_state{leaseClause};
 """;
-                updateCommand.Parameters.AddWithValue("workspace_id", commit.WorkspaceId);
-                updateCommand.Parameters.AddWithValue("run_id", commit.RunId);
+                updateCommand.Parameters.AddWithValue("workspace_id", commit.Key.WorkspaceId);
+                updateCommand.Parameters.AddWithValue("run_id", commit.Key.RunId);
                 updateCommand.Parameters.AddWithValue("expected_state", (byte)commit.ExpectedCurrentState!.Value);
                 updateCommand.Parameters.AddWithValue("new_state", (byte)snapshot.State);
                 updateCommand.Parameters.AddWithValue("turn", snapshot.Turn);
@@ -290,8 +295,8 @@ SELECT state FROM {Table("agent_runs")}
 WHERE workspace_id = @workspace_id AND run_id = @run_id
 LIMIT 1;
 """;
-                    selectCommand.Parameters.AddWithValue("workspace_id", commit.WorkspaceId);
-                    selectCommand.Parameters.AddWithValue("run_id", commit.RunId);
+                    selectCommand.Parameters.AddWithValue("workspace_id", commit.Key.WorkspaceId);
+                    selectCommand.Parameters.AddWithValue("run_id", commit.Key.RunId);
                     await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                     if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     {
@@ -300,42 +305,59 @@ LIMIT 1;
                         if (leaseValidated && currentState == commit.ExpectedCurrentState)
                         {
                             throw new InvalidOperationException(
-                                $"Agent Run lease fencing 校验失败（批量提交）：workspace_id={commit.WorkspaceId}, run_id={commit.RunId}。" +
+                                $"Agent Run lease fencing 校验失败（批量提交）：workspace_id={commit.Key.WorkspaceId}, run_id={commit.Key.RunId}。" +
                                 $"状态机前件匹配（{commit.ExpectedCurrentState}），但 lease_token/fencing_token 不匹配——" +
                                 $"lease 已被其他实例抢占，应立即停止处理该 Run。");
                         }
                         throw new InvalidOperationException(
-                            $"Agent Run 状态机 CAS 失败（批量提交）：workspace_id={commit.WorkspaceId}, run_id={commit.RunId}。" +
+                            $"Agent Run 状态机 CAS 失败（批量提交）：workspace_id={commit.Key.WorkspaceId}, run_id={commit.Key.RunId}。" +
                             $"期望当前状态={commit.ExpectedCurrentState}，实际={currentState}。" +
                             $"状态已被其他实例推进或不可逆退。");
                     }
 
                     throw new InvalidOperationException(
-                        $"Agent Run 不存在（批量提交）：workspace_id={commit.WorkspaceId}, run_id={commit.RunId}。" +
+                        $"Agent Run 不存在（批量提交）：workspace_id={commit.Key.WorkspaceId}, run_id={commit.Key.RunId}。" +
                         $"无法推进状态机（缺失 Run 元数据）。");
                 }
 
                 // CAS 成功：有结算策略的终态写结算 outbox（主路径统一入口——
                 // Actor 经提交器落库终态时与 Run Store 的 TransitionStateAsync 一致，
                 // 在同一事务内写 outbox，仅当预留行存在才入队，exactly-once）。
+                // 冻结结算事实：actual_tokens / actual_cost_usd 取自 UsageSnapshot
+                // （不可变 Settlement truth，独立于可变 Run 实体——Run 归档/删除/损坏
+                // 不影响账务事实）；usage_revision / final_attempt 记录用量版本与最终
+                // Attempt；settlement_policy 由语义层权威派生。
+                // ON CONFLICT DO NOTHING：UNIQUE(workspace_id, run_id) 使 outbox
+                // 自身 exactly-once（并发重放/Gap Reconciler 双写被数据库拒绝）。
                 if (requiresSettlement)
                 {
+                    var settlementPolicy = (short)semantics.QuotaSettlementPolicy;
                     await using var outboxCommand = connection.CreateCommand();
                     outboxCommand.Transaction = transaction;
                     outboxCommand.CommandTimeout = Options.CommandTimeoutSeconds;
                     outboxCommand.CommandText = $"""
 INSERT INTO {Table("terminal_run_settlement_outbox")} (
-    workspace_id, run_id, reservation_id, terminal_state, created_at, updated_at)
-SELECT @workspace_id, @run_id, @run_id, @new_state, @now, @now
+    workspace_id, run_id, reservation_id, terminal_state,
+    actual_tokens, actual_cost_usd, usage_revision, final_attempt, settlement_policy,
+    created_at, updated_at)
+SELECT @workspace_id, @run_id, @run_id, @new_state,
+       @actual_tokens, @actual_cost_usd, @usage_revision, @final_attempt, @settlement_policy,
+       @now, @now
 WHERE EXISTS (
     SELECT 1 FROM {Table("workspace_quota_reservations")}
     WHERE workspace_id = @workspace_id
       AND reservation_id = @run_id
-);
+)
+ON CONFLICT (workspace_id, run_id) DO NOTHING;
 """;
-                    outboxCommand.Parameters.AddWithValue("workspace_id", commit.WorkspaceId);
-                    outboxCommand.Parameters.AddWithValue("run_id", commit.RunId);
+                    outboxCommand.Parameters.AddWithValue("workspace_id", commit.Key.WorkspaceId);
+                    outboxCommand.Parameters.AddWithValue("run_id", commit.Key.RunId);
                     outboxCommand.Parameters.AddWithValue("new_state", (byte)snapshot.State);
+                    outboxCommand.Parameters.AddWithValue("actual_tokens", usageBudget?.TokensUsed ?? 0L);
+                    outboxCommand.Parameters.AddWithValue("actual_cost_usd", usageBudget?.CostUsedUsd ?? 0d);
+                    outboxCommand.Parameters.AddWithValue("usage_revision", snapshot.ModelCallsUsed);
+                    outboxCommand.Parameters.AddWithValue("final_attempt", snapshot.RetryCount + 1);
+                    outboxCommand.Parameters.AddWithValue("settlement_policy", settlementPolicy);
                     outboxCommand.Parameters.AddWithValue("now", now);
                     await outboxCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
@@ -347,8 +369,8 @@ WHERE EXISTS (
             {
                 checkpointCursor = new AgentCheckpointCursor
                 {
-                    WorkspaceId = commit.WorkspaceId,
-                    RunId = commit.RunId,
+                    WorkspaceId = commit.Key.WorkspaceId,
+                    RunId = commit.Key.RunId,
                     CheckpointId = commit.Checkpoint.CheckpointId,
                     LastEventSequence = events[^1].Sequence
                 };

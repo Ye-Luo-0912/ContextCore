@@ -406,7 +406,7 @@ public sealed class PostgresToolDispatchJournalTests
     }
 
     [TestMethod]
-    public async Task Prepare_WithDuplicateIdempotencyKey_ThrowsUniqueViolation()
+    public async Task Prepare_WithDuplicateIdempotencyKey_SameProvider_ThrowsUniqueViolation()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
 
@@ -415,7 +415,7 @@ public sealed class PostgresToolDispatchJournalTests
         {
             var journal = new PostgresToolDispatchJournal(factory, serializer, migrationRunner);
 
-            // 第一条 Prepare 带幂等键 "shared-idem-key"
+            // 第一条 Prepare 带幂等键 "shared-idem-key"（provider = tool_a）
             await journal.PrepareAsync(new ToolDispatchJournalEntry
             {
                 RequestId = "req-idem-a",
@@ -427,16 +427,17 @@ public sealed class PostgresToolDispatchJournalTests
                 UpdatedAt = DateTimeOffset.UtcNow
             });
 
-            // 第二条 Prepare 使用不同 request_id 但相同幂等键 → 应被 UNIQUE 约束拒绝
-            // 防止不同 request_id 复用同一幂等键分别执行外部副作用。
+            // 第二条 Prepare：同一 workspace + 同一 provider（tool_a）+ 相同幂等键
+            // （即使不同 Run）→ 应被 UNIQUE 约束拒绝——ExternalIdempotencyKey 是业务
+            // 外部操作身份，跨 Run 去重（客户端重建 Run 重放同一业务操作被拒绝）。
             await Assert.ThrowsExceptionAsync<PostgresException>(
                 async () => await journal.PrepareAsync(new ToolDispatchJournalEntry
                 {
                     RequestId = "req-idem-b",
-                    ToolName = "tool_b",
+                    ToolName = "tool_a",
                     State = ToolDispatchState.Prepared,
                     WorkspaceId = Ws,
-                    RunId = RunId,
+                    RunId = "run-other",
                     IdempotencyKey = "shared-idem-key",
                     UpdatedAt = DateTimeOffset.UtcNow
                 }));
@@ -444,8 +445,22 @@ public sealed class PostgresToolDispatchJournalTests
             // 验证第一条仍然存在，第二条未写入
             var a = await journal.GetEntryAsync(Key, "req-idem-a");
             Assert.IsNotNull(a, "第一条 Prepare 应保留。");
-            var b = await journal.GetEntryAsync(Key, "req-idem-b");
+            var b = await journal.GetEntryAsync(Key with { RunId = "run-other" }, "req-idem-b");
             Assert.IsNull(b, "第二条 Prepare（重复幂等键）不应写入。");
+
+            // 不同 provider（tool_b）使用相同幂等键 → 允许（业务去重键作用域 = 工作区 + Provider）。
+            await journal.PrepareAsync(new ToolDispatchJournalEntry
+            {
+                RequestId = "req-idem-c",
+                ToolName = "tool_b",
+                State = ToolDispatchState.Prepared,
+                WorkspaceId = Ws,
+                RunId = RunId,
+                IdempotencyKey = "shared-idem-key",
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+            var c = await journal.GetEntryAsync(Key, "req-idem-c");
+            Assert.IsNotNull(c, "不同 Provider 的相同幂等键应各自独立（作用域 = 工作区 + Provider）。");
         }
         finally
         {

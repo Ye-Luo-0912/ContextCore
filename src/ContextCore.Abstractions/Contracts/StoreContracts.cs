@@ -117,6 +117,22 @@ public interface IContextPackageBuildTraceStore
         string collectionId,
         int take,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 按稳定主键 (workspace_id, collection_id, build_id) 点查单条包构建 trace。
+    /// Decision Evidence 审计必须用点查而非"最近 N 条"窗口扫描——数据存在即可查，
+    /// 不受后续 trace 数量影响。
+    /// </summary>
+    /// <param name="workspaceId">Workspace ID。</param>
+    /// <param name="collectionId">Collection ID。</param>
+    /// <param name="buildId">包构建 ID（= 决策 DecisionId）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>匹配的构建结果；不存在时返回 null。</returns>
+    Task<ContextPackageBuildResult?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string buildId,
+        CancellationToken cancellationToken = default);
 }
 /// <summary>持久化上下文包策略，供服务和 ControlRoom 复用固定打包规则。</summary>
 public interface IContextPackagePolicyStore

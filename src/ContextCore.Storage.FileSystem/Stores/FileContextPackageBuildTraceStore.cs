@@ -68,6 +68,33 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
         return [.. traces.OrderByDescending(item => item.CreatedAt).Take(count)];
     }
 
+    public async Task<ContextPackageBuildResult?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string buildId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(buildId))
+        {
+            return null;
+        }
+
+        // 稳定主键点查：全量过滤匹配 build_id（审计路径低频，数据量受 retention 约束）。
+        var paths = EnumerateTraceFiles(workspaceId, collectionId);
+        var traces = await TraceQueryHelper.ReadRecentAsync<ContextPackageBuildResult>(
+            paths,
+            int.MaxValue,
+            _jsonLines,
+            t => string.IsNullOrWhiteSpace(t.BuildId) ? (t.Package.PackageId ?? string.Empty) : t.BuildId,
+            filter: t => string.Equals(
+                string.IsNullOrWhiteSpace(t.BuildId) ? t.Package.PackageId : t.BuildId,
+                buildId,
+                StringComparison.OrdinalIgnoreCase),
+            cancellationToken).ConfigureAwait(false);
+
+        return traces.FirstOrDefault();
+    }
+
     private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)
     {
         var files = new List<string>();

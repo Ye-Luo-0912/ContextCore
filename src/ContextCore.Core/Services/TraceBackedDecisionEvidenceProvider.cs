@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Core.Services;
 
@@ -100,16 +101,30 @@ public sealed class TraceBackedDecisionEvidenceProvider : IDecisionEvidenceProvi
         ContextDecisionRecord record,
         CancellationToken cancellationToken)
     {
-        var traces = await store.QueryRecentAsync(record.WorkspaceId, record.CollectionId, _lookupTake, cancellationToken)
+        // 十二：Decision Evidence 查证前先排空队列（若为 QueuedRetrievalTraceStore 装饰）——
+        // 已接受的 trace 先落库再读取，"已接受"即"已可查证"。
+        // 十三：稳定主键点查（(workspace_id, collection_id, retrieval_id)）——
+        // 数据存在即可查，不受"最近 N 条"可见窗口限制。
+        if (store is QueuedRetrievalTraceStore queued)
+        {
+            await queued.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var matched = await store.GetAsync(record.WorkspaceId, record.CollectionId, record.DecisionId, cancellationToken)
             .ConfigureAwait(false);
 
-        ContextRetrievalTrace? matched = null;
-        foreach (var t in traces)
+        // 兼容兜底：旧实现 / 不支持点查的 store 回退到最近 N 条窗口扫描。
+        if (matched is null)
         {
-            if (string.Equals(t.RetrievalId, record.DecisionId, StringComparison.OrdinalIgnoreCase))
+            var traces = await store.QueryRecentAsync(record.WorkspaceId, record.CollectionId, _lookupTake, cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var t in traces)
             {
-                matched = t;
-                break;
+                if (string.Equals(t.RetrievalId, record.DecisionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    matched = t;
+                    break;
+                }
             }
         }
 
@@ -155,16 +170,23 @@ public sealed class TraceBackedDecisionEvidenceProvider : IDecisionEvidenceProvi
         ContextDecisionRecord record,
         CancellationToken cancellationToken)
     {
-        var builds = await store.QueryRecentAsync(record.WorkspaceId, record.CollectionId, _lookupTake, cancellationToken)
+        // 十三：稳定主键点查（(workspace_id, collection_id, build_id)）——
+        // 数据存在即可查，不受"最近 N 条"可见窗口限制。
+        var matched = await store.GetAsync(record.WorkspaceId, record.CollectionId, record.DecisionId, cancellationToken)
             .ConfigureAwait(false);
 
-        ContextPackageBuildResult? matched = null;
-        foreach (var b in builds)
+        // 兼容兜底：旧实现 / 不支持点查的 store 回退到最近 N 条窗口扫描。
+        if (matched is null)
         {
-            if (string.Equals(b.BuildId, record.DecisionId, StringComparison.OrdinalIgnoreCase))
+            var builds = await store.QueryRecentAsync(record.WorkspaceId, record.CollectionId, _lookupTake, cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var b in builds)
             {
-                matched = b;
-                break;
+                if (string.Equals(b.BuildId, record.DecisionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    matched = b;
+                    break;
+                }
             }
         }
 

@@ -82,6 +82,8 @@ public static class PostgresMigrationStepRegistry
         new PostgresMigrationRetrievalPlanFeedbackTenantIsolation(),
         new PostgresMigrationAgentRunLeaseWorkspaceKey(),
         new PostgresMigrationQuotaReservationWorkspaceKey(),
-        new PostgresMigrationToolDispatchWorkspaceKey()
+        new PostgresMigrationToolDispatchWorkspaceKey(),
+        new PostgresMigrationSettlementOutboxExactlyOnce(),
+        new PostgresMigrationToolIdempotencyKeyNamespace()
     ];
 }

@@ -647,6 +647,10 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextPackageBuildResult>>(Array.Empty<ContextPackageBuildResult>());
+
+        public Task<ContextPackageBuildResult?> GetAsync(
+            string workspaceId, string collectionId, string buildId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextPackageBuildResult?>(null);
     }
 
     private sealed class ThrowingPackageBuildTraceStore : IContextPackageBuildTraceStore
@@ -667,6 +671,10 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextPackageBuildResult>>(Array.Empty<ContextPackageBuildResult>());
+
+        public Task<ContextPackageBuildResult?> GetAsync(
+            string workspaceId, string collectionId, string buildId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextPackageBuildResult?>(null);
     }
 
     // -------------------------------------------------------------------------
@@ -737,6 +745,10 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextRetrievalTrace>>(Array.Empty<ContextRetrievalTrace>());
+
+        public Task<ContextRetrievalTrace?> GetAsync(
+            string workspaceId, string collectionId, string retrievalId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextRetrievalTrace?>(null);
     }
 
     private sealed class ThrowingRetrievalTraceStore : IRetrievalTraceStore
@@ -757,5 +769,9 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextRetrievalTrace>>(Array.Empty<ContextRetrievalTrace>());
+
+        public Task<ContextRetrievalTrace?> GetAsync(
+            string workspaceId, string collectionId, string retrievalId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextRetrievalTrace?>(null);
     }
 }

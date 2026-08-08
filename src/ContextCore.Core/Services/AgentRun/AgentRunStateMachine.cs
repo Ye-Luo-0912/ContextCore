@@ -57,12 +57,35 @@ public static class AgentRunStateMachine
             return;
         }
 
-        // 任意状态可跳转到 Failed / Cancelled（终态短路，幂等收尾）
+        // 终态不可逆：已终态的任何改写（含 Failed / Cancelled 短路）一律拒绝。
+        // 幂等收尾只允许 from == to（同状态停留），绝不允许一个终态改写成另一个终态
+        // （如 Completed → Failed / RecoveryCorrupted → Cancelled）。
+        if (IsTerminalState(from))
+        {
+            throw new InvalidOperationException(
+                $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
+                $"终态（Completed/Failed/Cancelled/LeaseLost/ReconciliationRejected/RecoveryBlocked/RecoveryCorrupted/ContextSafetyBlocked/DeadLettered/AdmissionRejected）不可再推进。");
+        }
+
+        // 任意非终态可跳转到 Failed / Cancelled（终态短路，幂等收尾）
         // LeaseLost 表示丢租（区别于用户主动 Cancelled），但 Completed/Cancelled
         // 已是确定终态，不可被旧 owner 的丢租写入覆盖（旧 owner 无 fencing token）。
         if (to == AgentRunState.Failed || to == AgentRunState.Cancelled)
         {
-            // 已终态再跳 Failed/Cancelled 仍允许（幂等收尾），但不会改变事实
+            return;
+        }
+
+        // 任意非终态可跳转到 RetryPending（Attempt 失败且重试预算未耗尽）：
+        // 与 Failed 一样是任意状态的失败出口，但表达"还有下一次 Attempt"。
+        // 已终态不可进入 RetryPending（终态即最终，不复活）。
+        if (to == AgentRunState.RetryPending)
+        {
+            if (IsTerminalState(from))
+            {
+                throw new InvalidOperationException(
+                    $"Agent Run 状态机非法转换：终态 {from} 不可流转到 {to}。" +
+                    $"重试挂起（RetryPending）只接受非终态的失败 Attempt。");
+            }
             return;
         }
 
@@ -251,8 +274,15 @@ public static class AgentRunStateMachine
             // RecoveryDependencyUnavailable → ContextBuilding（退避重试）：
             // 恢复依赖（事件存储）恢复后，由恢复 Worker 在退避门（NextRetryAtUtc）通过后
             // 重新入队执行；Actor 恢复路径将本地状态规范化为 ContextBuilding。
-            // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待运维介入），不在此声明。
+            // RecoveryBlocked / RecoveryCorrupted 为终态（数据损坏，等待人工介入），不在此声明。
             AgentRunState.RecoveryDependencyUnavailable => to == AgentRunState.ContextBuilding,
+
+            // RetryPending（Attempt 失败，等待退避后重试）→ Claimed / Queued：
+            // Scheduler 在退避门（NextRetryAtUtc）通过后重新领取（Postgres 直写 Claimed；
+            // InMemory 兼容路径经 Queued 中转），进入下一 Attempt。
+            AgentRunState.RetryPending => to == AgentRunState.Claimed
+                                          || to == AgentRunState.Queued
+                                          || to == AgentRunState.ContextBuilding,
 
             // 终态已在调用方短路；此处不应到达
             _ => false

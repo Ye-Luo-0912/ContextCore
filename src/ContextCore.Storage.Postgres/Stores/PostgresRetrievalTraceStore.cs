@@ -64,6 +64,34 @@ LIMIT @take;
         return results;
     }
 
+    public async Task<ContextRetrievalTrace?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string retrievalId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 稳定主键 (workspace_id, collection_id, retrieval_id) 点查：
+        // Decision Evidence 审计不依赖"最近 N 条"窗口（窗口外的决策仍可查证）。
+        command.CommandText = $"""
+SELECT data
+FROM {Table("retrieval_traces")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND retrieval_id = @retrieval_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("retrieval_id", retrievalId);
+
+        var data = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+        return data is null ? null : Serializer.Deserialize<ContextRetrievalTrace>(data);
+    }
+
     private static ContextRetrievalTrace Normalize(ContextRetrievalTrace trace)
     {
         return new ContextRetrievalTrace

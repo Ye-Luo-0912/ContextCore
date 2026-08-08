@@ -68,6 +68,31 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         return [.. traces.OrderByDescending(item => item.CreatedAt).Take(count)];
     }
 
+    public async Task<ContextRetrievalTrace?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string retrievalId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(retrievalId))
+        {
+            return null;
+        }
+
+        // 稳定主键点查：全量过滤匹配 retrieval_id（append-only 分片文件无索引，
+        // 按需全读；审计路径低频，数据量受 retention 约束）。
+        var paths = EnumerateTraceFiles(workspaceId, collectionId);
+        var traces = await TraceQueryHelper.ReadRecentAsync<ContextRetrievalTrace>(
+            paths,
+            int.MaxValue,
+            _jsonLines,
+            t => t.RetrievalId ?? string.Empty,
+            filter: t => string.Equals(t.RetrievalId, retrievalId, StringComparison.OrdinalIgnoreCase),
+            cancellationToken).ConfigureAwait(false);
+
+        return traces.FirstOrDefault();
+    }
+
     private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)
     {
         var files = new List<string>();

@@ -822,9 +822,9 @@ public sealed class R28B_DurableMemoryGovernanceTests
     [TestMethod]
     public void SchemaVersion_IsV63()
     {
-        // 当前 schema 版本：v64 → v65（Model Node 身份拆分：NodeGroupId + InstanceId 主键）。
+        // 当前 schema 版本：v68 → v69（Tool Dispatch Journal / Result 工作区复合键）。
         // 历史版本演进见 PostgresMigrationRunner.SchemaVersion 注释。
-        Assert.AreEqual("cc-schema-v68", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v71", PostgresMigrationRunner.SchemaVersion);
     }
 
     [TestMethod]

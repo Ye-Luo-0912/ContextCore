@@ -89,7 +89,9 @@ public static class AgentRunStateSemantics
         // 其余终态（含 Cancelled——调用方可能已消耗模型/Tool 用量）统一按实际用量转正，
         // actualUsage=0 时自然等价于释放，不依据终态名字猜测是否发生过消费。
         AgentRunState.Completed => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
-        AgentRunState.Failed => Terminal(state, retryable: true, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: false),
+        // Failed 是重试预算耗尽后的真正 Run 终态（Attempt 失败仍有重试机会时进入
+        // RetryPending，绝不进入本状态），因此不可重试、按实际用量结算。
+        AgentRunState.Failed => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.Cancelled => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.LeaseLost => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
         AgentRunState.ReconciliationRejected => Terminal(state, retryable: false, manual: false, settlement: QuotaSettlementPolicy.Actualize, compactable: true),
@@ -101,6 +103,11 @@ public static class AgentRunStateSemantics
 
         // ── 恢复依赖不可用：非终态但 fail-closed 不执行，依赖恢复后退避重试 ──
         AgentRunState.RecoveryDependencyUnavailable => NonTerminal(state, retryable: true, recovery: AgentRunRecoveryPolicy.Retry),
+
+        // ── Attempt 失败但重试预算未耗尽：非终态、可重试，不结算配额 ──────
+        // 调度器在退避门通过后重新领取（RetryPending → Claimed → 下一 Attempt），
+        // 配额预留保留给下一 Attempt 使用，绝不提前结算（避免重试期间失去配额约束）。
+        AgentRunState.RetryPending => NonTerminal(state, retryable: true, recovery: AgentRunRecoveryPolicy.NewStart),
 
         // ── 前置 / 调度状态：尚未产生持久化事件，恢复时全新启动 ────────────
         AgentRunState.Created => NonTerminal(state, retryable: false, recovery: AgentRunRecoveryPolicy.NewStart),
@@ -126,17 +133,16 @@ public static class AgentRunStateSemantics
     };
 
     /// <summary>
-    /// 判定 Run 是否可压缩（终态且不再被 Recovery 重放）。Failed 仅在重试已耗尽
-    /// （retry_count &gt;= max_retries）时可压缩——仍可重试的 Failed 会被调度器
-    /// 重新领取并全量重放事件流。
+    /// 判定 Run 是否可压缩（终态且不再被 Recovery 重放）。Failed 到达时重试预算已耗尽
+    /// （仍有重试机会的 Attempt 失败进入 RetryPending，不会进入 Failed），天然可压缩；
+    /// RetryPending 非终态（会被调度器重新领取并全量重放），不可压缩。
     /// </summary>
     /// <param name="state">Run 当前状态。</param>
     /// <param name="retryCount">当前重试次数。</param>
     /// <param name="maxRetries">重试预算上限。</param>
     /// <returns>可压缩返回 true；否则返回 false。</returns>
     public static bool IsCompactable(AgentRunState state, int retryCount, int maxRetries)
-        => Get(state).EventCompactable
-           || (state == AgentRunState.Failed && retryCount >= maxRetries);
+        => Get(state).EventCompactable;
 
     private static AgentRunStateSemanticsInfo Terminal(
         AgentRunState state,

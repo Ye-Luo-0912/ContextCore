@@ -220,11 +220,12 @@ public sealed class R30Z_ImmutableAttemptTests
         Assert.IsTrue(AgentRunEventChain.VerifyChain(events),
             "含 AttemptFailed 的事件哈希链必须完整无断裂。");
 
-        // 断言 4：Run 进入 Failed 终态
+        // 断言 4：Run 进入 RetryPending（重试预算未耗尽：RetryCount=1 < MaxRetries=2）
         var finalRun = await runStore.GetAsync(WorkspaceId, run.RunId);
         Assert.IsNotNull(finalRun, "Run 应存在于 store 中。");
-        Assert.AreEqual(AgentRunState.Failed, finalRun!.State,
-            "重试 Attempt 失败后 Run 应进入 Failed 终态。");
+        Assert.AreEqual(AgentRunState.RetryPending, finalRun!.State,
+            "重试预算未耗尽的 Attempt 失败后 Run 应进入 RetryPending（非终态，待退避后重新领取）。");
+        Assert.IsNull(finalRun.FinishedAt, "RetryPending 非终态，不写 finished_at。");
         StringAssert.Contains(finalRun.FailureReason ?? string.Empty, "模拟模型调用失败",
             "FailureReason 应记录模型调用异常。");
     }

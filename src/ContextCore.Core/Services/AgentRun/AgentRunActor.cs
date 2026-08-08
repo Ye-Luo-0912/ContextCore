@@ -1439,10 +1439,13 @@ public sealed class AgentRunActor
                 }
             }
 
-            // 先计算 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
-            // workspaceId 参与哈希（跨工作区同 RunId 的相同 Tool 调用互不冲突）。
+            // 先确定 RequestId 并持久化 ToolCallStarted 事件，再执行外部 Tool。
+            // 优先使用 PendingToolCommand 持久化的 RequestId（崩溃恢复/审批恢复路径）——
+            // 滚动升级改变派生算法后，历史 Run 的 journal 仍以原 RequestId 寻址；
+            // 无持久化值时重新派生（新调用，workspaceId 参与哈希，跨工作区互不冲突）。
             var requestId = (_durableToolExecutor is not null)
-                ? DefaultDurableToolExecutor.ComputeRequestId(state.Run.WorkspaceId, state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
+                ? pendingCommand.RequestId
+                  ?? DefaultDurableToolExecutor.ComputeRequestId(state.Run.WorkspaceId, state.Run.RunId, toolCall, pendingCommand.ModelTurnRevision)
                 : pendingCommand.ToolCallId;
 
             // ToolCallStarted 携带 arguments + modelTurnRevision：
@@ -1481,7 +1484,8 @@ public sealed class AgentRunActor
                 toolResult = await _durableToolExecutor.ExecuteAsync(
                     state.Run.RunId, state.Run.WorkspaceId, toolCall, pendingCommand.ModelTurnRevision,
                     cancellationToken, leaseFence1, state.Run.DeadlineAt,
-                    approvalGranted: true).ConfigureAwait(false);
+                    approvalGranted: true,
+                    requestIdOverride: pendingCommand.RequestId).ConfigureAwait(false);
             }
             else
             {
@@ -2884,8 +2888,7 @@ public sealed class AgentRunActor
                 // 终态语义（finished_at / 结算 outbox）由提交器从状态语义层派生，与 Run Store 一致。
                 var commit = new AgentRunCommit
                 {
-                    WorkspaceId = run.WorkspaceId,
-                    RunId = run.RunId,
+                    Key = new TenantRunKey(run.WorkspaceId, run.RunId),
                     Events = _pendingTurnEvents,
                     ExpectedCurrentState = _turnStartState,
                     NewRunSnapshot = run,
@@ -2999,7 +3002,14 @@ public sealed class AgentRunActor
         {
             var fromState = state.Run.State;
 
-            // 更新本地 Run 副本（含失败原因 + ModelCallsUsed）
+            // Attempt 失败分类：重试预算未耗尽 → RetryPending（非终态，不结算配额、
+            // 不写 finished_at——预留保留给下一 Attempt）；预算耗尽 → Failed（真终态，结算）。
+            // 彻底拆开"Attempt 失败"与"Run 终态失败"两种含义：Failed 永不再被 Scheduler
+            // 领取，Quota Settlement 只在真正终结时发生一次。
+            var retryAvailable = state.Run.MaxRetries > 0 && state.Run.RetryCount < state.Run.MaxRetries;
+            var targetState = retryAvailable ? AgentRunState.RetryPending : AgentRunState.Failed;
+
+            // 更新本地 Run 副本（含失败原因 + ModelCallsUsed；非终态不写 FinishedAt）
             var failedRun = state.Run with
             {
                 FailureReason = reason,
@@ -3007,20 +3017,22 @@ public sealed class AgentRunActor
                 TurnBudget = _turnBudget,
                 CostBudget = _costBudget,
                 UpdatedAt = DateTimeOffset.UtcNow,
-                FinishedAt = DateTimeOffset.UtcNow
+                FinishedAt = retryAvailable ? null : DateTimeOffset.UtcNow
             };
             state = state with { Run = failedRun };
 
-            // 推进到 Failed（本地 + 缓冲 StateTransition 事件；允许任意状态跳转 Failed）
-            state = TransitionStateLocal(state, AgentRunState.Failed);
+            // 推进到 RetryPending（重试可用）/ Failed（耗尽；本地 + 缓冲 StateTransition 事件；
+            // 任意非终态可跳转；Scheduler 在退避门通过后领取 RetryPending）。
+            state = TransitionStateLocal(state, targetState);
 
-            // 缓冲 RunFailed 事件
+            // 缓冲 RunFailed 事件（Attempt 失败审计，含目标状态区分）
             state = BufferEvent(state, AgentRunEventType.RunFailed, JsonSerializer.Serialize(new
             {
                 reason,
                 fromState = fromState.ToString(),
                 modelCallsUsed = _modelCallsUsed,
-                turn = _currentTurn
+                turn = _currentTurn,
+                terminal = !retryAvailable
             }));
 
             // 不可变 Attempt：重试 Attempt 失败追加 AttemptFailed 审计标记

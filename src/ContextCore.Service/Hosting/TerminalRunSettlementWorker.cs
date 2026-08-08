@@ -40,13 +40,13 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
 
     private readonly IServiceProvider _services;
     private readonly IWorkspaceQuotaService _quotaService;
-    private readonly IAgentRunStore _runStore;
     private readonly ILogger<TerminalRunSettlementWorker> _logger;
     private readonly TimeSpan _interval;
     private readonly string _owner;
     private DateTimeOffset _nextReconcileAt = DateTimeOffset.UtcNow;
 
     /// <summary>初始化终态结算工作器。</summary>
+    /// <param name="runStore">保留参数（兼容既有 DI 注册）；结算事实以 outbox 冻结快照为准，不再读取 Run 实体。</param>
     public TerminalRunSettlementWorker(
         IServiceProvider services,
         IWorkspaceQuotaService quotaService,
@@ -54,9 +54,9 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
         ContextCoreRuntimeOptions options,
         ILogger<TerminalRunSettlementWorker> logger)
     {
+        _ = runStore;
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _quotaService = quotaService ?? throw new ArgumentNullException(nameof(quotaService));
-        _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _interval = options?.RunRecoveryInterval > TimeSpan.Zero
             ? options.RunRecoveryInterval
@@ -191,20 +191,16 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
 
     private async Task SettleEntryAsync(ITerminalRunSettlementStore store, TerminalSettlementEntry entry, CancellationToken ct)
     {
-        // 实际用量：读取 Run 当前持久化的预算（执行过程中由 Actor 更新）。
-        // Run 行缺失（已清理）时按 0 用量结算（预留转正/释放由配额服务幂等处理）。
-        long actualTokens = 0;
-        double actualCostUsd = 0;
-        var run = await _runStore.GetAsync(entry.WorkspaceId, entry.RunId, ct).ConfigureAwait(false);
-        if (run?.CostBudget is { } budget)
-        {
-            actualTokens = budget.TokensUsed;
-            actualCostUsd = budget.CostUsedUsd;
-        }
+        // 结算事实来自 outbox 冻结快照（写入时从 UsageSnapshot 冻结）——
+        // 绝不在此刻读取可变的 Run 实体：Run 归档 / 删除 / 数据损坏 / 未来 schema
+        // 变化都不影响已经形成的账务事实。实际用量以冻结值为准（多退少补）。
+        var actualTokens = entry.ActualTokens;
+        var actualCostUsd = entry.ActualCostUsd;
 
         // 终态语义统一来自 AgentRunStateSemantics：准入即拒绝（AdmissionRejected，从未执行）
         // 退回容量；其余终态按实际用量转正（多退少补，actualUsage=0 自然等价释放）。
-        var settlementPolicy = AgentRunStateSemantics.Get(entry.TerminalState).QuotaSettlementPolicy;
+        // 冻结的结算策略与语义层权威一致（防御：以冻结值为准，不在此重新派生）。
+        var settlementPolicy = entry.SettlementPolicy;
         if (settlementPolicy == QuotaSettlementPolicy.Release)
         {
             await _quotaService.ReleaseAsync(entry.WorkspaceId, entry.ReservationId, ct).ConfigureAwait(false);

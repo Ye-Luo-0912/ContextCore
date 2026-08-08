@@ -108,6 +108,7 @@ F:ContextCore.Abstractions.AgentRunState.ReconciliationRunning
 F:ContextCore.Abstractions.AgentRunState.RecoveryBlocked
 F:ContextCore.Abstractions.AgentRunState.RecoveryCorrupted
 F:ContextCore.Abstractions.AgentRunState.RecoveryDependencyUnavailable
+F:ContextCore.Abstractions.AgentRunState.RetryPending
 F:ContextCore.Abstractions.AgentRunState.Running
 F:ContextCore.Abstractions.AgentRunState.ScheduledLocally
 F:ContextCore.Abstractions.AgentRunState.ToolDispatching
@@ -1368,6 +1369,11 @@ M:ContextCore.Abstractions.AgentRunCommit.Equals(System.Object)
 M:ContextCore.Abstractions.AgentRunCommit.GetHashCode()
 M:ContextCore.Abstractions.AgentRunCommit.GetType()
 M:ContextCore.Abstractions.AgentRunCommit.ToString()
+M:ContextCore.Abstractions.AgentRunCommitIdentityValidator.Equals(System.Object)
+M:ContextCore.Abstractions.AgentRunCommitIdentityValidator.GetHashCode()
+M:ContextCore.Abstractions.AgentRunCommitIdentityValidator.GetType()
+M:ContextCore.Abstractions.AgentRunCommitIdentityValidator.ToString()
+M:ContextCore.Abstractions.AgentRunCommitIdentityValidator.static ValidateIdentityConsistency(ContextCore.Abstractions.AgentRunCommit)
 M:ContextCore.Abstractions.AgentRunCompactionCandidate.#ctor(System.String, System.String, System.Int32, System.Int32)
 M:ContextCore.Abstractions.AgentRunCompactionCandidate.<Clone>$()
 M:ContextCore.Abstractions.AgentRunCompactionCandidate.Deconstruct(out System.String, out System.String, out System.Int32, out System.Int32)
@@ -2423,6 +2429,7 @@ M:ContextCore.Abstractions.IContextLearningStore.GetRecordAsync(System.String, S
 M:ContextCore.Abstractions.IContextLearningStore.QueryCasesAsync(ContextCore.Abstractions.Models.ContextLearningCaseQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextLearningStore.QueryFeedbackAsync(ContextCore.Abstractions.Models.PromotionFeedbackSignalQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextLearningStore.QueryRecordsAsync(ContextCore.Abstractions.Models.ContextLearningRecordQuery, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IContextPackageBuildTraceStore.GetAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextPackageBuildTraceStore.QueryRecentAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextPackageBuildTraceStore.SaveAsync(ContextCore.Abstractions.Models.ContextPackageBuildResult, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextPackageBuilder.BuildAsync(ContextCore.Abstractions.Models.ContextPackageRequest, System.Threading.CancellationToken)
@@ -2471,7 +2478,7 @@ M:ContextCore.Abstractions.IDecisionTraceStore.SaveAsync(ContextCore.Abstraction
 M:ContextCore.Abstractions.IDesiredModelStateStore.GetAllAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDesiredModelStateStore.GetAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDesiredModelStateStore.SetAsync(ContextCore.Abstractions.DesiredModelState, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IDurableToolExecutor.ExecuteAsync(System.String, System.String, ContextCore.Abstractions.AgentToolCallRequest, System.Int32, System.Threading.CancellationToken, ContextCore.Abstractions.AgentLeaseFence, System.Nullable<System.DateTimeOffset>, System.Boolean)
+M:ContextCore.Abstractions.IDurableToolExecutor.ExecuteAsync(System.String, System.String, ContextCore.Abstractions.AgentToolCallRequest, System.Int32, System.Threading.CancellationToken, ContextCore.Abstractions.AgentLeaseFence, System.Nullable<System.DateTimeOffset>, System.Boolean, System.String)
 M:ContextCore.Abstractions.IDurableToolResultStore.GetAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDurableToolResultStore.GetByRequestIdAsync(ContextCore.Abstractions.TenantRunKey, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDurableToolResultStore.SaveAsync(System.String, ContextCore.Abstractions.DurableToolResult, System.Threading.CancellationToken)
@@ -2656,6 +2663,7 @@ M:ContextCore.Abstractions.IRetrievalPlanFeedbackStore.ClearAsync(System.String,
 M:ContextCore.Abstractions.IRetrievalPlanFeedbackStore.ListRecentAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRetrievalPlanFeedbackStore.RecordAsync(ContextCore.Abstractions.RetrievalPlanFeedback, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRetrievalRouter.Route(ContextCore.Abstractions.ContextDecisionRequest, ContextCore.Abstractions.RetrievalExpertMask, ContextCore.Abstractions.ContextPolicyBundle, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRetrievalTraceStore.GetAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRetrievalTraceStore.QueryRecentAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRetrievalTraceStore.SaveAsync(ContextCore.Abstractions.Models.ContextRetrievalTrace, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRouter.RouteAsync(ContextCore.Abstractions.ContextDecisionRuntimeRequest, ContextCore.Abstractions.EffectivePolicySnapshot, System.Threading.CancellationToken)
@@ -6130,12 +6138,11 @@ P:ContextCore.Abstractions.AgentRunCommit.CheckpointCursor (get|init)
 P:ContextCore.Abstractions.AgentRunCommit.Events (get|init)
 P:ContextCore.Abstractions.AgentRunCommit.ExpectedCurrentState (get|init)
 P:ContextCore.Abstractions.AgentRunCommit.FencingToken (get|init)
+P:ContextCore.Abstractions.AgentRunCommit.Key (get|init)
 P:ContextCore.Abstractions.AgentRunCommit.LeaseToken (get|init)
 P:ContextCore.Abstractions.AgentRunCommit.NewRunSnapshot (get|init)
-P:ContextCore.Abstractions.AgentRunCommit.RunId (get|init)
 P:ContextCore.Abstractions.AgentRunCommit.SettlementIntent (get)
 P:ContextCore.Abstractions.AgentRunCommit.UsageSnapshot (get|init)
-P:ContextCore.Abstractions.AgentRunCommit.WorkspaceId (get|init)
 P:ContextCore.Abstractions.AgentRunCompactionCandidate.EventCount (get|init)
 P:ContextCore.Abstractions.AgentRunCompactionCandidate.LastSequence (get|init)
 P:ContextCore.Abstractions.AgentRunCompactionCandidate.RunId (get|init)
@@ -11155,6 +11162,7 @@ P:ContextCore.Abstractions.PathHygieneScanReport.TotalFiles (get|init)
 P:ContextCore.Abstractions.PendingToolCommand.ArgumentsJson (get|init)
 P:ContextCore.Abstractions.PendingToolCommand.IdempotencyKey (get|init)
 P:ContextCore.Abstractions.PendingToolCommand.ModelTurnRevision (get|init)
+P:ContextCore.Abstractions.PendingToolCommand.RequestId (get|init)
 P:ContextCore.Abstractions.PendingToolCommand.ToolCallId (get|init)
 P:ContextCore.Abstractions.PendingToolCommand.ToolName (get|init)
 P:ContextCore.Abstractions.PerformanceFallbackOptions.ComponentPolicies (get|init)
@@ -11470,11 +11478,16 @@ P:ContextCore.Abstractions.StoreVersionVector.Empty (get)
 P:ContextCore.Abstractions.StoreVersionVector.Versions (get)
 P:ContextCore.Abstractions.TenantRunKey.RunId (get|init)
 P:ContextCore.Abstractions.TenantRunKey.WorkspaceId (get|init)
+P:ContextCore.Abstractions.TerminalSettlementEntry.ActualCostUsd (get|init)
+P:ContextCore.Abstractions.TerminalSettlementEntry.ActualTokens (get|init)
+P:ContextCore.Abstractions.TerminalSettlementEntry.FinalAttempt (get|init)
 P:ContextCore.Abstractions.TerminalSettlementEntry.LeaseToken (get|init)
 P:ContextCore.Abstractions.TerminalSettlementEntry.OutboxId (get|init)
 P:ContextCore.Abstractions.TerminalSettlementEntry.ReservationId (get|init)
 P:ContextCore.Abstractions.TerminalSettlementEntry.RunId (get|init)
+P:ContextCore.Abstractions.TerminalSettlementEntry.SettlementPolicy (get|init)
 P:ContextCore.Abstractions.TerminalSettlementEntry.TerminalState (get|init)
+P:ContextCore.Abstractions.TerminalSettlementEntry.UsageRevision (get|init)
 P:ContextCore.Abstractions.TerminalSettlementEntry.WorkspaceId (get|init)
 P:ContextCore.Abstractions.TokenTruncationResult.TokenCount (get|init)
 P:ContextCore.Abstractions.TokenTruncationResult.TruncatedContent (get|init)
@@ -11816,6 +11829,7 @@ T:ContextCore.Abstractions.AgentRunAdmitResult
 T:ContextCore.Abstractions.AgentRunAlert
 T:ContextCore.Abstractions.AgentRunAlertKind (Enum)
 T:ContextCore.Abstractions.AgentRunCommit
+T:ContextCore.Abstractions.AgentRunCommitIdentityValidator
 T:ContextCore.Abstractions.AgentRunCompactionCandidate
 T:ContextCore.Abstractions.AgentRunCompactionResult
 T:ContextCore.Abstractions.AgentRunCreateResult

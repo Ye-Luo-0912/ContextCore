@@ -87,7 +87,8 @@ FROM pending
 WHERE {{Table("terminal_run_settlement_outbox")}}.outbox_id = pending.outbox_id
 RETURNING
     {{Table("terminal_run_settlement_outbox")}}.outbox_id,
-    workspace_id, run_id, reservation_id, terminal_state, lease_token;
+    workspace_id, run_id, reservation_id, terminal_state, lease_token,
+    actual_tokens, actual_cost_usd, usage_revision, final_attempt, settlement_policy;
 """;
 
             var results = new List<TerminalSettlementEntry>();
@@ -225,30 +226,42 @@ WHERE status = 2
             .Where(s => AgentRunStateSemantics.Get(s) is { IsTerminal: true, QuotaSettlementPolicy: not QuotaSettlementPolicy.None })
             .Select(s => (int)s)
             .ToArray();
+        var releaseStates = Enum.GetValues<AgentRunState>()
+            .Where(s => AgentRunStateSemantics.Get(s).QuotaSettlementPolicy == QuotaSettlementPolicy.Release)
+            .Select(s => (int)s)
+            .ToArray();
 
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         // 终态 Run + 有效预留 + 无任何结算记录 → 补写待结算条目（status=0）。
-        // 与正常写入路径同一结构：reservation_id = run_id；幂等——已有记录（含卡住）
-        // 的 Run 不再补写，卡住条目由低频重试自行收敛。
+        // 冻结结算事实（actual_tokens / actual_cost_usd / usage_revision / final_attempt /
+        // settlement_policy）来自 agent_runs.data 的持久化快照——补写场景（正常写入路径
+        // 漏写）以 Run 行当前事实为权威，与正常写入路径冻结语义一致。
+        // ON CONFLICT (workspace_id, run_id) DO NOTHING：UNIQUE 约束使 outbox 自身
+        // exactly-once——并发 Gap Reconciler 双插被数据库拒绝，不依赖 NOT EXISTS 竞态窗口。
         command.CommandText = $"""
 INSERT INTO {Table("terminal_run_settlement_outbox")} (
-    workspace_id, run_id, reservation_id, terminal_state, created_at, updated_at)
-SELECT r.workspace_id, r.run_id, r.run_id, r.state, @now, @now
+    workspace_id, run_id, reservation_id, terminal_state,
+    actual_tokens, actual_cost_usd, usage_revision, final_attempt, settlement_policy,
+    created_at, updated_at)
+SELECT r.workspace_id, r.run_id, r.run_id, r.state,
+       COALESCE((r.data->'CostBudget'->>'TokensUsed')::bigint, 0),
+       COALESCE((r.data->'CostBudget'->>'CostUsedUsd')::double precision, 0),
+       COALESCE((r.data->>'ModelCallsUsed')::integer, 0),
+       COALESCE((r.data->>'RetryCount')::integer, 0) + 1,
+       CASE WHEN r.state = ANY(@release_states) THEN 2 ELSE 1 END,
+       @now, @now
 FROM {Table("agent_runs")} r
 JOIN {Table("workspace_quota_reservations")} res
   ON res.workspace_id = r.workspace_id
  AND res.reservation_id = r.run_id
 WHERE r.state = ANY(@terminal_states)
-  AND NOT EXISTS (
-      SELECT 1 FROM {Table("terminal_run_settlement_outbox")} o
-      WHERE o.workspace_id = r.workspace_id
-        AND o.run_id = r.run_id
-  );
+ON CONFLICT (workspace_id, run_id) DO NOTHING;
 """;
         command.Parameters.AddWithValue("now", now);
         command.Parameters.AddWithValue("terminal_states", terminalStates);
+        command.Parameters.AddWithValue("release_states", releaseStates);
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -259,6 +272,11 @@ WHERE r.state = ANY(@terminal_states)
         RunId = reader.GetString(reader.GetOrdinal("run_id")),
         ReservationId = reader.GetString(reader.GetOrdinal("reservation_id")),
         TerminalState = (AgentRunState)reader.GetInt16(reader.GetOrdinal("terminal_state")),
-        LeaseToken = reader.GetString(reader.GetOrdinal("lease_token"))
+        LeaseToken = reader.GetString(reader.GetOrdinal("lease_token")),
+        ActualTokens = reader.GetInt64(reader.GetOrdinal("actual_tokens")),
+        ActualCostUsd = reader.GetDouble(reader.GetOrdinal("actual_cost_usd")),
+        UsageRevision = reader.GetInt32(reader.GetOrdinal("usage_revision")),
+        FinalAttempt = reader.GetInt32(reader.GetOrdinal("final_attempt")),
+        SettlementPolicy = (QuotaSettlementPolicy)reader.GetInt16(reader.GetOrdinal("settlement_policy"))
     };
 }

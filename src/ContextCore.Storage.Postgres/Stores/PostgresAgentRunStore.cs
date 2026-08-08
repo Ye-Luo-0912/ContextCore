@@ -660,6 +660,10 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
             {
                 // CAS 成功：终态且存在对应预留时，写入结算 outbox（同一事务，exactly-once）。
                 // 仅当预留行存在才入队——配额未启用 / 预留已被释放的 Run 无需结算。
+                // 冻结结算事实（actual_tokens / actual_cost_usd / usage_revision /
+                // final_attempt / settlement_policy）来自 agent_runs.data 持久化快照，
+                // 与提交器路径（UsageSnapshot）语义一致——结算 worker 不读取可变 Run 实体。
+                // ON CONFLICT DO NOTHING：UNIQUE(workspace_id, run_id) 保证 outbox 自身 exactly-once。
                 if (semantics.QuotaSettlementPolicy != QuotaSettlementPolicy.None)
                 {
                     await using (var outboxCommand = connection.CreateCommand())
@@ -668,17 +672,30 @@ WHERE workspace_id = @workspace_id AND run_id = @run_id AND state = @expected_st
                         outboxCommand.CommandTimeout = Options.CommandTimeoutSeconds;
                         outboxCommand.CommandText = $"""
 INSERT INTO {Table("terminal_run_settlement_outbox")} (
-    workspace_id, run_id, reservation_id, terminal_state, created_at, updated_at)
-SELECT @workspace_id, @run_id, @run_id, @new_state, @now, @now
-WHERE EXISTS (
-    SELECT 1 FROM {Table("workspace_quota_reservations")}
-    WHERE workspace_id = @workspace_id
-      AND reservation_id = @run_id
-);
+    workspace_id, run_id, reservation_id, terminal_state,
+    actual_tokens, actual_cost_usd, usage_revision, final_attempt, settlement_policy,
+    created_at, updated_at)
+SELECT @workspace_id, @run_id, @run_id, @new_state,
+       COALESCE((ar.data->'CostBudget'->>'TokensUsed')::bigint, 0),
+       COALESCE((ar.data->'CostBudget'->>'CostUsedUsd')::double precision, 0),
+       COALESCE((ar.data->>'ModelCallsUsed')::integer, 0),
+       COALESCE((ar.data->>'RetryCount')::integer, 0) + 1,
+       @settlement_policy,
+       @now, @now
+FROM {Table("agent_runs")} ar
+WHERE ar.workspace_id = @workspace_id
+  AND ar.run_id = @run_id
+  AND EXISTS (
+      SELECT 1 FROM {Table("workspace_quota_reservations")}
+      WHERE workspace_id = @workspace_id
+        AND reservation_id = @run_id
+  )
+ON CONFLICT (workspace_id, run_id) DO NOTHING;
 """;
                         outboxCommand.Parameters.AddWithValue("workspace_id", workspaceId);
                         outboxCommand.Parameters.AddWithValue("run_id", runId);
                         outboxCommand.Parameters.AddWithValue("new_state", (byte)newState);
+                        outboxCommand.Parameters.AddWithValue("settlement_policy", (short)semantics.QuotaSettlementPolicy);
                         outboxCommand.Parameters.AddWithValue("now", now);
                         await outboxCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -850,7 +867,7 @@ LIMIT @take;
     /// claim_expires_at——Scheduler Claim Lease 真正落库（不再只打 UpdatedAt 补丁）：
     ///   - Queued（state=21）→ 领取；
     ///   - Claimed（state=22）且 claim 已过期 → 重新领取（节点崩溃后其他节点接管）；
-    ///   - Failed（state=8）且可重试 → 重置为 Claimed + retry_count+1 + next_retry_at=指数退避
+    ///   - RetryPending（state=27）且可重试 → 重置为 Claimed + retry_count+1 + next_retry_at=指数退避
     ///     （base × 2^(retry_count-1)，封顶 cap），清空失败字段与 checkpoint 指针
     ///     （新 Attempt 全新启动，不复用前序 Attempt 的 checkpoint 上下文）；
     ///   - RecoveryDependencyUnavailable（state=17）退避门通过 → 领取（事件流保留，按哈希链重放）。
@@ -941,8 +958,8 @@ WITH eligible AS (
                 -- ClaimExpired（state=24）：claim 已显式失效，可直接重新领取
                 (state = 24)
                 OR
-                -- Failed（state=8）且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
-                (state = 8 AND max_retries > 0 AND retry_count < max_retries
+                -- RetryPending（state=27）且配置了重试（max_retries > 0）且未耗尽（retry_count < max_retries）且退避门通过
+                (state = 27 AND max_retries > 0 AND retry_count < max_retries
                  AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp()))
                 OR
                 -- Recovery Integrity State：恢复依赖不可用（state = 17）为可重试状态（非终态），
@@ -987,17 +1004,17 @@ updated AS (
         claim_token = t.claim_token,
         claim_expires_at = clock_timestamp() + @claim_duration,
         claim_attempt = ar.claim_attempt + 1,
-        retry_count = CASE WHEN ar.state = 8 THEN ar.retry_count + 1 ELSE ar.retry_count END,
-        next_retry_at = CASE WHEN ar.state = 8
+        retry_count = CASE WHEN ar.state = 27 THEN ar.retry_count + 1 ELSE ar.retry_count END,
+        next_retry_at = CASE WHEN ar.state = 27
             THEN clock_timestamp() + LEAST(@backoff_base * POWER(2, GREATEST(ar.retry_count, 0))::double precision, @backoff_cap)
             ELSE ar.next_retry_at END,
         updated_at = clock_timestamp(),
-        finished_at = CASE WHEN ar.state = 8 THEN NULL ELSE ar.finished_at END,
-        failure_reason = CASE WHEN ar.state = 8 THEN NULL ELSE ar.failure_reason END,
-        final_answer = CASE WHEN ar.state = 8 THEN NULL ELSE ar.final_answer END,
-        last_checkpoint_id = CASE WHEN ar.state = 8 THEN NULL ELSE ar.last_checkpoint_id END,
-        last_checkpoint_sequence = CASE WHEN ar.state = 8 THEN NULL ELSE ar.last_checkpoint_sequence END,
-        data = CASE WHEN ar.state = 8
+        finished_at = CASE WHEN ar.state = 27 THEN NULL ELSE ar.finished_at END,
+        failure_reason = CASE WHEN ar.state = 27 THEN NULL ELSE ar.failure_reason END,
+        final_answer = CASE WHEN ar.state = 27 THEN NULL ELSE ar.final_answer END,
+        last_checkpoint_id = CASE WHEN ar.state = 27 THEN NULL ELSE ar.last_checkpoint_id END,
+        last_checkpoint_sequence = CASE WHEN ar.state = 27 THEN NULL ELSE ar.last_checkpoint_sequence END,
+        data = CASE WHEN ar.state = 27
             THEN data || jsonb_build_object(
                 'State', to_jsonb('Claimed'::text),
                 'UpdatedAt', to_jsonb(clock_timestamp()),
@@ -1387,8 +1404,10 @@ LIMIT 1;
 
     /// <inheritdoc />
     /// <remarks>
-    /// 原子死信：Failed（state=8）且 max_retries &gt; 0 且 retry_count &gt;= max_retries 且退避门通过
+    /// 原子死信：RetryPending（state=27）且 retry_count &gt;= max_retries 且退避门通过
     /// → state=DeadLettered（终态）+ finished_at + data jsonb 打补丁（State/UpdatedAt/FinishedAt）。
+    /// 防御性兜底：Actor 在重试预算耗尽时直接进入 Failed（终态），正常路径不会产生
+    /// 超预算的 RetryPending；本扫描捕获任何漏网（如重试预算运行时被调小）。
     /// 保留 failure_reason / 事件流作为审计证据（死信后不再自动恢复，需运维介入）。
     /// 终态写入天然幂等（重复执行无副作用），LIMIT take 分批；无需 SKIP LOCKED。
     /// </remarks>
@@ -1415,7 +1434,7 @@ SET state = 18,
         'State', to_jsonb('DeadLettered'::text),
         'UpdatedAt', to_jsonb(clock_timestamp()),
         'FinishedAt', to_jsonb(COALESCE(finished_at, clock_timestamp())))
-WHERE state = 8
+WHERE state = 27
   AND max_retries > 0
   AND retry_count >= max_retries
   AND (next_retry_at IS NULL OR next_retry_at <= clock_timestamp())

@@ -205,7 +205,15 @@ public enum AgentRunState : byte
     /// mandatory 上下文时运行。与 Failed 的区别：本状态明确表达"安全原因终止"，
     /// 不参与自动重试（与 RecoveryBlocked 语义一致，等待人工介入修复或重建）。
     /// </summary>
-    ContextSafetyBlocked = 25
+    ContextSafetyBlocked = 25,
+
+    /// <summary>
+    /// 重试挂起（Attempt 失败但重试预算未耗尽）：非终态——调度器在退避门
+    /// （NextRetryAtUtc）通过后重新领取（RetryPending → Claimed），进入下一 Attempt。
+    /// 区别于 <see cref="Failed"/>（重试预算耗尽的真正 Run 终态，需配额结算）：
+    /// RetryPending 不结算配额（预留保留给下一 Attempt），不写 finished_at。
+    /// </summary>
+    RetryPending = 27
 }
 
 /// <summary>
@@ -261,6 +269,14 @@ public sealed record PendingToolCommand
     /// 用于审计追踪与恢复时校验模型轮次一致性。
     /// </summary>
     public int ModelTurnRevision { get; init; }
+
+    /// <summary>
+    /// 已持久化的 Tool 调用 RequestId（执行框架从稳定身份派生；null = 事件未携带）。
+    /// 崩溃恢复时优先使用此值（绝不重新计算）：滚动升级改变 RequestId 派生算法后，
+    /// 历史 Run 的 journal 仍以原 RequestId 寻址——恢复沿用持久化值才能命中既有条目，
+    /// durable 去重生效，外部副作用不重复执行。
+    /// </summary>
+    public string? RequestId { get; init; }
 }
 
 /// <summary>
@@ -1659,6 +1675,25 @@ public sealed record TerminalSettlementEntry
 
     /// <summary>领取时写入的租约 token（结算完成后回传 CAS 标记）。</summary>
     public required string LeaseToken { get; init; }
+
+    /// <summary>
+    /// 冻结的实际 Token 用量（outbox 写入时从 UsageSnapshot 冻结）。
+    /// 结算 worker 直接消费此值，不再读取可变的 Run 实体——
+    /// Run 归档 / 删除 / 数据损坏都不影响已经形成的账务事实。
+    /// </summary>
+    public long ActualTokens { get; init; }
+
+    /// <summary>冻结的实际费用（USD）。</summary>
+    public double ActualCostUsd { get; init; }
+
+    /// <summary>冻结时的用量版本（模型调用计数；审计用）。</summary>
+    public int UsageRevision { get; init; }
+
+    /// <summary>冻结时的最终 Attempt 序号（RetryCount + 1）。</summary>
+    public int FinalAttempt { get; init; }
+
+    /// <summary>冻结的结算策略（执行类转正 / 准入拒绝退回）。</summary>
+    public QuotaSettlementPolicy SettlementPolicy { get; init; }
 }
 
 /// <summary>
@@ -2222,6 +2257,11 @@ public interface IDurableToolExecutor
     /// false（默认）时：声明 <see cref="ToolDescriptor.RequiresApproval"/> 的写副作用 Tool
     /// 会被策略层禁止自动提交（fail-safe，防止直连调用绕过 Actor 审批门）。
     /// </param>
+    /// <param name="requestIdOverride">
+    /// 恢复路径已持久化的 RequestId（事件中提取；可选）。非空时以该值寻址 journal，
+    /// 绝不重新计算——滚动升级改变派生算法后，历史 Run 的 journal 仍以原 RequestId
+    /// 命中，durable 去重生效，外部副作用不重复执行。
+    /// </param>
     /// <returns>Tool 执行结果（含 RequestId / SideEffect / JournalState / 结果本体）。</returns>
     ValueTask<ToolExecutionResult> ExecuteAsync(
         string runId,
@@ -2231,7 +2271,8 @@ public interface IDurableToolExecutor
         CancellationToken cancellationToken = default,
         AgentLeaseFence? leaseFence = null,
         DateTimeOffset? deadlineAt = null,
-        bool approvalGranted = false);
+        bool approvalGranted = false,
+        string? requestIdOverride = null);
 }
 
 /// <summary>

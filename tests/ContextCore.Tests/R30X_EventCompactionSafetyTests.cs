@@ -10,8 +10,8 @@ namespace ContextCore.Tests;
 /// 非终态 Run 的事件流被压缩后，重启恢复会因事件链断裂判定 RecoveryCorrupted。
 /// 因此 <see cref="PostgresAgentRunEventCompactor.FindCandidatesAsync"/> 的候选过滤
 /// 与操作员压缩端点均使用 <see cref="PostgresAgentRunEventCompactor.IsCompactableRunState"/>
-/// 只放行终态 Run（Failed 仅在重试已耗尽时放行——仍可重试的 Failed 会被调度器
-/// 重新领取并全量重放事件流）。
+/// 只放行终态 Run（RetryPending 是非终态——会被调度器重新领取并全量重放事件流，
+/// 压缩会破坏恢复；Failed 是重试预算耗尽后的真终态，天然可压缩）。
 /// </summary>
 [TestClass]
 [TestCategory("Storage")]
@@ -30,7 +30,8 @@ public sealed class R30X_EventCompactionSafetyTests
             AgentRunState.ReconciliationRejected,
             AgentRunState.RecoveryBlocked,
             AgentRunState.RecoveryCorrupted,
-            AgentRunState.DeadLettered
+            AgentRunState.DeadLettered,
+            AgentRunState.Failed
         ];
 
         foreach (var state in terminalStates)
@@ -42,19 +43,21 @@ public sealed class R30X_EventCompactionSafetyTests
     }
 
     [TestMethod]
-    public void IsCompactableRunState_FailedWithRetryRemaining_NotCompactable()
+    public void IsCompactableRunState_RetryPending_NotCompactable()
     {
-        // Failed 且重试预算未耗尽：会被调度器重新领取并重放事件流，压缩会破坏恢复。
+        // RetryPending（Attempt 失败但重试预算未耗尽）：会被调度器重新领取并
+        // 全量重放事件流，压缩会破坏恢复——无论重试计数如何都不可压缩。
         Assert.IsFalse(
-            PostgresAgentRunEventCompactor.IsCompactableRunState(AgentRunState.Failed, retryCount: 1, maxRetries: 3));
+            PostgresAgentRunEventCompactor.IsCompactableRunState(AgentRunState.RetryPending, retryCount: 1, maxRetries: 3));
         Assert.IsFalse(
-            PostgresAgentRunEventCompactor.IsCompactableRunState(AgentRunState.Failed, retryCount: 2, maxRetries: 5));
+            PostgresAgentRunEventCompactor.IsCompactableRunState(AgentRunState.RetryPending, retryCount: 2, maxRetries: 5));
     }
 
     [TestMethod]
-    public void IsCompactableRunState_FailedExhausted_IsCompactable()
+    public void IsCompactableRunState_Failed_IsCompactable()
     {
-        // Failed 且重试已耗尽：不会再被调度器重放，可压缩。
+        // Failed 是重试预算耗尽后的真正 Run 终态（仍有重试机会的 Attempt 失败
+        // 进入 RetryPending，不会进入 Failed），天然可压缩。
         Assert.IsTrue(
             PostgresAgentRunEventCompactor.IsCompactableRunState(AgentRunState.Failed, retryCount: 3, maxRetries: 3));
         // MaxRetries = 0（默认不重试）：失败即终态，可压缩。
@@ -78,7 +81,8 @@ public sealed class R30X_EventCompactionSafetyTests
             AgentRunState.PendingToolExecution,
             AgentRunState.AwaitingReconciliation,
             AgentRunState.ReconciliationRunning,
-            AgentRunState.RecoveryDependencyUnavailable
+            AgentRunState.RecoveryDependencyUnavailable,
+            AgentRunState.RetryPending
         ];
 
         foreach (var state in nonTerminalStates)

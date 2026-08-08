@@ -105,7 +105,8 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         CancellationToken cancellationToken = default,
         AgentLeaseFence? leaseFence = null,
         DateTimeOffset? deadlineAt = null,
-        bool approvalGranted = false)
+        bool approvalGranted = false,
+        string? requestIdOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
@@ -120,7 +121,11 @@ public sealed class DefaultDurableToolExecutor : IDurableToolExecutor
         // （journal 以 (workspace_id, run_id, request_id) 复合键寻址，跨工作区隔离）。
         // IdempotencyKey 不参与 RequestId 计算——它是业务级去重键，单独存储于 journal 条目，
         // 不应影响调用身份（InvocationId）。这避免同一 Run 内不同轮次的相同 Tool 调用被误判为重复。
-        var requestId = ComputeRequestId(workspaceId, runId, toolCall, modelTurn);
+        // requestIdOverride：恢复路径已持久化的 RequestId（事件中提取）优先，绝不重新计算——
+        // 滚动升级改变派生算法后，历史 Run 的 journal 仍以原 RequestId 寻址，命中既有条目。
+        var requestId = !string.IsNullOrWhiteSpace(requestIdOverride)
+            ? requestIdOverride!
+            : ComputeRequestId(workspaceId, runId, toolCall, modelTurn);
         var idempotencyKey = toolCall.IdempotencyKey;
         // toolCallId 优先使用模型分配的 ToolCallId，缺失时回退到 RequestId
         var toolCallId = !string.IsNullOrWhiteSpace(toolCall.ToolCallId) ? toolCall.ToolCallId! : requestId;

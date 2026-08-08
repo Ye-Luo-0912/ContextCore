@@ -15,8 +15,12 @@ namespace ContextCore.Storage.Postgres.Infrastructure;
 /// 三阶段执行：
 /// 1. Online：workspace_id / run_id 列已存在（基线建表即有），仅防御性置 NOT NULL；
 /// 2. Backfill：按 run_id join agent_runs 回填 workspace_id/run_id（防御；
-///    写入路径自始携带双键，理论上无 NULL 行），孤儿行（对应 Run 已不存在）删除——
-///    journal 无对应 Run 即无审计/对账意义，结果行同理；
+///    写入路径自始携带双键，理论上无 NULL 行）——映射规则：
+///    - 唯一映射（run_id 只对应一个 workspace_id）→ 回填；
+///    - 歧义映射（run_id 对应多个 workspace_id）→ 迁移前阻断失败（PreCheck 检测），
+///      要求人工修复——Tool Journal 是外部副作用审计真相，绝不替系统猜映射；
+///    - 未映射（run_id 在 agent_runs 不存在）→ 移入隔离表 tool_dispatch_quarantine
+///      （保留审计真相，不删除），再移除原行；
 /// 3. ConstraintValidate：journal 主键切换为 (workspace_id, run_id, request_id)，
 ///    幂等键唯一索引切换为 (workspace_id, run_id, idempotency_key)，
 ///    结果表主键切换为 (workspace_id, run_id, request_id)。
@@ -34,7 +38,7 @@ public sealed class PostgresMigrationToolDispatchWorkspaceKey : IPostgresMigrati
     public string Description =>
         "tool_dispatch_journal_entries / tool_dispatch_results 主键由 request_id 升级为 "
         + "(workspace_id, run_id, request_id)，幂等键唯一约束升级为 (workspace_id, run_id, idempotency_key) "
-        + "（跨工作区同 RunId/RequestId/幂等键互不干扰）。";
+        + "（跨工作区同 RunId/RequestId/幂等键互不干扰）；歧义/未映射历史行移入隔离表并阻断迁移（不替系统猜映射）。";
 
     public IReadOnlyList<PostgresMigrationStage> Stages { get; } =
     [
@@ -73,7 +77,54 @@ public sealed class PostgresMigrationToolDispatchWorkspaceKey : IPostgresMigrati
         command.Parameters.Clear();
         command.Parameters.AddWithValue("table_name", table);
         var exists = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return exists is null or DBNull ? string.Empty : null;
+        if (exists is not null and not DBNull)
+        {
+            return null;
+        }
+
+        // 歧义映射阻断：缺 workspace 的 journal / results 行，其 run_id 在 agent_runs 中
+        // 存在多个不同 workspace_id——映射本身就是歧义的，绝不替系统猜。
+        // 要求人工修复（指定映射或清理数据）后重试迁移；未映射行（run_id 无任何
+        // agent_runs 行）不算歧义，Backfill 阶段移入隔离表保留审计真相。
+        var runsTable = PostgresNames.Table(options, "agent_runs");
+        var resultsTable = PostgresNames.Table(options, "tool_dispatch_results");
+        command.CommandText = $"""
+            SELECT 1
+            FROM {table} j
+            JOIN {runsTable} r ON r.run_id = j.run_id
+            WHERE j.workspace_id IS NULL OR j.workspace_id = ''
+            GROUP BY j.request_id, j.run_id
+            HAVING COUNT(DISTINCT r.workspace_id) > 1
+            LIMIT 1;
+            """;
+        command.Parameters.Clear();
+        var ambiguous = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (ambiguous is not null and not DBNull)
+        {
+            return "tool_dispatch_journal_entries 存在歧义 run 映射（同一 run_id 对应多个 workspace_id）。"
+                + "Tool Journal 是外部副作用审计真相，迁移不替系统猜映射——"
+                + "请人工修复（明确归属或清理历史行）后重试迁移。";
+        }
+
+        command.CommandText = $"""
+            SELECT 1
+            FROM {resultsTable} d
+            JOIN {runsTable} r ON r.run_id = d.run_id
+            WHERE d.workspace_id IS NULL OR d.workspace_id = ''
+            GROUP BY d.request_id, d.run_id
+            HAVING COUNT(DISTINCT r.workspace_id) > 1
+            LIMIT 1;
+            """;
+        command.Parameters.Clear();
+        var ambiguousResults = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (ambiguousResults is not null and not DBNull)
+        {
+            return "tool_dispatch_results 存在歧义 run 映射（同一 run_id 对应多个 workspace_id）。"
+                + "Tool 执行结果审计真相不替系统猜映射——"
+                + "请人工修复（明确归属或清理历史行）后重试迁移。";
+        }
+
+        return string.Empty;
     }
 
     public async Task ExecuteStageAsync(
@@ -103,29 +154,103 @@ public sealed class PostgresMigrationToolDispatchWorkspaceKey : IPostgresMigrati
                 break;
 
             case PostgresMigrationStage.Backfill:
-                // 按 run_id join agent_runs 回填双键；无法回填的孤儿行删除
-                // （对应 Run 已不存在，journal/结果无审计与对账意义）。
+                // 按 run_id join agent_runs 回填双键。映射规则（审计真相不删除）：
+                // 1. 唯一映射（run_id 只对应一个 workspace_id）→ 回填；
+                // 2. 歧义映射（多 workspace）已被 PreCheck 阻断（fail-closed，人工修复）；
+                // 3. 未映射（run_id 无 agent_runs 行）→ 移入隔离表 tool_dispatch_quarantine
+                //    （保留审计真相 + 原因），再移除原行——绝不静默删除外部副作用审计数据。
+                // 结果表同理。quarantine 表幂等建表（仅存量迁移按需创建）。
+                var quarantineTable = PostgresNames.Table(options, "tool_dispatch_quarantine");
                 command.CommandText = $"""
+                    CREATE TABLE IF NOT EXISTS {quarantineTable} (
+                        request_id text NOT NULL,
+                        tool_name text NOT NULL DEFAULT '',
+                        state smallint NOT NULL DEFAULT 0,
+                        idempotency_key text,
+                        payload_digest text,
+                        external_operation_id text,
+                        workspace_id text NULL,
+                        run_id text NOT NULL,
+                        created_at timestamptz NULL,
+                        updated_at timestamptz NULL,
+                        diagnostic_note text,
+                        quarantine_reason text NOT NULL,
+                        quarantined_at timestamptz NOT NULL,
+                        PRIMARY KEY (run_id, request_id));
+
+                    -- 唯一映射 → 回填（排除歧义 run_id：多个 workspace 时 UPDATE 结果不确定）
                     UPDATE {journal} j
                     SET workspace_id = r.workspace_id,
                         run_id = COALESCE(j.run_id, r.run_id)
                     FROM {runsTable} r
                     WHERE j.run_id = r.run_id
-                      AND (j.workspace_id IS NULL OR j.workspace_id = '');
-                    DELETE FROM {journal}
-                    WHERE workspace_id IS NULL OR workspace_id = ''
-                       OR run_id IS NULL OR run_id = '';
+                      AND (j.workspace_id IS NULL OR j.workspace_id = '')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM {runsTable} r2
+                          WHERE r2.run_id = r.run_id
+                            AND r2.workspace_id <> r.workspace_id);
 
+                    -- 未映射（run_id 无任何 agent_runs 行）→ 隔离（保留审计真相，不删除）
+                    INSERT INTO {quarantineTable} (
+                        request_id, tool_name, state, idempotency_key, payload_digest,
+                        external_operation_id, workspace_id, run_id,
+                        created_at, updated_at, diagnostic_note,
+                        quarantine_reason, quarantined_at)
+                    SELECT j.request_id, j.tool_name, j.state, j.idempotency_key, j.payload_digest,
+                           j.external_operation_id, j.workspace_id, j.run_id,
+                           j.created_at, j.updated_at, j.diagnostic_note,
+                           'unmapped-run', @quarantined_at
+                    FROM {journal} j
+                    WHERE (j.workspace_id IS NULL OR j.workspace_id = '')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM {runsTable} r WHERE r.run_id = j.run_id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM {quarantineTable} q
+                          WHERE q.run_id = j.run_id AND q.request_id = j.request_id);
+
+                    -- 已隔离的未映射行从主表移除（真相已保留在隔离表）
+                    DELETE FROM {journal} j
+                    USING {quarantineTable} q
+                    WHERE q.run_id = j.run_id
+                      AND q.request_id = j.request_id
+                      AND q.quarantine_reason = 'unmapped-run';
+
+                    -- 结果表：同上（唯一映射回填 + 未映射隔离）
                     UPDATE {results} d
                     SET workspace_id = r.workspace_id,
                         run_id = COALESCE(d.run_id, r.run_id)
                     FROM {runsTable} r
                     WHERE d.run_id = r.run_id
-                      AND (d.workspace_id IS NULL OR d.workspace_id = '');
-                    DELETE FROM {results}
-                    WHERE workspace_id IS NULL OR workspace_id = ''
-                       OR run_id IS NULL OR run_id = '';
+                      AND (d.workspace_id IS NULL OR d.workspace_id = '')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM {runsTable} r2
+                          WHERE r2.run_id = r.run_id
+                            AND r2.workspace_id <> r.workspace_id);
+
+                    INSERT INTO {quarantineTable} (
+                        request_id, tool_name, state, idempotency_key, payload_digest,
+                        external_operation_id, workspace_id, run_id,
+                        created_at, updated_at, diagnostic_note,
+                        quarantine_reason, quarantined_at)
+                    SELECT d.request_id, '', 0, NULL, NULL,
+                           NULL, d.workspace_id, d.run_id,
+                           NULL, NULL, NULL,
+                           'unmapped-run', @quarantined_at
+                    FROM {results} d
+                    WHERE (d.workspace_id IS NULL OR d.workspace_id = '')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM {runsTable} r WHERE r.run_id = d.run_id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM {quarantineTable} q
+                          WHERE q.run_id = d.run_id AND q.request_id = d.request_id);
+
+                    DELETE FROM {results} d
+                    USING {quarantineTable} q
+                    WHERE q.run_id = d.run_id
+                      AND q.request_id = d.request_id
+                      AND q.quarantine_reason = 'unmapped-run';
                     """;
+                command.Parameters.AddWithValue("quarantined_at", DateTimeOffset.UtcNow);
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 break;
 

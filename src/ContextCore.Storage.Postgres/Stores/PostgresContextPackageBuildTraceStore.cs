@@ -72,4 +72,32 @@ LIMIT {(take > 0 ? take : 20)};
 
         return results;
     }
+
+    public async Task<ContextPackageBuildResult?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string buildId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 稳定主键 (workspace_id, collection_id, build_id) 点查：
+        // Decision Evidence 审计不依赖"最近 N 条"窗口。
+        command.CommandText = $"""
+SELECT data FROM {Table("package_build_traces")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND build_id = @build_id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("build_id", buildId);
+
+        var json = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+        return json is null ? null : Serializer.Deserialize<ContextPackageBuildResult>(json);
+    }
 }

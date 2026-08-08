@@ -174,7 +174,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   不再信任客户端提供的裸签名；查询 / 清除以工作区为作用域（全局重置需更高权限），
     ///   杜绝跨租户读取 / 污染 / 重置其他工作区的自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v68";
+    public const string SchemaVersion = "cc-schema-v71";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -1871,13 +1871,17 @@ ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS workspace_id t
 ALTER TABLE {toolDispatchJournalEntries} ADD COLUMN IF NOT EXISTS run_id text;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "state")} ON {toolDispatchJournalEntries} (state);
--- idempotency_key 升级为 (workspace_id, run_id) 前缀的 UNIQUE partial index。
--- 旧版本（v21）创建的是普通 index；此处先 DROP 旧 index（若存在）再创建 UNIQUE index，
--- 保证已有数据库升级后幂等键按工作区 + Run 唯一，防止不同 request_id 复用同一幂等键分别执行，
--- 同时允许不同工作区/不同 Run 使用相同幂等键（业务去重键的隔离边界为工作区 + Run）。
+-- idempotency_key 为 (workspace_id, tool_name, idempotency_key) 前缀的 UNIQUE partial index。
+-- ExternalIdempotencyKey 是业务外部操作身份（三种身份分离：InvocationId / RequestId /
+-- ExternalIdempotencyKey）——唯一范围 (workspace_id, provider_namespace, idempotency_key)
+-- （tool_name 即 provider/tool 命名空间），与 Run 生命周期解耦：客户端重建 Run 重放
+-- 同一业务操作（支付订单等）被唯一约束拒绝，跨 Run 去重生效。
+-- 旧版本（v21/v69）创建的是普通 index / (workspace_id, run_id) 前缀索引；
+-- 此处先 DROP 旧 index（若存在）再创建 UNIQUE index，保证已有数据库升级后幂等键
+-- 按工作区 + Provider 唯一。
 -- partial WHERE idempotency_key IS NOT NULL：NULL 幂等键不参与唯一约束（与 "未声明幂等键" 语义一致）。
 DROP INDEX IF EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")};
-CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (workspace_id, run_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "tool_dispatch_journal_entries", "idempotency")} ON {toolDispatchJournalEntries} (workspace_id, tool_name, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- Durable Tool Result 缓存持久化表（HA 崩溃恢复 exactly-once 结果读取）
 -- tool_dispatch_results: (workspace_id, run_id, request_id) 复合主键 — 每个 tool 调用的结果缓存一条行
@@ -2698,6 +2702,9 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "workspa
 -- Run 终态结算 outbox：Run 推进终态时在状态转换事务内写入（仅当预留存在），
 -- 结算 worker 按租约领取并执行 Actualize / Release（exactly-once）。
 -- status：0 = 待结算，1 = 已结算，2 = 结算中（持有租约），3 = 卡住（低频无限重试，供运维排查）。
+-- UNIQUE(workspace_id, run_id)：outbox 自身 exactly-once（Gap Reconciler 并发双插阻断）。
+-- 冻结结算事实列：actual_tokens / actual_cost_usd / usage_revision / final_attempt /
+-- settlement_policy——结算 worker 直接消费冻结值，不依赖读取可变的 Run 实体。
 CREATE TABLE IF NOT EXISTS {terminalRunSettlementOutbox} (
     outbox_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     workspace_id text NOT NULL,
@@ -2706,13 +2713,20 @@ CREATE TABLE IF NOT EXISTS {terminalRunSettlementOutbox} (
     terminal_state smallint NOT NULL,
     status smallint NOT NULL DEFAULT 0,
     attempts integer NOT NULL DEFAULT 0,
+    actual_tokens bigint NOT NULL DEFAULT 0,
+    actual_cost_usd double precision NOT NULL DEFAULT 0,
+    usage_revision integer NOT NULL DEFAULT 0,
+    final_attempt integer NOT NULL DEFAULT 0,
+    settlement_policy smallint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     processed_at timestamptz NULL,
     lease_owner text NULL,
     lease_token text NULL,
     lease_expires_at timestamptz NULL,
-    last_error text NULL
+    last_error text NULL,
+    CONSTRAINT {Infrastructure.PostgresNames.Index(options, "terminal_run_settlement_outbox", "run")}
+        UNIQUE (workspace_id, run_id)
 );
 
 -- 结算 worker 领取索引：按待结算 + 创建时间升序（最早优先）
