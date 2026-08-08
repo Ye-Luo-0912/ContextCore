@@ -309,12 +309,37 @@ public sealed class R30X_ToolAuthorizationTests
     }
 
     [TestMethod]
-    public async Task Dispatch_NoSnapshot_LegacyPathAllows()
+    public async Task Dispatch_NoSnapshot_LegacyBasicTool_Allows()
     {
-        // 无快照（旧路径 / 直接写 Store 的 Run）→ 不阻断，仍按 AllowedToolIds 约束。
+        // 无快照（历史 Run）+ 基础无副作用 Tool → 兼容放行（生产模式治理边界）。
         var runStore = new InMemoryAgentRunStore();
         var eventStore = new InMemoryAgentRunEventStore(runStore);
-        var run = BuildRun("旧路径", snapshot: null);
+        var run = BuildRun("旧路径基础工具", snapshot: null);
+        await runStore.CreateAsync(run);
+
+        var dispatcher = new StubToolDispatcher();
+        var actor = new AgentRunActor(
+            runStore, eventStore, new ScriptedToolCallTransport("echo"),
+            new DefaultAgentLoopPolicy(),
+            dispatcher,
+            toolAuthorizationPolicy: new DefaultToolAuthorizationPolicy());
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        var stored = await runStore.GetAsync(Ws, run.RunId);
+        Assert.AreEqual(AgentRunState.Completed, stored!.State, "基础无副作用 Tool 可兼容放行。");
+        CollectionAssert.Contains(dispatcher.DispatchedTools, "echo");
+    }
+
+    [TestMethod]
+    public async Task Dispatch_NoSnapshot_LegacySideEffectTool_RequiresReauthorization()
+    {
+        // 无快照（历史 Run）+ File/Process/Network 类副作用 Tool → 生产模式要求重新授权
+        // （旧 Run 不得成为绕过新安全模型的永久例外）。
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun("旧路径副作用工具", snapshot: null);
         await runStore.CreateAsync(run);
 
         var dispatcher = new StubToolDispatcher();
@@ -328,8 +353,37 @@ public sealed class R30X_ToolAuthorizationTests
         await actor.ExecuteAsync(run, cts.Token);
 
         var stored = await runStore.GetAsync(Ws, run.RunId);
-        Assert.AreEqual(AgentRunState.Completed, stored!.State, "无快照的旧路径 Run 不应被阻断。");
-        CollectionAssert.Contains(dispatcher.DispatchedTools, "file_delete");
+        CollectionAssert.DoesNotContain(dispatcher.DispatchedTools, "file_delete",
+            "File/Process/Network 类 Tool 不得在无授权快照下分派（要求重新授权）。");
+        Assert.IsTrue(stored!.FailureReason?.Contains("重新授权") == true,
+            "失败原因应说明要求重新授权。");
+    }
+
+    [TestMethod]
+    public async Task Dispatch_StaleAuthorizationEpoch_RejectsImmediately()
+    {
+        // AuthorizationEpoch：管理员撤权（epoch++）后，固化旧纪元的快照立即失效
+        // （无需等待 ExpiresAt）——一次轻量整数比较使全部旧授权快照失效。
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun("旧纪元快照", Snapshot(new[] { "echo" }) with { AuthorizationEpoch = 41 });
+        await runStore.CreateAsync(run);
+
+        var dispatcher = new StubToolDispatcher();
+        var actor = new AgentRunActor(
+            runStore, eventStore, new ScriptedToolCallTransport("echo"),
+            new DefaultAgentLoopPolicy(),
+            dispatcher,
+            toolAuthorizationPolicy: new DefaultToolAuthorizationPolicy());
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        var stored = await runStore.GetAsync(Ws, run.RunId);
+        CollectionAssert.DoesNotContain(dispatcher.DispatchedTools, "echo",
+            "旧纪元快照不得分派任何 Tool。");
+        Assert.IsTrue(stored!.FailureReason?.Contains("授权纪元") == true,
+            "失败原因应说明授权纪元已变更。");
     }
 
     // ── 测试辅助 ─────────────────────────────────────────────────────────
@@ -375,6 +429,8 @@ public sealed class R30X_ToolAuthorizationTests
             GrantedToolIds = grantedTools,
             GrantedPermissions = permissions,
             PolicyVersion = new DefaultToolAuthorizationPolicy().PolicyVersion,
+            // 默认固化当前授权纪元（旧纪元失效测试用 with 覆盖）。
+            AuthorizationEpoch = new DefaultToolAuthorizationPolicy().AuthorizationEpoch,
             IssuedAt = DateTimeOffset.UtcNow.AddHours(-1),
             ExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddHours(1)
         };

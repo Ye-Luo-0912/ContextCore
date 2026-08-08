@@ -70,6 +70,73 @@ public sealed record TrainingDataExportRequest
 }
 
 /// <summary>
+/// 数据集快照报告：Learning 数据可被严格证明"完整、可重建、可追责"。
+/// </summary>
+/// <remarks>
+/// 每个导出对应一个快照：
+/// - <see cref="SnapshotId"/> 由输入条件确定性派生（workspace + collection + 时间窗 +
+///   model artifact + schema 版本哈希）——相同输入重现相同快照 ID（Reproducibility）；
+/// - <see cref="InputEvidenceCount"/> 为过滤前的候选 evidence 总数（输入集规模），
+///   <see cref="MaterializedCount"/> 为实际物化导出的样本数，
+///   <see cref="CompletenessRatio"/> = 物化 / 输入（完整率报告）；
+/// - <see cref="MissingCount"/> = 输入 - 物化（未进入快照的样本数），
+///   <see cref="MissingReasons"/> 为样本级拒绝/缺失原因去重列表（Dropped/missing reason）；
+/// - <see cref="ContentHash"/> 为数据文件 SHA-256（内容完整性），
+///   <see cref="PolicyVersion"/> / <see cref="ModelArtifactId"/> / <see cref="SchemaVersion"/>
+///   记录生产该快照的策略 / 模型 / schema 版本（可追责）。
+/// </remarks>
+public sealed record DatasetSnapshotReport
+{
+    /// <summary>快照唯一 ID（由输入条件确定性派生；相同输入 → 相同 ID，可重现）。</summary>
+    public required string SnapshotId { get; init; }
+
+    /// <summary>导出 schema 版本。</summary>
+    public required string SchemaVersion { get; init; }
+
+    /// <summary>快照生产时间（UTC）。</summary>
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>workspace 作用域。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>collection 作用域（跨集合时为 null）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>时间范围下界（Since 过滤条件）。</summary>
+    public DateTimeOffset? Since { get; init; }
+
+    /// <summary>时间范围上界（Until 过滤条件）。</summary>
+    public DateTimeOffset? Until { get; init; }
+
+    /// <summary>关联的 ModelArtifactId（未指定时为 null）。</summary>
+    public string? ModelArtifactId { get; init; }
+
+    /// <summary>输入 evidence 集规模（过滤前的候选总数；null = 无法确定）。</summary>
+    public int? InputEvidenceCount { get; init; }
+
+    /// <summary>实际物化导出的样本数。</summary>
+    public required int MaterializedCount { get; init; }
+
+    /// <summary>完整率 = 物化 / 输入（0.0-1.0；输入不可确定时为 null）。</summary>
+    public double? CompletenessRatio { get; init; }
+
+    /// <summary>缺失（未进入快照）样本数 = 输入 - 物化。</summary>
+    public int? MissingCount { get; init; }
+
+    /// <summary>样本级缺失/拒绝原因去重列表（如 dropped-by-threshold / filtered-out）。</summary>
+    public IReadOnlyList<string> MissingReasons { get; init; } = [];
+
+    /// <summary>数据文件 SHA-256（内容完整性；与 manifest 一致）。</summary>
+    public required string ContentHash { get; init; }
+
+    /// <summary>快照中样本携带的策略版本集合（去重；空 = 样本未记录策略版本）。</summary>
+    public IReadOnlyList<string> PolicyVersions { get; init; } = [];
+
+    /// <summary>样本血缘（DecisionId / CandidateItemId / MaterializedAt）覆盖的决策数。</summary>
+    public required int LineageDecisionCount { get; init; }
+}
+
+/// <summary>
 /// 训练数据导出结果。
 /// </summary>
 public sealed record TrainingDataExportResult
@@ -103,6 +170,11 @@ public sealed record TrainingDataExportResult
 
     /// <summary>导出 schema 版本（用于下游消费者识别格式）。</summary>
     public string SchemaVersion { get; init; } = "training-data-export/v1";
+
+    /// <summary>
+    /// 数据集快照报告（完整性 / 血缘 / 可重现性；null = 未启用快照能力）。
+    /// </summary>
+    public DatasetSnapshotReport? DatasetSnapshot { get; init; }
 }
 
 /// <summary>
@@ -190,4 +262,22 @@ public sealed record TrainingDataExportManifest
 
     /// <summary>导出文件名（相对于 OutputDirectory）。</summary>
     public required string DataFileName { get; init; }
+
+    /// <summary>数据集快照 ID（由输入条件确定性派生；相同输入 → 相同 ID，可重现）。</summary>
+    public string? SnapshotId { get; init; }
+
+    /// <summary>输入 evidence 集规模（过滤前的候选总数；null = 无法确定）。</summary>
+    public int? InputEvidenceCount { get; init; }
+
+    /// <summary>完整率 = 物化样本数 / 输入 evidence 数（0.0-1.0）。</summary>
+    public double? CompletenessRatio { get; init; }
+
+    /// <summary>样本级缺失/拒绝原因去重列表。</summary>
+    public IReadOnlyList<string> MissingReasons { get; init; } = [];
+
+    /// <summary>快照中样本携带的策略版本集合（去重）。</summary>
+    public IReadOnlyList<string> PolicyVersions { get; init; } = [];
+
+    /// <summary>样本血缘覆盖的决策数。</summary>
+    public int? LineageDecisionCount { get; init; }
 }

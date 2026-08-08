@@ -2121,13 +2121,37 @@ public sealed class AgentRunActor
 
     /// <summary>
     /// 校验 Run 的 Tool 授权快照是否允许执行指定 Tool。
-    /// 快照为空（旧路径）→ 放行（无快照可校验，仍受 AllowedToolIds 约束）。
+    /// 快照为空（历史 Run / 未启用授权快照）时：
+    /// - 未注册授权策略（开发/测试路径）→ 兼容放行（无策略可校验）；
+    /// - 生产模式（已注册策略）→ 基础无副作用 Tool（ReadOnly/None）兼容放行；
+    ///   File / Process / Network / Write 类 Tool 要求重新授权（RequiresReauthorization）——
+    ///   旧 Run 不得成为绕过新安全模型的永久例外。
     /// </summary>
     private (bool Allowed, ToolAuthorizationDenial Denial, string Reason) IsToolAuthorizedBySnapshot(AgentRun run, string toolName)
     {
         var snapshot = run.AuthorizationSnapshot;
         if (snapshot is null)
         {
+            // 生产模式（已注册授权策略）下旧 Run 的治理边界：
+            // 基础无副作用 Tool（仅需 AgentRun 能力位）可兼容；File / Process / Network
+            // 类副作用 Tool 要求重新授权（fail-closed 于安全模型）——旧 Run 不得成为
+            // 绕过新安全模型的永久例外。
+            if (_toolAuthorizationPolicy is not null)
+            {
+                var legacyRequirement = _toolAuthorizationPolicy.GetRequirement(toolName);
+                var requiresCapability = legacyRequirement.RequiredCapability
+                    & (WorkspacePermission.FileAccess | WorkspacePermission.ProcessExec | WorkspacePermission.NetworkAccess);
+                if (requiresCapability == WorkspacePermission.None)
+                {
+                    return (true, ToolAuthorizationDenial.None, string.Empty);
+                }
+
+                return (false, ToolAuthorizationDenial.SnapshotInvalid,
+                    $"Run 未建立 Tool 授权快照（历史 Run），Tool '{toolName}' 需要 " +
+                    $"{legacyRequirement.RequiredCapability}（File/Process/Network 类）能力——" +
+                    $"生产模式要求重新授权，旧 Run 不得绕过新安全模型。");
+            }
+
             return (true, ToolAuthorizationDenial.None, string.Empty);
         }
 
@@ -2147,6 +2171,15 @@ public sealed class AgentRunActor
         {
             return (false, ToolAuthorizationDenial.SnapshotInvalid,
                 $"Tool 授权策略版本已漂移（快照 {snapshot.PolicyVersion}，当前 {_toolAuthorizationPolicy.PolicyVersion}），拒绝执行。");
+        }
+
+        // AuthorizationEpoch：管理员撤权后纪元递增——固化了旧纪元的快照立即失效，
+        // 无需等待 ExpiresAt（一次轻量整数比较使全部旧授权快照失效）。
+        if (snapshot.AuthorizationEpoch != _toolAuthorizationPolicy.AuthorizationEpoch)
+        {
+            return (false, ToolAuthorizationDenial.SnapshotInvalid,
+                $"Tool 授权纪元已变更（快照 {snapshot.AuthorizationEpoch}，当前 {_toolAuthorizationPolicy.AuthorizationEpoch}）——" +
+                "管理员已撤权或权限已变更，旧快照立即失效，要求重新授权。");
         }
 
         if (!snapshot.GrantedToolIds.Contains(toolName))

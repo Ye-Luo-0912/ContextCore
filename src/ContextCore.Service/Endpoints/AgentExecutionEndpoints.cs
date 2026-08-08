@@ -1626,6 +1626,8 @@ internal static class AgentExecutionEndpoints
             GrantedToolIds = granted,
             GrantedPermissions = grantedPermissions,
             PolicyVersion = policy.PolicyVersion,
+            // 固化当前授权纪元：管理员撤权（epoch++）后本快照立即失效（派发前轻量校验）。
+            AuthorizationEpoch = policy.AuthorizationEpoch,
             IssuedAt = now,
             ExpiresAt = expiresAt
         };

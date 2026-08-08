@@ -25,6 +25,25 @@ public sealed class InMemoryRetrievalTraceStore : IRetrievalTraceStore
         return Task.CompletedTask;
     }
 
+    public Task SaveBatchAsync(
+        IReadOnlyList<ContextRetrievalTrace> traces,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traces);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_gate)
+        {
+            foreach (var trace in traces)
+            {
+                _traces.RemoveAll(item => string.Equals(item.RetrievalId, trace.RetrievalId, StringComparison.OrdinalIgnoreCase));
+                _traces.Add(trace);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
         string workspaceId,
         string collectionId,

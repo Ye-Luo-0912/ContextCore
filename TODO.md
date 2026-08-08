@@ -1,44 +1,41 @@
 # ContextCore 项目路线图
 
-> 最近更新：2026-08-04。
-> **Current HEAD：`51f4d0d3`**（P1 完善项 11 项全部完成并推送，与 origin/main 一致）。
-> **Current Phase：R30.1 Production Semantics Stabilization（已完成）+ P1 完善项（已完成，8 个工作包）** —— 16 项 P0 全部关闭（12 个 WP）+ 11 项 P1 完善项（WP-G1..G8），详见「当前阶段」。
+> 最近更新：2026-08-09。
+> **Current HEAD：`73cca7be`**（R31 Production Semantics + Settlement/Evidence 加固完成并推送；本轮 R31 后续工作包见「当前阶段」）。
+> **Current Phase：R31 Agent Runtime / Quota / Evidence 生产语义收敛（进行中）** —— R30.1 与 P1 完善项全部完成；R31 已交付：租户复合键（Tool Journal/Result/Lease/Quota）、Settlement exactly-once + 冻结、Attempt 状态分离（RetryPending）、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot 完整性报告、AuthorizationEpoch、Trace 批量写入、后台负载治理，详见「当前阶段」。
 
-> 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R29 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
+> 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
 ---
 
 ## 当前阶段
 
-**R30.1 Production Semantics Stabilization（已完成，HEAD `6dee79fa`）**
+**R31 Agent Runtime / Quota / Evidence 生产语义收敛（进行中）**
 
-**Closed（已关闭，12 个 WP 覆盖 16 项 P0）**：
-- WP-A1（P0-1 + P0-2）：Tool 失败阶段 + 重试安全契约——DispatchingIntent 后一律进对账（ToolFailurePhase）、普通 Write 默认不可自动重试（ToolRetrySafety）
-- WP-A2（P0-3 + P0-4 + P0-5）：对账原子裁决 + 裁决租约 + 仲裁权——ResolveReconciliationAtomicallyAsync 单事务、Running 带 lease/fencing/过期重取、先取裁决权再提交 Journal
-- WP-B（P0-6 + P0-7 + P0-8）：调度 Admission + 严格入队语义 + Scheduler Claim Lease——原子 Admission（PendingAdmission→AdmissionRejected/Queued）、429/202/201 严格语义、Scheduler Claim 与 Execution Lease 分离
-- WP-C1（P0-10 即时安全）：事件压缩仅限终态 Run（可重试 Failed 不压缩）
-- WP-C2（P0-9）：不可变 Attempt——重试不删事件历史、Attempt 边界标记、消除 ANY 交叉删除
-- WP-C3（P0-10 正式方案）：Recoverable Snapshot + Anchor + Hot Delta + Archived Audit Stream——恢复顺序 Snapshot → validate anchor → replay hot delta，Raw Events 拼接归档
-- WP-D1（P0-11）：自动回滚先写持久化 Kill Switch——Create Emergency Override → 本地 0% → DB CAS，失败持续 fail-closed
-- WP-D2（P0-12）：Canary 单一真相源——CanaryPercentage/Revision/Epoch 全部进入 PipelineRun，Transition Audit 与 CAS 同事务
-- WP-D3（P0-13）：Kill Switch 查询 fail-safe——Override Active / Store Error / Inactive 三态语义 + TTL 缓存
-- WP-E1（P0-14）：节点级 Admission——当前节点 Applied Revision / 引擎 Model ID / ContentHash / Isolated / 真实推理就绪纳入准入
-- WP-E2（P0-15）：节点成员资格租约——model_node_membership（lease/heartbeat/serving_enabled），Rollout Ready 基于活跃成员，Isolated 真正停止接流量
-- WP-F1（P0-16）：自适应检索反馈加固——租户隔离 SHA-256 签名（workspace/collection/purpose/policy/profile/taskClass）、反馈幂等键/可信度/时间衰减/单主体封顶、默认 Disabled
+### 已完成（HEAD `73cca7be`，6 个提交收口）
 
-**Open P0（待办）**：无（16 项全部关闭）。
+1. **租户复合键（WP-A）**：Tool Dispatch Journal / Durable Tool Result / Agent Run Lease / Quota Reservation 全部升级 (workspace_id, run_id, ...) 复合键（迁移 0014~0016，v66→v69）；RequestId 派生加入 workspaceId（V2 算法）；恢复路径优先使用持久化 RequestId（滚动升级 exactly-once 不破坏，V1→V2 Kill Matrix 9 项测试）。
+2. **Attempt 状态分离（P0-3）**：新增 RetryPending（非终态、可重试、不结算）——Failed 变成重试预算耗尽后的真终态（不可重试、结算恰好一次）；状态机拒绝终态被 Failed/Cancelled 覆盖；DeadLettered 仅保留运维介入分类。
+3. **AgentRunCommit 身份不变量（P0-4）**：提交负载统一 TenantRunKey，入口校验 events/snapshot/cursor/checkpoint 与复合键一致（SQL 执行前 fail），7 项负向测试。
+4. **Quota Period 修复（P0-5）**：SetLimitAsync 只改上限不清 usage/reservation；周期轮转重新 SUM(active reservations)（跨周期长 Run 预留保留，阻断过度放行）。
+5. **Settlement 生产语义（P1-七/八）**：outbox UNIQUE(workspace_id, run_id) + ON CONFLICT DO NOTHING（自身 exactly-once）；冻结 actual_tokens/actual_cost_usd/usage_revision/final_attempt/settlement_policy（结算 Worker 不再读可变 Run 实体）。
+6. **Tool 幂等键作用域（P1-十一）**：ExternalIdempotencyKey 唯一范围 (workspace_id, tool_name, idempotency_key)——跨 Run 业务去重（重建 Run 重放同一业务操作被拒绝），三种身份正式分离（InvocationId / RequestId / ExternalIdempotencyKey）。
+7. **Evidence Plane 加固（P1-十二/十三）**：stable 主键 GetAsync 点查（不受"最近 100 条"窗口限制）+ 审计前 FlushAsync（已接受即已可查证）+ Trace 批量写入 SaveBatchAsync（unnest 单次 roundtrip）。
+8. **DatasetSnapshot（P1-十四）**：快照 ID 确定性派生（可重现）、InputEvidenceSet/MaterializedCount/CompletenessRatio、Dropped/missing reason、Policy/Model/Schema version、ContentHash、Lineage 决策数——CI 唯一 Learning skip 已启用为真实验收。
+9. **Tool AuthorizationEpoch（P1-十七）**：撤权 epoch++ 后旧快照立即失效（轻量整数比较）；生产模式 Legacy Run 治理（基础无副作用 Tool 兼容放行，File/Process/Network 类要求重新授权）。
+10. **后台负载治理（P1-十八）**：BackgroundDrainBudget 统一 burst 约束（批次数/时长上限 + yield），接入 Settlement / Relation / Compaction 三个续扫型 Worker。
 
-**P1 完善项（已完成，HEAD `51f4d0d3`，8 个工作包 WP-G1..G8 覆盖 11 项 P1）**：
-- WP-G1（P1-1 + P1-2）：Tool 成功结果与 Journal 状态一致（模糊态强制 Succeeded=false）+ Reconciliation 决策幂等（DecisionRequestId 身份）
-- WP-G2（P1-3）：Agent 本地调度队列 Workspace 公平性——per-workspace 分桶加权公平 + 优先级老化 + 保留容量
-- WP-G3（P1-4 + P1-5）：生产准入能力探针深度化（原生 Tool Calling 三级探针 / Tool Schema 复用运行时校验）+ 节点级检查核实
-- WP-G4（P1-6 + P1-7）：Event Compaction 数据库侧归档（INSERT..SELECT + 快照增量重建）+ Raw/SSE 统一 Archive 视图
-- WP-G5（P1-8）：移除未消费的 ILearningLeaseStore 抽象（含 learning_leases 死 schema 清理）
-- WP-G6（P1-9）：迁移 DDL 分阶段修复迁移顺序（消除 Docker 集成测试 42P01）+ 陈旧断言修复 + 共享异步迁移缓存
-- WP-G7（P1-10）：推理指标按模型 / 节点 / 批次维度标注（NodeId + ModelNodeTags/ModelNodeBatchTags）
-- WP-G8（P1-11）：CI Artifact 进一步瘦身（剔除跨平台原生运行时 / PDB / obj 中间产物，~0.8GB → ~0.2GB）
+### 下一阶段（R32，按优先级）
 
-## 历史快照（R27~R29 已完成记录，不作为当前架构依据）
+- **WP-B（Evidence 三层架构，P1-十五）**：Diagnostic Plane（IDiagnosticTraceSink，可采样/可 Drop/Async）→ Decision Evidence Plane（IDecisionEvidenceStore，Durable/Point Lookup/Immutable/Versioned）→ Learning Artifact Plane（ILearningArtifactStore，DatasetSnapshot/Lineage/Completeness/Replay Manifest）；Decision Commit = Decision Record + Evidence Manifest + Learning Materialization Intent（经 Durable Outbox 连成可靠链）。Trace Queue 之后可放心做性能优化（它真的只是 Trace）。
+- **WP-C（Adaptive Retrieval 原生消费，P1-十六）**：AgentRetrievalExecutionPlan（Queries[Text/Weight/Purpose/ProviderHints]、TopK、TokenBudget、ChannelBudgets、PolicyVersion、PlanSignature）由 Decision Runtime 原生消费；反馈改为延迟归因（Retrieval→Model→Tool→Final Result→Evaluation→Attribution→Feedback），不再用 Effective=result!=null/Confidence=1.0 学习"有没有召回东西"。
+- **WP-D（动态降速）**：BackgroundDrainBudget 基于 DB Pool Utilization / Online P95/P99 / Queue Lag / Worker Age 动态调速。
+
+### Open P0（待办）
+
+无（R30.1 16 项 P0 全部关闭；R31 已交付项无遗留 P0）。
+
+## 历史快照（R27~R30 已完成记录，不作为当前架构依据）
 
 > 以下 R28/R29 记录描述的是**已删除的旧 Agent Kernel / Durable Transport 执行平面**。执行平面已收敛为单一平面（`AgentRunStore → AgentKernelHost → AgentRunActor`，见 `CoreExtensions.cs` 与 `AgentKernelContracts.cs` 的注释），本章节仅作回溯，不得作为当前架构依据。
 

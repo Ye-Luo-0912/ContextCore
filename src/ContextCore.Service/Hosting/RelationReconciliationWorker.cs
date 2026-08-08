@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
 using Microsoft.Extensions.Options;
 
@@ -65,6 +66,9 @@ public sealed class RelationReconciliationWorker : BackgroundService
         _logger = logger;
     }
 
+    /// <summary>后台负载治理预算（burst 限制 + 让出），避免 Relation 投影持续独占 DB。</summary>
+    private static readonly BackgroundDrainBudget DrainBudget = BackgroundDrainBudget.RelationProjection;
+
     /// <summary>共享心跳注册表条目：outboxId + owner + 记录取消源 + 最后确认过期时间（本地 watchdog）。</summary>
     private sealed class OutboxLeaseEntry
     {
@@ -111,12 +115,17 @@ public sealed class RelationReconciliationWorker : BackgroundService
 
         if (options.RunOnStartup)
         {
-            // 启动即处理：满批立即续扫到队尾，不等间隔（积压时启动即排空）。
+            // 启动即处理：满批续扫受 burst 预算约束（批次数 / 时长超限即让出，再续扫）。
             var startupHasMore = true;
-            while (startupHasMore && !stoppingToken.IsCancellationRequested)
+            var startupBurstStart = DateTimeOffset.UtcNow;
+            var startupBatches = 0;
+            while (startupHasMore
+                   && DrainBudget.ShouldContinueBurst(startupBatches, DateTimeOffset.UtcNow - startupBurstStart)
+                   && !stoppingToken.IsCancellationRequested)
             {
                 startupHasMore = await RunReconciliationBatchAsync(
                     probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken).ConfigureAwait(false);
+                startupBatches++;
             }
         }
 
@@ -133,14 +142,26 @@ public sealed class RelationReconciliationWorker : BackgroundService
                     break;
                 }
 
-                // 满批续扫：本批取满说明仍有积压，立即处理下一批，不等间隔（吞吐优先）；
+                // 满批续扫受 burst 预算约束（BackgroundDrainBudget）：
+                // 本批取满说明仍有积压，burst 预算内继续处理下一批；
+                // 预算耗尽仍有积压 → 让出后继续（限单次突发，不放弃积压）；
                 // 空批/不足一批说明队列已清空，回到外层按间隔休眠。
                 var hasMore = true;
-                while (hasMore && !stoppingToken.IsCancellationRequested)
+                var burstStart = DateTimeOffset.UtcNow;
+                var batchesThisBurst = 0;
+                while (hasMore
+                       && DrainBudget.ShouldContinueBurst(batchesThisBurst, DateTimeOffset.UtcNow - burstStart)
+                       && !stoppingToken.IsCancellationRequested)
                 {
                     hasMore = await RunReconciliationBatchAsync(
                         probeOutbox, batchSize, owner, leaseDuration, heartbeatInterval, stoppingToken)
                         .ConfigureAwait(false);
+                    batchesThisBurst++;
+                }
+
+                if (hasMore)
+                {
+                    await DrainBudget.YieldAsync(stoppingToken).ConfigureAwait(false);
                 }
             }
         }

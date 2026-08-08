@@ -72,6 +72,23 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
 
         var entries = await _ledgerStore.QueryAsync(query, cancellationToken).ConfigureAwait(false);
 
+        // 数据集快照：输入 evidence 集 = 该请求时间/作用域范围内的全部候选（不加
+        // 决策/选中过滤），物化集 = 实际导出样本。完整率 = 物化 / 输入。
+        // 输入集无法查询（Take 截断语义）时 InputEvidenceCount 为 null（不伪造完整性）。
+        IReadOnlyList<UtilityLedgerEntry>? inputEvidenceSet = null;
+        if (request.Take == 0 || entries.Count < request.Take)
+        {
+            var inputQuery = new UtilityLedgerQuery
+            {
+                WorkspaceId = request.WorkspaceId,
+                CollectionId = request.CollectionId,
+                Since = request.Since,
+                Until = request.Until,
+                Take = 0
+            };
+            inputEvidenceSet = await _ledgerStore.QueryAsync(inputQuery, cancellationToken).ConfigureAwait(false);
+        }
+
         // 转换为训练数据记录（feature / label / metadata 三段式）
         var records = entries.Select(MapToTrainingDataRecord).ToList();
 
@@ -86,7 +103,52 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
 
         var exportedAt = DateTimeOffset.UtcNow;
 
-        // 写入 sidecar manifest（含 SHA-256 + model artifact 追溯）
+        // 数据集快照：ID 由输入条件确定性派生（相同输入 → 相同 ID，可重现）；
+        // 完整率 = 物化 / 输入；缺失原因来自样本 DropReasonCode 去重；
+        // 策略版本 / 血缘决策数从物化样本聚合。
+        var snapshotId = ComputeSnapshotId(request);
+        var inputCount = inputEvidenceSet?.Count;
+        var materializedCount = records.Count;
+        var missingReasons = records
+            .Select(r => r.DropReasonCode)
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var policyVersions = records
+            .Select(r => r.PolicyVersion)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var lineageDecisionCount = records
+            .Select(r => r.DecisionId)
+            .Where(d => !string.IsNullOrWhiteSpace(d))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        var completenessRatio = inputCount is > 0
+            ? Math.Min(1.0, (double)materializedCount / inputCount.Value)
+            : (double?)null;
+
+        var snapshot = new DatasetSnapshotReport
+        {
+            SnapshotId = snapshotId,
+            SchemaVersion = ExportSchemaVersion,
+            CreatedAt = exportedAt,
+            WorkspaceId = request.WorkspaceId,
+            CollectionId = request.CollectionId,
+            Since = request.Since,
+            Until = request.Until,
+            ModelArtifactId = request.ModelArtifactId,
+            InputEvidenceCount = inputCount,
+            MaterializedCount = materializedCount,
+            CompletenessRatio = completenessRatio,
+            MissingCount = inputCount is not null ? Math.Max(0, inputCount.Value - materializedCount) : null,
+            MissingReasons = missingReasons,
+            ContentHash = sha256Hash,
+            PolicyVersions = policyVersions,
+            LineageDecisionCount = lineageDecisionCount
+        };
+
+        // 写入 sidecar manifest（含 SHA-256 + model artifact 追溯 + 快照报告）
         var manifest = new TrainingDataExportManifest
         {
             ExportedAt = exportedAt,
@@ -98,7 +160,13 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
             ModelArtifactId = request.ModelArtifactId,
             EntryCount = records.Count,
             Sha256Hash = sha256Hash,
-            DataFileName = DataFileName
+            DataFileName = DataFileName,
+            SnapshotId = snapshotId,
+            InputEvidenceCount = inputCount,
+            CompletenessRatio = completenessRatio,
+            MissingReasons = missingReasons,
+            PolicyVersions = policyVersions,
+            LineageDecisionCount = lineageDecisionCount
         };
 
         var manifestJson = JsonSerializer.Serialize(manifest, JsonOptions);
@@ -115,8 +183,26 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
             CollectionId = request.CollectionId,
             ModelArtifactId = request.ModelArtifactId,
             Sha256Hash = sha256Hash,
-            SchemaVersion = ExportSchemaVersion
+            SchemaVersion = ExportSchemaVersion,
+            DatasetSnapshot = snapshot
         };
+    }
+
+    /// <summary>
+    /// 快照 ID 由输入条件确定性派生（workspace + collection + 时间窗 + model artifact +
+    /// schema 版本哈希，前 16 字节 hex）——相同输入重现相同快照 ID（Reproducibility）。
+    /// </summary>
+    internal static string ComputeSnapshotId(TrainingDataExportRequest request)
+    {
+        var raw = string.Join('|',
+            request.WorkspaceId,
+            request.CollectionId ?? string.Empty,
+            request.Since?.ToUniversalTime().ToString("O") ?? string.Empty,
+            request.Until?.ToUniversalTime().ToString("O") ?? string.Empty,
+            request.ModelArtifactId ?? string.Empty,
+            TrainingDataExporter.ExportSchemaVersion);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+        return "snapshot-" + Convert.ToHexString(hash, 0, 16).ToLowerInvariant();
     }
 
     /// <summary>

@@ -49,6 +49,28 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         _pendingPurge = _janitor.MaybePurge(_paths.GetRetrievalTraceDirectory(trace.WorkspaceId, trace.CollectionId));
     }
 
+    public async Task SaveBatchAsync(
+        IReadOnlyList<ContextRetrievalTrace> traces,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traces);
+        if (traces.Count == 0)
+        {
+            return;
+        }
+
+        // 按 (workspace, collection) 分组追加（JSONL 按目录分片）。
+        foreach (var group in traces.GroupBy(t => (t.WorkspaceId, t.CollectionId)))
+        {
+            var path = _paths.GetRetrievalTraceJsonlPath(group.Key.WorkspaceId, group.Key.CollectionId);
+            foreach (var trace in group)
+            {
+                await _jsonLines.AppendAsync(path, trace, cancellationToken).ConfigureAwait(false);
+            }
+            _pendingPurge = _janitor.MaybePurge(_paths.GetRetrievalTraceDirectory(group.Key.WorkspaceId, group.Key.CollectionId));
+        }
+    }
+
     public async Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
         string workspaceId,
         string collectionId,

@@ -54,6 +54,23 @@ public sealed class QueuedRetrievalTraceStore : IRetrievalTraceStore, IDisposabl
     }
 
     /// <inheritdoc />
+    public Task SaveBatchAsync(
+        IReadOnlyList<ContextRetrievalTrace> traces,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traces);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // 批量入队（单条语义一致：满队列丢写，不阻塞热路径）；
+        // 后台 drain 攒批后单次落库（降低 Postgres roundtrip）。
+        foreach (var trace in traces)
+        {
+            _channel.Writer.TryWrite(trace);
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
         string workspaceId,
         string collectionId,
@@ -92,29 +109,54 @@ public sealed class QueuedRetrievalTraceStore : IRetrievalTraceStore, IDisposabl
         }
     }
 
-    /// <summary>后台 drain：从队列取 trace 串行写入内层 store。</summary>
+    /// <summary>后台 drain 批量大小（攒批后单次落库，降低 Postgres roundtrip 次数）。</summary>
+    private const int DrainBatchSize = 32;
+
+    /// <summary>后台 drain：从队列取 trace 批量写入内层 store。</summary>
     private async Task DrainAsync(CancellationToken ct)
     {
         try
         {
             while (await _channel.Reader.WaitToReadAsync(ct).ConfigureAwait(false))
             {
+                // 攒批：一次取出最多 DrainBatchSize 条，单次批量落库（Diagnostic Plane
+                // 性能路径——只减少 DB roundtrip，不改变 Evidence 读取语义：读取前
+                // FlushAsync 仍保证"已接受"即"已可查证"）。
+                var batch = new List<ContextRetrievalTrace>(DrainBatchSize);
                 while (_channel.Reader.TryRead(out var trace))
                 {
-                    try
+                    batch.Add(trace);
+                    if (batch.Count >= DrainBatchSize)
                     {
-                        await _inner.SaveAsync(trace, CancellationToken.None).ConfigureAwait(false);
+                        break;
                     }
-                    catch
+                }
+
+                if (batch.Count == 0)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (batch.Count == 1)
                     {
-                        // 后台写失败静默（诊断数据可丢弃），不中断 drain 循环。
-                        // 注意：FlushAsync 的排空计数含失败路径——失败也算"已处理"
-                        // （不再重试该条；Evidence 审计以持久化 store 的实况为准）。
+                        await _inner.SaveAsync(batch[0], CancellationToken.None).ConfigureAwait(false);
                     }
-                    finally
+                    else
                     {
-                        Interlocked.Increment(ref _drainedCount);
+                        await _inner.SaveBatchAsync(batch, CancellationToken.None).ConfigureAwait(false);
                     }
+                }
+                catch
+                {
+                    // 后台写失败静默（诊断数据可丢弃），不中断 drain 循环。
+                    // 注意：FlushAsync 的排空计数含失败路径——失败也算"已处理"
+                    // （不再重试该条；Evidence 审计以持久化 store 的实况为准）。
+                }
+                finally
+                {
+                    Interlocked.Add(ref _drainedCount, batch.Count);
                 }
             }
         }

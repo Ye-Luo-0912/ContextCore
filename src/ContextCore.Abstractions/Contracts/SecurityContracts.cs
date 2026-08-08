@@ -401,6 +401,13 @@ public interface IToolAuthorizationPolicy
     /// <summary>策略版本标识（快照记录；策略变化时递增）。</summary>
     string PolicyVersion { get; }
 
+    /// <summary>
+    /// 授权纪元（AuthorizationEpoch）：管理员撤权 / 权限变更时递增。
+    /// 快照固化解发时的纪元；Tool 派发前做一次轻量纪元检查即可让全部旧授权快照失效
+    /// （撤权 42 → 43 后，固化 42 的旧快照立即拒绝执行，无需等待 ExpiresAt）。
+    /// </summary>
+    long AuthorizationEpoch { get; }
+
     /// <summary>解析指定 Tool 的授权要求。</summary>
     ToolAuthorizationRequirement GetRequirement(string toolName);
 }
@@ -426,6 +433,12 @@ public sealed record ToolAuthorizationSnapshot
 
     /// <summary>策略版本（与 <see cref="IToolAuthorizationPolicy.PolicyVersion"/> 一致）。</summary>
     public string PolicyVersion { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 固化的授权纪元（AuthorizationEpoch，与 <see cref="IToolAuthorizationPolicy.AuthorizationEpoch"/>
+    /// 一致）。管理员撤权后纪元递增，旧纪元快照在派发前立即失效（不等 ExpiresAt）。
+    /// </summary>
+    public long AuthorizationEpoch { get; init; }
 
     /// <summary>快照签发时间（UTC）。</summary>
     public DateTimeOffset IssuedAt { get; init; }

@@ -138,6 +138,55 @@ public sealed class TraceBackedDecisionEvidenceProviderTests
         Assert.AreEqual("queued-hit", result.Evidence[0].PrimaryRationale);
     }
 
+    /// <summary>
+    /// 验证（十九）：QueuedRetrievalTraceStore 后台 drain 攒批落库——
+    /// 批量入队（SaveBatchAsync / 多次 SaveAsync）后 Flush，内层 store 全部收到；
+    /// 只减少 Postgres roundtrip，不丢数据（Evidence 语义不受影响）。
+    /// </summary>
+    [TestMethod]
+    public async Task QueuedStore_DrainsBatch_PersistsAllWithoutLoss()
+    {
+        var inner = new InMemoryRetrievalTraceStore();
+        using var queued = new QueuedRetrievalTraceStore(inner, capacity: 256);
+
+        // 批量入队 100 条（超过单批 32 条——必须攒多批且全部落库）。
+        var traces = Enumerable.Range(0, 100).Select(i => new ContextRetrievalTrace
+        {
+            RetrievalId = $"batch-{i}",
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            CreatedAt = DateTimeOffset.UtcNow.AddSeconds(i),
+            Stages = Array.Empty<ContextRetrievalStageTrace>(),
+            SelectedItems = Array.Empty<ContextRetrievalDecision>(),
+            DroppedItems = Array.Empty<ContextRetrievalDecision>()
+        }).ToArray();
+        await queued.SaveBatchAsync(traces);
+
+        await queued.FlushAsync();
+
+        for (var i = 0; i < 100; i++)
+        {
+            var fetched = await inner.GetAsync(WorkspaceId, CollectionId, $"batch-{i}");
+            Assert.IsNotNull(fetched, $"批量入队的 trace batch-{i} 必须全部落库（不丢数据）。");
+        }
+
+        // 批量写入后点查仍可用（Evidence 读取路径不受影响）。
+        var provider = new TraceBackedDecisionEvidenceProvider(
+            retrievalTraceStore: queued,
+            packageBuildTraceStore: null);
+        var record = new ContextDecisionRecord
+        {
+            DecisionId = "batch-0",
+            Source = ContextDecisionSource.Retrieval,
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Candidates = Array.Empty<ContextDecisionCandidate>()
+        };
+        var evidence = await provider.ResolveEvidenceAsync(record);
+        Assert.IsFalse(evidence.IsComplete, "trace 存在但无候选时不应 Complete（候选缺失属正常语义）。");
+        Assert.AreEqual(0, evidence.MissingItemIds.Count, "无候选时不应有缺失项。");
+    }
+
     [TestMethod]
     public async Task Resolve_RetrievalWithMatchingTrace_ReturnsCompleteEvidence()
     {
@@ -540,6 +589,10 @@ public sealed class TraceBackedDecisionEvidenceProviderTests
     {
         public Task SaveAsync(ContextRetrievalTrace trace, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("test: SaveAsync");
+
+        public Task SaveBatchAsync(
+            IReadOnlyList<ContextRetrievalTrace> traces, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("test: SaveBatchAsync");
 
         public Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
             string workspaceId,

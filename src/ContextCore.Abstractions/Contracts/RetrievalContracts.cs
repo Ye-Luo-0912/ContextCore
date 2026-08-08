@@ -17,6 +17,17 @@ public interface IRetrievalTraceStore
         ContextRetrievalTrace trace,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 批量持久化 trace（Diagnostic Plane 性能路径）：后台 drain 攒批后单次落库，
+    /// 显著减少 Postgres roundtrip 次数。实现应原子处理或逐条尽力而为；
+    /// 语义与逐条 SaveAsync 等价（upsert 按 (workspace_id, collection_id, retrieval_id)）。
+    /// </summary>
+    /// <param name="traces">待持久化的 trace 批次（非空）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task SaveBatchAsync(
+        IReadOnlyList<ContextRetrievalTrace> traces,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
         string workspaceId,
         string collectionId,

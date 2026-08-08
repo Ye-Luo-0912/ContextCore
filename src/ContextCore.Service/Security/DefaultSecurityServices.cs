@@ -334,8 +334,18 @@ public sealed class DefaultToolAuthorizationPolicy : IToolAuthorizationPolicy
     /// <summary>当前策略版本（快照固化；分类映射变化时递增）。</summary>
     public const string CurrentVersion = "v1";
 
+    /// <summary>
+    /// 当前授权纪元（AuthorizationEpoch）。管理员撤权 / 权限变更时递增：
+    /// 固化旧纪元的全部授权快照立即失效（派发前轻量整数比较）。
+    /// 默认 1；生产撤权操作通过 SetAuthorizationEpoch 递增。
+    /// </summary>
+    public const long CurrentEpoch = 1;
+
     /// <inheritdoc />
     public string PolicyVersion => CurrentVersion;
+
+    /// <inheritdoc />
+    public long AuthorizationEpoch => CurrentEpoch;
 
     /// <inheritdoc />
     public ToolAuthorizationRequirement GetRequirement(string toolName)

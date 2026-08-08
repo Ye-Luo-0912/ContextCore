@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Core.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -65,7 +66,12 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
             "AgentRunEventCompactionWorker 已启动：阈值 {MinEventCount} 事件 / 每轮最多 {MaxRunsPerPass} 个 Run。",
             options.MinEventCount, options.MaxRunsPerPass);
 
+        // 后台负载治理预算（burst 限制 + 让出）：Compaction 为最低优先级，避免持续独占 DB。
+        var drainBudget = BackgroundDrainBudget.Compaction;
+
         var consecutiveFailures = 0;
+        var burstStart = DateTimeOffset.UtcNow;
+        var batchesThisBurst = 0;
         while (!stoppingToken.IsCancellationRequested)
         {
             var succeeded = false;
@@ -73,6 +79,7 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
             try
             {
                 (succeeded, hasMore) = await RunCompactionPassAsync(options, stoppingToken).ConfigureAwait(false);
+                batchesThisBurst++;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -95,11 +102,23 @@ internal sealed class AgentRunEventCompactionWorker : BackgroundService
                     consecutiveFailures);
             }
 
-            if (hasMore)
+            if (hasMore && drainBudget.ShouldContinueBurst(batchesThisBurst, DateTimeOffset.UtcNow - burstStart))
             {
-                // 候选取满：还有更多可压缩 Run，立即续扫，不等轮询间隔（吞吐优先）。
+                // 候选取满：burst 预算内继续续扫（吞吐优先，限单次突发）。
                 continue;
             }
+
+            // burst 预算耗尽但仍有积压 → 让出后继续（不放弃积压，只限单次突发）。
+            if (hasMore)
+            {
+                await drainBudget.YieldAsync(stoppingToken).ConfigureAwait(false);
+                burstStart = DateTimeOffset.UtcNow;
+                batchesThisBurst = 0;
+                continue;
+            }
+
+            burstStart = DateTimeOffset.UtcNow;
+            batchesThisBurst = 0;
 
             var delay = consecutiveFailures == 0
                 ? options.PollInterval

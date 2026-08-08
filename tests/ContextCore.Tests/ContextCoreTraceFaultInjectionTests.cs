@@ -742,6 +742,14 @@ public sealed class ContextCoreTraceFaultInjectionTests
                 await Task.Delay(_latency, cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task SaveBatchAsync(
+            IReadOnlyList<ContextRetrievalTrace> traces, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Add(ref _saveCount, traces?.Count ?? 0);
+            if (_latency > TimeSpan.Zero)
+                await Task.Delay(_latency, cancellationToken).ConfigureAwait(false);
+        }
+
         public Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
             string workspaceId, string collectionId, int take, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContextRetrievalTrace>>(Array.Empty<ContextRetrievalTrace>());
@@ -763,6 +771,13 @@ public sealed class ContextCoreTraceFaultInjectionTests
         public Task SaveAsync(ContextRetrievalTrace trace, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _saveCount);
+            throw _exception;
+        }
+
+        public Task SaveBatchAsync(
+            IReadOnlyList<ContextRetrievalTrace> traces, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Add(ref _saveCount, traces?.Count ?? 0);
             throw _exception;
         }
 

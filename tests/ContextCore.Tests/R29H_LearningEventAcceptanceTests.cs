@@ -230,21 +230,16 @@ public sealed class R29H_LearningEventAcceptanceTests
     // -----------------------------------------------------------------------
     // 3. DatasetSnapshot_HasCompleteness_AndLineageReport
     // 验证：数据集快照应包含完整性报告（completeness）与血缘信息（lineage）。
-    // 现状：项目仅有 TrainingDataExporter（JSONL + manifest），尚未实现独立 DatasetSnapshot。
     // -----------------------------------------------------------------------
     [TestMethod]
     [TestCategory("Learning-Event")]
     public async Task DatasetSnapshot_HasCompleteness_AndLineageReport()
     {
-        // 项目当前仅有 TrainingDataExporter（JSONL + SHA-256 manifest，文件级完整性），
-        // 尚未实现独立的 DatasetSnapshot 概念（含 completeness 完整率报告 + per-sample lineage）。
-        // 本测试先验证当前可用的 lineage 字段（TrainingDataRecord 携带 DecisionId /
-        // CandidateItemId / MaterializedAt 血缘），再对未实现的 DatasetSnapshot completeness
-        // 报告标记 Inconclusive。
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var ledgerStore = new InMemoryUtilityLedgerStore();
         var now = DateTimeOffset.UtcNow;
+
+        // 输入 evidence 集：3 条（1 条选中 + 2 条被拒），其中 1 条落在 IsSelected=false 过滤外。
         await ledgerStore.AppendEntriesAsync(new[]
         {
             new UtilityLedgerEntry
@@ -259,6 +254,38 @@ public sealed class R29H_LearningEventAcceptanceTests
                 FinalScore = 0.88,
                 IsSelected = true,
                 DecisionId = "dec-lineage-1",
+                PolicyVersion = "policy/v1",
+                MaterializedAt = now
+            },
+            new UtilityLedgerEntry
+            {
+                EntryId = "e-lineage-2",
+                WorkspaceId = "ws-lineage",
+                CollectionId = "col-lineage",
+                CandidateItemId = "item-2",
+                Expert = RetrievalExpert.Semantic,
+                UtilityContribution = 0.2,
+                DeterministicScore = 0.2,
+                FinalScore = 0.18,
+                IsSelected = false,
+                DropReasonCode = "below-threshold",
+                DecisionId = "dec-lineage-1",
+                PolicyVersion = "policy/v1",
+                MaterializedAt = now
+            },
+            new UtilityLedgerEntry
+            {
+                EntryId = "e-lineage-3",
+                WorkspaceId = "ws-lineage",
+                CollectionId = "col-lineage",
+                CandidateItemId = "item-3",
+                Expert = RetrievalExpert.Lexical,
+                UtilityContribution = 0.1,
+                DeterministicScore = 0.1,
+                FinalScore = 0.09,
+                IsSelected = false,
+                DropReasonCode = "below-threshold",
+                DecisionId = "dec-lineage-2",
                 PolicyVersion = "policy/v1",
                 MaterializedAt = now
             }
@@ -277,8 +304,11 @@ public sealed class R29H_LearningEventAcceptanceTests
 
         // 验证当前可用的 lineage 字段：TrainingDataRecord 携带 source decision_id + 物化时间。
         var lines = await File.ReadAllLinesAsync(result.DataFilePath, cts.Token);
-        Assert.AreEqual(1, lines.Length, "应导出 1 条记录。");
-        var record = JsonSerializer.Deserialize<TrainingDataRecord>(lines[0], WebJsonOptions)!;
+        Assert.AreEqual(3, lines.Length, "应导出 3 条记录。");
+        var records = lines
+            .Select(l => JsonSerializer.Deserialize<TrainingDataRecord>(l, WebJsonOptions)!)
+            .ToList();
+        var record = records.Single(r => r.CandidateItemId == "item-1");
         Assert.AreEqual(
             "dec-lineage-1", record.DecisionId,
             "lineage: TrainingDataRecord 应携带 source DecisionId。");
@@ -289,15 +319,46 @@ public sealed class R29H_LearningEventAcceptanceTests
             Math.Abs((record.MaterializedAt - now).TotalMilliseconds) < 1000,
             "lineage: TrainingDataRecord 应携带物化时间。");
 
-        // 当前 manifest 已含 SHA-256 哈希（文件级完整性），但缺少数据集级 completeness 报告
-        // （完整率 = 已物化 events / 总 events）与 per-sample lineage 元数据
-        // （source decision_id + materialization 耗时等）。
-        // 独立 DatasetSnapshot 概念尚未实现 — 标记 Inconclusive 待后续实现。
-        Assert.Inconclusive(
-            "DatasetSnapshot 概念（含 completeness 完整率报告 + per-sample lineage）尚未实现。" +
-            "当前 TrainingDataExporter 提供 JSONL + SHA-256 manifest（文件级完整性），" +
-            "TrainingDataRecord 携带 DecisionId / CandidateItemId / MaterializedAt 血缘字段。" +
-            "需要实现独立 DatasetSnapshot + completeness 报告后启用本验收点。");
+        // ── DatasetSnapshot 快照验收：完整、可重建、可追责 ──────────────
+        var snapshot = result.DatasetSnapshot;
+        Assert.IsNotNull(snapshot, "导出结果应携带数据集快照报告。");
+
+        // 1. Snapshot ID：确定性派生（相同输入 → 相同 ID，可重现）。
+        Assert.IsTrue(snapshot!.SnapshotId.StartsWith("snapshot-", StringComparison.Ordinal), "快照 ID 应有前缀。");
+        var manifest = JsonSerializer.Deserialize<TrainingDataExportManifest>(
+            await File.ReadAllTextAsync(result.ManifestFilePath, cts.Token), WebJsonOptions)!;
+        Assert.AreEqual(snapshot.SnapshotId, manifest.SnapshotId, "manifest 应携带快照 ID。");
+        Assert.AreEqual(1.0, manifest.CompletenessRatio!.Value, 0.0001, "manifest 应携带完整率。");
+        Assert.AreEqual(snapshot.ContentHash, manifest.Sha256Hash, "manifest 哈希应与快照一致。");
+
+        var second = await exporter.ExportAsync(request, cts.Token);
+        Assert.AreEqual(snapshot.SnapshotId, second.DatasetSnapshot!.SnapshotId,
+            "相同输入条件重现相同快照 ID（可重现性）。");
+        var other = await exporter.ExportAsync(request with { ModelArtifactId = "model-other" }, cts.Token);
+        Assert.AreNotEqual(snapshot.SnapshotId, other.DatasetSnapshot!.SnapshotId,
+            "不同输入条件（model artifact）产生不同快照 ID。");
+
+        // 2. 完整性报告：输入 evidence 集 3 条、物化 3 条 → 完整率 1.0。
+        Assert.AreEqual(3, snapshot.InputEvidenceCount, "输入 evidence 集规模应为 3。");
+        Assert.AreEqual(3, snapshot.MaterializedCount, "物化样本数应为 3。");
+        Assert.AreEqual(1.0, snapshot.CompletenessRatio!.Value, 0.0001, "完整率 = 物化 / 输入。");
+        Assert.AreEqual(0, snapshot.MissingCount, "全量导出无缺失样本。");
+
+        // 3. Dropped/missing reason：被拒样本的 DropReasonCode 去重进入快照。
+        CollectionAssert.Contains(snapshot.MissingReasons.ToList(), "below-threshold",
+            "快照应记录样本级拒绝原因（Dropped/missing reason）。");
+
+        // 4. Policy/model/schema version 追责。
+        CollectionAssert.Contains(snapshot.PolicyVersions.ToList(), "policy/v1", "快照应记录策略版本。");
+        Assert.AreEqual("model-lineage-001", snapshot.ModelArtifactId, "快照应记录 model artifact。");
+        Assert.AreEqual("training-data-export/v1", snapshot.SchemaVersion, "快照应记录 schema 版本。");
+
+        // 5. Content hash：内容完整性（与 manifest 一致）。
+        Assert.IsFalse(string.IsNullOrWhiteSpace(snapshot.ContentHash), "快照应携带内容哈希。");
+        Assert.AreEqual(result.Sha256Hash, snapshot.ContentHash, "快照哈希应与导出结果一致。");
+
+        // 6. Sample lineage：血缘覆盖的决策数（dec-lineage-1 / dec-lineage-2）。
+        Assert.AreEqual(2, snapshot.LineageDecisionCount, "血缘应覆盖 2 个源决策。");
     }
 
     // -----------------------------------------------------------------------

@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
+using NpgsqlTypes;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -34,6 +35,61 @@ ON CONFLICT (workspace_id, collection_id, retrieval_id) DO UPDATE SET
         command.Parameters.AddWithValue("query_text", (object?)normalized.QueryText ?? DBNull.Value);
         command.Parameters.AddWithValue("created_at", normalized.CreatedAt);
         AddJson(command, "data", normalized);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task SaveBatchAsync(
+        IReadOnlyList<ContextRetrievalTrace> traces,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traces);
+        if (traces.Count == 0)
+        {
+            return;
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        // 批量 unnest：单次 Postgres roundtrip 写入整批 trace（Diagnostic Plane 性能路径）。
+        var count = traces.Count;
+        var workspaceIds = new string[count];
+        var collectionIds = new string[count];
+        var retrievalIds = new string[count];
+        var queryTexts = new string?[count];
+        var createdAt = new DateTimeOffset[count];
+        var datas = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            var normalized = Normalize(traces[i]);
+            workspaceIds[i] = normalized.WorkspaceId;
+            collectionIds[i] = normalized.CollectionId;
+            retrievalIds[i] = normalized.RetrievalId;
+            queryTexts[i] = normalized.QueryText;
+            createdAt[i] = normalized.CreatedAt;
+            datas[i] = Serializer.Serialize(normalized);
+        }
+
+        command.CommandText = $"""
+INSERT INTO {Table("retrieval_traces")} (workspace_id, collection_id, retrieval_id, query_text, created_at, data)
+SELECT ws, col, rid, qtext, cat, d::jsonb
+FROM unnest(
+    @workspace_ids::text[], @collection_ids::text[], @retrieval_ids::text[],
+    @query_texts::text[], @created_ats::timestamptz[], @datas::jsonb[])
+AS t(ws, col, rid, qtext, cat, d)
+ON CONFLICT (workspace_id, collection_id, retrieval_id) DO UPDATE SET
+    query_text = EXCLUDED.query_text,
+    created_at = EXCLUDED.created_at,
+    data = EXCLUDED.data;
+""";
+        AddTextArray(command, "workspace_ids", workspaceIds);
+        AddTextArray(command, "collection_ids", collectionIds);
+        AddTextArray(command, "retrieval_ids", retrievalIds);
+        AddNullableTextArray(command, "query_texts", queryTexts);
+        AddArrayParameter(command, "created_ats", NpgsqlDbType.Array | NpgsqlDbType.TimestampTz, createdAt);
+        AddArrayParameter(command, "datas", NpgsqlDbType.Array | NpgsqlDbType.Jsonb, datas);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 

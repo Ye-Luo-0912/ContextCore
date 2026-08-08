@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,9 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
 
     /// <summary>周期对账间隔：终态 Run + 有效预留 + 无结算记录 → 补写待结算条目。</summary>
     private static readonly TimeSpan ReconcileInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>后台负载治理预算（burst 限制 + 让出），避免结算 Worker 持续独占 DB。</summary>
+    private static readonly BackgroundDrainBudget DrainBudget = BackgroundDrainBudget.QuotaSettlement;
 
     private readonly IServiceProvider _services;
     private readonly IWorkspaceQuotaService _quotaService;
@@ -108,9 +112,20 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
                 }
 
                 var hasMore = false;
+                var burstStart = DateTimeOffset.UtcNow;
+                var batchesThisBurst = 0;
                 try
                 {
-                    hasMore = await SettleOnceAsync(store, stoppingToken).ConfigureAwait(false);
+                    // 满批续扫受 burst 预算约束：批次数 / 时长任一超限即让出，
+                    // 防持续负载下无限追队尾独占 DB（BackgroundDrainBudget）。
+                    do
+                    {
+                        hasMore = await SettleOnceAsync(store, stoppingToken).ConfigureAwait(false);
+                        batchesThisBurst++;
+                    }
+                    while (hasMore
+                           && DrainBudget.ShouldContinueBurst(batchesThisBurst, DateTimeOffset.UtcNow - burstStart)
+                           && !stoppingToken.IsCancellationRequested);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -123,7 +138,8 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
 
                 if (hasMore)
                 {
-                    // 满批领取：还有更多待结算条目，立即续扫，不等间隔（吞吐优先）。
+                    // burst 预算耗尽但仍有积压：让出后继续（不放弃积压，只限单次突发）。
+                    await DrainBudget.YieldAsync(stoppingToken).ConfigureAwait(false);
                     continue;
                 }
 
