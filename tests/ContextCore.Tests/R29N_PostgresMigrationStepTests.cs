@@ -167,7 +167,7 @@ public sealed class R29N_PostgresMigrationStepTests
             var runner = new PostgresMigrationRunner(factory);
             var result = await runner.ApplyMigrationsAsync(confirm: true, CancellationToken.None);
             Assert.IsTrue(result.Applied, "迁移应成功应用。");
-            Assert.AreEqual("cc-schema-v72", await runner.GetAppliedVersionAsync(CancellationToken.None));
+            Assert.AreEqual("cc-schema-v73", await runner.GetAppliedVersionAsync(CancellationToken.None));
 
             // 回填：run-legacy-1 的 workspace_id 来自 agent_runs。
             await using (var conn = await factory.OpenConnectionAsync(CancellationToken.None))
@@ -240,7 +240,7 @@ public sealed class R29N_PostgresMigrationStepTests
 
             // 与备份集成测试一致的入口：全新数据库上先跑版本化步骤再跑基线 DDL。
             await runner.MigrateAsync(CancellationToken.None);
-            Assert.AreEqual("cc-schema-v72", await runner.GetAppliedVersionAsync(CancellationToken.None));
+            Assert.AreEqual("cc-schema-v73", await runner.GetAppliedVersionAsync(CancellationToken.None));
 
             await using (var conn = await factory.OpenConnectionAsync(CancellationToken.None))
             {
@@ -441,7 +441,7 @@ public sealed class R29N_PostgresMigrationStepTests
             // 启动当前代码：MigrateAsync 必须执行 0016 + 0017（不得被 v68 短路跳过）。
             var runner = new PostgresMigrationRunner(factory);
             await runner.MigrateAsync(CancellationToken.None);
-            Assert.AreEqual("cc-schema-v72", await runner.GetAppliedVersionAsync(CancellationToken.None),
+            Assert.AreEqual("cc-schema-v73", await runner.GetAppliedVersionAsync(CancellationToken.None),
                 "v68 存量库部署当前代码后必须升级到最新 schema。");
 
             await using (var conn = await factory.OpenConnectionAsync(CancellationToken.None))

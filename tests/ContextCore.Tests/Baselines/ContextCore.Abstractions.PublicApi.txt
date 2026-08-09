@@ -239,6 +239,8 @@ F:ContextCore.Abstractions.DatasetSplitStrategy.GroupKeyed
 F:ContextCore.Abstractions.DatasetSplitStrategy.Random
 F:ContextCore.Abstractions.DatasetSplitStrategy.Stratified
 F:ContextCore.Abstractions.DatasetSplitStrategy.TimeSeries
+F:ContextCore.Abstractions.DecisionCommitType.RecordAndMaterialize
+F:ContextCore.Abstractions.DecisionCommitType.RecordOnly
 F:ContextCore.Abstractions.DispatchErrorKind.Cancelled
 F:ContextCore.Abstractions.DispatchErrorKind.HandlerException
 F:ContextCore.Abstractions.DispatchErrorKind.HandlerTimeout
@@ -2066,6 +2068,13 @@ M:ContextCore.Abstractions.DatasetVersion.Equals(System.Object)
 M:ContextCore.Abstractions.DatasetVersion.GetHashCode()
 M:ContextCore.Abstractions.DatasetVersion.GetType()
 M:ContextCore.Abstractions.DatasetVersion.ToString()
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.#ctor()
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.<Clone>$()
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.Equals(ContextCore.Abstractions.DecisionCommitOutboxRecord)
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.Equals(System.Object)
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.GetHashCode()
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.GetType()
+M:ContextCore.Abstractions.DecisionCommitOutboxRecord.ToString()
 M:ContextCore.Abstractions.DelayedUserFeedbackRequest.#ctor()
 M:ContextCore.Abstractions.DelayedUserFeedbackRequest.Equals(System.Object)
 M:ContextCore.Abstractions.DelayedUserFeedbackRequest.GetHashCode()
@@ -2487,6 +2496,10 @@ M:ContextCore.Abstractions.IContextTokenizerResolver.TruncateForTokenBudget(Syst
 M:ContextCore.Abstractions.IContextValidationService.ValidateContextItem(ContextCore.Abstractions.Models.ContextItem)
 M:ContextCore.Abstractions.IContextValidationService.ValidateMemoryItem(ContextCore.Abstractions.Models.ContextMemoryItem)
 M:ContextCore.Abstractions.IContextValidationService.ValidatePackageRequest(ContextCore.Abstractions.Models.ContextPackageRequest)
+M:ContextCore.Abstractions.IDecisionCommitOutbox.AckAsync(System.Int64, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IDecisionCommitOutbox.AcquirePendingAsync(System.Int32, System.String, System.TimeSpan, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IDecisionCommitOutbox.EnqueueAsync(ContextCore.Abstractions.DecisionCommitOutboxRecord, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IDecisionCommitOutbox.MarkFailedAsync(System.Int64, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDecisionEvidenceProvider.ResolveEvidenceAsync(ContextCore.Abstractions.Models.ContextDecisionRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDecisionTraceStore.GetAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IDecisionTraceStore.QueryRecentAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
@@ -6882,6 +6895,19 @@ P:ContextCore.Abstractions.DatasetStatistics.ValidationItems (get)
 P:ContextCore.Abstractions.DatasetVersion.Initial (get)
 P:ContextCore.Abstractions.DatasetVersion.Major (get|init)
 P:ContextCore.Abstractions.DatasetVersion.Minor (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.Attempts (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.CollectionId (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.CommitType (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.CreatedAt (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.DecisionId (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.EvidenceRef (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.LastError (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.LeaseExpiresAt (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.LeaseToken (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.OutboxId (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.Record (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.State (get|init)
+P:ContextCore.Abstractions.DecisionCommitOutboxRecord.WorkspaceId (get|init)
 P:ContextCore.Abstractions.DelayedUserFeedbackRequest.CollectionId (get|init)
 P:ContextCore.Abstractions.DelayedUserFeedbackRequest.DecisionId (get|init)
 P:ContextCore.Abstractions.DelayedUserFeedbackRequest.FeedbackText (get|init)
@@ -12011,6 +12037,8 @@ T:ContextCore.Abstractions.DatasetSplitResult
 T:ContextCore.Abstractions.DatasetSplitStrategy (Enum)
 T:ContextCore.Abstractions.DatasetStatistics
 T:ContextCore.Abstractions.DatasetVersion
+T:ContextCore.Abstractions.DecisionCommitOutboxRecord
+T:ContextCore.Abstractions.DecisionCommitType (Enum)
 T:ContextCore.Abstractions.DelayedUserFeedbackRequest
 T:ContextCore.Abstractions.DelayedUserFeedbackResult
 T:ContextCore.Abstractions.DependencyScopeSet
@@ -12127,6 +12155,7 @@ T:ContextCore.Abstractions.IContextStoreMetadataLookup (Interface)
 T:ContextCore.Abstractions.IContextTokenizer (Interface)
 T:ContextCore.Abstractions.IContextTokenizerResolver (Interface)
 T:ContextCore.Abstractions.IContextValidationService (Interface)
+T:ContextCore.Abstractions.IDecisionCommitOutbox (Interface)
 T:ContextCore.Abstractions.IDecisionEvidenceProvider (Interface)
 T:ContextCore.Abstractions.IDecisionTraceStore (Interface)
 T:ContextCore.Abstractions.IDesiredModelStateStore (Interface)

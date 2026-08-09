@@ -527,6 +527,7 @@ internal static class StorageExtensions
 		services.AddPlain<IDecisionTraceStore, InMemoryDecisionTraceStore>();
 		services.AddPlain<IContextPackagePolicyStore, InMemoryContextPackagePolicyStore>();
 		services.AddPlain<ILearningArtifactStore, InMemoryLearningArtifactStore>();
+		services.AddPlain<IDecisionCommitOutbox, InMemoryDecisionCommitOutbox>();
 
 		services.AddInvalidating<IMemoryStore, InMemoryMemoryStore>((inner, inv, vs) => new InvalidatingMemoryStoreDecorator(inner, inv, vs));
 		services.AddDecoratedService<IWorkingMemoryService, InMemoryMemoryStore>((inner, inv, vs) => new InvalidatingWorkingMemoryServiceDecorator(inner, inv, vs));

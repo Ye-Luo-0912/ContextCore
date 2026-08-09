@@ -113,6 +113,10 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresLearningArtifactStore>();
         services.AddSingleton<ILearningArtifactStore>(sp => sp.GetRequiredService<PostgresLearningArtifactStore>());
 
+        // Decision Commit Outbox：决策提交可靠链（Record + Evidence 引用 + 物化意图）。
+        services.AddSingleton<PostgresDecisionCommitOutbox>();
+        services.AddSingleton<IDecisionCommitOutbox>(sp => sp.GetRequiredService<PostgresDecisionCommitOutbox>());
+
         // Short-term memory / promotion / candidate review stores。
         // 替代 Unsupported 占位，让 HA 场景下短期记忆与晋升审核可持久化。
         services.AddSingleton<PostgresShortTermMemoryStore>();

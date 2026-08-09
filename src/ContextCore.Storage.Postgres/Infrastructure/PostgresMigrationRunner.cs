@@ -174,7 +174,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     ///   不再信任客户端提供的裸签名；查询 / 清除以工作区为作用域（全局重置需更高权限），
     ///   杜绝跨租户读取 / 污染 / 重置其他工作区的自适应状态。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v72";
+    public const string SchemaVersion = "cc-schema-v73";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -2748,6 +2748,31 @@ CREATE TABLE IF NOT EXISTS {Infrastructure.PostgresNames.Table(options, "dataset
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "dataset_snapshots", "created")}
     ON {Infrastructure.PostgresNames.Table(options, "dataset_snapshots")} (workspace_id, created_at DESC);
+
+-- Decision Commit Outbox：决策提交可靠链（Decision Record + Evidence 引用 +
+-- Learning Materialization Intent 经 Durable Outbox；未 Ack 崩溃可重放）。
+CREATE TABLE IF NOT EXISTS {Infrastructure.PostgresNames.Table(options, "decision_commits")} (
+    outbox_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    decision_id text NOT NULL,
+    commit_type smallint NOT NULL DEFAULT 1,
+    evidence_ref text NULL,
+    payload jsonb NOT NULL,
+    state smallint NOT NULL DEFAULT 0,
+    attempts integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    processed_at timestamptz NULL,
+    lease_owner text NULL,
+    lease_token text NULL,
+    lease_expires_at timestamptz NULL,
+    last_error text NULL,
+    CONSTRAINT {Infrastructure.PostgresNames.Index(options, "decision_commits", "run")}
+        UNIQUE (workspace_id, decision_id));
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decision_commits", "state")}
+    ON {Infrastructure.PostgresNames.Table(options, "decision_commits")} (state, created_at ASC);
 """;
     }
 
