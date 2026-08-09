@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-10。
-> **Current HEAD：`35be157f`**（R31-R39 生产语义收敛 + Learning/观测面/CLI 全部完成并推送；R40 剩余项见「下一阶段（R40）」）。
-> **Current Phase：R31-R39 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R39 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI，详见「当前阶段」。
+> **Current HEAD：`5c1a0978`**（R31-R40 生产语义收敛 + Learning/观测/CLI/规模全部完成并推送；R41 剩余项见「下一阶段（R41）」）。
+> **Current Phase：R31-R40 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R40 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI；R40：Learning/Diagnostics API 端到端 HTTP 验收 + 闭环规模压测，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -65,10 +65,15 @@
 25. **OpenTelemetry 指标导出收口（WP-O）**：ObservabilityContractTests——核心遥测 Meter 名（ContextCore.Storage.Postgres / ContextCore.Core 等）必须匹配 Service 的 AddMeter("ContextCore.*") OTLP 通配，防止新增组件用非前缀 Meter 名导致导出丢失（反射契约 + 关键组件存在性断言）。
 26. **Learning 控制面 ControlRoom CLI（WP-P）**：LearningCommand——`learning artifact get/list/export`（快照工件点查/列表/导出落库）+ `learning decision get`（决策审计点查）；Direct 模式用本地 ILearningArtifactStore/IDecisionTraceStore（ControlRoomState 注入），Service 模式提示经 /api/learning 远程调用。
 
-### 下一阶段（R40，按优先级）
+### 已完成（HEAD `5c1a0978`，R40 工作包收口）
 
-- **WP-Q（Service API 集成验收）**：新端点（learning/diagnostics）的端到端 HTTP 验收（真实 Service 启动 + 认证 + 响应契约）。
-- **WP-R（Learning 闭环压测/规模）**：大数据量下的快照导出/工件重建/outbox 吞吐基准与上限。
+27. **Learning / Diagnostics API 端到端 HTTP 验收（WP-Q）**：LearningApiIntegrationTests（WebApplicationFactory + filesystem provider）——learning 工件列表（200 + 契约 + 空列表）、diagnostics 报告（200 + 契约）、无 API Key 401；修复 filesystem 下 ILearningArtifactStore 未注册（公共段注册）与诊断端点触发不可用 Postgres 构造（端点改为 provider 无关）。
+28. **Learning 闭环规模/压测（WP-R）**：LearningPipelineScaleTests——10k 条 ledger 快照导出（完整性 1.0 / 内容哈希 / 100 源决策血缘）→ 工件落库 → 重建一致；2k 条 DecisionCommitOutbox 全量领取-Ack 无残留。
+
+### 下一阶段（R41，按优先级）
+
+- **WP-S（Postgres Learning 闭环吞吐验收）**：Postgres provider 下 outbox/工件/迁移的并发吞吐与锁竞争验收（SKIP LOCKED 高积压）。
+- **WP-T（Learning 数据质量闸门）**：快照导出前的数据质量校验（样本缺失/标签不平衡/脏数据检测）与闸门语义。
 
 ### Open P0（待办）
 

@@ -168,6 +168,14 @@ internal static class StorageExtensions
 		// 未注入时 CoreExtensions 的 TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder> 回退。
 		RegisterExperimentRecorder(services, options);
 
+		// Learning Artifact Plane / Decision Commit Outbox（公共注册：memory/filesystem 用内存实现；
+		// Postgres provider 由 PostgresServiceCollectionExtensions 注册持久化实现，此处跳过避免重复）。
+		if (!options.IsPostgres)
+		{
+			services.AddPlain<ILearningArtifactStore, InMemoryLearningArtifactStore>();
+			services.AddPlain<IDecisionCommitOutbox, InMemoryDecisionCommitOutbox>();
+		}
+
 		return services;
 	}
 
@@ -526,8 +534,6 @@ internal static class StorageExtensions
 		services.AddQueuedRetrievalTraceStore<InMemoryRetrievalTraceStore>();
 		services.AddPlain<IDecisionTraceStore, InMemoryDecisionTraceStore>();
 		services.AddPlain<IContextPackagePolicyStore, InMemoryContextPackagePolicyStore>();
-		services.AddPlain<ILearningArtifactStore, InMemoryLearningArtifactStore>();
-		services.AddPlain<IDecisionCommitOutbox, InMemoryDecisionCommitOutbox>();
 
 		services.AddInvalidating<IMemoryStore, InMemoryMemoryStore>((inner, inv, vs) => new InvalidatingMemoryStoreDecorator(inner, inv, vs));
 		services.AddDecoratedService<IWorkingMemoryService, InMemoryMemoryStore>((inner, inv, vs) => new InvalidatingWorkingMemoryServiceDecorator(inner, inv, vs));

@@ -9522,16 +9522,9 @@
         "tags": [
           "AdaptiveRetrieval"
         ],
-        "summary": "查询自适应检索策略（预算收敛 / 查询收敛 / 召回增强乘数；signature 或规划输入字段）",
+        "summary": "查询自适应检索策略（预算收敛 / 查询收敛 / 召回增强乘数；由规划输入字段服务端派生签名）",
         "operationId": "GetAdaptiveRetrievalPolicy",
         "parameters": [
-          {
-            "name": "signature",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "originalTask",
             "in": "query",
@@ -9618,13 +9611,61 @@
         "tags": [
           "AdaptiveRetrieval"
         ],
-        "summary": "列出指定计划签名最近 N 条检索结果反馈（按记录时间倒序）",
+        "summary": "列出规划输入对应计划签名最近 N 条检索结果反馈（按记录时间倒序；服务端派生签名）",
         "operationId": "ListAdaptiveRetrievalFeedback",
         "parameters": [
           {
-            "name": "signature",
+            "name": "originalTask",
             "in": "query",
-            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "latestAssistantIntent",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "goals",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyVersion",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "retrievalProfile",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskClass",
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -9680,7 +9721,7 @@
         "tags": [
           "AdaptiveRetrieval"
         ],
-        "summary": "记录一条检索结果反馈（自适应规划器的学习信号）",
+        "summary": "记录一条检索结果反馈（计划签名由规划输入字段 + 请求工作区服务端派生）",
         "operationId": "RecordAdaptiveRetrievalFeedback",
         "requestBody": {
           "content": {
@@ -9731,11 +9772,60 @@
         "tags": [
           "AdaptiveRetrieval"
         ],
-        "summary": "清除检索结果反馈并重置自适应状态（signature 缺省时清除全部）",
+        "summary": "清除检索结果反馈并重置自适应状态（按规划输入字段作用域；缺省 = 全局重置，需 Admin）",
         "operationId": "ResetAdaptiveRetrieval",
         "parameters": [
           {
-            "name": "signature",
+            "name": "originalTask",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "latestAssistantIntent",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "goals",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policyVersion",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "retrievalProfile",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskClass",
             "in": "query",
             "schema": {
               "type": "string"
@@ -9753,12 +9843,252 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/learning/artifacts/{snapshotId}": {
+      "get": {
+        "tags": [
+          "Learning"
+        ],
+        "summary": "按快照 ID 点查数据集快照工件（完整性 / 血缘 / 内容哈希；Replay 重建入口）",
+        "operationId": "GetLearningArtifact",
+        "parameters": [
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetSnapshotArtifact"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/learning/artifacts": {
+      "get": {
+        "tags": [
+          "Learning"
+        ],
+        "summary": "列出工作区最近 N 个数据集快照工件（按入库时间倒序）",
+        "operationId": "ListLearningArtifacts",
+        "parameters": [
+          {
+            "name": "take",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningArtifactListResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/learning/artifacts/export": {
+      "post": {
+        "tags": [
+          "Learning"
+        ],
+        "summary": "触发训练数据导出（DatasetSnapshot + 完整性报告）并落库为工件",
+        "operationId": "ExportLearningArtifact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningArtifactExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetSnapshotReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/learning/decisions/{decisionId}": {
+      "get": {
+        "tags": [
+          "Learning"
+        ],
+        "summary": "按稳定主键点查决策记录（Decision Evidence Plane durable 归档审计）",
+        "operationId": "GetLearningDecision",
+        "parameters": [
+          {
+            "name": "decisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextDecisionRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnostics/runtime": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "运行时诊断：Schema 版本 / 缺失表 / 索引 / Learning 积压 / 后台负载预算",
+        "operationId": "GetRuntimeDiagnostics",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeDiagnosticsReport"
                 }
               }
             }
@@ -10209,6 +10539,21 @@
           }
         }
       },
+      "BackgroundDiagnostics": {
+        "type": "object",
+        "properties": {
+          "drainBudget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DrainBudgetDiagnostics"
+              }
+            ]
+          }
+        }
+      },
       "CalibrationValidationResponse": {
         "type": "object",
         "properties": {
@@ -10489,6 +10834,9 @@
             }
           }
         }
+      },
+      "CandidateDecisionReasonCode": {
+        "type": "integer"
       },
       "CandidateMemoryDiagnostic": {
         "type": "object",
@@ -11161,7 +11509,8 @@
       },
       "ClusterNodeAppliedEntry": {
         "required": [
-          "nodeId",
+          "nodeGroupId",
+          "instanceId",
           "appliedRevision",
           "appliedAt",
           "isCurrent",
@@ -11170,7 +11519,10 @@
         ],
         "type": "object",
         "properties": {
-          "nodeId": {
+          "nodeGroupId": {
+            "type": "string"
+          },
+          "instanceId": {
             "type": "string"
           },
           "appliedRevision": {
@@ -13423,6 +13775,263 @@
             ]
           }
         }
+      },
+      "ContextDecisionCandidate": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ContextDecisionCandidateOutcome"
+          },
+          "sectionName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "$ref": "#/components/schemas/CandidateDecisionReasonCode"
+          },
+          "secondaryReasonCodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CandidateDecisionReasonCode"
+            }
+          },
+          "channelSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scoreBreakdown": {
+            "type": "object",
+            "additionalProperties": {
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+              "type": [
+                "number",
+                "string"
+              ],
+              "format": "double"
+            }
+          },
+          "matchedAnchors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relationPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lifecycleState": {
+            "type": "string"
+          },
+          "rankBefore": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rankAfter": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tokenBudgetBefore": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tokenBudgetAfter": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "score": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "estimatedTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ContextDecisionCandidateOutcome": {
+        "type": "integer"
+      },
+      "ContextDecisionOutcome": {
+        "type": "object",
+        "properties": {
+          "selectedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "droppedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "estimatedTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tokenBudget": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ContextDecisionRecord": {
+        "type": "object",
+        "properties": {
+          "decisionId": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ContextDecisionSource"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "queryText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextDecisionCandidate"
+            }
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ContextDecisionOutcome"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/ContextDecisionRisk"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PackageQualityReport"
+              }
+            ]
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ContextDecisionRisk": {
+        "type": "object",
+        "properties": {
+          "formalRetrievalAllowed": {
+            "type": "boolean"
+          },
+          "runtimeSwitchAllowed": {
+            "type": "boolean"
+          },
+          "formalVectorStoreBinding": {
+            "type": "boolean"
+          },
+          "formalPackageWrite": {
+            "type": "boolean"
+          },
+          "packageOutputChanged": {
+            "type": "boolean"
+          },
+          "packingPolicyChanged": {
+            "type": "boolean"
+          },
+          "graphApplyFormalChanged": {
+            "type": "boolean"
+          },
+          "learningPolicyApplied": {
+            "type": "boolean"
+          },
+          "modelTrainingStarted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContextDecisionSource": {
+        "type": "integer"
       },
       "ContextError": {
         "type": "object",
@@ -16104,6 +16713,145 @@
           }
         }
       },
+      "DatasetSnapshotArtifact": {
+        "required": [
+          "snapshot",
+          "storedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/DatasetSnapshotReport"
+          },
+          "dataFilePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "manifestFilePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "storedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DatasetSnapshotReport": {
+        "required": [
+          "snapshotId",
+          "schemaVersion",
+          "createdAt",
+          "workspaceId",
+          "materializedCount",
+          "contentHash",
+          "lineageDecisionCount"
+        ],
+        "type": "object",
+        "properties": {
+          "snapshotId": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "since": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "until": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "modelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "inputEvidenceCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "materializedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "completenessRatio": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "missingCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "missingReasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "policyVersions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lineageDecisionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "DelayedUserFeedbackRequest": {
         "type": "object",
         "properties": {
@@ -16177,6 +16925,35 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "DrainBudgetDiagnostics": {
+        "type": "object",
+        "properties": {
+          "maxBatchesPerBurst": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxBurstDurationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "yieldDelayMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -16456,6 +17233,97 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "LearningArtifactExportRequest": {
+        "required": [
+          "outputDirectory"
+        ],
+        "type": "object",
+        "properties": {
+          "collectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "since": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "until": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "decisionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modelArtifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "take": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "outputDirectory": {
+            "type": "string"
+          }
+        }
+      },
+      "LearningArtifactListResponse": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatasetSnapshotArtifact"
+            }
+          }
+        }
+      },
+      "LearningDiagnostics": {
+        "type": "object",
+        "properties": {
+          "pendingEvents": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "processingEvents": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "deadLetterEvents": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -17502,6 +18370,85 @@
           }
         }
       },
+      "PackageQualityMetric": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "score": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "numerator": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "denominator": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "PackageQualityReport": {
+        "type": "object",
+        "properties": {
+          "anchorCoverage": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "hardConstraintSatisfaction": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "requiredItemCoverage": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "redundancy": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "provenanceCompleteness": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "lifecycleRisk": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "tokenEfficiency": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "sectionBalance": {
+            "$ref": "#/components/schemas/PackageQualityMetric"
+          },
+          "overallScore": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "PackageReadPlan": {
         "type": "object",
         "properties": {
@@ -18481,7 +19428,52 @@
       "RecordAdaptiveRetrievalFeedbackRequest": {
         "type": "object",
         "properties": {
-          "planSignature": {
+          "originalTask": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "latestAssistantIntent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "goals": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "collectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "purpose": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "policyVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "retrievalProfile": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taskClass": {
             "type": [
               "null",
               "string"
@@ -19700,6 +20692,12 @@
       "ResolveReconciliationRequest": {
         "type": "object",
         "properties": {
+          "decisionRequestId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "sideEffectOccurred": {
             "type": "boolean"
           },
@@ -19868,12 +20866,46 @@
       "RetrievalPlanFeedback": {
         "required": [
           "planSignature",
+          "workspaceId",
           "recordedAtUtc"
         ],
         "type": "object",
         "properties": {
           "planSignature": {
             "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "purpose": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "policyVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "retrievalProfile": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taskClass": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "queryText": {
             "type": "string"
@@ -20188,6 +21220,45 @@
           }
         }
       },
+      "RuntimeDiagnosticsReport": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schema": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SchemaDiagnostics"
+              }
+            ]
+          },
+          "learning": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LearningDiagnostics"
+              }
+            ]
+          },
+          "background": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackgroundDiagnostics"
+              }
+            ]
+          }
+        }
+      },
       "RuntimeProbeCheckResponse": {
         "type": "object",
         "properties": {
@@ -20337,6 +21408,42 @@
                 "$ref": "#/components/schemas/ShortTermMaintenanceStatusResponse"
               }
             ]
+          }
+        }
+      },
+      "SchemaDiagnostics": {
+        "type": "object",
+        "properties": {
+          "targetVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliedVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "missingTables": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "missingIndexes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "connectionAvailable": {
+            "type": "boolean"
           }
         }
       },
@@ -22264,6 +23371,12 @@
           },
           "requestId": {
             "type": "string"
+          },
+          "decisionRequestId": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "toolName": {
             "type": "string"
@@ -24204,6 +25317,41 @@
           },
           "started": {
             "type": "boolean"
+          },
+          "lastCycleAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "currentBackoff": {
+            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "queueLag": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "leaseStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -24433,6 +25581,9 @@
     },
     {
       "name": "AdaptiveRetrieval"
+    },
+    {
+      "name": "Diagnostics"
     }
   ]
 }

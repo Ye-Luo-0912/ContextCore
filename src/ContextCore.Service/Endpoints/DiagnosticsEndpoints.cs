@@ -42,32 +42,13 @@ internal static class DiagnosticsEndpoints
     }
 
     /// <summary>运行时诊断处理器。</summary>
+    /// <remarks>Schema 迁移诊断依赖 Postgres 基础设施（filesystem/内存 provider 下 Postgres 服务为惰性注册，
+    /// 不构造连接工厂），由 Postgres 集成测试的 VerifySchemaAsync 覆盖；本端点提供
+    /// provider 无关的 Learning 积压与后台负载观测。</remarks>
     internal static async Task<IResult> GetRuntimeDiagnosticsAsync(
-        [FromServices] PostgresMigrationRunner? migrationRunner,
         [FromServices] ILearningEventOutboxStore? learningOutbox,
         CancellationToken cancellationToken = default)
     {
-        SchemaDiagnostics? schema = null;
-        if (migrationRunner is not null)
-        {
-            try
-            {
-                var verified = await migrationRunner.VerifySchemaAsync(cancellationToken);
-                schema = new SchemaDiagnostics
-                {
-                    TargetVersion = PostgresMigrationRunner.SchemaVersion,
-                    AppliedVersion = verified.CurrentSchemaVersion,
-                    MissingTables = verified.MissingRequiredTableCount,
-                    MissingIndexes = verified.MissingIndexCount,
-                    ConnectionAvailable = verified.ConnectionAvailable
-                };
-            }
-            catch
-            {
-                // 诊断查询失败不阻断（schema 保持 null）。
-            }
-        }
-
         LearningDiagnostics? learning = null;
         if (learningOutbox is not null)
         {
@@ -90,7 +71,7 @@ internal static class DiagnosticsEndpoints
         var report = new RuntimeDiagnosticsReport
         {
             GeneratedAt = DateTimeOffset.UtcNow,
-            Schema = schema,
+            Schema = null,
             Learning = learning,
             Background = new BackgroundDiagnostics
             {

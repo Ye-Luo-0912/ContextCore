@@ -18,8 +18,7 @@ public sealed class DiagnosticsEndpointsTests
     public async Task RuntimeDiagnostics_ReportsLearningBacklogAndDrainBudget()
     {
         var outbox = new FakeLearningOutbox(pending: 3, processing: 1, deadLetter: 2);
-        var result = await DiagnosticsEndpoints.GetRuntimeDiagnosticsAsync(
-            migrationRunner: null, learningOutbox: outbox);
+        var result = await DiagnosticsEndpoints.GetRuntimeDiagnosticsAsync(learningOutbox: outbox);
 
         var (status, report) = await ExecuteAsync<RuntimeDiagnosticsReport>(result);
 
@@ -37,8 +36,7 @@ public sealed class DiagnosticsEndpointsTests
     [TestMethod]
     public async Task RuntimeDiagnostics_NoLearningOutbox_ReportsBackgroundOnly()
     {
-        var result = await DiagnosticsEndpoints.GetRuntimeDiagnosticsAsync(
-            migrationRunner: null, learningOutbox: null);
+        var result = await DiagnosticsEndpoints.GetRuntimeDiagnosticsAsync(learningOutbox: null);
 
         var (status, report) = await ExecuteAsync<RuntimeDiagnosticsReport>(result);
 
