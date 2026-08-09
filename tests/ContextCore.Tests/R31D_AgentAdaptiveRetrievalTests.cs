@@ -48,9 +48,10 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         Assert.AreEqual(2048, decisionRuntime.LastRequest!.TokenBudget,
             "计划 TokenBudget 应注入决策请求（planner → Actor 上下文构建）。");
 
-        // 2. 决策执行后记录检索结果反馈（闭环学习信号）。
-        Assert.AreEqual(1, planner.OutcomeRecords.Count, "每次上下文构建应记录一条反馈。");
-        var record = planner.OutcomeRecords[0];
+        // 2. 决策执行后记录检索结果反馈（闭环学习信号——即时过程信号 Source=Runtime）。
+        var runtimeRecords = planner.OutcomeRecords.Where(r => r.Source == RetrievalFeedbackSource.Runtime).ToList();
+        Assert.AreEqual(1, runtimeRecords.Count, "每次上下文构建应记录一条即时反馈。");
+        var record = runtimeRecords[0];
         Assert.AreEqual(run.WorkspaceId, record.WorkspaceId, "反馈应归属到 Run 的工作区。");
         Assert.AreEqual(2, record.HitsReturned, "命中数应为选中候选数。");
         Assert.IsTrue(record.Effective, "产出候选结果应视为有效信号。");
@@ -116,8 +117,9 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
             decisionRuntime.LastRequest.AgentInput?.RequiredIds?.ToList() ?? new List<string>(), "entity-required-1",
             "RequiredIds 应注入决策请求（mandatory recall）。");
 
-        // 反馈 QueryText 也应记录实际使用的受控查询文本。
-        Assert.AreEqual("受控查询-任务分解", planner.OutcomeRecords[0].QueryText,
+        // 反馈 QueryText 也应记录实际使用的受控查询文本（即时过程反馈）。
+        Assert.AreEqual("受控查询-任务分解",
+            planner.OutcomeRecords.First(r => r.Source == RetrievalFeedbackSource.Runtime).QueryText,
             "反馈应记录实际执行的受控查询文本。");
     }
 
@@ -147,7 +149,7 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await actor.ExecuteAsync(run, cts.Token);
 
-        var record = planner.OutcomeRecords[0];
+        var record = planner.OutcomeRecords.First(r => r.Source == RetrievalFeedbackSource.Runtime);
         Assert.IsTrue(record.Effective, "产出且被采用的候选 → 有效信号（非 result!=null 恒真）。");
         Assert.AreEqual(0.9, record.Confidence, 0.0001,
             "Confidence 应为最高选中候选分数（不再恒 1.0）。");
@@ -177,10 +179,110 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await actor.ExecuteAsync(run, cts.Token);
 
-        var record = planner.OutcomeRecords[0];
+        var record = planner.OutcomeRecords.First(r => r.Source == RetrievalFeedbackSource.Runtime);
         Assert.IsFalse(record.Effective, "无被采用候选时不得视为有效信号。");
         Assert.AreEqual(0.0, record.OutcomeQuality, 0.0001, "无候选时质量为零。");
         Assert.AreEqual(0.5, record.Confidence, 0.0001, "无分数时置信度为中性 0.5。");
+    }
+
+    /// <summary>
+    /// 验证（P1-十六 延迟归因）：Run 到达终态后，把最终结果质量归因到本 Run
+    /// 使用过的检索计划签名（Source=AutomatedEvaluation，幂等键含 runId）——
+    /// 反馈是"这些 Context 是否帮助 Agent 完成任务"的结果信号。
+    /// </summary>
+    [TestMethod]
+    public async Task DeferredAttribution_CompletedRun_AttributesHighQuality()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun();
+        await runStore.CreateAsync(run);
+
+        var planner = new FakeAdaptivePlanner(new AgentRetrievalPlan
+        {
+            TokenBudget = 2048,
+            ControlledQueries = new[]
+            {
+                new AgentRetrievalQuery { Text = "受控查询", Type = AgentRetrievalQueryType.Hybrid, Weight = 1.0 }
+            }
+        });
+        var decisionRuntime = new FakeDecisionRuntime(selectedCount: 1, effectiveTokens: 100, tokenBudget: 2048);
+        var actor = new AgentRunActor(
+            runStore, eventStore, new FinalAnswerTransport(),
+            new DefaultAgentLoopPolicy(), new EchoToolDispatcher(),
+            decisionRuntime: decisionRuntime, adaptivePlanner: planner);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        // 归因反馈：Run 完成 → 高质量归因（AutomatedEvaluation 来源）。
+        var attribution = planner.OutcomeRecords.FirstOrDefault(r =>
+            r.Source == RetrievalFeedbackSource.AutomatedEvaluation);
+        Assert.IsNotNull(attribution, "Run 终态后应写入延迟归因反馈。");
+        Assert.AreEqual(0.9, attribution!.OutcomeQuality, 0.0001, "Completed 归因质量应为 0.9。");
+        Assert.AreEqual(0.9, attribution.Confidence, 0.0001, "终态归因高置信度。");
+        Assert.IsTrue(attribution.Effective, "终态是可确认的结果 → 有效信号。");
+        Assert.AreEqual(
+            AdaptiveRetrievalPlanSignature.Compute(new AgentRetrievalPlannerInput
+            {
+                OriginalTask = run.Task,
+                LatestAssistantIntent = run.Task,
+                UnresolvedGoals = new[] { run.Task },
+                WorkspaceId = run.WorkspaceId,
+                CollectionId = run.WorkspaceId,
+                Purpose = Purpose
+            }),
+            attribution.PlanSignature, "归因应落到本 Run 使用的检索计划签名。");
+        Assert.AreEqual($"run:{run.RunId}:{attribution.PlanSignature}", attribution.IdempotencyKey,
+            "归因幂等键 = run:runId:signature（重试/重放不重复归因）。");
+    }
+
+    /// <summary>
+    /// 验证（P1-十六 延迟归因）：Run 失败 → 归因质量 0.2（检索未达成任务目标）；
+    /// 非终态（RetryPending）不归因（还有后续 Attempt）。
+    /// </summary>
+    [TestMethod]
+    public async Task DeferredAttribution_FailedRun_AttributesLowQuality()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = BuildRun();
+        await runStore.CreateAsync(run);
+
+        var planner = new FakeAdaptivePlanner(new AgentRetrievalPlan
+        {
+            TokenBudget = 2048,
+            ControlledQueries = new[]
+            {
+                new AgentRetrievalQuery { Text = "受控查询", Type = AgentRetrievalQueryType.Hybrid, Weight = 1.0 }
+            }
+        });
+        var decisionRuntime = new FakeDecisionRuntime(selectedCount: 1, effectiveTokens: 100, tokenBudget: 2048);
+        var actor = new AgentRunActor(
+            runStore, eventStore, new ThrowingModelRunTransport(),
+            new DefaultAgentLoopPolicy(), new EchoToolDispatcher(),
+            decisionRuntime: decisionRuntime, adaptivePlanner: planner);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        var attribution = planner.OutcomeRecords.FirstOrDefault(r =>
+            r.Source == RetrievalFeedbackSource.AutomatedEvaluation);
+        Assert.IsNotNull(attribution, "Run 失败终态后也应写入延迟归因反馈。");
+        Assert.AreEqual(0.2, attribution!.OutcomeQuality, 0.0001, "Failed 归因质量应为 0.2。");
+    }
+
+    /// <summary>模型传输 stub：调用即抛异常（触发 FailAsync → Failed 终态）。</summary>
+    private sealed class ThrowingModelRunTransport : IAgentModelTransport
+    {
+        public ValueTask<AgentModelResponse> CallAsync(string runId, string context, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("simulated model failure");
+
+        public ValueTask<AgentModelResponse> CallAsync(string runId, IReadOnlyList<AgentMessage> messages, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("simulated model failure");
+
+        public ValueTask<AgentModelResponse> CallAsync(AgentModelRequest request, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("simulated model failure");
     }
 
     [TestMethod]
@@ -202,8 +304,9 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await actor.ExecuteAsync(run, cts.Token);
 
-        var record = planner.OutcomeRecords.Single();
-        Assert.IsTrue(record.BudgetExceeded, "决策结果含预算拦截时应上报预算超限信号。");
+        var record = planner.OutcomeRecords.FirstOrDefault(r => r.Source == RetrievalFeedbackSource.Runtime);
+        Assert.IsNotNull(record, "应存在即时过程反馈。");
+        Assert.IsTrue(record!.BudgetExceeded, "决策结果含预算拦截时应上报预算超限信号。");
     }
 
     [TestMethod]

@@ -45,6 +45,7 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
     private readonly IServiceProvider _services;
     private readonly IWorkspaceQuotaService _quotaService;
     private readonly ILogger<TerminalRunSettlementWorker> _logger;
+    private readonly IBackgroundLoadProbe? _loadProbe;
     private readonly TimeSpan _interval;
     private readonly string _owner;
     private DateTimeOffset _nextReconcileAt = DateTimeOffset.UtcNow;
@@ -66,6 +67,8 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
             ? options.RunRecoveryInterval
             : TimeSpan.FromSeconds(30);
         _owner = $"{Environment.MachineName}:{Environment.ProcessId}";
+        // 动态降速探针（可选）：DB 池利用率高时收紧 burst 预算。
+        _loadProbe = services.GetService<IBackgroundLoadProbe>();
     }
 
     /// <inheritdoc />
@@ -114,6 +117,10 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
                 var hasMore = false;
                 var burstStart = DateTimeOffset.UtcNow;
                 var batchesThisBurst = 0;
+                // 动态降速（WP-D）：DB 池利用率高时收紧 burst 预算（探针可选；null = 静态）。
+                var loadFactor = _loadProbe?.GetDbPoolUtilization() is { } utilization
+                    ? BackgroundDrainBudget.ComputeScaleFactor(utilization)
+                    : (double?)null;
                 try
                 {
                     // 满批续扫受 burst 预算约束：批次数 / 时长任一超限即让出，
@@ -124,7 +131,7 @@ public sealed class TerminalRunSettlementWorker : BackgroundService
                         batchesThisBurst++;
                     }
                     while (hasMore
-                           && DrainBudget.ShouldContinueBurst(batchesThisBurst, DateTimeOffset.UtcNow - burstStart)
+                           && DrainBudget.ShouldContinueBurst(batchesThisBurst, DateTimeOffset.UtcNow - burstStart, loadFactor)
                            && !stoppingToken.IsCancellationRequested);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

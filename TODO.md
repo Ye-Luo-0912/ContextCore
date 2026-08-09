@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-09。
-> **Current HEAD：`73cca7be`**（R31 Production Semantics + Settlement/Evidence 加固完成并推送；本轮 R31 后续工作包见「当前阶段」）。
-> **Current Phase：R31 Agent Runtime / Quota / Evidence 生产语义收敛（进行中）** —— R30.1 与 P1 完善项全部完成；R31 已交付：租户复合键（Tool Journal/Result/Lease/Quota）、Settlement exactly-once + 冻结、Attempt 状态分离（RetryPending）、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot 完整性报告、AuthorizationEpoch、Trace 批量写入、后台负载治理，详见「当前阶段」。
+> **Current HEAD：`2bec0ec4`**（R31 生产语义收敛 + R32 Evidence 三层 / Adaptive Retrieval 原生消费完成并推送；R32 剩余项见「下一阶段（R33）」）。
+> **Current Phase：R31/R32 Agent Runtime / Quota / Evidence 生产语义收敛（R32 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31 已交付：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32 已交付：Evidence 三层架构（Diagnostic/Decision Evidence/Learning Artifact）、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -25,11 +25,17 @@
 9. **Tool AuthorizationEpoch（P1-十七）**：撤权 epoch++ 后旧快照立即失效（轻量整数比较）；生产模式 Legacy Run 治理（基础无副作用 Tool 兼容放行，File/Process/Network 类要求重新授权）。
 10. **后台负载治理（P1-十八）**：BackgroundDrainBudget 统一 burst 约束（批次数/时长上限 + yield），接入 Settlement / Relation / Compaction 三个续扫型 Worker。
 
-### 下一阶段（R32，按优先级）
+### 已完成（HEAD `2bec0ec4`，R32 工作包收口）
 
-- **WP-B（Evidence 三层架构，P1-十五）**：Diagnostic Plane（IDiagnosticTraceSink，可采样/可 Drop/Async）→ Decision Evidence Plane（IDecisionEvidenceStore，Durable/Point Lookup/Immutable/Versioned）→ Learning Artifact Plane（ILearningArtifactStore，DatasetSnapshot/Lineage/Completeness/Replay Manifest）；Decision Commit = Decision Record + Evidence Manifest + Learning Materialization Intent（经 Durable Outbox 连成可靠链）。Trace Queue 之后可放心做性能优化（它真的只是 Trace）。
-- **WP-C（Adaptive Retrieval 原生消费，P1-十六）**：AgentRetrievalExecutionPlan（Queries[Text/Weight/Purpose/ProviderHints]、TopK、TokenBudget、ChannelBudgets、PolicyVersion、PlanSignature）由 Decision Runtime 原生消费；反馈改为延迟归因（Retrieval→Model→Tool→Final Result→Evaluation→Attribution→Feedback），不再用 Effective=result!=null/Confidence=1.0 学习"有没有召回东西"。
-- **WP-D（动态降速）**：BackgroundDrainBudget 基于 DB Pool Utilization / Online P95/P99 / Queue Lag / Worker Age 动态调速。
+11. **Evidence 三层架构（WP-B，P1-十五）**：Diagnostic Plane（IRetrievalTraceStore，可采样/可 Drop/Async + 批量写入）→ Decision Evidence Plane（IDecisionTraceStore 稳定主键 GetAsync：Durable/Point Lookup）→ Learning Artifact Plane（ILearningArtifactStore + DatasetSnapshotArtifact：迁移 0019 v71→v72 `dataset_snapshots` 表，(workspace_id, snapshot_id) 点查 = 可重建入口）。
+12. **Adaptive Retrieval 原生消费（WP-C，P1-十六）**：AgentRetrievalPlan 增加 TopK/PlanSignature；Actor 原生消费（受控查询 QueryText / TopK / RequiredIds 注入 Decision Runtime）；反馈质量信号从选中候选真实分数派生；**延迟归因**——Run 终态时把最终结果质量（Completed 0.9 / Cancelled 0.5 / Failed 0.2）归因到本 Run 使用的检索计划签名（AutomatedEvaluation 来源，run:runId:signature 幂等）。
+13. **后台负载动态降速（WP-D）**：BackgroundDrainBudget 支持负载缩放因子（ShouldContinueBurst 按因子收紧批次数；ComputeScaleFactor：池利用率 0%→1.0 / 80%→0.36 / 100%→0.2 保底）；IBackgroundLoadProbe 契约（DB 池利用率信号，可选注入，无信号回退静态预算）；Settlement Worker 接入。注：Npgsql 10 未公开池统计 API，生产探针实现待 Npgsql 提供统计能力时接入（契约与缩放已就绪）。
+
+### 下一阶段（R33，按优先级）
+
+- **WP-E（Decision Commit Durable Outbox 显式链）**：Decision Commit = Decision Record + Evidence Manifest + Learning Materialization Intent 经 Durable Outbox 连成可靠链（当前 Decision Record 落库与 Learning 物化各自独立，靠稳定主键关联）。
+- **WP-F（延迟归因全链）**：归因从"Run 终态三档"演进为完整链（Retrieval→Model→Tool→Final Result→User/Automatic Evaluation→Attribution），支持人工/自动评测信号合并。
+- **WP-G（动态降速生产探针）**：接入真实 DB 池统计（Npgsql 提供 API 后）+ Queue Lag / Worker Age 维度。
 
 ### Open P0（待办）
 

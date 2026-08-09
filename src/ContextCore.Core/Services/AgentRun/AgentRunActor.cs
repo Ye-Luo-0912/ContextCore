@@ -129,6 +129,9 @@ public sealed class AgentRunActor
     // 执行后记录检索结果反馈，闭环学习信号）。null = 未注册（无自适应层，行为不变）。
     private readonly IAdaptiveRetrievalPlanner? _adaptivePlanner;
 
+    /// <summary>本 Run 使用过的检索计划签名集合（延迟归因用；ExecuteAsync 开始清空）。</summary>
+    private readonly List<string> _usedRetrievalSignatures = new();
+
     /// <summary>
     /// 重构：Agent Run 执行期状态（不可变记录，所有阶段方法返回新状态）。
     /// 统一管理 Run 元数据 / 结构化上下文 / 模型响应 / checkpoint / 事件序列与哈希链。
@@ -302,6 +305,9 @@ public sealed class AgentRunActor
         _leaseToken = leaseToken;
         _fencingToken = fencingToken;
         _leaseExpiresAtProvider = leaseExpiresAtProvider;
+
+        // 每次执行开始清空检索计划签名集合（Run 隔离；延迟归因只归因本 Run 使用的签名）。
+        _usedRetrievalSignatures.Clear();
 
         // 运行时能力补齐：检测 resume 场景
         // 全新启动状态集由 AgentRunStateSemantics 权威定义（RecoveryPolicy = NewStart：
@@ -483,7 +489,84 @@ public sealed class AgentRunActor
             // 任意异常 → 转 Failed
             // 同上：阶段方法抛异常时 state 赋值未完成，需从 _pendingTurnEvents 重新同步。
             state = ResyncStateFromPendingEvents(state);
-            await FailAsync(state, ex.ToString(), cancellationToken).ConfigureAwait(false);
+            state = await FailAsync(state, ex.ToString(), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // 延迟归因（P1-十六续）：Run 到达终态时，把最终结果质量归因到本 Run
+            // 使用过的全部检索计划签名——反馈不再只有"检索是否产出候选"的过程信号，
+            // 而是"这些 Context 是否帮助 Agent 完成了任务"的结果信号
+            // （Retrieval → Model → Tool → Final Result → Attribution → Feedback）。
+            await RecordDeferredAttributionAsync(state, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// 延迟归因反馈：Run 终态时把最终结果质量归因到本 Run 使用过的检索计划签名。
+    /// 归因质量三档（AutomatedEvaluation 来源，高置信度）：
+    /// - Completed：0.9（最终答案收敛，检索帮助完成任务）；
+    /// - Cancelled：0.5（外部终止，中性）；
+    /// - 其余终态（Failed / DeadLettered 等）：0.2（任务未完成，检索未达成目标）。
+    /// 每条反馈以 (runId, signature) 幂等键去重（Run 重试/重放不重复归因）。
+    /// </summary>
+    private async Task RecordDeferredAttributionAsync(
+        AgentRunExecutionState state,
+        CancellationToken cancellationToken)
+    {
+        if (_adaptivePlanner is null || _usedRetrievalSignatures.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var finalState = state.Run.State;
+            // 仅终态归因：RetryPending / Awaiting* 非终态还有后续 Attempt / 对账，不归因。
+            if (!AgentRunStateMachine.IsTerminalState(finalState))
+            {
+                return;
+            }
+
+            var quality = finalState switch
+            {
+                AgentRunState.Completed => 0.9,
+                AgentRunState.Cancelled => 0.5,
+                _ => 0.2
+            };
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var signature in _usedRetrievalSignatures.Distinct(StringComparer.Ordinal))
+            {
+                await _adaptivePlanner.RecordOutcomeAsync(new RetrievalPlanFeedback
+                {
+                    PlanSignature = signature,
+                    WorkspaceId = state.Run.WorkspaceId,
+                    CollectionId = state.Run.WorkspaceId,
+                    Purpose = AdaptiveAgentContextPurpose,
+                    QueryText = string.Empty,
+                    HitsReturned = 0,
+                    Effective = true,
+                    RecordedAtUtc = now,
+                    Source = RetrievalFeedbackSource.AutomatedEvaluation,
+                    Confidence = 0.9,
+                    OutcomeQuality = quality,
+                    // 幂等：Run 重试 / 恢复重放不产生重复归因反馈。
+                    IdempotencyKey = $"run:{state.Run.RunId}:{signature}"
+                }, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                "[AgentRunActor] Deferred retrieval attribution failed for run {0}: {1}", state.Run.RunId, ex.Message);
+        }
+        finally
+        {
+            _usedRetrievalSignatures.Clear();
         }
     }
 
@@ -1929,6 +2012,8 @@ public sealed class AgentRunActor
                     : run.Task;
                 plannedTopK = plan.TopK;
                 plannedRequiredIds = plan.RequiredIds;
+                // 记录本 Run 使用的检索计划签名（延迟归因：Run 终态时把最终结果质量归因到该签名）。
+                _usedRetrievalSignatures.Add(AdaptiveRetrievalPlanSignature.Compute(plannerInput));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

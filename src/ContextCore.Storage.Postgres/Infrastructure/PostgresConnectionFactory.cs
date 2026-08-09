@@ -21,6 +21,9 @@ public sealed class PostgresConnectionFactory : IPostgresConnectionFactory
 
     public PostgresOptions Options { get; }
 
+    /// <summary>共享 NpgsqlDataSource（供负载探针读取池统计等诊断用途）。</summary>
+    public NpgsqlDataSource DataSource => _dataSource;
+
     public ValueTask<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
         return _dataSource.OpenConnectionAsync(cancellationToken);

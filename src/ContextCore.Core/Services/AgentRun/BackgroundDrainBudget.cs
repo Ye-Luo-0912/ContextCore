@@ -51,9 +51,28 @@ public sealed class BackgroundDrainBudget
     /// </summary>
     /// <param name="batchesThisBurst">本次 burst 已连续处理的批次数。</param>
     /// <param name="burstElapsed">本次 burst 已耗时。</param>
-    public bool ShouldContinueBurst(int batchesThisBurst, TimeSpan burstElapsed)
-        => batchesThisBurst < MaxBatchesPerBurst
-           && burstElapsed < MaxBurstDuration;
+    /// <param name="loadFactor">
+    /// 动态负载缩放因子（0.2-1.0；null/越界 = 1.0 静态预算）。
+    /// 由 <see cref="IBackgroundLoadProbe"/> 观测（DB 池利用率等）——
+    /// 高负载时按比例收紧批次数上限（动态降速，WP-D）。
+    /// </param>
+    public bool ShouldContinueBurst(int batchesThisBurst, TimeSpan burstElapsed, double? loadFactor = null)
+    {
+        var factor = loadFactor is > 0 and <= 1 ? loadFactor.Value : 1.0;
+        var effectiveBatches = (int)Math.Max(1, Math.Ceiling(MaxBatchesPerBurst * factor));
+        return batchesThisBurst < effectiveBatches
+               && burstElapsed < MaxBurstDuration;
+    }
+
+    /// <summary>
+    /// 由 DB 连接池利用率派生负载缩放因子（0.2-1.0）：
+    /// 池利用率 0% → 1.0（静态预算）；80% → 0.36（明显收紧）；100% → 0.2（保底）。
+    /// </summary>
+    public static double ComputeScaleFactor(double dbPoolUtilization)
+    {
+        var clamped = Math.Clamp(dbPoolUtilization, 0.0, 1.0);
+        return Math.Max(0.2, 1.0 - clamped * 0.8);
+    }
 
     /// <summary>burst 边界让出（yield）：短暂让出调度，避免持续独占 DB 连接。</summary>
     public async Task YieldAsync(CancellationToken cancellationToken = default)
@@ -64,3 +83,4 @@ public sealed class BackgroundDrainBudget
         }
     }
 }
+
