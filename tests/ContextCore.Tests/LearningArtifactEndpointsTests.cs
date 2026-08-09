@@ -174,6 +174,24 @@ public sealed class LearningArtifactEndpointsTests
         Assert.AreEqual(StatusCodes.Status404NotFound, status);
     }
 
+    [TestMethod]
+    public async Task ExportAndStore_EmptyDataset_QualityGateBlocksPersistence()
+    {
+        // WP-U：空数据集 → 质量闸门 Blocked → 不落库 + 422。
+        var ledgerStore = new InMemoryUtilityLedgerStore();
+        var exporter = new TrainingDataExporter(ledgerStore);
+        var artifactStore = new InMemoryLearningArtifactStore();
+        using var tempDir = new TempDirectory();
+
+        var result = await LearningArtifactEndpoints.ExportAndStoreAsync(
+            exporter, artifactStore, Workspace(),
+            new LearningArtifactExportRequest { OutputDirectory = tempDir.Path, ModelArtifactId = "model-api" });
+        var (status, _) = await ExecuteAsync<ContextCoreErrorResponse>(result);
+
+        Assert.AreEqual(StatusCodes.Status422UnprocessableEntity, status, "空数据集应被质量闸门阻断。");
+        Assert.AreEqual(0, (await artifactStore.ListRecentAsync(Ws)).Count, "Blocked 数据集不落库。");
+    }
+
     // ── 辅助 ─────────────────────────────────────────────────────────────
 
     private static DefaultHttpContext Http()

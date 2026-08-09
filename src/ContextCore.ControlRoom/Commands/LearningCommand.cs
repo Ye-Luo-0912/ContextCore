@@ -146,6 +146,21 @@ public static class LearningCommand
 
         if (export.DatasetSnapshot is { } snapshot)
         {
+            // 数据质量闸门（WP-U）：Blocked（空数据集等）→ 不落库并提示。
+            var gate = new ContextCore.Core.Services.MemoryEvolution.LearningDataQualityGate();
+            var quality = gate.Evaluate(snapshot, export.PositiveCount, export.NegativeCount);
+            if (quality.Verdict == ContextCore.Core.Services.MemoryEvolution.LearningDataQualityVerdict.Blocked)
+            {
+                Console.Error.WriteLine($"数据集质量阻断，未落库：{string.Join("；", quality.Issues)}");
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            if (quality.Verdict == ContextCore.Core.Services.MemoryEvolution.LearningDataQualityVerdict.Warning)
+            {
+                Console.WriteLine($"数据质量警告（仍落库）：{string.Join("；", quality.Issues)}");
+            }
+
             await store.SaveAsync(new DatasetSnapshotArtifact
             {
                 Snapshot = snapshot,

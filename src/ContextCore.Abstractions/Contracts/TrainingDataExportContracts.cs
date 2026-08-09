@@ -200,6 +200,12 @@ public sealed record TrainingDataExportResult
     /// <summary>导出的样本条目数。</summary>
     public required int EntryCount { get; init; }
 
+    /// <summary>正样本（选中）数——数据质量闸门（标签平衡）判定输入。</summary>
+    public int PositiveCount { get; init; }
+
+    /// <summary>负样本（丢弃）数——数据质量闸门（标签平衡）判定输入。</summary>
+    public int NegativeCount { get; init; }
+
     /// <summary>导出请求的 workspace 作用域。</summary>
     public required string WorkspaceId { get; init; }
 

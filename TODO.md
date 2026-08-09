@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-10。
-> **Current HEAD：`be121e77`**（R31-R41 生产语义收敛 + Learning 并发/质量闸门完成并推送；R42 剩余项见「下一阶段（R42）」）。
-> **Current Phase：R31-R41 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R41 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI；R40：Learning/Diagnostics API 端到端 HTTP 验收 + 闭环规模压测；R41：Postgres Learning 并发吞吐验收 + 数据质量闸门，详见「当前阶段」。
+> **Current HEAD：`a18cd5a0`**（R31-R42 生产语义收敛 + Learning 质量闸门/全链路压测完成并推送；R43 剩余项见「下一阶段（R43）」）。
+> **Current Phase：R31-R42 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R42 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI；R40：Learning/Diagnostics API 端到端 HTTP 验收 + 闭环规模压测；R41：Postgres Learning 并发吞吐验收 + 数据质量闸门；R42：质量闸门接线（导出管线阻断语义）+ Postgres 全链路压测，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -75,10 +75,15 @@
 29. **Postgres Learning 并发吞吐验收（WP-S）**：PostgresLearningConcurrencyTests——DecisionCommitOutbox 300 条高积压 5 worker 并发消费（SKIP LOCKED 互斥：无重复领取、无丢失、全量 Ack 无残留）；LearningArtifactStore 50 快照并发保存 + 并发重建一致（内容哈希逐条验证）。
 30. **Learning 数据质量闸门（WP-T）**：LearningDataQualityGate（Core）——快照导出/使用前质量校验：空数据集 Blocked、样本缺失率 >10% Warning、标签不平衡（正/负占比 <5%）Warning、输入不可确定不伪造惩罚；LearningDataQualityReport 判定 + 问题明细（审计可解释）；5 项测试。
 
-### 下一阶段（R42，按优先级）
+### 已完成（HEAD `a18cd5a0`，R42 工作包收口）
 
-- **WP-U（数据质量闸门接线）**：LearningDataQualityGate 接入导出管线（export 端点 / ControlRoom CLI 导出前校验，Blocked 阻断落库）。
-- **WP-V（Learning 闭环 Postgres 全链路压测）**：决策→物化→快照→工件→重建在 Postgres 下的端到端吞吐与延迟基准。
+31. **数据质量闸门接线（WP-U）**：TrainingDataExportResult 增加 PositiveCount/NegativeCount（标签平衡判定输入）；LearningArtifactEndpoints.ExportAndStoreAsync 导出后跑质量闸门——Blocked（空数据集等）→ 不落库 + 422；ControlRoom CLI learning artifact export 同样闸门（Blocked 阻断落库 + 退出码 1，Warning 提示仍落库）；Blocked 端点测试。
+32. **Learning 闭环 Postgres 全链路压测（WP-V）**：PostgresLearningPipelineLoadTests——500 决策全链路（入队 → 记录落库 → 物化 1000 ledger → 快照导出 → 工件 → 重建内容哈希一致），各阶段耗时报告输出，全量正确性验证。
+
+### 下一阶段（R43，按优先级）
+
+- **WP-W（Learning 管线可观测完善）**：快照导出/质量闸门/工件重建的指标与审计事件（导出耗时/闸门判定分布/重建命中率）。
+- **WP-X（自适应检索 Active 生产开关治理）**：Active 模式的生产启用流程（Shadow 观察期 → 审核 → Active）+ 一键回退。
 
 ### Open P0（待办）
 

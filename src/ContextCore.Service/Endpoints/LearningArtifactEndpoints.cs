@@ -151,9 +151,22 @@ internal static class LearningArtifactEndpoints
             Take = request.Take
         });
 
-        // 快照工件落库（Learning Artifact Plane 持久化；SnapshotId 确定性 → 可重建）。
+        // 数据质量闸门（WP-U）：Blocked（空数据集等）→ 不落库并返回 422（数据不可用）。
         if (export.DatasetSnapshot is { } snapshot)
         {
+            var gate = new Core.Services.MemoryEvolution.LearningDataQualityGate();
+            var quality = gate.Evaluate(snapshot, export.PositiveCount, export.NegativeCount);
+            if (quality.Verdict == Core.Services.MemoryEvolution.LearningDataQualityVerdict.Blocked)
+            {
+                return Results.Json(
+                    new ContextCoreErrorResponse
+                    {
+                        Message = $"数据集质量阻断：{string.Join("；", quality.Issues)}"
+                    },
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+
+            // 快照工件落库（Learning Artifact Plane 持久化；SnapshotId 确定性 → 可重建）。
             await artifactStore.SaveAsync(new DatasetSnapshotArtifact
             {
                 Snapshot = snapshot,

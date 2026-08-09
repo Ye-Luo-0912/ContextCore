@@ -179,6 +179,8 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
             DataFilePath = dataFilePath,
             ManifestFilePath = manifestFilePath,
             EntryCount = records.Count,
+            PositiveCount = records.Count(r => r.IsSelected),
+            NegativeCount = records.Count(r => !r.IsSelected),
             WorkspaceId = request.WorkspaceId,
             CollectionId = request.CollectionId,
             ModelArtifactId = request.ModelArtifactId,
