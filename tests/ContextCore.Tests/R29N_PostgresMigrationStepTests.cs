@@ -71,6 +71,59 @@ public sealed class R29N_PostgresMigrationStepTests
             step.Stages.ToArray());
     }
 
+    // ── WP-AA：迁移链完整版本矩阵（防历史迁移回归）─────────────────────────
+
+    /// <summary>
+    /// 迁移链无重叠：后一步 From 必须 ≥ 前一步 To（禁止范围重叠/倒序；历史早期存在
+    /// 合法跳段——如 v49→v52，早期版本以累计 DDL 覆盖，故允许前一步 To &lt; 后一步 From）。
+    /// </summary>
+    [TestMethod]
+    public void MigrationMatrix_VersionChain_NoOverlapNoRegression()
+    {
+        var steps = PostgresMigrationStepRegistry.Steps;
+
+        Assert.IsTrue(steps.Count > 0);
+        for (var i = 1; i < steps.Count; i++)
+        {
+            Assert.IsTrue(
+                string.CompareOrdinal(steps[i].FromSchemaVersion, steps[i - 1].ToSchemaVersion) >= 0,
+                $"步骤 {steps[i].MigrationId} 的 From（{steps[i].FromSchemaVersion}）不得小于前一步 " +
+                $"{steps[i - 1].MigrationId} 的 To（{steps[i - 1].ToSchemaVersion}）——禁止范围重叠/倒序。");
+        }
+    }
+
+    /// <summary>
+    /// 迁移链完整性：MigrationId 全局唯一（防重复注册）、首步 From 与末步 To 覆盖完整范围
+    /// （首步 From 应为链条起点，末步 To 应等于 Runner.SchemaVersion）。
+    /// </summary>
+    [TestMethod]
+    public void MigrationMatrix_IdsUnique_AndChainCoversFullRange()
+    {
+        var steps = PostgresMigrationStepRegistry.Steps;
+
+        var ids = steps.Select(s => s.MigrationId).ToList();
+        Assert.AreEqual(ids.Count, ids.Distinct(StringComparer.Ordinal).Count(), "MigrationId 不得重复。");
+
+        // 首步起点：链条第一个迁移步骤（v48 是版本化步骤的最早起点——0002）。
+        Assert.AreEqual("cc-schema-v48", steps[0].FromSchemaVersion,
+            "版本化步骤链条应从 v48 开始（基线 v1 为累计 DDL，不进入版本链）。");
+        Assert.AreEqual(PostgresMigrationRunner.SchemaVersion, steps[^1].ToSchemaVersion,
+            "末步 To 必须等于 Runner.SchemaVersion（与漂移测试一致）。");
+    }
+
+    /// <summary>
+    /// 迁移链步数快照：当前注册表应为 20 步（v48→v49 至 v72→v73，MigrationId 0002~0020）。
+    /// 新增迁移时更新本断言——防止意外删除/合并历史步骤（审计链完整性）。
+    /// </summary>
+    [TestMethod]
+    public void MigrationMatrix_StepCountMatchesExpectedChain()
+    {
+        var steps = PostgresMigrationStepRegistry.Steps;
+        Assert.AreEqual(20, steps.Count,
+            $"迁移链步数应等于 20（0002~0020 共 19 个版本化步骤）。" +
+            $"实际 {steps.Count}——新增/删除步骤时更新本断言。");
+    }
+
     [TestMethod]
     public void MigrationMetrics_RecordWithoutThrowing()
     {
