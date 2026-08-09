@@ -211,7 +211,8 @@ app
 	.MapProductionRuntimeEndpoints()
 	.MapAgentExecutionEndpoints()
 	.MapCanaryEmergencyEndpoints()
-	.MapAdaptiveRetrievalEndpoints();
+	.MapAdaptiveRetrievalEndpoints()
+	.MapLearningArtifactEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", utc = DateTimeOffset.UtcNow }))
 	.WithTags("Health")

@@ -111,6 +111,82 @@ public sealed class PostgresIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("Postgres")]
+    public async Task Migration_ConcurrentRunners_MutexSerializes_OnlyOneApplies()
+    {
+        // WP-L：并发迁移互斥——两个 runner 同时 MigrateAsync（HA 多节点启动），
+        // pg_advisory_lock 保证串行：都成功返回，schema 版本一致、步骤记录不重复。
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, _, _) = CreateInfrastructure("mig_conc_");
+        try
+        {
+            var runnerA = new PostgresMigrationRunner(factory);
+            var runnerB = new PostgresMigrationRunner(factory);
+
+            var tasks = new[] { runnerA.MigrateAsync(), runnerB.MigrateAsync() };
+            await Task.WhenAll(tasks);
+
+            var version = await runnerA.GetAppliedVersionAsync();
+            Assert.AreEqual("cc-schema-v73", version, "并发迁移后 schema 版本一致（最新）。");
+
+            // 步骤应用记录不重复（互斥锁保证同一步骤只应用一次）。
+            await using var conn = await factory.OpenConnectionAsync();
+            await using var countCmd = conn.CreateCommand();
+            countCmd.CommandText = "SELECT COUNT(1) FROM mig_conc_context_schema_migrations;";
+            var count = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+            Assert.IsTrue(count > 0, "步骤应用记录存在。");
+            Assert.IsTrue(count <= 30, "并发下步骤记录不应翻倍（同一步骤只应用一次）。");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
+    public async Task Migration_SchemaVersionRecorded_MissingTableRebuilt()
+    {
+        // WP-L：部分表缺失恢复——schema_versions 已记录当前版本但某表被删，
+        // 迁移应重建缺失表（幂等 CREATE TABLE IF NOT EXISTS 修复路径）。
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。"); return; }
+
+        var (factory, migrationRunner, _) = CreateInfrastructure("mig_rebuild_");
+        try
+        {
+            await migrationRunner.MigrateAsync();
+            var version = await migrationRunner.GetAppliedVersionAsync();
+            Assert.AreEqual("cc-schema-v73", version);
+
+            // 删除一张表（模拟人为/损坏导致的缺失）。
+            await using (var conn = await factory.OpenConnectionAsync())
+            {
+                await using var dropCmd = conn.CreateCommand();
+                dropCmd.CommandText = "DROP TABLE mig_rebuild_dataset_snapshots;";
+                await dropCmd.ExecuteNonQueryAsync();
+            }
+
+            // 再次迁移：缺失表被重建（基线 DDL 幂等修复）。
+            await migrationRunner.MigrateAsync();
+
+            await using (var conn = await factory.OpenConnectionAsync())
+            {
+                await using var checkCmd = conn.CreateCommand();
+                checkCmd.CommandText = "SELECT to_regclass('mig_rebuild_dataset_snapshots')::text;";
+                var table = await checkCmd.ExecuteScalarAsync() as string;
+                Assert.IsNotNull(table, "缺失表应被重建。");
+            }
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
     public async Task ContextStore_SaveAndGet_ShouldRoundtrip()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }

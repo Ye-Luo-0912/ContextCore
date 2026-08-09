@@ -291,7 +291,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // Workspace 配额持久化（配额周期状态 / 持久化预留 / 终态结算 outbox）
         "workspace_quota_ledger",
         "workspace_quota_reservations",
-        "terminal_run_settlement_outbox"
+        "terminal_run_settlement_outbox",
+        // Learning Artifact Plane（数据集快照工件）与 Decision Commit Outbox（决策提交可靠链）
+        "dataset_snapshots",
+        "decision_commits"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -2877,11 +2880,14 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decisio
     /// <summary>执行建表迁移。该方法幂等，可在服务启动或首次访问存储时调用。</summary>
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
-        // 冻结：版本已匹配时跳过完整 DDL 批次，避免重复执行 150+ CREATE TABLE IF NOT EXISTS。
+        // 冻结：版本已匹配且无缺失表时跳过完整 DDL 批次，避免重复执行 150+ CREATE TABLE IF NOT EXISTS。
         // Docker Desktop / WSL2 上即使幂等重跑也需要 3+ 分钟，会触发 socket read timeout。
         // 首次迁移成功后 schema_versions 表会记录 SchemaVersion，后续调用直接 short-circuit 返回。
+        // WP-L 加固：仅"版本匹配"不足以短路——表被删除/损坏后版本仍匹配；
+        // 必须同时检查缺失表（缺失 → 走基线 DDL 幂等重建）。
         var appliedVersion = await GetAppliedVersionAsync(cancellationToken).ConfigureAwait(false);
-        if (appliedVersion == SchemaVersion)
+        var missingTables = await GetMissingRequiredTablesAsync(cancellationToken).ConfigureAwait(false);
+        if (appliedVersion == SchemaVersion && missingTables.Count == 0)
         {
             return;
         }
@@ -2895,7 +2901,8 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decisio
             {
                 // 锁内复查：本实例等待期间另一实例可能已完成迁移。
                 var currentVersion = await GetAppliedVersionAsync(cancellationToken).ConfigureAwait(false);
-                if (currentVersion == SchemaVersion)
+                var lockedMissingTables = await GetMissingRequiredTablesAsync(cancellationToken).ConfigureAwait(false);
+                if (currentVersion == SchemaVersion && lockedMissingTables.Count == 0)
                 {
                     return;
                 }
