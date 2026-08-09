@@ -109,22 +109,24 @@ RETURNING
 """;
 
             var results = new List<DecisionCommitOutboxRecord>();
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
             {
-                results.Add(new DecisionCommitOutboxRecord
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    OutboxId = reader.GetInt64(0),
-                    WorkspaceId = reader.GetString(1),
-                    CollectionId = reader.GetString(2),
-                    DecisionId = reader.GetString(3),
-                    CommitType = (DecisionCommitType)reader.GetInt16(4),
-                    EvidenceRef = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    Record = Serializer.Deserialize<ContextDecisionRecord>(reader.GetString(6))!,
-                    State = reader.GetInt16(7),
-                    LeaseToken = reader.GetString(8),
-                    CreatedAt = DateTimeOffset.UtcNow
-                });
+                    results.Add(new DecisionCommitOutboxRecord
+                    {
+                        OutboxId = reader.GetInt64(0),
+                        WorkspaceId = reader.GetString(1),
+                        CollectionId = reader.GetString(2),
+                        DecisionId = reader.GetString(3),
+                        CommitType = (DecisionCommitType)reader.GetInt16(4),
+                        EvidenceRef = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        Record = Serializer.Deserialize<ContextDecisionRecord>(reader.GetString(6))!,
+                        State = reader.GetInt16(7),
+                        LeaseToken = reader.GetString(8),
+                        CreatedAt = DateTimeOffset.UtcNow
+                    });
+                }
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

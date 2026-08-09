@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-09。
-> **Current HEAD：`d4dc6103`**（R31-R35 生产语义收敛 + Learning 闭环全部完成并推送；R36 剩余项见「下一阶段（R36）」）。
-> **Current Phase：R31-R35 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R35 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端（决策→物化→快照→工件→校准）、动态降速探针契约收口（Npgsql 10 池统计限制如实记录），详见「当前阶段」。
+> **Current HEAD：`d1282150`**（R31-R36 生产语义收敛 + Learning/自适应生产验收全部完成并推送；R37 剩余项见「下一阶段（R37）」）。
+> **Current Phase：R31-R36 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R36 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -45,10 +45,15 @@
 17. **Learning 训练闭环端到端（WP-H）**：Decision → UtilityLedgerMaterializer 物化 → TrainingDataExporter 导出 DatasetSnapshot（Completeness/Lineage/ContentHash/版本追责）→ ILearningArtifactStore 工件落库 → 按 SnapshotId 重建（Replay 入口，内容哈希一致）→ CalibrationDataExporter 校准导出（正负样本比例）。闭环验收测试 2 项；Canary/Promotion 为既有组件（各自测试覆盖）。
 18. **动态降速生产探针（WP-G，契约收口）**：BackgroundDrainBudget 负载缩放 + IBackgroundLoadProbe 契约已就绪（Settlement Worker 接入）；**Npgsql 10 不公开连接池统计 API（Statistics 为 protected），生产探针实现待 Npgsql 提供统计能力时接入**（不引入不可验证的实现）；Queue Lag / Worker Age 维度随契约预留。
 
-### 下一阶段（R36，按优先级）
+### 已完成（HEAD `d1282150`，R36 工作包收口）
 
-- **WP-I（Learning 闭环生产持久化验收）**：Learning 管线各组件在 Postgres provider 下的端到端验收（DecisionCommit → worker 落库 → 物化 → DatasetSnapshot 工件持久化 → 重建），补齐 Postgres 集成测试矩阵。
-- **WP-J（自适应检索生产形态）**：AdaptiveRetrievalMode Active 的生产验收（Shadow → Active 切换、策略应用可观测、回退语义）。
+19. **Learning 闭环 Postgres 生产持久化验收（WP-I）**：PostgresLearningPipelineTests（Testcontainers）——DecisionCommitOutbox 租约 CAS 往返 + 幂等重放、LearningArtifactStore 快照持久化/点查重建/跨工作区隔离、全链路闭环（决策提交 → 记录落库 → Utility Ledger 物化 → DatasetSnapshot 工件 → 重建）。修复 Postgres outbox 领取 reader 未释放即 Commit 的缺陷。
+20. **自适应检索生产形态验收（WP-J）**：R36_AdaptiveRetrievalProductionTests——Shadow→Active 切换（Shadow 计算不应用/计划无签名/预算不变；Active 应用+签名+预算收缩，同反馈状态行为差异可观测）、Active 计划签名与策略查询一致（运维端点可复现）、Disabled fail-closed（不写反馈存储、计划透传）、反馈不足回退中性（Note 可解释）。
+
+### 下一阶段（R37，按优先级）
+
+- **WP-K（ControlRoom Learning 控制面）**：DatasetSnapshot 工件 / 决策提交 / 校准导出的控制面端点（点查、列表、重建入口）——把 Learning Artifact Plane 暴露为可操作界面。
+- **WP-L（Postgres 全链路故障注入）**：迁移链在故障场景（中断/并发迁移/部分表缺失）下的恢复验收矩阵。
 
 ### Open P0（待办）
 
