@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-10。
-> **Current HEAD：`a18cd5a0`**（R31-R42 生产语义收敛 + Learning 质量闸门/全链路压测完成并推送；R43 剩余项见「下一阶段（R43）」）。
-> **Current Phase：R31-R42 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R42 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI；R40：Learning/Diagnostics API 端到端 HTTP 验收 + 闭环规模压测；R41：Postgres Learning 并发吞吐验收 + 数据质量闸门；R42：质量闸门接线（导出管线阻断语义）+ Postgres 全链路压测，详见「当前阶段」。
+> **Current HEAD：`170b5498`**（R31-R43 生产语义收敛 + Learning 观测/模式治理完成并推送；R44 剩余项见「下一阶段（R44）」）。
+> **Current Phase：R31-R43 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R43 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI；R40：Learning/Diagnostics API 端到端 HTTP 验收 + 闭环规模压测；R41：Postgres Learning 并发吞吐验收 + 数据质量闸门；R42：质量闸门接线 + Postgres 全链路压测；R43：Learning 管线可观测指标 + 自适应 Active 生产开关治理，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -80,10 +80,15 @@
 31. **数据质量闸门接线（WP-U）**：TrainingDataExportResult 增加 PositiveCount/NegativeCount（标签平衡判定输入）；LearningArtifactEndpoints.ExportAndStoreAsync 导出后跑质量闸门——Blocked（空数据集等）→ 不落库 + 422；ControlRoom CLI learning artifact export 同样闸门（Blocked 阻断落库 + 退出码 1，Warning 提示仍落库）；Blocked 端点测试。
 32. **Learning 闭环 Postgres 全链路压测（WP-V）**：PostgresLearningPipelineLoadTests——500 决策全链路（入队 → 记录落库 → 物化 1000 ledger → 快照导出 → 工件 → 重建内容哈希一致），各阶段耗时报告输出，全量正确性验证。
 
-### 下一阶段（R43，按优先级）
+### 已完成（HEAD `170b5498`，R43 工作包收口）
 
-- **WP-W（Learning 管线可观测完善）**：快照导出/质量闸门/工件重建的指标与审计事件（导出耗时/闸门判定分布/重建命中率）。
-- **WP-X（自适应检索 Active 生产开关治理）**：Active 模式的生产启用流程（Shadow 观察期 → 审核 → Active）+ 一键回退。
+33. **Learning 管线可观测（WP-W）**：LearningPipelineMetrics（Meter "ContextCore.Core"，匹配 OTLP 通配）——快照导出耗时直方图、质量闸门判定分布计数（passed/warning/blocked）、工件重建命中/未命中计数；接入 exporter（导出耗时）、export 端点（闸门判定）、工件点查端点（重建命中）；无 MeterListener no-op。
+34. **自适应检索 Active 生产开关治理（WP-X）**：AdaptiveRetrievalModeController（单例）——运行时动态切换 Disabled/Shadow/Active + 切换审计（from/to/actor/reason/时间，保留最近 100 条）；planner 每轮读取当前模式（controller 优先，null 回退静态配置）；端点 GET/POST /api/retrieval/adaptive/mode（Shadow→Active 生产启用、一键回退 Disabled、400 无效模式）；4 项测试（切换生效 + 审计、回退 fail-closed 停止学习信号、无效模式 400、状态查询）。
+
+### 下一阶段（R44，按优先级）
+
+- **WP-Y（Service API 全端点 HTTP 验收补全）**：新增端点（adaptive mode / diagnostics / learning）的认证与契约矩阵端到端补全（Service.Tests）。
+- **WP-Z（Learning 闭环端到端黄金路径）**：决策→物化→快照→质量闸门→工件→重建→Canary→Promotion 的全链黄金路径单测（一条测试覆盖全部 R31-R43 交付）。
 
 ### Open P0（待办）
 

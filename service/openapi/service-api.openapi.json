@@ -9517,6 +9517,86 @@
         }
       }
     },
+    "/api/retrieval/adaptive/mode": {
+      "get": {
+        "tags": [
+          "AdaptiveRetrieval"
+        ],
+        "summary": "查询自适应检索当前运行模式（Disabled / Shadow / Active）+ 最近切换审计",
+        "operationId": "GetAdaptiveRetrievalMode",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptiveModeStatusResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AdaptiveRetrieval"
+        ],
+        "summary": "切换自适应检索运行模式（Shadow→Active 生产启用；一键回退 = Disabled；审计记录）",
+        "operationId": "SetAdaptiveRetrievalMode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdaptiveModeSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptiveModeTransition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/retrieval/adaptive/policy": {
       "get": {
         "tags": [
@@ -10193,6 +10273,70 @@
           }
         }
       },
+      "AdaptiveModeSetRequest": {
+        "required": [
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AdaptiveRetrievalMode"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AdaptiveModeStatusResponse": {
+        "required": [
+          "currentMode"
+        ],
+        "type": "object",
+        "properties": {
+          "currentMode": {
+            "$ref": "#/components/schemas/AdaptiveRetrievalMode"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdaptiveModeTransition"
+            }
+          }
+        }
+      },
+      "AdaptiveModeTransition": {
+        "required": [
+          "from",
+          "to",
+          "actor",
+          "transitionedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/AdaptiveRetrievalMode"
+          },
+          "to": {
+            "$ref": "#/components/schemas/AdaptiveRetrievalMode"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "transitionedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "AdaptiveRetrievalFeedbackListResponse": {
         "type": "object",
         "properties": {
@@ -10225,6 +10369,9 @@
             "type": "boolean"
           }
         }
+      },
+      "AdaptiveRetrievalMode": {
+        "type": "integer"
       },
       "AdaptiveRetrievalPolicy": {
         "required": [

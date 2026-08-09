@@ -42,6 +42,17 @@ public sealed class ObservabilityContractTests
             "Core 遥测 Meter 应存在。");
     }
 
+    [TestMethod]
+    public void LearningPipelineMetrics_RecordsWithoutThrowing()
+    {
+        // WP-W：无 MeterListener 时记录为 no-op（不抛异常）；指标名符合 OTLP 前缀契约。
+        ContextCore.Core.Services.MemoryEvolution.LearningPipelineMetrics.RecordExportDuration(12.5);
+        ContextCore.Core.Services.MemoryEvolution.LearningPipelineMetrics.RecordQualityGateVerdict(
+            ContextCore.Core.Services.MemoryEvolution.LearningDataQualityVerdict.Warning);
+        ContextCore.Core.Services.MemoryEvolution.LearningPipelineMetrics.RecordArtifactRebuild(hit: true);
+        ContextCore.Core.Services.MemoryEvolution.LearningPipelineMetrics.RecordArtifactRebuild(hit: false);
+    }
+
     private static List<string> EnumerateMeterNames(params Assembly[] assemblies)
     {
         var names = new List<string>();

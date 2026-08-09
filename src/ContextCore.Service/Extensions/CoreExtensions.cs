@@ -904,6 +904,18 @@ internal static class CoreExtensions
 		// 加固：默认 Disabled（fail-closed，自适应不生效），运维经 "AdaptiveRetrieval"
 		// 配置节显式开启 Shadow / Active；签名含租户维度（workspace/collection/purpose/
 		// policy/profile/taskClass），反馈带幂等键与可信度字段，杜绝跨 Workspace 污染与单源投毒。
+		// WP-X：模式控制器单例——生产运行时经 /api/retrieval/adaptive/mode 动态切换
+		// （Shadow→Active 生产启用 / 一键回退 Disabled），planner 每轮读取当前模式。
+		services.AddSingleton(sp =>
+		{
+			var options = sp.GetService<Microsoft.Extensions.Options.IOptions<AdaptiveRetrievalOptions>>()?.Value;
+			if (options is null)
+			{
+				options = new AdaptiveRetrievalOptions();
+				sp.GetService<IConfiguration>()?.GetSection("AdaptiveRetrieval").Bind(options);
+			}
+			return new AdaptiveRetrievalModeController(options.Mode);
+		});
 		services.AddSingleton<IAdaptiveRetrievalPlanner>(sp =>
 		{
 			var options = sp.GetService<Microsoft.Extensions.Options.IOptions<AdaptiveRetrievalOptions>>()?.Value;
@@ -915,7 +927,8 @@ internal static class CoreExtensions
 			return new AdaptiveRetrievalPlanner(
 				sp.GetRequiredService<IAgentRetrievalQueryPlanner>(),
 				sp.GetRequiredService<IRetrievalPlanFeedbackStore>(),
-				options);
+				options,
+				sp.GetService<AdaptiveRetrievalModeController>());
 		});
 
 		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。

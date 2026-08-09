@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Service.Security;
 using Microsoft.AspNetCore.Mvc;
@@ -43,6 +44,22 @@ internal static class AdaptiveRetrievalEndpoints
     public static IEndpointRouteBuilder MapAdaptiveRetrievalEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/retrieval/adaptive").WithTags(Tag);
+
+        // ── 查询当前模式 + 切换（WP-X：生产启用流程 + 一键回退）────────────
+        group.MapGet("/mode", GetModeAsync)
+            .WithName("GetAdaptiveRetrievalMode")
+            .RequireWorkspaceRole(WorkspaceRole.Operator)
+            .WithSummary("查询自适应检索当前运行模式（Disabled / Shadow / Active）+ 最近切换审计")
+            .Produces<AdaptiveModeStatusResponse>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status503ServiceUnavailable);
+
+        group.MapPost("/mode", SetModeAsync)
+            .WithName("SetAdaptiveRetrievalMode")
+            .RequireWorkspaceRole(WorkspaceRole.Operator)
+            .WithSummary("切换自适应检索运行模式（Shadow→Active 生产启用；一键回退 = Disabled；审计记录）")
+            .Produces<AdaptiveModeTransition>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
         // ── 查询当前自适应策略 ───────────────────────────────────────────
         group.MapGet("/policy", GetPolicyAsync)
@@ -338,6 +355,49 @@ internal static class AdaptiveRetrievalEndpoints
         }
         return workspaceContext?.WorkspaceId ?? string.Empty;
     }
+
+    /// <summary>查询当前运行模式与最近切换审计。</summary>
+    internal static async Task<IResult> GetModeAsync(
+        [FromServices] AdaptiveRetrievalModeController? modeController)
+    {
+        if (modeController is null)
+        {
+            return Results.Json(
+                new ContextCoreErrorResponse { Message = "自适应检索模式控制器未注册。" },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        return Results.Ok(new AdaptiveModeStatusResponse
+        {
+            CurrentMode = modeController.CurrentMode,
+            History = modeController.GetHistory()
+        });
+    }
+
+    /// <summary>切换运行模式（Shadow→Active 生产启用；一键回退 = Disabled；审计记录）。</summary>
+    internal static async Task<IResult> SetModeAsync(
+        [FromServices] AdaptiveRetrievalModeController? modeController,
+        [FromServices] IWorkspaceContextAccessor workspaceAccessor,
+        AdaptiveModeSetRequest request)
+    {
+        if (modeController is null)
+        {
+            return Results.Json(
+                new ContextCoreErrorResponse { Message = "自适应检索模式控制器未注册。" },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (request is null || !Enum.IsDefined(request.Mode))
+        {
+            return Results.Json(
+                new ContextCoreErrorResponse { Message = "目标模式无效（Disabled / Shadow / Active）。" },
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var actor = workspaceAccessor.Current?.ApiKeyId ?? workspaceAccessor.Current?.WorkspaceId ?? "unknown";
+        var transition = modeController.Transition(request.Mode, actor, request.Reason);
+        return Results.Ok(transition);
+    }
 }
 
 /// <summary>记录一条检索结果反馈的请求。</summary>
@@ -409,6 +469,26 @@ public sealed class AdaptiveRetrievalFeedbackListResponse
 
     /// <summary>条目数。</summary>
     public int Count { get; init; }
+}
+
+/// <summary>模式状态响应。</summary>
+public sealed class AdaptiveModeStatusResponse
+{
+    /// <summary>当前运行模式。</summary>
+    public required AdaptiveRetrievalMode CurrentMode { get; init; }
+
+    /// <summary>最近切换审计（时间正序）。</summary>
+    public IReadOnlyList<AdaptiveModeTransition> History { get; init; } = Array.Empty<AdaptiveModeTransition>();
+}
+
+/// <summary>模式切换请求体。</summary>
+public sealed class AdaptiveModeSetRequest
+{
+    /// <summary>目标模式（Disabled / Shadow / Active）。</summary>
+    public required AdaptiveRetrievalMode Mode { get; init; }
+
+    /// <summary>切换原因（审计可解释）。</summary>
+    public string? Reason { get; init; }
 }
 
 /// <summary>记录反馈响应。</summary>

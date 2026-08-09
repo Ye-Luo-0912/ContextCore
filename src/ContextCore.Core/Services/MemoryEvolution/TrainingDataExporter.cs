@@ -72,6 +72,8 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
 
         var entries = await _ledgerStore.QueryAsync(query, cancellationToken).ConfigureAwait(false);
 
+        var exportStopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         // 数据集快照：输入 evidence 集 = 该请求时间/作用域范围内的全部候选（不加
         // 决策/选中过滤），物化集 = 实际导出样本。完整率 = 物化 / 输入。
         // 输入集无法查询（Take 截断语义）时 InputEvidenceCount 为 null（不伪造完整性）。
@@ -171,6 +173,9 @@ public sealed class TrainingDataExporter : ITrainingDataExporter
 
         var manifestJson = JsonSerializer.Serialize(manifest, JsonOptions);
         await File.WriteAllTextAsync(manifestFilePath, manifestJson, cancellationToken).ConfigureAwait(false);
+
+        exportStopwatch.Stop();
+        LearningPipelineMetrics.RecordExportDuration(exportStopwatch.Elapsed.TotalMilliseconds);
 
         return new TrainingDataExportResult
         {

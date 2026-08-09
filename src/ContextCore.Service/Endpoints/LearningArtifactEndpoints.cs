@@ -90,6 +90,7 @@ internal static class LearningArtifactEndpoints
         }
 
         var artifact = await artifactStore.GetAsync(workspaceId, snapshotId);
+        Core.Services.MemoryEvolution.LearningPipelineMetrics.RecordArtifactRebuild(artifact is not null);
         return artifact is null
             ? Results.Json(new ContextCoreErrorResponse { Message = $"快照工件不存在：{snapshotId}。" }, statusCode: StatusCodes.Status404NotFound)
             : Results.Ok(artifact);
@@ -156,6 +157,7 @@ internal static class LearningArtifactEndpoints
         {
             var gate = new Core.Services.MemoryEvolution.LearningDataQualityGate();
             var quality = gate.Evaluate(snapshot, export.PositiveCount, export.NegativeCount);
+            Core.Services.MemoryEvolution.LearningPipelineMetrics.RecordQualityGateVerdict(quality.Verdict);
             if (quality.Verdict == Core.Services.MemoryEvolution.LearningDataQualityVerdict.Blocked)
             {
                 return Results.Json(

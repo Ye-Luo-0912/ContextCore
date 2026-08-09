@@ -61,6 +61,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
     private readonly IAgentRetrievalQueryPlanner _inner;
     private readonly IRetrievalPlanFeedbackStore _feedbackStore;
     private readonly AdaptiveRetrievalOptions _options;
+    private readonly AdaptiveRetrievalModeController? _modeController;
 
     // 签名 → 缓存策略（TTL 内复用，避免每轮规划都读取近期反馈重新聚合；
     // 记录新反馈时立即失效对应签名，下次读取即重算）。
@@ -73,12 +74,18 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
     public AdaptiveRetrievalPlanner(
         IAgentRetrievalQueryPlanner inner,
         IRetrievalPlanFeedbackStore feedbackStore,
-        AdaptiveRetrievalOptions? options = null)
+        AdaptiveRetrievalOptions? options = null,
+        AdaptiveRetrievalModeController? modeController = null)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _feedbackStore = feedbackStore ?? throw new ArgumentNullException(nameof(feedbackStore));
         _options = options ?? new AdaptiveRetrievalOptions();
+        // 模式控制器（可选）：生产运行时动态切换模式；null 时回退静态 options.Mode。
+        _modeController = modeController;
     }
+
+    /// <summary>当前生效模式：控制器优先（运行时可变），否则静态配置。</summary>
+    private AdaptiveRetrievalMode EffectiveMode => _modeController?.CurrentMode ?? _options.Mode;
 
     /// <inheritdoc />
     public async Task<AgentRetrievalPlan> PlanAsync(AgentRetrievalPlannerInput input, CancellationToken ct = default)
@@ -89,7 +96,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         var basePlan = _inner.Plan(input, ct);
 
         // Disabled（默认，fail-closed）：自适应层完全不读写反馈存储，透传底层计划。
-        if (_options.Mode == AdaptiveRetrievalMode.Disabled)
+        if (EffectiveMode == AdaptiveRetrievalMode.Disabled)
         {
             return basePlan;
         }
@@ -98,7 +105,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
         var policy = await GetCachedPolicyAsync(signature, NormalizeWorkspace(input.WorkspaceId), ct).ConfigureAwait(false);
 
         // Shadow：计算策略但不应用（观察学习信号，验证无副作用后再启用）。
-        if (_options.Mode == AdaptiveRetrievalMode.Shadow)
+        if (EffectiveMode == AdaptiveRetrievalMode.Shadow)
         {
             return basePlan;
         }
@@ -114,7 +121,7 @@ public sealed class AdaptiveRetrievalPlanner : IAdaptiveRetrievalPlanner
 
         // Disabled 模式不写反馈存储：自适应层完全旁路，不产生任何学习信号
         // （与 PlanAsync 的 fail-closed 透传语义一致，避免"不应用策略却仍收集反馈"的隐式副作用）。
-        if (_options.Mode == AdaptiveRetrievalMode.Disabled)
+        if (EffectiveMode == AdaptiveRetrievalMode.Disabled)
         {
             return;
         }
