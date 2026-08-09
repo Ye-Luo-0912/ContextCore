@@ -575,6 +575,7 @@ internal static class CoreExtensions
 			var componentHealthRegistry = sp.GetService<IComponentHealthRegistry>();
 			var materializationDispatcher = sp.GetService<LearningMaterializationDispatcher>();
 			var selectedCandidateHydrator = sp.GetService<ISelectedCandidateHydrator>();
+			var decisionCommitOutbox = sp.GetService<IDecisionCommitOutbox>();
 			return new DefaultContextDecisionRuntime(
 				engine, policyProvider, router, expertCatalog, candidateProviders,
 				canonicalMerger, earlyAdmissionGate, featurePipeline, safetyGate, lifecycleGate,
@@ -585,7 +586,8 @@ internal static class CoreExtensions
 				utilityLedgerMaterializer: utilityLedgerMaterializer,
 				componentHealthRegistry: componentHealthRegistry,
 				materializationDispatcher: materializationDispatcher,
-				selectedCandidateHydrator: selectedCandidateHydrator);
+				selectedCandidateHydrator: selectedCandidateHydrator,
+				decisionCommitOutbox: decisionCommitOutbox);
 		});
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();

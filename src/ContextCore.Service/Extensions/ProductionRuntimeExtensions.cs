@@ -264,6 +264,11 @@ internal static class ProductionRuntimeExtensions
         services.AddHostedService<TerminalRunSettlementWorker>();
         workerRegistry.Add<TerminalRunSettlementWorker>();
 
+        // DecisionCommitWorker：消费决策提交 outbox（决策记录落库，可靠链）。
+        // 无条件注册；非 Postgres provider（未注册 IDecisionCommitOutbox）时自退出 no-op。
+        services.AddHostedService<DecisionCommitWorker>();
+        workerRegistry.Add<DecisionCommitWorker>();
+
         // 单节点 Canary Progression HostedService 注册。
         // CanaryProgressionHostedService 通过 IOptionsMonitor<CanarySchedulerOptions> 读取 Enabled 标志，
         // ProductionHA 模式的 PostConfigure(Enabled=false) 能被正确感知。

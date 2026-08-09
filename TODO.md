@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-09。
-> **Current HEAD：`471b2cf7`**（R31/R32 生产语义收敛 + R33 Decision Commit Outbox 完成并推送；R34 剩余项见「下一阶段（R34）」）。
-> **Current Phase：R31-R33 Agent Runtime / Quota / Evidence 生产语义收敛（R33 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox 显式链，详见「当前阶段」。
+> **Current HEAD：`c5b0c18d`**（R31-R34 生产语义收敛完成并推送；R35 剩余项见「下一阶段（R35）」）。
+> **Current Phase：R31-R34 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R34 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线（产生点 → outbox → worker → 记录落库）+ 延迟归因三来源合并，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -35,10 +35,15 @@
 
 14. **Decision Commit Durable Outbox 显式链（WP-E）**：新增 IDecisionCommitOutbox + DecisionCommitOutboxRecord（Decision Record 完整载荷 + Evidence 引用 + Materialization Intent），迁移 0020 v72→v73 `decision_commits` 表；入队幂等（(workspace_id, decision_id)）、领取 FOR UPDATE SKIP LOCKED + 租约、失败重试达上限转死信、未 Ack 崩溃可重放——决策提交（Record + Evidence Manifest 引用 + 物化意图）经 Durable Outbox 连成可靠链。
 
-### 下一阶段（R34，按优先级）
+### 已完成（HEAD `c5b0c18d`，R34 工作包收口）
 
-- **WP-F（延迟归因全链）**：归因从"Run 终态三档"演进为完整链（Retrieval→Model→Tool→Final Result→User/Automatic Evaluation→Attribution），支持人工/自动评测信号合并；DecisionCommitOutbox 消费方接线（决策产生点 → Enqueue → worker 消费：record 落库 + 物化意图执行 + Ack）。
+15. **Decision Commit 可靠链接线（WP-F）**：决策产生点（DefaultContextDecisionRuntime）执行完成即入队决策提交（Decision Record 完整载荷 + 物化意图，Evidence 引用预留）；新增 DecisionCommitWorker（BackgroundService）消费 outbox → IDecisionTraceStore 落库（Decision Evidence Plane durable 归档）→ Ack/重试/死信——崩溃后未 Ack 条目重放，决策记录不丢、可重建、可追责。端到端测试：产生点入队 → worker 落库 → Ack；无 outbox provider 时 worker 自退出 no-op。
+16. **延迟归因全链合并**：反馈三来源统一加权——Runtime（即时过程信号：命中/预算超限/选中质量）+ AutomatedEvaluation（Run 终态归因：Completed 0.9 / Cancelled 0.5 / Failed 0.2）+ Operator（人工评测端点，既有）/ AdaptiveRetrievalEndpoints /feedback）→ ComputePolicy 按 Confidence × OutcomeQuality × 时间衰减 × 单主体封顶合并为自适应策略。
+
+### 下一阶段（R35，按优先级）
+
 - **WP-G（动态降速生产探针）**：接入真实 DB 池统计（Npgsql 提供 API 后）+ Queue Lag / Worker Age 维度。
+- **WP-H（Dataset 训练闭环验收）**：DatasetSnapshot 工件 → 训练/校准数据导出 → Replay → Canary → Promotion 的端到端闭环集成（各组件已就绪，收口为一条可验证的 Learning 管线）。
 
 ### Open P0（待办）
 

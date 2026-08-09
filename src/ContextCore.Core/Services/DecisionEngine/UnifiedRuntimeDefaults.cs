@@ -84,6 +84,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     private readonly IExecutionArtifactFactory _executionArtifactFactory;
     private readonly UtilityLedgerMaterializer? _utilityLedgerMaterializer;
     private readonly LearningMaterializationDispatcher? _materializationDispatcher;
+
+    /// <summary>Decision Commit Outbox（可选；决策执行后入队决策提交，可靠链）。</summary>
+    private readonly IDecisionCommitOutbox? _decisionCommitOutbox;
     private readonly IComponentHealthRegistry? _componentHealthRegistry;
     // Selected 候选正文批量 hydrator（可选）。未注入时保持旧行为（IncludeContent=true）。
     private readonly ISelectedCandidateHydrator? _selectedCandidateHydrator;
@@ -120,7 +123,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         UtilityLedgerMaterializer? utilityLedgerMaterializer = null,
         IComponentHealthRegistry? componentHealthRegistry = null,
         LearningMaterializationDispatcher? materializationDispatcher = null,
-        ISelectedCandidateHydrator? selectedCandidateHydrator = null)
+        ISelectedCandidateHydrator? selectedCandidateHydrator = null,
+        IDecisionCommitOutbox? decisionCommitOutbox = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _policyProvider = policyProvider ?? throw new ArgumentNullException(nameof(policyProvider));
@@ -147,6 +151,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         _materializationDispatcher = materializationDispatcher;
         // Selected 候选正文批量 hydrator（可选；未注入时保持旧行为）
         _selectedCandidateHydrator = selectedCandidateHydrator;
+        // Decision Commit Outbox（可选；WP-F）：注入后决策执行完成即入队决策提交
+        // （Decision Record + Evidence 引用 + 物化意图经 Durable Outbox 连成可靠链，
+        // 由 DecisionCommitWorker 消费落库；null = 不启用，决策记录不归档）。
+        _decisionCommitOutbox = decisionCommitOutbox;
     }
 
     /// <summary>
@@ -668,6 +676,33 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         var workspaceId = request.Scope.WorkspaceId;
         var collectionId = request.Scope.CollectionId;
 
+        // Decision Commit（WP-F）：决策执行完成即把决策提交（Decision Record + 证据引用 +
+        // 物化意图）写入 Durable Outbox——由 DecisionCommitWorker 消费落库到决策记录存储，
+        // 失败/崩溃可重放（决策记录不丢、可重建、可追责）。
+        if (_decisionCommitOutbox is not null)
+        {
+            try
+            {
+                await _decisionCommitOutbox.EnqueueAsync(new DecisionCommitOutboxRecord
+                {
+                    DecisionId = decision.RequestId,
+                    WorkspaceId = workspaceId,
+                    CollectionId = collectionId,
+                    CommitType = DecisionCommitType.RecordAndMaterialize,
+                    Record = BuildDecisionRecord(decision, request),
+                    EvidenceRef = null,
+                    CreatedAt = DateTimeOffset.UtcNow
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // 决策提交入队失败不阻断主决策流（与 Learning 物化同一降级语义）；
+                // 决策记录归档缺口通过 LearningPersistenceStatus=Failed 暴露给 caller 可观测。
+                // 注：此处复用物化状态返回——入队失败即视为持久化失败。
+                return LearningPersistenceStatus.Failed;
+            }
+        }
+
         // 生产路径：dispatcher 已注入 → 通过 bounded Channel / Durable Outbox 入队（消除 Task.Run）。
         if (_materializationDispatcher is not null)
         {
@@ -720,6 +755,57 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         });
 
         return LearningPersistenceStatus.Deferred;
+    }
+
+    /// <summary>
+    /// 从决策执行结果构建决策记录（Decision Evidence Plane durable 归档本体）：
+    /// 投影 selected/dropped envelopes 为候选决策列表，携带策略版本与产出摘要。
+    /// </summary>
+    private static ContextDecisionRecord BuildDecisionRecord(
+        ContextDecisionResult decision,
+        ContextDecisionRuntimeRequest request)
+    {
+        var candidates = new List<ContextDecisionCandidate>(
+            decision.SelectedEnvelopes.Count + decision.DroppedEnvelopes.Count);
+
+        foreach (var envelope in decision.SelectedEnvelopes)
+        {
+            candidates.Add(new ContextDecisionCandidate
+            {
+                ItemId = envelope.CandidateId,
+                Kind = envelope.Source.ToString(),
+                Outcome = ContextDecisionCandidateOutcome.Selected,
+                Reason = "selected"
+            });
+        }
+
+        foreach (var envelope in decision.DroppedEnvelopes)
+        {
+            candidates.Add(new ContextDecisionCandidate
+            {
+                ItemId = envelope.CandidateId,
+                Kind = envelope.Source.ToString(),
+                Outcome = ContextDecisionCandidateOutcome.Dropped,
+                Reason = envelope.Safety.BlockReasonCode.ToString()
+            });
+        }
+
+        return new ContextDecisionRecord
+        {
+            DecisionId = decision.RequestId,
+            Source = decision.DecisionSource,
+            WorkspaceId = request.Scope.WorkspaceId,
+            CollectionId = request.Scope.CollectionId,
+            QueryText = request.QueryText,
+            Candidates = candidates,
+            Outcome = new ContextDecisionOutcome
+            {
+                SelectedCount = decision.Outcome.SelectedCount,
+                DroppedCount = decision.Outcome.DroppedCount
+            },
+            PolicyVersion = decision.PolicyVersion,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
     }
 
     /// <summary>
