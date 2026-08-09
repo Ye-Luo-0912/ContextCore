@@ -103,6 +103,9 @@ static async Task ExecuteCommandAsync(
         case "calibration-data":
             await CalibrationDataCommand.ExecuteAsync(service, commandArgs, cancellationToken);
             break;
+        case "learning":
+            await LearningCommand.ExecuteAsync(service, commandArgs, cancellationToken);
+            break;
         case "policy":
         case "policies":
             await PolicyCommand.ExecuteAsync(service, commandArgs, cancellationToken);

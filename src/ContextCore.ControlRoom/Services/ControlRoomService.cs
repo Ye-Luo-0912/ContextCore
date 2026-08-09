@@ -139,7 +139,9 @@ public sealed partial class ControlRoomService
                 ModelHealthService = new ModelHealthService(modelOptions, modelAdapters, apiKeyResolver),
                 ModelUsageLogStore = modelUsageLogStore,
                 TrainingDataExporter = new TrainingDataExporter(utilityLedgerStore),
-                CalibrationDataExporter = new CalibrationDataExporter(utilityLedgerStore)
+                CalibrationDataExporter = new CalibrationDataExporter(utilityLedgerStore),
+                LearningArtifactStore = new InMemoryLearningArtifactStore(),
+                DecisionTraceStore = new InMemoryDecisionTraceStore()
             };
         }
 

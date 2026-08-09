@@ -98,6 +98,18 @@ public sealed class ControlRoomState
     /// </summary>
     public ICalibrationDataExporter? CalibrationDataExporter { get; init; }
 
+    /// <summary>
+    /// Learning Artifact Store（Direct 模式可用；快照工件点查 / 列表 / 重建）。
+    /// Service 模式下为 null（CLI 通过 Service API 远程调用）。
+    /// </summary>
+    public ILearningArtifactStore? LearningArtifactStore { get; init; }
+
+    /// <summary>
+    /// 决策记录存储（Direct 模式可用；Decision Evidence 审计点查）。
+    /// Service 模式下为 null（CLI 通过 Service API 远程调用）。
+    /// </summary>
+    public IDecisionTraceStore? DecisionTraceStore { get; init; }
+
     public ContextPackage? LastPackage { get; set; }
 
     public bool IsServiceMode => Mode == ControlRoomMode.Service;

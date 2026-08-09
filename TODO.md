@@ -1,8 +1,8 @@
 # ContextCore 项目路线图
 
 > 最近更新：2026-08-10。
-> **Current HEAD：`dd21efd1`**（R31-R38 生产语义收敛 + Learning/Canary/观测面全部完成并推送；R39 剩余项见「下一阶段（R39）」）。
-> **Current Phase：R31-R38 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R38 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点，详见「当前阶段」。
+> **Current HEAD：`35be157f`**（R31-R39 生产语义收敛 + Learning/观测面/CLI 全部完成并推送；R40 剩余项见「下一阶段（R40）」）。
+> **Current Phase：R31-R39 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R39 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI，详见「当前阶段」。
 
 > 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
@@ -60,10 +60,15 @@
 23. **Canary/Promotion Learning 闭环末端（WP-M）**：R38_LearningCanaryPromotionTests——DatasetSnapshot（ModelArtifactId 关联候选模型）→ 模型工件注册（基线/候选）→ Canary 阶梯推进（健康指标 1→50→100）→ Promoted（Cutover 100% 请求走 V2）→ 候选成为最新工件；回滚闭环（指标不达标 → Rollback → 基线保持最新）。
 24. **运行观测面（WP-N）**：DiagnosticsEndpoints（/api/diagnostics/runtime）——Schema 版本/缺失表/索引（VerifySchemaAsync）、Learning 物化 outbox 积压（pending/processing/dead-letter）、后台负载预算配置；Operator 角色、依赖缺失不失败；2 项端点测试。
 
-### 下一阶段（R39，按优先级）
+### 已完成（HEAD `35be157f`，R39 工作包收口）
 
-- **WP-O（OpenTelemetry 指标导出收口）**：迁移/学习/后台负载 Meter 接入 OTLP 导出配置验证（OpenTelemetry.Extensions.Hosting 已在 Service 引用），补齐可观测性导出验收。
-- **WP-P（Learning 控制面 ControlRoom CLI）**：Learning 端点（工件点查/导出/决策审计）的 ControlRoom 命令封装，运维 CLI 操作入口。
+25. **OpenTelemetry 指标导出收口（WP-O）**：ObservabilityContractTests——核心遥测 Meter 名（ContextCore.Storage.Postgres / ContextCore.Core 等）必须匹配 Service 的 AddMeter("ContextCore.*") OTLP 通配，防止新增组件用非前缀 Meter 名导致导出丢失（反射契约 + 关键组件存在性断言）。
+26. **Learning 控制面 ControlRoom CLI（WP-P）**：LearningCommand——`learning artifact get/list/export`（快照工件点查/列表/导出落库）+ `learning decision get`（决策审计点查）；Direct 模式用本地 ILearningArtifactStore/IDecisionTraceStore（ControlRoomState 注入），Service 模式提示经 /api/learning 远程调用。
+
+### 下一阶段（R40，按优先级）
+
+- **WP-Q（Service API 集成验收）**：新端点（learning/diagnostics）的端到端 HTTP 验收（真实 Service 启动 + 认证 + 响应契约）。
+- **WP-R（Learning 闭环压测/规模）**：大数据量下的快照导出/工件重建/outbox 吞吐基准与上限。
 
 ### Open P0（待办）
 
