@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory.Stores;
 
@@ -238,122 +239,7 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
     }
 
     private static bool MatchesQueryText(ContextItem item, string? queryText)
-    {
-        if (string.IsNullOrWhiteSpace(queryText))
-        {
-            return true;
-        }
-
-        var normalizedQuery = queryText.Trim();
-        return MatchesQueryTerm(item, normalizedQuery) || ExtractQueryTerms(normalizedQuery).Any(term => MatchesQueryTerm(item, term));
-    }
-
-    private static bool MatchesQueryTerm(ContextItem item, string queryText)
-    {
-        return Contains(item.Id, queryText)
-            || Contains(item.Title, queryText)
-            || Contains(item.Type, queryText)
-            || Contains(item.Content, queryText)
-            || item.Tags.Any(tag => Contains(tag, queryText))
-            || item.Refs.Any(itemRef => Contains(itemRef, queryText))
-            || item.SourceRefs.Any(sourceRef => Contains(sourceRef, queryText));
-    }
-
-    private static IEnumerable<string> ExtractQueryTerms(string? queryText)
-    {
-        if (string.IsNullOrWhiteSpace(queryText))
-        {
-            yield break;
-        }
-
-        var count = 0;
-        foreach (var term in SplitTerms(queryText))
-        {
-            yield return term;
-            if (++count >= 12)
-            {
-                yield break;
-            }
-
-            if (!ContainsCjk(term))
-            {
-                continue;
-            }
-
-            foreach (var bigram in EnumerateCjkBigrams(term))
-            {
-                yield return bigram;
-                if (++count >= 12)
-                {
-                    yield break;
-                }
-            }
-        }
-    }
-
-    private static IEnumerable<string> SplitTerms(string text)
-    {
-        var current = new List<char>();
-        foreach (var ch in text)
-        {
-            if (char.IsLetterOrDigit(ch) || IsCjk(ch))
-            {
-                current.Add(ch);
-                continue;
-            }
-
-            foreach (var term in Flush(current))
-            {
-                yield return term;
-            }
-        }
-
-        foreach (var term in Flush(current))
-        {
-            yield return term;
-        }
-    }
-
-    private static IEnumerable<string> Flush(List<char> buffer)
-    {
-        if (buffer.Count == 0)
-        {
-            yield break;
-        }
-
-        var text = new string(buffer.ToArray()).Trim();
-        buffer.Clear();
-        if (text.Length >= 2)
-        {
-            yield return text;
-        }
-    }
-
-    private static bool IsCjk(char ch)
-    {
-        return ch is >= '\u4e00' and <= '\u9fff';
-    }
-
-    private static bool ContainsCjk(string text)
-    {
-        return text.Any(IsCjk);
-    }
-
-    private static IEnumerable<string> EnumerateCjkBigrams(string text)
-    {
-        for (var index = 0; index < text.Length - 1; index++)
-        {
-            if (IsCjk(text[index]) && IsCjk(text[index + 1]))
-            {
-                yield return text.Substring(index, 2);
-            }
-        }
-    }
-
-    private static bool Contains(string? value, string queryText)
-    {
-        return value?.Contains(queryText, StringComparison.OrdinalIgnoreCase) == true;
-    }
+        => ContextQueryTextMatcher.Matches(item, queryText);
 
     private static ContextItem Clone(ContextItem item, string? content = null)
     {

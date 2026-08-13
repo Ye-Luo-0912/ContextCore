@@ -18,8 +18,10 @@ namespace ContextCore.Core.Services.Retrieval;
 // 提取 ID 引用（"确认不存在"的实体），封顶 MaxExcludedIds。
 // 3. 图种子：优先取引号 / 书名号内显式实体锚点，不足时取长词元
 // （长度 2..32、非停用词、非纯数字，按长度降序），封顶 MaxGraphSeeds。
-// 4. 受控查询集：原始任务（混合）→ 最新意图（关键词）→ 未解决目标（向量）
-// → 图种子锚定查询（关键词），封顶 MaxControlledQueries 条。
+// 4. 受控查询集：原始任务（混合）→ 意图（若与任务不同）→ 未解决目标
+// → 成功工具观察抽出的新实体词 → 图种子文本（有空位且未被现有问句覆盖才加），封顶 MaxControlledQueries 条。
+// 观察优先占位：问句跟外部结果走，不用整段结果当问句。
+// 图种子文本只是额外 Keyword 查询，不是关系图上的节点 ID。
 // 5. Token 预算：TurnBudget.Remaining × 1024，钳制 [512, 8192]；
 // 上一轮诊断 BudgetExceeded=true 时减半（受控回退）。
 //
@@ -95,8 +97,8 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         // 3. 图种子（显式锚点优先 + 长词元补充，封顶）
         var graphSeeds = ExtractGraphSeeds(task, intent, goals, MaxGraphSeeds);
 
-        // 4. 受控查询集（有界，最多 MaxControlledQueries 条）
-        var queries = BuildControlledQueries(task, intent, goals, graphSeeds);
+        // 4. 受控查询集（有界；成功观察的实体词优先于图种子）
+        var queries = BuildControlledQueries(task, intent, goals, graphSeeds, observations);
 
         // 5. Token 预算（Turn 预算推导 + 诊断回退；任务为空时只给最小预算）
         var tokenBudget = string.IsNullOrWhiteSpace(task)
@@ -129,7 +131,11 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
     // ── 受控查询集 ───────────────────────────────────────────────────────────
 
     private static List<AgentRetrievalQuery> BuildControlledQueries(
-        string task, string intent, IReadOnlyList<string> goals, IReadOnlyList<string> graphSeeds)
+        string task,
+        string intent,
+        IReadOnlyList<string> goals,
+        IReadOnlyList<string> graphSeeds,
+        IReadOnlyList<ToolObservation> observations)
     {
         var queries = new List<AgentRetrievalQuery>(MaxControlledQueries);
 
@@ -157,7 +163,8 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         }
 
         var goalsText = string.Join(" ", goals.Where(g => !string.IsNullOrWhiteSpace(g)));
-        if (!string.IsNullOrWhiteSpace(goalsText))
+        if (!string.IsNullOrWhiteSpace(goalsText)
+            && !string.Equals(goalsText, task, StringComparison.Ordinal))
         {
             queries.Add(new AgentRetrievalQuery
             {
@@ -168,12 +175,18 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
             });
         }
 
-        // 图种子锚定查询：为每个种子生成一条定向关键词查询（受控，不超上限）
+        TryAddObservationQueries(queries, observations);
+
+        var coveredText = string.Join(" ", queries.Select(query => query.Text));
         foreach (var seed in graphSeeds)
         {
             if (queries.Count >= MaxControlledQueries)
             {
                 break;
+            }
+            if (IsCoveredByQueries(seed, coveredText))
+            {
+                continue;
             }
             queries.Add(new AgentRetrievalQuery
             {
@@ -186,6 +199,65 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
 
         return queries;
     }
+
+    private static void TryAddObservationQueries(
+        List<AgentRetrievalQuery> queries,
+        IReadOnlyList<ToolObservation> observations)
+    {
+        var covered = string.Join(" ", queries.Select(query => query.Text));
+        foreach (var distinctive in ObservationQueryText.DistinctiveQueries(covered, observations))
+        {
+            if (queries.Count >= MaxControlledQueries)
+            {
+                return;
+            }
+
+            queries.Add(new AgentRetrievalQuery
+            {
+                Text = distinctive,
+                Type = AgentRetrievalQueryType.Keyword,
+                Weight = 1.0,
+                Reason = "成功工具观察"
+            });
+        }
+    }
+
+    /// <summary>
+    /// 图种子是否已被现有查询覆盖：整段包含，或按词元规则每个信息词都已出现。
+    /// 被覆盖的种子不再占查询名额（任务套话不重复搜），名额留给新实体。
+    /// </summary>
+    private static bool IsCoveredByQueries(string seed, string coveredText)
+    {
+        if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(coveredText))
+        {
+            return false;
+        }
+
+        if (coveredText.Contains(seed, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // 词元规则：种子的每个信息词（非停用词、长度达标）都已整段出现，
+        // 与观察问句的覆盖判断一致。
+        var informativeTermCount = 0;
+        foreach (var term in SplitTerms(seed))
+        {
+            if (term.Length < GraphSeedMinLength || StopWords.Contains(term))
+            {
+                continue;
+            }
+            informativeTermCount++;
+            if (!coveredText.Contains(term, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+        return informativeTermCount > 0;
+    }
+
+    private static IEnumerable<string> SplitTerms(string text)
+        => Regex.Split(text, @"[^\p{L}\p{N}_\-]+").Where(term => term.Length > 0);
 
     // ── ID 提取 ──────────────────────────────────────────────────────────────
 

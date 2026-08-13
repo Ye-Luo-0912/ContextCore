@@ -994,7 +994,7 @@ public sealed record ToolDispatchResult
     public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.Unknown;
 
     /// <summary>
-    /// 子问题 5：外部操作 ID（tool 实际执行后返回的外部系统 ID，可用于查询/对账）。
+    /// 外部操作 ID（tool 实际执行后返回的外部系统 ID，可用于查询/对账）。
     /// 默认 null；Tool 实现可选填充（如外部系统的 transaction ID / job ID）。
     /// 由 <see cref="IDurableToolExecutor"/> 透传到 journal 与 <see cref="ToolExecutionResult"/>。
     /// </summary>

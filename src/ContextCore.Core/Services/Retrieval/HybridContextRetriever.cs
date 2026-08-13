@@ -4,7 +4,11 @@ using ContextCore.Core.Services.Graph;
 
 namespace ContextCore.Core.Services.Retrieval;
 
-/// <summary>第一版混合检索器：规则召回、向量召回、关系扩展、去重和预算打包。</summary>
+/// <summary>混合检索器：规则召回、向量召回、关系扩展、去重和预算打包。</summary>
+/// <remarks>
+/// HTTP POST /api/context/retrieve 在切流为 0 时走这里。
+/// 缺省切流 100 时由 AuthoritativeRetrievalRuntime 改走 IContextDecisionRuntime。
+/// </remarks>
 public sealed class HybridContextRetriever : IContextRetriever
 {
     private readonly IRetrievalChannelExecutor _contextRecallChannelExecutor;

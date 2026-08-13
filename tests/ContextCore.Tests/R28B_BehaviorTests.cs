@@ -827,8 +827,34 @@ public sealed class CutoverConfigurationTests
         var config = CutoverConfiguration.FromEnvironment();
 
         Assert.AreEqual(CutoverConfiguration.DefaultCutoverPercentage, config.CutoverPercentage);
+        Assert.AreEqual(100, config.CutoverPercentage);
         Assert.IsTrue(config.EnableSampledShadow);
         Assert.AreEqual(0.01, config.ShadowSampleRate);
+
+        var controller = new CutoverController(config.CutoverPercentage);
+        Assert.IsTrue(controller.ShouldUseV2("http-retrieve"));
+    }
+
+    [TestMethod]
+    public void ParameterlessCutoverController_StartsAtZeroForCanaryIsolation()
+    {
+        var controller = new CutoverController();
+        Assert.AreEqual(0, controller.CutoverPercentage);
+        Assert.IsFalse(controller.ShouldUseV2("canary-run"));
+    }
+
+    [TestMethod]
+    public void FromEnvironment_ZeroOverridesDefaultToLegacy()
+    {
+        Environment.SetEnvironmentVariable(CutoverConfiguration.CutoverPercentageEnvVar, "0");
+
+        var config = CutoverConfiguration.FromEnvironment();
+        var controller = new CutoverController(config.CutoverPercentage);
+
+        Assert.AreEqual(0, config.CutoverPercentage);
+        Assert.IsFalse(controller.ShouldUseV2("http-retrieve"));
+
+        Environment.SetEnvironmentVariable(CutoverConfiguration.CutoverPercentageEnvVar, null);
     }
 
     [TestMethod]

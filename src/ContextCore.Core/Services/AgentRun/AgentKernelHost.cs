@@ -4,32 +4,9 @@ using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
-// ===========================================================================
-// AgentKernelHost — 多 Session 隔离的 Kernel Host（生产化）
-// 
-// 替代旧单例 Kernel 平面的全局状态，实现真正的多 Session 隔离：
-// 1. 每个 Run 拥有独立的 AgentRunActor 实例（per-run 隔离）；
-// 2. 通过 IServiceProvider 解析 Actor 所需依赖（与 DI 容器集成）；
-// 3. ConcurrentDictionary 跟踪活跃 Run（key = workspaceIdrunId）；
-// 4. StartRunAsync 创建 Actor 并写入 bounded 优先级队列（fire-and-forget）；
-// 5. GetRunStatusAsync 查询 Run 状态（通过 IAgentRunStore）；
-// 6. CancelRunAsync 取消指定 Run（TransitionState → Cancelled + CTS 触发）。
-// 
-// 子问题 9 生产化增强：
-// - HA Run Lease： 方案 A — Worker 取到 Run + 获得执行槽之后再
-// IAgentRunLease.TryAcquireAsync 获取租约，然后立即启动 heartbeat；入队前不获取 lease。
-// heartbeat 续租失败时 CancellationTokenSource.Cancel() 取消 Actor（防止双执行）；
-// 处理完成后 Release；
-// - 全局并发上限：SemaphoreSlim(MaxGlobalRuns)；
-// - Workspace 级并发上限：per-workspace SemaphoreSlim(MaxWorkspaceRuns)；
-// 
-// B3 Durable Scheduler 增强（替代 Task.Factory.StartNew / FIFO Channel）：
-// - bounded 优先级队列（PriorityQueue + SemaphoreSlim 背压）+ 固定 worker 池：
-// 消除每 Run 一个 Task 的 Task 风暴风险；
-// - 优先级调度：Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）；
-// - 队列深度管理：ChannelCapacity 上限，超过后拒绝入队（QueueFull 拒绝策略）；
-// - 优雅 drain：IAsyncDisposable.DisposeAsync 标记关闭 + 唤醒 worker 排空（DrainTimeout）。
-// ===========================================================================
+// 多 Session 隔离的 Kernel Host：每个 Run 一个 AgentRunActor。
+// 通过 IServiceProvider 解析依赖；用优先级队列 + 固定 worker 池调度，而不是每 Run 一个 Task。
+// 可选租约：取到执行槽后再 TryAcquire，心跳失败则取消 Actor，避免双执行。
 
 /// <summary>
 /// 多 Session 隔离的 Kernel Host（生产化）。
@@ -37,7 +14,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 /// 为每个 Run 创建独立的 <see cref="AgentRunActor"/> 实例，实现真正的多 Session 隔离。
 /// </summary>
 /// <remarks>
-/// B3 Durable Scheduler 增强后，Run 执行通过 bounded 优先级队列 + 固定 worker 池调度，
+/// 调度用有界优先级队列和固定 worker 池，避免每个 Run 起一个 Task。
 /// 替代原 Task.Factory.StartNew / FIFO Channel 模式。队列提供深度管理、优先级排序与拒绝策略；
 /// worker 池提供固定并发上限与优雅 drain。
 /// </remarks>
@@ -63,7 +40,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     private const int WorkspaceSemaphoreMaxEntries = 128;
 
     // weighted fair queue + 固定 worker 池（替代 Task.Factory.StartNew / FIFO Channel）
-    // B3：调度从 FIFO 升级为按 Priority DESC（高优先级先出队），同优先级保持入队顺序（FIFO）。
+    // 调度按优先级出队（高优先级先出），同优先级保持入队顺序。
     // 公平性：队列按 Workspace 分桶（weighted fair queue——出队选
     // min(ServiceCount / Weight) 的 Workspace，等权重 = 严格轮转），单 Workspace 排队上限
     // 防止独占全部槽位；出队时按 aged priority（原始优先级 + 排队时长老化提升）取桶内最优，
@@ -91,8 +68,8 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     /// </summary>
     /// <param name="serviceProvider">DI 容器（用于解析 Actor 依赖）。</param>
     /// <param name="runStore">Run 元数据存储（用于查询状态）。</param>
-    /// <param name="runLease">子问题 9：Run 租约（null = 单节点模式，不竞争租约）。</param>
-    /// <param name="options">子问题 9：Host 配置（并发上限 / 租约参数 / Channel 容量）；null = 默认值。</param>
+    /// <param name="runLease">Run 租约（null = 单节点模式，不竞争租约）。</param>
+    /// <param name="options">Host 配置（并发上限 / 租约参数 / Channel 容量）；null = 默认值。</param>
     /// <param name="logger">日志（null = 静默）。</param>
     public AgentKernelHost(
         IServiceProvider serviceProvider,
@@ -625,7 +602,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
     }
 
     /// <summary>
-    /// 子问题 9 + + 带租约心跳 + 并发上限的 Run 执行包装。
+    /// 带租约心跳与并发上限的 Run 执行包装。
     /// </summary>
     /// <remarks>
     /// 方案 A：Worker 从队列取到 Run + 获得全局/Workspace 执行槽之后再 Acquire Lease，
@@ -645,11 +622,11 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
 
         try
         {
-            // 子问题 9：全局并发上限
+            // 全局并发上限
             await _globalSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
             globalAcquired = true;
 
-            // 子问题 9：Workspace 级并发上限
+            // Workspace 级并发上限
             // 通过 GetOrCreateWorkspaceSemaphore 支持潜在 LRU 淘汰避免无界增长
             workspaceSemaphore = GetOrCreateWorkspaceSemaphore(run.WorkspaceId);
             await workspaceSemaphore.WaitAsync(activeRun.Cts.Token).ConfigureAwait(false);
@@ -742,7 +719,7 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
                 }
             }
 
-            // 子问题 9：将租约登记到共享批量心跳（续约失败时取消 Actor 防止双执行）
+            // 将租约登记到共享批量心跳（续约失败时取消 Actor 防止双执行）
             // 传入 activeRun.Cts 以便续租失败时取消 Actor（防止双执行）
             Func<DateTimeOffset?>? leaseExpiryProvider = null;
             if (lease is not null && _runLease is not null)
@@ -1153,9 +1130,9 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var approvalStore = _serviceProvider.GetService(typeof(IAgentApprovalStore)) as IAgentApprovalStore;
         var checkpointFactory = _serviceProvider.GetService(typeof(IAgentCheckpointFactory)) as IAgentCheckpointFactory;
         var decisionRuntime = _serviceProvider.GetService(typeof(IContextDecisionRuntime)) as IContextDecisionRuntime;
-        // 子问题 4：解析 IAgentCheckpointStore
+        // 解析 IAgentCheckpointStore
         var checkpointStore = _serviceProvider.GetService(typeof(IAgentCheckpointStore)) as IAgentCheckpointStore;
-        // 子问题 5：解析 IDurableToolExecutor
+        // 解析 IDurableToolExecutor
         var durableToolExecutor = _serviceProvider.GetService(typeof(IDurableToolExecutor)) as IDurableToolExecutor;
         // 解析 IAgentModelContextProjector
         var modelContextProjector = _serviceProvider.GetService(typeof(IAgentModelContextProjector)) as IAgentModelContextProjector;

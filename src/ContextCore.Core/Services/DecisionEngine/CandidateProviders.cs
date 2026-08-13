@@ -33,6 +33,85 @@ internal static class CandidateProviderHelpers
     /// <summary>并行回退路径的默认读并发上限，避免 store 不支持批量时击穿连接池。</summary>
     internal const int DefaultReadFanout = 16;
 
+    /// <summary>
+    /// 解析排除 ID：优先 RetrievalInput.ExcludedIds，否则读 Metadata["excludedIds"]（逗号分隔）。
+    /// </summary>
+    internal static IReadOnlyList<string> ResolveExcludedIds(RetrievalInput? retrievalInput)
+    {
+        if (retrievalInput?.ExcludedIds is { Count: > 0 } direct)
+        {
+            return direct;
+        }
+
+        var (_, fromMetadata) = ResolveExcludedFiltersFromMetadata(retrievalInput?.Metadata);
+        return fromMetadata;
+    }
+
+    /// <summary>
+    /// 从 RetrievalInput.Metadata 解析排除过滤条件。
+    /// 支持 "excludedTypes"（逗号分隔）和 "excludedIds"（逗号分隔）两个键。
+    /// </summary>
+    internal static (IReadOnlyList<string> ExcludedTypes, IReadOnlyList<string> ExcludedIds) ResolveExcludedFiltersFromMetadata(
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is null || metadata.Count == 0)
+        {
+            return (Array.Empty<string>(), Array.Empty<string>());
+        }
+
+        IReadOnlyList<string> excludedTypes = Array.Empty<string>();
+        IReadOnlyList<string> excludedIds = Array.Empty<string>();
+
+        if (metadata.TryGetValue("excludedTypes", out var typesStr) && !string.IsNullOrWhiteSpace(typesStr))
+        {
+            excludedTypes = typesStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+        if (metadata.TryGetValue("excludedIds", out var idsStr) && !string.IsNullOrWhiteSpace(idsStr))
+        {
+            excludedIds = idsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        return (excludedTypes, excludedIds);
+    }
+
+    /// <summary>
+    /// 词法查询列表：有 QueryTexts 时按条搜；否则 RewrittenQueryText / 请求 QueryText。
+    /// </summary>
+    internal static IReadOnlyList<string> ResolveLexicalQueryTexts(
+        string? requestQueryText,
+        RetrievalInput? retrievalInput)
+    {
+        if (retrievalInput?.QueryTexts is { Count: > 0 } extras)
+        {
+            var list = new List<string>(extras.Count);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var text in extras)
+            {
+                var trimmed = (text ?? string.Empty).Trim();
+                if (trimmed.Length == 0 || !seen.Add(trimmed))
+                {
+                    continue;
+                }
+
+                list.Add(trimmed);
+            }
+
+            if (list.Count > 0)
+            {
+                return list;
+            }
+        }
+
+        var primary = retrievalInput?.RewrittenQueryText;
+        if (string.IsNullOrWhiteSpace(primary))
+        {
+            primary = requestQueryText;
+        }
+
+        primary = (primary ?? string.Empty).Trim();
+        return primary.Length == 0 ? Array.Empty<string>() : new[] { primary };
+    }
+
     /// <summary>计算 stable content hash（SHA256 前 16 字符），用作 EntityVersion。</summary>
     internal static string ComputeContentHash(string content)
     {
@@ -740,6 +819,10 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         var collectionId = context.Request.Scope.CollectionId;
         // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
+        var excludedIds = CandidateProviderHelpers.ResolveExcludedIds(context.Request.RetrievalInput);
+        var excluded = excludedIds.Count == 0
+            ? null
+            : new HashSet<string>(excludedIds, StringComparer.OrdinalIgnoreCase);
 
         // 路径 1：Tags=["mandatory"] 召回
         var items = await _contextStore.QueryAsync(new ContextQuery
@@ -747,6 +830,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
             WorkspaceId = workspaceId,
             CollectionId = collectionId,
             Tags = new[] { "mandatory" },
+            ExcludedIds = excludedIds,
             Take = take,
             // 将 IncludeContent 传递到 Store 查询
             IncludeContent = includeContent
@@ -760,12 +844,13 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
 
         if (requiredIds.Count > 0)
         {
-            // 过滤空 ID 和已见 ID，保留原始顺序去重
+            // 过滤空 ID、已见 ID、排除 ID，保留原始顺序去重
             var idsToFetch = new List<string>();
             var fetchSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var id in requiredIds)
             {
                 if (string.IsNullOrEmpty(id) || seenIds.Contains(id) || !fetchSeen.Add(id)) continue;
+                if (excluded is not null && excluded.Contains(id)) continue;
                 idsToFetch.Add(id);
             }
 
@@ -981,19 +1066,21 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             return CandidateProviderHelpers.Empty();
         }
 
-        // 优先使用 RewrittenQueryText（query rewriting 后的结果），回退到 QueryText
         var retrievalInput = context.Request.RetrievalInput;
-        var effectiveQueryText = retrievalInput?.RewrittenQueryText ?? context.Request.QueryText;
+        var queryTexts = CandidateProviderHelpers.ResolveLexicalQueryTexts(
+            context.Request.QueryText, retrievalInput);
 
-        // 无查询文本且无 Refs 时 lexical 召回无意义
         var hasRefs = retrievalInput?.Refs is { Count: > 0 };
-        if (string.IsNullOrWhiteSpace(effectiveQueryText) && !hasRefs)
+        if (queryTexts.Count == 0 && !hasRefs)
         {
             return CandidateProviderHelpers.Empty();
         }
 
-        // 读取 RetrievalInput 的 RequiredTags / RequiredTypes
-        // PackageInput 也提供相同字段（Package 路径下 Lexical 不一定启用，但保留兼容）
+        if (queryTexts.Count == 0)
+        {
+            queryTexts = new[] { string.Empty };
+        }
+
         var packageInput = context.Request.PackageInput;
         var requiredTags = retrievalInput?.RequiredTags;
         if (requiredTags is null || requiredTags.Count == 0)
@@ -1006,52 +1093,54 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             requiredTypes = packageInput?.RequiredTypes;
         }
 
-        // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = retrievalInput?.IncludeContent ?? true;
 
-        // 从 Metadata 解析排除类型/排除 ID（过滤用）
-        var (excludedTypes, excludedIds) = ResolveExcludedFiltersFromMetadata(retrievalInput?.Metadata);
+        var (excludedTypes, _) = CandidateProviderHelpers.ResolveExcludedFiltersFromMetadata(retrievalInput?.Metadata);
+        var excludedIds = CandidateProviderHelpers.ResolveExcludedIds(retrievalInput);
 
         var take = CandidateProviderHelpers.ResolveTake(context);
-        var items = await _contextStore.QueryAsync(new ContextQuery
+        var refs = retrievalInput?.Refs ?? Array.Empty<string>();
+        var best = new Dictionary<string, (ContextItem Item, double Score)>(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 0; index < queryTexts.Count; index++)
         {
-            WorkspaceId = context.Request.Scope.WorkspaceId,
-            CollectionId = context.Request.Scope.CollectionId,
-            QueryText = effectiveQueryText,
-            // 应用 RequiredTags / RequiredTypes 作为过滤条件
-            // （ContextQuery.Tags/Types 默认为空数组，等价于不应用过滤）
-            Tags = requiredTags ?? Array.Empty<string>(),
-            Types = requiredTypes ?? Array.Empty<string>(),
-            // 应用 Refs（如果有 Refs，按 Refs 召回）
-            Refs = retrievalInput?.Refs ?? Array.Empty<string>(),
-            // 应用 Metadata 解析的排除过滤
-            ExcludedTypes = excludedTypes,
-            ExcludedIds = excludedIds,
-            Take = take,
-            // 将 IncludeContent 传递到 Store 查询
-            IncludeContent = includeContent
-        }, cancellationToken).ConfigureAwait(false);
-
-        if (items.Count == 0) return CandidateProviderHelpers.Empty();
-
-        var envelopes = new List<ContextCandidateEnvelope>(items.Count);
-        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(items.Count);
-
-        foreach (var item in items)
-        {
-            // 优先读取 PostgreSQL ts_rank_cd 派生的检索评分（写入 Metadata["__ts_rank"]）。
-            // IncludeContent=false 路径下 PostgresContextStore 也会写入此键——确保 ts_rank 仍进入评分。
-            // 未持久化 ts_rank 时（非 Postgres provider / ID-match 无 QueryText 路径），
-            // 使用 50.0 作为 ID-match 基线分（精确 ID 查找是刻意召回，而非文本搜索），
-            // 与 FTS ts_rank 评分尺度可比。title-contains 奖励 +50.0 仍叠加在此基线之上。
-            var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 50.0;
-            if (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(effectiveQueryText) &&
-                item.Title.Contains(effectiveQueryText, StringComparison.OrdinalIgnoreCase))
+            var queryText = queryTexts[index];
+            var items = await _contextStore.QueryAsync(new ContextQuery
             {
-                score += 50.0;
+                WorkspaceId = context.Request.Scope.WorkspaceId,
+                CollectionId = context.Request.Scope.CollectionId,
+                QueryText = queryText,
+                Tags = requiredTags ?? Array.Empty<string>(),
+                Types = requiredTypes ?? Array.Empty<string>(),
+                Refs = index == 0 ? refs : Array.Empty<string>(),
+                ExcludedTypes = excludedTypes,
+                ExcludedIds = excludedIds,
+                Take = take,
+                IncludeContent = includeContent
+            }, cancellationToken).ConfigureAwait(false);
+
+            foreach (var item in items)
+            {
+                var score = ScoreLexicalItem(item, queryText);
+                if (!best.TryGetValue(item.Id, out var previous) || score > previous.Score)
+                {
+                    best[item.Id] = (item, score);
+                }
             }
+        }
+
+        if (best.Count == 0)
+        {
+            return CandidateProviderHelpers.Empty();
+        }
+
+        var envelopes = new List<ContextCandidateEnvelope>(best.Count);
+        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(best.Count);
+
+        foreach (var (_, scored) in best)
+        {
             var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
-                item, ContextCandidateSource.Lexical, ExpertKind.Lexical, score,
+                scored.Item, ContextCandidateSource.Lexical, ExpertKind.Lexical, scored.Score,
                 context.AdaptationContext, includeContent,
                 _tokenizerResolver, _tokenizerModelName);
             envelopes.Add(envelope);
@@ -1061,31 +1150,18 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         return new ExpertExecutionResult(envelopes, materials);
     }
 
-    /// <summary>
-    /// 从 RetrievalInput.Metadata 解析排除过滤条件。
-    /// 支持 "excludedTypes"（逗号分隔）和 "excludedIds"（逗号分隔）两个键。
-    /// </summary>
-    private static (IReadOnlyList<string> ExcludedTypes, IReadOnlyList<string> ExcludedIds) ResolveExcludedFiltersFromMetadata(
-        IReadOnlyDictionary<string, string>? metadata)
+    // 已命中候选之间的诊断排序，不是召回策略。不要靠改这两个数字提高「准不准」。
+    private static double ScoreLexicalItem(ContextItem item, string queryText)
     {
-        if (metadata is null || metadata.Count == 0)
+        var score = CandidateProviderHelpers.ReadPersistedTsRank(item) ?? 50.0;
+        if (!string.IsNullOrEmpty(item.Title)
+            && !string.IsNullOrEmpty(queryText)
+            && item.Title.Contains(queryText, StringComparison.OrdinalIgnoreCase))
         {
-            return (Array.Empty<string>(), Array.Empty<string>());
+            score += 50.0;
         }
 
-        IReadOnlyList<string> excludedTypes = Array.Empty<string>();
-        IReadOnlyList<string> excludedIds = Array.Empty<string>();
-
-        if (metadata.TryGetValue("excludedTypes", out var typesStr) && !string.IsNullOrWhiteSpace(typesStr))
-        {
-            excludedTypes = typesStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
-        if (metadata.TryGetValue("excludedIds", out var idsStr) && !string.IsNullOrWhiteSpace(idsStr))
-        {
-            excludedIds = idsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
-
-        return (excludedTypes, excludedIds);
+        return score;
     }
 }
 

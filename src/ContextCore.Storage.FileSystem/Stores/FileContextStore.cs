@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -690,22 +691,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     private static bool MatchesQueryText(ContextItem item, string? queryText)
-    {
-        if (string.IsNullOrWhiteSpace(queryText))
-        {
-            return true;
-        }
-
-        return Contains(item.Title, queryText)
-            || Contains(item.Type, queryText)
-            || Contains(item.Content, queryText)
-            || item.Tags.Any(tag => Contains(tag, queryText));
-    }
-
-    private static bool Contains(string? value, string queryText)
-    {
-        return value?.Contains(queryText, StringComparison.OrdinalIgnoreCase) == true;
-    }
+        => ContextQueryTextMatcher.Matches(item, queryText);
 
     private static ContextItem WithoutContent(ContextItem item)
     {

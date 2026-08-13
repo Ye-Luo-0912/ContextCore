@@ -235,14 +235,13 @@ public sealed class ContextCoreServiceSmokeTests
                 }
             });
 
-            CollectionAssert.AreEqual(
-                new[] { "hard_constraints", "global_context", "working_memory", "recent_context", "stable_memory", "soft_constraints", "related_context" },
+            // V2 缺省切流（100）下打包按决策分组出 section：default=摘要、mandatory=硬约束、
+            // memory=工作记忆；旧 7 段式 Legacy 断言不再适用。
+            CollectionAssert.AreEquivalent(
+                new[] { "default", "mandatory", "memory" },
                 package.Sections.Select(section => section.Name).ToArray());
             StringAssert.Contains(
-                package.Sections.Single(section => section.Name == "global_context").Content,
-                "Global preference: keep context compact.");
-            StringAssert.Contains(
-                package.Sections.Single(section => section.Name == "hard_constraints").Content,
+                package.Sections.Single(section => section.Name == "mandatory").Content,
                 "Preserve source context for API smoke.");
             Assert.IsTrue(package.EstimatedTokens <= 1200);
             Assert.AreEqual("http-raw-1", ingested.Id);

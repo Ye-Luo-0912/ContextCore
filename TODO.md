@@ -1,16 +1,22 @@
 # ContextCore 项目路线图
 
-> 最近更新：2026-08-10。
-> **Current HEAD：`47c21db5`**（R31-R45 生产语义收敛 + Learning 黄金路径/故障语义完成并推送；R46 剩余项见「下一阶段（R46）」）。
-> **Current Phase：R31-R45 Agent Runtime / Quota / Evidence / Learning 生产语义收敛（R45 工作包已收口）** —— R30.1 与 P1 完善项全部完成；R31：租户复合键、Settlement exactly-once + 冻结、Attempt 状态分离、Committer 身份不变量、Quota Period 修复、Tool 幂等键作用域、Evidence 稳定点查、DatasetSnapshot、AuthorizationEpoch、Trace 批量写入、后台负载治理；R32：Evidence 三层架构、Adaptive Retrieval 原生消费 + 延迟归因、动态降速契约；R33：Decision Commit Durable Outbox；R34：决策提交可靠链接线 + 延迟归因三来源合并；R35：Learning 训练闭环端到端 + 动态降速探针契约收口；R36：Learning 闭环 Postgres 生产验收 + 自适应检索 Active 模式生产验收；R37：Learning 控制面端点 + 迁移故障注入；R38：Canary/Promotion 闭环末端 + 运行观测面端点；R39：OTLP 指标导出契约收口 + Learning 控制面 CLI；R40：Learning/Diagnostics API 端到端 HTTP 验收 + 闭环规模压测；R41：Postgres Learning 并发吞吐验收 + 数据质量闸门；R42：质量闸门接线 + Postgres 全链路压测；R43：Learning 管线可观测指标 + 自适应 Active 生产开关治理；R44：Service API 全端点验收 + Learning 闭环端到端黄金路径；R45：迁移链回归矩阵 + Learning 故障恢复语义，详见「当前阶段」。
+> **2026-08-14。** 现行导航是 [`docs/LIVE_PATH.md`](docs/LIVE_PATH.md)。
+> **下一阶段执行清单**是 [`docs/RECALL_WIRING.md`](docs/RECALL_WIRING.md)（召回接线 RW-1…RW-4），不是本文件的 R46。
+> HTTP retrieve/package 缺省切流 100，与 Agent 共用决策运行时。R46 仍延后。
+> 本文件后半仍是 R31–R45 完成记录，供回溯；不要根据 WP-AC/AD 开工。
+>
+> 最近功能收口：2026-08-10，HEAD `47c21db5`（R45）。
+> docs/ 根上只留现行导航与专题说明；Freeze / 阶段报告 / 过期设计稿已迁入 [docs/archive/](docs/archive/)，禁止当现行依据。
 
-> 本文件是 ContextCore 的**唯一当前路线图**，是后续 Agent 的当前状态真相源。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
+> ~~本文件是唯一当前路线图。~~ 现行状态与调用链以 `docs/LIVE_PATH.md` 为准。已完成阶段的历史记录：R14-PG 及更早已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)；R27~R30 记录保留在本文件「历史快照」章节，同样不作为当前架构依据。
 
 ---
 
 ## 当前阶段
 
-**R31 Agent Runtime / Quota / Evidence 生产语义收敛（进行中）**
+**召回接线（2026-08-14 起）** — 执行 [`docs/RECALL_WIRING.md`](docs/RECALL_WIRING.md)。
+
+不是 R31，也不是 R46。R31–R45 已收口，记录在下方。认路后的产品缺口按 RECALL_WIRING 的 RW-1…RW-4 做：Resident 及时落盘、HTTP 分条 QueryTexts、规划器图种子不占套话名额、图通道诚实说明。
 
 ### 已完成（HEAD `73cca7be`，6 个提交收口）
 
@@ -95,10 +101,12 @@
 37. **迁移链全量回归矩阵（WP-AA）**：R29N 扩 3 项矩阵测试——版本链无重叠/无倒序（后一步 From ≥ 前一步 To，历史早期合法跳段）、MigrationId 全局唯一 + 首步 From=v48 + 末步 To=SchemaVersion（与漂移测试双保险）、步数快照（20 步，防意外删除/合并历史步骤）。
 38. **Learning 闭环故障恢复语义（WP-AB）**：LearningPipelineFaultRecoveryTests——导出故障异常明确传播（不伪造空快照）+ 工件不落库（无半态）、物化故障异常传播（存储故障不静默吞）、重建故障（Artifact Store 未注册）端点 503（不静默降级）。
 
-### 下一阶段（R46，按优先级）
+### 下一阶段（R46，按优先级）— 2026-08-13 延后
 
-- **WP-AC（Postgres 迁移故障恢复验收）**：迁移中断/步骤失败后的重试恢复（PreCheck 幂等跳过已应用步骤）Postgres 集成矩阵。
-- **WP-AD（Learning 数据质量闸门生产策略）**：闸门阈值可配置（Options）+ Warning 升级（连续 Warning 阻断）+ 告警事件。
+认路完成前不开工。现行导航见 [`docs/LIVE_PATH.md`](docs/LIVE_PATH.md)。
+
+- **WP-AC（Postgres 迁移故障恢复验收）**：延后。迁移中断/步骤失败后的重试恢复（PreCheck 幂等跳过已应用步骤）Postgres 集成矩阵。
+- **WP-AD（Learning 数据质量闸门生产策略）**：延后。闸门阈值可配置（Options）+ Warning 升级（连续 Warning 阻断）+ 告警事件。
 
 ### Open P0（待办）
 
@@ -703,7 +711,6 @@ R18-1 → R18-2 → R18-3 → R18-4 → R19-1 → R19-2 → R19-3 → R20-1 → 
 
 ## 文档约定
 
-- **本文件（TODO.md）** 是唯一当前路线图，反映最新完成状态与剩余任务。
-- **docs/archive/roadmap-history.md** 归档所有已完成的历史工作记录，仅供回溯。
-- `docs/` 下的所有 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均为**历史快照**，顶部已统一标注"历史快照（Historical Snapshot）"声明块。仅供回溯，不作为 current-head 决策依据。
-- 如需根据陈旧报告做设计，应先在本文件中确认对应任务是否已完成或已被取代。
+- **现行导航**是 [`docs/LIVE_PATH.md`](docs/LIVE_PATH.md)。**下一阶段开工清单**是 [`docs/RECALL_WIRING.md`](docs/RECALL_WIRING.md)。本文件后半是完成记录，不是开工清单。
+- **docs/archive/** 归档历史快照与旧路线图，仅供回溯。
+- 改行为前对照 LIVE_PATH 与源码，不要从 archive 里的 freeze/报告推断 DI。

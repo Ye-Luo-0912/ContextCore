@@ -1250,6 +1250,7 @@ internal static class AgentExecutionEndpoints
         {
             RunId = run.RunId,
             WorkspaceId = run.WorkspaceId,
+            CollectionId = run.ResolveContextCollectionId(),
             SessionId = run.SessionId,
             Task = run.Task,
             State = run.State.ToString(),
@@ -1380,6 +1381,9 @@ internal static class AgentExecutionEndpoints
         {
             RunId = runId,
             WorkspaceId = workspaceId,
+            CollectionId = string.IsNullOrWhiteSpace(request.CollectionId)
+                ? string.Empty
+                : request.CollectionId.Trim(),
             SessionId = sessionId,
             Task = request.Task!,
             State = persistentStore is not null ? AgentRunState.PendingAdmission : AgentRunState.Created,
@@ -1758,6 +1762,11 @@ public sealed class CreateRunRequest
     /// <summary>Workspace ID（可选；未启用 RBAC 时由请求体提供，否则从认证上下文读取）。</summary>
     public string? WorkspaceId { get; init; }
 
+    /// <summary>
+    /// 构建上下文时检索的集合。未指定时回退为 WorkspaceId。
+    /// </summary>
+    public string? CollectionId { get; init; }
+
     /// <summary>Session ID（可选；为空时自动生成 "session-{runId}"）。</summary>
     public string? SessionId { get; init; }
 
@@ -1905,6 +1914,9 @@ public sealed class RunResponse
 
     /// <summary>Workspace ID。</summary>
     public string WorkspaceId { get; init; } = string.Empty;
+
+    /// <summary>构建上下文时检索的集合（未指定时等于 WorkspaceId）。</summary>
+    public string CollectionId { get; init; } = string.Empty;
 
     /// <summary>Session ID。</summary>
     public string SessionId { get; init; } = string.Empty;

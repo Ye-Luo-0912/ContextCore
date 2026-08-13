@@ -316,6 +316,20 @@ public sealed record AgentRun
     /// <summary>Session ID（同一 session 的多个 run 共享上下文）。</summary>
     public required string SessionId { get; init; }
 
+    /// <summary>
+    /// 构建上下文时检索的集合。空则回退为 <see cref="WorkspaceId"/>（旧行为）。
+    /// </summary>
+    public string CollectionId { get; init; } = string.Empty;
+
+    /// <summary>实际用于检索/决策的集合：未指定时等于工作区。</summary>
+    public string ResolveContextCollectionId()
+        => string.IsNullOrWhiteSpace(CollectionId) ? WorkspaceId : CollectionId;
+
+    /// <summary>
+    /// 上一轮选中的 Resident 工作集（JSON）。空表示没有可恢复的种子，恢复后重新搜索。
+    /// </summary>
+    public string? ResidentWorkingSetJson { get; init; }
+
     /// <summary>用户输入/任务描述。</summary>
     public required string Task { get; init; }
 
@@ -2216,10 +2230,10 @@ public interface IAgentRunEventSubscription : IAsyncEnumerable<long>, IDisposabl
 {
 }
 
-// ── Durable Tool Executor（子问题 5）────────────────────────────────────────
+// ── Durable Tool Executor ──────────────────────────────────────────────────
 
 /// <summary>
-/// 子问题 5：Durable Tool Executor 抽象。
+/// Durable Tool Executor 抽象。
 /// 封装 Tool 调用的完整 durable 流程：Validate → Approval → Journal.Prepare →
 /// Dispatch → Journal.MarkDispatched → Commit/Unknown → Result Outbox →
 /// Journal.MarkResultDelivered，保证 RequestId 在整个生命周期中一致。
@@ -2276,9 +2290,9 @@ public interface IDurableToolExecutor
 }
 
 /// <summary>
-/// 子问题 5：Durable Tool 执行结果。
+/// Durable Tool 执行结果。
 /// 携带完整 Tool 身份信息（RequestId / IdempotencyKey / SideEffect / JournalState），
-/// 供 Actor 写入 ToolCallCompleted 事件 payload（子问题 6）并恢复时重建 _committedToolResults。
+/// 供 Actor 写入 ToolCallCompleted 事件 payload 并恢复时重建 _committedToolResults。
 /// </summary>
 public sealed record ToolExecutionResult
 {
@@ -2342,10 +2356,10 @@ public sealed record ToolExecutionResult
     public required TimeSpan Duration { get; init; }
 }
 
-// ── Agent Run Lease（子问题 9）──────────────────────────────────────────────
+// ── Agent Run Lease ────────────────────────────────────────────────────────
 
 /// <summary>
-/// 子问题 9：Agent Run 租约抽象（HA 隔离）。
+/// Agent Run 租约抽象（HA 隔离）。
 /// 复用 ICanaryLeaderLease 模式，确保同一时刻仅一个 Host 实例处理同一 Run。
 /// </summary>
 /// <remarks>
@@ -2462,7 +2476,7 @@ public interface IAgentRunLease
 }
 
 /// <summary>
-/// 子问题 9：Agent Run 租约信息（TryAcquireAsync 返回值）。
+/// Agent Run 租约信息（TryAcquireAsync 返回值）。
 /// </summary>
 /// <remarks>
 /// 修复双执行：新增 <see cref="FencingToken"/>（单调递增），用于所有副作用操作
@@ -2513,7 +2527,7 @@ public sealed record AgentRunLeaseRenewal
 }
 
 /// <summary>
-/// 子问题 9：Agent Kernel Host 配置。
+/// Agent Kernel Host 配置。
 /// 控制 HA Run Lease 与全局/workspace 级并发上限。
 /// </summary>
 /// <remarks>

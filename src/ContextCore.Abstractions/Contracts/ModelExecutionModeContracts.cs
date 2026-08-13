@@ -1,26 +1,10 @@
 namespace ContextCore.Abstractions;
 
-// ===========================================================================
-// 子问题5：Model Execution Mode 契约
-//
-// 目标：
-// 把生产 DI 的 IBatchInferenceEngine 注册从硬编码 DeterministicBatchInferenceEngine
-// 改为按 Mode 选择：
-// - Deterministic（默认）：注册 DeterministicBatchInferenceEngine，使用 feature hash
-// 产出确定性分数（基础设施测试 / 预览 / fail-safe 降级）。
-// - RealModel：注册 ModelActivationManager（以 DeterministicBatchInferenceEngine 为 fallback），
-// 运行时通过 ActivateAsync 切换到真实 ONNX 模型。未激活时仍走 Deterministic 路径。
-//
-// 设计原则：
-// 1. 默认值 = Deterministic：不改变现有生产行为，向后兼容。
-// 2. RealModel 模式需要调用方额外注册 IModelArtifactRegistry / IOnnxInferenceSessionFactory
-// （由 PostgresServiceCollectionExtensions / OnnxInferenceServiceCollectionExtensions 提供）。
-// 3. Mode 仅控制 IBatchInferenceEngine 的注册选择，不干预 IFeatureRegistry / ICalibrationService
-// 等其他模型执行依赖（它们始终由 AddContextCore 注册默认实现）。
-// ===========================================================================
+// 模型执行模式契约：生产 DI 按 Mode 选择 IBatchInferenceEngine。
+// 默认 Deterministic；RealModel 才挂 ModelActivationManager（未激活仍走确定性）。
 
 /// <summary>
-/// 子问题5：模型执行模式。控制生产 DI 中 <see cref="IBatchInferenceEngine"/> 的注册选择。
+/// 模型执行模式。控制生产 DI 中 <see cref="IBatchInferenceEngine"/> 的注册选择。
 /// </summary>
 public enum ModelExecutionMode : byte
 {
@@ -42,7 +26,7 @@ public enum ModelExecutionMode : byte
 }
 
 /// <summary>
-/// 子问题5：模型执行配置选项。控制 <see cref="IBatchInferenceEngine"/> 的注册行为。
+/// 模型执行配置选项。控制 <see cref="IBatchInferenceEngine"/> 的注册行为。
 /// </summary>
 /// <remarks>
 /// <b>使用模式</b>：

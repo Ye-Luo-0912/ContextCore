@@ -152,7 +152,7 @@ public interface IBatchInferenceEngine
 }
 
 /// <summary>
-/// 子问题1：Fallback Inference Engine — 用于 ModelActivationManager 注入的降级引擎标记接口。
+/// Fallback Inference Engine — 用于 ModelActivationManager 注入的降级引擎标记接口。
 /// </summary>
 /// <remarks>
 /// 仅为 <see cref="IBatchInferenceEngine"/> 的 marker 接口，不新增成员。

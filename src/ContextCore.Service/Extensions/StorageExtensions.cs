@@ -300,6 +300,7 @@ internal static class StorageExtensions
 
 		// 非 Data Plane Store 直接转发，不叠加失效 Decorator（读路径未接入缓存）。
 		services.AddForwardedService<IContextCollectionStore, PostgresContextStore>();
+		services.AddForwardedService<IContextStoreBatchLookup, PostgresContextStore>();
 		services.AddForwardedService<IPromotionRecordStore, PostgresWorkingMemoryStore>();
 		services.AddForwardedService<IPromotionCandidateStore, PostgresWorkingMemoryStore>();
 		services.AddForwardedService<IRelationReviewStore, PostgresRelationReviewStore>();
@@ -336,6 +337,8 @@ internal static class StorageExtensions
 			sp => new FileContextStore(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()),
 			(inner, inv, vs) => new InvalidatingContextStoreDecorator(inner, inv, vs));
 		services.AddForwardedService<IContextCollectionStore, FileContextStore>();
+		// Late Hydration：Agent 以 IncludeContent=false 召回，选中后再按 ID 批量回填正文。
+		services.AddForwardedService<IContextStoreBatchLookup, FileContextStore>();
 
 		services.AddInvalidating<IContextIndex, FileContextIndex>(
 			sp => new FileContextIndex(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()),
@@ -511,6 +514,7 @@ internal static class StorageExtensions
 	{
 		services.AddInvalidating<IContextStore, InMemoryContextStore>((inner, inv, vs) => new InvalidatingContextStoreDecorator(inner, inv, vs));
 		services.AddForwardedService<IContextCollectionStore, InMemoryContextStore>();
+		services.AddForwardedService<IContextStoreBatchLookup, InMemoryContextStore>();
 		services.AddInvalidating<IContextIndex, InMemoryContextIndex>((inner, inv, vs) => new InvalidatingContextIndexDecorator(inner, inv, vs));
         services.AddPlain<IShortTermMemoryStore, InMemoryShortTermMemoryStore>();
         services.AddPlain<IShortTermPromotionCandidateStore, InMemoryShortTermPromotionCandidateStore>();

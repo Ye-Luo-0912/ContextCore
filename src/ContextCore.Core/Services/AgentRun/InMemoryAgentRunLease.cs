@@ -3,25 +3,11 @@ using ContextCore.Abstractions;
 
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
-// ===========================================================================
-// 子问题 9：InMemoryAgentRunLease — 进程内 Agent Run 租约实现（开发/测试用）
-//
-// 实现 IAgentRunLease 的进程内默认实现，复用 ICanaryLeaderLease 模式：
-// - ConcurrentDictionary 维护 TenantRunKey（工作区 + Run）→ LeaseEntry 映射；
-// - TryAcquireAsync 原子 CAS：未持有或已过期 → 获取成功；
-// - RenewAsync 校验 leaseToken + 未过期 → 延长；
-// - ReleaseAsync 校验 leaseToken → 移除；
-// - ReapExpiredAsync 扫描过期条目并移除。
-//
-// 设计决策：
-// - 不持久化到磁盘：进程崩溃后租约丢失（多实例下其他实例可立即接管）。
-// - 线程安全：所有读写通过 ConcurrentDictionary 原子操作。
-// - 仅供开发/测试；生产部署应注入基于 Postgres FOR UPDATE SKIP LOCKED 的持久化实现。
-// - 身份键统一为 TenantRunKey（工作区 + Run），跨工作区同 RunId 互不覆盖。
-// ===========================================================================
+// 进程内 Run 租约：同一进程同一时刻只有一个 Host 处理同一 Run。
+// 不落盘；崩溃后租约丢失。生产应换成 Postgres 实现。
 
 /// <summary>
-/// 子问题 9：进程内 Agent Run 租约默认实现（开发/测试用）。
+/// 进程内 Agent Run 租约（开发/测试用）。
 /// 确保同一进程内同一时刻仅一个 Host 处理同一 Run。
 /// </summary>
 /// <remarks>

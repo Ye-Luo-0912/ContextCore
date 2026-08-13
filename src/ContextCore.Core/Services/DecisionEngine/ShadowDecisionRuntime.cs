@@ -4,29 +4,9 @@ using ContextCore.Core.Services.Learning.V14_0;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
-// ===========================================================================
-// Candidate Capture + Pure Runtime + Tee Shadow 执行
-//
-// 目标（B-2 阶段：Shadow tee，单次候选捕获）：
-// 1. Tee 机制：在 Legacy 主链产出后，零侵入地捕获原始候选快照，
-// 转换为 V2 CandidateWorkingSet（Envelopes + Materials）。
-// 2. Pure Runtime：DefaultContextDecisionRuntime 升级为真实编排
-// （EarlyGate → FeaturePipeline → Engine → Allocator），消费 WorkingSet。
-// 3. Shadow 执行：ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，
-// 产出 DecisionExperimentPlane 的对比结果。
-//
-// 设计原则：
-// 1. Shadow tee：单次候选捕获，Legacy 与 V2 消费同一 raw candidate snapshot，
-// 避免双倍 I/O（设计文档 Shadow 迁移方案）。
-// 2. 零侵入：Legacy 主链代码不改；tee 在调用方编排。
-// 3. B-2 仍是 Shadow（Diagnostic parity），不强制切换主链（B-4 才是 Authoritative）。
-// 4. Provider 网络不接入（B-4 才接入真实 ICandidateProvider）；B-2 消费 Legacy 产出的候选。
-//
-// 替换策略：
-// - B-3：接入 Shadow Gate 多维度验收（Hard/Diagnostic parity + replay fixtures）。
-// - B-4：Authoritative cutover，Retriever/PackageBuilder 切换到 IContextDecisionRuntime。
-// - B-5：Legacy 移除，DecisionExperimentPlane 保留。
-// ===========================================================================
+// 候选捕获 + Tee Shadow：旧检索/打包跑完后抓一份候选，转成决策运行时 WorkingSet，再做 parity。
+// 本文件不替换 HTTP 主链。缺省切流 100 时 HTTP 走决策运行时；抽样对比仍可走这里。
+// 设 CC_CUTOVER_PERCENTAGE=0 时 HTTP 主链才是混合检索 / 基础打包器。
 
 // ---------------------------------------------------------------------------
 // WorkingSetTee — 候选捕获与 V2 转换
@@ -101,7 +81,7 @@ public static class WorkingSetTee
     /// </summary>
     /// <remarks>
     /// Package 路径的 ContextPackageDecision 不含 Content（仅 ItemId/Score/Section），
-    /// Materials 的 Content 留空（B-4 阶段由 Store 访问填充）。
+    /// Materials 的 Content 留空，正文由后续 Store 访问填充。
     /// </remarks>
     public static CandidateWorkingSet BuildPackageWorkingSet(
         ContextPackageBuildResult result,
@@ -126,7 +106,7 @@ public static class WorkingSetTee
             materials[envelope.CanonicalKey] = new CandidateMaterial
             {
                 Key = envelope.CanonicalKey,
-                Content = string.Empty, // B-4 阶段由 Store 访问填充
+                Content = string.Empty, // 打包结果无正文，后续由 Store 填充
                 NativeKind = envelope.Type,
                 SourceRefs = Array.Empty<string>()
             };
@@ -148,9 +128,7 @@ public static class WorkingSetTee
 /// 决策实验平面。对比 Legacy 与 V2 决策结果，产出 parity 报告。
 /// </summary>
 /// <remarks>
-/// B-2 阶段：Diagnostic parity（仅告警，不阻断切换）。
-/// B-3 阶段升级为 Hard parity（阻断 Authoritative cutover）。
-/// B-5 阶段保留为长期 replay / fixture / sampled shadow 基础设施。
+/// 对比旧路径与决策运行时的结果，产出 parity 报告，供抽样与回放。
 /// </remarks>
 public sealed class DecisionExperimentPlane
 {
@@ -241,9 +219,8 @@ public sealed record ParityReport(
 /// 编排 Legacy 主链 → Tee 捕获 → V2 pure Runtime → Parity 对比。
 /// </summary>
 /// <remarks>
-/// B-2 阶段：仅产出 parity 报告，不替换 Legacy 结果。
-/// 调用方仍使用 Legacy 结果；V2 结果仅用于诊断。
-/// B-4 阶段升级为 Authoritative：V2 结果替换 Legacy 结果。
+/// 只产出 parity 报告，不替换调用方手里的旧检索/打包结果。
+/// HTTP 是否改走决策运行时，由 Cutover 装饰器决定，不是本类。
 /// </remarks>
 public sealed class ShadowDecisionRuntime
 {

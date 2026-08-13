@@ -5,39 +5,16 @@ using ContextCore.Core.Services.AgentKernel;
 
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
-// ===========================================================================
-// AgentRunActor — 单个 Agent Run 的执行者（per-run 实例）
-// 
-// 负责单个 Run 的完整生命周期：
-// 1. ContextBuilding → 调用 IContextDecisionRuntime 或直接构造上下文（子问题 1）
-// 2. IAgentLoopPolicy.DecideAsync → 决定下一步（含 ModelCallsUsed 预检，子问题 2）
-// 3. CallModel → IAgentModelTransport.CallAsync → 记录事件 → 持久化预算（子问题 2/3）
-// 4. DispatchTool → IAgentToolCallValidator.ValidateAsync → IAgentApprovalGate →
-// IDurableToolExecutor.ExecuteAsync（子问题 5）→ 记录完整 Tool 身份事件（子问题 6）
-// 5. Observing → 追加 Tool 结果到上下文
-// 6. Checkpointing → IAgentCheckpointFactory.CreateAsync → IAgentCheckpointStore.SaveAsync
-// （子问题 4）→ 记录事件
-// 7. 循环回到 1，直到 Complete/Failed/Cancelled
-// 
-// 设计决策：
-// - 通过 IAgentRunStore.TransitionStateAsync 推进状态（CAS expected-state）
-// - 通过 IAgentRunEventStore.AppendAsync 写入审计事件（哈希链）
-// - 异常时 TransitionStateAsync → Failed 并记录 RunFailed 事件
-// - IAgentModelTransport / IContextDecisionRuntime 为 null 时优雅降级（兼容现有 Kernel）
-// - 子问题 1：ContextBuilding 阶段实际构建上下文（run.Task + session history + observations）
-// - 子问题 2：ModelCallsUsed 计数 + MaxModelCalls 预检防止无限循环
-// - 子问题 3：AgentModelResponse 扩展字段累积到 CostBudget 并 CAS 持久化
-// - 子问题 4：Checkpoint 先 SaveAsync 再记录事件（顺序保证）
-// - 子问题 5：通过 IDurableToolExecutor 走 Durable Journal（不再直接调 IToolDispatcher）
-// - 子问题 6：ToolCallCompleted payload 含完整 Tool 身份（RequestId/SideEffect/IdempotencyKey）
-// 
-// 修复：
-// - 引入 AgentRunExecutionState 统一管理执行期可变状态（Run/Messages/LastModelResponse/
-// LastCheckpoint/EventSequence/EventChainHash），消除散落实例字段
-// - Bug 3：每次模型调用都计为一次 Turn（TurnBudget 递减），防止无 Tool 的模型循环无限运行
-// - Bug 4：Checkpoint SaveAsync 失败时显式捕获异常并转 Failed 状态（不记录 CheckpointSaved 事件）
-// - Bug 5：在 DispatchToolsAsync 开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
-// ===========================================================================
+// 单个 Agent Run 的执行者（每个 Run 一个实例）。
+// 顺序：ContextBuilding → 循环策略 → 调模型 → 校验/审批/执行工具 → 观察 → 检查点 → 下一轮。
+// ContextBuilding 若注入了 IContextDecisionRuntime，直接调用它（不经过 HTTP 检索装饰器）。
+// 从第二轮起把上一轮选中项作为 SeedWorkingSet；本轮仍搜索。
+// 计划查询与成功观察的实体词写入 QueryTexts 分条检索；QueryText 只是诊断拼接。
+// 未选中的不带入。Resident 写在 AgentRun 上，上下文构建成功后随 Run 快照落库；
+// 模型调用前已持久化，调用中途取消或崩溃也能从 Run 恢复种子。
+// 未注入模型通道或决策运行时时降级：无召回也可按策略调模型。
+// 状态用 IAgentRunStore 的 CAS 推进；事件用 IAgentRunEventStore 哈希链追加。
+// 工具走 IDurableToolExecutor，不直接调 IToolDispatcher。
 
 /// <summary>
 /// 单个 Agent Run 的执行者（per-run 实例）。
@@ -62,9 +39,9 @@ public sealed class AgentRunActor
     private readonly IAgentApprovalStore? _approvalStore;
     private readonly IAgentCheckpointFactory? _checkpointFactory;
     private readonly IContextDecisionRuntime? _decisionRuntime;
-    // 子问题 4：Checkpoint Store（保存 checkpoint 持久化）
+    // Checkpoint Store（保存 checkpoint 持久化）
     private readonly IAgentCheckpointStore? _checkpointStore;
-    // 子问题 5：Durable Tool Executor（封装 journal + dispatch）
+    // Durable Tool Executor（封装 journal + dispatch）
     private readonly IDurableToolExecutor? _durableToolExecutor;
     // Tool 对账记录存储（null 时禁用"未裁决不完成"约束，仅 journal 自身保证模糊态不被重放）
     private readonly IToolReconciliationStore? _reconciliationStore;
@@ -78,7 +55,7 @@ public sealed class AgentRunActor
 
     // 运行时累积状态（预算与计数，不在 AgentRunExecutionState 中，因为它们是 Run 的字段的可变副本）
     private int _currentTurn;
-    // 子问题 2：模型调用次数计数（防止无限循环）
+    // 模型调用次数计数（防止无限循环）
     private int _modelCallsUsed;
     // 当前执行期内的模型轮次计数（每次 ExecuteAsync 重置为 0）。
     // 用于 ComputeRequestId 的 modelTurn 参数，确保同一逻辑轮次在崩溃恢复后产生相同 RequestId
@@ -192,13 +169,13 @@ public sealed class AgentRunActor
     /// <param name="eventStore">Run 事件流存储（哈希链）。</param>
     /// <param name="modelTransport">模型调用传输（null 时降级为仅 Tool 分派）。</param>
     /// <param name="loopPolicy">循环策略。</param>
-    /// <param name="toolDispatcher">Tool 分派器（子问题 5：仅当 durableToolExecutor=null 时使用）。</param>
+    /// <param name="toolDispatcher">Tool 分派器（仅当 durableToolExecutor=null 时使用）。</param>
     /// <param name="toolCallValidator">Tool 校验器（null 时跳过校验）。</param>
     /// <param name="approvalGate">审批门（null 时跳过审批）。</param>
     /// <param name="checkpointFactory">检查点工厂（null 时跳过 checkpoint）。</param>
     /// <param name="decisionRuntime">Context Decision Runtime（null 时直接构造上下文）。</param>
-    /// <param name="checkpointStore">子问题 4：Checkpoint Store（null 时跳过 SaveAsync）。</param>
-    /// <param name="durableToolExecutor">子问题 5：Durable Tool Executor（null 时回退到 IToolDispatcher）。</param>
+    /// <param name="checkpointStore">Checkpoint Store（null 时跳过 SaveAsync）。</param>
+    /// <param name="durableToolExecutor">Durable Tool Executor（null 时回退到 IToolDispatcher）。</param>
     /// <param name="modelContextProjector">模型上下文投影器（null 时回退到 AgentContextState.ProjectForModel）。</param>
     /// <param name="approvalStore">审批持久化存储（null 时由 Gate 内部处理；注入后 Actor 用正确 workspaceId 创建审批记录）。</param>
     /// <param name="reconciliationStore">Tool 对账记录存储（null 时跳过"未裁决不完成"约束）。</param>
@@ -344,7 +321,7 @@ public sealed class AgentRunActor
         _turnBudget = run.TurnBudget;
         _costBudget = run.CostBudget;
         _currentTurn = run.Turn;
-        // 子问题 2：从 Run 元数据恢复 ModelCallsUsed（支持崩溃恢复后续跑）
+        // 从 Run 元数据恢复 ModelCallsUsed（支持崩溃恢复后续跑）
         _modelCallsUsed = run.ModelCallsUsed;
         // _executionModelTurn 先重置为 0，Resume 时由 RebuildStateFromEventsAsync
         // 从 ModelCallCompleted 事件流统计重建——避免恢复后从 0 重新计数导致 RequestId 改变。
@@ -493,21 +470,15 @@ public sealed class AgentRunActor
         }
         finally
         {
-            // 延迟归因（P1-十六续）：Run 到达终态时，把最终结果质量归因到本 Run
-            // 使用过的全部检索计划签名——反馈不再只有"检索是否产出候选"的过程信号，
-            // 而是"这些 Context 是否帮助 Agent 完成了任务"的结果信号
-            // （Retrieval → Model → Tool → Final Result → Attribution → Feedback）。
+            // 延迟归因：Run 到达终态时，把工具观察得到的质量信号归因到本 Run
+            // 用过的检索计划签名。没有工具观察则不归因，避免用打分器分数冒充准不准。
             await RecordDeferredAttributionAsync(state, cancellationToken).ConfigureAwait(false);
         }
     }
 
     /// <summary>
-    /// 延迟归因反馈：Run 终态时把最终结果质量归因到本 Run 使用过的检索计划签名。
-    /// 归因质量三档（AutomatedEvaluation 来源，高置信度）：
-    /// - Completed：0.9（最终答案收敛，检索帮助完成任务）；
-    /// - Cancelled：0.5（外部终止，中性）；
-    /// - 其余终态（Failed / DeadLettered 等）：0.2（任务未完成，检索未达成目标）。
-    /// 每条反馈以 (runId, signature) 幂等键去重（Run 重试/重放不重复归因）。
+    /// 延迟归因：Run 终态时把工具成功率归因到本 Run 用过的检索计划签名。
+    /// 没有工具观察则不写。幂等键 (runId, signature)，重试/重放不重复归因。
     /// </summary>
     private async Task RecordDeferredAttributionAsync(
         AgentRunExecutionState state,
@@ -527,12 +498,11 @@ public sealed class AgentRunActor
                 return;
             }
 
-            var quality = finalState switch
+            var quality = AgentTurnSearchQuery.ToolEvidence(state.Context.ToolObservations);
+            if (!quality.Effective)
             {
-                AgentRunState.Completed => 0.9,
-                AgentRunState.Cancelled => 0.5,
-                _ => 0.2
-            };
+                return;
+            }
 
             var now = DateTimeOffset.UtcNow;
             foreach (var signature in _usedRetrievalSignatures.Distinct(StringComparer.Ordinal))
@@ -541,15 +511,15 @@ public sealed class AgentRunActor
                 {
                     PlanSignature = signature,
                     WorkspaceId = state.Run.WorkspaceId,
-                    CollectionId = state.Run.WorkspaceId,
+                    CollectionId = state.Run.ResolveContextCollectionId(),
                     Purpose = AdaptiveAgentContextPurpose,
                     QueryText = string.Empty,
                     HitsReturned = 0,
                     Effective = true,
                     RecordedAtUtc = now,
                     Source = RetrievalFeedbackSource.AutomatedEvaluation,
-                    Confidence = 0.9,
-                    OutcomeQuality = quality,
+                    Confidence = quality.Confidence,
+                    OutcomeQuality = quality.Quality,
                     // 幂等：Run 重试 / 恢复重放不产生重复归因反馈。
                     IdempotencyKey = $"run:{state.Run.RunId}:{signature}"
                 }, cancellationToken).ConfigureAwait(false);
@@ -1746,6 +1716,11 @@ public sealed class AgentRunActor
                 throw new InvalidOperationException($"未知上下文构建状态：{contextBuildStatus}");
         }
 
+        // 上下文构建成功后立即持久化当前 Run：此时已缓冲 RunCreated / StateTransition 事件，
+        // 连同带 Resident 的 Run 快照一并提交。模型第一次调用中途取消或崩溃时，
+        // store 上已有本轮种子，新 Actor 可直接从 Run 恢复，不必等 Turn 正常结束。
+        await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
+
         // 模型传输未注入 → 降级：直接产出空响应，进入下一轮决策
         if (_modelTransport is null)
         {
@@ -1822,7 +1797,7 @@ public sealed class AgentRunActor
             Context = state.Context with { LastModelTurn = response }
         };
 
-        // 子问题 2：递增模型调用计数
+        // 递增模型调用计数
         _modelCallsUsed++;
         // 递增执行期内模型轮次计数（用于 RequestId 的 modelTurn）
         _executionModelTurn++;
@@ -1834,7 +1809,7 @@ public sealed class AgentRunActor
         var normalizedToolCalls = NormalizeToolCalls(state.Run.RunId, _executionModelTurn, response.ToolCalls);
         state = state with { NormalizedToolCalls = normalizedToolCalls };
 
-        // 子问题 3：累积 token + 费用到 _costBudget
+        // 累积 token + 费用到 _costBudget
         if (_costBudget is not null)
         {
             var billedCost = response.BilledCost > 0 ? response.BilledCost : response.EstimatedCost;
@@ -1845,7 +1820,7 @@ public sealed class AgentRunActor
             };
         }
 
-        // 子问题 2/3：同步 _turnBudget 的 ModelCallsUsed 计数
+        // 同步 _turnBudget 的 ModelCallsUsed 计数
         if (_turnBudget is not null)
         {
             _turnBudget = _turnBudget with { ModelCallsUsed = _modelCallsUsed };
@@ -1954,10 +1929,22 @@ public sealed class AgentRunActor
 
         var (status, decisionResult) = await TryExecuteDecisionAsync(state, cancellationToken).ConfigureAwait(false);
         // 阻断状态一律清空上轮决策结果（避免投影器使用过期 Materials），交由调用方终止本轮；
-        // 可继续的状态把决策结果存入供投影器使用。
-        state = status is AgentContextBuildStatus.Ready or AgentContextBuildStatus.OptionalRetrievalDegraded
-            ? state with { LastDecisionResult = decisionResult }
-            : state with { LastDecisionResult = null };
+        // 可继续的状态把决策结果存入供投影器使用，并把 Resident 写进 Run 以便崩溃后恢复。
+        if (status is AgentContextBuildStatus.Ready or AgentContextBuildStatus.OptionalRetrievalDegraded)
+        {
+            var run = decisionResult is null
+                ? state.Run
+                : state.Run with
+                {
+                    ResidentWorkingSetJson = AgentResidentWorkingSet.Serialize(
+                        AgentResidentWorkingSet.FromLastDecision(decisionResult))
+                };
+            state = state with { LastDecisionResult = decisionResult, Run = run };
+        }
+        else
+        {
+            state = state with { LastDecisionResult = null };
+        }
         return (status, state);
     }
 
@@ -1975,15 +1962,17 @@ public sealed class AgentRunActor
         }
 
         // 自适应检索规划器驱动 Agent 上下文构建（planner → Actor）。
-        // - 规划：由 run 派生规划输入（任务 + 当前意图 + 未解决目标 + 工作区 + 集合 + 用途），
-        //   PlanAsync 产出受控计划（自适应模式 Active 时应用预算收敛 / 查询收敛 / 召回增强策略），
-        //   计划 TokenBudget 注入决策请求——自适应策略真实作用于上下文构建。
+        // - 规划：由 run 派生规划输入（任务 + 意图 + 工具观察 + 未解决目标 + 上轮诊断 + 工作区 + 集合），
+        //   PlanAsync 产出受控计划（自适应模式 Active 时才改预算/查询权重），
+        //   计划 TokenBudget / TopK / RequiredIds 注入决策请求。
         // - 规划失败不阻断主链（自适应是增强层；降级为不设 TokenBudget，走引擎默认）。
         AgentRetrievalPlannerInput? plannerInput = null;
         var plannedTokenBudget = 0;
         var controlledQueryText = string.Empty;
         var plannedTopK = 0;
         IReadOnlyList<string> plannedRequiredIds = Array.Empty<string>();
+        IReadOnlyList<string> plannedExcludedIds = Array.Empty<string>();
+        IReadOnlyList<AgentRetrievalQuery>? plannedQueries = null;
         if (_adaptivePlanner is not null)
         {
             try
@@ -1995,23 +1984,28 @@ public sealed class AgentRunActor
                 {
                     OriginalTask = run.Task,
                     LatestAssistantIntent = currentIntent,
-                    UnresolvedGoals = string.IsNullOrWhiteSpace(run.Task)
-                        ? Array.Empty<string>()
-                        : new[] { run.Task },
+                    ToolObservations = state.Context.ToolObservations.Count == 0
+                        ? Array.Empty<ToolObservation>()
+                        : state.Context.ToolObservations.ToArray(),
+                    UnresolvedGoals = Array.Empty<string>(),
+                    PreviousRetrievalDiagnostics = AgentTurnSearchQuery.DiagnosticsFrom(state.LastDecisionResult),
+                    TurnBudget = run.TurnBudget,
                     WorkspaceId = run.WorkspaceId,
-                    CollectionId = run.WorkspaceId,
+                    CollectionId = run.ResolveContextCollectionId(),
                     Purpose = AdaptiveAgentContextPurpose
                 };
                 var plan = await _adaptivePlanner.PlanAsync(plannerInput, cancellationToken).ConfigureAwait(false);
                 plannedTokenBudget = plan.TokenBudget;
-                // 受控计划原生消费（P1-十六）：首条受控查询作为 QueryText（fallback 原始任务）、
-                // TopK 与 RequiredIds 注入决策请求——自适应策略（查询收敛/召回增强/预算收缩）
-                // 真实作用于 Decision Runtime，而非只拿 TokenBudget 后仍以 run.Task 检索。
-                controlledQueryText = plan.ControlledQueries.Count > 0
-                    ? plan.ControlledQueries[0].Text
-                    : run.Task;
+                plannedQueries = plan.ControlledQueries;
                 plannedTopK = plan.TopK;
                 plannedRequiredIds = plan.RequiredIds;
+                plannedExcludedIds = plan.ExcludedIds;
+                if (plannedExcludedIds.Count > 0 && plannedRequiredIds.Count > 0)
+                {
+                    plannedRequiredIds = plannedRequiredIds
+                        .Where(id => !plannedExcludedIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+                        .ToArray();
+                }
                 // 记录本 Run 使用的检索计划签名（延迟归因：Run 终态时把最终结果质量归因到该签名）。
                 _usedRetrievalSignatures.Add(AdaptiveRetrievalPlanSignature.Compute(plannerInput));
             }
@@ -2026,33 +2020,42 @@ public sealed class AgentRunActor
             }
         }
 
+        var plannedQueryTexts = AgentTurnSearchQuery.CollectQueries(
+            plannedQueries, run.Task, state.Context.ToolObservations);
+        controlledQueryText = AgentTurnSearchQuery.MergeQueries(plannedQueryTexts, run.Task);
+
         try
         {
-            var scope = new ContextDecisionScope(run.WorkspaceId, run.WorkspaceId);
+            var collectionId = run.ResolveContextCollectionId();
+            var scope = new ContextDecisionScope(run.WorkspaceId, collectionId);
             var agentSession = new AgentSessionId
             {
                 Value = run.SessionId,
                 WorkspaceId = run.WorkspaceId,
-                CollectionId = run.WorkspaceId,
+                CollectionId = collectionId,
                 CreatedAt = run.CreatedAt
             };
 
+            // 上一轮选中项作为 Resident 种子。本轮按计划查询分条检索。
+            // 未选中的不带入。不把选中 ID 设为 RequiredIds。失败工具确认不存在的 ID 排除。
             var request = new ContextDecisionRuntimeRequest
             {
                 RequestId = $"{run.WorkspaceId}/{run.RunId}-ctx-{_modelCallsUsed}",
                 Scope = scope,
                 Purpose = ContextDecisionPurpose.AgentContext,
-                // 受控查询文本（自适应计划首条查询；规划器未接入时回退原始任务）。
+                SeedWorkingSet = AgentResidentWorkingSet.WithoutIds(
+                    AgentResidentWorkingSet.ResolveSeed(
+                        state.LastDecisionResult, state.Run.ResidentWorkingSetJson),
+                    plannedExcludedIds),
                 QueryText = string.IsNullOrWhiteSpace(controlledQueryText) ? run.Task : controlledQueryText,
-                // 受控 Token 预算：规划器产出（含自适应收敛）>0 时覆盖引擎默认；
-                // 规划器未接入 / 规划失败时为 0（引擎按 profile 默认预算）。
                 TokenBudget = plannedTokenBudget,
-                // 受控 TopK：规划器产出（0 = 引擎按 profile 默认）。
                 TopK = plannedTopK,
-                // 激活 Late Hydration — Provider 仅召回 metadata（IncludeContent=false），
-                // Engine 选出 SelectedEnvelopes 后由 ISelectedCandidateHydrator 批量 hydrate 正文，
-                // 避免对未选中候选做无用正文 I/O。
-                RetrievalInput = new RetrievalInput { IncludeContent = false },
+                RetrievalInput = new RetrievalInput
+                {
+                    IncludeContent = false,
+                    ExcludedIds = plannedExcludedIds,
+                    QueryTexts = plannedQueryTexts
+                },
                 AgentInput = new AgentInput
                 {
                     Session = agentSession,
@@ -2064,9 +2067,9 @@ public sealed class AgentRunActor
             // 让投影器从 Materials 恢复候选正文，而不只是 CandidateId/Type/Score 摘要
             var result = await _decisionRuntime.ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
 
-            // 自适应反馈记录（best-effort，失败不阻断主链）：
-            // 命中数 / 预算超限 / 是否产出候选——闭环学习信号，供后续规划调整预算与查询收敛。
-            await RecordAdaptiveOutcomeAsync(run, plannerInput, controlledQueryText, result, cancellationToken).ConfigureAwait(false);
+            // 自适应反馈（best-effort）：命中数 / 预算超限记过程；质量只来自工具观察。
+            // 默认模式不应用乘数，失败不阻断主链。
+            await RecordAdaptiveOutcomeAsync(run, plannerInput, request.QueryText, result, cancellationToken).ConfigureAwait(false);
 
             // hydration 失败严重度处理。
             // 1) 日志：hydration.failedCount > 0 / hydration.budgetExceeded 时记录 Trace 警告（可观测性）。
@@ -2152,9 +2155,8 @@ public sealed class AgentRunActor
     }
 
     /// <summary>
-    /// 记录自适应检索反馈（best-effort 学习信号钩子，失败不阻断主链）。
-    /// 命中数取选中候选数；预算超限由决策结果（budget 拦截数 / EffectiveTokens 超预算）判定；
-    /// Effective = 是否产出候选结果（结果被后续投影采用）。
+    /// 记录自适应检索反馈（best-effort，失败不阻断主链）。
+    /// 命中数取选中候选数；质量取工具观察成功率。没有工具观察则无效，不把打分器分数当准。
     /// </summary>
     private async Task RecordAdaptiveOutcomeAsync(
         AgentRun run,
@@ -2175,37 +2177,25 @@ public sealed class AgentRunActor
                 && (outcome.BudgetExceededCount > 0
                     || (outcome.TokenBudget > 0 && outcome.EffectiveTokens > outcome.TokenBudget));
 
-            // 反馈质量信号（P1-十六）：不再用占位常量（Effective=result!=null /
-            // Confidence=1.0 / OutcomeQuality=1.0）学习"有没有召回东西"——
-            // 以选中候选的实际质量为信号（这些 Context 是否被上下文构建采用）：
-            // - Effective：产出且被采用（选中候选数 > 0——结果真正进入投影，而非仅非空）；
-            // - Confidence：最高选中候选分数（无分数时 0.5 中性，避免 1.0 恒真）；
-            // - OutcomeQuality：选中候选平均分（钳制 0-1；反映召回内容与任务的相关度）。
+            // 质量信号来自工具观察（外部结果），不用选中项的打分器分数。
+            // 还没有工具时记为无效，避免把启发式分数学成「准」。
             var selectedCount = Math.Max(0, outcome?.SelectedCount ?? 0);
-            var effective = result is not null && selectedCount > 0;
-            var selectedScores = result?.Decision.SelectedEnvelopes
-                .Select(e => e.Utility.FinalScore)
-                .Where(s => s > 0)
-                .ToArray() ?? Array.Empty<double>();
-            var confidence = selectedScores.Length > 0 ? Math.Clamp(selectedScores.Max(), 0.0, 1.0) : 0.5;
-            var outcomeQuality = selectedScores.Length > 0
-                ? Math.Clamp(selectedScores.Average(), 0.0, 1.0)
-                : 0.0;
+            var evidence = AgentTurnSearchQuery.ToolEvidence(plannerInput.ToolObservations);
 
             await _adaptivePlanner.RecordOutcomeAsync(new RetrievalPlanFeedback
             {
                 PlanSignature = AdaptiveRetrievalPlanSignature.Compute(plannerInput),
                 WorkspaceId = run.WorkspaceId,
-                CollectionId = run.WorkspaceId,
+                CollectionId = run.ResolveContextCollectionId(),
                 Purpose = AdaptiveAgentContextPurpose,
                 QueryText = string.IsNullOrWhiteSpace(controlledQueryText) ? run.Task : controlledQueryText,
                 HitsReturned = selectedCount,
                 BudgetExceeded = budgetExceeded,
-                Effective = effective,
+                Effective = evidence.Effective,
                 RecordedAtUtc = DateTimeOffset.UtcNow,
                 Source = RetrievalFeedbackSource.Runtime,
-                Confidence = confidence,
-                OutcomeQuality = outcomeQuality
+                Confidence = evidence.Confidence,
+                OutcomeQuality = evidence.Quality
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2329,7 +2319,7 @@ public sealed class AgentRunActor
         {
             var toolCall = state.LastModelResponse.ToolCalls[toolIndex];
 
-            // Bug 5 修复：在循环开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
+            //在循环开始时生成 toolCallId，同时用于 ToolCallStarted 和 ToolCallCompleted
             // 确保 ToolCallStarted 事件和 ToolCallCompleted 事件的审计 ID 一致。
             // 多轮协议修复：优先使用模型返回的 ToolCallId（如 OpenAI 的 tool_call_id），
             // 确保 Tool 观察消息的 tool_call_id 与 Assistant 消息的 tool_calls[].id 一致——
@@ -2394,7 +2384,7 @@ public sealed class AgentRunActor
                 var validation = await _toolCallValidator.ValidateAsync(state.Run.WorkspaceId, state.Run.RunId, toolCall, cancellationToken).ConfigureAwait(false);
                 if (!validation.IsValid)
                 {
-                    // 子问题 6：校验失败的 ToolCallCompleted 也含 toolCallId（便于恢复时定位）
+                    // 校验失败的 ToolCallCompleted 也含 toolCallId（便于恢复时定位）
                     state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
                         toolCallId: toolCallId,
                         requestId: null,
@@ -2544,7 +2534,7 @@ public sealed class AgentRunActor
             // flush 持久化 ToolCallStarted 后再执行外部 Tool（先日志后执行）。
             await FlushPendingEventsAsync(state.Run, cancellationToken).ConfigureAwait(false);
 
-            // 子问题 5：通过 IDurableToolExecutor 执行（若注入），否则回退到直接 IToolDispatcher
+            // 通过 IDurableToolExecutor 执行（若注入），否则回退到直接 IToolDispatcher
             ToolExecutionResult? toolResult = null;
             if (_durableToolExecutor is not null)
             {
@@ -2566,7 +2556,7 @@ public sealed class AgentRunActor
             else
             {
                 // 回退路径：直接调 IToolDispatcher（无 journal，无 durable 保证）
-                // Bug 5 修复：使用预生成的 toolCallId 作为 RequestId（与 ToolCallStarted/Completed 一致）
+                //使用预生成的 toolCallId 作为 RequestId（与 ToolCallStarted/Completed 一致）
                 var dispatchResult = await _toolDispatcher.DispatchAsync(new ToolDispatchRequest
                 {
                     ToolName = toolCall.ToolName ?? string.Empty,
@@ -2588,7 +2578,7 @@ public sealed class AgentRunActor
                 };
             }
 
-            // 4. 记录 ToolCallCompleted（子问题 6：含完整 Tool 身份信息； Bug 5 修复：使用同一 toolCallId）
+            // 4. 记录 ToolCallCompleted（含完整 Tool 身份信息；使用同一 toolCallId）
             state = BufferEvent(state, AgentRunEventType.ToolCallCompleted, JsonSerializer.Serialize(BuildCompletedPayload(
                 toolCallId: toolCallId,
                 requestId: toolResult.RequestId,
@@ -2730,7 +2720,7 @@ public sealed class AgentRunActor
            || state == ToolDispatchState.Reconciling;
 
     /// <summary>
-    /// 子问题 6：构建 ToolCallCompleted 事件 payload（含完整 Tool 身份信息）。
+    /// 构建 ToolCallCompleted 事件 payload（含完整 Tool 身份信息）。
     /// payload 结构与事件流中的 ToolCallCompleted payload 对齐（JSON 字段名兼容），
     /// 让恢复路径可从 payload 反序列化真实 RequestId/SideEffect/IdempotencyKey。
     /// </summary>
@@ -2747,7 +2737,7 @@ public sealed class AgentRunActor
         string? error,
         double durationMs)
     {
-        // 子问题 6：新增字段（toolCallId / requestId / idempotencyKey / sideEffect /
+        // 新增字段（toolCallId / requestId / idempotencyKey / sideEffect /
         // externalOperationId / journalState / resultDigest）
         var resultDigest = ComputeResultDigest(output ?? error);
         return new
@@ -2767,7 +2757,7 @@ public sealed class AgentRunActor
         };
     }
 
-    /// <summary>子问题 6：计算结果摘要（SHA-256，小写 hex）。</summary>
+    /// <summary>计算结果摘要（SHA-256，小写 hex）。</summary>
     private static string? ComputeResultDigest(string? text)
     {
         if (string.IsNullOrEmpty(text))
@@ -2817,7 +2807,7 @@ public sealed class AgentRunActor
 
     /// <summary>执行 Checkpoint 阶段。</summary>
     /// <remarks>
-    /// 子问题 4：Create checkpoint → Save checkpoint（IAgentCheckpointStore.SaveAsync）→
+    /// Create checkpoint → Save checkpoint（IAgentCheckpointStore.SaveAsync）→
     /// 缓冲 CheckpointSaved event → 本地推进到 ContextBuilding。
     /// 顺序必须是保存成功后才记录事件（不能先记录成功事件再保存）。
     /// Bug 4 修复：SaveAsync 失败时显式捕获异常，转 Failed 状态，不记录 CheckpointSaved 事件。

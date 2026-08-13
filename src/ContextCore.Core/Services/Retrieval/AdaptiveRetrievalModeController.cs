@@ -19,7 +19,7 @@ public sealed record AdaptiveModeTransition
 }
 
 /// <summary>
-/// 自适应检索运行模式控制器（WP-X）：支持生产运行时动态切换
+/// 自适应检索运行模式控制器：支持运行时动态切换
 /// Disabled / Shadow / Active，并记录切换审计。
 /// 生产启用流程：Disabled（默认，fail-closed）→ Shadow（观察期，计算不应用）
 /// → 审核 → Active（应用）；一键回退 = 切换回 Disabled。

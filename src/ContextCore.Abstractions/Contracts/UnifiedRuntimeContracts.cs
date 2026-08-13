@@ -382,7 +382,7 @@ public sealed record ContextDecisionRuntimeRequest
     /// <summary>
     /// 种子 WorkingSet（含 Envelopes + Materials）。
     /// 正式路径接受完整 WorkingSet，而非只有 Envelope 的 SeedCandidates。
-    /// Replay/Agent 显式注入时 Seed Material 不再丢失。
+    /// Replay / Agent 跨轮 Resident 注入时保留上一轮选中项的正文。
     /// null 时回退到 <see cref="SeedCandidates"/>（向后兼容）。
     /// </summary>
     public CandidateWorkingSet? SeedWorkingSet { get; init; }
@@ -414,6 +414,9 @@ public sealed record RetrievalInput
     /// <summary>必需 ID 列表（mandatory recall）。</summary>
     public IReadOnlyList<string> RequiredIds { get; init; } = [];
 
+    /// <summary>排除 ID 列表（确认不存在的条目，不参与召回）。</summary>
+    public IReadOnlyList<string> ExcludedIds { get; init; } = [];
+
     /// <summary>外部 refs（强制召回）。</summary>
     public IReadOnlyList<string> Refs { get; init; } = [];
 
@@ -425,6 +428,13 @@ public sealed record RetrievalInput
 
     /// <summary>embedding query instruction（如 BGE 前缀）。</summary>
     public string? QueryInstruction { get; init; }
+
+    /// <summary>
+    /// 额外词法查询。非空时 Lexical 按条检索再按 ID 合并（保留最高分），
+    /// 不再把多条问句拼成一句导致词元上限截掉后面的观察。
+    /// 空则仍用 RewrittenQueryText / 请求 QueryText。
+    /// </summary>
+    public IReadOnlyList<string> QueryTexts { get; init; } = [];
 
     /// <summary>候选 take（粗排上限）。</summary>
     public int CandidateTake { get; init; }

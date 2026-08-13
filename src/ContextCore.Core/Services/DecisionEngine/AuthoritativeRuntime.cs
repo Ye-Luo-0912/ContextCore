@@ -7,22 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
-// ===========================================================================
-// Authoritative Cutover — Retrieval → Package → AgentContext
-// 
-// 目标（B-4 阶段：V2 Runtime 成为权威路径，Legacy 降级为可选 fallback）：
-// 1. AuthoritativeRetrievalRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
-// 2. AuthoritativePackageRuntime：V2 执行 + 可选 Shadow parity 校验 + fallback。
-// 3. AuthoritativeAgentContextRuntime：V2 执行 + AgentContextProjector 投影。
-// 4. CutoverController：控制 Legacy → V2 切换比例（0% = Legacy only，
-// 100% = V2 only，中间值 = 按 requestId 哈希分流）。
-// 
-// 设计原则：
-// 1. 渐进切换：CutoverController 按 percentage 控制流量比例，支持灰度。
-// 2. Fallback 安全：V2 失败时自动回退到 Legacy（fail-open）。
-// 3. Parity 监控：切换期间持续 Shadow parity 校验，Divergent 自动回退。
-// 4. B-4 不删除 Legacy 代码（B-5 才删除）；Legacy 仍可通过 CutoverPercentage=0 启用。
-// ===========================================================================
+// HTTP 检索/打包的装饰器：按 CutoverController 在两条实现之间切换。
+// 缺省（FromEnvironment）是 100：只走 IContextDecisionRuntime；失败不回退 Legacy。
+// 0：只走 HybridContextRetriever / BasicContextPackageBuilder。
+// 中间值：按 requestId 哈希分流，并可做 shadow/parity。
+// CutoverController 无参构造仍是 0，给 canary 每轮隔离用；HTTP 默认百分比来自 CutoverConfiguration。
+// Agent Run 的 ContextBuilding 不经过本装饰器，直接调用 IContextDecisionRuntime。
 
 // ---------------------------------------------------------------------------
 // CutoverController — 渐进切换控制
@@ -40,7 +30,10 @@ public sealed class CutoverController
 {
     private int _cutoverPercentage;
 
-    /// <summary>构造控制器，默认 cutoverPercentage=0（全部 Legacy）。</summary>
+    /// <summary>
+    /// 构造控制器。无参时为 0（全部 Legacy），给 canary 每轮隔离用。
+    /// HTTP 进程默认百分比来自 <see cref="CutoverConfiguration.FromEnvironment"/>，不是本构造缺省。
+    /// </summary>
     public CutoverController(int cutoverPercentage = 0)
     {
         if (cutoverPercentage < 0 || cutoverPercentage > 100)
@@ -264,7 +257,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
     // 可选的 per-run CutoverController 解析器。
     // 非空时按请求 metadata 中的 canaryRunId 解析到对应 run 的专用控制器；
-    // 为 null 时回退到直接注入的 _cutoverController（B-5 行为，向后兼容）。
+    // 为 null 时回退到直接注入的 _cutoverController。
     private readonly ICutoverControllerResolver? _cutoverResolver;
     // 可选的 Canary 指标采集器。非空时 Mixed mode + Sampled shadow 路径会调用
     // RecordObservation 上报 V2/Legacy 耗时与 parity，让 CanaryProgressionHostedService 有生产样本可消费。
@@ -510,9 +503,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     }
 
     /// <summary>
-    /// 从 ContextRetrievalRequest 构建完整的 V2 RuntimeRequest，
-    /// 携带 RetrievalInput（完整保留 RequiredIds/RequiredTags/QueryVector/IncludeVectorRecall/
-    /// IncludeRelationExpansion/RewrittenQueryText 等）+ 真实 TokenBudget。
+    /// 从 ContextRetrievalRequest 构建 V2 RuntimeRequest。
+    /// 请求带 QueryTexts 时按条词法检索；为空则回退单条 QueryText（RewrittenQueryText 优先）。
     /// </summary>
     private static ContextDecisionRuntimeRequest BuildV2RetrievalRequest(ContextRetrievalRequest request)
     {
@@ -528,6 +520,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
             RetrievalInput = new RetrievalInput
             {
                 RewrittenQueryText = request.RewrittenQueryText,
+                QueryTexts = request.QueryTexts,
                 RequiredTags = request.RequiredTags,
                 RequiredTypes = request.RequiredTypes,
                 RequiredIds = request.RequiredIds,
@@ -934,6 +927,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     /// 携带 PackageInput（完整保留 RequiredIds/RequiredTags/QueryVector 等）+ 真实 TokenBudget。
     /// 补齐 Mode/Policy/IncludeRecent/IsAuditMode/Metadata 字段映射，
     /// 完整保留原 ContextPackageRequest 语义。
+    /// RetrievalInput 只补 Lexical 需要的 QueryTexts（空则回退单条 QueryText），
+    /// IncludeContent 保持默认 true，与未设 RetrievalInput 时行为一致。
     /// </summary>
     private static ContextDecisionRuntimeRequest BuildV2PackageRequest(ContextPackageRequest request)
     {
@@ -949,6 +944,10 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
             TokenBudget = request.TokenBudget > 0 ? request.TokenBudget : 4096,
             TopK = int.MaxValue,
             SeedCandidates = Array.Empty<ContextCandidateEnvelope>(),
+            RetrievalInput = new RetrievalInput
+            {
+                QueryTexts = request.QueryTexts
+            },
             PackageInput = new PackageInput
             {
                 RequiredTags = request.RequiredTags,

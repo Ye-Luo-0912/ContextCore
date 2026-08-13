@@ -15,3 +15,10 @@
 ## 测试与验证
 
 - 开发过程中只跑本次改动相关的定向测试，**不频繁跑全量测试**；全部任务完成后统一跑一次全量测试（ContextCore.Tests 失败须恰好 11 个既有项）。
+
+## 现行工作
+
+- 查「现在走哪」：[`docs/LIVE_PATH.md`](docs/LIVE_PATH.md)
+- 下一阶段（召回接线）按工作包执行：[`docs/RECALL_WIRING.md`](docs/RECALL_WIRING.md)
+- 不要按 [`TODO.md`](TODO.md) 的 R46 / WP-AC / WP-AD 开工
+- 不要打开 Adaptive Active、Learning 训练、原型 `materialize`

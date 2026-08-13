@@ -12,46 +12,21 @@ using ContextCore.Core.Services.Policy;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
-// ===========================================================================
-// Unified Runtime 默认实现骨架（Skeletons）
-//
-// 目标（B-1 阶段：Contracts correction，无行为变更）：
-// 为 ~ 新增契约提供可编译、可注入的默认实现。
-// 这些骨架仅满足"契约可实例化 + DI 可注册"，不接入生产主链。
-// 真正的编排逻辑（Provider 召回、Shadow tee、Authoritative cutover）
-// 由 B-2~B-5 阶段实现，届时本文件中的骨架将被替换或重构。
-//
-// 设计原则：
-// 1. 不改生产行为：DefaultContextDecisionEngine（既有接口 IContextDecisionEngine）
-// 保持不变；本文件中的实现不被 AddContextCore 注册到主链（B-1-4 仅注册接口，
-// 不替换 IContextRetriever / IContextPackageBuilder）。
-// 2. 骨架语义自洽：每个骨架实现最简但合法的逻辑，避免 NotImplementedException。
-// 3. 依赖注入友好：构造函数接受协作者，便于 B-2 替换为真实实现。
-// 4. rule-only convergence：UtilityScorer 使用 w_d=1.0 / w_m=0.0；
-// FeaturePipeline 为 identity transform；Allocator 使用 TopK + TokenBudget 硬截断。
-//
-// 替换策略：
-// - DefaultContextDecisionRuntime 替换为真实编排（Policy → Router → Providers →
-// Merge → EarlyGate → FeaturePipeline → Engine → Allocator）。
-// - DefaultRouter / DefaultExpertCatalog / DefaultCanonicalCandidateMerger
-// 替换为接入真实 Provider 网络的实现。
-// - Legacy 移除后，本文件中保留的实现升级为权威路径。
-// ===========================================================================
+// 本文件是 IContextDecisionRuntime 的默认实现。
+// DI 把它注册为 IContextDecisionRuntime。Agent Run 的 ContextBuilding 直接调用它。
+// HTTP 的 /api/context/retrieve 与 /api/package/build 经 Cutover 装饰器进入本运行时（缺省切流 100）。
+// 设 CC_CUTOVER_PERCENTAGE=0 时，装饰器把这两条 HTTP 路径交给 HybridContextRetriever / BasicContextPackageBuilder。
 
 // ---------------------------------------------------------------------------
-// DefaultContextDecisionRuntime（B-2 升级为 pure Runtime）
+// DefaultContextDecisionRuntime
 // ---------------------------------------------------------------------------
 
 /// <summary>
 /// 统一 Context Decision Runtime — pure Runtime 真实编排。
 /// </summary>
 /// <remarks>
-/// 修复：移除 Runtime 后二次 Allocate。Engine 是分配的唯一权威所有者，
-/// Runtime 不再在 Engine 后调用 IGlobalAllocator。Engine 内部已执行
-/// SafetyGate → UtilityScoring → 排序 → TopK/TokenBudget 截断。
-///
-/// 修复：Runtime 注入 IRouter / IExpertCatalog / ICandidateProvider / ICanonicalCandidateMerger，
-/// 真正执行 Route → Provider → Merge → SeedCandidates merge → EarlyGate → Feature → Engine。
+/// Engine 是唯一分配点：本 Runtime 不再在 Engine 之后调用 IGlobalAllocator。
+/// Engine 内部执行 SafetyGate → 评分 → 排序 → TopK/TokenBudget 截断。
 ///
 /// 编排流程：
 /// 1. 策略解析（IResolvedPolicyProvider → EffectivePolicySnapshot）

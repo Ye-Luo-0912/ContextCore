@@ -55,6 +55,13 @@ connectionstrings.local.json
 !src/ContextCore.Inference.Onnx/*.cs
 !src/ContextCore.Inference.Onnx/*.csproj
 
+# Local smoke / agent logs at repo root
+/*.log
+
+# BenchmarkDotNet local counters
+benchmarks/results/.counters/
+
 # Python gate scripts (ci evidence)
 __pycache__/
 *.pyc
+

@@ -214,9 +214,12 @@ public sealed class R29P_DurableRunSchedulerTests
     public async Task Host_AvailableQueueSlots_ReflectsFreeCapacity()
     {
         var transport = new RecordingBlockingTransport();
+        var runStore = new InMemoryAgentRunStore();
         var services = new ServiceCollection();
-        services.AddSingleton<IAgentRunStore>(new InMemoryAgentRunStore());
-        services.AddSingleton<IAgentRunEventStore>(new InMemoryAgentRunEventStore(new InMemoryAgentRunStore()));
+        services.AddSingleton<IAgentRunStore>(runStore);
+        // 事件存储复用同一 Run Store 实例：Actor 的批量提交（含构建后立即落库）
+        // 需要能在 store 上找到 Run 做状态 CAS，不能是另一个空实例。
+        services.AddSingleton<IAgentRunEventStore>(new InMemoryAgentRunEventStore(runStore));
         services.AddSingleton<IToolDispatcher>(new NoopToolDispatcher());
         services.AddSingleton<IAgentModelTransport>(transport);
         services.AddSingleton(new AgentHostOptions
@@ -235,6 +238,9 @@ public sealed class R29P_DurableRunSchedulerTests
 
         var run1 = BuildRun("slots-1");
         var run2 = BuildRun("slots-2");
+        // Run 需先落 store（Actor 在构建后立即 flush，state CAS 依赖 store 上的 Run）。
+        await runStore.CreateAsync(run1);
+        await runStore.CreateAsync(run2);
         Assert.AreEqual(AgentRunEnqueueStatus.Accepted, (await host.TryEnqueueAsync(run1)).Status);
 
         // worker 拾起 run1 并阻塞在 transport → 队列槽位释放，空闲槽位恢复为 4。

@@ -36,7 +36,7 @@ internal static class CoreExtensions
 {
 	/// <summary>注册 Core 业务服务（摄取、打包、校验、晋升、工作记忆）。</summary>
 	/// <remarks>
-	/// 子问题5：使用默认 ModelExecutionOptions（Deterministic 模式），向后兼容。
+	/// 使用默认 ModelExecutionOptions（Deterministic 模式），向后兼容。
 	/// [Obsolete] 此重载强制选择 Deterministic 模式，与 ProductionHA Profile 真实运行模式分裂。
 	/// 新代码应使用 <see cref="ProductionRuntimeExtensions.AddContextCoreRuntime"/> 单一入口，
 	/// 由该方法按 ContextCoreRuntime:ModelMode 配置选择正确的 ModelExecutionOptions。
@@ -51,10 +51,10 @@ internal static class CoreExtensions
 	/// 注册 Core 业务服务，并按 <paramref name="modelExecutionOptions"/> 选择 IBatchInferenceEngine 注册方式。
 	/// </summary>
 	/// <param name="services">DI 容器。</param>
-	/// <param name="modelExecutionOptions">模型执行配置（子问题5：控制 Deterministic / RealModel 模式）。</param>
+	/// <param name="modelExecutionOptions">模型执行配置（控制 Deterministic / RealModel 模式）。</param>
 	public static IServiceCollection AddContextCore(this IServiceCollection services, ModelExecutionOptions modelExecutionOptions)
 	{
-		// 子问题5：注册 ModelExecutionOptions 单例（供 HostedService / 运行时查询当前模式）。
+		// 注册 ModelExecutionOptions 单例（供 HostedService / 运行时查询当前模式）。
 		services.AddSingleton(modelExecutionOptions ?? ModelExecutionOptions.Default);
 
 		// ContextStateCache 基础设施。InMemoryContextStateCache 同时实现
@@ -385,10 +385,11 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 
-		// Unified Decision Runtime — pure Runtime + Shadow tee 注册。
-		// 主链（IContextRetriever / IContextPackageBuilder）已切换为 Authoritative Runtime（装饰器模式）。
-		// IContextDecisionRuntime 已升级为真实编排（EarlyGate → Feature → Safety → Score → Engine → Allocator）。
-		// ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，产出 Diagnostic parity 报告（B-3 升级为 Hard）。
+		// 决策运行时与 HTTP 检索/打包装饰器。
+		// IContextDecisionRuntime 是真实编排（策略 → 路由 → Provider → 门控 → 评分 → Engine 分配）。
+		// IContextRetriever / IContextPackageBuilder 指向 Authoritative* 装饰器，不是直接指向决策运行时。
+		// 装饰器缺省（切流 100）把 HTTP 流量交给决策运行时；切流 0 时交给 HybridContextRetriever / BasicContextPackageBuilder。
+		// Agent ContextBuilding 不经过装饰器，直接用 IContextDecisionRuntime。
 		// 注册 IPolicyRegistry 默认实现（in-memory DefaultPolicyRegistry）。
 		// 使用 TryAdd 避免 Postgres provider 扩展已注册 PostgresPolicyRegistry 时产生重复注册。
 		// 调用顺序：AddContextStorage(Postgres) 先注册 → AddContextCore 的 TryAdd 跳过。
@@ -416,10 +417,9 @@ internal static class CoreExtensions
 			performanceMonitor: sp.GetService<IPerformanceMonitor>(),
 			componentHealthRegistry: sp.GetService<IComponentHealthRegistry>()));
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
-		// 将 IResolvedPolicyProvider 从 B-1 骨架 DefaultResolvedPolicyProvider 替换为
-		// PostgresResolvedPolicyProvider，接入 IPolicyRegistry（CAS epoch + content hash +
-		// activation override + request override）。IPolicyRegistry 由 DefaultPolicyRegistry
-		// （in-memory）或 PostgresPolicyRegistry（生产）提供。
+		// IResolvedPolicyProvider 使用 PostgresResolvedPolicyProvider，接入 IPolicyRegistry
+		// （CAS epoch + content hash + 激活覆盖 + 请求覆盖）。
+		// 未配 Postgres 时 IPolicyRegistry 是内存 DefaultPolicyRegistry。
 		services.AddSingleton<PostgresResolvedPolicyProvider>();
 		services.AddSingleton<IResolvedPolicyProvider>(sp => sp.GetRequiredService<PostgresResolvedPolicyProvider>());
 		services.AddSingleton<IExpertCatalog, DefaultExpertCatalog>();
@@ -463,7 +463,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
 		// DefaultUtilityScorer 注入模型推理 + 校准 + 特征 schema（可选）。
 		// null 时强制 rule-only（EnableModelScoring=true 也不触发模型路径）。
-		// 子问题6：IFeatureSchemaValidator 为必须依赖（非 null），推理前强制校验输入特征与 schema 一致性；
+		// IFeatureSchemaValidator 为必须依赖（非 null），推理前强制校验输入特征与 schema 一致性；
 		// IInferenceResultValidator 可选（未注册时 Scorer 内部回退 DefaultInferenceResultValidator）。
 		services.AddSingleton<IUtilityScorer>(sp => new DefaultUtilityScorer(
 			sp.GetRequiredService<IFeatureSchemaValidator>(),
@@ -593,7 +593,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ShadowDecisionRuntime>();
 		services.AddSingleton<ShadowGate>();
 		services.AddSingleton<ShadowGateEvaluator>();
-		// CutoverConfiguration 从环境变量读取（默认 0% = Legacy only）
+		// CutoverConfiguration 从环境变量读取（默认 100% = HTTP 走决策运行时）
 		services.AddSingleton(CutoverConfiguration.FromEnvironment());
 		services.AddSingleton<CutoverController>(sp =>
 		{
@@ -616,11 +616,8 @@ internal static class CoreExtensions
 		services.AddSingleton<AuthoritativeRetrievalRuntime>();
 		services.AddSingleton<AuthoritativePackageRuntime>();
 		services.AddSingleton<AuthoritativeAgentContextRuntime>();
-		// 主链接口注册为 Authoritative Runtime（装饰器模式）。
-		// IContextRetriever → AuthoritativeRetrievalRuntime（注入 HybridContextRetriever 具体类型，无 DI 循环）。
-		// IContextPackageBuilder → AuthoritativePackageRuntime（注入 BasicContextPackageBuilder 具体类型，无 DI 循环）。
-		// Legacy 具体类型仍注册为 concrete type（上方 RuntimeServices.PackageBuilder / .Retriever），
-		// 供 Authoritative Runtime 作为 fallback 路径注入。普通消费者通过接口获取的是 V2 装饰器。
+		// HTTP 消费者拿到的是装饰器，不是决策运行时本身。
+		// 旧实现仍以具体类型注册（上方 RuntimeServices.PackageBuilder / Retriever），供装饰器在切流为 0、灰度中间值或 Kill Switch 时调用。
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<AuthoritativeRetrievalRuntime>());
 		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<AuthoritativePackageRuntime>());
 		// DecisionExperimentPlane 长期保留（sampled shadow + replay fixtures）
@@ -699,7 +696,7 @@ internal static class CoreExtensions
 
 		// Model Execution Runtime 默认实现。
 		// - IFeatureRegistry：in-memory 特征 schema 注册表（生产可替换为持久化实现）
-		// - IBatchInferenceEngine：按 ModelExecutionMode 选择注册方式（子问题5）
+		// - IBatchInferenceEngine：按 ModelExecutionMode 选择注册方式
 		// - ICalibrationService：Platt scaling 默认 A=1 B=0（identity 的 sigmoid 形式）
 		// 三者均为 Singleton 生命周期：无状态/线程安全，可被多个请求共享。
 		// IFeatureRegistry 预注册 default schema 匹配 DeterministicBatchInferenceEngine.ModelVersion，
@@ -724,13 +721,13 @@ internal static class CoreExtensions
 			return registry;
 		});
 
-		// 子问题5：按 ModelExecutionMode 选择 IBatchInferenceEngine 注册方式。
+		// 按 ModelExecutionMode 选择 IBatchInferenceEngine 注册方式。
 		// 默认 Deterministic 模式：注册 DeterministicBatchInferenceEngine（feature hash 确定性分数）。
 		// RealModel 模式：注册 ModelActivationManager，以 DeterministicBatchInferenceEngine 为 fallback，
 		// 运行时通过 IModelActivationManager.ActivateAsync 切换到真实 ONNX 模型。
 		// 两种模式都注册 DeterministicBatchInferenceEngine 为具体类型（供 fallback / 直接消费方使用）。
 		services.TryAddSingleton<DeterministicBatchInferenceEngine>();
-		// 子问题1：同时注册 DeterministicBatchInferenceEngine 为 IFallbackInferenceEngine，
+		// 同时注册 DeterministicBatchInferenceEngine 为 IFallbackInferenceEngine，
 		// 供 ModelActivationManager 构造函数注入（避免与 IBatchInferenceEngine 注册冲突导致循环依赖）。
 		services.TryAddSingleton<IFallbackInferenceEngine>(sp => sp.GetRequiredService<DeterministicBatchInferenceEngine>());
 		if (modelExecutionOptions?.Mode == ModelExecutionMode.RealModel)
@@ -738,7 +735,7 @@ internal static class CoreExtensions
 			// RealModel 模式：注册 ModelActivationManager 为 IBatchInferenceEngine。
 			// 前置条件：调用方需注册 IModelArtifactRegistry（由 PostgresServiceCollectionExtensions 提供）。
 			// IOnnxInferenceSessionFactory 默认使用 OnnxRuntimeInferenceSessionFactory（TryAdd 不覆盖调用方注册）。
-			// 子问题1：ModelActivationManager 构造函数注入 IFallbackInferenceEngine（而非 IBatchInferenceEngine），
+			// ModelActivationManager 构造函数注入 IFallbackInferenceEngine（而非 IBatchInferenceEngine），
 			// 避免解析 IBatchInferenceEngine 时回到 ModelActivationManager 自身（循环依赖）。
 			services.TryAddSingleton<IOnnxInferenceSessionFactory, OnnxRuntimeInferenceSessionFactory>();
 			services.AddSingleton<ModelActivationManager>(sp => new ModelActivationManager(
@@ -802,7 +799,7 @@ internal static class CoreExtensions
 		// 与 IInferenceResultValidator 互补：前者关心输入 vs schema，后者关心输出 vs 输入约束。
 		services.TryAddSingleton<IFeatureSchemaValidator, DefaultFeatureSchemaValidator>();
 
-		// 子问题6：IInferenceResultValidator — 推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
+		// IInferenceResultValidator — 推理输出严格验证（NaN/Infinity/Confidence 范围/Count 一致性）。
 		// 由 DefaultUtilityScorer 在推理后调用，验证失败时降级到 deterministic（fail-safe）。
 		// TryAddSingleton 避免覆盖调用方注册的自定义验证器。
 		services.TryAddSingleton<IInferenceResultValidator, DefaultInferenceResultValidator>();
@@ -817,14 +814,14 @@ internal static class CoreExtensions
 		// Tool 目录与分派器同实例注册（Actor 经 IToolCatalog 读取 Tool 定义，避免向下转型到具体类型）。
 		services.TryAddSingleton<IToolCatalog, EchoToolDispatcher>();
 
-		// 子问题 8：Agent Run Actor 生产化注册（模型驱动的 Agent 执行循环）。
+		// Agent Run Actor 生产化注册（模型驱动的 Agent 执行循环）。
 		// 注册顺序：底层依赖（Store / Journal / Executor）→ 策略 / 校验 / 审批 → ModelTransport → Host。
 		// 所有注册使用 TryAdd 不覆盖调用方已注册的自定义实现；执行平面已收敛到
 		// AgentRunStore → AgentKernelHost → AgentRunActor（无独立 IAgentKernel / Transport 平面）。
 
-		// 子问题 8：Agent Run 元数据 Store（进程内默认实现；Postgres provider 可覆盖）
+		// Agent Run 元数据 Store（进程内默认实现；Postgres provider 可覆盖）
 		services.TryAddSingleton<IAgentRunStore, InMemoryAgentRunStore>();
-		// 子问题 8：Agent Run 事件流 Store（进程内默认实现；Postgres provider 可覆盖）
+		// Agent Run 事件流 Store（进程内默认实现；Postgres provider 可覆盖）
 		services.TryAddSingleton<IAgentRunEventStore, InMemoryAgentRunEventStore>();
 
 		// 2e：Agent Run 事件推送通知器（SSE push 通道）。
@@ -832,7 +829,7 @@ internal static class CoreExtensions
 		// 无事件时 500ms 超时回退轮询；多实例部署时跨实例 SSE 客户端依赖轮询兜底。
 		services.TryAddSingleton<IAgentRunEventNotifier, ChannelAgentRunEventNotifier>();
 
-		// 子问题 8：循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
+		// 循环策略 + Tool 校验 + 审批门（默认实现，可被调用方覆盖）
 		services.TryAddSingleton<IAgentLoopPolicy, DefaultAgentLoopPolicy>();
 		// 服务端 Tool 成本估算器：审批成本阈值判定不依赖模型填写的估算值。
 		services.TryAddSingleton<IToolCostEstimator, DefaultToolCostEstimator>();
@@ -879,12 +876,12 @@ internal static class CoreExtensions
 				approvalPolicy: approvalPolicy);
 		});
 
-		// 子问题 8：IAgentCheckpointFactory（默认实现）。
+		// IAgentCheckpointFactory（默认实现）。
 		// 注：DefaultAgentCheckpointFactory 依赖 KernelStateAccessor（由状态持有方构造，无法由 DI 直接激活），
 		// 故此处不再注册。生产环境 AgentRunActor._checkpointFactory 为 null，checkpoint 走事件流游标路径
 		// （_pendingTurnCheckpoint + AppendBatchAsync 单事务持久化）；测试通过 StubCheckpointFactory 注入。
 
-		// 子问题 7：IAgentModelTransport fallback 实现（确定性响应，不调用真实 LLM）。
+		// IAgentModelTransport fallback 实现（确定性响应，不调用真实 LLM）。
 		// 生产部署应替换为真实 LLM adapter（OpenAI / Anthropic / ModelGateway）。
 		services.TryAddSingleton<IAgentModelTransport, DeterministicAgentModelTransport>();
 
@@ -931,7 +928,7 @@ internal static class CoreExtensions
 				sp.GetService<AdaptiveRetrievalModeController>());
 		});
 
-		// 子问题 5：IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
+		// IDurableToolExecutor（封装 Tool 调用的 durable 流程：journal + dispatch）。
 		// 依赖 IToolDispatcher（已注册）+ 可选 IToolDispatchJournal（Postgres provider 可注入持久化实现）。
 		services.TryAddSingleton<IDurableToolExecutor, DefaultDurableToolExecutor>();
 
@@ -939,7 +936,7 @@ internal static class CoreExtensions
 		// 由 DefaultDurableToolExecutor 消费，决定 Dispatch 后是否自动提交。
 		services.TryAddSingleton<IToolEffectPolicy, DefaultToolEffectPolicy>();
 
-		// 子问题 8：IToolDispatchJournal（进程内默认实现；Postgres provider 可覆盖）。
+		// IToolDispatchJournal（进程内默认实现；Postgres provider 可覆盖）。
 		// 注册为 singleton 让 DefaultDurableToolExecutor 与各 Run 共享同一 journal 实例。
 		services.TryAddSingleton<IToolDispatchJournal, InMemoryToolDispatchJournal>();
 
@@ -954,17 +951,17 @@ internal static class CoreExtensions
 		// Tool 对账协调器（Worker 与 resolve 端点共用裁决入口）。
 		services.TryAddSingleton<ToolReconciliationCoordinator>();
 
-		// 子问题 9：IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
+		// IAgentRunLease（进程内默认实现；Postgres provider 可覆盖为持久化实现）。
 		services.TryAddSingleton<IAgentRunLease, InMemoryAgentRunLease>();
 
-		// 子问题 9：AgentHostOptions 配置（默认单节点模式；生产部署通过配置覆盖）。
+		// AgentHostOptions 配置（默认单节点模式；生产部署通过配置覆盖）。
 		services.TryAddSingleton(AgentHostOptionsDefaultFactory);
 
 		// Recovery Integrity State：人工介入告警接收器（默认日志实现；
 		// 生产环境可注册 PagerDuty / Slack 等真实通道覆盖——TryAddSingleton 不覆盖已注册实现）。
 		services.TryAddSingleton<IRecoveryAlertSink, LoggingRecoveryAlertSink>();
 
-		// 子问题 8：AgentKernelHost（Singleton，per-run Actor 通过 IServiceProvider 解析）。
+		// AgentKernelHost（Singleton，per-run Actor 通过 IServiceProvider 解析）。
 		services.TryAddSingleton<AgentKernelHost>();
 		// Agent Run 调度器抽象与 Host 同实例注册（端点经 IAgentRunScheduler 非阻塞入队，
 		// 按 AgentRunEnqueueResult.Status 返回 202 / 429，避免无限等待队列槽位）。
@@ -974,7 +971,7 @@ internal static class CoreExtensions
 	}
 
 	/// <summary>
-	/// 子问题 9：AgentHostOptions 默认工厂。
+	/// AgentHostOptions 默认工厂。
 	/// 从 IConfiguration 读取 "AgentHost" 段；未配置时返回默认值（单节点模式）。
 	/// </summary>
 	private static AgentHostOptions AgentHostOptionsDefaultFactory(IServiceProvider sp)

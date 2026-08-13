@@ -23,6 +23,7 @@ namespace ContextCore.Core.Services.Retrieval;
 // - Disabled（默认，fail-closed）：PlanAsync 完全透传底层计划，不读写反馈存储。
 // - Shadow：计算策略但不应用，仅观察学习信号（验证无副作用后再启用）。
 // - Active：计算并应用策略。
+// 默认必须保持 Disabled。Active 只调固定乘数，不是召回准不准；不要为了「更准」打开它。
 // 
 // 设计原则：
 // - 底层规划器保持确定性 / 幂等：自适应仅调整规划参数；给定相同输入 +

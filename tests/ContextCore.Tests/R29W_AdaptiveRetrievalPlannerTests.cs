@@ -245,7 +245,8 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var plan = await planner.PlanAsync(input);
 
         Assert.AreEqual(4096, plan.TokenBudget, "TurnBudget Remaining=4 → 基础预算 4096（无自适应调整）。");
-        Assert.AreEqual(4, plan.ControlledQueries.Count);
+        Assert.AreEqual(3, plan.ControlledQueries.Count,
+            "书名号锚点已在任务查询文本中，不再单独占图种子查询名额（任务/意图/目标共 3 条）。");
         Assert.IsFalse(plan.Reason.Contains("[自适应]", StringComparison.Ordinal));
     }
 
@@ -263,9 +264,9 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var plan = await planner.PlanAsync(input);
 
         Assert.AreEqual(3072, plan.TokenBudget, "4096 × 0.75 = 3072。");
-        Assert.AreEqual(3, plan.ControlledQueries.Count, "查询收敛：4 条 → 保留 3 条。");
+        Assert.AreEqual(3, plan.ControlledQueries.Count, "基础计划 3 条（任务/意图/目标），Active 收敛后仍 3 条。");
         Assert.IsFalse(plan.ControlledQueries.Any(q => q.Text == "AlphaProtocol"),
-            "收敛应丢弃权重最低的图种子锚定查询。");
+            "图种子锚点已在任务文本中，不单独占查询名额。");
         StringAssert.Contains(plan.Reason, "[自适应]");
     }
 
@@ -471,7 +472,8 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var plan = await planner.PlanAsync(input);
 
         Assert.AreEqual(4096, plan.TokenBudget, "Disabled 模式（默认 fail-closed）不应应用自适应策略。");
-        Assert.AreEqual(4, plan.ControlledQueries.Count);
+        Assert.AreEqual(3, plan.ControlledQueries.Count,
+            "书名号锚点已在任务查询文本中，不再单独占图种子查询名额（任务/意图/目标共 3 条）。");
         Assert.IsFalse(plan.Reason.Contains("[自适应]", StringComparison.Ordinal));
     }
 
@@ -506,7 +508,8 @@ public sealed class R29W_AdaptiveRetrievalPlannerTests
         var policy = await planner.GetPolicyForSignatureAsync(DefaultWorkspace, signature);
 
         Assert.AreEqual(4096, plan.TokenBudget, "Shadow 模式只观察，不应用策略。");
-        Assert.AreEqual(4, plan.ControlledQueries.Count);
+        Assert.AreEqual(3, plan.ControlledQueries.Count,
+            "书名号锚点已在任务查询文本中，不再单独占图种子查询名额（任务/意图/目标共 3 条）。");
         Assert.AreEqual(0.75, policy.TokenBudgetMultiplier, "Shadow 模式仍应计算策略（观察学习信号）。");
     }
 

@@ -297,6 +297,95 @@ public sealed class R29M_AgentRetrievalQueryPlannerTests
         StringAssert.Contains(plan.Reason, "原始任务为空", "计划说明应标注任务为空。");
     }
 
+    [TestMethod]
+    public void Plan_SuccessfulToolObservation_AddsQuery_FailedDoesNot()
+    {
+        var plan = _planner.Plan(new AgentRetrievalPlannerInput
+        {
+            OriginalTask = "summarize project notes",
+            ToolObservations = new[]
+            {
+                new ToolObservation { ToolName = "echo", Succeeded = false, Error = "未找到 id:keep-1" },
+                new ToolObservation { ToolName = "echo", Succeeded = true, Result = "AmberCompass-17 found in notes" }
+            }
+        });
+
+        Assert.AreEqual("summarize project notes", plan.ControlledQueries[0].Text);
+        CollectionAssert.Contains(plan.ExcludedIds.ToList(), "keep-1");
+        var observationQuery = plan.ControlledQueries.FirstOrDefault(query => query.Reason == "成功工具观察");
+        Assert.IsNotNull(observationQuery, "成功工具观察应成为受控查询，而不是靠固定词表。");
+        Assert.AreEqual("AmberCompass-17", observationQuery!.Text, "观察查询只保留新实体词，不带 found/notes。");
+        Assert.IsFalse(
+            plan.ControlledQueries.Any(query => query.Text.Contains("keep-1", StringComparison.Ordinal)),
+            "失败观察里的 ID 只排除，不拿去再搜。");
+    }
+
+    /// <summary>
+    /// 验证：图种子词元已被任务查询覆盖时不再占查询名额（任务套话不重复搜）。
+    /// </summary>
+    [TestMethod]
+    public void Plan_GraphSeedQuery_SkipsWordsAlreadyCoveredByTask()
+    {
+        var plan = _planner.Plan(new AgentRetrievalPlannerInput
+        {
+            OriginalTask = "summarize project notes"
+        });
+
+        Assert.AreEqual("summarize project notes", plan.ControlledQueries[0].Text, "首条查询应为原始任务。");
+        var seedQueries = plan.ControlledQueries
+            .Where(query => query.Reason == "图种子锚定查询")
+            .ToList();
+        Assert.IsFalse(
+            seedQueries.Any(query => query.Text == "summarize" || query.Text == "project"),
+            "任务里已有的词元不应再作为图种子单独查询（重复检索无新信息）。");
+    }
+
+    /// <summary>
+    /// 验证：观察实体问句保留，图种子条目不得把观察结果整段带上。
+    /// </summary>
+    [TestMethod]
+    public void Plan_GraphSeedQuery_SkipsCoveredWords_KeepsObservationEntity()
+    {
+        var plan = _planner.Plan(new AgentRetrievalPlannerInput
+        {
+            OriginalTask = "summarize project notes",
+            ToolObservations = new[]
+            {
+                new ToolObservation { ToolName = "echo", Succeeded = true, Result = "AmberCompass-17 found in notes" }
+            }
+        });
+
+        var observationQuery = plan.ControlledQueries.Single(query => query.Reason == "成功工具观察");
+        Assert.AreEqual("AmberCompass-17", observationQuery.Text, "观察查询只保留新实体词。");
+        Assert.AreEqual(2, plan.ControlledQueries.Count,
+            "任务里的词元都被任务查询覆盖，图种子不应再占查询名额。");
+        var seedQueries = plan.ControlledQueries
+            .Where(query => query.Reason == "图种子锚定查询")
+            .ToList();
+        Assert.IsFalse(
+            seedQueries.Any(query => query.Text.Contains("found", StringComparison.Ordinal)
+                || query.Text.Contains("notes", StringComparison.Ordinal)),
+            "图种子条目不得把观察结果里的套话整段带上。");
+    }
+
+    /// <summary>
+    /// 验证：引号/书名号内显式实体锚点仍保留在查询集或图种子里（显式锚点优先）。
+    /// </summary>
+    [TestMethod]
+    public void Plan_QuotedEntity_RemainsInGraphSeedsOrQueries()
+    {
+        var plan = _planner.Plan(new AgentRetrievalPlannerInput
+        {
+            OriginalTask = "summarize 《AmberCompass-17》 project notes"
+        });
+
+        const string entity = "AmberCompass-17";
+        Assert.IsTrue(
+            plan.GraphSeeds.Contains(entity)
+            || plan.ControlledQueries.Any(query => query.Text.Contains(entity, StringComparison.Ordinal)),
+            "引号/书名号内实体应保留在查询集或图种子里（显式锚点优先）。");
+    }
+
     /// <summary>
     /// 验证：null 输入抛 ArgumentNullException（fail-fast）。
     /// </summary>

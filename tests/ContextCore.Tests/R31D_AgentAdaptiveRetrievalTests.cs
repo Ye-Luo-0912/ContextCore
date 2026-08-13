@@ -54,17 +54,10 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         var record = runtimeRecords[0];
         Assert.AreEqual(run.WorkspaceId, record.WorkspaceId, "反馈应归属到 Run 的工作区。");
         Assert.AreEqual(2, record.HitsReturned, "命中数应为选中候选数。");
-        Assert.IsTrue(record.Effective, "产出候选结果应视为有效信号。");
+        Assert.IsFalse(record.Effective, "还没有工具观察时不得把检索结果当成准。");
+        Assert.AreEqual(0.0, record.OutcomeQuality, 0.0001, "没有外部证据时质量为零。");
         Assert.AreEqual(
-            AdaptiveRetrievalPlanSignature.Compute(new AgentRetrievalPlannerInput
-            {
-                OriginalTask = run.Task,
-                LatestAssistantIntent = run.Task,
-                UnresolvedGoals = new[] { run.Task },
-                WorkspaceId = run.WorkspaceId,
-                CollectionId = run.WorkspaceId,
-                Purpose = Purpose
-            }),
+            ExpectedSignature(run),
             record.PlanSignature, "反馈签名应与规划输入派生一致。");
 
         // 3. Run 正常完成（主链未被自适应层阻断）。
@@ -107,8 +100,14 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         await actor.ExecuteAsync(run, cts.Token);
 
         Assert.IsNotNull(decisionRuntime.LastRequest);
-        Assert.AreEqual("受控查询-任务分解", decisionRuntime.LastRequest!.QueryText,
-            "QueryText 应为受控计划的首条查询（而非 run.Task 原文）。");
+        StringAssert.Contains(decisionRuntime.LastRequest!.QueryText, "受控查询-任务分解",
+            "QueryText 应包含受控计划查询。");
+        StringAssert.Contains(decisionRuntime.LastRequest.QueryText, "受控查询-意图补充",
+            "计划里的后续查询也要并进检索问句，不能只跑第一条。");
+        CollectionAssert.AreEqual(
+            new[] { "受控查询-任务分解", "受控查询-意图补充" },
+            decisionRuntime.LastRequest.RetrievalInput!.QueryTexts.ToList(),
+            "Lexical 应按计划分条检索。");
         Assert.AreNotEqual(run.Task, decisionRuntime.LastRequest.QueryText,
             "受控计划存在时不得回退 run.Task。");
         Assert.AreEqual(12, decisionRuntime.LastRequest.TopK,
@@ -117,19 +116,17 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
             decisionRuntime.LastRequest.AgentInput?.RequiredIds?.ToList() ?? new List<string>(), "entity-required-1",
             "RequiredIds 应注入决策请求（mandatory recall）。");
 
-        // 反馈 QueryText 也应记录实际使用的受控查询文本（即时过程反馈）。
-        Assert.AreEqual("受控查询-任务分解",
+        StringAssert.Contains(
             planner.OutcomeRecords.First(r => r.Source == RetrievalFeedbackSource.Runtime).QueryText,
+            "受控查询-任务分解",
             "反馈应记录实际执行的受控查询文本。");
     }
 
     /// <summary>
-    /// 验证（P1-十六）：反馈质量信号从选中候选真实分数派生——
-    /// 不再用占位常量（Effective=result!=null / Confidence=1.0 / OutcomeQuality=1.0）
-    /// 学习"有没有召回东西"；以"这些 Context 是否被采用及其质量"为学习信号。
+    /// 没有工具观察时，不得用选中候选的打分器分数当质量。
     /// </summary>
     [TestMethod]
-    public async Task ContextBuilding_FeedbackUsesSelectedQualitySignals()
+    public async Task ContextBuilding_FeedbackWithoutTools_NotEffective()
     {
         var runStore = new InMemoryAgentRunStore();
         var eventStore = new InMemoryAgentRunEventStore(runStore);
@@ -137,7 +134,6 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         await runStore.CreateAsync(run);
 
         var planner = new FakeAdaptivePlanner(new AgentRetrievalPlan { TokenBudget = 2048 });
-        // 两个选中候选：分数 0.9 与 0.5 → Confidence=0.9（最高）、OutcomeQuality=0.7（平均）。
         var decisionRuntime = new FakeDecisionRuntime(
             selectedCount: 2, effectiveTokens: 1500, tokenBudget: 2048,
             selectedScores: new[] { 0.9, 0.5 });
@@ -150,11 +146,10 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         await actor.ExecuteAsync(run, cts.Token);
 
         var record = planner.OutcomeRecords.First(r => r.Source == RetrievalFeedbackSource.Runtime);
-        Assert.IsTrue(record.Effective, "产出且被采用的候选 → 有效信号（非 result!=null 恒真）。");
-        Assert.AreEqual(0.9, record.Confidence, 0.0001,
-            "Confidence 应为最高选中候选分数（不再恒 1.0）。");
-        Assert.AreEqual(0.7, record.OutcomeQuality, 0.0001,
-            "OutcomeQuality 应为选中候选平均分（不再恒 1.0）。");
+        Assert.IsFalse(record.Effective, "没有工具观察时不得视为有效质量信号。");
+        Assert.AreEqual(0.0, record.OutcomeQuality, 0.0001, "没有外部证据时质量为零。");
+        Assert.AreEqual(0.5, record.Confidence, 0.0001, "没有观察时置信度为中性。");
+        Assert.AreEqual(2, record.HitsReturned, "命中数仍记录选中候选数。");
     }
 
     /// <summary>
@@ -180,18 +175,16 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         await actor.ExecuteAsync(run, cts.Token);
 
         var record = planner.OutcomeRecords.First(r => r.Source == RetrievalFeedbackSource.Runtime);
-        Assert.IsFalse(record.Effective, "无被采用候选时不得视为有效信号。");
-        Assert.AreEqual(0.0, record.OutcomeQuality, 0.0001, "无候选时质量为零。");
-        Assert.AreEqual(0.5, record.Confidence, 0.0001, "无分数时置信度为中性 0.5。");
+        Assert.IsFalse(record.Effective, "没有工具观察时不得视为有效信号。");
+        Assert.AreEqual(0.0, record.OutcomeQuality, 0.0001, "没有外部证据时质量为零。");
+        Assert.AreEqual(0.5, record.Confidence, 0.0001, "没有观察时置信度为中性。");
     }
 
     /// <summary>
-    /// 验证（P1-十六 延迟归因）：Run 到达终态后，把最终结果质量归因到本 Run
-    /// 使用过的检索计划签名（Source=AutomatedEvaluation，幂等键含 runId）——
-    /// 反馈是"这些 Context 是否帮助 Agent 完成任务"的结果信号。
+    /// Run 终态归因只在有工具观察时写入。没有外部证据就不要用 Completed=0.9 这种固定分。
     /// </summary>
     [TestMethod]
-    public async Task DeferredAttribution_CompletedRun_AttributesHighQuality()
+    public async Task DeferredAttribution_WithoutTools_DoesNotInventQuality()
     {
         var runStore = new InMemoryAgentRunStore();
         var eventStore = new InMemoryAgentRunEventStore(runStore);
@@ -215,34 +208,15 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await actor.ExecuteAsync(run, cts.Token);
 
-        // 归因反馈：Run 完成 → 高质量归因（AutomatedEvaluation 来源）。
-        var attribution = planner.OutcomeRecords.FirstOrDefault(r =>
-            r.Source == RetrievalFeedbackSource.AutomatedEvaluation);
-        Assert.IsNotNull(attribution, "Run 终态后应写入延迟归因反馈。");
-        Assert.AreEqual(0.9, attribution!.OutcomeQuality, 0.0001, "Completed 归因质量应为 0.9。");
-        Assert.AreEqual(0.9, attribution.Confidence, 0.0001, "终态归因高置信度。");
-        Assert.IsTrue(attribution.Effective, "终态是可确认的结果 → 有效信号。");
-        Assert.AreEqual(
-            AdaptiveRetrievalPlanSignature.Compute(new AgentRetrievalPlannerInput
-            {
-                OriginalTask = run.Task,
-                LatestAssistantIntent = run.Task,
-                UnresolvedGoals = new[] { run.Task },
-                WorkspaceId = run.WorkspaceId,
-                CollectionId = run.WorkspaceId,
-                Purpose = Purpose
-            }),
-            attribution.PlanSignature, "归因应落到本 Run 使用的检索计划签名。");
-        Assert.AreEqual($"run:{run.RunId}:{attribution.PlanSignature}", attribution.IdempotencyKey,
-            "归因幂等键 = run:runId:signature（重试/重放不重复归因）。");
+        Assert.IsFalse(
+            planner.OutcomeRecords.Any(r => r.Source == RetrievalFeedbackSource.AutomatedEvaluation),
+            "没有工具观察时终态不得编造归因质量。");
+        Assert.AreEqual(ExpectedSignature(run), AdaptiveRetrievalPlanSignature.Compute(planner.LastInput!),
+            "规划签名应与输入一致。");
     }
 
-    /// <summary>
-    /// 验证（P1-十六 延迟归因）：Run 失败 → 归因质量 0.2（检索未达成任务目标）；
-    /// 非终态（RetryPending）不归因（还有后续 Attempt）。
-    /// </summary>
     [TestMethod]
-    public async Task DeferredAttribution_FailedRun_AttributesLowQuality()
+    public async Task DeferredAttribution_FailedRunWithoutTools_DoesNotInventQuality()
     {
         var runStore = new InMemoryAgentRunStore();
         var eventStore = new InMemoryAgentRunEventStore(runStore);
@@ -266,10 +240,9 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await actor.ExecuteAsync(run, cts.Token);
 
-        var attribution = planner.OutcomeRecords.FirstOrDefault(r =>
-            r.Source == RetrievalFeedbackSource.AutomatedEvaluation);
-        Assert.IsNotNull(attribution, "Run 失败终态后也应写入延迟归因反馈。");
-        Assert.AreEqual(0.2, attribution!.OutcomeQuality, 0.0001, "Failed 归因质量应为 0.2。");
+        Assert.IsFalse(
+            planner.OutcomeRecords.Any(r => r.Source == RetrievalFeedbackSource.AutomatedEvaluation),
+            "模型失败且没有工具观察时，不得用固定低分冒充召回不准。");
     }
 
     /// <summary>模型传输 stub：调用即抛异常（触发 FailAsync → Failed 终态）。</summary>
@@ -376,6 +349,17 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
         UpdatedAt = DateTimeOffset.UtcNow
     };
 
+    private static string ExpectedSignature(AgentRun run) =>
+        AdaptiveRetrievalPlanSignature.Compute(new AgentRetrievalPlannerInput
+        {
+            OriginalTask = run.Task,
+            LatestAssistantIntent = run.Task,
+            UnresolvedGoals = Array.Empty<string>(),
+            WorkspaceId = run.WorkspaceId,
+            CollectionId = run.WorkspaceId,
+            Purpose = Purpose
+        });
+
     /// <summary>一次性返回最终答案的模型传输（主链单轮完成）。</summary>
     private sealed class FinalAnswerTransport : IAgentModelTransport
     {
@@ -407,11 +391,14 @@ public sealed class R31D_AgentAdaptiveRetrievalTests
 
         public int PlanCallCount { get; private set; }
 
+        public AgentRetrievalPlannerInput? LastInput { get; private set; }
+
         public List<RetrievalPlanFeedback> OutcomeRecords { get; } = new();
 
         public Task<AgentRetrievalPlan> PlanAsync(AgentRetrievalPlannerInput input, CancellationToken ct = default)
         {
             PlanCallCount++;
+            LastInput = input;
             return Task.FromResult(_plan);
         }
 

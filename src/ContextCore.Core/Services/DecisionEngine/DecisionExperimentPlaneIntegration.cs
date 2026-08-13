@@ -76,26 +76,8 @@ public sealed class InMemoryExperimentRecorder : IExperimentRecorder
     }
 }
 
-// ===========================================================================
-// Legacy Removal + DecisionExperimentPlane 长期保留
-//
-// 目标（B-5 阶段：V2 成为唯一权威路径，Legacy 代码保留但默认停用）：
-// 1. DecisionExperimentPlaneIntegration：长期保留的实验平面集成入口。
-// 提供 sampled shadow（抽样校验）、replay fixture 存储、CI 验收 hook。
-// 2. CutoverConfiguration：从配置读取默认 cutover 比例（默认 0% = Legacy only（Closure Gate 通过前安全默认））。
-// 3. LegacyCodeMarkedDeprecated：标记 Legacy 路径为 [Obsolete]（不物理删除，
-// 保留用于回滚和 DecisionExperimentPlane 的 parity 对比基线）。
-//
-// 设计原则：
-// 1. B-5 不物理删除 Legacy 代码（HybridContextRetriever / BasicContextPackageBuilder）。
-// 原因：DecisionExperimentPlane 需要 Legacy 作为 parity 基线；
-// 回滚安全需要 Legacy 代码可用。
-// 2. CutoverController 默认 0%（Legacy only），可通过配置降级。
-// 3. DecisionExperimentPlane 作为长期基础设施：
-// - Sampled shadow：即使 V2 已权威，仍按采样率执行 Legacy + parity 对比
-// - Replay fixture：存储历史 parity 报告供回归分析
-// - CI 验收 hook：ShadowGateEvaluator 输出 CutoverReadinessAssessment
-// ===========================================================================
+// 实验平面：抽样对比旧检索/打包与决策运行时，存 replay fixture。
+// 不改变缺省切流：HTTP 仍默认走 HybridContextRetriever / BasicContextPackageBuilder。
 
 // ---------------------------------------------------------------------------
 // CutoverConfiguration — 配置驱动默认比例
@@ -105,21 +87,21 @@ public sealed class InMemoryExperimentRecorder : IExperimentRecorder
 /// Cutover 配置。从环境变量/配置读取默认 cutover 比例。
 /// </summary>
 /// <remarks>
-/// 默认 0%（Legacy only）。可通过环境变量 CC_CUTOVER_PERCENTAGE 降级。
-/// B-5 阶段 Legacy 代码保留但默认停用（CutoverPercentage=0）。
+/// 缺省 100：HTTP 检索与打包走 IContextDecisionRuntime，与 Agent ContextBuilding 同一条链。
+/// 设 CC_CUTOVER_PERCENTAGE=0 才把这两条 HTTP 路径切回 HybridContextRetriever / BasicContextPackageBuilder。
+/// 100 不是删除旧实现；旧实现仍注册，供切流 0、灰度中间值、Kill Switch 与 canary 阶梯使用。
 /// </remarks>
 public sealed class CutoverConfiguration
 {
     /// <summary>环境变量名：控制 V2 流量百分比（0-100）。</summary>
     public const string CutoverPercentageEnvVar = "CC_CUTOVER_PERCENTAGE";
 
-    /// <summary>默认 cutover 百分比（Closure Gate: 0 = Legacy only，直到 Closure Gate 通过）。</summary>
+    /// <summary>默认切流百分比。100 = HTTP 检索/打包走决策运行时。</summary>
     /// <remarks>
-    /// 曾设为 100（V2 only），但 B.6 Closure Gate 要求在验收测试通过前
-    /// 默认走 Legacy，避免未完成的 Provider 网络导致空结果。
-    /// 通过环境变量 CC_CUTOVER_PERCENTAGE 可覆盖（如测试环境设为 100）。
+    /// 未设环境变量时 HTTP retrieve/package 与 Agent 共用 IContextDecisionRuntime。
+    /// 用 CC_CUTOVER_PERCENTAGE 覆盖（0–100）；0 为仅 Legacy。
     /// </remarks>
-    public const int DefaultCutoverPercentage = 0;
+    public const int DefaultCutoverPercentage = 100;
 
     /// <summary>当前配置的 cutover 百分比。</summary>
     public int CutoverPercentage { get; init; } = DefaultCutoverPercentage;
@@ -178,14 +160,8 @@ public sealed class CutoverConfiguration
 /// DecisionExperimentPlane 长期保留集成入口。
 /// </summary>
 /// <remarks>
-/// B-5 后 V2 已权威，但 DecisionExperimentPlane 仍作为长期基础设施保留：
-/// 1. Sampled shadow：按采样率执行 Legacy + parity 对比（监控 V2 漂移）
-/// 2. Replay fixture 存储：历史 parity 报告供回归分析
-/// 3. CI 验收 hook：ShadowGateEvaluator 输出 CutoverReadinessAssessment
-///
-/// 与 B-2~B-4 的区别：
-/// - B-2~B-4：Shadow 是切换前的验收手段
-/// - B-5：Shadow 是切换后的持续监控手段（detect V2 drift over time）
+/// 抽样对比旧检索/打包与决策运行时，并保存回放 fixture。
+/// HTTP 缺省切流已是 100；本平面只做抽样 shadow / replay，不改主链实现。
 /// </remarks>
 public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 {
@@ -358,7 +334,7 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 
     /// <summary>
     /// 记录一次 parity 对比，存为 replay fixture。
-    /// 即使 V2 已权威，仍按 ShadowSampleRate 抽样执行 Legacy + parity 对比。
+    /// 按 ShadowSampleRate 抽样跑旧检索/打包并做 parity 对比。不改变 HTTP 主链切流。
     /// </summary>
     public bool ShouldRunSampledShadow(string requestId)
     {

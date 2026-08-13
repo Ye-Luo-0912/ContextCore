@@ -587,6 +587,12 @@ public sealed class ContextPackageRequest
 
     public string? QueryText { get; init; }
 
+    /// <summary>
+    /// 可选的分条词法查询。非空时 Lexical 按条检索再按 ID 合并最高分；
+    /// 空则回退单条 <see cref="QueryText"/>。
+    /// </summary>
+    public IReadOnlyList<string> QueryTexts { get; init; } = Array.Empty<string>();
+
     public IReadOnlyList<string> RequiredTags { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> RequiredTypes { get; init; } = Array.Empty<string>();

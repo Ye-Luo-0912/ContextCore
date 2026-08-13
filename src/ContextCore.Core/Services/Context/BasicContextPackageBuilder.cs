@@ -9,6 +9,10 @@ namespace ContextCore.Core;
 /// <summary>
 /// 默认上下文包构建器，按请求或策略从原始上下文、记忆、约束、全局项和关系中选择内容。
 /// </summary>
+/// <remarks>
+/// HTTP POST /api/package/build 在切流为 0 时走这里。
+/// 缺省切流 100 时由 AuthoritativePackageRuntime 改走决策运行时的投影。
+/// </remarks>
 public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
 {
     private readonly IConstraintStore? _constraintStore;
