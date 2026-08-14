@@ -179,6 +179,37 @@ public sealed class ContextCorePostgresStorageTests
     }
 
     [TestMethod]
+    public async Task PostgresServiceCollectionExtensions_CanaryAndAgentRunLease_ResolveDedicatedContracts()
+    {
+        // RF-2 验收：Canary Leader 与 Agent Run 租约都通过各自的专用接口解析，
+        // 不依赖通用 ILeasedWorkStore 的 closed generic 注册顺序（通用层已删除）。
+        var services = new ServiceCollection();
+        services.AddContextCorePostgresStorage(new PostgresOptions
+        {
+            ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
+            AutoMigrate = false
+        });
+
+        // Canary Leader 租约解析到专用实现（同一底层 canary_leader_leases 表）。
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ICanaryLeaderLease)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresCanaryLeaderLease)));
+        // Agent Run 租约仍注册专用接口实现。
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentRunLease)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentRunLease)));
+
+        // PostgresConnectionFactory 只实现 IAsyncDisposable，容器须异步释放。
+        await using var provider = services.BuildServiceProvider();
+        Assert.IsInstanceOfType(
+            provider.GetRequiredService<ICanaryLeaderLease>(),
+            typeof(PostgresCanaryLeaderLease),
+            "Canary Leader 租约必须解析到专用 Postgres 实现。");
+        Assert.IsInstanceOfType(
+            provider.GetRequiredService<IAgentRunLease>(),
+            typeof(PostgresAgentRunLease),
+            "Agent Run 租约必须解析到专用 Postgres 实现。");
+    }
+
+    [TestMethod]
     public async Task InMemoryLearningFeatureCandidateStore_ShouldUpsertAndFilter()
     {
         var store = new ContextCore.Storage.InMemory.Stores.InMemoryLearningFeatureCandidateStore();

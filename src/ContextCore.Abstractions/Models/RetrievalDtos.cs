@@ -34,6 +34,9 @@ namespace ContextCore.Abstractions.Models
 
         public IReadOnlyList<string> RequiredIds { get; init; } = Array.Empty<string>();
 
+        /// <summary>排除 ID（确认不存在的条目，不参与召回）。空列表 = 旧行为。</summary>
+        public IReadOnlyList<string> ExcludedIds { get; init; } = Array.Empty<string>();
+
         public IReadOnlyList<float> QueryVector { get; init; } = Array.Empty<float>();
 
         public string? ModelName { get; init; }

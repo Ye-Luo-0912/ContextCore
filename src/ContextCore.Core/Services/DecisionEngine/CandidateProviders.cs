@@ -48,6 +48,57 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>
+    /// 收集种子（SeedWorkingSet / SeedCandidates）里已持有的候选 ID：本轮已经记住的条目
+    /// 不再占词法/向量 TopK，把名额留给需要找回的。图扩展仍要用种子 ID，不能排除。
+    /// </summary>
+    internal static IReadOnlyList<string> ResolveHeldIds(ContextDecisionRuntimeRequest request)
+    {
+        var held = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string id)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
+            {
+                held.Add(id);
+            }
+        }
+
+        if (request.SeedWorkingSet is { Envelopes.Count: > 0 } workingSet)
+        {
+            foreach (var envelope in workingSet.Envelopes)
+            {
+                Add(envelope.CandidateId);
+                Add(envelope.CanonicalKey.EntityId);
+            }
+        }
+
+        if (request.SeedCandidates is { Count: > 0 })
+        {
+            foreach (var envelope in request.SeedCandidates)
+            {
+                Add(envelope.CandidateId);
+                Add(envelope.CanonicalKey.EntityId);
+            }
+        }
+
+        return held;
+    }
+
+    /// <summary>
+    /// 合并"确认不存在"的排除 ID 与已持有的种子 ID：两者都不占本次查询 TopK。
+    /// 只作用于本次查询，不写回 RetrievalInput.ExcludedIds。
+    /// </summary>
+    internal static IReadOnlyList<string> ResolveSkipSourceIds(ContextDecisionRuntimeRequest request)
+    {
+        var excludedIds = ResolveExcludedIds(request.RetrievalInput);
+        var heldIds = ResolveHeldIds(request);
+        if (excludedIds.Count == 0) return heldIds;
+        if (heldIds.Count == 0) return excludedIds;
+        return excludedIds.Concat(heldIds).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    /// <summary>
     /// 从 RetrievalInput.Metadata 解析排除过滤条件。
     /// 支持 "excludedTypes"（逗号分隔）和 "excludedIds"（逗号分隔）两个键。
     /// </summary>
@@ -1096,7 +1147,9 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         var includeContent = retrievalInput?.IncludeContent ?? true;
 
         var (excludedTypes, _) = CandidateProviderHelpers.ResolveExcludedFiltersFromMetadata(retrievalInput?.Metadata);
-        var excludedIds = CandidateProviderHelpers.ResolveExcludedIds(retrievalInput);
+        // 已持有的种子 ID 与"确认不存在"的排除 ID 都不占 TopK；只作用于本次查询，
+        // 不写回 RetrievalInput.ExcludedIds（Actor 的种子清理语义不受影响）。
+        var skipIds = CandidateProviderHelpers.ResolveSkipSourceIds(context.Request);
 
         var take = CandidateProviderHelpers.ResolveTake(context);
         var refs = retrievalInput?.Refs ?? Array.Empty<string>();
@@ -1114,7 +1167,7 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
                 Types = requiredTypes ?? Array.Empty<string>(),
                 Refs = index == 0 ? refs : Array.Empty<string>(),
                 ExcludedTypes = excludedTypes,
-                ExcludedIds = excludedIds,
+                ExcludedIds = skipIds,
                 Take = take,
                 IncludeContent = includeContent
             }, cancellationToken).ConfigureAwait(false);
@@ -1232,17 +1285,35 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         // 尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = retrievalInput?.IncludeContent ?? true;
 
-        // 如果 QueryVector 非空，直接使用（不调用 EmbeddingProvider）
-        IReadOnlyList<float> queryVector;
+        // VectorTopK 优先于 ResolveTake
+        var topK = vectorTopKFromInput > 0
+            ? vectorTopKFromInput
+            : CandidateProviderHelpers.ResolveTake(context);
+
+        // 已持有的种子 ID 与"确认不存在"的排除 ID 下推到向量查询（排序/截断前排除），
+        // 与 Lexical 通道语义一致；末端保留去重作为防御，不依赖末端过滤满足 TopK。
+        var skipSourceIds = CandidateProviderHelpers.ResolveSkipSourceIds(context.Request);
+
+        // 向量来源：
+        // 1. QueryVector 非空时直接使用（不调用 EmbeddingProvider）；
+        // 2. QueryTexts 非空时对每条分别 embed + search，按来源 ID 合并保留最高分
+        //    （与 Lexical 分条对齐）；
+        // 3. 都没有时回退单条 QueryText（旧行为）。
+        // 无 EmbeddingProvider / VectorStore 时直接空（默认 Dev 无 embedding，通道为空是预期）。
+        IReadOnlyList<VectorSearchResult> hits;
         if (externalQueryVector is { Count: > 0 } v)
         {
-            queryVector = v;
+            hits = await SearchSingleVectorAsync(context, v, topK, skipSourceIds, cancellationToken).ConfigureAwait(false);
+        }
+        else if (retrievalInput?.QueryTexts is { Count: > 0 } queryTexts)
+        {
+            if (_embeddingProvider is null) return CandidateProviderHelpers.Empty();
+            hits = await SearchPerQueryTextAsync(
+                context, queryTexts, modelName, queryInstruction, topK, skipSourceIds, cancellationToken).ConfigureAwait(false);
         }
         else
         {
             if (string.IsNullOrWhiteSpace(context.Request.QueryText)) return CandidateProviderHelpers.Empty();
-
-            // 未提供 QueryVector 时使用 QueryText + QueryInstruction 调用 EmbeddingProvider
             if (_embeddingProvider is null) return CandidateProviderHelpers.Empty();
 
             // QueryInstruction 作为 BGE 前缀拼接到 QueryText
@@ -1250,45 +1321,13 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
                 ? context.Request.QueryText!
                 : queryInstruction + " " + context.Request.QueryText;
 
-            var embedding = await _embeddingProvider.EmbedAsync(new EmbeddingRequest
-            {
-                OperationId = context.Request.RequestId,
-                WorkspaceId = context.Request.Scope.WorkspaceId,
-                CollectionId = context.Request.Scope.CollectionId,
-                // 传 ModelName 给 EmbeddingProvider
-                ModelName = modelName,
-                InputKind = EmbeddingInputKind.Query,
-                Inputs =
-                [
-                    new EmbeddingInput
-                    {
-                        Id = "query",
-                        Text = effectiveQueryText,
-                        SourceRef = "query"
-                    }
-                ]
-            }, cancellationToken).ConfigureAwait(false);
+            var embedding = await EmbedQueryAsync(
+                context, effectiveQueryText, modelName, cancellationToken).ConfigureAwait(false);
+            if (!embedding.Succeeded || embedding.Vectors.Count == 0) return CandidateProviderHelpers.Empty();
 
-            queryVector = embedding.Succeeded && embedding.Vectors.Count > 0
-                ? embedding.Vectors[0].Values
-                : Array.Empty<float>();
+            hits = await SearchSingleVectorAsync(
+                context, embedding.Vectors[0].Values, topK, skipSourceIds, cancellationToken).ConfigureAwait(false);
         }
-
-        if (queryVector.Count == 0) return CandidateProviderHelpers.Empty();
-
-        // 2. 向量搜索
-        // VectorTopK 优先于 ResolveTake
-        var topK = vectorTopKFromInput > 0
-            ? vectorTopKFromInput
-            : CandidateProviderHelpers.ResolveTake(context);
-        var hits = await _vectorStore.SearchAsync(new VectorQuery
-        {
-            WorkspaceId = context.Request.Scope.WorkspaceId,
-            CollectionId = context.Request.Scope.CollectionId,
-            Vector = queryVector,
-            TopK = topK,
-            IncludeVector = false
-        }, cancellationToken).ConfigureAwait(false);
 
         if (hits.Count == 0) return CandidateProviderHelpers.Empty();
 
@@ -1298,6 +1337,13 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             var threshold = minVectorScore.Value;
             hits = hits.Where(h => h.Score >= threshold).ToList();
             if (hits.Count == 0) return CandidateProviderHelpers.Empty();
+        }
+
+        // 末端防御去重：即使 store 未执行下推（旧实现 / 测试桩），已持有与确认不存在的 ID 也不进候选。
+        if (skipSourceIds.Count > 0 && hits.Count > 0)
+        {
+            var skipSet = new HashSet<string>(skipSourceIds, StringComparer.OrdinalIgnoreCase);
+            hits = hits.Where(hit => !skipSet.Contains(hit.Record.SourceId)).ToList();
         }
 
         // 3. Hydration：按 SourceKind 分组批量查询，消除 N+1
@@ -1452,6 +1498,99 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         }
 
         return new ExpertExecutionResult(envelopes, materials);
+    }
+
+    // 单条向量查询：对给定 queryVector 执行一次向量搜索。
+    private async ValueTask<IReadOnlyList<VectorSearchResult>> SearchSingleVectorAsync(
+        CandidateProviderContext context,
+        IReadOnlyList<float> queryVector,
+        int topK,
+        IReadOnlyList<string> skipSourceIds,
+        CancellationToken cancellationToken)
+    {
+        var hits = await _vectorStore!.SearchAsync(new VectorQuery
+        {
+            WorkspaceId = context.Request.Scope.WorkspaceId,
+            CollectionId = context.Request.Scope.CollectionId,
+            Vector = queryVector,
+            TopK = topK,
+            IncludeVector = false,
+            ExcludeSourceIds = skipSourceIds
+        }, cancellationToken).ConfigureAwait(false);
+        return hits;
+    }
+
+    // 分条向量检索：QueryTexts 非空时对每条分别 embed + search，按来源 ID 合并保留最高分。
+    // 与 Lexical 分条对齐；无 EmbeddingProvider 时调用方已在入口返回空。
+    private async ValueTask<IReadOnlyList<VectorSearchResult>> SearchPerQueryTextAsync(
+        CandidateProviderContext context,
+        IReadOnlyList<string> queryTexts,
+        string? modelName,
+        string? queryInstruction,
+        int topK,
+        IReadOnlyList<string> skipSourceIds,
+        CancellationToken cancellationToken)
+    {
+        var bestByKey = new Dictionary<string, VectorSearchResult>(StringComparer.OrdinalIgnoreCase);
+        foreach (var queryText in queryTexts)
+        {
+            if (string.IsNullOrWhiteSpace(queryText))
+            {
+                continue;
+            }
+
+            var effectiveQueryText = string.IsNullOrEmpty(queryInstruction)
+                ? queryText
+                : queryInstruction + " " + queryText;
+
+            var embedding = await EmbedQueryAsync(
+                context, effectiveQueryText, modelName, cancellationToken).ConfigureAwait(false);
+            if (!embedding.Succeeded || embedding.Vectors.Count == 0)
+            {
+                continue;
+            }
+
+            var hits = await SearchSingleVectorAsync(
+                context, embedding.Vectors[0].Values, topK, skipSourceIds, cancellationToken).ConfigureAwait(false);
+            foreach (var hit in hits)
+            {
+                var record = hit.Record;
+                var key = record.SourceKind + "|" + (record.CollectionId ?? string.Empty) + "|" + record.SourceId;
+                if (!bestByKey.TryGetValue(key, out var existing) || hit.Score > existing.Score)
+                {
+                    bestByKey[key] = hit;
+                }
+            }
+        }
+        return bestByKey.Values.ToList();
+    }
+
+    // 单条 Query 文本 embedding。
+    private async ValueTask<EmbeddingResult> EmbedQueryAsync(
+        CandidateProviderContext context,
+        string effectiveQueryText,
+        string? modelName,
+        CancellationToken cancellationToken)
+    {
+        var embedding = await _embeddingProvider!.EmbedAsync(new EmbeddingRequest
+        {
+            OperationId = context.Request.RequestId,
+            WorkspaceId = context.Request.Scope.WorkspaceId,
+            CollectionId = context.Request.Scope.CollectionId,
+            // 传 ModelName 给 EmbeddingProvider
+            ModelName = modelName,
+            InputKind = EmbeddingInputKind.Query,
+            Inputs =
+            [
+                new EmbeddingInput
+                {
+                    Id = "query",
+                    Text = effectiveQueryText,
+                    SourceRef = "query"
+                }
+            ]
+        }, cancellationToken).ConfigureAwait(false);
+        return embedding;
     }
 
     private static bool IsContextSourceKind(string sourceKind)

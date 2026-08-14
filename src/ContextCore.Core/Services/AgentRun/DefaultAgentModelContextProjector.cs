@@ -32,7 +32,7 @@ namespace ContextCore.Core.Services.AgentRunRuntime;
 //
 // 保留要点：
 // - Retrieved Materials 不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
-// - Retrieved Materials 使用 best-fit 策略：按 FinalScore 排序后逐个尝试纳入。
+// - Retrieved Materials 使用 best-fit 策略：按 SelectedEnvelopes 原顺序逐个尝试纳入。
 // ===========================================================================
 
 /// <summary>
@@ -60,6 +60,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
 
         var projected = new List<AgentMessage>();
         var selectedMaterialIds = new HashSet<string>(StringComparer.Ordinal);
+        var skippedMaterialIds = new List<string>();
         var budget = modelContextTokenBudget > 0 ? modelContextTokenBudget : 0;
         var usedTokens = 0;
         var truncated = false;
@@ -92,32 +93,22 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
         // Retrieved Materials 移到 Conversation 之前——作为检索上下文注入，
         // 不破坏对话历史中 "assistant tool_calls → tool result" 的因果顺序。
         // 修复 a：不放入 System 角色（避免提示注入），改为 User 角色 + untrusted_data 标记。
-        // 修复 c：best-fit 策略——按 FinalScore 排序后逐个尝试纳入，
+        // 修复 c：best-fit 策略——按 SelectedEnvelopes 原顺序逐个尝试纳入，
         // 某个材料太大时跳过该材料继续尝试下一个（不直接 break），让更小的相关材料仍能进入上下文。
         if (decisionResult is not null)
         {
             var selected = decisionResult.Decision.SelectedEnvelopes;
             var materials = decisionResult.WorkingSet.Materials;
 
-            // 按 FinalScore 降序排序（最相关的优先尝试）
-            var ordered = new List<ContextCandidateEnvelope>(selected.Count);
-            ordered.AddRange(selected);
-            ordered.Sort((a, b) =>
-            {
-                var sa = a.Utility?.FinalScore ?? 0.0;
-                var sb = b.Utility?.FinalScore ?? 0.0;
-                // 降序：sb 对比 sa
-                return sb.CompareTo(sa);
-            });
-
-            foreach (var env in ordered)
+            // 保持分配器 SelectedEnvelopes 原顺序 best-fit：
+            // 分配器已决定模型看见谁的顺序，不再用 FinalScore 重排。
+            foreach (var env in selected)
             {
                 var content = TryGetMaterialContent(env, materials, out var materialId);
                 if (content is null)
                 {
-                    // Material 不可用 — 降级为摘要（与旧路径兼容，但标记未取到正文）
-                    var score = env.Utility?.FinalScore ?? 0;
-                    content = $"- [{env.Type}] {env.CandidateId} (score={score:F3}) [content unavailable]";
+                    // Material 不可用 — 降级为摘要（与旧路径兼容，但标记未取到正文，不写分数）
+                    content = $"- [{env.Type}] {env.CandidateId} [content unavailable]";
                 }
                 else if (materialId is not null)
                 {
@@ -143,6 +134,8 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
                 {
                     // 修复 c：best-fit — 当前材料太大时跳过，继续尝试下一个更小的材料（不 break）
                     truncated = true;
+                    // 记录因预算跳过的材料：下一轮找回问句要覆盖「选了但没投影」的条目。
+                    skippedMaterialIds.Add(materialId ?? env.CandidateId);
                     continue;
                 }
                 projected.Add(msg);
@@ -170,6 +163,7 @@ public sealed class DefaultAgentModelContextProjector : IAgentModelContextProjec
             Messages = projected,
             TotalTokens = usedTokens,
             SelectedMaterialIds = selectedMaterialIds,
+            SkippedMaterialIds = skippedMaterialIds,
             TruncationDiagnostics = truncated
                 ? $"Projected {projected.Count} messages, {usedTokens} tokens (budget={budget}). Some content truncated."
                 : null

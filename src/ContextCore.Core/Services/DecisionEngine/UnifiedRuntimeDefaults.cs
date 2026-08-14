@@ -1999,7 +1999,7 @@ public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
 /// 从 <see cref="ProviderExecutionArtifact"/>[] 构建完整 <see cref="ContextDecisionExecutionResult"/>。
 /// </summary>
 /// <remarks>
-/// 替代旧的 internal static ExecutionArtifactFactory，改为可注入的 IExecutionArtifactFactory 实现。
+/// 替代早期内部静态实现，改为可注入的 IExecutionArtifactFactory 实现。
 /// 从单一数据源（ProviderExecutionArtifact[]）构建 ProviderReports 与 ProviderOutputSnapshots，
 /// 让 Runtime 不再分散处理 expertOutputs + providerReports 的配对逻辑。
 /// </remarks>
@@ -2101,130 +2101,6 @@ public sealed class DefaultExecutionArtifactFactory : IExecutionArtifactFactory
                 Materials = artifact.Materials,
                 Succeeded = artifact.Succeeded,
                 Duration = artifact.Duration
-            });
-        }
-        return snapshots;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// ExecutionArtifactFactory — 执行结果工厂（保留向后兼容）
-// ---------------------------------------------------------------------------
-
-/// <summary>
-/// 执行结果工厂，统一填充 <see cref="ContextDecisionExecutionResult"/> 的所有字段。
-/// </summary>
-/// <remarks>
-/// 设计目标：
-/// - 统一 Runtime 所有返回点（正常路径 / EarlyRejected 空路径 / 完全空候选路径）的结果构造，
-/// 避免 问题（新字段 NormalizedRequest / RequestSemanticHash / Scope /
-/// FeatureSchemaVersion / AllocatorVersion / TokenizerVersion / ProviderOutputSnapshots 未填充）。
-/// - ProviderOutputSnapshots 从 expertOutputs 构建，用于 Shadow replay 与审计。
-/// - RequestSemanticHash 基于请求语义字段计算 SHA256，用于 replay 匹配。
-/// </remarks>
-internal static class ExecutionArtifactFactory
-{
-    /// <summary>当前 Allocator 版本（与 DefaultAllocatorV2_1 诊断字段保持一致）。</summary>
-    private const string AllocatorVersion = "V2.1";
-
-    /// <summary>Tokenizer 版本占位（无 IContextTokenizerResolver 注入时为 null）。</summary>
-    private const string? TokenizerVersionValue = null;
-
-    /// <summary>
-    /// 创建完整填充的 <see cref="ContextDecisionExecutionResult"/>。
-    /// </summary>
-    public static ContextDecisionExecutionResult Create(
-        ContextDecisionRuntimeRequest request,
-        ContextDecisionResult decision,
-        CandidateWorkingSet workingSet,
-        EffectivePolicySnapshot snapshot,
-        ExpertRoutingDecisionSet routing,
-        IReadOnlyList<ProviderExecutionReport> providerReports,
-        IReadOnlyList<ExpertExecutionResult>? expertOutputs)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(decision);
-        ArgumentNullException.ThrowIfNull(workingSet);
-        ArgumentNullException.ThrowIfNull(snapshot);
-        ArgumentNullException.ThrowIfNull(routing);
-
-        return new ContextDecisionExecutionResult
-        {
-            Decision = decision,
-            WorkingSet = workingSet,
-            Policy = snapshot,
-            Routing = routing,
-            ProviderReports = providerReports,
-            // 标准化请求（当前为 identity，后续接入 PurposeRequestNormalizer）
-            NormalizedRequest = request,
-            // 请求语义哈希（用于 replay 匹配）
-            RequestSemanticHash = ComputeRequestSemanticHash(request),
-            // 请求作用域（从请求直接获取，不从候选反推）
-            Scope = request.Scope,
-            // Feature Schema 版本（从 Policy 获取）
-            FeatureSchemaVersion = snapshot.FeatureSchemaVersion,
-            // Allocator 版本（用于 replay 兼容性）
-            AllocatorVersion = AllocatorVersion,
-            // Tokenizer 版本（无 resolver 注入时为 null）
-            TokenizerVersion = TokenizerVersionValue,
-            // Provider 输出快照（用于 replay 和审计）
-            ProviderOutputSnapshots = BuildProviderOutputSnapshots(expertOutputs, providerReports),
-            // 统一 Token Ledger — 从 AllocationDecisions + WorkingSet 精确计算
-            FinalTokenCost = TokenCostHelper.ComputeFinalArtifactTokenCost(decision, workingSet),
-            // Provider degraded 标记（任一 Provider 失败时为 true）
-            IsDegraded = providerReports.Count > 0 && providerReports.Any(r => !r.Succeeded)
-        };
-    }
-
-    /// <summary>
-    /// 计算请求语义哈希（SHA256，用于 replay 匹配）。
-    /// </summary>
-    /// <remarks>
-    /// 委托给 DefaultRequestSemanticHasher，消除重复实现。
-    /// 哈希输入包含完整业务语义（Scope/Purpose/QueryText/TokenBudget/TopK +
-    /// RetrievalInput/PackageInput 关键字段 + SeedCandidates 数量），
-    /// 不含 RequestId（RequestId 仅作 CorrelationId）。
-    /// </remarks>
-    private static string ComputeRequestSemanticHash(ContextDecisionRuntimeRequest request)
-    {
-        return DefaultRequestSemanticHasher.Instance.ComputeHash(request);
-    }
-
-    /// <summary>
-    /// 从 ExpertExecutionResult + ProviderExecutionReport 构建 ProviderOutputSnapshot 列表。
-    /// </summary>
-    /// <remarks>
-    /// expertOutputs 与 providerReports 按相同顺序收集（InvokeProviderBatchAsync 产出），
-    /// 按索引配对：Kind/Succeeded/Duration 取自 report，Envelopes/Materials 取自 output。
-    /// 数量不匹配时按 output 为主，Kind 回退到 Semantic。
-    /// </remarks>
-    private static IReadOnlyList<ProviderOutputSnapshot> BuildProviderOutputSnapshots(
-        IReadOnlyList<ExpertExecutionResult>? expertOutputs,
-        IReadOnlyList<ProviderExecutionReport> providerReports)
-    {
-        if (expertOutputs is null || expertOutputs.Count == 0)
-        {
-            return Array.Empty<ProviderOutputSnapshot>();
-        }
-
-        var snapshots = new List<ProviderOutputSnapshot>(expertOutputs.Count);
-        for (var i = 0; i < expertOutputs.Count; i++)
-        {
-            var output = expertOutputs[i];
-            // 按索引从 providerReports 取 Kind / Succeeded / Duration / ErrorCode（同序收集）
-            var (kind, succeeded, duration, errorCode) = i < providerReports.Count
-                ? (providerReports[i].Kind, providerReports[i].Succeeded, providerReports[i].Duration, providerReports[i].ErrorCode)
-                : (ExpertKind.Semantic, true, TimeSpan.Zero, (string?)null);
-
-            snapshots.Add(new ProviderOutputSnapshot
-            {
-                Kind = kind,
-                Envelopes = output.Envelopes,
-                Materials = output.Materials,
-                Succeeded = succeeded,
-                Duration = duration,
-                // 传播错误码到快照（用于 replay 诊断 degraded 原因）
-                ErrorCode = errorCode
             });
         }
         return snapshots;

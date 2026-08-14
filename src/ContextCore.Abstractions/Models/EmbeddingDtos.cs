@@ -203,6 +203,12 @@ public sealed class VectorQuery
     /// <summary>必须包含的标签。</summary>
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// 本次查询不返回的来源 ID 集合，在排序/截断前排除。
+    /// 只表达"本次查询不返回"，不代表"确认不存在"。
+    /// </summary>
+    public IReadOnlyList<string> ExcludeSourceIds { get; init; } = Array.Empty<string>();
+
     /// <summary>返回结果中是否包含原始向量。</summary>
     public bool IncludeVector { get; init; }
 

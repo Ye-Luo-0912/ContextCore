@@ -18,8 +18,10 @@ namespace ContextCore.Core.Services.Retrieval;
 // 提取 ID 引用（"确认不存在"的实体），封顶 MaxExcludedIds。
 // 3. 图种子：优先取引号 / 书名号内显式实体锚点，不足时取长词元
 // （长度 2..32、非停用词、非纯数字，按长度降序），封顶 MaxGraphSeeds。
-// 4. 受控查询集：原始任务（混合）→ 意图（若与任务不同）→ 未解决目标
-// → 成功工具观察抽出的新实体词 → 图种子文本（有空位且未被现有问句覆盖才加），封顶 MaxControlledQueries 条。
+// 4. 受控查询集：原始任务（混合）→ 意图（若与任务不同）→ 上一轮 0 命中时
+// 任务/意图里未单独成问句的实体样词（Keyword，不加向量）→ 未解决目标
+// → 成功工具观察抽出的新实体词 → 成功观察里的显式 id:/ref:/uuid: 引用（Keyword）
+// → 图种子文本（有空位且未被现有问句覆盖才加），封顶 MaxControlledQueries 条。
 // 观察优先占位：问句跟外部结果走，不用整段结果当问句。
 // 图种子文本只是额外 Keyword 查询，不是关系图上的节点 ID。
 // 5. Token 预算：TurnBudget.Remaining × 1024，钳制 [512, 8192]；
@@ -97,8 +99,9 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         // 3. 图种子（显式锚点优先 + 长词元补充，封顶）
         var graphSeeds = ExtractGraphSeeds(task, intent, goals, MaxGraphSeeds);
 
-        // 4. 受控查询集（有界；成功观察的实体词优先于图种子）
-        var queries = BuildControlledQueries(task, intent, goals, graphSeeds, observations);
+        // 4. 受控查询集（有界；上一轮 0 命中时先拆实体词，成功观察的实体词优先于图种子）
+        var emptyRecall = diagnostics.Any(d => d is { HitsReturned: 0 });
+        var queries = BuildControlledQueries(task, intent, goals, graphSeeds, observations, emptyRecall);
 
         // 5. Token 预算（Turn 预算推导 + 诊断回退；任务为空时只给最小预算）
         var tokenBudget = string.IsNullOrWhiteSpace(task)
@@ -135,7 +138,8 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         string intent,
         IReadOnlyList<string> goals,
         IReadOnlyList<string> graphSeeds,
-        IReadOnlyList<ToolObservation> observations)
+        IReadOnlyList<ToolObservation> observations,
+        bool emptyRecall)
     {
         var queries = new List<AgentRetrievalQuery>(MaxControlledQueries);
 
@@ -162,20 +166,42 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
             });
         }
 
-        var goalsText = string.Join(" ", goals.Where(g => !string.IsNullOrWhiteSpace(g)));
-        if (!string.IsNullOrWhiteSpace(goalsText)
-            && !string.Equals(goalsText, task, StringComparison.Ordinal))
+        // 上一轮 0 命中时：任务/意图整体问句没搜到东西，把其中还没单独成问句的
+        // 实体样词逐条加成 Keyword 再搜（不调用向量；名额仍受上限约束）。
+        if (emptyRecall)
         {
+            TryAddEmptyRecallEntityQueries(queries, task, intent);
+        }
+
+        // 成功工具观察的实体词优先于找回词占名额（最新工具结果先写进问句）。
+        TryAddObservationQueries(queries, observations);
+
+        // 未解决目标（上一轮被分配器裁掉的条目）逐条加成 Keyword 查询：
+        // 不拼成一句、不标 Vector——默认没有向量，拼句会再次撞词元上限、标题对不上。
+        // 与观察实体词相同的覆盖检查，被已有问句覆盖的目标不再占名额。
+        var goalsCovered = string.Join(" ", queries.Select(query => query.Text));
+        foreach (var goal in goals)
+        {
+            if (queries.Count >= MaxControlledQueries)
+            {
+                break;
+            }
+            var goalText = (goal ?? string.Empty).Trim();
+            if (goalText.Length == 0
+                || string.Equals(goalText, task, StringComparison.Ordinal)
+                || IsCoveredByQueries(goalText, goalsCovered))
+            {
+                continue;
+            }
             queries.Add(new AgentRetrievalQuery
             {
-                Text = goalsText,
-                Type = AgentRetrievalQueryType.Vector,
+                Text = goalText,
+                Type = AgentRetrievalQueryType.Keyword,
                 Weight = 0.7,
                 Reason = "未解决目标"
             });
+            goalsCovered = goalsCovered + " " + goalText;
         }
-
-        TryAddObservationQueries(queries, observations);
 
         var coveredText = string.Join(" ", queries.Select(query => query.Text));
         foreach (var seed in graphSeeds)
@@ -218,6 +244,83 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
                 Type = AgentRetrievalQueryType.Keyword,
                 Weight = 1.0,
                 Reason = "成功工具观察"
+            });
+        }
+
+        // 成功观察里的显式 id:/ref:/uuid: 引用：工具在说这个 ID 存在，
+        // 按条加成 Keyword 问句（上限），不进 RequiredIds。
+        TryAddSuccessfulIdQueries(queries, observations);
+    }
+
+    // 成功工具观察中的 ID 引用（如 id:keep-1）说明该实体确实存在：
+    // 逐条加成 Keyword 问句，方便它不在工作集时靠搜索找回。
+    // 失败观察的 ID 走排除路径（ExtractExcludedIds），这里只看成功观察；
+    // 与观察实体词同一最近窗口、最新优先；已单独成问句的 ID 不重复加成。
+    private static void TryAddSuccessfulIdQueries(
+        List<AgentRetrievalQuery> queries,
+        IReadOnlyList<ToolObservation> observations)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var windowStart = Math.Max(0, observations.Count - ObservationQueryText.MaxObservationWindow);
+        for (var i = observations.Count - 1; i >= windowStart; i--)
+        {
+            var observation = observations[i];
+            if (observation is null || !observation.Succeeded)
+            {
+                continue;
+            }
+            var text = string.Concat(observation.Result, " ", observation.Error);
+            foreach (Match match in IdReferenceRegex.Matches(text ?? string.Empty))
+            {
+                var id = match.Groups[1].Value;
+                if (!seen.Add(id)
+                    || queries.Any(query => string.Equals(query.Text, id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+                if (queries.Count >= MaxControlledQueries)
+                {
+                    return;
+                }
+                queries.Add(new AgentRetrievalQuery
+                {
+                    Text = id,
+                    Type = AgentRetrievalQueryType.Keyword,
+                    Weight = 1.0,
+                    Reason = "成功工具观察 ID"
+                });
+            }
+        }
+    }
+
+    // 空召回恢复：上一轮 0 命中时，任务/意图整体没搜到东西，把其中还没单独成问句的
+    // 实体样词（带数字/连字符/下划线，与观察实体词同一词元规则）逐条加成 Keyword 再搜。
+    // 不调用向量；已是单独问句的词不再重复加成。
+    private static void TryAddEmptyRecallEntityQueries(
+        List<AgentRetrievalQuery> queries, string task, string intent)
+    {
+        var combined = string.IsNullOrWhiteSpace(intent)
+            ? task
+            : string.Concat(task, " ", intent);
+        foreach (var term in SplitTerms(combined))
+        {
+            if (queries.Count >= MaxControlledQueries)
+            {
+                return;
+            }
+            if (term.Length < GraphSeedMinLength
+                || StopWords.Contains(term)
+                || !ObservationQueryText.LooksLikeEntity(term)
+                || queries.Any(query => string.Equals(query.Text, term, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            queries.Add(new AgentRetrievalQuery
+            {
+                Text = term,
+                Type = AgentRetrievalQueryType.Keyword,
+                Weight = 0.7,
+                Reason = "空召回实体词"
             });
         }
     }
@@ -290,8 +393,12 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         var result = new List<string>(max);
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var observation in observations)
+        // 只取最近 MaxObservationWindow 条且从最新失败开始：新的 id:missing 先占排除名额，
+        // 窗口外的旧失败不再进排除列表。
+        var windowStart = Math.Max(0, observations.Count - ObservationQueryText.MaxObservationWindow);
+        for (var i = observations.Count - 1; i >= windowStart; i--)
         {
+            var observation = observations[i];
             if (observation is null || observation.Succeeded)
             {
                 continue;
@@ -406,9 +513,9 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         {
             sb.Append("上一轮预算超限，本轮已回退减半。");
         }
-        else if (diagnostics.Any(d => d is { HitsReturned: 0 }))
+        if (diagnostics.Any(d => d is { HitsReturned: 0 }))
         {
-            sb.Append("上一轮存在空结果，本轮增加向量查询覆盖。");
+            sb.Append("上一轮 0 命中，本轮用尚未覆盖的实体词再搜。");
         }
         return sb.ToString().TrimEnd();
     }

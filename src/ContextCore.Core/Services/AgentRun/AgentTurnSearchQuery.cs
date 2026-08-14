@@ -184,15 +184,18 @@ internal static class AgentTurnSearchQuery
             return (false, 0.0, 0.5);
         }
 
+        // 与规划同窗口：只用最近若干条观察算成功率，整个 Run 的古代失败不打没质量。
+        var windowStart = Math.Max(0, observations.Count - ObservationQueryText.MaxObservationWindow);
         var succeeded = 0;
-        foreach (var observation in observations)
+        for (var i = observations.Count - 1; i >= windowStart; i--)
         {
-            if (observation is { Succeeded: true })
+            if (observations[i] is { Succeeded: true })
             {
                 succeeded++;
             }
         }
 
-        return (true, succeeded / (double)observations.Count, 1.0);
+        var windowedCount = observations.Count - windowStart;
+        return (true, succeeded / (double)windowedCount, 1.0);
     }
 }

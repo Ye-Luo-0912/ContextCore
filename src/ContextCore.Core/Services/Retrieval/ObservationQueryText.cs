@@ -4,11 +4,16 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Retrieval;
 
 // 从成功工具观察里抽出还没搜过的实体词。
+// 按时间倒序产出：查询名额有限时，最新工具结果优先占名额。
 // 不用整段结果当问句，避免 found/notes 这类套话跟任务词一起 OR 命中。
 
 internal static class ObservationQueryText
 {
     internal const int MaxSnippetChars = 240;
+
+    // 规划与质量证据只消费最近若干条观察：旧观察不再占查询名额或拖低成功率。
+    // 复用现有排除上限作为窗口大小，不新增配置。
+    internal const int MaxObservationWindow = DefaultAgentRetrievalQueryPlanner.MaxExcludedIds;
 
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -26,8 +31,12 @@ internal static class ObservationQueryText
         }
 
         var covered = alreadyCovered ?? string.Empty;
-        foreach (var observation in observations)
+        // 从最新一条开始倒序且只取最近 MaxObservationWindow 条：
+        // 最新工具结果先写进问句，旧观察不再占名额、也不挡后来的同主题词。
+        var windowStart = Math.Max(0, observations.Count - MaxObservationWindow);
+        for (var i = observations.Count - 1; i >= windowStart; i--)
         {
+            var observation = observations[i];
             if (observation is null || !observation.Succeeded)
             {
                 continue;
@@ -73,7 +82,7 @@ internal static class ObservationQueryText
         return string.Join(" ", chosen);
     }
 
-    private static bool LooksLikeEntity(string term)
+    internal static bool LooksLikeEntity(string term)
     {
         foreach (var ch in term)
         {

@@ -2,15 +2,15 @@
 
 > 生成：2026-08-14。跟的是当时 HEAD 的 DI 与端点，不是 freeze 报告。
 > 本文件只回答「现在一次请求实际走哪」。不消化历史快照。
-> 下一阶段开工清单：[`RECALL_WIRING.md`](RECALL_WIRING.md)。R46 与 Learning/Canary 新票仍延后。
+> 当前开工清单：暂无（RF 重构/精简/性能阶段已收口并归档）。R46 与 Learning/Canary 新票仍延后。
 
-读代码从这里开始。`TODO.md` 后半是 R31–R45 完成记录，不是导航图。
-下一阶段要改召回/工作集时读 [`RECALL_WIRING.md`](RECALL_WIRING.md)，按工作包执行，不要从 archive 发明架构。
-历史 freeze / 阶段报告在 `docs/archive/`，不当现行依据。文档入口见 `docs/README.md`。
+读代码从这里开始。`TODO.md` 是一页式路线入口，不再承载历史完成记录。
+做下一阶段改动时以新的执行清单为准（当前无；上一份 RF 阶段清单 [`NEXT_PHASE_REFACTOR.md`](NEXT_PHASE_REFACTOR.md) 已完成）。召回接线与多轮找回、RF 阶段均已收口，不要从 Git 历史发明架构。
+文档入口见 `docs/README.md`。
 
-仓库根上的 `vector/`、`learning/`、`eval/`（除 `contexts/`）、`foundation/`、`storage/` 报告、以及 `service/` 里除 `openapi/` 以外的冒烟，都是历史证据。各目录有 README。不要从那些 JSON 反推现行 DI。
+仓库根上的 `vector/`、`learning/`、`eval/`（除 `contexts/`）、`foundation/`、`storage/` 报告、以及 `service/` 里除 `openapi/` 以外的产物，都是机器可读或可重新生成的历史证据。不要从那些 JSON 反推现行 DI。
 
-**整理之后（2026-08-14）：** 活路径、误导注释、docs archive、证据目录牌子。HTTP retrieve/package **缺省切流 100**，与 Agent 共用 `DefaultContextDecisionRuntime`。设 `CC_CUTOVER_PERCENTAGE=0` 可切回混合检索/基础打包器。下一阶段见 `RECALL_WIRING.md`。不做 R46、不接原型。
+**整理之后（2026-08-14）：** 活路径、误导注释与历史文档已收口。HTTP retrieve/package **缺省切流 100**，与 Agent 共用 `DefaultContextDecisionRuntime`。设 `CC_CUTOVER_PERCENTAGE=0` 可切回混合检索/基础打包器。RF 重构/精简/性能阶段已完成，当前无下一份执行清单。不做 R46、不接原型。
 
 ---
 
@@ -138,6 +138,8 @@ WorkingMemory、StableMemory、Graph。Store 为 null 时对应 Provider 返回�
 
 HTTP retrieve 请求体可带可选 `QueryTexts`（分条词法查询，Lexical 按条检索再按 ID 合并最高分）；
 为空时回退单条 `QueryText`（`RewrittenQueryText` 优先），行为与改前一致。
+HTTP retrieve/package 请求体均可传可选 `ExcludedIds`（确认不存在的 ID，不参与召回），空列表 = 旧行为。
+Semantic 通道：无 embedding / 向量存储时为空（预期）；有向量时同样按 `QueryTexts` 逐条检索并按来源 ID 合并最高分，与 Lexical 分条对齐。
 
 ### 3.4 打包（给 LLM 的 ContextPackage）
 
@@ -177,10 +179,11 @@ AgentKernelHost 解析 IContextDecisionRuntime
 ```
 
 请求从第二轮起带 `SeedWorkingSet`：上一轮 **SelectedEnvelopes + 对应 Materials**。
-`QueryText` 是规划器查询的诊断拼接。真正词法召回走 `RetrievalInput.QueryTexts`，按条检索再按 ID 合并（保留对该条问句的最高分），避免拼成一句后词元上限截掉工具观察、标题也对不上。成功工具观察只抽出还没搜过的实体词（带数字或连字符的优先），不把 found/notes 整段拿去 OR。
+`QueryText` 是规划器查询的诊断拼接。真正词法召回走 `RetrievalInput.QueryTexts`，按条检索再按 ID 合并（保留对该条问句的最高分），避免拼成一句后词元上限截掉工具观察、标题也对不上。成功工具观察只抽出还没搜过的实体词（带数字或连字符的优先），**按时间倒序占查询名额**（最新工具结果优先，最旧让位），不把 found/notes 整段拿去 OR；成功观察里的显式 `id:`/`ref:`/`uuid:` 引用按条加成 Keyword 问句（工具在说这个 ID 存在，不在工作集时靠搜索找回），失败观察里的 ID 只进排除集、不变成问句。
 规划器图种子文本只在查询名额有空且**尚未被已有问句覆盖**时加成 Keyword 查询；任务里已有的套话不再重复搜，名额留给观察实体或引号实体。图种子文本与图 Expert 无关（不是关系图节点 ID）。
-规划输入带上 `ToolObservations`、`TurnBudget`、上一轮检索诊断；不再把任务原文复制成未解决目标。
-自适应模式默认仍是 **Disabled**：不改 Token/TopK 乘数。准不准跟工具观察走，不跟固定乘数或打分器分数走。
+投影材料顺序保持分配器 `SelectedEnvelopes` 原顺序，不用 FinalScore 重排（正文缺失的降级摘要也不写分数）；best-fit 仍按预算逐个尝试、跳过太大的材料。
+规划输入带上 `ToolObservations`、`TurnBudget`、上一轮检索诊断；规划与排除只消费**最近 8 条**观察（复用排除上限；旧观察不再占查询名额、不拖低成功率），对话历史仍按预算投影。未解决目标 = 上一轮被分配器裁掉条目的实体词，逐条加成 Keyword 找回问句（不钉 ID、不复制任务原文）。上一轮检索 0 命中时，任务/意图里尚未单独成问句的实体样词逐条拆成 Keyword 问句再搜（不加向量），计划说明如实标注 0 命中。
+自适应模式默认仍是 **Disabled**：不改 Token/TopK 乘数。准不准跟工具观察走，不跟固定乘数或打分器分数走。诊断里的 `HighestScore` 只是上一轮选中项的 FinalScore 快照（诊断字段），不是质量信号，不送进自适应。
 未选中的不进种子；也不把选中 ID 写成 `RequiredIds`，这样分配器仍能按预算忘掉。
 失败工具观察确认不存在的 ID 写入 `RetrievalInput.ExcludedIds`，并从 Resident 种子拿掉。
 Resident 写进 `AgentRun.ResidentWorkingSetJson`，上下文构建成功后随 Run 快照落进 data jsonb。
@@ -242,7 +245,7 @@ Learning 物化：Postgres 走 durable outbox；FileSystem/InMemory 走进程内
 - `CanaryProgressionService`（可改 Cutover 百分比；Development 默认不是生产推进器）
 - ControlRoom `EvalCommand*` 超大文件
 - `MapRetrievalEndpoints` 已空（shadow debug 端点删了）
-- `docs/archive/` 里的 freeze / 阶段报告 / 过期设计稿
+- Git 历史里的 freeze / 阶段报告 / 过期设计稿
 
 可以读、可以测，不要当现行合同改。
 
@@ -253,17 +256,16 @@ Learning 物化：Postgres 走 durable outbox；FileSystem/InMemory 走进程内
 | 文件 | 角色 |
 | --- | --- |
 | **本文件 `docs/LIVE_PATH.md`** | 现行导航 |
-| `docs/RECALL_WIRING.md` | **下一阶段执行清单**（召回接线）。按工作包改代码 |
+| `docs/NEXT_PHASE_REFACTOR.md` | 已完成的重构/精简/性能阶段清单（RF-1…RF-7，含基线数据） |
 | `docs/README.md` | 文档索引 |
 | `README.md` | 仓库入口 |
-| `TODO.md` | R31–R45 完成记录。不再根据「下一阶段 R46」开工 |
-| `docs/archive/` | 历史快照与旧路线图，考古用 |
-| `vector/` `learning/` `foundation/` `storage/` | 历史证据堆，目录内有牌子 |
+| `TODO.md` | 一页式当前路线与历史入口 |
+| `vector/` `learning/` `foundation/` `storage/` | 机器可读或可重新生成的历史证据 |
 | `eval/contexts/` | 评测语料（测试会读） |
 | `service/openapi/` | OpenAPI 快照（漂移测试会读） |
 | `AGENTS.md` | 注释与测试约定，不是架构 |
 
-不新写 `ContextCore_Unified_V3.md`。活路径变了，只改本文件；下一阶段任务只改 `RECALL_WIRING.md`。
+不新写 `ContextCore_Unified_V3.md`。活路径变了就更新本文件；阶段安排只更新 `NEXT_PHASE_REFACTOR.md`。
 
 ---
 
@@ -343,16 +345,29 @@ Learning 物化：Postgres 走 durable outbox；FileSystem/InMemory 走进程内
 | 对象 | 跨轮 | 行为 |
 | --- | --- | --- |
 | 上一轮 `SelectedEnvelopes` | 是 | 作为下一轮 `SeedWorkingSet`；随 `AgentRun` 提交写进 `ResidentWorkingSetJson` |
-| 上一轮未选中项 | 否 | 不进种子；本轮搜索命中则可再入选 |
+| 上一轮未选中项 | 否 | 不进种子；实体词写入下一轮找回问句（逐条 Keyword），搜索命中则可再入选 |
 | 检索问句 | 每轮仍搜索 | 计划查询与观察实体词写入 `QueryTexts` 分条检索；拼句只用于诊断 |
 | `RequiredIds` | 不钉死选中 ID | 预算裁掉 = 忘掉 |
 | 失败工具确认不存在的 ID | 否 | 写入 `RetrievalInput.ExcludedIds`，从 Resident 种子拿掉，Lexical/Mandatory 不再召回 |
+| 成功工具观察里的显式 `id:` | 否（搜索线索） | 按条加成 Keyword 问句，不在工作集时靠搜索找回；不钉 `RequiredIds`、不进 `ExcludedIds` |
+| 已持有 ID（种子里） | 是 | 保留在种子；Lexical/Semantic 召回跳过，不再占 TopK；与 `ExcludedIds`（确认不存在）分开 |
+| 投影因预算跳过 | 是（仍在种子） | 不等于进模型；其实体词写入下一轮找回问句，靠搜索换问句找回 |
 | 召回质量信号 | 有工具才有效 | 工具成功率；不用选中项 `FinalScore`，也不用 Completed=0.9 |
 | `IWorkingMemoryService` | Agent 仍不写 | 记忆层不是这条 Resident |
 | 崩溃恢复 | 是（Run jsonb） | 新 Actor 从 `ResidentWorkingSetJson` 恢复种子；上下文构建成功后已落库，模型返回前崩溃也能恢复；未构建完的当轮仍会丢 |
 | `AgentContextState.Conversation` | 是 | 工具轮协议单元仍按预算裁剪 |
 
 不做原型那套 Warm/Cold/admit/`materialize`。只接种子、不做驱逐会变成 append-only；这里驱逐就是「没选中就不带入 + 分配器预算」。
+
+### 9.6 「忘掉再搜回」端到端夹具（MR-11 验收结论）
+
+`MultiTurnForgetAndRecallTests`：库两条笔记（长正文 keep-budget 占预算、短标题实体 AmberCompass-17），InMemory store + 确定性脚本模型 + Echo 工具，不调真实 LLM / 不用 embedding。
+
+| 轮次 | 发生了什么 | 结论 |
+| --- | --- | --- |
+| 第一轮 | 任务同时命中两条；分配器预算只够长正文，短条目被裁（Dropped） | 选中 = 记住；未选中 = 忘掉，不进下一轮种子 |
+| 第二轮 | 被裁条目的实体词自动写进找回问句（分条 Keyword）；搜索再次召回并选中它 | 忘掉靠搜索找回，不钉 `RequiredIds` |
+| 第三轮 | 失败工具 `id:gone` 进入排除集；种子与决策都不再出现 gone | 失败只排除：确认不存在的 ID 不召回、不进种子 |
 
 ### 9.5 图通道：默认空是预期，有关系边才扩展
 
@@ -386,6 +401,8 @@ Learning 物化：Postgres 走 durable outbox；FileSystem/InMemory 走进程内
 - 打开 Adaptive Active（只调固定乘数，不解决准不准）
 - 打开模型打分 / Learning 训练（默认链上没有 embedding，也没有可用的外部标签）
 
-下一阶段要动的代码缺口（执行顺序与禁令见 [`RECALL_WIRING.md`](RECALL_WIRING.md)）：
+多轮找回阶段（MR-1…MR-12）已完成：观察实体词最新优先、规划/排除只看最近 8 条观察、已持有 ID 不占 Lexical/Semantic TopK、分配器/投影裁掉的条目实体词写进下一轮分条找回问句、空召回换实体词问句且 Reason 不提向量、成功 `id:` 是搜索线索而失败 `id:` 只排除、投影顺序 = 分配器顺序、HTTP retrieve/package 可传 `excludedIds`、Semantic 有 embedding 时按 `QueryTexts` 分条、「忘掉再搜回」端到端夹具绿。代码缺口清单已清空；剩余疑问见上。
+
+重构精简与性能阶段（RF-1…RF-7）已完成：已持有 ID 下推到三 provider 向量检索（排序/截断前排除，162 组合欠召回均为 0）；通用 LeasedWork 租约层删除，Canary 与 AgentRun 各依赖专用租约接口；无引用的旧执行产物工厂删除；HTTP 冲突错误统一走 `ContextCoreHttpResultMapper.Conflict`；RF-4（outbox 去重）与 RF-6（Actor 终态模板）经净删除门槛评估后取消。多问句召回基线见 `benchmarks/results/MULTIQUERY_RECALL_BASELINE.md`：embedding/vector search 与 FileSystem lexical roundtrip 均随问句数线性放大，优先做批量 embedding/query 去重与单请求批量读取；TopK 与 held 数量对时延影响小。全量测试 4075 通过 / 0 失败 / 7 跳过。
 
 R46（Postgres 迁移恢复、Learning 质量闸门生产策略）仍延后。

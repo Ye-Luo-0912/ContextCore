@@ -283,9 +283,6 @@ F:ContextCore.Abstractions.LearningPipelineEventType.Decision
 F:ContextCore.Abstractions.LearningPipelineEventType.TaskCompletion
 F:ContextCore.Abstractions.LearningPipelineEventType.ToolOutcome
 F:ContextCore.Abstractions.LearningPipelineEventType.UserFeedback
-F:ContextCore.Abstractions.LeaseAcquireResult.Acquired
-F:ContextCore.Abstractions.LeaseAcquireResult.AlreadyHeld
-F:ContextCore.Abstractions.LeaseAcquireResult.NotFound
 F:ContextCore.Abstractions.MandatoryOverflowPolicy.AllowOverflowWithDiagnostic
 F:ContextCore.Abstractions.MandatoryOverflowPolicy.FailClosed
 F:ContextCore.Abstractions.MandatoryOverflowPolicy.RejectLowestAuthorityMandatory
@@ -2565,13 +2562,6 @@ M:ContextCore.Abstractions.ILeasedJobQueue.AcquireLeaseAsync(System.String, Syst
 M:ContextCore.Abstractions.ILeasedJobQueue.AcquireLeaseBatchAsync(System.String, System.TimeSpan, System.Int32, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedJobQueue.RenewHeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILeasedJobQueue.RenewHeartbeatBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.JobLeaseRenewal>, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.AckAsync(System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.HeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.NackAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.ReapExpiredAsync(System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.RenewAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.TryAcquireAsync(System.String, System.TimeSpan, System.String, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.ILeasedWorkStore<>.TryAcquireBatchAsync(System.Int32, System.TimeSpan, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILifecycleGate.Evaluate(ContextCore.Abstractions.ContextCandidateEnvelope)
 M:ContextCore.Abstractions.IMemoryDecayEvaluator.EvaluateAsync(System.String, System.String, System.String, ContextCore.Abstractions.MemoryState, ContextCore.Abstractions.MemoryUtilityStats, System.Nullable<System.DateTimeOffset>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IMemoryPromotionService.DeprecateAsync(System.String, System.String, System.String, System.String, System.String, System.Double, System.Threading.CancellationToken, System.String)
@@ -2931,13 +2921,6 @@ M:ContextCore.Abstractions.LeasedLeadership.Equals(System.Object)
 M:ContextCore.Abstractions.LeasedLeadership.GetHashCode()
 M:ContextCore.Abstractions.LeasedLeadership.GetType()
 M:ContextCore.Abstractions.LeasedLeadership.ToString()
-M:ContextCore.Abstractions.LeasedWork<>.#ctor()
-M:ContextCore.Abstractions.LeasedWork<>.<Clone>$()
-M:ContextCore.Abstractions.LeasedWork<>.Equals(ContextCore.Abstractions.LeasedWork<>)
-M:ContextCore.Abstractions.LeasedWork<>.Equals(System.Object)
-M:ContextCore.Abstractions.LeasedWork<>.GetHashCode()
-M:ContextCore.Abstractions.LeasedWork<>.GetType()
-M:ContextCore.Abstractions.LeasedWork<>.ToString()
 M:ContextCore.Abstractions.LifecycleGateResult.#ctor(System.Boolean, System.String, System.String)
 M:ContextCore.Abstractions.LifecycleGateResult.<Clone>$()
 M:ContextCore.Abstractions.LifecycleGateResult.Deconstruct(out System.Boolean, out System.String, out System.String)
@@ -6079,6 +6062,7 @@ P:ContextCore.Abstractions.AgentMessage.ToolCalls (get|init)
 P:ContextCore.Abstractions.AgentMessage.ToolName (get|init)
 P:ContextCore.Abstractions.AgentModelContextProjection.Messages (get|init)
 P:ContextCore.Abstractions.AgentModelContextProjection.SelectedMaterialIds (get|init)
+P:ContextCore.Abstractions.AgentModelContextProjection.SkippedMaterialIds (get|init)
 P:ContextCore.Abstractions.AgentModelContextProjection.TotalTokens (get|init)
 P:ContextCore.Abstractions.AgentModelContextProjection.TruncationDiagnostics (get|init)
 P:ContextCore.Abstractions.AgentModelRequest.DeadlineAt (get|init)
@@ -7177,12 +7161,6 @@ P:ContextCore.Abstractions.LeasedLeadership.FencingToken (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.LeaseToken (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.Owner (get|init)
 P:ContextCore.Abstractions.LeasedLeadership.RunId (get|init)
-P:ContextCore.Abstractions.LeasedWork<>.AcquiredAt (get|init)
-P:ContextCore.Abstractions.LeasedWork<>.ExpiresAt (get|init)
-P:ContextCore.Abstractions.LeasedWork<>.FencingToken (get|init)
-P:ContextCore.Abstractions.LeasedWork<>.LeaseToken (get|init)
-P:ContextCore.Abstractions.LeasedWork<>.Owner (get|init)
-P:ContextCore.Abstractions.LeasedWork<>.Work (get|init)
 P:ContextCore.Abstractions.LifecycleGateResult.Detail (get|init)
 P:ContextCore.Abstractions.LifecycleGateResult.Passes (get|init)
 P:ContextCore.Abstractions.LifecycleGateResult.ReasonCode (get|init)
@@ -8487,6 +8465,7 @@ P:ContextCore.Abstractions.Models.ContextPackagePolicyQuery.QueryText (get|init)
 P:ContextCore.Abstractions.Models.ContextPackagePolicyQuery.Take (get|init)
 P:ContextCore.Abstractions.Models.ContextPackagePolicyQuery.WorkspaceId (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageRequest.CollectionId (get|init)
+P:ContextCore.Abstractions.Models.ContextPackageRequest.ExcludedIds (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageRequest.IncludeRecent (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageRequest.IsAuditMode (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageRequest.Metadata (get|init)
@@ -8669,6 +8648,7 @@ P:ContextCore.Abstractions.Models.ContextRetrievalDecision.Type (get|init)
 P:ContextCore.Abstractions.Models.ContextRetrievalRequest.AllowedRelationTypes (get|init)
 P:ContextCore.Abstractions.Models.ContextRetrievalRequest.CandidateTake (get|init)
 P:ContextCore.Abstractions.Models.ContextRetrievalRequest.CollectionId (get|init)
+P:ContextCore.Abstractions.Models.ContextRetrievalRequest.ExcludedIds (get|init)
 P:ContextCore.Abstractions.Models.ContextRetrievalRequest.IncludeContent (get|init)
 P:ContextCore.Abstractions.Models.ContextRetrievalRequest.IncludeKeywordRecall (get|init)
 P:ContextCore.Abstractions.Models.ContextRetrievalRequest.IncludeRelationExpansion (get|init)
@@ -10846,6 +10826,7 @@ P:ContextCore.Abstractions.Models.VectorLifecycleSidecarMetadataEntry.SourceRevi
 P:ContextCore.Abstractions.Models.VectorLifecycleSidecarMetadataEntry.TargetSectionOverride (get|init)
 P:ContextCore.Abstractions.Models.VectorLifecycleSidecarMetadataEntry.WorkspaceId (get|init)
 P:ContextCore.Abstractions.Models.VectorQuery.CollectionId (get|init)
+P:ContextCore.Abstractions.Models.VectorQuery.ExcludeSourceIds (get|init)
 P:ContextCore.Abstractions.Models.VectorQuery.IncludeVector (get|init)
 P:ContextCore.Abstractions.Models.VectorQuery.Metadata (get|init)
 P:ContextCore.Abstractions.Models.VectorQuery.MinScore (get|init)
@@ -12196,8 +12177,6 @@ T:ContextCore.Abstractions.ILearningFeedbackReviewStore (Interface)
 T:ContextCore.Abstractions.ILearningFeedbackStore (Interface)
 T:ContextCore.Abstractions.ILearningPipelineSink (Interface)
 T:ContextCore.Abstractions.ILeasedJobQueue (Interface)
-T:ContextCore.Abstractions.ILeasedWorkStore (Interface)
-T:ContextCore.Abstractions.ILeasedWorkStore<> (Interface)
 T:ContextCore.Abstractions.ILifecycleGate (Interface)
 T:ContextCore.Abstractions.IMemoryDecayEvaluator (Interface)
 T:ContextCore.Abstractions.IMemoryPromotionService (Interface)
@@ -12307,10 +12286,8 @@ T:ContextCore.Abstractions.LearningMaterializationOptions
 T:ContextCore.Abstractions.LearningPersistenceStatus (Enum)
 T:ContextCore.Abstractions.LearningPipelineEvent
 T:ContextCore.Abstractions.LearningPipelineEventType (Enum)
-T:ContextCore.Abstractions.LeaseAcquireResult (Enum)
 T:ContextCore.Abstractions.LeasedAgentRun
 T:ContextCore.Abstractions.LeasedLeadership
-T:ContextCore.Abstractions.LeasedWork<>
 T:ContextCore.Abstractions.LifecycleGateResult
 T:ContextCore.Abstractions.MandatoryContextWindowExceededException
 T:ContextCore.Abstractions.MandatoryHydrationFailedException

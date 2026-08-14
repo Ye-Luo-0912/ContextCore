@@ -411,12 +411,8 @@ internal static class ModelControlPlaneEndpoints
                 clusterSlotStore, id, descriptor.ContentHash, ClusterModelSlotDesiredStatus.Active, updatedBy, ct).ConfigureAwait(false);
             if (casConflict)
             {
-                return Results.Conflict(new ContextCoreErrorResponse
-                {
-                    Message = "CAS 更新失败：集群模型槽位已被并发修改，请重试。",
-                    ErrorCode = "CasConflict",
-                    OperationId = "models.activate"
-                });
+                return ContextCoreHttpResultMapper.Conflict(
+                    "models.activate", "CAS 更新失败：集群模型槽位已被并发修改，请重试。", "CasConflict");
             }
 
             // 本地激活（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
@@ -507,12 +503,8 @@ internal static class ModelControlPlaneEndpoints
                 clusterSlotStore, id, descriptor.ContentHash, ClusterModelSlotDesiredStatus.Active, updatedBy, ct).ConfigureAwait(false);
             if (casConflict)
             {
-                return Results.Conflict(new ContextCoreErrorResponse
-                {
-                    Message = "CAS 更新失败：集群模型槽位已被并发修改，请重试。",
-                    ErrorCode = "CasConflict",
-                    OperationId = "models.rollback"
-                });
+                return ContextCoreHttpResultMapper.Conflict(
+                    "models.rollback", "CAS 更新失败：集群模型槽位已被并发修改，请重试。", "CasConflict");
             }
 
             // 本地激活（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。
@@ -584,12 +576,8 @@ internal static class ModelControlPlaneEndpoints
                     clusterSlotStore, null, null, ClusterModelSlotDesiredStatus.Inactive, updatedBy, ct).ConfigureAwait(false);
                 if (casConflict)
                 {
-                    return Results.Conflict(new ContextCoreErrorResponse
-                    {
-                        Message = "CAS 更新失败：集群模型槽位已被并发修改，请重试。",
-                        ErrorCode = "CasConflict",
-                        OperationId = "models.retire"
-                    });
+                    return ContextCoreHttpResultMapper.Conflict(
+                        "models.retire", "CAS 更新失败：集群模型槽位已被并发修改，请重试。", "CasConflict");
                 }
 
                 // 本地停用（CAS 成功后执行）：若失败则返回 202 Accepted，Reconciler 将重试。

@@ -67,6 +67,9 @@ public sealed class FileVectorStore : IVectorStore
 
         var tags = query.Tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var sourceKinds = query.SourceKinds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var excludedSourceIds = query.ExcludeSourceIds.Count == 0
+            ? null
+            : new HashSet<string>(query.ExcludeSourceIds, StringComparer.OrdinalIgnoreCase);
         var topK = query.TopK > 0 ? query.TopK : 10;
 
         return [.. records
@@ -75,6 +78,8 @@ public sealed class FileVectorStore : IVectorStore
                 || string.Equals(record.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
             .Where(record => sourceKinds.Count == 0 || sourceKinds.Contains(record.SourceKind))
             .Where(record => tags.Count == 0 || tags.All(record.Tags.Contains))
+            // 本次查询不返回的来源 ID 在排序/截断前排除，避免已持有 ID 占满 TopK。
+            .Where(record => excludedSourceIds is null || !excludedSourceIds.Contains(record.SourceId))
             .Select(record => new
             {
                 Record = record,

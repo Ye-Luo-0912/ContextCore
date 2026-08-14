@@ -76,6 +76,25 @@ public sealed class AgentTurnSearchQueryTests
     }
 
     [TestMethod]
+    public void ToolEvidence_UsesRecentWindow_NotAncientFailures()
+    {
+        var observations = new List<ToolObservation>();
+        for (var i = 0; i < 8; i++)
+        {
+            observations.Add(new ToolObservation { ToolName = "echo", Succeeded = false, Error = $"miss-{i}" });
+        }
+        for (var i = 0; i < 8; i++)
+        {
+            observations.Add(new ToolObservation { ToolName = "echo", Succeeded = true, Result = $"ok-{i}" });
+        }
+
+        var evidence = AgentTurnSearchQuery.ToolEvidence(observations);
+        Assert.IsTrue(evidence.Effective);
+        Assert.AreEqual(1.0, evidence.Quality, 0.0001,
+            "质量只看最近窗口的成功率，古代失败不打没。");
+    }
+
+    [TestMethod]
     public void Compose_TruncatesLongSnippet()
     {
         var longBody = new string('a', AgentTurnSearchQuery.MaxObservationSnippetChars + 40);
@@ -220,6 +239,152 @@ public sealed class AgentTurnSearchQueryTests
         Assert.AreEqual(1.0, secondRuntime.OutcomeQuality, 0.0001, "工具全部成功时质量为 1。");
         Assert.IsFalse(planner.Outcomes[0].Effective, "首轮还没有工具观察，不能用打分器分数当准。");
     }
+
+    [TestMethod]
+    public async Task SecondTurn_UnresolvedGoals_FromDroppedEnvelopes()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = new AgentRun
+        {
+            RunId = "run-" + Guid.NewGuid().ToString("N"),
+            WorkspaceId = "ws-search",
+            CollectionId = "demo",
+            SessionId = "session-recover",
+            Task = "summarize project notes",
+            State = AgentRunState.Created,
+            Turn = 0,
+            ModelCallsUsed = 0,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            TurnBudget = new AgentTurnBudget { MaxTurns = 5, TurnsUsed = 0, MaxModelCalls = 5 }
+        };
+        await runStore.CreateAsync(run);
+
+        var keepKey = CanonicalCandidateKey.Create("ws-search", "demo", "note", "keep-1", "v1");
+        var amberKey = CanonicalCandidateKey.Create("ws-search", "demo", "note", "AmberCompass-17", "v1");
+        var execution = R28BTestHelpers.MakeExecutionResult(new ContextDecisionResult
+        {
+            SelectedEnvelopes = new[] { MakeEnvelope("keep-1", keepKey) },
+            DroppedEnvelopes = new[] { MakeEnvelope("AmberCompass-17", amberKey) },
+            Outcome = new ContextDecisionOutcomeSummary { SelectedCount = 1, DroppedCount = 1 }
+        });
+
+        var runtime = new RecordingDecisionRuntime(execution);
+        var planner = new RecordingAdaptivePlanner(new AgentRetrievalPlan
+        {
+            ControlledQueries = new[]
+            {
+                new AgentRetrievalQuery { Text = run.Task, Type = AgentRetrievalQueryType.Hybrid }
+            }
+        });
+        var echoTriggers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["summarize"] = "echo"
+        };
+        var actor = new AgentRunActor(
+            runStore, eventStore, new DeterministicAgentModelTransport(echoTriggers),
+            new DefaultAgentLoopPolicy(), new FixedResultDispatcher("nothing found"),
+            decisionRuntime: runtime, adaptivePlanner: planner);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        Assert.IsTrue(planner.Inputs.Count >= 2, "工具轮之后应再次构建上下文。");
+        Assert.AreEqual(0, planner.Inputs[0].UnresolvedGoals.Count, "首轮没有上一轮决策，无找回问句。");
+        Assert.IsTrue(
+            planner.Inputs[1].UnresolvedGoals.Any(goal =>
+                goal.Contains("AmberCompass-17", StringComparison.Ordinal)),
+            "上一轮被分配器裁掉的条目实体词应进入下一轮找回问句。");
+        Assert.IsFalse(
+            planner.Inputs[1].UnresolvedGoals.Any(goal =>
+                goal.Contains("keep-1", StringComparison.Ordinal)),
+            "选中的条目不是未解决目标。");
+    }
+
+    [TestMethod]
+    public async Task SecondTurn_UnresolvedGoals_IncludeProjectionSkipped()
+    {
+        var runStore = new InMemoryAgentRunStore();
+        var eventStore = new InMemoryAgentRunEventStore(runStore);
+        var run = new AgentRun
+        {
+            RunId = "run-" + Guid.NewGuid().ToString("N"),
+            WorkspaceId = "ws-search",
+            CollectionId = "demo",
+            SessionId = "session-proj-skip",
+            Task = "summarize project notes",
+            State = AgentRunState.Created,
+            Turn = 0,
+            ModelCallsUsed = 0,
+            ModelContextTokenBudget = 40,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            TurnBudget = new AgentTurnBudget { MaxTurns = 5, TurnsUsed = 0, MaxModelCalls = 5 }
+        };
+        await runStore.CreateAsync(run);
+
+        var keepKey = CanonicalCandidateKey.Create("ws-search", "demo", "note", "keep-1", "v1");
+        var amberKey = CanonicalCandidateKey.Create("ws-search", "demo", "note", "AmberCompass-17", "v1");
+        var keep = MakeEnvelope("keep-1", keepKey);
+        var amber = MakeEnvelope("AmberCompass-17", amberKey);
+        var execution = R28BTestHelpers.MakeExecutionResult(new ContextDecisionResult
+        {
+            SelectedEnvelopes = new[] { keep, amber },
+            Outcome = new ContextDecisionOutcomeSummary { SelectedCount = 2 }
+        }) with
+        {
+            WorkingSet = new CandidateWorkingSet
+            {
+                Envelopes = new[] { keep, amber },
+                Materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>
+                {
+                    [keepKey] = new CandidateMaterial { Key = keepKey, Content = "short body", NativeKind = "note" },
+                    [amberKey] = new CandidateMaterial { Key = amberKey, Content = new string('x', 300), NativeKind = "note" }
+                }
+            }
+        };
+
+        var runtime = new RecordingDecisionRuntime(execution);
+        var planner = new RecordingAdaptivePlanner(new AgentRetrievalPlan
+        {
+            ControlledQueries = new[]
+            {
+                new AgentRetrievalQuery { Text = run.Task, Type = AgentRetrievalQueryType.Hybrid }
+            }
+        });
+        var echoTriggers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["summarize"] = "echo"
+        };
+        var actor = new AgentRunActor(
+            runStore, eventStore, new DeterministicAgentModelTransport(echoTriggers),
+            new DefaultAgentLoopPolicy(), new FixedResultDispatcher("nothing found"),
+            decisionRuntime: runtime, adaptivePlanner: planner,
+            modelContextProjector: new DefaultAgentModelContextProjector());
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await actor.ExecuteAsync(run, cts.Token);
+
+        Assert.IsTrue(planner.Inputs.Count >= 2, "工具轮之后应再次构建上下文。");
+        Assert.IsTrue(
+            planner.Inputs[1].UnresolvedGoals.Any(goal =>
+                goal.Contains("AmberCompass-17", StringComparison.Ordinal)),
+            "投影因预算跳过的材料应进入下一轮找回问句。");
+        Assert.IsFalse(
+            planner.Inputs[1].UnresolvedGoals.Any(goal =>
+                goal.Contains("keep-1", StringComparison.Ordinal)),
+            "投影能放下的材料不是找回目标。");
+    }
+
+    private static ContextCandidateEnvelope MakeEnvelope(string id, CanonicalCandidateKey key)
+        => new()
+        {
+            CandidateId = id,
+            Source = ContextCandidateSource.Lexical,
+            CanonicalKey = key,
+            Utility = new CandidateUtilityScore { DeterministicScore = 0.8, FinalScore = 0.8 }
+        };
 
     private sealed class RecordingDecisionRuntime : IContextDecisionRuntime
     {

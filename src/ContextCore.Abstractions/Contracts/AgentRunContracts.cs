@@ -1429,6 +1429,9 @@ public sealed record AgentModelContextProjection
     /// <summary>选中的 Material ID 集合（从 WorkingSet.Materials 取出正文的候选 ID）。</summary>
     public HashSet<string> SelectedMaterialIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
+    /// <summary>因预算跳过的 Material / Candidate ID（分配器选中但没投影进模型）。</summary>
+    public IReadOnlyList<string> SkippedMaterialIds { get; init; } = Array.Empty<string>();
+
     /// <summary>截断诊断信息（如有截断则填充，null = 未截断）。</summary>
     public string? TruncationDiagnostics { get; init; }
 }

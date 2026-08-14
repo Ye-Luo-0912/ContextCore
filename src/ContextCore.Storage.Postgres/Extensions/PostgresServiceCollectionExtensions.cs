@@ -337,23 +337,6 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresTerminalRunSettlementStore>();
         services.AddSingleton<ITerminalRunSettlementStore>(sp => sp.GetRequiredService<PostgresTerminalRunSettlementStore>());
 
-        // 注册 ILeasedWorkStore 用于 Agent Run 租约（统一租约基础设施 — dual-registration）。
-        // 与 IAgentRunLease 共享同一底层表（agent_run_leases），使用统一的 ILeasedWorkStore 接口。
-        // 消费方（AgentKernelHost）暂不改用 ILeasedWorkStore，先通过 dual-registration 证明语义覆盖。
-        services.AddLeasedWorkStore<string>(new LeasedWorkStoreConfiguration<string>
-        {
-            TableName = Infrastructure.PostgresNames.Table(options, "agent_run_leases"),
-            WorkIdColumn = "run_id",
-            LeaseTokenColumn = "lease_token",
-            LeaseOwnerColumn = "owner",
-            LeaseExpiresAtColumn = "lease_expires_at",
-            FencingTokenColumn = "fencing_token",
-            AcquiredAtColumn = "acquired_at",
-            IsLeaderLease = true,
-            SerializeWork = work => work,
-            DeserializeWork = workId => workId
-        });
-
         // Canary HA 聚合 + Leader 租约持久化（PostgreSQL）。
         // 替代单节点 InMemory 默认实现，让 HA 场景下 Canary 指标可跨实例聚合 + Leader 选举确保单 leader 推进。
         // - ICanaryLeaderLease：CanaryLeaderHostedService 通过 TryAcquireAsync/RenewAsync/ReleaseAsync
@@ -380,21 +363,6 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresRetrievalPlanFeedbackStore>();
         services.AddSingleton<IRetrievalPlanFeedbackStore>(sp => sp.GetRequiredService<PostgresRetrievalPlanFeedbackStore>());
 
-        // 注册 ILeasedWorkStore 用于 Canary Leader 租约（统一租约基础设施）。
-        // 与 ICanaryLeaderLease 共享同一底层表（canary_leader_leases），但使用统一的 ILeasedWorkStore 接口。
-        services.AddLeasedWorkStore<string>(new LeasedWorkStoreConfiguration<string>
-        {
-            TableName = Infrastructure.PostgresNames.Table(options, "canary_leader_leases"),
-            WorkIdColumn = "run_id",
-            LeaseTokenColumn = "lease_token",
-            LeaseOwnerColumn = "owner",
-            LeaseExpiresAtColumn = "lease_expires_at",
-            FencingTokenColumn = "fencing_token",
-            AcquiredAtColumn = "acquired_at",
-            IsLeaderLease = true,
-            SerializeWork = work => work,
-            DeserializeWork = workId => workId
-        });
         services.AddSingleton<PostgresCanaryMetricsAggregator>();
         services.AddSingleton<ICanaryMetricsAggregator>(sp => sp.GetRequiredService<PostgresCanaryMetricsAggregator>());
 
@@ -404,40 +372,6 @@ public static class PostgresServiceCollectionExtensions
         services.AddTransient<PostgresBackupRunner>();
         services.AddTransient<PostgresPitrRunner>();
 
-        return services;
-    }
-
-    /// <summary>
-    /// 注册一个通用 PostgreSQL 租约工作存储（<see cref="PostgresLeasedWorkStore{TWork}"/>）。
-    /// </summary>
-    /// <typeparam name="TWork">工作项类型。</typeparam>
-    /// <param name="services">服务容器。</param>
-    /// <param name="configuration">表/列映射配置。</param>
-    /// <remarks>
-    /// 注册以下绑定：
-    /// <list type="bullet">
-    /// <item><see cref="LeasedWorkStoreConfiguration{TWork}"/> — 单例（供 store 构造注入）。</item>
-    /// <item><see cref="PostgresLeasedWorkStore{TWork}"/> — 单例。</item>
-    /// <item><see cref="IPostgresLeasedWorkStore{TWork}"/> — 指向同一单例（含 <c>ExecuteFencedAsync</c>）。</item>
-    /// <item><see cref="ILeasedWorkStore{TWork, LeasedWork{TWork}}"/> — 指向同一单例（provider-agnostic 接口）。</item>
-    /// <item><see cref="ILeasedWorkStore"/> — 指向同一单例（非泛型标记，供 <c>IEnumerable&lt;ILeasedWorkStore&gt;</c> 枚举）。</item>
-    /// </list>
-    /// 可多次调用以注册不同 <typeparamref name="TWork"/> 的租约存储。
-    /// </remarks>
-    public static IServiceCollection AddLeasedWorkStore<TWork>(
-        this IServiceCollection services,
-        LeasedWorkStoreConfiguration<TWork> configuration)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        services.AddSingleton(configuration);
-        services.AddSingleton<PostgresLeasedWorkStore<TWork>>();
-        // 接口绑定使用 TryAdd：同一 TWork 的租约存储可注册多次（不同底层表，如 Agent Run 租约与
-        // Canary Leader 租约），接口只绑定首个实例（DI 无法用同型泛型接口区分多个存储）。
-        services.TryAddSingleton<IPostgresLeasedWorkStore<TWork>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
-        services.TryAddSingleton<ILeasedWorkStore<TWork, LeasedWork<TWork>>>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
-        services.TryAddSingleton<ILeasedWorkStore>(sp => sp.GetRequiredService<PostgresLeasedWorkStore<TWork>>());
         return services;
     }
 }

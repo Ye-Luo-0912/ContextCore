@@ -14,11 +14,14 @@
 
 ## 测试与验证
 
-- 开发过程中只跑本次改动相关的定向测试，**不频繁跑全量测试**；全部任务完成后统一跑一次全量测试（ContextCore.Tests 失败须恰好 11 个既有项）。
+- 开发过程中只跑本次改动相关的定向测试，**不频繁跑全量测试**；全部任务完成后统一跑一次全量测试。历史失败数只能作参考，以本次实测和失败明细为准。
 
 ## 现行工作
 
 - 查「现在走哪」：[`docs/LIVE_PATH.md`](docs/LIVE_PATH.md)
-- 下一阶段（召回接线）按工作包执行：[`docs/RECALL_WIRING.md`](docs/RECALL_WIRING.md)
-- 不要按 [`TODO.md`](TODO.md) 的 R46 / WP-AC / WP-AD 开工
+- 当前阶段按工作包执行：暂无（RF 重构/精简/性能阶段已完成，记录见 [`docs/NEXT_PHASE_REFACTOR.md`](docs/NEXT_PHASE_REFACTOR.md)；新执行清单未定义）
+- 召回接线与多轮找回、RF 阶段（RF-1…RF-7）已完成；不要重做，现行行为以 `docs/LIVE_PATH.md` 和测试为准
+- 一个 Agent 一次只执行一个工作包；不要并行修改 `CandidateProviders.cs`、`AgentRunActor.cs` 和公共 Contracts
+- 每包报告生产代码净增减；拆文件、改名和迁移命名空间不算精简
+- 不要按历史路线的 R46 / WP-AC / WP-AD 开工
 - 不要打开 Adaptive Active、Learning 训练、原型 `materialize`

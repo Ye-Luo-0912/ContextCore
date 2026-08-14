@@ -99,6 +99,13 @@ ON CONFLICT (workspace_id, id) DO UPDATE SET
             AddTextArray(command, "tags", query.Tags);
         }
 
+        // 本次查询不返回的来源 ID 在 LIMIT 前排除，避免已持有 ID 占满 TopK。
+        if (query.ExcludeSourceIds.Count > 0)
+        {
+            filters.Add("NOT (source_id = ANY(@exclude_source_ids))");
+            AddTextArray(command, "exclude_source_ids", query.ExcludeSourceIds);
+        }
+
         var scoreExpression = "(1 - (embedding <=> @query_vector::vector))";
         if (query.MinScore is not null)
         {

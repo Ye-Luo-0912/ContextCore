@@ -64,6 +64,20 @@ internal static class ContextCoreHttpResultMapper
             statusCode: StatusCodes.Status404NotFound);
     }
 
+    /// <summary>
+    /// 409 Conflict 响应（CAS 并发冲突等稳定错误码）。
+    /// 响应体仅含 OperationId / ErrorCode / Message，与既有内联构造保持一致。
+    /// </summary>
+    public static IResult Conflict(string operationId, string message, string errorCode)
+    {
+        return Results.Conflict(new ContextCoreErrorResponse
+        {
+            OperationId = operationId,
+            ErrorCode = errorCode,
+            Message = message
+        });
+    }
+
     public static IResult StorageUnavailable(
         HttpContext httpContext,
         string operationId,

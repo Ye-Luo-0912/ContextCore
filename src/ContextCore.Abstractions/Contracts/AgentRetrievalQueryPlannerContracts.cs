@@ -18,8 +18,9 @@ namespace ContextCore.Abstractions;
 // 便于审计与回归测试。
 // 4. 正交于决策引擎：本规划器不替代 IContextDecisionRuntime / IRetrievalRouter；
 // 它回答的是"检索什么"（查询 + 约束），而非"候选如何排序/分配"。
-// 5. 诊断回退：PreviousRetrievalDiagnostics 表明上一轮预算超限 / 命中率低时，
-// 规划器执行受控回退（缩减 Token 预算、收敛查询），避免反复撞墙。
+// 5. 诊断回退：PreviousRetrievalDiagnostics 表明上一轮预算超限时缩减 Token 预算；
+// 上一轮 0 命中时把任务/意图里尚未单独成问句的实体样词拆出来再搜（不调用向量），
+// 避免同一问句反复空转。
 // ===========================================================================
 
 /// <summary>
@@ -93,7 +94,7 @@ public sealed record AgentRetrievalPlannerInput
     /// <summary>尚未解决的目标列表（如多步任务中未完成子目标）。</summary>
     public IReadOnlyList<string> UnresolvedGoals { get; init; } = Array.Empty<string>();
 
-    /// <summary>上一轮检索诊断（预算超限 / 命中率低时触发受控回退）。</summary>
+    /// <summary>上一轮检索诊断（预算超限 → 缩减预算；0 命中 → 拆实体词再搜）。</summary>
     public IReadOnlyList<AgentRetrievalDiagnostic> PreviousRetrievalDiagnostics { get; init; } = Array.Empty<AgentRetrievalDiagnostic>();
 
     /// <summary>Turn 预算（剩余轮次决定 Token 预算上限；null = 未配置）。</summary>

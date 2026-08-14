@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.AgentKernel;
+using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Core.Services.AgentRunRuntime;
 
@@ -83,6 +84,9 @@ public sealed class AgentRunActor
     private const int RecoveryEventPageSize = 500;
     // 自上次 checkpoint 以来已 flush 的事件数（用于强制 checkpoint 阈值判断）。
     private int _eventsSinceLastCheckpoint;
+
+    // 上一轮投影因预算跳过的材料 ID：下一轮找回问句要覆盖「选了但没投影」的条目。
+    private IReadOnlyList<string> _lastProjectionSkippedIds = Array.Empty<string>();
 
     // 当前 Run 的 lease token 与 fencing token（由 AgentKernelHost 在 ExecuteAsync 时注入）。
     // 非空时 FlushPendingEventsAsync 将它们写入 AgentRunStateUpdate，由 Postgres 实现在
@@ -285,6 +289,8 @@ public sealed class AgentRunActor
 
         // 每次执行开始清空检索计划签名集合（Run 隔离；延迟归因只归因本 Run 使用的签名）。
         _usedRetrievalSignatures.Clear();
+        // 每次执行开始清空上轮投影跳过记录（Run 隔离；崩溃恢复后没有投影线索）。
+        _lastProjectionSkippedIds = Array.Empty<string>();
 
         // 运行时能力补齐：检测 resume 场景
         // 全新启动状态集由 AgentRunStateSemantics 权威定义（RecoveryPolicy = NewStart：
@@ -1761,6 +1767,8 @@ public sealed class AgentRunActor
             var projection = _modelContextProjector.Project(
                 state.Run, state.LastDecisionResult, state.Context, tokenBudget);
             projectedMessages = projection.Messages;
+            // 投影跳过 ≠ 分配器选中：记录因预算跳过的材料，下一轮找回问句要覆盖它们。
+            _lastProjectionSkippedIds = projection.SkippedMaterialIds;
         }
         else
         {
@@ -1987,7 +1995,8 @@ public sealed class AgentRunActor
                     ToolObservations = state.Context.ToolObservations.Count == 0
                         ? Array.Empty<ToolObservation>()
                         : state.Context.ToolObservations.ToArray(),
-                    UnresolvedGoals = Array.Empty<string>(),
+                    // 找回问句：上一轮被分配器裁掉、或投影因预算跳过的条目，用实体词逐条搜（不钉 RequiredIds）。
+                    UnresolvedGoals = BuildRecoveryGoals(state.LastDecisionResult, _lastProjectionSkippedIds),
                     PreviousRetrievalDiagnostics = AgentTurnSearchQuery.DiagnosticsFrom(state.LastDecisionResult),
                     TurnBudget = run.TurnBudget,
                     WorkspaceId = run.WorkspaceId,
@@ -2152,6 +2161,55 @@ public sealed class AgentRunActor
                 run.RunId);
             return (AgentContextBuildStatus.DependencyUnavailable, null);
         }
+    }
+
+    /// <summary>
+    /// 从上一轮被分配器裁掉、或投影因预算跳过的条目抽出实体词作为找回问句（逐条 Keyword，不钉 RequiredIds）。
+    /// 崩溃恢复后 LastDecisionResult 为 null：本轮没有裁掉线索，只靠 Resident + 任务 + 观察。
+    /// </summary>
+    private static IReadOnlyList<string> BuildRecoveryGoals(
+        ContextDecisionExecutionResult? last,
+        IReadOnlyList<string>? projectionSkippedIds)
+    {
+        var goals = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddDistinctive(string? text)
+        {
+            var distinctive = ObservationQueryText.Distinctive(string.Empty, text);
+            if (distinctive.Length == 0 || !seen.Add(distinctive))
+            {
+                return;
+            }
+            goals.Add(distinctive);
+        }
+
+        if (last is not null)
+        {
+            foreach (var envelope in last.Decision.DroppedEnvelopes)
+            {
+                // Envelope 不带标题，用实体 ID 当找回词；ID 抽不出词时才回退带前缀的 CandidateId。
+                var entityId = envelope.CanonicalKey.EntityId;
+                if (ObservationQueryText.Distinctive(string.Empty, entityId).Length > 0)
+                {
+                    AddDistinctive(entityId);
+                }
+                else
+                {
+                    AddDistinctive(envelope.CandidateId);
+                }
+            }
+        }
+
+        if (projectionSkippedIds is not null)
+        {
+            foreach (var skipped in projectionSkippedIds)
+            {
+                AddDistinctive(skipped);
+            }
+        }
+
+        return goals;
     }
 
     /// <summary>

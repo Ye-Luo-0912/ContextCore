@@ -524,6 +524,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
                 RequiredTags = request.RequiredTags,
                 RequiredTypes = request.RequiredTypes,
                 RequiredIds = request.RequiredIds,
+                ExcludedIds = request.ExcludedIds,
                 Refs = request.Refs,
                 QueryVector = request.QueryVector,
                 ModelName = request.ModelName,
@@ -946,7 +947,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
             SeedCandidates = Array.Empty<ContextCandidateEnvelope>(),
             RetrievalInput = new RetrievalInput
             {
-                QueryTexts = request.QueryTexts
+                QueryTexts = request.QueryTexts,
+                ExcludedIds = request.ExcludedIds
             },
             PackageInput = new PackageInput
             {
