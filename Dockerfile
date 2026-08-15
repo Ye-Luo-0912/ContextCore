@@ -6,6 +6,10 @@
 #         -e Storage__PostgresConnectionString="Host=host.docker.internal;..." \
 #         contextcore-service:latest
 #
+# 注意：默认配置启用 deepseek / pinai-openai 模型（ApiKeyRequired），启动必须设置
+#       DEEPSEEK_API_KEY 与 PINAI_OPENAI_API_KEY；Deterministic 模式不实际调用模型，
+#       占位值即可通过配置校验。
+#
 # 说明：
 # - 采用多阶段构建：SDK 阶段编译 → aspnet 运行时阶段运行（镜像不含 SDK/编译器）。
 # - 发布使用 linux-x64 RID + framework-dependent：产物含 ONNX 原生库的 linux-x64 负载，
