@@ -21,13 +21,7 @@
     "tests": [
       "tests/ContextCore.Tests/ContextCoreRetrievalDatasetV2MetadataContractTests.cs"
     ],
-    "docs": [
-      "docs/ContextCore_Foundation_Freeze_Report.md",
-      "docs/ContextCore_\\346\\226\\260\\351\\230\\266\\346\\256\\265\\346\\211\\247\\350\\241\\214\\346\\212\\245\\345\\221\\212.md",
-      "docs/controlroom-service-mode.md",
-      "docs/vector-index-foundation.md",
-      "docs/vector-preview-shadow-freeze.md"
-    ],
+    "docs": [],
     "generated reports": [
       "eval/eval-report-latest.json",
       "eval/eval-report-p15-a3.json",
@@ -53,12 +47,8 @@
     "other": []
   },
   "CriticalReportCoverage": {
-    "foundation\\foundation-release-candidate-gate.md": true,
     "foundation\\foundation-release-candidate-gate.json": true,
-    "learning\\readiness\\learning-runtime-change-readiness-gate.md": true,
     "learning\\readiness\\learning-runtime-change-readiness-gate.json": true,
-    "vector\\v4\\vector-formal-preview-freeze-gate.md": true,
-    "docs\\ContextCore_Foundation_Freeze_Report.md": true,
     "eval\\eval-report-p15-a3.json": true,
     "eval\\eval-report-p15-extended.json": true
   },

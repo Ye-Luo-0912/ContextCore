@@ -3,7 +3,7 @@
 本目录只保留现行文档、测试固定契约和可执行运行手册；已完成阶段、freeze、旧路线和过期专题不保留副本，需要时从 Git 历史查询。
 
 - [LIVE_PATH.md](LIVE_PATH.md) — ingest / query / retrieve / package / Agent Run 实际调用链
-- [NEXT_PHASE_REFACTOR.md](NEXT_PHASE_REFACTOR.md) — **当前阶段**：重构、精简与性能工作包
+- [ROADMAP.md](ROADMAP.md) — **唯一活动路线**：高召回、高准确率、反馈闭环、自学习与工程收敛
 - [router-intent-boundaries.md](router-intent-boundaries.md) — Router 意图边界；测试读取此固定路径
 - [private-configuration.md](private-configuration.md) — 本机私有配置位置
 - [postgres-local-smoke-runbook.md](postgres-local-smoke-runbook.md) — Postgres 本机冒烟

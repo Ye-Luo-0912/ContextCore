@@ -1,12 +1,15 @@
 ---
-description: ContextCore 活路径与下一阶段执行约定
+description: ContextCore 活路径与当前阶段执行约定
 alwaysApply: true
 ---
 
 # ContextCore 活路径
 
-- 现行调用链只认 `docs/LIVE_PATH.md`。不要从 `TODO.md` 后半、`docs/archive/`、`vector/`、`learning/` 推断 DI。
-- 下一阶段按 `docs/RECALL_WIRING.md` **一次一个工作包**执行。复制该文件开头的提示词，换工作包编号。
+- 现行调用链只认 `docs/LIVE_PATH.md`。不要从 `vector/`、`learning/` 的历史报告推断 DI。
+- 当前阶段按 `docs/ROADMAP.md` **一次一个工作包**执行；北极星是在预算内提高召回、排序准确率和任务成功率。
+- 已完成阶段文档已删除；不要从 Git 历史重做或推翻现行行为。
 - 产品：模型输入 = 工作集 + 搜索。忘掉靠工作集，找回靠搜索。准不准跟工具观察走，不跟固定乘数、`FinalScore`、标题 +50、Completed=0.9 走。
-- 禁止：R46（WP-AC/AD）、打开 Adaptive Active、Learning/ONNX/默认 embedding、原型 materialize/Warm-Cold/admit、把选中 ID 写成 RequiredIds、把 Resident 写入 IWorkingMemoryService、按连字符拆实体词。
+- 已持有 ID 不是 `ExcludedIds`（后者是确认不存在，会删掉种子）。裁掉的条目用实体词搜，不要写成 `RequiredIds`。
+- 禁止：跳过离线/shadow/canary 门槛打开 Adaptive Active 或 Learning、原型 materialize/Warm-Cold/admit、把选中 ID 写成 RequiredIds、把 Resident 写入 IWorkingMemoryService、按连字符拆实体词、空召回时无证据地打开向量通道。
+- 不并行修改 `CandidateProviders.cs`、`AgentRunActor.cs` 和公共 Contracts。每包报告生产代码净增减，拆文件不算精简。
 - 注释中文、无任务编号。只跑工作包写明的定向测试。不要自己 commit。

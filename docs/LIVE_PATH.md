@@ -2,15 +2,15 @@
 
 > 生成：2026-08-14。跟的是当时 HEAD 的 DI 与端点，不是 freeze 报告。
 > 本文件只回答「现在一次请求实际走哪」。不消化历史快照。
-> 当前开工清单：暂无（RF 重构/精简/性能阶段已收口并归档）。R46 与 Learning/Canary 新票仍延后。
+> 当前开工清单见 [`ROADMAP.md`](ROADMAP.md)。长期北极星是在预算内提高召回、排序准确率和任务成功率。
 
-读代码从这里开始。`TODO.md` 是一页式路线入口，不再承载历史完成记录。
-做下一阶段改动时以新的执行清单为准（当前无；上一份 RF 阶段清单 [`NEXT_PHASE_REFACTOR.md`](NEXT_PHASE_REFACTOR.md) 已完成）。召回接线与多轮找回、RF 阶段均已收口，不要从 Git 历史发明架构。
+读代码从这里开始。`TODO.md` 是一页式执行入口，`ROADMAP.md` 是唯一长期路线；都不承载历史完成记录。
+做阶段改动时一次只执行路线图中的一个工作包。不要从 Git 历史发明架构或重做已完成任务。
 文档入口见 `docs/README.md`。
 
 仓库根上的 `vector/`、`learning/`、`eval/`（除 `contexts/`）、`foundation/`、`storage/` 报告、以及 `service/` 里除 `openapi/` 以外的产物，都是机器可读或可重新生成的历史证据。不要从那些 JSON 反推现行 DI。
 
-**整理之后（2026-08-14）：** 活路径、误导注释与历史文档已收口。HTTP retrieve/package **缺省切流 100**，与 Agent 共用 `DefaultContextDecisionRuntime`。设 `CC_CUTOVER_PERCENTAGE=0` 可切回混合检索/基础打包器。RF 重构/精简/性能阶段已完成，当前无下一份执行清单。不做 R46、不接原型。
+**当前状态（2026-08-14）：** HTTP retrieve/package **缺省切流 100**，与 Agent 共用 `DefaultContextDecisionRuntime`。设 `CC_CUTOVER_PERCENTAGE=0` 可切回混合检索/基础打包器。质量评测、批量检索、反馈闭环和受控自学习按路线图推进；没有质量门前不打开 Active Learning，不接原型。
 
 ---
 
@@ -256,16 +256,16 @@ Learning 物化：Postgres 走 durable outbox；FileSystem/InMemory 走进程内
 | 文件 | 角色 |
 | --- | --- |
 | **本文件 `docs/LIVE_PATH.md`** | 现行导航 |
-| `docs/NEXT_PHASE_REFACTOR.md` | 已完成的重构/精简/性能阶段清单（RF-1…RF-7，含基线数据） |
+| `docs/ROADMAP.md` | 唯一活动路线：质量、召回、排序、反馈、自学习与工程收敛 |
 | `docs/README.md` | 文档索引 |
 | `README.md` | 仓库入口 |
-| `TODO.md` | 一页式当前路线与历史入口 |
+| `TODO.md` | 一页式当前执行顺序 |
 | `vector/` `learning/` `foundation/` `storage/` | 机器可读或可重新生成的历史证据 |
 | `eval/contexts/` | 评测语料（测试会读） |
 | `service/openapi/` | OpenAPI 快照（漂移测试会读） |
 | `AGENTS.md` | 注释与测试约定，不是架构 |
 
-不新写 `ContextCore_Unified_V3.md`。活路径变了就更新本文件；阶段安排只更新 `NEXT_PHASE_REFACTOR.md`。
+不新写阶段总结或新版本总设计。活路径变了就更新本文件；阶段安排只更新 `ROADMAP.md`。
 
 ---
 
@@ -401,8 +401,4 @@ Learning 物化：Postgres 走 durable outbox；FileSystem/InMemory 走进程内
 - 打开 Adaptive Active（只调固定乘数，不解决准不准）
 - 打开模型打分 / Learning 训练（默认链上没有 embedding，也没有可用的外部标签）
 
-多轮找回阶段（MR-1…MR-12）已完成：观察实体词最新优先、规划/排除只看最近 8 条观察、已持有 ID 不占 Lexical/Semantic TopK、分配器/投影裁掉的条目实体词写进下一轮分条找回问句、空召回换实体词问句且 Reason 不提向量、成功 `id:` 是搜索线索而失败 `id:` 只排除、投影顺序 = 分配器顺序、HTTP retrieve/package 可传 `excludedIds`、Semantic 有 embedding 时按 `QueryTexts` 分条、「忘掉再搜回」端到端夹具绿。代码缺口清单已清空；剩余疑问见上。
-
-重构精简与性能阶段（RF-1…RF-7）已完成：已持有 ID 下推到三 provider 向量检索（排序/截断前排除，162 组合欠召回均为 0）；通用 LeasedWork 租约层删除，Canary 与 AgentRun 各依赖专用租约接口；无引用的旧执行产物工厂删除；HTTP 冲突错误统一走 `ContextCoreHttpResultMapper.Conflict`；RF-4（outbox 去重）与 RF-6（Actor 终态模板）经净删除门槛评估后取消。多问句召回基线见 `benchmarks/results/MULTIQUERY_RECALL_BASELINE.md`：embedding/vector search 与 FileSystem lexical roundtrip 均随问句数线性放大，优先做批量 embedding/query 去重与单请求批量读取；TopK 与 held 数量对时延影响小。全量测试 4075 通过 / 0 失败 / 7 跳过。
-
-R46（Postgres 迁移恢复、Learning 质量闸门生产策略）仍延后。
+长期质量、性能、自学习与精简安排只见 [`ROADMAP.md`](ROADMAP.md)。历史阶段细节从 Git 查询，不在活路径文档重复维护。

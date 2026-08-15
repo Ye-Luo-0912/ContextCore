@@ -31,6 +31,9 @@ appsettings.Development.local.json
 appsettings.Postgres.local.json
 connectionstrings.local.json
 
+# 评测/生成脚本的默认输出目录（机器契约除外）
+artifacts/
+
 # Local database files and transient traces
 *.db
 *.sqlite

@@ -19,9 +19,10 @@
 ## 现行工作
 
 - 查「现在走哪」：[`docs/LIVE_PATH.md`](docs/LIVE_PATH.md)
-- 当前阶段按工作包执行：暂无（RF 重构/精简/性能阶段已完成，记录见 [`docs/NEXT_PHASE_REFACTOR.md`](docs/NEXT_PHASE_REFACTOR.md)；新执行清单未定义）
-- 召回接线与多轮找回、RF 阶段（RF-1…RF-7）已完成；不要重做，现行行为以 `docs/LIVE_PATH.md` 和测试为准
+- 查「长期做什么」：[`docs/ROADMAP.md`](docs/ROADMAP.md)；一次只执行其中一个工作包
+- 北极星是在预算内提高 Required-Evidence Recall、排序准确率和任务成功率；自学习、性能与精简都只为此服务
+- 现行行为以 `docs/LIVE_PATH.md` 和测试为准；已完成阶段不保留执行文档，不要从 Git 历史重做旧任务
 - 一个 Agent 一次只执行一个工作包；不要并行修改 `CandidateProviders.cs`、`AgentRunActor.cs` 和公共 Contracts
-- 每包报告生产代码净增减；拆文件、改名和迁移命名空间不算精简
+- 每包先声明质量指标与不变量，并报告质量、性能、生产代码和 Public API 净变化；拆文件、改名和迁移命名空间不算精简
 - 不要按历史路线的 R46 / WP-AC / WP-AD 开工
-- 不要打开 Adaptive Active、Learning 训练、原型 `materialize`
+- 没有离线、shadow、canary、rollback 门槛时，不要打开 Adaptive Active 或 Learning 训练；不要接原型 `materialize`
