@@ -1,6 +1,6 @@
 # ContextCore 现行活路径
 
-> 生成：2026-08-14。跟的是当时 HEAD 的 DI 与端点，不是 freeze 报告。
+> 生成：2026-08-15。跟的是当时 HEAD 的 DI 与端点，不是 freeze 报告。LR-6B..LR-7E 未改变请求主链，本文内容现行。
 > 本文件只回答「现在一次请求实际走哪」。不消化历史快照。
 > 当前开工清单见 [`ROADMAP.md`](ROADMAP.md)。长期北极星是在预算内提高召回、排序准确率和任务成功率。
 
@@ -10,7 +10,7 @@
 
 仓库根上的 `vector/`、`learning/`、`eval/`（除 `contexts/`）、`foundation/`、`storage/` 报告、以及 `service/` 里除 `openapi/` 以外的产物，都是机器可读或可重新生成的历史证据。不要从那些 JSON 反推现行 DI。
 
-**当前状态（2026-08-14）：** HTTP retrieve/package **缺省切流 100**，与 Agent 共用 `DefaultContextDecisionRuntime`。设 `CC_CUTOVER_PERCENTAGE=0` 可切回混合检索/基础打包器。质量评测、批量检索、反馈闭环和受控自学习按路线图推进；没有质量门前不打开 Active Learning，不接原型。
+**当前状态（2026-08-15）：** HTTP retrieve/package **缺省切流 100**，与 Agent 共用 `DefaultContextDecisionRuntime`。设 `CC_CUTOVER_PERCENTAGE=0` 可切回混合检索/基础打包器。质量评测、批量检索、反馈闭环和受控自学习按路线图推进；没有质量门前不打开 Active Learning，不接原型。
 
 ---
 

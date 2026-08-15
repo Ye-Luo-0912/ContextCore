@@ -1,6 +1,6 @@
 # ContextCore 高召回、高准确率长期路线图
 
-> 基线：2026-08-14，HEAD `bd679ad2`。本文是唯一活动路线；现行行为以 [`LIVE_PATH.md`](LIVE_PATH.md)、源码和测试为准。已完成阶段不保留单独文档，细节从 Git 历史查询。
+> 基线：2026-08-15，HEAD `4f60254b`。LR-0A..LR-7E 全部工作包已按 §12 协议执行完毕并验证（全量测试 4222 通过 / 6 跳过 / 0 失败；容器构建与冒烟通过），已推送 origin/main。本文仍是唯一活动路线；下一轮工作包从 §2 阶段与 §1.2/§1.3 缺口中指定。现行行为以 [`LIVE_PATH.md`](LIVE_PATH.md)、源码和测试为准。已完成阶段不保留单独文档，细节从 Git 历史查询。
 
 ## 0. 北极星目标
 
@@ -35,18 +35,18 @@ ContextCore 的长期目标是：**在给定 token、时延和成本预算内，
 | `ContextCore.Storage.Postgres` | 110 文件 / 32,240 行 |
 | `ContextCore.Service` | 70 文件 / 26,786 行 |
 | 单元、Service、Integration 测试 | 约 152,700 行 |
-| Abstractions Public API baseline | 12,914 行 |
-| Service 扩展中的 singleton 注册 | 约 330 处 |
-| Hosted service 注册 | 约 30 处 |
-| SDK 固定 | 无 `global.json`，当前机器使用 .NET 11 preview 构建 net10.0 |
+| Abstractions Public API baseline | 12,966 行（LR-7A 删除 10 个零引用类型后重生成） |
+| 组合根 DI 注册（按 profile） | Development ≈ 351 / SingleNode ≈ 356 / ProductionHA ≈ 361（预算 390/395/400） |
+| Hosted service 注册 | AddHostedService 28 处（全 profile 合计），逐 profile 组合由 R29H 测试锁定 |
+| SDK 固定 | `global.json` 固定 .NET 10.0.301（rollForward=latestFeature，禁止 preview） |
 
 最大维护热点：
 
-- `UnifiedRuntimeDefaults.cs`：4,601 行、18 个运行时类型；
-- `PostgresMigrationRunner.cs`：3,504 行，且是近期高频修改文件；
-- `AgentRunActor.cs`：3,360 行，恢复、模型、工具、checkpoint、终态集中；
-- `AgentRunContracts.cs`：3,181 行，也是近期最高 churn 文件；
-- Service endpoints 合计约 11,354 行；`CoreExtensions.cs` 1,207 行。
+- `UnifiedRuntimeDefaults.cs`：4,481 行、18 个运行时类型；
+- `PostgresMigrationRunner.cs`：3,568 行，且是近期高频修改文件；
+- `AgentRunActor.cs`：626 行（LR-6A 已拆出 Recovery/ContextModel/ToolDispatch/EventBuffer/ExecutionState 协作者，低于 2,200 行目标）；
+- `AgentRunContracts.cs`：3,181 行，仍是 AgentRun 区域最高 churn 文件；
+- Service endpoints 合计约 11,354 行；`CoreExtensions.cs` 1,216 行。
 
 这些数字用于判断责任集中度和变化成本。拆文件、改名、搬 namespace 不算精简。
 
@@ -77,12 +77,19 @@ ContextCore 的长期目标是：**在给定 token、时延和成本预算内，
 
 ### 1.4 已知结构债务
 
-- `IContextRetrievalAdapter`、`IShadowRetrievalAdapter`、`IModelRegistry` 等 obsolete 公共类型无生产引用；
-- `IRetrievalRouter` 已被 `IRouter` 替代但仍保留；
-- Service 仅为备份实现直接引用整个 `ContextCore.ControlRoom`；
-- Learning、Evolution、DecisionExperiment 等默认关闭或实验能力仍在默认组合根大量注册；
-- 文档报告已清理，但脚本仍可在受版本控制目录重新生成 Markdown；
-- 已删除证据文档仍被个别测试、SourceRefs 和注释提及。
+已解决（LR-0..LR-7 收敛）：
+
+- obsolete 公共类型（`IContextRetrievalAdapter`、`IShadowRetrievalAdapter`、`IModelRegistry`、`IRetrievalRouter` 等）已删除（LR-7A）；
+- Service → ControlRoom 直接依赖已解除，备份能力迁入 `ContextCore.Storage.Postgres.Backup`（LR-7B）；
+- Learning/Evolution/DecisionExperiment/旧 VectorIndex/ControlRoom 已逐项「正式支持并隔离」，默认关闭能力不启动 worker、不创建重对象（LR-7C）；
+- 报告 Markdown 回流已由 `artifacts/` 忽略 + CI 门阻断（LR-0B）。
+
+仍保留：
+
+- `AgentRunContracts.cs` 3,181 行仍为 AgentRun 区域最高 churn 文件；
+- `UnifiedRuntimeDefaults.cs` 4,481 行、18 个运行时类型仍集中；
+- Service endpoints 合计约 11,354 行仍厚，未达 LR-7B「变薄」目标；
+- eval/learning/vector/foundation 历史证据 JSON 仍被个别测试与 SourceRefs 提及（机器契约，删除前需同步测试）。
 
 ## 2. 长期阶段
 
@@ -388,16 +395,16 @@ LR-7 只在质量贡献和消费者清点完成后做删除与主版本边界调
 
 | 指标 | 当前 | 中期目标 | 长期目标 |
 | --- | ---: | ---: | ---: |
-| Required-Evidence Recall@K | 待 LR-1 基线 | 分切片持续提升 | 稳定预算与回归门 |
-| Recall@TokenBudget | 待 LR-1 基线 | 排序阶段显著提升 | 与任务成功率联动 |
-| Precision@K / nDCG | 待 LR-1 基线 | hard negatives 不回退 | 可按场景校准 |
-| 失败漏失可归因率 | 未统一 | >90% | 接近全量可归因 |
-| q=8 embedding 调用 | 8 | 1 | 1 |
-| FileSystem q=8 combined p95 | 约 1.9–3.7s | <500ms 或 -60% | 持续预算 |
-| Public API baseline | 12,914 行 | -8% | -20% 以上 |
-| 默认 DI singleton 注册 | 约 330 | -15% | -30% |
-| `AgentRunActor.cs` | 3,360 行 | <2,700 | <2,200 |
-| tracked 生成 Markdown | 已清理 | 0 回流 | 0 |
+| Required-Evidence Recall@K | 评测集与候选流诊断已建（LR-1A/1B），绝对值待评测运行 | 分切片持续提升 | 稳定预算与回归门 |
+| Recall@TokenBudget | 同上 | 排序阶段显著提升 | 与任务成功率联动 |
+| Precision@K / nDCG | 同上 | hard negatives 不回退 | 可按场景校准 |
+| 失败漏失可归因率 | 候选流诊断已建（LR-1B） | >90% | 接近全量可归因 |
+| q=8 embedding 调用 | 1（LR-2A 批量 embedding 完成） | 1 | 1 |
+| FileSystem q=8 combined p95 | lexical ≈1.5–2.2s（见 MULTIQUERY_RECALL_BASELINE） | <500ms 或 -60% | 持续预算 |
+| Public API baseline | 12,966 行（LR-7A 删 10 类型） | -8% | -20% 以上 |
+| 默认 DI singleton 注册 | 351–361（按 profile，预算 390–400） | -15% | -30% |
+| `AgentRunActor.cs` | 626 行（LR-6A 拆分后） | <2,700 | <2,200 |
+| tracked 生成 Markdown | 0 回流（LR-0B 后） | 0 回流 | 0 |
 | 测试代码 | 约 152,700 行 | -10% | -20%，覆盖不降 |
 
 质量门优先于代码量和速度。任何优化若没有可测改善，或让更高层指标回退，立即停止。
@@ -416,14 +423,12 @@ LR-7 只在质量贡献和消费者清点完成后做删除与主版本边界调
 
 ## 13. 当前执行顺序
 
-1. LR-0A：收口当前工作树和全量基线。
-2. LR-0B：阻止报告 Markdown 回流，清理失效文档引用。
-3. LR-0C：固定 .NET 10 SDK。
-4. LR-0D：修正分配测量并补 Postgres 基线。
-5. LR-0E：固定召回、准确率、预算和结果指标契约。
-6. LR-1A：建立分层、隔离、版本化的评测集。
-7. LR-1B：建立候选流诊断和漏失归因。
-8. LR-2A：批量 embedding。
-9. LR-2B：多问句 lexical 单次读取。
+LR-0A..LR-7E 全部工作包已按 §12 协议执行完毕并验证：全量测试 4222 通过 / 6 跳过 / 0 失败，容器构建与冒烟通过，已推送 origin/main。当前无进行中工作包。
 
-零引用 obsolete 契约和 Service → ControlRoom 解耦可在 LR-0E 后作为质量中性清理包串行执行；Learning/Evolution 去留必须等 LR-1 贡献清点，不能提前删除或开启。
+下一轮工作包从 §2 长期目标与 §1.2/§1.3 缺口中指定，候选方向：
+
+- 质量基线落地：按 LR-0E 契约跑真实评测，填 §11 绝对目标（Recall@K、Recall@TokenBudget、Precision@K、p95 等）；
+- 真实模型打分与 Learning 四道门（离线/shadow/canary/active）逐级打开；
+- §10 长期精简目标：生产源码净减 ≥20%、Public API -20%、测试代码 -10%..-20%。
+
+未达门槛前不打开 Adaptive Active / Learning 训练，不接原型 materialize；零引用契约清理与宿主收敛已随 LR-7 完成，不重复执行。
