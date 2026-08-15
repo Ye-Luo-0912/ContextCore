@@ -266,13 +266,5 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
     }
 
     private static string ResolveDropReason(ContextCandidateEnvelope envelope)
-    {
-        if (!envelope.Safety.PassesSafetyGate)
-        {
-            var code = envelope.Safety.BlockReasonCode;
-            var detail = envelope.Safety.BlockReasonDetail;
-            return string.IsNullOrEmpty(detail) ? code.ToString() : $"{code}: {detail}";
-        }
-        return "budget exceeded";
-    }
+        => DecisionOutcomeRecomputer.ResolveDropReasonText(envelope);
 }

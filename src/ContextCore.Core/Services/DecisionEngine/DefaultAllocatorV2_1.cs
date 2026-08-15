@@ -126,7 +126,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         var mandatorySelected = selected
             .Where(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
             .ToList();
-        var mandatoryTotalTokens = mandatorySelected.Sum(GetEffectiveTokens);
+        var mandatoryTotalTokens = mandatorySelected.Sum(DecisionOutcomeRecomputer.GetEffectiveTokens);
         var mandatoryOverflowTokens = Math.Max(0, mandatoryTotalTokens - tokenBudget);
         var hardWindowViolated = false;
 
@@ -154,7 +154,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
                     foreach (var envelope in rejectable)
                     {
                         if (mandatoryTotalTokens <= tokenBudget) break;
-                        var envTokens = GetEffectiveTokens(envelope);
+                        var envTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
                         mandatoryTotalTokens -= envTokens;
                         // 将候选从 selected 移入 dropped
                         selected.Remove(envelope);
@@ -421,7 +421,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
 
             // 使用 EffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
             // 原实现用 EstimatedTokens 导致中文/JSON/代码场景严重低估 token 成本。
-            var effectiveTokens = GetEffectiveTokens(envelope);
+            var effectiveTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
 
             if (isMandatory)
             {
@@ -481,12 +481,10 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
     }
 
     /// <summary>
-    /// 获取候选的有效 token 数（与 DefaultGlobalAllocator.GetEffectiveTokens 语义一致）。
-    /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
-    /// 回退到 EstimatedTokens（length/4 粗估）。
+    /// 将候选映射到 section 名（委托权威实现，与 DefaultGlobalAllocator 语义一致）。
     /// </summary>
-    private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
-        => DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
+    private static string ResolveSectionName(ContextCandidateEnvelope envelope)
+        => DecisionOutcomeRecomputer.ResolveSection(envelope);
 
     /// <summary>section 分配中间状态（便于第二轮 rollover 复用）。</summary>
     private sealed class SectionState
@@ -498,22 +496,6 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         public int BudgetLimit { get; set; }
         public List<ContextCandidateEnvelope> RemainingCandidates { get; set; } = new();
         public int BorrowedTokens { get; set; }
-    }
-
-    /// <summary>
-    /// 将候选映射到 section 名（与 DefaultGlobalAllocator.ResolveSection 语义对齐）。
-    /// </summary>
-    private static string ResolveSectionName(ContextCandidateEnvelope envelope)
-    {
-        return envelope.Source switch
-        {
-            ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "mandatory",
-            ContextCandidateSource.WorkingMemory or ContextCandidateSource.StableMemory => "memory",
-            ContextCandidateSource.Graph => "relations",
-            ContextCandidateSource.GlobalContext => "global",
-            ContextCandidateSource.RelatedContext => "related",
-            _ => "default"
-        };
     }
 
     /// <summary>

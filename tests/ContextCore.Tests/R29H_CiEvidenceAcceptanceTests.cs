@@ -20,7 +20,8 @@ namespace ContextCore.Tests;
 // 3. scripts/gate-evidence.py 语义正确（Failed/Inconclusive/NotExecuted → exit 1；
 // 无 TRX → exit 2；白名单机制）。
 // 4. benchmark-main.yml 将基准结果与当前 HEAD 绑定（head-commit.json）。
-// 5. 证据文档存在。
+// 5. 证据设施只产出 JSON 机器契约（gate-evidence / write-trx-manifest /
+//    write-head-evidence 均不写 Markdown，报告只进入被忽略的 artifacts/）。
 //
 // 设计原则：
 // - 纯文件结构验证，不实际运行 benchmark / CI。
@@ -251,26 +252,31 @@ public sealed class R29H_CiEvidenceAcceptanceTests
     }
 
     // =======================================================================
-    // 测试 4：证据文档存在
+    // 测试 4：证据设施只产出 JSON 机器契约，不写 Markdown 报告
     // =======================================================================
     [TestMethod]
-    public void Ci_EvidenceDocument_Exists()
+    public void Ci_Evidence_JsonOnlyNoMarkdown()
     {
         var repoRoot = FindRepoRoot();
-        var docPath = Path.Combine(repoRoot, "docs", "WP-S6-Evidence.md");
-
-        if (!File.Exists(docPath))
+        var evidenceScripts = new[]
         {
-            Assert.Inconclusive("未找到 docs/WP-S6-Evidence.md，跳过证据文档验证。");
-            return;
-        }
+            Path.Combine(repoRoot, "scripts", "gate-evidence.py"),
+            Path.Combine(repoRoot, "scripts", "write-trx-manifest.py"),
+            Path.Combine(repoRoot, "scripts", "write-head-evidence.py")
+        };
 
-        var content = File.ReadAllText(docPath);
-        Assert.IsTrue(content.Length > 0, "证据文档不应为空。");
-        Assert.IsTrue(content.Contains("WP-S6", StringComparison.Ordinal),
-            "证据文档应包含 WP-S6 标识。");
-        Assert.IsTrue(content.Contains("gate-evidence.py", StringComparison.Ordinal),
-            "证据文档应描述 evidence manifest 门禁（gate-evidence.py）。");
+        foreach (var scriptPath in evidenceScripts)
+        {
+            if (!File.Exists(scriptPath))
+            {
+                Assert.Inconclusive($"未找到 {scriptPath}，跳过证据脚本验证。");
+                return;
+            }
+
+            var content = File.ReadAllText(scriptPath);
+            Assert.IsFalse(content.Contains(".md", StringComparison.Ordinal),
+                $"{Path.GetFileName(scriptPath)} 不得引用或写 Markdown；证据只允许 JSON 机器契约，报告只进入被忽略的 artifacts/。");
+        }
     }
 
     // =======================================================================

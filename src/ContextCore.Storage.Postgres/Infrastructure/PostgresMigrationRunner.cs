@@ -178,6 +178,50 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
+    /// <summary>
+    /// 最低支持 schema 版本（版本支持窗口下界）：等于版本化步骤链中最旧步骤的起始版本。
+    /// 低于此版本的库不再走增量迁移（更旧的步骤已随主版本删除，链可能断裂），
+    /// 必须重新基线（重建 schema）后启动；主版本删除旧迁移代码前先确认此窗口。
+    /// </summary>
+    public static string MinSupportedSchemaVersion =>
+        PostgresMigrationStepRegistry.Steps.Count > 0
+            ? PostgresMigrationStepRegistry.Steps[0].FromSchemaVersion
+            : BaselineMigrationId;
+
+    /// <summary>
+    /// 判断已应用版本是否不低于最低支持版本。
+    /// null（从未迁移 / 全新库）视为支持（走全新基线路径）；无法解析的版本号视为不支持（fail-closed，
+    /// 交由运维人工判定，避免链断裂后部分 DDL 静默跳过造成半迁移状态）。
+    /// </summary>
+    public static bool IsSchemaVersionAtLeast(string? appliedVersion, string minSupportedVersion)
+    {
+        if (appliedVersion is null)
+        {
+            return true;
+        }
+
+        var appliedNumber = TryParseVersionNumber(appliedVersion);
+        var minNumber = TryParseVersionNumber(minSupportedVersion);
+        if (appliedNumber is null || minNumber is null)
+        {
+            return false;
+        }
+
+        return appliedNumber.Value >= minNumber.Value;
+    }
+
+    /// <summary>从 "cc-schema-vNN" 提取尾部整数版本号；无法解析返回 null。</summary>
+    private static int? TryParseVersionNumber(string version)
+    {
+        var markerIndex = version.LastIndexOf('v');
+        if (markerIndex < 0 || markerIndex == version.Length - 1)
+        {
+            return null;
+        }
+
+        return int.TryParse(version.AsSpan(markerIndex + 1), out var number) ? number : null;
+    }
+
     public static readonly IReadOnlyList<string> RequiredOperationalTableSuffixes =
     [
         "workspaces",
@@ -2907,6 +2951,16 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decisio
                     return;
                 }
 
+                // 版本支持窗口：低于最低支持版本的库不再走增量迁移（旧版本步骤已随主版本
+                // 删除，链可能断裂）。fail-closed——拒绝继续，要求重新基线，避免半迁移状态。
+                if (currentVersion is not null
+                    && !IsSchemaVersionAtLeast(currentVersion, MinSupportedSchemaVersion))
+                {
+                    throw new InvalidOperationException(
+                        $"Postgres schema 版本 {currentVersion} 低于最低支持版本 {MinSupportedSchemaVersion}，" +
+                        "不再支持增量迁移（旧版本迁移步骤已随主版本删除）。请重新基线（重建 schema）后启动。");
+                }
+
                 // 分阶段 DDL：
                 // 阶段一：先建迁移追踪表（context_schema_migrations / schema_versions）——
                 // 版本化步骤成功执行后要写入 context_schema_migrations（RecordMigrationStepAsync），
@@ -3239,6 +3293,14 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decisio
             diagnostics.Add("MissingRequiredIndexes");
         }
 
+        // 版本支持窗口：低于最低支持版本 = 超出支持窗口，需重新基线（区别于普通版本滞后）。
+        var outsideSupportWindow = currentVersion is not null
+            && !IsSchemaVersionAtLeast(currentVersion, MinSupportedSchemaVersion);
+        if (outsideSupportWindow)
+        {
+            diagnostics.Add("SchemaTooOld");
+        }
+
         if (currentVersion != SchemaVersion)
         {
             diagnostics.Add("SchemaVersionOutOfDate");
@@ -3260,9 +3322,11 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decisio
             RequiredIndexes = GetRequiredIndexNames(options),
             MissingIndexes = missingIndexes,
             Diagnostics = diagnostics,
-            Recommendation = missingTables.Count == 0 && missingIndexes.Count == 0 && currentVersion == SchemaVersion
-                ? "ReadyForProviderDevelopment"
-                : "SchemaIncomplete"
+            Recommendation = outsideSupportWindow
+                ? "ReinstallRequired"
+                : missingTables.Count == 0 && missingIndexes.Count == 0 && currentVersion == SchemaVersion
+                    ? "ReadyForProviderDevelopment"
+                    : "SchemaIncomplete"
         };
     }
 

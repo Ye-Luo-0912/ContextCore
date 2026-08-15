@@ -251,14 +251,13 @@ public sealed class R29H_ProductionEvidenceE2ETests
             });
             await runStore.CreateAsync(run);
 
-            // ── 构建 Actor（注入审批门 + 校验器 + 审批 store）──
+            // ── 构建 Actor（注入审批门 + 校验器；审批记录由 Gate 通过 store 持久化）──
             var actor = new AgentRunActor(
                 runStore, eventStore, transport,
                 new DefaultAgentLoopPolicy(),
                 dispatcher,
                 toolCallValidator: validator,
                 approvalGate: approvalGate,
-                approvalStore: approvalStore,
                 durableToolExecutor: durableExecutor);
 
             // ── 第一次执行：应在 AwaitingApproval 挂起 ──
@@ -304,7 +303,6 @@ public sealed class R29H_ProductionEvidenceE2ETests
                 dispatcher,
                 toolCallValidator: validator,
                 approvalGate: approvalGate,
-                approvalStore: approvalStore,
                 durableToolExecutor: durableExecutor);
 
             using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(30));

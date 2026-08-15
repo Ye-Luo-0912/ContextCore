@@ -1126,8 +1126,6 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
         var modelTransport = _serviceProvider.GetService(typeof(IAgentModelTransport)) as IAgentModelTransport;
         var toolCallValidator = _serviceProvider.GetService(typeof(IAgentToolCallValidator)) as IAgentToolCallValidator;
         var approvalGate = _serviceProvider.GetService(typeof(IAgentApprovalGate)) as IAgentApprovalGate;
-        // 解析 IAgentApprovalStore（让 Actor 用正确 workspaceId 创建审批记录，而非 Gate 内部的 "default"）
-        var approvalStore = _serviceProvider.GetService(typeof(IAgentApprovalStore)) as IAgentApprovalStore;
         var checkpointFactory = _serviceProvider.GetService(typeof(IAgentCheckpointFactory)) as IAgentCheckpointFactory;
         var decisionRuntime = _serviceProvider.GetService(typeof(IContextDecisionRuntime)) as IContextDecisionRuntime;
         // 解析 IAgentCheckpointStore
@@ -1160,7 +1158,6 @@ public sealed class AgentKernelHost : IAsyncDisposable, IAgentRunScheduler
             toolDispatcher,
             toolCallValidator,
             approvalGate,
-            approvalStore,
             checkpointFactory,
             decisionRuntime,
             checkpointStore,

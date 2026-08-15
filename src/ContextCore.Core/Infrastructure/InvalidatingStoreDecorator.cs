@@ -118,10 +118,11 @@ public abstract class InvalidatingStoreDecoratorBase
 /// 失效边界 Decorator：本身不缓存，仅向 <see cref="IStateCacheInvalidator"/> 发出失效信号。
 /// 同时透传 <see cref="IContextStoreBatchLookup"/> / <see cref="IContextStoreMetadataLookup"/> 能力接口，
 /// 确保 Retrieval 通道能走批量查询 / 元数据投影路径。
+/// 透传 <see cref="IContextStoreMultiQuery"/> 能力接口，让多问句 lexical 召回在 Decorator 包装下仍可被检测到。
 /// 透传 <see cref="ITransactionalContextStore"/> 能力接口，让事务路径在 Decorator 包装下仍可被检测到。
 /// 透传 <see cref="IContextQueryPageStore"/> 能力接口，让分页查询在 Decorator 包装下仍可被检测到。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup), typeof(IContextStoreMetadataLookup), typeof(ITransactionalContextStore), typeof(IContextQueryPageStore))]
+[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup), typeof(IContextStoreMetadataLookup), typeof(IContextStoreMultiQuery), typeof(ITransactionalContextStore), typeof(IContextQueryPageStore))]
 public sealed partial class InvalidatingContextStoreDecorator;
 
 public sealed partial class InvalidatingContextStoreDecorator
@@ -384,8 +385,9 @@ public sealed partial class InvalidatingWorkingMemoryServiceDecorator
 
 /// <summary>
 /// 包装 <see cref="IVectorStore"/>，在写入成功（UpsertAsync/DeleteAsync）后触发缓存失效。
+/// 透传 <see cref="IVectorStoreMultiSearch"/> 能力接口，让多问句向量检索在 Decorator 包装下仍可被检测到。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IVectorStore))]
+[GenerateInvalidatingDecorator(typeof(IVectorStore), typeof(IVectorStoreMultiSearch))]
 public sealed partial class InvalidatingVectorStoreDecorator;
 
 public sealed partial class InvalidatingVectorStoreDecorator

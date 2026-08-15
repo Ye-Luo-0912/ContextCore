@@ -1155,29 +1155,58 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         var refs = retrievalInput?.Refs ?? Array.Empty<string>();
         var best = new Dictionary<string, (ContextItem Item, double Score)>(StringComparer.OrdinalIgnoreCase);
 
-        for (var index = 0; index < queryTexts.Count; index++)
+        // 多问句（q≥2）且 store 支持批量能力时走单次读取，避免 q 次 QueryAsync
+        // 各自加锁/枚举/往返放大文件 I/O 与连接池；语义与逐条路径完全一致
+        // （每问句独立 TopK、refs 只作用于首问句、最高分合并规则不变）。
+        if (queryTexts.Count > 1 && _contextStore is IContextStoreMultiQuery multiQuery)
         {
-            var queryText = queryTexts[index];
-            var items = await _contextStore.QueryAsync(new ContextQuery
+            var multiResults = await multiQuery.QueryMultiAsync(new ContextMultiQuery
             {
                 WorkspaceId = context.Request.Scope.WorkspaceId,
                 CollectionId = context.Request.Scope.CollectionId,
-                QueryText = queryText,
+                Queries = queryTexts.Select((text, index) => new ContextMultiQueryText
+                {
+                    QueryText = text,
+                    Refs = index == 0 ? refs : Array.Empty<string>()
+                }).ToArray(),
                 Tags = requiredTags ?? Array.Empty<string>(),
                 Types = requiredTypes ?? Array.Empty<string>(),
-                Refs = index == 0 ? refs : Array.Empty<string>(),
                 ExcludedTypes = excludedTypes,
                 ExcludedIds = skipIds,
                 Take = take,
                 IncludeContent = includeContent
             }, cancellationToken).ConfigureAwait(false);
 
-            foreach (var item in items)
+            foreach (var result in multiResults)
             {
-                var score = ScoreLexicalItem(item, queryText);
-                if (!best.TryGetValue(item.Id, out var previous) || score > previous.Score)
+                foreach (var item in result.Items)
                 {
-                    best[item.Id] = (item, score);
+                    MergeLexicalBest(best, item, result.QueryText);
+                }
+            }
+        }
+        else
+        {
+            for (var index = 0; index < queryTexts.Count; index++)
+            {
+                var queryText = queryTexts[index];
+                var items = await _contextStore.QueryAsync(new ContextQuery
+                {
+                    WorkspaceId = context.Request.Scope.WorkspaceId,
+                    CollectionId = context.Request.Scope.CollectionId,
+                    QueryText = queryText,
+                    Tags = requiredTags ?? Array.Empty<string>(),
+                    Types = requiredTypes ?? Array.Empty<string>(),
+                    Refs = index == 0 ? refs : Array.Empty<string>(),
+                    ExcludedTypes = excludedTypes,
+                    ExcludedIds = skipIds,
+                    Take = take,
+                    IncludeContent = includeContent
+                }, cancellationToken).ConfigureAwait(false);
+
+                foreach (var item in items)
+                {
+                    MergeLexicalBest(best, item, queryText);
                 }
             }
         }
@@ -1215,6 +1244,19 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         }
 
         return score;
+    }
+
+    /// <summary>按 ID 合并最高分：同一候选被多条问句命中时保留分数最高的一次。</summary>
+    private static void MergeLexicalBest(
+        Dictionary<string, (ContextItem Item, double Score)> best,
+        ContextItem item,
+        string queryText)
+    {
+        var score = ScoreLexicalItem(item, queryText);
+        if (!best.TryGetValue(item.Id, out var previous) || score > previous.Score)
+        {
+            best[item.Id] = (item, score);
+        }
     }
 }
 
@@ -1520,8 +1562,10 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         return hits;
     }
 
-    // 分条向量检索：QueryTexts 非空时对每条分别 embed + search，按来源 ID 合并保留最高分。
-    // 与 Lexical 分条对齐；无 EmbeddingProvider 时调用方已在入口返回空。
+    // 分条向量检索：QueryTexts 非空时规范化去重后一次批量 embedding 生成全部向量，
+    // 再逐条 vector search，按来源 ID 合并保留最高分（与 Lexical 分条对齐）。
+    // 与旧实现相比：embedding 调用从 q 次降到 1 次；文本拼接方式不变（instruction + 空格 + 文本），
+    // 向量逐位一致，召回与合并语义不变；无 EmbeddingProvider 时调用方已在入口返回空。
     private async ValueTask<IReadOnlyList<VectorSearchResult>> SearchPerQueryTextAsync(
         CandidateProviderContext context,
         IReadOnlyList<string> queryTexts,
@@ -1531,38 +1575,117 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         IReadOnlyList<string> skipSourceIds,
         CancellationToken cancellationToken)
     {
-        var bestByKey = new Dictionary<string, VectorSearchResult>(StringComparer.OrdinalIgnoreCase);
-        foreach (var queryText in queryTexts)
+        // 规范化 + 去重：trim、跳过空白、按首次出现顺序去重（空白/重复问句不再触发 embedding）。
+        var normalized = queryTexts
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Select(text => text.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (normalized.Length == 0)
         {
-            if (string.IsNullOrWhiteSpace(queryText))
-            {
-                continue;
-            }
+            return Array.Empty<VectorSearchResult>();
+        }
 
-            var effectiveQueryText = string.IsNullOrEmpty(queryInstruction)
-                ? queryText
-                : queryInstruction + " " + queryText;
-
-            var embedding = await EmbedQueryAsync(
-                context, effectiveQueryText, modelName, cancellationToken).ConfigureAwait(false);
-            if (!embedding.Succeeded || embedding.Vectors.Count == 0)
+        // 一次批量 embedding；输入文本与旧逐条路径逐位一致（instruction + 空格 + 文本）。
+        var inputs = normalized
+            .Select((text, index) => new EmbeddingInput
             {
-                continue;
-            }
+                Id = "query-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Text = string.IsNullOrEmpty(queryInstruction) ? text : queryInstruction + " " + text,
+                SourceRef = "query"
+            })
+            .ToArray();
 
-            var hits = await SearchSingleVectorAsync(
-                context, embedding.Vectors[0].Values, topK, skipSourceIds, cancellationToken).ConfigureAwait(false);
-            foreach (var hit in hits)
+        var embedding = await _embeddingProvider!.EmbedAsync(new EmbeddingRequest
+        {
+            OperationId = context.Request.RequestId,
+            WorkspaceId = context.Request.Scope.WorkspaceId,
+            CollectionId = context.Request.Scope.CollectionId,
+            ModelName = modelName,
+            InputKind = EmbeddingInputKind.Query,
+            Inputs = inputs
+        }, cancellationToken).ConfigureAwait(false);
+
+        // 错误语义与旧实现一致：整批失败返回空；单条向量缺失只跳过该问句。
+        if (!embedding.Succeeded || embedding.Vectors.Count == 0)
+        {
+            return Array.Empty<VectorSearchResult>();
+        }
+        var vectorByInputId = embedding.Vectors
+            .Where(v => !string.IsNullOrEmpty(v.InputId) && v.Values.Count > 0)
+            .ToDictionary(v => v.InputId, StringComparer.Ordinal);
+
+        var bestByKey = new Dictionary<string, VectorSearchResult>(StringComparer.OrdinalIgnoreCase);
+
+        // 多问句（q≥2）且 vector store 支持批量能力时走单次检索，避免 q 次 SearchAsync
+        // 各自读快照/枚举/往返放大文件 I/O 与连接池；语义与逐条路径完全一致
+        // （每问句独立 TopK、共享过滤、最高分合并规则不变）。
+        if (normalized.Length > 1 && _vectorStore is IVectorStoreMultiSearch multiSearch)
+        {
+            var multiResults = await multiSearch.SearchMultiAsync(new VectorMultiQuery
             {
-                var record = hit.Record;
-                var key = record.SourceKind + "|" + (record.CollectionId ?? string.Empty) + "|" + record.SourceId;
-                if (!bestByKey.TryGetValue(key, out var existing) || hit.Score > existing.Score)
+                WorkspaceId = context.Request.Scope.WorkspaceId,
+                CollectionId = context.Request.Scope.CollectionId,
+                Queries = normalized
+                    .Select((text, index) =>
+                    {
+                        var inputId = "query-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        return new VectorMultiQueryVector
+                        {
+                            Id = inputId,
+                            // 单条向量缺失只跳过该问句（与逐条路径一致）。
+                            Vector = vectorByInputId.TryGetValue(inputId, out var vector)
+                                ? vector.Values
+                                : Array.Empty<float>()
+                        };
+                    })
+                    .Where(q => q.Vector.Count > 0)
+                    .ToArray(),
+                TopK = topK,
+                ExcludeSourceIds = skipSourceIds,
+                IncludeVector = false
+            }, cancellationToken).ConfigureAwait(false);
+
+            foreach (var result in multiResults)
+            {
+                foreach (var hit in result.Hits)
                 {
-                    bestByKey[key] = hit;
+                    MergeVectorBest(bestByKey, hit);
+                }
+            }
+        }
+        else
+        {
+            for (var index = 0; index < normalized.Length; index++)
+            {
+                var inputId = "query-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (!vectorByInputId.TryGetValue(inputId, out var vector))
+                {
+                    continue;
+                }
+
+                var hits = await SearchSingleVectorAsync(
+                    context, vector.Values, topK, skipSourceIds, cancellationToken).ConfigureAwait(false);
+                foreach (var hit in hits)
+                {
+                    MergeVectorBest(bestByKey, hit);
                 }
             }
         }
         return bestByKey.Values.ToList();
+    }
+
+    /// <summary>按来源键（SourceKind|CollectionId|SourceId）合并最高分：同一来源被多条问句命中时保留分数最高的一次。</summary>
+    private static void MergeVectorBest(
+        Dictionary<string, VectorSearchResult> bestByKey,
+        VectorSearchResult hit)
+    {
+        var record = hit.Record;
+        var key = record.SourceKind + "|" + (record.CollectionId ?? string.Empty) + "|" + record.SourceId;
+        if (!bestByKey.TryGetValue(key, out var existing) || hit.Score > existing.Score)
+        {
+            bestByKey[key] = hit;
+        }
     }
 
     // 单条 Query 文本 embedding。

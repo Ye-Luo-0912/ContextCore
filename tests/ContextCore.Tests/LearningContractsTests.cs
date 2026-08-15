@@ -13,7 +13,7 @@ public sealed class LearningContractsTests
 {
     private static readonly DateTimeOffset FixedTime = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
 
-    // ---------- FeatureSchemaVersion / DatasetVersion / ModelArtifactVersion ----------
+    // ---------- FeatureSchemaVersion / DatasetVersion ----------
 
     [TestMethod]
     public void FeatureSchemaVersion_Initial_Is_v1_0()
@@ -47,15 +47,6 @@ public sealed class LearningContractsTests
     public void DatasetVersion_BumpMinor_BumpMajor_Work_As_Expected()
     {
         var v = DatasetVersion.Initial;
-        Assert.AreEqual("v1.0", v.ToString());
-        Assert.AreEqual(1, v.BumpMinor().Minor);
-        Assert.AreEqual(2, v.BumpMajor().Major);
-    }
-
-    [TestMethod]
-    public void ModelArtifactVersion_BumpMinor_BumpMajor_Work_As_Expected()
-    {
-        var v = ModelArtifactVersion.Initial;
         Assert.AreEqual("v1.0", v.ToString());
         Assert.AreEqual(1, v.BumpMinor().Minor);
         Assert.AreEqual(2, v.BumpMajor().Major);
@@ -176,68 +167,6 @@ public sealed class LearningContractsTests
             new DatasetStatistics(0, 0, 0, 0, 0, 0, 0), FixedTime));
     }
 
-    // ---------- ModelCompatibilityContract ----------
-
-    [TestMethod]
-    public void ModelCompatibilityContract_Construction()
-    {
-        var c = new ModelCompatibilityContract(
-            requiredFeatureSchemaVersion: new FeatureSchemaVersion(2, 0),
-            compatibilityLevel: ModelCompatibilityLevel.Breaking,
-            minRuntimeVersion: "decision-schema/2.0",
-            maxRuntimeVersion: null,
-            breakingChangeNotes: "Renamed feature column");
-
-        Assert.AreEqual(2, c.RequiredFeatureSchemaVersion.Major);
-        Assert.AreEqual(ModelCompatibilityLevel.Breaking, c.CompatibilityLevel);
-        Assert.AreEqual("decision-schema/2.0", c.MinRuntimeVersion);
-        Assert.IsNull(c.MaxRuntimeVersion);
-        Assert.AreEqual("Renamed feature column", c.BreakingChangeNotes);
-    }
-
-    // ---------- ModelArtifact ----------
-
-    [TestMethod]
-    public void ModelArtifact_Construction_Required_Fields()
-    {
-        var a = new ModelArtifact(
-            modelId: "model-router-1",
-            version: ModelArtifactVersion.Initial,
-            targetCapability: OptimizationTargetComponent.CostAwareRetrievalRouter,
-            artifactUri: "file://models/router-v1.bin",
-            createdAt: FixedTime);
-
-        Assert.AreEqual("model-router-1", a.ModelId);
-        Assert.AreEqual(ModelArtifactVersion.Initial, a.Version);
-        Assert.AreEqual(OptimizationTargetComponent.CostAwareRetrievalRouter, a.TargetCapability);
-        Assert.AreEqual(ModelArtifactStatus.Draft, a.Status, "默认状态应为 Draft");
-        Assert.IsNull(a.CompatibilityContract);
-    }
-
-    [TestMethod]
-    public void ModelArtifact_With_Expression_Preserves_Identity()
-    {
-        var a = new ModelArtifact(
-            "m-1", ModelArtifactVersion.Initial,
-            OptimizationTargetComponent.PackagePolicy,
-            "file://m.bin", FixedTime);
-
-        var staged = a with { Status = ModelArtifactStatus.Staged };
-
-        Assert.AreEqual(a.ModelId, staged.ModelId);
-        Assert.AreEqual(ModelArtifactStatus.Staged, staged.Status);
-        Assert.AreEqual(ModelArtifactStatus.Draft, a.Status, "原对象应保持不变");
-    }
-
-    [TestMethod]
-    public void ModelArtifact_NullOrWhitespace_ModelId_Throws()
-    {
-        Assert.ThrowsException<ArgumentException>(() => new ModelArtifact(
-            "", ModelArtifactVersion.Initial,
-            OptimizationTargetComponent.PackagePolicy,
-            "file://m.bin", FixedTime));
-    }
-
     // ---------- CanaryAssignment ----------
 
     [TestMethod]
@@ -355,12 +284,6 @@ public sealed class LearningContractsTests
     public void ModelArtifactStatus_Has_6_Values()
     {
         Assert.AreEqual(6, Enum.GetValues<ModelArtifactStatus>().Length);
-    }
-
-    [TestMethod]
-    public void ModelCompatibilityLevel_Has_3_Values()
-    {
-        Assert.AreEqual(3, Enum.GetValues<ModelCompatibilityLevel>().Length);
     }
 
     [TestMethod]

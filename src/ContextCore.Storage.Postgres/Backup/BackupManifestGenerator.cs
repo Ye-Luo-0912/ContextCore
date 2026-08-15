@@ -3,10 +3,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using ContextCore.Abstractions.Models;
-using ContextCore.Storage.Postgres.Backup;
 using ContextCore.Storage.Shared;
 
-namespace ContextCore.ControlRoom.Backup;
+namespace ContextCore.Storage.Postgres.Backup;
 
 /// <summary>
 /// 备份清单生成器。遍历数据根目录、计算每个文件的 SHA-256，

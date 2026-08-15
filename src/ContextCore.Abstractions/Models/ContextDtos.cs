@@ -91,6 +91,58 @@ public sealed class ContextCollection
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
+/// <summary>
+/// 多问句查询条件：共享作用域与过滤 + 按问句的 QueryText/Refs。
+/// 一次调用内对多个问句完成 lexical 关键词召回，避免 q 次 QueryAsync 各自加锁、枚举或往返。
+/// 语义与逐条 QueryAsync 一致：共享过滤只评估一次，每条问句独立保留 TopK；
+/// 结果按问句分组返回，最高分合并由调用方完成。
+/// </summary>
+public sealed class ContextMultiQuery
+{
+    public string WorkspaceId { get; init; } = string.Empty;
+
+    public string? CollectionId { get; init; }
+
+    /// <summary>按问句的文本与 refs。空列表直接返回空结果。</summary>
+    public IReadOnlyList<ContextMultiQueryText> Queries { get; init; } = Array.Empty<ContextMultiQueryText>();
+
+    public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> Types { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> ExcludedTypes { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> ExcludedIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>每条问句各自保留的 TopK。</summary>
+    public int Take { get; init; } = 50;
+
+    public bool IncludeContent { get; init; } = true;
+
+    public bool IncludeDerived { get; init; } = true;
+}
+
+/// <summary>多问句中的单条问句：文本与作用于本问句的 refs 过滤。</summary>
+public sealed class ContextMultiQueryText
+{
+    public string QueryText { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> Refs { get; init; } = Array.Empty<string>();
+}
+
+/// <summary>单条问句的查询结果。QueryIndex 对应 ContextMultiQuery.Queries 中的位置。</summary>
+public sealed class ContextMultiQueryResult
+{
+    /// <summary>在 <see cref="ContextMultiQuery.Queries"/> 中的位置（从 0 开始）。</summary>
+    public int QueryIndex { get; init; }
+
+    /// <summary>本问句的文本（便于调用方按问句打分，避免依赖索引）。</summary>
+    public string QueryText { get; init; } = string.Empty;
+
+    /// <summary>本问句命中的条目（已按 TopK 截断）。</summary>
+    public IReadOnlyList<ContextItem> Items { get; init; } = Array.Empty<ContextItem>();
+}
+
 /// <summary>上下文条目的查询条件。</summary>
 public sealed class ContextQuery
 {

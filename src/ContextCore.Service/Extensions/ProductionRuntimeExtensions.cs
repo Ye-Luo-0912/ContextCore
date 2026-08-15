@@ -252,6 +252,11 @@ internal static class ProductionRuntimeExtensions
         services.AddHostedService<DecisionCommitWorker>();
         workerRegistry.Add<DecisionCommitWorker>();
 
+        // PostgresRuntimeMetricsCollector：采样连接池 / 死元组 / 锁等待 / 复制滞后指标。
+        // 无条件注册；非 Postgres provider（未注册 PostgresConnectionFactory）时自退出 no-op。
+        services.AddHostedService<PostgresRuntimeMetricsCollector>();
+        workerRegistry.Add<PostgresRuntimeMetricsCollector>();
+
         // 单节点 Canary Progression HostedService 注册。
         // CanaryProgressionHostedService 通过 IOptionsMonitor<CanarySchedulerOptions> 读取 Enabled 标志，
         // ProductionHA 模式的 PostConfigure(Enabled=false) 能被正确感知。
@@ -308,6 +313,16 @@ internal static class ProductionRuntimeExtensions
         // TerminalRunSettlementWorker：消费 Run 终态结算 outbox（配额 Actualize / Release）。
         services.AddHostedService<TerminalRunSettlementWorker>();
         workerRegistry.Add<TerminalRunSettlementWorker>();
+
+        // DecisionCommitWorker：消费决策提交 outbox（决策记录落库，可靠链）。
+        // 无条件注册；非 Postgres provider（未注册 IDecisionCommitOutbox）时自退出 no-op。
+        services.AddHostedService<DecisionCommitWorker>();
+        workerRegistry.Add<DecisionCommitWorker>();
+
+        // PostgresRuntimeMetricsCollector：采样连接池 / 死元组 / 锁等待 / 复制滞后指标。
+        // 无条件注册；非 Postgres provider（未注册 PostgresConnectionFactory）时自退出 no-op。
+        services.AddHostedService<PostgresRuntimeMetricsCollector>();
+        workerRegistry.Add<PostgresRuntimeMetricsCollector>();
 
         // 单节点 Canary Progression HostedService 注册。
         services.AddHostedService<CanaryProgressionHostedService>();
@@ -387,6 +402,16 @@ internal static class ProductionRuntimeExtensions
         // TerminalRunSettlementWorker：消费 Run 终态结算 outbox（配额 Actualize / Release）。
         services.AddHostedService<TerminalRunSettlementWorker>();
         workerRegistry.Add<TerminalRunSettlementWorker>();
+
+        // DecisionCommitWorker：消费决策提交 outbox（决策记录落库，可靠链）。
+        // 无条件注册；非 Postgres provider（未注册 IDecisionCommitOutbox）时自退出 no-op。
+        services.AddHostedService<DecisionCommitWorker>();
+        workerRegistry.Add<DecisionCommitWorker>();
+
+        // PostgresRuntimeMetricsCollector：采样连接池 / 死元组 / 锁等待 / 复制滞后指标。
+        // 无条件注册；非 Postgres provider（未注册 PostgresConnectionFactory）时自退出 no-op。
+        services.AddHostedService<PostgresRuntimeMetricsCollector>();
+        workerRegistry.Add<PostgresRuntimeMetricsCollector>();
 
         // 3. HA 模式注册 CanaryLeaderHostedService（互斥不注册 CanaryProgressionHostedService）。
         // CanaryLeaderHostedService 通过 IOptionsMonitor<CanaryLeaderOptions> 读取 Enabled=true。

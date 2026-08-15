@@ -30,9 +30,9 @@ private static async Task ExecuteStorageBoundaryReportAsync(
         CancellationToken cancellationToken)
     {
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine("storage", "storage-boundary-report.json");
+            ?? Path.Combine("artifacts", "storage", "storage-boundary-report.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine("storage", "storage-boundary-report.md");
+            ?? Path.Combine("artifacts", "storage", "storage-boundary-report.md");
         var report = StorageResponsibilityRegistry.BuildReport();
 
         await WriteJsonAsync(report, outputPath, cancellationToken)

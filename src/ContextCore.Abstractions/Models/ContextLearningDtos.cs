@@ -98,6 +98,32 @@ public static class LearningFeedbackKinds
     public const string ShouldReject = nameof(ShouldReject);
 
     public const string NeedsMoreEvidence = nameof(NeedsMoreEvidence);
+
+    /// <summary>撤销：声明 <see cref="LearningFeedbackEvent.RevokesFeedbackId"/> 指向的反馈事件作废。</summary>
+    public const string Revoke = nameof(Revoke);
+
+    /// <summary>失败归因：证据存在但未进入候选集（召回漏失）。</summary>
+    public const string EvidenceNotRecalled = nameof(EvidenceNotRecalled);
+
+    /// <summary>失败归因：已召回但被分配器裁掉（排序/分配漏失）。</summary>
+    public const string RecalledNotSelected = nameof(RecalledNotSelected);
+
+    /// <summary>失败归因：已选中进入上下文但模型未使用（利用漏失）。</summary>
+    public const string SelectedNotUsed = nameof(SelectedNotUsed);
+
+    /// <summary>失败归因：工具调用自身失败（权限/超时/格式等，与证据无关）。</summary>
+    public const string ToolFailed = nameof(ToolFailed);
+}
+
+/// <summary>反馈事件携带的结构化工具/任务结果摘要；只记录身份与成败，不记录正文。</summary>
+public sealed class FeedbackToolResult
+{
+    public string ToolName { get; set; } = string.Empty;
+
+    public bool Succeeded { get; set; }
+
+    /// <summary>工具结果涉及的实体/候选 ID；不含结果正文。</summary>
+    public IReadOnlyList<string> EntityIds { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>运行时反馈目标类型，限定反馈可以绑定的对象类别。</summary>
@@ -149,6 +175,33 @@ public sealed class LearningFeedbackSubmitRequest
 
     public double Confidence { get; init; }
 
+    /// <summary>事件模型版本；后续字段演进时递增，供离线消费方按版本解析。</summary>
+    public int EventSchemaVersion { get; set; } = 1;
+
+    /// <summary>被反馈的决策请求 ID（对应 ContextDecisionResult.RequestId）。</summary>
+    public string RequestId { get; set; } = string.Empty;
+
+    /// <summary>被反馈决策使用的策略版本。</summary>
+    public string PolicyVersion { get; set; } = string.Empty;
+
+    /// <summary>决策涉及的查询 ID 列表。</summary>
+    public IReadOnlyList<string> QueryIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>本次决策召回（进入候选集）的候选 ID 列表。</summary>
+    public IReadOnlyList<string> CandidateIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>本次决策最终选中的候选 ID 列表。</summary>
+    public IReadOnlyList<string> SelectedIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>决策伴随的工具/任务结果摘要；不含正文。</summary>
+    public IReadOnlyList<FeedbackToolResult> ToolResults { get; set; } = Array.Empty<FeedbackToolResult>();
+
+    /// <summary>撤销目标：被本事件作废的反馈事件 ID。</summary>
+    public string RevokesFeedbackId { get; set; } = string.Empty;
+
+    /// <summary>撤销发生时间；为空时服务端按创建时间补齐。</summary>
+    public DateTimeOffset? RevokedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.OrdinalIgnoreCase);
@@ -188,6 +241,33 @@ public sealed class LearningFeedbackEvent
     public string TrainingUse { get; init; } = "disabled_until_review";
 
     public double Confidence { get; init; }
+
+    /// <summary>事件模型版本；后续字段演进时递增，供离线消费方按版本解析。</summary>
+    public int EventSchemaVersion { get; set; } = 1;
+
+    /// <summary>被反馈的决策请求 ID（对应 ContextDecisionResult.RequestId）。</summary>
+    public string RequestId { get; set; } = string.Empty;
+
+    /// <summary>被反馈决策使用的策略版本。</summary>
+    public string PolicyVersion { get; set; } = string.Empty;
+
+    /// <summary>决策涉及的查询 ID 列表。</summary>
+    public IReadOnlyList<string> QueryIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>本次决策召回（进入候选集）的候选 ID 列表。</summary>
+    public IReadOnlyList<string> CandidateIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>本次决策最终选中的候选 ID 列表。</summary>
+    public IReadOnlyList<string> SelectedIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>决策伴随的工具/任务结果摘要；不含正文。</summary>
+    public IReadOnlyList<FeedbackToolResult> ToolResults { get; set; } = Array.Empty<FeedbackToolResult>();
+
+    /// <summary>撤销目标：被本事件作废的反馈事件 ID。</summary>
+    public string RevokesFeedbackId { get; set; } = string.Empty;
+
+    /// <summary>撤销发生时间；为空时服务端按创建时间补齐。</summary>
+    public DateTimeOffset? RevokedAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; init; }
 
@@ -1121,5 +1201,72 @@ public static class ShadowCapabilityIds
     public const string Qwen3EmbeddingProvider = nameof(Qwen3EmbeddingProvider);
 
     public const string CurrentEmbeddingProvider = nameof(CurrentEmbeddingProvider);
+}
+
+/// <summary>数据删除请求：指定反馈事件不再进入任何后续快照/数据集。</summary>
+public sealed class FeedbackDeletionRequest
+{
+    public string FeedbackId { get; init; } = string.Empty;
+
+    public DateTimeOffset RequestedAt { get; init; }
+
+    public string Reason { get; init; } = string.Empty;
+}
+
+/// <summary>快照内每个事件的训练/调参/评测归属。</summary>
+public enum LearningSnapshotSplit
+{
+    Train = 0,
+    Dev = 1,
+    Eval = 2
+}
+
+/// <summary>
+/// 从反馈事件生成的不可变快照；内容寻址（相同输入产出相同 SnapshotId），
+/// 记录数据 lineage（源事件 ID、删除/撤销排除、特征版本）与训练/评测隔离归属。
+/// 任何基于快照的训练结果都必须能追到 SnapshotId。
+/// </summary>
+public sealed class LearningFeedbackSnapshot
+{
+    public string SnapshotId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>特征版本；特征 schema 演进时递增，快照按版本解析。</summary>
+    public string FeatureVersion { get; init; } = string.Empty;
+
+    /// <summary>快照针对的策略版本；为空表示覆盖全部策略版本。</summary>
+    public string PolicyVersion { get; init; } = string.Empty;
+
+    /// <summary>纳入快照的反馈事件（不可变视图）。</summary>
+    public IReadOnlyList<LearningFeedbackEvent> Events { get; init; } = Array.Empty<LearningFeedbackEvent>();
+
+    /// <summary>lineage：全部输入事件 ID（含被排除的）。</summary>
+    public IReadOnlyList<string> SourceEventIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>lineage：因删除请求被排除的事件 ID。</summary>
+    public IReadOnlyList<string> DeletedEventIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>lineage：因被撤销而排除的事件 ID。</summary>
+    public IReadOnlyList<string> RevokedEventIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>训练/评测隔离归属：事件 ID → 分桶。</summary>
+    public IReadOnlyDictionary<string, LearningSnapshotSplit> SplitAssignment { get; init; }
+        = new Dictionary<string, LearningSnapshotSplit>();
+
+    /// <summary>调参分桶百分比（0-100）；训练/调参/评测互不重叠。</summary>
+    public int DevPercent { get; init; }
+
+    /// <summary>评测分桶百分比（0-100）；供校验重算指纹使用。</summary>
+    public int EvalPercent { get; init; }
+
+    public int TrainCount { get; init; }
+
+    public int DevCount { get; init; }
+
+    public int EvalCount { get; init; }
+
+    /// <summary>输入指纹（特征版本 + 策略版本 + 全部源事件 ID + 排除 + 切分比例）。</summary>
+    public string LineageSignature { get; init; } = string.Empty;
 }
 

@@ -2,6 +2,26 @@ using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Abstractions;
 
+/// <summary>
+/// 可选能力接口：多问句关键词召回。
+/// 实现此接口的 <see cref="IContextStore"/> 在一次调用内对多个 QueryText 完成过滤与各自 TopK，
+/// 避免 q 次 <see cref="IContextStore.QueryAsync"/> 各自加锁/枚举/往返，放大文件 I/O 与连接池占用。
+/// 语义与逐条 QueryAsync 完全一致：共享作用域/过滤只评估一次，每条问句独立保留 TopK 与 refs；
+/// 返回合并前的各问句命中，最高分合并由调用方完成。
+/// </summary>
+/// <remarks>
+/// 这是按问句过滤的窄能力，不是按 ID 的 <see cref="IContextStoreBatchLookup"/>，
+/// 二者语义与用途不同，不能互相冒充。
+/// </remarks>
+public interface IContextStoreMultiQuery
+{
+    /// <summary>对多个问句执行关键词召回，按问句返回各自的 TopK 命中。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<IReadOnlyList<ContextMultiQueryResult>> QueryMultiAsync(
+        ContextMultiQuery query,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>提供上下文条目的增删改查操作。</summary>
 public interface IContextStore
 {

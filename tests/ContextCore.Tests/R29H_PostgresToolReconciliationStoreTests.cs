@@ -46,7 +46,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
     [TestMethod]
     public async Task Store_ResolvesFromDi_AndCreateIsIdempotentByRunAndRequest()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_PostgresToolReconciliationStoreTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — PostgresToolReconciliationStore 测试已跳过。");
@@ -82,7 +82,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
     [TestMethod]
     public async Task Store_CasTransitions_AndUnresolvedGate()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_PostgresToolReconciliationStoreTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — PostgresToolReconciliationStore 测试已跳过。");
@@ -135,7 +135,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
     [TestMethod]
     public async Task Store_RenewHeartbeatBatch_OnlyRenewsMatchingToken()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_PostgresToolReconciliationStoreTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — PostgresToolReconciliationStore 测试已跳过。");
@@ -184,7 +184,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
     [TestMethod]
     public async Task Store_QueryByExternalOperationId_AcrossRuns()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_PostgresToolReconciliationStoreTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — PostgresToolReconciliationStore 测试已跳过。");
@@ -223,7 +223,7 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
     [TestMethod]
     public async Task Store_ControlRoomList_Paging_OverdueHighlight_AlertCount()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_PostgresToolReconciliationStoreTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — PostgresToolReconciliationStore 测试已跳过。");
@@ -314,26 +314,6 @@ public sealed class R29H_PostgresToolReconciliationStoreTests
         return (provider, store);
     }
 
-    private static async Task<PostgreSqlContainer?> TryStartPostgresAsync()
-    {
-        const string pgVectorImage = "pgvector/pgvector:pg17";
-        try
-        {
-            var container = new PostgreSqlBuilder(pgVectorImage)
-                .WithDatabase("cctest")
-                .WithUsername("cctest")
-                .WithPassword("cctest")
-                .Build();
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            await container.StartAsync(cts.Token);
-            return container;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[R29H_PostgresToolReconciliationStoreTests] Docker/Postgres 不可用：{ex.GetType().Name}: {ex.Message}");
-            return null;
-        }
-    }
 
     private static ToolReconciliationRecord BuildRecord(
         string reconciliationId,

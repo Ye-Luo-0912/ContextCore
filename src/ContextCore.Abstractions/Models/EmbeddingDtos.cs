@@ -229,6 +229,61 @@ public sealed class VectorSearchResult
     public int Rank { get; init; }
 }
 
+/// <summary>
+/// 多问句向量查询条件：共享作用域与过滤 + 按问句的查询向量。
+/// 一次调用内对多个查询向量完成相似度检索，各自保留 TopK，
+/// 避免 q 次 SearchAsync 各自读快照/枚举/往返。语义与逐条 SearchAsync 一致。
+/// </summary>
+public sealed class VectorMultiQuery
+{
+    /// <summary>所属工作空间 ID。</summary>
+    public string WorkspaceId { get; init; } = string.Empty;
+
+    /// <summary>所属集合 ID（可选）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>按问句的查询向量。空列表直接返回空结果。</summary>
+    public IReadOnlyList<VectorMultiQueryVector> Queries { get; init; } = Array.Empty<VectorMultiQueryVector>();
+
+    /// <summary>每条问句各自保留的 TopK。</summary>
+    public int TopK { get; init; } = 10;
+
+    /// <summary>最小相似度分数（可选）。</summary>
+    public double? MinScore { get; init; }
+
+    /// <summary>筛选来源对象类型。</summary>
+    public IReadOnlyList<string> SourceKinds { get; init; } = Array.Empty<string>();
+
+    /// <summary>必须包含的标签。</summary>
+    public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
+
+    /// <summary>本次查询不返回的来源 ID 集合，在排序/截断前排除。</summary>
+    public IReadOnlyList<string> ExcludeSourceIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>返回结果中是否包含原始向量。</summary>
+    public bool IncludeVector { get; init; }
+}
+
+/// <summary>多问句中的单条问句：查询向量 + 问句标识。</summary>
+public sealed class VectorMultiQueryVector
+{
+    /// <summary>本问句标识（与 embedding input Id 对应，供调用方把结果映射回问句）。</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>查询向量。</summary>
+    public IReadOnlyList<float> Vector { get; init; } = Array.Empty<float>();
+}
+
+/// <summary>单条问句的向量检索结果。QueryId 对应 VectorMultiQuery.Queries 中的 Id。</summary>
+public sealed class VectorMultiSearchResult
+{
+    /// <summary>问句标识（对应 <see cref="VectorMultiQueryVector.Id"/>）。</summary>
+    public string QueryId { get; init; } = string.Empty;
+
+    /// <summary>本问句的命中（已按 TopK 截断）。</summary>
+    public IReadOnlyList<VectorSearchResult> Hits { get; init; } = Array.Empty<VectorSearchResult>();
+}
+
 /// <summary>Embedding 后台任务。</summary>
 public sealed class EmbeddingJob
 {

@@ -82,6 +82,21 @@ public static partial class EvalCommand
         Reg("storage-boundary-report", "  eval storage-boundary-report [--out <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteStorageBoundaryReportAsync(args, ct));
 
+        // === quality metrics contract ===
+        Reg("quality-metrics-smoke", "  eval quality-metrics-smoke [--k <n>] [--budget <n>] [--out <path.json>]",
+            ExecuteQualityMetricsSmokeAsync);
+
+        // === versioned eval dataset ===
+        Reg("dataset-build", "  eval dataset-build [--in <declarations.json>] [--version v1] [--out-dir <dir>] [--force]",
+            ExecuteDatasetBuildAsync);
+        Reg("dataset-verify", "  eval dataset-verify [--dir <version-dir>]",
+            ExecuteDatasetVerifyAsync);
+
+        // === candidate flow diagnostics ===
+        Reg("flow-diagnostics",
+            "  eval flow-diagnostics [--required <csv>] [--forbidden <csv>] [--out <path.json>]",
+            ExecuteFlowDiagnosticsSmokeAsync);
+
         return s_registry;
     }
 

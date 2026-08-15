@@ -43,7 +43,7 @@ public sealed class R29H_ProductionHACompositionRootTests
     [TestMethod]
     public async Task ProductionHA_CompositionRoot_ResolvesDurableHAPlane_AndReadiness()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_ProductionHACompositionRootTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — ProductionHA 组合根测试已跳过。此结果不证明组合根通过。");
@@ -115,7 +115,7 @@ public sealed class R29H_ProductionHACompositionRootTests
     [TestMethod]
     public async Task ProductionHA_CompositionRoot_TwoRoots_SameRun_LeaseFencing()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_ProductionHACompositionRootTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — ProductionHA 组合根测试已跳过。此结果不证明组合根通过。");
@@ -159,7 +159,7 @@ public sealed class R29H_ProductionHACompositionRootTests
     [TestMethod]
     public async Task ProductionHA_CompositionRoot_ExecutesRunEndToEnd_ThroughDurablePlane()
     {
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_ProductionHACompositionRootTests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — ProductionHA 组合根测试已跳过。此结果不证明组合根通过。");
@@ -250,27 +250,6 @@ public sealed class R29H_ProductionHACompositionRootTests
         return services.BuildServiceProvider();
     }
 
-    private static async Task<PostgreSqlContainer?> TryStartPostgresAsync()
-    {
-        const string pgVectorImage = "pgvector/pgvector:pg17";
-        try
-        {
-            var container = new PostgreSqlBuilder(pgVectorImage)
-                .WithDatabase("cctest")
-                .WithUsername("cctest")
-                .WithPassword("cctest")
-                .Build();
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            await container.StartAsync(cts.Token);
-            return container;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[R29H_ProductionHACompositionRootTests] Docker/Postgres 不可用：{ex.GetType().Name}: {ex.Message}");
-            return null;
-        }
-    }
 
     private static AgentRun BuildRun(string task) => new()
     {

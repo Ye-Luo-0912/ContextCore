@@ -333,6 +333,15 @@ public sealed partial class ContextCoreClient
             MetadataOnly = feedbackEvent.MetadataOnly,
             TrainingUse = feedbackEvent.TrainingUse,
             Confidence = feedbackEvent.Confidence,
+            EventSchemaVersion = feedbackEvent.EventSchemaVersion,
+            RequestId = feedbackEvent.RequestId,
+            PolicyVersion = feedbackEvent.PolicyVersion,
+            QueryIds = feedbackEvent.QueryIds,
+            CandidateIds = feedbackEvent.CandidateIds,
+            SelectedIds = feedbackEvent.SelectedIds,
+            ToolResults = feedbackEvent.ToolResults,
+            RevokesFeedbackId = feedbackEvent.RevokesFeedbackId,
+            RevokedAt = feedbackEvent.RevokedAt,
             CreatedAt = feedbackEvent.CreatedAt,
             Metadata = feedbackEvent.Metadata
         };

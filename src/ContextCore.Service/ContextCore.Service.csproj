@@ -5,11 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>ContextCore.Service</RootNamespace>
+    <!-- 稳态性能优化：启用分层 PGO（发布/运行均生效，JIT 按热度分层收集 profile 并重编译热方法）。 -->
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
-    <ProjectReference Include="..\ContextCore.ControlRoom\ContextCore.ControlRoom.csproj" />
     <ProjectReference Include="..\ContextCore.Core\ContextCore.Core.csproj" />
     <ProjectReference Include="..\ContextCore.Embedding\ContextCore.Embedding.csproj" />
     <ProjectReference Include="..\ContextCore.Inference.Onnx\ContextCore.Inference.Onnx.csproj" />

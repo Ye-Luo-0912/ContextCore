@@ -41,6 +41,26 @@ public interface IVectorStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// 可选能力接口：多问句向量相似度检索。
+/// 实现此接口的 <see cref="IVectorStore"/> 在一次调用内对多个查询向量完成检索，
+/// 各自保留 TopK，避免 q 次 <see cref="IVectorStore.SearchAsync"/> 各自读快照/枚举/往返，
+/// 放大文件 I/O 与连接池占用。语义与逐条 SearchAsync 完全一致：
+/// 共享作用域/过滤只评估一次，每条问句独立计算相似度并保留各自 TopK；
+/// 返回合并前的各问句命中，最高分合并由调用方完成。
+/// </summary>
+/// <remarks>
+/// 这是按查询向量的窄能力（多问句召回），与按 ID 的批量读取不同，不能互相冒充。
+/// </remarks>
+public interface IVectorStoreMultiSearch
+{
+    /// <summary>对多个查询向量执行相似度检索，按问句返回各自的 TopK 命中。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<IReadOnlyList<VectorMultiSearchResult>> SearchMultiAsync(
+        VectorMultiQuery query,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>编排 embedding 后台任务，从请求生成向量并写入向量存储。</summary>
 public interface IEmbeddingJobService
 {

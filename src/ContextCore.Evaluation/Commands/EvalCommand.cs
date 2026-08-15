@@ -93,9 +93,9 @@ public static partial class EvalCommand
         var current = Directory.GetCurrentDirectory();
         var contextsRoot = ResolveContextsRoot();
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine(current, "eval", "relation-corpus-hygiene-report.json");
+            ?? Path.Combine(current, "artifacts", "eval", "relation-corpus-hygiene-report.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine(current, "eval", "relation-corpus-hygiene-report.md");
+            ?? Path.Combine(current, "artifacts", "eval", "relation-corpus-hygiene-report.md");
 
         var builder = new RelationCorpusHygieneReportBuilder();
         var report = await builder.BuildAsync(contextsRoot, cancellationToken).ConfigureAwait(false);
@@ -169,9 +169,9 @@ public static partial class EvalCommand
         var request = await BuildVectorReindexRequestAsync(service, args, apply: false, cancellationToken)
             .ConfigureAwait(false);
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine("vector", "reindex", "vector-reindex-report.json");
+            ?? Path.Combine("artifacts", "vector", "vector-reindex-report.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine("vector", "reindex", "vector-reindex-report.md");
+            ?? Path.Combine("artifacts", "vector", "vector-reindex-report.md");
 
         VectorReindexResult result;
         if (service.State.IsServiceMode)
@@ -210,9 +210,9 @@ public static partial class EvalCommand
         var request = await BuildVectorReindexRequestAsync(service, args, apply: true, cancellationToken)
             .ConfigureAwait(false);
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine("vector", "reindex", "vector-reindex-report.json");
+            ?? Path.Combine("artifacts", "vector", "vector-reindex-report.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine("vector", "reindex", "vector-reindex-report.md");
+            ?? Path.Combine("artifacts", "vector", "vector-reindex-report.md");
 
         if (service.State.IsServiceMode)
         {
@@ -261,9 +261,9 @@ public static partial class EvalCommand
         var sourceItems = await LoadPostgresVectorProviderScopedReindexSourceItemsAsync(service, args, cancellationToken)
             .ConfigureAwait(false);
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine("vector", "reindex", "vector-index-diagnostics.json");
+            ?? Path.Combine("artifacts", "vector", "vector-index-diagnostics.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine("vector", "reindex", "vector-index-diagnostics.md");
+            ?? Path.Combine("artifacts", "vector", "vector-index-diagnostics.md");
 
         VectorIndexDiagnosticsReport report;
         if (service.State.IsServiceMode)
@@ -298,9 +298,9 @@ public static partial class EvalCommand
         var request = await BuildVectorCoverageReindexRequestAsync(service, args, cancellationToken)
             .ConfigureAwait(false);
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine("vector", "reindex", "vector-index-coverage-report.json");
+            ?? Path.Combine("artifacts", "vector", "vector-index-coverage-report.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine("vector", "reindex", "vector-index-coverage-report.md");
+            ?? Path.Combine("artifacts", "vector", "vector-index-coverage-report.md");
 
         VectorReindexPlan plan;
         VectorIndexDiagnosticsReport diagnostics;
@@ -358,9 +358,9 @@ public static partial class EvalCommand
 
         var request = BuildVectorQueryPreviewRequest(service, args, queryText);
         var outputPath = CommandHelpers.GetOption(args, "--out")
-            ?? Path.Combine("vector", "query", "vector-query-preview.json");
+            ?? Path.Combine("artifacts", "vector", "vector-query-preview.json");
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine("vector", "query", "vector-query-preview.md");
+            ?? Path.Combine("artifacts", "vector", "vector-query-preview.md");
 
         VectorQueryPreviewResult result;
         if (service.State.IsServiceMode)
@@ -402,11 +402,11 @@ public static partial class EvalCommand
         var outputPath = CommandHelpers.GetOption(args, "--out")
             ?? (isQwen3Provider
                 ? Qwen3OutputPath("embedding-provider-smoke.json")
-                : Path.Combine("eval", "embedding-provider-smoke-report.json"));
+                : Path.Combine("artifacts", "eval", "embedding-provider-smoke-report.json"));
         var markdownPath = CommandHelpers.GetOption(args, "--md-out")
             ?? (isQwen3Provider
                 ? Qwen3OutputPath("embedding-provider-smoke.md")
-                : Path.Combine("eval", "embedding-provider-smoke-report.md"));
+                : Path.Combine("artifacts", "eval", "embedding-provider-smoke-report.md"));
 
         var tester = new EmbeddingProviderSmokeTester();
         var report = await tester.RunAsync(providerOptions, cancellationToken).ConfigureAwait(false);
@@ -421,7 +421,7 @@ public static partial class EvalCommand
 
     private static string AlignmentOutputPath(string fileName)
     {
-        return Path.Combine("vector", "alignment", fileName);
+        return Path.Combine("artifacts", "vector", "alignment", fileName);
     }
 
     private static async Task ExecuteVectorRetrievalDatasetAlignmentAuditAsync(
@@ -1261,7 +1261,7 @@ public static partial class EvalCommand
 
     private static string Qwen3OutputPath(string fileName)
     {
-        return Path.Combine("vector", "providers", "qwen3", fileName);
+        return Path.Combine("artifacts", "vector", "providers", "qwen3", fileName);
     }
 
     private static IReadOnlyList<string> AddOrReplaceOptions(

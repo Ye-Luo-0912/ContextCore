@@ -8,6 +8,7 @@ using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.AgentRunRuntime;
 using ContextCore.Core.Services.Context;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.DecisionEngine.FlowDiagnostics;
 using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.MemoryEvolution;
 using ContextCore.Core.Services.Promotion;
@@ -415,7 +416,10 @@ internal static class CoreExtensions
 			globalAllocator: sp.GetService<IGlobalAllocator>(),
 			allocatorV2_1: sp.GetService<IAllocatorV2_1>(),
 			performanceMonitor: sp.GetService<IPerformanceMonitor>(),
-			componentHealthRegistry: sp.GetService<IComponentHealthRegistry>()));
+			componentHealthRegistry: sp.GetService<IComponentHealthRegistry>(),
+			reranker: sp.GetService<ICandidateReranker>()));
+		// 两阶段排序的第二阶段：确定性 reranker（EnableTwoStageRerank=true 时生效）。
+		services.TryAddSingleton<ICandidateReranker, DefaultCandidateReranker>();
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
 		// IResolvedPolicyProvider 使用 PostgresResolvedPolicyProvider，接入 IPolicyRegistry
 		// （CAS epoch + content hash + 激活覆盖 + 请求覆盖）。
@@ -465,12 +469,15 @@ internal static class CoreExtensions
 		// null 时强制 rule-only（EnableModelScoring=true 也不触发模型路径）。
 		// IFeatureSchemaValidator 为必须依赖（非 null），推理前强制校验输入特征与 schema 一致性；
 		// IInferenceResultValidator 可选（未注册时 Scorer 内部回退 DefaultInferenceResultValidator）。
+		// 候选分数校准器（分桶校准，可解释确定性方法；EnableScoreCalibration=true 时生效）。
+		services.AddSingleton<ICandidateScoreCalibrator, DefaultCandidateScoreCalibrator>();
 		services.AddSingleton<IUtilityScorer>(sp => new DefaultUtilityScorer(
 			sp.GetRequiredService<IFeatureSchemaValidator>(),
 			sp.GetService<IBatchInferenceEngine>(),
 			sp.GetService<ICalibrationService>(),
 			sp.GetService<IFeatureRegistry>(),
-			sp.GetService<IInferenceResultValidator>()));
+			sp.GetService<IInferenceResultValidator>(),
+			sp.GetService<ICandidateScoreCalibrator>()));
 		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
 		// Allocator V2.1（section rollover + MMR diversity）。
 		// 默认不替换 IGlobalAllocator（仍为 V2.0 DefaultGlobalAllocator）；
@@ -576,18 +583,20 @@ internal static class CoreExtensions
 			var materializationDispatcher = sp.GetService<LearningMaterializationDispatcher>();
 			var selectedCandidateHydrator = sp.GetService<ISelectedCandidateHydrator>();
 			var decisionCommitOutbox = sp.GetService<IDecisionCommitOutbox>();
-			return new DefaultContextDecisionRuntime(
-				engine, policyProvider, router, expertCatalog, candidateProviders,
-				canonicalMerger, earlyAdmissionGate, featurePipeline, safetyGate, lifecycleGate,
-				utilityScorer,
-				requestNormalizer: requestNormalizer,
-				requestSemanticHasher: requestSemanticHasher,
-				executionArtifactFactory: executionArtifactFactory,
-				utilityLedgerMaterializer: utilityLedgerMaterializer,
-				componentHealthRegistry: componentHealthRegistry,
-				materializationDispatcher: materializationDispatcher,
-				selectedCandidateHydrator: selectedCandidateHydrator,
-				decisionCommitOutbox: decisionCommitOutbox);
+			return new FlowDiagnosticsRuntimeDecorator(
+				new DefaultContextDecisionRuntime(
+					engine, policyProvider, router, expertCatalog, candidateProviders,
+					canonicalMerger, earlyAdmissionGate, featurePipeline, safetyGate, lifecycleGate,
+					utilityScorer,
+					requestNormalizer: requestNormalizer,
+					requestSemanticHasher: requestSemanticHasher,
+					executionArtifactFactory: executionArtifactFactory,
+					utilityLedgerMaterializer: utilityLedgerMaterializer,
+					componentHealthRegistry: componentHealthRegistry,
+					materializationDispatcher: materializationDispatcher,
+					selectedCandidateHydrator: selectedCandidateHydrator,
+					decisionCommitOutbox: decisionCommitOutbox),
+				FlowDiagnosticsOptions.FromEnvironment());
 		});
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();

@@ -1198,7 +1198,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 combined.Add(new CandidateAllocationDecision
                 {
                     CandidateKey = envelope.CanonicalKey,
-                    Section = ResolveSectionForAllocation(envelope),
+                    Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                     IncludedTokens = 0,
                     IsTruncated = false,
                     ReasonCode = CandidateDecisionReasonCode.EarlyAdmissionRejected
@@ -1223,32 +1223,16 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             rejectReasons: rejectReasons);
 
         var tokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget;
-
-        return new ContextDecisionResult
-        {
-            RequestId = request.RequestId,
-            DecisionSource = ResolveDecisionSource(request.Purpose),
-            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
-            DroppedEnvelopes = dropped,
-            Outcome = new ContextDecisionOutcomeSummary
-            {
-                SelectedCount = 0,
-                DroppedCount = dropped.Count,
-                EffectiveTokens = 0,
-                TokenBudget = tokenBudget,
-                Sections = Array.Empty<string>(),
-                SafetyGateBlockedCount = 0,
-                BudgetExceededCount = 0
-            },
-            PolicyVersion = snapshot.FeatureSchemaVersion,
-            ModelEnabled = false,
-            DecidedAt = DateTimeOffset.UtcNow,
-            Purpose = request.Purpose,
-            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
-            AllocationDecisions = AppendEarlyRejectedAllocationDecisions(
+        return BuildEmptyDecision(
+            request.RequestId,
+            ResolveDecisionSource(request.Purpose),
+            request.Purpose,
+            dropped,
+            AppendEarlyRejectedAllocationDecisions(
                 Array.Empty<CandidateAllocationDecision>(), earlyRejected),
-            PolicyReference = snapshot.Reference
-        };
+            tokenBudget,
+            snapshot.FeatureSchemaVersion,
+            snapshot.Reference);
     }
 
     private ContextDecisionExecutionResult EmptyExecutionResult(
@@ -1386,7 +1370,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             decisions.Add(new CandidateAllocationDecision
             {
                 CandidateKey = envelope.CanonicalKey,
-                Section = ResolveSectionForAllocation(envelope),
+                Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                 IncludedTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope),
                 IsTruncated = false,
                 ReasonCode = CandidateDecisionReasonCode.SelectedHighestUtility
@@ -1401,7 +1385,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             decisions.Add(new CandidateAllocationDecision
             {
                 CandidateKey = envelope.CanonicalKey,
-                Section = ResolveSectionForAllocation(envelope),
+                Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                 IncludedTokens = 0,
                 IsTruncated = false,
                 ReasonCode = reasonCode
@@ -1410,10 +1394,6 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
         return decisions;
     }
-
-    // section 解析统一委托 DecisionOutcomeRecomputer.ResolveSection（单一真相源）。
-    private static string ResolveSectionForAllocation(ContextCandidateEnvelope envelope)
-        => DecisionOutcomeRecomputer.ResolveSection(envelope);
 
     private static RetrievalExpert MapExpertKindToRetrievalExpert(ExpertKind kind) => kind switch
     {
@@ -1462,34 +1442,60 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         return concreteRegistry.ShouldFallbackProvider(MapExpertKindToProviderKind(kind), scopeKey);
     }
 
+    /// <summary>
+    /// 构建空决策骨架（无 selected 候选；dropped / decisions / 预算 / 版本按调用方传入）。
+    /// 三处空结果路径（EarlyRejected / 空输入 / Engine 回退）共用，消除重复构建。
+    /// </summary>
+    private static ContextDecisionResult BuildEmptyDecision(
+        string requestId,
+        ContextDecisionSource decisionSource,
+        ContextDecisionPurpose purpose,
+        IReadOnlyList<ContextCandidateEnvelope> dropped,
+        IReadOnlyList<CandidateAllocationDecision> decisions,
+        int tokenBudget,
+        string policyVersion,
+        ResolvedPolicyReference? policyReference,
+        IReadOnlyDictionary<string, string>? diagnostics = null)
+        => new()
+        {
+            RequestId = requestId,
+            DecisionSource = decisionSource,
+            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            DroppedEnvelopes = dropped,
+            Outcome = new ContextDecisionOutcomeSummary
+            {
+                SelectedCount = 0,
+                DroppedCount = dropped.Count,
+                EffectiveTokens = 0,
+                TokenBudget = tokenBudget,
+                Sections = Array.Empty<string>(),
+                SafetyGateBlockedCount = 0,
+                BudgetExceededCount = 0,
+                Diagnostics = diagnostics ?? new Dictionary<string, string>(StringComparer.Ordinal)
+            },
+            PolicyVersion = policyVersion,
+            ModelEnabled = false,
+            DecidedAt = DateTimeOffset.UtcNow,
+            Purpose = purpose,
+            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
+            AllocationDecisions = decisions,
+            PolicyReference = policyReference
+        };
+
     private static ContextDecisionResult EmptyResult(
         ContextDecisionRuntimeRequest request,
         EffectivePolicySnapshot snapshot)
     {
-        return new ContextDecisionResult
-        {
-            RequestId = request.RequestId,
-            DecisionSource = ResolveDecisionSource(request.Purpose),
-            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
-            DroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
-            Outcome = new ContextDecisionOutcomeSummary
-            {
-                SelectedCount = 0,
-                DroppedCount = 0,
-                EffectiveTokens = 0,
-                TokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget,
-                Sections = Array.Empty<string>(),
-                SafetyGateBlockedCount = 0,
-                BudgetExceededCount = 0
-            },
-            PolicyVersion = snapshot.FeatureSchemaVersion,
-            ModelEnabled = false,
-            DecidedAt = DateTimeOffset.UtcNow,
-            Purpose = request.Purpose,
-            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
-            AllocationDecisions = Array.Empty<CandidateAllocationDecision>(),
-            PolicyReference = snapshot.Reference
-        };
+        var tokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget;
+        return BuildEmptyDecision(
+            request.RequestId,
+            ResolveDecisionSource(request.Purpose),
+            request.Purpose,
+            Array.Empty<ContextCandidateEnvelope>(),
+            Array.Empty<CandidateAllocationDecision>(),
+            tokenBudget,
+            snapshot.FeatureSchemaVersion,
+            snapshot.Reference);
     }
 
     private static ContextDecisionSource ResolveDecisionSource(ContextDecisionPurpose purpose) => purpose switch
@@ -1567,31 +1573,16 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             ["engine.errorMessage"] = ex.Message
         };
 
-        return new ContextDecisionResult
-        {
-            RequestId = decisionRequest.RequestId,
-            DecisionSource = decisionRequest.DecisionSource,
-            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
-            DroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
-            Outcome = new ContextDecisionOutcomeSummary
-            {
-                SelectedCount = 0,
-                DroppedCount = 0,
-                EffectiveTokens = 0,
-                TokenBudget = decisionRequest.TokenBudget,
-                Sections = Array.Empty<string>(),
-                SafetyGateBlockedCount = 0,
-                BudgetExceededCount = 0,
-                Diagnostics = diagnostics
-            },
-            PolicyVersion = decisionRequest.PolicySnapshot?.FeatureSchemaVersion ?? "unknown",
-            ModelEnabled = false,
-            DecidedAt = DateTimeOffset.UtcNow,
-            Purpose = ResolvePurposeFromDecisionSource(decisionRequest.DecisionSource),
-            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
-            AllocationDecisions = Array.Empty<CandidateAllocationDecision>(),
-            PolicyReference = decisionRequest.PolicySnapshot?.Reference
-        };
+        return BuildEmptyDecision(
+            decisionRequest.RequestId,
+            decisionRequest.DecisionSource,
+            ResolvePurposeFromDecisionSource(decisionRequest.DecisionSource),
+            Array.Empty<ContextCandidateEnvelope>(),
+            Array.Empty<CandidateAllocationDecision>(),
+            decisionRequest.TokenBudget,
+            decisionRequest.PolicySnapshot?.FeatureSchemaVersion ?? "unknown",
+            decisionRequest.PolicySnapshot?.Reference,
+            diagnostics);
     }
 
     private static ContextDecisionPurpose ResolvePurposeFromDecisionSource(ContextDecisionSource source) => source switch
@@ -2448,8 +2439,8 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
         }
 
         // 4. merge activation override（控制面注入的受限 override）
-        var budget = MergeBudgetOverride(bundle.Budget, activation?.BudgetOverride);
-        var routing = MergeRoutingOverride(bundle.Routing, activation?.RoutingOverride);
+        var budget = DecisionOutcomeRecomputer.ApplyBudgetOverride(bundle.Budget, activation?.BudgetOverride)!;
+        var routing = DecisionOutcomeRecomputer.ApplyRoutingOverride(bundle.Routing, activation?.RoutingOverride)!;
 
         // 5. merge request override（V2 Runtime 的 TokenBudget / TopK 是 per-request 预算 override）
         budget = MergeRequestBudgetOverride(budget, request.TokenBudget, request.TopK);
@@ -2477,25 +2468,8 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
     }
 
     // -----------------------------------------------------------------------
-    // 受限 override 合并（与 DefaultContextDecisionEngine.ApplyBudgetOverride 对齐）
+    // 受限 override 合并（委托 DecisionOutcomeRecomputer 权威实现）
     // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// 将 activation 的 <see cref="RequestBudgetOverride"/> 合并到 bundle 的 <see cref="BudgetProfile"/>，
-    /// 仅覆盖非空字段（TokenBudget / TopK / SectionRatios），不替换整个 profile。
-    /// </summary>
-    private static BudgetProfile MergeBudgetOverride(
-        BudgetProfile baseProfile,
-        RequestBudgetOverride? activationOverride)
-    {
-        if (activationOverride is null) return baseProfile;
-        return baseProfile with
-        {
-            DefaultTokenBudget = activationOverride.TokenBudget ?? baseProfile.DefaultTokenBudget,
-            DefaultTopK = activationOverride.TopK ?? baseProfile.DefaultTopK,
-            SectionRatios = activationOverride.SectionRatios ?? baseProfile.SectionRatios
-        };
-    }
 
     /// <summary>
     /// 将 request 的 TokenBudget / TopK（非零时）合并到 Budget profile。
@@ -2511,21 +2485,6 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
         {
             DefaultTokenBudget = requestTokenBudget > 0 ? requestTokenBudget : baseProfile.DefaultTokenBudget,
             DefaultTopK = requestTopK > 0 ? requestTopK : baseProfile.DefaultTopK
-        };
-    }
-
-    /// <summary>
-    /// 将 activation 的 <see cref="RequestRoutingOverride"/> 合并到 bundle 的 <see cref="RoutingProfile"/>，
-    /// 仅覆盖 EnableModelScoring（非空时），不替换整个 profile。
-    /// </summary>
-    private static RoutingProfile MergeRoutingOverride(
-        RoutingProfile baseProfile,
-        RequestRoutingOverride? activationOverride)
-    {
-        if (activationOverride is null) return baseProfile;
-        return baseProfile with
-        {
-            EnableModelScoring = activationOverride.EnableModelScoring ?? baseProfile.EnableModelScoring
         };
     }
 
@@ -3281,14 +3240,7 @@ public sealed class DefaultFeaturePipeline : IFeaturePipeline
     }
 
     private static bool TryGet(IReadOnlyDictionary<string, double> dict, string key, out double value)
-    {
-        if (dict is null || dict.Count == 0)
-        {
-            value = 0;
-            return false;
-        }
-        return dict.TryGetValue(key, out value);
-    }
+        => DecisionOutcomeRecomputer.TryGetScoreBreakdown(dict, key, out value);
 }
 
 /// <summary>
@@ -3414,6 +3366,9 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     // 在推理前对输入特征与 FeatureSchema 执行严格匹配验证，防止 schema drift。
     private readonly IFeatureSchemaValidator _featureSchemaValidator;
 
+    // 候选分数校准器（可选）。启用 EnableScoreCalibration 时把各通道原始分映射到公共刻度。
+    private readonly ICandidateScoreCalibrator? _scoreCalibrator;
+
     /// <summary>
     /// 构造 Utility Scorer。
     /// </summary>
@@ -3425,12 +3380,14 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     /// 推理输出验证器。null 时使用默认 DefaultInferenceResultValidator。
     /// 验证失败时降级到 deterministic（不抛异常，fail-safe）。
     /// </param>
+    /// <param name="scoreCalibrator">候选分数校准器（null 时即使启用开关也不校准）。</param>
     public DefaultUtilityScorer(
         IFeatureSchemaValidator featureSchemaValidator,
         IBatchInferenceEngine? inferenceEngine = null,
         ICalibrationService? calibrationService = null,
         IFeatureRegistry? featureRegistry = null,
-        IInferenceResultValidator? inferenceValidator = null)
+        IInferenceResultValidator? inferenceValidator = null,
+        ICandidateScoreCalibrator? scoreCalibrator = null)
     {
         ArgumentNullException.ThrowIfNull(featureSchemaValidator);
 
@@ -3439,6 +3396,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         _calibrationService = calibrationService;
         _featureRegistry = featureRegistry;
         _inferenceValidator = inferenceValidator ?? new DefaultInferenceResultValidator();
+        _scoreCalibrator = scoreCalibrator;
     }
 
     /// <summary>对候选集合计算效用评分，返回更新后的 envelope 列表。</summary>
@@ -3450,16 +3408,20 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         ArgumentNullException.ThrowIfNull(envelopes);
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        // 分数校准：启用时把各通道原始分映射到公共刻度（原始分保留在 ScoreBreakdown["raw"]）。
+        // 在 rule-only / model 分支之前统一应用一次，之后两条路径消费的都是校准后的 DeterministicScore。
+        var current = ApplyCalibration(envelopes, snapshot);
+
         // rule-only 模式：FinalScore 已由 adapter 填充为 DeterministicScore，直接返回。
         if (!snapshot.Routing.EnableModelScoring)
         {
-            return envelopes;
+            return current;
         }
 
         // model 模式但缺少推理引擎 / registry → 标记 ModelAttempted 并降级
         if (_inferenceEngine is null || _featureRegistry is null)
         {
-            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "engine-unavailable");
+            return MarkModelAttempted(current, applied: false, fallbackReason: "engine-unavailable");
         }
 
         // DeterministicReplay 引擎默认不参与 FinalScore 加权，
@@ -3468,16 +3430,59 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         if (_inferenceEngine.Kind == InferenceEngineKind.DeterministicReplay
             && !snapshot.AllowDeterministicReplayScoring)
         {
-            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "deterministic-replay-skipped");
+            return MarkModelAttempted(current, applied: false, fallbackReason: "deterministic-replay-skipped");
         }
 
         // Disabled 引擎立即降级
         if (_inferenceEngine.Kind == InferenceEngineKind.Disabled)
         {
-            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "engine-disabled");
+            return MarkModelAttempted(current, applied: false, fallbackReason: "engine-disabled");
         }
 
-        return await ScoreWithModelAsync(envelopes, snapshot, cancellationToken).ConfigureAwait(false);
+        return await ScoreWithModelAsync(current, snapshot, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 分桶校准：把各通道原始分映射到公共刻度，原始分保留在 ScoreBreakdown["raw"] 供审计。
+    /// 未启用开关、未注入校准器或空候选时原样返回，保证旧行为逐位不变。
+    /// </summary>
+    private IReadOnlyList<ContextCandidateEnvelope> ApplyCalibration(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot)
+    {
+        if (!snapshot.Routing.EnableScoreCalibration || _scoreCalibrator is null || envelopes.Count == 0)
+        {
+            return envelopes;
+        }
+
+        var result = new List<ContextCandidateEnvelope>(envelopes.Count);
+        foreach (var envelope in envelopes)
+        {
+            var raw = envelope.Utility.DeterministicScore;
+            var calibrated = _scoreCalibrator.Calibrate(envelope.Source, raw);
+            if (Math.Abs(calibrated - raw) < 1e-9)
+            {
+                result.Add(envelope);
+                continue;
+            }
+
+            var breakdown = new Dictionary<string, double>(envelope.Features.ScoreBreakdown, StringComparer.Ordinal)
+            {
+                ["raw"] = raw
+            };
+            result.Add(envelope with
+            {
+                Features = envelope.Features with { ScoreBreakdown = breakdown },
+                Utility = envelope.Utility with
+                {
+                    DeterministicScore = calibrated,
+                    FinalScore = calibrated,
+                    ReasonCode = "calibrated-deterministic"
+                }
+            });
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -3851,14 +3856,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
     }
 
     private static bool TryGetScoreBreakdown(IReadOnlyDictionary<string, double> breakdown, string key, out double value)
-    {
-        if (breakdown is null || breakdown.Count == 0)
-        {
-            value = 0;
-            return false;
-        }
-        return breakdown.TryGetValue(key, out value);
-    }
+        => DecisionOutcomeRecomputer.TryGetScoreBreakdown(breakdown, key, out value);
 }
 
 /// <summary>
@@ -3925,13 +3923,13 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
     /// 核心分配实现。使用显式传入的 MandatoryOverflowPolicy（已由调用方解析）。
     /// </summary>
     /// <remarks>
-    /// 优化：把全量 O(n log n) 排序改为：
+    /// 输入候选已按最终顺序排列（引擎阶段 3.5 先按 FinalScore 建立第一阶段顺序，
+    /// 可选经 reranker 重排），因此：
     /// 1. mandatory partition（按 FinalScore 降序，mandatory 候选数量通常很小）
-    /// 2. non-mandatory partial TopK 选择（堆大小 K，仅保留前 K 候选）
-    /// 3. 最终对 K 项做稳定排序
-    /// 当 n &gt;&gt; K 时复杂度从 O(n log n) 降至 O(n log K)。
-    /// 语义与原实现等价：mandatory 优先 → non-mandatory 按 FinalScore/EffectiveTokens/CandidateId 排序 →
-    /// TopK 截断 → TokenBudget 截断。
+    /// 2. non-mandatory TopK 截断直接取输入顺序的前 K 个（保持最终排序）
+    /// 3. 按最终顺序遍历做 TokenBudget 截断
+    /// 复杂度 O(n)；TopK 截断不再是独立排序步骤，最终顺序由调用方保证。
+    /// 语义：mandatory 优先 → non-mandatory 按最终顺序 → TopK 截断 → TokenBudget 截断。
     /// </remarks>
     /// <param name="mandatoryOverflowPolicy">本次分配使用的 overflow 策略。</param>
     /// <param name="purpose">业务用途（仅用于诊断；null 时记录 "Unknown"）。</param>
@@ -3961,11 +3959,9 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
 
         // mandatory 按 FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
         // mandatory 数量通常远小于 non-mandatory，全量排序成本可忽略
-        mandatory.Sort(MandatoryComparison);
-        // non-mandatory：partial TopK 选择，仅保留前 topK 候选
+        mandatory.Sort(DecisionOutcomeRecomputer.CompareByScoreDesc);
+        // non-mandatory：TopK 截断 — 输入已按最终顺序排列，直接取前 topK 个
         var nonMandatoryTopK = SelectTopK(nonMandatory, topK);
-        // 对选出的 topK 做稳定排序（K 很小，O(K log K)）
-        nonMandatoryTopK.Sort(NonMandatoryComparison);
 
         // 合并为最终遍历顺序：mandatory 优先，然后 non-mandatory TopK
         // decisions 容量按全部候选预留（dropped 候选也要生成 decision）
@@ -3998,7 +3994,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             decisions.Add(new CandidateAllocationDecision
             {
                 CandidateKey = envelope.CanonicalKey,
-                Section = ResolveSection(envelope),
+                Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                 IncludedTokens = 0,
                 IsTruncated = false,
                 ReasonCode = CandidateDecisionReasonCode.SectionQuotaExceeded
@@ -4012,7 +4008,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
 
             // mandatory 候选超出预算时按策略处理
             // 使用 EffectiveTokens（TokenCost 优先）
-            var effectiveTokens = GetEffectiveTokens(envelope);
+            var effectiveTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
             if (isMandatory && usedTokens + effectiveTokens > tokenBudget)
             {
                 var overflow = (usedTokens + effectiveTokens) - tokenBudget;
@@ -4030,7 +4026,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                         decisions.Add(new CandidateAllocationDecision
                         {
                             CandidateKey = envelope.CanonicalKey,
-                            Section = ResolveSection(envelope),
+                            Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                             IncludedTokens = 0,
                             IsTruncated = false,
                             ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
@@ -4045,7 +4041,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                         decisions.Add(new CandidateAllocationDecision
                         {
                             CandidateKey = envelope.CanonicalKey,
-                            Section = ResolveSection(envelope),
+                            Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                             IncludedTokens = 0,
                             IsTruncated = false,
                             ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
@@ -4077,7 +4073,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                     decisions.Add(new CandidateAllocationDecision
                     {
                         CandidateKey = envelope.CanonicalKey,
-                        Section = ResolveSection(envelope),
+                        Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                         IncludedTokens = remaining,
                         IsTruncated = true,
                         ReasonCode = CandidateDecisionReasonCode.SelectedHighestUtility
@@ -4090,7 +4086,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                     decisions.Add(new CandidateAllocationDecision
                     {
                         CandidateKey = envelope.CanonicalKey,
-                        Section = ResolveSection(envelope),
+                        Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                         IncludedTokens = 0,
                         IsTruncated = false,
                         ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
@@ -4108,7 +4104,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             decisions.Add(new CandidateAllocationDecision
             {
                 CandidateKey = envelope.CanonicalKey,
-                Section = ResolveSection(envelope),
+                Section = DecisionOutcomeRecomputer.ResolveSection(envelope),
                 IncludedTokens = effectiveTokens,
                 IsTruncated = false,
                 ReasonCode = isMandatory
@@ -4155,13 +4151,14 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
     }
 
     /// <summary>
-    /// partial TopK 选择。使用最小堆（大小 K）保留前 K 个候选。
-    /// 复杂度 O(n log K)，当 n &gt;&gt; K 时优于全量排序 O(n log n)。
-    /// 当 topK &lt;= 0 或候选数 &lt;= topK 时直接返回原列表（避免无意义堆操作）。
+    /// partial TopK 选择：保留输入顺序（最终排序）的前 K 个候选。
+    /// 输入已按第一阶段顺序（FinalScore 降序，可选经 reranker 重排）排列，
+    /// 因此 TopK 截断直接取前 K 个，无需再排序或建堆。
+    /// topK &lt;= 0 表示无 TopK 限制（保留全部）；候选数 &lt;= topK 时全部保留。
     /// </summary>
     /// <param name="candidates">候选列表（不会被修改）。</param>
     /// <param name="topK">TopK 上限。</param>
-    /// <returns>前 K 个候选（无序；调用方需排序）。</returns>
+    /// <returns>前 K 个候选（保持输入顺序）。</returns>
     private static List<ContextCandidateEnvelope> SelectTopK(
         IReadOnlyList<ContextCandidateEnvelope> candidates,
         int topK)
@@ -4172,73 +4169,8 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             return candidates as List<ContextCandidateEnvelope> ?? new List<ContextCandidateEnvelope>(candidates);
         }
 
-        // 最小堆：堆顶是当前堆中"最小"的候选（按 NonMandatoryComparison，最小者先出堆）。
-        // 堆大小 = topK；遍历候选时比堆顶大则替换堆顶。
-        var heap = new List<ContextCandidateEnvelope>(topK);
-        for (var i = 0; i < topK; i++)
-        {
-            heap.Add(candidates[i]);
-            SiftUp(heap, heap.Count - 1);
-        }
-
-        for (var i = topK; i < candidates.Count; i++)
-        {
-            var candidate = candidates[i];
-            // 堆顶是最小者；若当前候选更大则替换堆顶并下沉
-            if (NonMandatoryComparison(candidate, heap[0]) > 0)
-            {
-                heap[0] = candidate;
-                SiftDown(heap, 0, heap.Count);
-            }
-        }
-
-        return heap;
-    }
-
-    /// <summary>最小堆上浮：把 idx 位置的元素上浮到正确位置。</summary>
-    private static void SiftUp(List<ContextCandidateEnvelope> heap, int idx)
-    {
-        while (idx > 0)
-        {
-            var parent = (idx - 1) >> 1;
-            if (NonMandatoryComparison(heap[idx], heap[parent]) < 0)
-            {
-                (heap[idx], heap[parent]) = (heap[parent], heap[idx]);
-                idx = parent;
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-
-    /// <summary>最小堆下沉：把 idx 位置的元素下沉到正确位置。</summary>
-    private static void SiftDown(List<ContextCandidateEnvelope> heap, int idx, int count)
-    {
-        while (true)
-        {
-            var left = 2 * idx + 1;
-            var right = 2 * idx + 2;
-            var smallest = idx;
-            if (left < count && NonMandatoryComparison(heap[left], heap[smallest]) < 0)
-            {
-                smallest = left;
-            }
-            if (right < count && NonMandatoryComparison(heap[right], heap[smallest]) < 0)
-            {
-                smallest = right;
-            }
-            if (smallest != idx)
-            {
-                (heap[idx], heap[smallest]) = (heap[smallest], heap[idx]);
-                idx = smallest;
-            }
-            else
-            {
-                break;
-            }
-        }
+        // 直接取输入顺序的前 topK 个（最终排序已由调用方保证）
+        return candidates.Take(topK).ToList();
     }
 
     /// <summary>合并 mandatory 与 non-mandatory TopK 为单一遍历序列。</summary>
@@ -4255,58 +4187,6 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             yield return e;
         }
     }
-
-    /// <summary>
-    /// mandatory 候选排序比较器。
-    /// FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序（与原 OrderBy 链等价）。
-    /// </summary>
-    private static int MandatoryComparison(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
-    {
-        // FinalScore 降序
-        var cmp = b.Utility.FinalScore.CompareTo(a.Utility.FinalScore);
-        if (cmp != 0) return cmp;
-        // EffectiveTokens 降序
-        var tokensA = GetEffectiveTokens(a);
-        var tokensB = GetEffectiveTokens(b);
-        cmp = tokensB.CompareTo(tokensA);
-        if (cmp != 0) return cmp;
-        // CandidateId 升序
-        return StringComparer.OrdinalIgnoreCase.Compare(a.CandidateId, b.CandidateId);
-    }
-
-    /// <summary>
-    /// non-mandatory 候选排序比较器（与 MandatoryComparison 同序，便于统一）。
-    /// FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序（与原 OrderBy 链等价）。
-    /// </summary>
-    private static int NonMandatoryComparison(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
-        => MandatoryComparison(a, b);
-
-    private static string ResolveSection(ContextCandidateEnvelope envelope)
-    {
-        // B-1 骨架：基于 Source 映射到 section 名（B-2 将由 Allocator 真正分配 section）
-        return envelope.Source switch
-        {
-            ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "mandatory",
-            ContextCandidateSource.WorkingMemory or ContextCandidateSource.StableMemory => "memory",
-            ContextCandidateSource.Graph => "relations",
-            ContextCandidateSource.GlobalContext => "global",
-            ContextCandidateSource.RelatedContext => "related",
-            _ => "default"
-        };
-    }
-
-    /// <summary>
-    /// 获取候选的有效 token 数。
-    /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
-    /// 回退到 EstimatedTokens（length/4 粗估，仅用于兼容/诊断）。
-    /// </summary>
-    /// <remarks>
-    /// 这是 Allocator 的权威 token 输入：中文/代码/JSON 场景下 EstimatedTokens 严重低估，
-    /// 必须使用基于 tokenizer 的精确 TokenCost 才能避免预算超支。
-    /// 实现统一委托 DecisionOutcomeRecomputer.GetEffectiveTokens（单一真相源）。
-    /// </remarks>
-    private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
-        => DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
 }
 
 // ---------------------------------------------------------------------------

@@ -297,10 +297,12 @@ internal static class StorageExtensions
 
 		services.AddDecoratedService<IWorkingMemoryService, PostgresWorkingMemoryStore>((inner, inv, vs) => new InvalidatingWorkingMemoryServiceDecorator(inner, inv, vs));
 		services.AddDecoratedService<IVectorStore, PostgresVectorStore>((inner, inv, vs) => new InvalidatingVectorStoreDecorator(inner, inv, vs));
+		services.AddForwardedService<IVectorStoreMultiSearch, PostgresVectorStore>();
 
 		// 非 Data Plane Store 直接转发，不叠加失效 Decorator（读路径未接入缓存）。
 		services.AddForwardedService<IContextCollectionStore, PostgresContextStore>();
 		services.AddForwardedService<IContextStoreBatchLookup, PostgresContextStore>();
+		services.AddForwardedService<IContextStoreMultiQuery, PostgresContextStore>();
 		services.AddForwardedService<IPromotionRecordStore, PostgresWorkingMemoryStore>();
 		services.AddForwardedService<IPromotionCandidateStore, PostgresWorkingMemoryStore>();
 		services.AddForwardedService<IRelationReviewStore, PostgresRelationReviewStore>();
@@ -339,6 +341,8 @@ internal static class StorageExtensions
 		services.AddForwardedService<IContextCollectionStore, FileContextStore>();
 		// Late Hydration：Agent 以 IncludeContent=false 召回，选中后再按 ID 批量回填正文。
 		services.AddForwardedService<IContextStoreBatchLookup, FileContextStore>();
+		// 多问句 lexical 召回：一次 snapshot 完成全部问句过滤，避免 q 次 QueryAsync 放大文件 I/O。
+		services.AddForwardedService<IContextStoreMultiQuery, FileContextStore>();
 
 		services.AddInvalidating<IContextIndex, FileContextIndex>(
 			sp => new FileContextIndex(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()),
@@ -347,6 +351,7 @@ internal static class StorageExtensions
 		services.AddInvalidating<IVectorStore, FileVectorStore>(
 			sp => new FileVectorStore(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()),
 			(inner, inv, vs) => new InvalidatingVectorStoreDecorator(inner, inv, vs));
+		services.AddForwardedService<IVectorStoreMultiSearch, FileVectorStore>();
 
 		services.AddPlain<IVectorIndexStore, FileVectorIndexStore>(
 			sp => new FileVectorIndexStore(sp.GetRequiredService<FilePathResolver>(), sp.GetRequiredService<FileFormatSerializer>()));
@@ -515,6 +520,7 @@ internal static class StorageExtensions
 		services.AddInvalidating<IContextStore, InMemoryContextStore>((inner, inv, vs) => new InvalidatingContextStoreDecorator(inner, inv, vs));
 		services.AddForwardedService<IContextCollectionStore, InMemoryContextStore>();
 		services.AddForwardedService<IContextStoreBatchLookup, InMemoryContextStore>();
+		services.AddForwardedService<IContextStoreMultiQuery, InMemoryContextStore>();
 		services.AddInvalidating<IContextIndex, InMemoryContextIndex>((inner, inv, vs) => new InvalidatingContextIndexDecorator(inner, inv, vs));
         services.AddPlain<IShortTermMemoryStore, InMemoryShortTermMemoryStore>();
         services.AddPlain<IShortTermPromotionCandidateStore, InMemoryShortTermPromotionCandidateStore>();
@@ -529,6 +535,7 @@ internal static class StorageExtensions
         services.AddPlain<IRelationReviewStore, InMemoryRelationReviewStore>();
 
 		services.AddInvalidating<IVectorStore, InMemoryVectorStore>((inner, inv, vs) => new InvalidatingVectorStoreDecorator(inner, inv, vs));
+		services.AddForwardedService<IVectorStoreMultiSearch, InMemoryVectorStore>();
 		services.AddPlain<IVectorIndexStore, InMemoryVectorIndexStore>();
 		services.AddPlain<IVectorReindexReportStore, InMemoryVectorReindexReportStore>();
 		services.AddPlain<IVectorLifecycleMetadataReviewCandidateStore, InMemoryVectorLifecycleMetadataReviewCandidateStore>();

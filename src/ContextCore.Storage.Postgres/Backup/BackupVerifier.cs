@@ -2,7 +2,7 @@ using System.IO.Compression;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Shared;
 
-namespace ContextCore.ControlRoom.Backup;
+namespace ContextCore.Storage.Postgres.Backup;
 
 /// <summary>
 /// 备份校验器。加载清单后重新解压/读取归档并对比每条目 SHA-256，

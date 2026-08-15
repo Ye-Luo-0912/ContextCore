@@ -1,0 +1,12 @@
+# 构建上下文精简：排除本机构建产物与无关目录，避免覆盖容器内 restore 资产
+# （容器 restore 后 COPY src/ 若带入宿主机 obj/ 的 Windows 路径 assets，
+#  --no-restore publish 会因路径不匹配失败；排除后容器内 obj/ 保持不变）。
+**/bin/
+**/obj/
+.git/
+tests/
+benchmarks/
+eval/
+docs/
+*.trx
+TestResults/

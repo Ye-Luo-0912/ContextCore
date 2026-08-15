@@ -9,7 +9,7 @@ namespace ContextCore.Storage.InMemory.Stores;
 /// 基于内存的 <see cref="IContextStore"/> 与 <see cref="IContextCollectionStore"/> 实现，
 /// 适用于测试和短生命周期场景。
 /// </summary>
-public sealed class InMemoryContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextQueryPageStore
+public sealed class InMemoryContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextQueryPageStore, IContextStoreMultiQuery
 {
     private readonly ConcurrentDictionary<string, ContextCollection> _collections = new();
     private readonly ConcurrentDictionary<string, ContextItem> _items = new();
@@ -97,6 +97,53 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
         return Task.FromResult<IReadOnlyList<ContextItem>>(results);
     }
 
+    /// <summary>
+    /// 多问句关键词召回：单次枚举完成全部问句过滤，避免 q 次 QueryAsync 各自枚举。
+    /// 共享作用域与过滤只评估一次；每条问句独立做文本/refs 过滤并保留各自 TopK，
+    /// 语义与逐条 QueryAsync 完全一致。
+    /// </summary>
+    public Task<IReadOnlyList<ContextMultiQueryResult>> QueryMultiAsync(
+        ContextMultiQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (query.Queries.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<ContextMultiQueryResult>>(Array.Empty<ContextMultiQueryResult>());
+        }
+
+        var take = query.Take > 0 ? query.Take : 50;
+
+        // 单次枚举：共享过滤（作用域/排除/tags/types）只评估一次，按问句再做文本与 refs 过滤。
+        var candidates = _items.Values
+            .Where(item => string.Equals(item.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.IsNullOrWhiteSpace(query.CollectionId)
+                || string.Equals(item.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
+            .Where(item => !IsExcluded(item, query.ExcludedIds, query.ExcludedTypes, query.IncludeDerived))
+            .Where(item => MatchesTags(item, query.Tags))
+            .Where(item => MatchesTypes(item, query.Types))
+            .ToArray();
+
+        var results = new List<ContextMultiQueryResult>(query.Queries.Count);
+        for (var index = 0; index < query.Queries.Count; index++)
+        {
+            var q = query.Queries[index];
+            var items = candidates
+                .Where(item => MatchesRefs(item, q.Refs))
+                .Where(item => MatchesQueryText(item, q.QueryText))
+                .OrderByDescending(item => item.UpdatedAt)
+                .ThenByDescending(item => item.Id, StringComparer.Ordinal)
+                .Take(take)
+                .Select(item => query.IncludeContent ? Clone(item) : Clone(item, content: string.Empty))
+                .ToArray();
+            results.Add(new ContextMultiQueryResult { QueryIndex = index, QueryText = q.QueryText, Items = items });
+        }
+
+        return Task.FromResult<IReadOnlyList<ContextMultiQueryResult>>(results);
+    }
+
     /// <inheritdoc />
     public Task<ContextQueryPageResult> QueryPageAsync(
         ContextQuery query,
@@ -157,18 +204,25 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
     }
 
     private static bool IsExcluded(ContextItem item, ContextQuery query)
+        => IsExcluded(item, query.ExcludedIds, query.ExcludedTypes, query.IncludeDerived);
+
+    private static bool IsExcluded(
+        ContextItem item,
+        IReadOnlyList<string> excludedIds,
+        IReadOnlyList<string> excludedTypes,
+        bool includeDerived)
     {
-        if (query.ExcludedIds.Any(id => string.Equals(id, item.Id, StringComparison.OrdinalIgnoreCase)))
+        if (excludedIds.Any(id => string.Equals(id, item.Id, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
-        if (query.ExcludedTypes.Any(type => string.Equals(type, item.Type, StringComparison.OrdinalIgnoreCase)))
+        if (excludedTypes.Any(type => string.Equals(type, item.Type, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
-        return !query.IncludeDerived
+        return !includeDerived
             && item.Metadata.TryGetValue("isDerived", out var isDerived)
             && string.Equals(isDerived, "true", StringComparison.OrdinalIgnoreCase);
     }

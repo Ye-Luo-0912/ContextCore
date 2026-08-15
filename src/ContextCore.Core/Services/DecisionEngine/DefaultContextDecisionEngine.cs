@@ -69,6 +69,10 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     private readonly IAllocatorV2_1? _allocatorV2_1;
     private readonly IPerformanceMonitor? _performanceMonitor;
     private readonly IComponentHealthRegistry? _componentHealthRegistry;
+    private readonly ICandidateReranker? _reranker;
+
+    // Legacy 路径的 SafetyGate 评估复用默认实现（无状态，可安全共享）。
+    private static readonly DefaultSafetyGate SafetyGateEvaluator = new();
 
     /// <summary>构造默认 Engine（无注入；使用静态内联逻辑，向后兼容 行为）。</summary>
     public DefaultContextDecisionEngine()
@@ -163,6 +167,33 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         IAllocatorV2_1? allocatorV2_1,
         IPerformanceMonitor? performanceMonitor,
         IComponentHealthRegistry? componentHealthRegistry)
+        : this(policyRegistry, safetyGate, lifecycleGate, utilityScorer, globalAllocator,
+               allocatorV2_1, performanceMonitor, componentHealthRegistry, reranker: null)
+    {
+    }
+
+    /// <summary>
+    /// 构造 Engine 并注入全部 V2 决策抽象 + V2.1 Allocator + 性能监控 + 组件健康注册表 + 两阶段 reranker。
+    /// </summary>
+    /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
+    /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="lifecycleGate">Lifecycle Gate 评估器（null 时跳过 lifecycle 检查）。</param>
+    /// <param name="utilityScorer">效用评分器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="globalAllocator">全局分配器（V2.0 基础，null 时走 Legacy 静态路径）。</param>
+    /// <param name="allocatorV2_1">V2.1 Allocator（section rollover + MMR；null 时回退 V2.0 Allocate）。</param>
+    /// <param name="performanceMonitor">性能监控（null 时不监控、不回退，向后兼容 行为）。</param>
+    /// <param name="componentHealthRegistry">组件健康注册表（null 时不归因、不回退，向后兼容 之前的行为）。</param>
+    /// <param name="reranker">两阶段排序第二阶段的确定性 reranker（null 时禁用；EnableTwoStageRerank 也需为 true）。</param>
+    public DefaultContextDecisionEngine(
+        IPolicyRegistry? policyRegistry,
+        ISafetyGate? safetyGate,
+        ILifecycleGate? lifecycleGate,
+        IUtilityScorer? utilityScorer,
+        IGlobalAllocator? globalAllocator,
+        IAllocatorV2_1? allocatorV2_1,
+        IPerformanceMonitor? performanceMonitor,
+        IComponentHealthRegistry? componentHealthRegistry,
+        ICandidateReranker? reranker)
     {
         _policyRegistry = policyRegistry;
         _safetyGate = safetyGate;
@@ -172,6 +203,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         _allocatorV2_1 = allocatorV2_1;
         _performanceMonitor = performanceMonitor;
         _componentHealthRegistry = componentHealthRegistry;
+        _reranker = reranker;
     }
 
     /// <summary>
@@ -222,15 +254,15 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         // 不允许替换 SafetyProfile；BudgetOverride 仅调整 TokenBudget/TopK/SectionRatios；
         // RoutingOverride 仅调整 EnableModelScoring。
         var safety = bundle?.Safety;
-        var budget = ApplyBudgetOverride(bundle?.Budget, request.PolicyOverride?.BudgetOverride);
-        var routing = ApplyRoutingOverride(bundle?.Routing, request.PolicyOverride?.RoutingOverride);
+        var budget = DecisionOutcomeRecomputer.ApplyBudgetOverride(bundle?.Budget, request.PolicyOverride?.BudgetOverride);
+        var routing = DecisionOutcomeRecomputer.ApplyRoutingOverride(bundle?.Routing, request.PolicyOverride?.RoutingOverride);
 
         // 阶段 1：Safety Gate — 分离 passing / blocked
         var passing = new List<ContextCandidateEnvelope>();
         var blocked = new List<ContextCandidateEnvelope>();
         foreach (var envelope in request.Candidates)
         {
-            var (passes, reason, detail) = EvaluateSafetyGate(envelope.Safety, safety);
+            var (passes, reason, detail) = EvaluateSafetyGate(envelope, safety);
             if (passes)
             {
                 passing.Add(envelope);
@@ -261,7 +293,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         var ordered = scored
             .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
             .ThenByDescending(e => e.Utility.FinalScore)
-            .ThenByDescending(e => GetEffectiveTokens(e))
+            .ThenByDescending(e => DecisionOutcomeRecomputer.GetEffectiveTokens(e))
             .ThenBy(e => e.CandidateId, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -298,7 +330,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
 
             // Token budget 检查（Retrieval 全局硬上限语义）
             // 使用 GetEffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
-            var effectiveTokens = GetEffectiveTokens(envelope);
+            var effectiveTokens = DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
             if (!isMandatory && usedTokens + effectiveTokens > tokenBudget)
             {
                 droppedByBudget.Add(envelope with
@@ -503,6 +535,22 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             }
         }
 
+        // 阶段 3.5：两阶段排序 — 先按 FinalScore 建立第一阶段顺序（分配器的 TopK 截断
+        // 与预算遍历都按最终顺序消费，因此排序必须发生在分配之前），
+        // 启用两阶段重排时再对有限窗口做确定性重排；只改顺序不改 FinalScore，
+        // 窗口外候选保持第一阶段顺序；未启用或未注入 reranker 时仅排序、不重排。
+        if (lifecyclePassed.Count > 1)
+        {
+            lifecyclePassed.Sort(CompareStageOneOrder);
+        }
+        if (_reranker is not null && snapshot.Routing.EnableTwoStageRerank && lifecyclePassed.Count > 0)
+        {
+            var reranked = await _reranker.RerankAsync(lifecyclePassed, snapshot, cancellationToken).ConfigureAwait(false);
+            lifecyclePassed = reranked is List<ContextCandidateEnvelope> rerankList
+                ? rerankList
+                : new List<ContextCandidateEnvelope>(reranked);
+        }
+
         // 阶段 4：GlobalAllocator — 委托 IGlobalAllocator（唯一分配点）
         // 合并 request 级 budget override 到 snapshot（request budget 只解析一次）。
         // request.TokenBudget > 0 时覆盖 snapshot.Budget.DefaultTokenBudget；
@@ -582,11 +630,40 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         }
 
         // 合并所有 dropped（safety + lifecycle + budget）
+        // 分配裁掉的候选打上丢弃原因（BlockReasonCode + 详情），兑现
+        // DroppedEnvelopes 契约「包含 BlockReasonCode」，让每个 dropped 可解释；
+        // gate 拦截的候选已在上游带原因，此处只处理 allocation.Dropped。
+        var decisionByKey = new Dictionary<CanonicalCandidateKey, CandidateAllocationDecision>(
+            allocation.AllocationDecisions.Count);
+        foreach (var decision in allocation.AllocationDecisions)
+        {
+            decisionByKey[decision.CandidateKey] = decision;
+        }
+        var allocationDropped = new List<ContextCandidateEnvelope>(allocation.Dropped.Count);
+        foreach (var envelope in allocation.Dropped)
+        {
+            if (decisionByKey.TryGetValue(envelope.CanonicalKey, out var decision))
+            {
+                allocationDropped.Add(envelope with
+                {
+                    Safety = envelope.Safety with
+                    {
+                        BlockReasonCode = decision.ReasonCode,
+                        BlockReasonDetail = DescribeAllocationDropReason(decision)
+                    }
+                });
+            }
+            else
+            {
+                allocationDropped.Add(envelope);
+            }
+        }
+
         var allDropped = new List<ContextCandidateEnvelope>(
-            safetyBlocked.Count + lifecycleBlocked.Count + allocation.Dropped.Count);
+            safetyBlocked.Count + lifecycleBlocked.Count + allocationDropped.Count);
         allDropped.AddRange(safetyBlocked);
         allDropped.AddRange(lifecycleBlocked);
-        allDropped.AddRange(allocation.Dropped);
+        allDropped.AddRange(allocationDropped);
 
         // 模型启用标志
         var enableModel = request.EnableModel && snapshot.Routing.EnableModelScoring;
@@ -654,50 +731,28 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     // Legacy SafetyGate 评估（向后兼容 测试）
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// Legacy 路径的 SafetyGate 评估：候选自带 PassesSafetyGate=false（adapter 已预先标记）
+    /// 直接信任；无 bundle 时其余全放行（向后兼容 行为）；有 bundle 时委托
+    /// <see cref="DefaultSafetyGate"/>（同一语义，消除重复实现）。
+    /// </summary>
     private static (bool Passes, CandidateDecisionReasonCode Reason, string Detail) EvaluateSafetyGate(
-        CandidateSafetyState candidate, SafetyProfile? safety)
+        ContextCandidateEnvelope envelope, SafetyProfile? safety)
     {
-        // 1. 候选自身 PassesSafetyGate=false（adapter 已预先标记）→ 信任之
-        if (!candidate.PassesSafetyGate)
+        // 候选自带 PassesSafetyGate=false（adapter 已预先标记）→ 信任之
+        if (!envelope.Safety.PassesSafetyGate)
         {
-            return (false, candidate.BlockReasonCode, candidate.BlockReasonDetail);
+            return (false, envelope.Safety.BlockReasonCode, envelope.Safety.BlockReasonDetail);
         }
 
-        // 2. 无 bundle → 不应用额外 safety 检查（向后兼容 行为）
+        // 无 bundle → 不应用额外 safety 检查（向后兼容 行为）
         if (safety is null)
         {
             return (true, CandidateDecisionReasonCode.Unknown, string.Empty);
         }
 
-        // 3. 应用 bundle SafetyProfile
-        // IsSuperseded / IsRequiredTagMismatch 永远阻断（不受 bundle Allow* 字段控制）
-        if (candidate.IsSuperseded)
-        {
-            return (false, CandidateDecisionReasonCode.SupersededByCurrentVersion,
-                "superseded by newer version");
-        }
-
-        if (candidate.IsRequiredTagMismatch)
-        {
-            return (false, CandidateDecisionReasonCode.RequiredTagMismatch,
-                "missing required tag");
-        }
-
-        // IsDeprecatedUsedByActiveChain 受 bundle.Safety.AllowDeprecatedUsedByActiveChain 控制
-        if (candidate.IsDeprecatedUsedByActiveChain && !safety.AllowDeprecatedUsedByActiveChain)
-        {
-            return (false, CandidateDecisionReasonCode.DeprecatedBlocked,
-                "deprecated-used-by-active-chain blocked by safety profile");
-        }
-
-        // IsDuplicate 受 bundle.Safety.AllowDuplicateReference 控制
-        if (candidate.IsDuplicate && !safety.AllowDuplicateReference)
-        {
-            return (false, CandidateDecisionReasonCode.DuplicateSuppressed,
-                "duplicate reference blocked by safety profile");
-        }
-
-        return (true, CandidateDecisionReasonCode.Unknown, string.Empty);
+        var result = SafetyGateEvaluator.Evaluate(envelope, safety);
+        return (result.Passes, result.ReasonCode, result.Detail);
     }
 
     // -----------------------------------------------------------------------
@@ -759,44 +814,37 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// 将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
-    /// 仅覆盖非空字段，不替换整个 profile。
+    /// 将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile（委托权威实现）。
     /// </summary>
     private static BudgetProfile? ApplyBudgetOverride(
         BudgetProfile? baseProfile,
         RequestBudgetOverride? budgetOverride)
-    {
-        if (baseProfile is null) return null;
-        if (budgetOverride is null) return baseProfile;
-        return baseProfile with
-        {
-            DefaultTokenBudget = budgetOverride.TokenBudget ?? baseProfile.DefaultTokenBudget,
-            DefaultTopK = budgetOverride.TopK ?? baseProfile.DefaultTopK,
-            SectionRatios = budgetOverride.SectionRatios ?? baseProfile.SectionRatios
-        };
-    }
+        => DecisionOutcomeRecomputer.ApplyBudgetOverride(baseProfile, budgetOverride);
 
     /// <summary>
-    /// 将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
-    /// 仅覆盖 EnableModelScoring（非空时），不替换整个 profile。
+    /// 将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile（委托权威实现）。
     /// </summary>
     private static RoutingProfile? ApplyRoutingOverride(
         RoutingProfile? baseProfile,
         RequestRoutingOverride? routingOverride)
-    {
-        if (baseProfile is null) return null;
-        if (routingOverride is null) return baseProfile;
-        return baseProfile with
-        {
-            EnableModelScoring = routingOverride.EnableModelScoring ?? baseProfile.EnableModelScoring
-        };
-    }
+        => DecisionOutcomeRecomputer.ApplyRoutingOverride(baseProfile, routingOverride);
 
     /// <summary>
-    /// 获取候选的有效 token 数（与 DefaultGlobalAllocator / DefaultAllocatorV2_1 语义一致）。
-    /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
-    /// 回退到 EstimatedTokens（length/4 粗估，仅用于兼容 Legacy 候选）。
+    /// 第一阶段排序比较器：FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序。
+    /// 与分配器的 mandatory 排序共用同一权威实现，保证进入分配器时输入即为评分降序；
+    /// 两阶段重排在此顺序之上对有限窗口做最终排序。
     /// </summary>
-    private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
-        => DecisionOutcomeRecomputer.GetEffectiveTokens(envelope);
+    private static int CompareStageOneOrder(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
+        => DecisionOutcomeRecomputer.CompareByScoreDesc(a, b);
+
+    /// <summary>
+    /// 生成分配丢弃原因的可读详情（中文，供审计与投影展示）。
+    /// </summary>
+    private static string DescribeAllocationDropReason(CandidateAllocationDecision decision)
+        => decision.ReasonCode switch
+        {
+            CandidateDecisionReasonCode.SectionQuotaExceeded => "TopK 截断：候选数超过 TopK 上限",
+            CandidateDecisionReasonCode.TokenBudgetExceeded => "Token 预算超限：有效 token 超出剩余预算",
+            _ => decision.ReasonCode.ToString()
+        };
 }

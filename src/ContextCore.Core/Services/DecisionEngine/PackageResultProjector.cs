@@ -400,24 +400,6 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
-    /// 重建 ContextPackageSection，替换 Content 和 EstimatedTokens。
-    /// ContextPackageSection 是 class with init，无法原地修改，需创建新实例。
-    /// </summary>
-    private static ContextPackageSection RebuildSection(ContextPackageSection section, string content, int tokens)
-    {
-        return new ContextPackageSection
-        {
-            Name = section.Name,
-            Priority = section.Priority,
-            Content = content,
-            ContentFormat = section.ContentFormat,
-            SourceRefs = section.SourceRefs,
-            ItemRefs = section.ItemRefs,
-            EstimatedTokens = tokens
-        };
-    }
-
-    /// <summary>
     /// 判断 section 是否属于 recent_context 分组。
     /// 与 <see cref="BuildStandardOutput"/> 中 recent_context 分组映射保持一致，
     /// 包含 recent_context / global / global_context / related 几个历史别名。
@@ -688,13 +670,5 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     private static string ResolveDropReason(ContextCandidateEnvelope envelope)
-    {
-        if (!envelope.Safety.PassesSafetyGate)
-        {
-            var code = envelope.Safety.BlockReasonCode;
-            var detail = envelope.Safety.BlockReasonDetail;
-            return string.IsNullOrEmpty(detail) ? code.ToString() : $"{code}: {detail}";
-        }
-        return "budget exceeded";
-    }
+        => DecisionOutcomeRecomputer.ResolveDropReasonText(envelope);
 }

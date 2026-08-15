@@ -5,7 +5,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Storage.InMemory;
 
 /// <summary>基于内存的向量存储，适用于测试、Demo 和短生命周期运行。</summary>
-public sealed class InMemoryVectorStore : IVectorStore
+public sealed class InMemoryVectorStore : IVectorStore, IVectorStoreMultiSearch
 {
     private readonly ConcurrentDictionary<string, VectorRecord> _records = new();
 
@@ -74,6 +74,67 @@ public sealed class InMemoryVectorStore : IVectorStore
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<VectorSearchResult>>(results);
+    }
+
+    /// <summary>
+    /// 多问句向量检索：单次枚举完成全部问句，避免 q 次 SearchAsync 各自枚举。
+    /// 共享过滤（作用域/来源类型/tags/排除）只评估一次；每条问句独立计算余弦并保留各自 TopK，
+    /// 语义与逐条 SearchAsync 完全一致（含 MinScore 过滤时机与确定性 tie-break）。
+    /// </summary>
+    public Task<IReadOnlyList<VectorMultiSearchResult>> SearchMultiAsync(
+        VectorMultiQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (query.Queries.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<VectorMultiSearchResult>>(Array.Empty<VectorMultiSearchResult>());
+        }
+
+        var tags = query.Tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceKinds = query.SourceKinds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var excludedSourceIds = query.ExcludeSourceIds.Count == 0
+            ? null
+            : new HashSet<string>(query.ExcludeSourceIds, StringComparer.OrdinalIgnoreCase);
+        var topK = query.TopK > 0 ? query.TopK : 10;
+
+        // 单次枚举：共享过滤只评估一次，按问句再做相似度计算与各自 TopK。
+        var candidates = _records.Values
+            .Where(record => string.Equals(record.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(record => string.IsNullOrWhiteSpace(query.CollectionId)
+                || string.Equals(record.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
+            .Where(record => sourceKinds.Count == 0 || sourceKinds.Contains(record.SourceKind))
+            .Where(record => tags.Count == 0 || tags.All(record.Tags.Contains))
+            .Where(record => excludedSourceIds is null || !excludedSourceIds.Contains(record.SourceId))
+            .ToArray();
+
+        var results = new List<VectorMultiSearchResult>(query.Queries.Count);
+        foreach (var q in query.Queries)
+        {
+            var hits = candidates
+                .Select(record => new
+                {
+                    Record = record,
+                    Score = Cosine(q.Vector, record.Vector)
+                })
+                .Where(item => query.MinScore is null || item.Score >= query.MinScore.Value)
+                .OrderByDescending(item => item.Score)
+                .ThenByDescending(item => item.Record.UpdatedAt)
+                .ThenBy(item => item.Record.SourceId, StringComparer.OrdinalIgnoreCase)
+                .Take(topK)
+                .Select((item, index) => new VectorSearchResult
+                {
+                    Record = Clone(item.Record, includeVector: query.IncludeVector),
+                    Score = item.Score,
+                    Rank = index + 1
+                })
+                .ToArray();
+            results.Add(new VectorMultiSearchResult { QueryId = q.Id, Hits = hits });
+        }
+
+        return Task.FromResult<IReadOnlyList<VectorMultiSearchResult>>(results);
     }
 
     public Task DeleteAsync(

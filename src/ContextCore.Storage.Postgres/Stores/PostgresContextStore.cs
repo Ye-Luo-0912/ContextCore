@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
@@ -10,7 +11,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 上下文条目与集合元数据存储。
 /// 完整 DTO 保存在 jsonb 中，同时抽取常用筛选列以便查询和索引。
 /// </summary>
-public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextStoreMetadataLookup, ITransactionalContextStore, IContextQueryPageStore
+public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextStoreMetadataLookup, ITransactionalContextStore, IContextQueryPageStore, IContextStoreMultiQuery
 {
     public PostgresContextStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -340,7 +341,7 @@ deduped AS (
 )
 SELECT workspace_id, collection_id, id, type, title, importance, version,
        updated_at, created_at, content_hash, content_token_cost,
-       tags, refs, source_refs, data->'Metadata' AS metadata, ts_rank, source_order
+       tags, refs, source_refs, metadata, ts_rank, source_order
 FROM deduped
 ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
 {finalLimitSql};
@@ -443,6 +444,206 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         return results;
     }
 
+    /// <summary>
+    /// 多问句关键词召回：单条 SQL（一次数据库往返）完成全部问句过滤。
+    /// 问句以 jsonb 参数传递（query_index/query_text/query_refs），
+    /// jsonb_to_recordset 解包后逐问句执行与 QueryAsync 相同的 per-query 逻辑：
+    /// 空白问句走 importance 排序路径，非空白走 FTS + ID 命中双 CTE；
+    /// refs 按问句独立生效；每问句各自保留 TopK（per-source LIMIT + 去重 + 每问句 LIMIT），
+    /// 与逐条 QueryAsync 语义完全一致，不放大连接池占用。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextMultiQueryResult>> QueryMultiAsync(
+        ContextMultiQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        if (query.Queries.Count == 0)
+        {
+            return Array.Empty<ContextMultiQueryResult>();
+        }
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        // 问句载荷以 jsonb 参数传递，jsonb_to_recordset 解包后逐问句参与过滤。
+        // 属性名小写与 SQL 别名一一对应；query_refs 恒为数组（空数组 = 该问句不过滤 refs）。
+        var payload = query.Queries
+            .Select((q, index) => new
+            {
+                query_index = index,
+                query_text = q.QueryText ?? string.Empty,
+                query_refs = q.Refs.ToArray()
+            })
+            .ToArray();
+        AddJson(command, "queries", payload);
+        command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
+
+        // 共享过滤（作用域/tags/types/排除）；refs 在多问句路径按问句独立生效，不进共享过滤。
+        var filters = AppendScopeFilters(
+            command,
+            query.WorkspaceId,
+            query.CollectionId,
+            query.Tags,
+            query.Types,
+            query.ExcludedTypes,
+            query.ExcludedIds);
+        var baseFilterSql = string.Join(" AND ", filters);
+
+        command.CommandText = BuildMultiQuerySql(query.IncludeContent, baseFilterSql);
+
+        var buckets = new List<ContextItem>[query.Queries.Count];
+        for (var i = 0; i < buckets.Length; i++)
+        {
+            buckets[i] = new List<ContextItem>();
+        }
+
+        if (!query.IncludeContent)
+        {
+            // 列序：query_index(0), workspace_id(1) ... metadata(15), ts_rank(16), source_order(17)。
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var queryIndex = reader.GetInt32(0);
+                buckets[queryIndex].Add(
+                    ReadMetadataRowAt(reader, baseColumn: 1, tsRankColumnIndex: 16, sourceOrderColumnIndex: 17));
+            }
+        }
+        else
+        {
+            // 列序：query_index(0), data(1), ts_rank(2), source_order(3)。
+            await using var fullReader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await fullReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var queryIndex = fullReader.GetInt32(0);
+                var item = Serializer.Deserialize<ContextItem>(fullReader.GetString(1));
+                var hasRank = !fullReader.IsDBNull(2);
+                var sourceOrder = !fullReader.IsDBNull(3) ? fullReader.GetInt32(3) : 1;
+                if (hasRank)
+                {
+                    item = WithTsRank(item, fullReader.GetDouble(2), sourceOrder);
+                }
+                else
+                {
+                    item = WithSourceOrder(item, sourceOrder);
+                }
+                buckets[queryIndex].Add(item);
+            }
+        }
+
+        var results = new List<ContextMultiQueryResult>(query.Queries.Count);
+        for (var i = 0; i < query.Queries.Count; i++)
+        {
+            results.Add(new ContextMultiQueryResult
+            {
+                QueryIndex = i,
+                QueryText = query.Queries[i].QueryText,
+                Items = buckets[i]
+            });
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// 构建多问句单条 SQL：jsonb_to_recordset 解包问句 → 按问句的 plain/fts/id 三个
+    /// LATERAL 来源（各 LIMIT take，与单问句 per-source LIMIT 一致）→ 去重 → 每问句 TopK。
+    /// 空白问句（无关键词）走 plain 路径，与单问句无 QueryText 路径排序一致。
+    /// </summary>
+    private string BuildMultiQuerySql(bool includeContent, string baseFilterSql)
+    {
+        // 内层 LATERAL 选列：元数据投影（多列）或全量 jsonb（data + 去重/排序所需列）。
+        var innerCols = includeContent
+            ? "data, workspace_id, collection_id, id, importance, updated_at"
+            : "workspace_id, collection_id, id, type, title, importance, version, updated_at, created_at, content_hash, content_token_cost, tags, refs, source_refs, data->'Metadata' AS metadata";
+
+        // 外层引用 lateral 输出列（lateral 内层已把 data->'Metadata' 别名为 metadata，外层不能再引用 data）。
+        var refCols = includeContent
+            ? "ci.data, ci.workspace_id, ci.collection_id, ci.id, ci.importance, ci.updated_at"
+            : "ci.workspace_id, ci.collection_id, ci.id, ci.type, ci.title, ci.importance, ci.version, ci.updated_at, ci.created_at, ci.content_hash, ci.content_token_cost, ci.tags, ci.refs, ci.source_refs, ci.metadata";
+
+        // 最终 SELECT 列（来自 ranked，列名即 combined 透传名）：元数据投影或 (data, ts_rank, source_order)。
+        var outerCols = includeContent
+            ? "query_index, data, ts_rank, source_order"
+            : "query_index, workspace_id, collection_id, id, type, title, importance, version, updated_at, created_at, content_hash, content_token_cost, tags, refs, source_refs, metadata, ts_rank, source_order";
+
+        var rankExpr = "ts_rank_cd(search_vector, websearch_to_tsquery('simple', cjk_pre_tokenize(q.query_text)))";
+
+        // 空白问句判断：与单问句 IsNullOrWhiteSpace(QueryText) 语义一致（空白 → 无关键词路径）。
+        var isBlank = "(q.query_text IS NULL OR btrim(q.query_text) = '')";
+
+        // 每问句独立的 refs 谓词：refs 为空时不过滤（COALESCE 防御 jsonb 缺键/NULL）。
+        var refsPredicate =
+            "(COALESCE(CARDINALITY(q.query_refs), 0) = 0 OR (refs && q.query_refs OR source_refs && q.query_refs OR id = ANY(q.query_refs)))";
+
+        return $"""
+WITH qs AS (
+    SELECT query_index, query_text, query_refs
+    FROM jsonb_to_recordset(@queries::jsonb) AS q(query_index int, query_text text, query_refs text[])
+),
+plain_matches AS (
+    SELECT q.query_index, q.query_text, {refCols}, NULL::real AS ts_rank, 1 AS source_order
+    FROM qs q
+    CROSS JOIN LATERAL (
+        SELECT {innerCols}
+        FROM {Table("context_items")}
+        WHERE {baseFilterSql} AND {isBlank} AND {refsPredicate}
+        ORDER BY importance DESC, updated_at DESC, id DESC
+        LIMIT @take
+    ) ci
+),
+fts_matches AS (
+    SELECT q.query_index, q.query_text, {refCols}, ci.ts_rank, 0 AS source_order
+    FROM qs q
+    CROSS JOIN LATERAL (
+        SELECT {innerCols}, {rankExpr} AS ts_rank
+        FROM {Table("context_items")}
+        WHERE {baseFilterSql} AND NOT {isBlank} AND {refsPredicate}
+          AND search_vector @@ websearch_to_tsquery('simple', cjk_pre_tokenize(q.query_text))
+        ORDER BY ts_rank DESC, importance DESC, updated_at DESC, id DESC
+        LIMIT @take
+    ) ci
+),
+id_matches AS (
+    SELECT q.query_index, q.query_text, {refCols}, NULL::real AS ts_rank, 1 AS source_order
+    FROM qs q
+    CROSS JOIN LATERAL (
+        SELECT {innerCols}
+        FROM {Table("context_items")}
+        WHERE {baseFilterSql} AND NOT {isBlank} AND {refsPredicate}
+          AND (id = q.query_text OR id LIKE q.query_text || '%')
+        ORDER BY importance DESC, updated_at DESC, id DESC
+        LIMIT @take
+    ) ci
+),
+combined AS (
+    SELECT * FROM fts_matches
+    UNION ALL
+    SELECT * FROM id_matches
+    UNION ALL
+    SELECT * FROM plain_matches
+),
+deduped AS (
+    SELECT DISTINCT ON (query_index, workspace_id, collection_id, id) *
+    FROM combined
+    ORDER BY query_index, workspace_id, collection_id, id, source_order
+),
+ranked AS (
+    SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY query_index
+        ORDER BY source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC
+    ) AS rn
+    FROM deduped
+)
+SELECT {outerCols}
+FROM ranked
+WHERE rn <= @take
+ORDER BY query_index, source_order, ts_rank DESC NULLS LAST, importance DESC, updated_at DESC, id DESC;
+""";
+    }
+
     /// <summary>FTS 命中源的 keyset 排序键（该源内 ts_rank 恒非空，无需 NULLS LAST 处理）。</summary>
     private static readonly string[] FtsAfterColumns = ["ts_rank", "importance", "updated_at", "id"];
 
@@ -527,43 +728,68 @@ ORDER BY importance DESC, updated_at DESC, id DESC
     /// </summary>
     private List<string> AppendBaseFilters(NpgsqlCommand command, ContextQuery query)
     {
-        var filters = new List<string> { "workspace_id = @workspace_id" };
-        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
-
-        if (!string.IsNullOrWhiteSpace(query.CollectionId))
-        {
-            filters.Add("collection_id = @collection_id");
-            command.Parameters.AddWithValue("collection_id", query.CollectionId);
-        }
-
-        if (query.Tags.Count > 0)
-        {
-            filters.Add("tags @> @tags");
-            AddTextArray(command, "tags", query.Tags);
-        }
-
-        if (query.Types.Count > 0)
-        {
-            filters.Add("type = ANY(@types)");
-            AddTextArray(command, "types", query.Types);
-        }
-
-        if (query.ExcludedTypes.Count > 0)
-        {
-            filters.Add("NOT (type = ANY(@excluded_types))");
-            AddTextArray(command, "excluded_types", query.ExcludedTypes);
-        }
-
-        if (query.ExcludedIds.Count > 0)
-        {
-            filters.Add("NOT (id = ANY(@excluded_ids))");
-            AddTextArray(command, "excluded_ids", query.ExcludedIds);
-        }
+        var filters = AppendScopeFilters(
+            command,
+            query.WorkspaceId,
+            query.CollectionId,
+            query.Tags,
+            query.Types,
+            query.ExcludedTypes,
+            query.ExcludedIds);
 
         if (query.Refs.Count > 0)
         {
             filters.Add("(refs && @refs OR source_refs && @refs OR id = ANY(@refs))");
             AddTextArray(command, "refs", query.Refs);
+        }
+
+        return filters;
+    }
+
+    /// <summary>
+    /// 共享过滤条件（作用域/tags/types/排除），不含 refs——refs 在单问句路径
+    /// 由 <see cref="AppendBaseFilters"/> 追加，多问句路径按问句独立生效。
+    /// </summary>
+    private List<string> AppendScopeFilters(
+        NpgsqlCommand command,
+        string workspaceId,
+        string? collectionId,
+        IReadOnlyList<string> tags,
+        IReadOnlyList<string> types,
+        IReadOnlyList<string> excludedTypes,
+        IReadOnlyList<string> excludedIds)
+    {
+        var filters = new List<string> { "workspace_id = @workspace_id" };
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+
+        if (!string.IsNullOrWhiteSpace(collectionId))
+        {
+            filters.Add("collection_id = @collection_id");
+            command.Parameters.AddWithValue("collection_id", collectionId);
+        }
+
+        if (tags.Count > 0)
+        {
+            filters.Add("tags @> @tags");
+            AddTextArray(command, "tags", tags);
+        }
+
+        if (types.Count > 0)
+        {
+            filters.Add("type = ANY(@types)");
+            AddTextArray(command, "types", types);
+        }
+
+        if (excludedTypes.Count > 0)
+        {
+            filters.Add("NOT (type = ANY(@excluded_types))");
+            AddTextArray(command, "excluded_types", excludedTypes);
+        }
+
+        if (excludedIds.Count > 0)
+        {
+            filters.Add("NOT (id = ANY(@excluded_ids))");
+            AddTextArray(command, "excluded_ids", excludedIds);
         }
 
         return filters;
@@ -588,28 +814,42 @@ ORDER BY importance DESC, updated_at DESC, id DESC
         System.Data.Common.DbDataReader reader,
         int tsRankColumnIndex = -1,
         int sourceOrderColumnIndex = -1)
+        => ReadMetadataRowAt(reader, 0, tsRankColumnIndex, sourceOrderColumnIndex);
+
+    /// <summary>
+    /// 从 metadata-only 行构造 <see cref="ContextItem"/>，支持基础列偏移——
+    /// 多问句结果集首列为 query_index，基础列从 baseColumn 起（单问句路径 baseColumn=0）。
+    /// 列相对顺序与 <see cref="ReadMetadataRow"/> 一致：workspace_id(+0), collection_id(+1),
+    /// id(+2), type(+3), title(+4), importance(+5), version(+6), updated_at(+7), created_at(+8),
+    /// content_hash(+9), content_token_cost(+10), tags(+11), refs(+12), source_refs(+13), metadata(+14)。
+    /// </summary>
+    private ContextItem ReadMetadataRowAt(
+        System.Data.Common.DbDataReader reader,
+        int baseColumn,
+        int tsRankColumnIndex = -1,
+        int sourceOrderColumnIndex = -1)
     {
-        var workspaceId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
-        var collectionId = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-        var id = reader.GetString(2);
-        var type = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
-        var title = reader.IsDBNull(4) ? null : reader.GetString(4);
-        var importance = reader.IsDBNull(5) ? 0.0 : reader.GetDouble(5);
-        var version = reader.IsDBNull(6) ? 0L : reader.GetInt64(6);
-        var updatedAt = reader.IsDBNull(7) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(7);
-        var createdAt = reader.IsDBNull(8) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(8);
-        var contentHash = reader.IsDBNull(9) ? null : reader.GetString(9);
-        var contentTokenCost = reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10);
-        var tags = reader.IsDBNull(11) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(11);
-        var refs = reader.IsDBNull(12) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(12);
-        var sourceRefs = reader.IsDBNull(13) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(13);
+        var workspaceId = reader.IsDBNull(baseColumn + 0) ? string.Empty : reader.GetString(baseColumn + 0);
+        var collectionId = reader.IsDBNull(baseColumn + 1) ? string.Empty : reader.GetString(baseColumn + 1);
+        var id = reader.GetString(baseColumn + 2);
+        var type = reader.IsDBNull(baseColumn + 3) ? string.Empty : reader.GetString(baseColumn + 3);
+        var title = reader.IsDBNull(baseColumn + 4) ? null : reader.GetString(baseColumn + 4);
+        var importance = reader.IsDBNull(baseColumn + 5) ? 0.0 : reader.GetDouble(baseColumn + 5);
+        var version = reader.IsDBNull(baseColumn + 6) ? 0L : reader.GetInt64(baseColumn + 6);
+        var updatedAt = reader.IsDBNull(baseColumn + 7) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(baseColumn + 7);
+        var createdAt = reader.IsDBNull(baseColumn + 8) ? DateTimeOffset.MinValue : reader.GetFieldValue<DateTimeOffset>(baseColumn + 8);
+        var contentHash = reader.IsDBNull(baseColumn + 9) ? null : reader.GetString(baseColumn + 9);
+        var contentTokenCost = reader.IsDBNull(baseColumn + 10) ? (int?)null : reader.GetInt32(baseColumn + 10);
+        var tags = reader.IsDBNull(baseColumn + 11) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(baseColumn + 11);
+        var refs = reader.IsDBNull(baseColumn + 12) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(baseColumn + 12);
+        var sourceRefs = reader.IsDBNull(baseColumn + 13) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(baseColumn + 13);
 
         // 合并存储的元数据字典（data->'Metadata'），使元数据投影与全量读取路径
         // 在 status 等自定义键上保持一致——检索阶段的废弃项过滤与候选元数据输出不因投影而丢失信息。
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!reader.IsDBNull(14))
+        if (!reader.IsDBNull(baseColumn + 14))
         {
-            var storedJson = reader.GetString(14);
+            var storedJson = reader.GetString(baseColumn + 14);
             if (!string.Equals(storedJson, "null", StringComparison.OrdinalIgnoreCase))
             {
                 var stored = Serializer.Deserialize<Dictionary<string, string>>(storedJson);
@@ -860,6 +1100,100 @@ ON CONFLICT (workspace_id, id) DO UPDATE SET
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt
         };
+    }
+
+    /// <summary>
+    /// 诊断（基线采集用）：对多问句 SQL 生成 EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)。
+    /// 与 <see cref="QueryMultiAsync"/> 完全同参同 SQL，仅前置 EXPLAIN，用于建立
+    /// multiquery 真实执行计划 / roundtrip 基线（ANALYZE 会真实执行查询）。
+    /// </summary>
+    /// <returns>EXPLAIN 的 JSON 文本（PG 可能分多行返回，拼接）；无问句时返回 null。</returns>
+    internal async Task<string?> ExplainMultiQueryAsync(
+        ContextMultiQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        if (query.Queries.Count == 0)
+        {
+            return null;
+        }
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        var payload = query.Queries
+            .Select((q, index) => new
+            {
+                query_index = index,
+                query_text = q.QueryText ?? string.Empty,
+                query_refs = q.Refs.ToArray()
+            })
+            .ToArray();
+        AddJson(command, "queries", payload);
+        command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
+
+        var filters = AppendScopeFilters(
+            command,
+            query.WorkspaceId,
+            query.CollectionId,
+            query.Tags,
+            query.Types,
+            query.ExcludedTypes,
+            query.ExcludedIds);
+        var baseFilterSql = string.Join(" AND ", filters);
+
+        command.CommandText = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
+            + BuildMultiQuerySql(query.IncludeContent, baseFilterSql);
+
+        return await ReadExplainJsonAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 诊断（基线采集用）：对批量 hydration（按 ID 取正文）SQL 生成 EXPLAIN
+    /// (ANALYZE, BUFFERS, FORMAT JSON)，与 <see cref="BatchGetAsync"/> 同参同 SQL。
+    /// </summary>
+    internal async Task<string?> ExplainBatchLookupAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var normalizedIds = ids.Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+        if (normalizedIds.Length == 0)
+        {
+            return null;
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText =
+            "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
+            + $"SELECT data FROM {Table("context_items")} " +
+              "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        AddTextArray(command, "ids", normalizedIds);
+
+        return await ReadExplainJsonAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>执行 EXPLAIN 命令并拼接返回的 JSON 文本（PG 可能分多行）。</summary>
+    private static async Task<string?> ReadExplainJsonAsync(
+        NpgsqlCommand command,
+        CancellationToken cancellationToken)
+    {
+        var sb = new StringBuilder();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            sb.Append(reader.GetString(0));
+        }
+        return sb.Length == 0 ? null : sb.ToString();
     }
 }
 

@@ -11,7 +11,7 @@ public sealed class PolicyFeedbackDatasetService
 {
     public const string PolicyVersion = "policy-feedback-dataset/v1";
     public const string EvalBaselineRef =
-        "docs/eval-baseline-p15.md;eval/eval-report-p15-a3.json;eval/eval-report-p15-extended.json";
+        "artifacts/eval/eval-baseline-p15.md;artifacts/eval/eval-report-p15-a3.json;artifacts/eval/eval-report-p15-extended.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 

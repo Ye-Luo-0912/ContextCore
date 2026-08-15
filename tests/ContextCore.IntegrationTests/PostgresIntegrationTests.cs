@@ -430,6 +430,210 @@ public sealed class PostgresIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("Postgres")]
+    public async Task ContextStore_QueryText_IncludeContentFalse_ShouldProjectMetadata()
+    {
+        // 回归：QueryText + IncludeContent=false 的 CTE 外层 SELECT 曾引用不存在的 data 列
+        // （PostgresException 42703，列 "data" does not exist），修复后改为引用去重后的
+        // metadata 投影列。无既有测试覆盖该组合，导致该缺陷未被发现。
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("ctxm_");
+        try
+        {
+            var store = new PostgresContextStore(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            for (var i = 1; i <= 3; i++)
+            {
+                await store.SaveAsync(new ContextItem
+                {
+                    Id = $"m-{i}",
+                    WorkspaceId = "ws",
+                    CollectionId = "col",
+                    Type = "note",
+                    Title = $"retrieval metadata item {i}",
+                    Content = $"正文内容 {i}",
+                    Tags = [$"tag-{i}"],
+                    SourceRefs = [$"source:{i}"],
+                    Importance = i / 10.0,
+                    CreatedAt = now,
+                    UpdatedAt = now.AddMinutes(-i)
+                });
+            }
+
+            // 修复前该路径抛 PostgresException；修复后应返回元数据投影行。
+            var results = await store.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                QueryText = "retrieval",
+                Take = 10,
+                IncludeContent = false
+            });
+
+            Assert.AreEqual(3, results.Count, "QueryText + IncludeContent=false 应返回全部命中条目。");
+            Assert.IsTrue(results.All(r => r.Content == string.Empty), "IncludeContent=false 时 Content 应为空字符串。");
+            Assert.IsTrue(results.All(r => r.Metadata.ContainsKey(ContentMetadataKeys.TsRank)), "元数据投影应携带 __ts_rank 供 Provider 打分。");
+            CollectionAssert.AreEquivalent(
+                new[] { "tag-1", "tag-2", "tag-3" },
+                results.Select(r => r.Tags.Single()).ToArray(),
+                "Tags 应随元数据投影返回。");
+            CollectionAssert.AreEquivalent(
+                new[] { "source:1", "source:2", "source:3" },
+                results.Select(r => r.SourceRefs.Single()).ToArray(),
+                "SourceRefs 应随元数据投影返回。");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
+    public async Task ContextStore_MultiQuery_SingleRoundtrip_ParitiesSequential()
+    {
+        // QueryMultiAsync 应单条 SQL 完成全部问句召回，结果与逐条 QueryAsync 完全一致
+        // （含每问句 TopK、首问句 refs、空白问句 refs 路径、共享排除、元数据投影）。
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("mq_");
+        try
+        {
+            var store = new PostgresContextStore(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            var items = new[]
+            {
+                ("mq-a", "alpha note", "alpha body", new[] { "tag-a" }, new[] { "ref-x" }, Array.Empty<string>()),
+                ("mq-b", "beta note", "alpha beta body", new[] { "tag-b" }, Array.Empty<string>(), new[] { "ref-x" }),
+                ("mq-c", "gamma note", "gamma body", new[] { "tag-a" }, Array.Empty<string>(), Array.Empty<string>()),
+                ("mq-d", "delta note", "beta delta body", new[] { "tag-b" }, Array.Empty<string>(), Array.Empty<string>()),
+                ("mq-e", "epsilon note", "gamma epsilon body", new[] { "tag-a" }, Array.Empty<string>(), Array.Empty<string>())
+            };
+            for (var i = 0; i < items.Length; i++)
+            {
+                var (id, title, content, tags, refs, sourceRefs) = items[i];
+                await store.SaveAsync(new ContextItem
+                {
+                    Id = id,
+                    WorkspaceId = "ws",
+                    CollectionId = "col",
+                    Type = "note",
+                    Title = title,
+                    Content = content,
+                    Tags = tags,
+                    Refs = refs,
+                    SourceRefs = sourceRefs,
+                    Importance = 0.5,
+                    CreatedAt = now,
+                    UpdatedAt = now.AddMinutes(-i)
+                });
+            }
+
+            // 元数据投影路径（IncludeContent=false）：text 问句 + 空白问句（refs 路径）。
+            var metaMulti = new ContextMultiQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Queries = new[]
+                {
+                    new ContextMultiQueryText { QueryText = "alpha", Refs = new[] { "ref-x" } },
+                    new ContextMultiQueryText { QueryText = "beta" },
+                    new ContextMultiQueryText { QueryText = string.Empty, Refs = new[] { "ref-x" } }
+                },
+                Take = 10,
+                IncludeContent = false
+            };
+
+            var metaResults = await store.QueryMultiAsync(metaMulti);
+            Assert.AreEqual(3, metaResults.Count, "按问句返回结果分组。");
+            Assert.IsTrue(metaResults.All(r => r.Items.All(item => item.Content == string.Empty)), "IncludeContent=false 批量路径正文为空。");
+
+            for (var i = 0; i < metaMulti.Queries.Count; i++)
+            {
+                var q = metaMulti.Queries[i];
+                var sequential = await store.QueryAsync(new ContextQuery
+                {
+                    WorkspaceId = "ws",
+                    CollectionId = "col",
+                    QueryText = q.QueryText,
+                    Refs = q.Refs,
+                    Take = 10,
+                    IncludeContent = false
+                });
+                var multiItem = metaResults.Single(r => r.QueryIndex == i);
+                CollectionAssert.AreEqual(
+                    sequential.Select(item => item.Id).ToArray(),
+                    multiItem.Items.Select(item => item.Id).ToArray(),
+                    $"问句 [{q.QueryText}] refs=[{string.Join(",", q.Refs)}] 的批量结果应与逐条结果一致（含顺序）。");
+            }
+
+            // 文本问句的元数据投影应携带 __ts_rank（Provider 打分用）。
+            Assert.IsTrue(
+                metaResults.Single(r => r.QueryText == "alpha").Items.All(item => item.Metadata.ContainsKey(ContentMetadataKeys.TsRank)),
+                "文本问句的元数据投影应携带 __ts_rank。");
+
+            // 共享排除：排除 mq-a 后不应再出现。
+            var excluded = await store.QueryMultiAsync(new ContextMultiQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Queries = new[]
+                {
+                    new ContextMultiQueryText { QueryText = "alpha" },
+                    new ContextMultiQueryText { QueryText = "beta" }
+                },
+                ExcludedIds = new[] { "mq-a" },
+                Take = 10,
+                IncludeContent = false
+            });
+            var excludedIds = excluded.SelectMany(r => r.Items).Select(item => item.Id).ToArray();
+            CollectionAssert.DoesNotContain(excludedIds, "mq-a", "共享排除 ID 生效。");
+
+            // 每问句 TopK：Take=2 时每条问句最多 2 条。
+            var topK = await store.QueryMultiAsync(new ContextMultiQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Queries = new[]
+                {
+                    new ContextMultiQueryText { QueryText = "note" },
+                    new ContextMultiQueryText { QueryText = "alpha" }
+                },
+                Take = 2,
+                IncludeContent = false
+            });
+            Assert.IsTrue(topK.All(r => r.Items.Count <= 2), "每问句应各自保留 TopK=2。");
+
+            // 全量路径（IncludeContent=true）：正文非空 + 文本问句注入 ts_rank。
+            var full = await store.QueryMultiAsync(new ContextMultiQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Queries = new[]
+                {
+                    new ContextMultiQueryText { QueryText = "alpha" },
+                    new ContextMultiQueryText { QueryText = "beta" }
+                },
+                Take = 10,
+                IncludeContent = true
+            });
+            Assert.IsTrue(full.SelectMany(r => r.Items).All(item => item.Content.Length > 0), "IncludeContent=true 批量路径应返回正文。");
+            Assert.IsTrue(
+                full.Single(r => r.QueryText == "alpha").Items.All(item => item.Metadata.ContainsKey(ContentMetadataKeys.TsRank)),
+                "全量路径文本问句同样注入 __ts_rank。");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
     public async Task MemoryStore_SaveAndPromotion_ShouldRoundtrip()
     {
         if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
@@ -640,6 +844,108 @@ public sealed class PostgresIntegrationTests
             var results = await store.SearchAsync(query);
             Assert.IsTrue(results.Count > 0, "应返回至少一个结果");
             Assert.AreEqual("v1", results[0].Record.Id, "最近邻应为 v1");
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("Postgres")]
+    public async Task VectorStore_MultiSearch_SingleRoundtrip_ParitiesSequential()
+    {
+        // SearchMultiAsync 应单条 SQL 完成全部问句检索，结果与逐条 SearchAsync
+        // 完全一致（含每问句 TopK、共享排除、QueryId 映射、排序与分数）。
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
+
+        var (factory, migrationRunner, serializer) = CreateInfrastructure("vsmq_");
+        try
+        {
+            var store = new PostgresVectorStore(factory, serializer, migrationRunner);
+            var now = DateTimeOffset.UtcNow;
+
+            var vectors = new[]
+            {
+                (id: "v1", sourceId: "s-a", v: new float[] { 1.0f, 0.0f, 0.0f, 0.0f }),
+                (id: "v2", sourceId: "s-b", v: new float[] { 0.0f, 1.0f, 0.0f, 0.0f }),
+                (id: "v3", sourceId: "s-c", v: new float[] { 0.0f, 0.0f, 1.0f, 0.0f }),
+                (id: "v4", sourceId: "s-d", v: new float[] { 1.0f, 1.0f, 0.0f, 0.0f })
+            };
+            for (var index = 0; index < vectors.Length; index++)
+            {
+                var (id, sourceId, v) = vectors[index];
+                await store.UpsertAsync(new VectorRecord
+                {
+                    Id = id,
+                    WorkspaceId = "ws",
+                    CollectionId = "col",
+                    SourceId = sourceId,
+                    SourceKind = "context",
+                    ModelName = "test-model",
+                    Dimensions = 4,
+                    ContentHash = $"hash-{id}",
+                    Vector = v,
+                    CreatedAt = now,
+                    UpdatedAt = now.AddMinutes(-index)
+                });
+            }
+
+            var multi = new VectorMultiQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Queries = new[]
+                {
+                    new VectorMultiQueryVector { Id = "q0", Vector = new float[] { 1.0f, 0.0f, 0.0f, 0.0f } },
+                    new VectorMultiQueryVector { Id = "q1", Vector = new float[] { 0.0f, 1.0f, 0.0f, 0.0f } },
+                    new VectorMultiQueryVector { Id = "q2", Vector = new float[] { 1.0f, 1.0f, 0.0f, 0.0f } }
+                },
+                TopK = 5,
+                IncludeVector = false
+            };
+
+            var multiResults = await store.SearchMultiAsync(multi);
+            Assert.AreEqual(3, multiResults.Count, "按问句返回结果分组。");
+
+            foreach (var q in multi.Queries)
+            {
+                var sequential = await store.SearchAsync(new VectorQuery
+                {
+                    WorkspaceId = "ws",
+                    CollectionId = "col",
+                    Vector = q.Vector,
+                    TopK = 5,
+                    IncludeVector = false
+                });
+                var multiItem = multiResults.Single(r => r.QueryId == q.Id);
+                Assert.AreEqual(sequential.Count, multiItem.Hits.Count, $"问句 [{q.Id}] 命中数应与逐条一致。");
+                for (var i = 0; i < sequential.Count; i++)
+                {
+                    Assert.AreEqual(sequential[i].Record.SourceId, multiItem.Hits[i].Record.SourceId, $"问句 [{q.Id}] 第 {i} 名来源应一致。");
+                    Assert.AreEqual(sequential[i].Score, multiItem.Hits[i].Score, 0.0001, $"问句 [{q.Id}] 第 {i} 名分数应一致。");
+                    Assert.AreEqual(sequential[i].Rank, multiItem.Hits[i].Rank, $"问句 [{q.Id}] 第 {i} 名名次应一致。");
+                }
+                Assert.IsTrue(multiItem.Hits.All(h => h.Record.Vector.Count == 0), "IncludeVector=false 批量路径不应返回原始向量。");
+            }
+
+            // 每问句 TopK + 共享排除。
+            var topK = await store.SearchMultiAsync(new VectorMultiQuery
+            {
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Queries = new[]
+                {
+                    new VectorMultiQueryVector { Id = "q0", Vector = new float[] { 1.0f, 0.0f, 0.0f, 0.0f } },
+                    new VectorMultiQueryVector { Id = "q2", Vector = new float[] { 1.0f, 1.0f, 0.0f, 0.0f } }
+                },
+                TopK = 1,
+                ExcludeSourceIds = new[] { "s-a" },
+                IncludeVector = false
+            });
+            Assert.IsTrue(topK.All(r => r.Hits.Count <= 1), "TopK=1 时每条问句最多一条。");
+            Assert.IsTrue(topK.SelectMany(r => r.Hits).All(h => h.Record.SourceId != "s-a"), "共享排除 ID 生效。");
         }
         finally
         {

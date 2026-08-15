@@ -369,22 +369,10 @@ public static class RetrievalCandidateAdapter
     // ----------------------------------------------------------------------
 
     /// <summary>
-    /// 将 ContextCandidateSource 映射到 ExpertKind（用于 Origins/ExpertContributions）。
+    /// 将 ContextCandidateSource 映射到 ExpertKind（委托权威实现，用于 Origins/ExpertContributions）。
     /// </summary>
-    private static ExpertKind MapSourceToExpertKind(ContextCandidateSource source) => source switch
-    {
-        ContextCandidateSource.Mandatory => ExpertKind.Mandatory,
-        ContextCandidateSource.Constraint => ExpertKind.Constraint,
-        ContextCandidateSource.Lexical => ExpertKind.Lexical,
-        ContextCandidateSource.Semantic => ExpertKind.Semantic,
-        ContextCandidateSource.WorkingMemory => ExpertKind.WorkingMemory,
-        ContextCandidateSource.StableMemory => ExpertKind.StableMemory,
-        ContextCandidateSource.Graph => ExpertKind.Graph,
-        ContextCandidateSource.Recency => ExpertKind.Recency,
-        ContextCandidateSource.GlobalContext => ExpertKind.Mandatory,
-        ContextCandidateSource.RelatedContext => ExpertKind.Graph,
-        _ => ExpertKind.Lexical
-    };
+    private static ExpertKind MapSourceToExpertKind(ContextCandidateSource source)
+        => DecisionOutcomeRecomputer.MapSourceToExpertKind(source);
 
     /// <summary>
     /// 解析 EntityKind。优先使用 candidate.Type（业务类型），

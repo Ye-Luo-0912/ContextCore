@@ -2,7 +2,7 @@ using System.IO.Compression;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Shared;
 
-namespace ContextCore.ControlRoom.Backup;
+namespace ContextCore.Storage.Postgres.Backup;
 
 /// <summary>
 /// 恢复演练器。将 ZIP 归档解压到隔离的 staging 目录，

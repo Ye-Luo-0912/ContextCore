@@ -38,7 +38,7 @@ public static partial class EvalCommand
             ?? Path.Combine(current, "learning", "features");
         var outputDirectory = CommandHelpers.GetOption(args, "--out-dir")
             ?? CommandHelpers.GetOption(args, "-o")
-            ?? Path.Combine(current, "learning", "baselines");
+            ?? Path.Combine(current, "artifacts", "learning", "baselines");
         var task = CommandHelpers.GetOption(args, "--task")
             ?? (string.Equals(subcommand, "learning-baseline-router", StringComparison.OrdinalIgnoreCase)
                 ? "router"
@@ -106,7 +106,7 @@ public static partial class EvalCommand
             ?? Path.Combine(current, "learning", "features");
         var outputDirectory = CommandHelpers.GetOption(args, "--out-dir")
             ?? CommandHelpers.GetOption(args, "-o")
-            ?? Path.Combine(current, "learning", "baselines");
+            ?? Path.Combine(current, "artifacts", "learning", "baselines");
         var inputPath = CommandHelpers.GetOption(args, "--ranker-input")
             ?? Path.Combine(featuresDirectory, LearningDatasetQualityReportBuilder.RankingPairsFileName);
 

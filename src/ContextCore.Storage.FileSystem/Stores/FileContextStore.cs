@@ -14,7 +14,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 原子替换只保证单文件完整，不保证 content+metadata 组成同一快照。
 /// collection 级 metadata cache 带 mtime 双重校验和容量上限。
 /// </remarks>
-public sealed class FileContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextQueryPageStore
+public sealed class FileContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup, IContextQueryPageStore, IContextStoreMultiQuery
 {
     private const int MaxCacheEntries = 256;
 
@@ -297,6 +297,104 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
                 var item = await MaterializeAsync(metadata, includeContent: query.IncludeContent, cancellationToken)
                     .ConfigureAwait(false);
                 results.Add(item);
+            }
+
+            return results;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 多问句关键词召回：在一次 snapshot（单次 _gate 锁 + metadata 只读一次）内完成全部问句过滤。
+    /// 共享过滤在 metadata 上只评估一次；按问句先做 refs 过滤（metadata 轻量），
+    /// 正文只 materialize 一次并缓存（同一候选被多条问句命中时不重复读文件），
+    /// 每条问句独立做文本过滤并保留各自 TopK。语义与逐条 QueryAsync 完全一致。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextMultiQueryResult>> QueryMultiAsync(
+        ContextMultiQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        if (string.IsNullOrWhiteSpace(query.WorkspaceId))
+        {
+            throw new ArgumentException("WorkspaceId is required.", nameof(query));
+        }
+
+        if (query.Queries.Count == 0)
+        {
+            return Array.Empty<ContextMultiQueryResult>();
+        }
+
+        var take = query.Take > 0 ? query.Take : 50;
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
+
+            // 阶段一：共享过滤（作用域/排除/tags/types）在 metadata 上只评估一次。
+            var candidates = new List<ContextItemMetadata>();
+            foreach (var collectionId in collectionIds)
+            {
+                var metadataEntries = await ReadItemMetadataLockedAsync(
+                    query.WorkspaceId,
+                    collectionId,
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var metadata in metadataEntries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!IsExcluded(metadata, query.ExcludedIds, query.ExcludedTypes, query.IncludeDerived)
+                        && MatchesTags(metadata.Tags, query.Tags)
+                        && MatchesTypes(metadata.Type, query.Types))
+                    {
+                        candidates.Add(metadata);
+                    }
+                }
+            }
+
+            // 阶段二：按问句 refs 过滤 metadata，正文只 materialize 一次并缓存，
+            // 再做文本过滤与各自 TopK。文本过滤必须读正文，因此只对 refs 命中的候选读文件。
+            // 缓存键含 CollectionId——多集合查询下不同集合的同 Id 条目互不串扰。
+            var materializedCache = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
+            var results = new List<ContextMultiQueryResult>(query.Queries.Count);
+            for (var index = 0; index < query.Queries.Count; index++)
+            {
+                var q = query.Queries[index];
+                var matched = new List<ContextItem>();
+                foreach (var metadata in candidates)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!MatchesRefs(metadata, q.Refs))
+                    {
+                        continue;
+                    }
+
+                    var cacheKey = metadata.CollectionId + "|" + metadata.Id;
+                    if (!materializedCache.TryGetValue(cacheKey, out var item))
+                    {
+                        item = await MaterializeAsync(metadata, includeContent: true, cancellationToken)
+                            .ConfigureAwait(false);
+                        materializedCache[cacheKey] = item;
+                    }
+
+                    if (MatchesQueryText(item, q.QueryText))
+                    {
+                        matched.Add(item);
+                    }
+                }
+
+                var items = matched
+                    .OrderByDescending(item => item.UpdatedAt)
+                    .ThenByDescending(item => item.Id, StringComparer.Ordinal)
+                    .Take(take)
+                    .Select(item => query.IncludeContent ? item : WithoutContent(item))
+                    .ToArray();
+                results.Add(new ContextMultiQueryResult { QueryIndex = index, QueryText = q.QueryText, Items = items });
             }
 
             return results;
@@ -606,18 +704,25 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
     }
 
     private static bool IsExcluded(ContextItemMetadata metadata, ContextQuery query)
+        => IsExcluded(metadata, query.ExcludedIds, query.ExcludedTypes, query.IncludeDerived);
+
+    private static bool IsExcluded(
+        ContextItemMetadata metadata,
+        IReadOnlyList<string> excludedIds,
+        IReadOnlyList<string> excludedTypes,
+        bool includeDerived)
     {
-        if (query.ExcludedIds.Any(id => string.Equals(id, metadata.Id, StringComparison.OrdinalIgnoreCase)))
+        if (excludedIds.Any(id => string.Equals(id, metadata.Id, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
-        if (query.ExcludedTypes.Any(type => string.Equals(type, metadata.Type, StringComparison.OrdinalIgnoreCase)))
+        if (excludedTypes.Any(type => string.Equals(type, metadata.Type, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
-        return !query.IncludeDerived
+        return !includeDerived
             && metadata.Metadata.TryGetValue("isDerived", out var isDerived)
             && string.Equals(isDerived, "true", StringComparison.OrdinalIgnoreCase);
     }

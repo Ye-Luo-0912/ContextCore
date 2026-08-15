@@ -8,7 +8,6 @@ using ContextCore.Storage.Postgres.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Testcontainers.PostgreSql;
 
 namespace ContextCore.Tests;
 
@@ -399,7 +398,7 @@ public sealed class R29H_ServiceCompositionE2ETests
     public async Task ProductionHA_Profile_RealPostgres_AllServicesResolvable()
     {
         // 启动 Testcontainers Postgres 容器
-        var container = await TryStartPostgresAsync();
+        var container = await PostgresTestHost.TryStartPostgresAsync(nameof(R29H_ServiceCompositionE2ETests));
         if (container is null)
         {
             Assert.Inconclusive("Docker 不可用 — ProductionHA 真实 Postgres E2E 测试已跳过。此结果不证明 ProductionHA 真实 Postgres 通过。");
@@ -469,29 +468,4 @@ public sealed class R29H_ServiceCompositionE2ETests
         EnablePgVectorExtension = false,
         TablePrefix = tablePrefix
     };
-
-    /// <summary>
-    /// 尝试启动 Postgres Testcontainers；Docker 不可用时返回 null。
-    /// </summary>
-    private static async Task<PostgreSqlContainer?> TryStartPostgresAsync()
-    {
-        const string pgVectorImage = "pgvector/pgvector:pg17";
-        try
-        {
-            var container = new PostgreSqlBuilder(pgVectorImage)
-                .WithDatabase("cctest")
-                .WithUsername("cctest")
-                .WithPassword("cctest")
-                .Build();
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            await container.StartAsync(cts.Token);
-            return container;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[R29H_ServiceCompositionE2ETests] Docker/Postgres 不可用：{ex.GetType().Name}: {ex.Message}");
-            return null;
-        }
-    }
 }

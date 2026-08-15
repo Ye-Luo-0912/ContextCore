@@ -50,6 +50,15 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
     /// <summary>图种子上限。</summary>
     public const int MaxGraphSeeds = 6;
 
+    /// <summary>短语锚定查询上限（引号/书名号内的整体短语）。</summary>
+    public const int MaxPhraseAnchorQueries = 2;
+
+    /// <summary>显式别名查询上限（文本中成对出现的同指）。</summary>
+    public const int MaxAliasQueries = 2;
+
+    /// <summary>时效限定查询上限（生命周期/时间限定短语）。</summary>
+    public const int MaxTimeQualifierQueries = 1;
+
     /// <summary>最小 Token 预算。</summary>
     public const int MinTokenBudget = 512;
 
@@ -68,6 +77,31 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
     /// <summary>显式 ID / ref / uuid 引用模式（如 id:abc-123 / ref=XYZ_01）。</summary>
     private static readonly Regex IdReferenceRegex = new(
         @"(?i)\b(?:id|ref|uuid)\s*[:=]\s*([A-Za-z0-9_\-]{4,64})",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>引号 / 书名号内的整体短语锚点（强实体信号，按整体成问句而非拆词元）。</summary>
+    private static readonly Regex PhraseAnchorRegex = new(
+        @"[“‘「『《〈【]([^”’」』》〉】]{2,48})[”’」』》〉】]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>括号内同指（A（B）/A(B)）：括号内容是与前文同指的显式别名证据。</summary>
+    private static readonly Regex ParenthesizedAliasRegex = new(
+        @"[\p{L}\p{N}_\-]{2,40}[（(]([^（）()]{2,24})[）)]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>显式同指标记（A 又称 B / A 别名 B 等）：标记后紧随的名字是别名证据。</summary>
+    private static readonly Regex AliasMarkerRegex = new(
+        @"(?:又称|别名|也就是|亦作|也称|简称)\s*([\p{L}\p{N}_\-]{2,40})",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>生命周期 / 时间限定短语：查询里出现时单独保留成低权重问句，防止被长任务词元预算挤掉。</summary>
+    private static readonly Regex TimeQualifierRegex = new(
+        @"当前生效|现行版本|当前版本|最新版本|最近一次|上一版|已废弃|已过期|过期|作数|新版|旧版|现行|正在推进",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>单个 ASCII 词元（字母/数字/下划线/连字符，无空格）：匹配器原生提取为独立词项。</summary>
+    private static readonly Regex SingleAsciiTokenRegex = new(
+        @"^[A-Za-z0-9_\-]+$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>常用停用词（中英文），不作为图种子。</summary>
@@ -176,6 +210,13 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
         // 成功工具观察的实体词优先于找回词占名额（最新工具结果先写进问句）。
         TryAddObservationQueries(queries, observations);
 
+        // 短语锚定：引号/书名号内的整体短语单独成问句，不被词元化打散。
+        // 显式用户标记是强信号，优先级高于未解决目标与图种子。
+        TryAddPhraseAnchorQueries(queries, task, intent, goals, observations);
+
+        // 显式别名：只从文本中成对出现的同指（A（B）/A 即 B）提取，不做全局同义词膨胀。
+        TryAddAliasQueries(queries, task, intent, goals, observations);
+
         // 未解决目标（上一轮被分配器裁掉的条目）逐条加成 Keyword 查询：
         // 不拼成一句、不标 Vector——默认没有向量，拼句会再次撞词元上限、标题对不上。
         // 与观察实体词相同的覆盖检查，被已有问句覆盖的目标不再占名额。
@@ -202,6 +243,10 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
             });
             goalsCovered = goalsCovered + " " + goalText;
         }
+
+        // 时效限定：任务/意图/目标里的生命周期/时间限定短语单独成低权重问句。
+        // 限定词通常在长任务里被词元预算挤掉，独立保留后含相同限定词的文档标题仍可命中。
+        TryAddTimeQualifierQueries(queries, task, intent, goals);
 
         var coveredText = string.Join(" ", queries.Select(query => query.Text));
         foreach (var seed in graphSeeds)
@@ -290,6 +335,182 @@ public sealed class DefaultAgentRetrievalQueryPlanner : IAgentRetrievalQueryPlan
                     Reason = "成功工具观察 ID"
                 });
             }
+        }
+    }
+
+    // 短语锚定查询：引号/书名号内的整体短语单独成 Keyword 问句，不被词元化打散。
+    // 只来自输入文本的显式引号标记（任务/意图/目标/成功观察），不是无证据的膨胀；
+    // 短语在长任务里可能被匹配器词元预算挤掉，独立成短问句保证短语本身可命中，
+    // 因此多字/多词短语不做"已被任务文本覆盖"的跳过（那会取消它的保护作用）。
+    // 例外：单个 ASCII 词元（如 AlphaProtocol）会被匹配器原生提取为独立词项，
+    // 任务问句里不会因词元化打散，单独成问句是冗余的——若已出现在任务文本中
+    // 则不再占查询名额。只按完全重复去重，上限受 MaxPhraseAnchorQueries 约束。
+    private static void TryAddPhraseAnchorQueries(
+        List<AgentRetrievalQuery> queries,
+        string task,
+        string intent,
+        IReadOnlyList<string> goals,
+        IReadOnlyList<ToolObservation> observations)
+    {
+        var combined = Concat(task, intent, goals);
+        if (observations is not null)
+        {
+            foreach (var observation in observations)
+            {
+                if (observation is { Succeeded: true } && !string.IsNullOrWhiteSpace(observation.Result))
+                {
+                    combined = string.Concat(combined, " ", observation.Result);
+                }
+            }
+        }
+
+        var added = 0;
+        foreach (Match match in PhraseAnchorRegex.Matches(combined))
+        {
+            if (queries.Count >= MaxControlledQueries || added >= MaxPhraseAnchorQueries)
+            {
+                return;
+            }
+            var phrase = match.Groups[1].Value.Trim();
+            if (phrase.Length < 2
+                || queries.Any(query => string.Equals(query.Text, phrase, StringComparison.OrdinalIgnoreCase))
+                || IsSingleAsciiTokenCoveredByTask(phrase, task))
+            {
+                continue;
+            }
+            queries.Add(new AgentRetrievalQuery
+            {
+                Text = phrase,
+                Type = AgentRetrievalQueryType.Keyword,
+                Weight = 0.9,
+                Reason = "短语锚定"
+            });
+            added++;
+        }
+    }
+
+    /// <summary>
+    /// 判断锚定短语是否是单个 ASCII 词元且已出现在任务文本中。
+    /// 单个 ASCII 词元会被匹配器原生提取为独立词项，无需短语问句保护；
+    /// 已出现在任务文本中时单独成问句是冗余的，不再占查询名额。
+    /// </summary>
+    private static bool IsSingleAsciiTokenCoveredByTask(string phrase, string task)
+    {
+        if (task.Length == 0 || phrase.Length == 0)
+        {
+            return false;
+        }
+        if (!SingleAsciiTokenRegex.IsMatch(phrase))
+        {
+            return false;
+        }
+        return task.Contains(phrase, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // 显式别名查询：只从文本中成对出现的同指（A（B）/A 又称 B）提取别名，按证据加成；
+    // 不做全局同义词膨胀——文本里没有显式同指标记就不产生任何别名查询。
+    private static void TryAddAliasQueries(
+        List<AgentRetrievalQuery> queries,
+        string task,
+        string intent,
+        IReadOnlyList<string> goals,
+        IReadOnlyList<ToolObservation> observations)
+    {
+        var combined = Concat(task, intent, goals);
+        if (observations is not null)
+        {
+            foreach (var observation in observations)
+            {
+                if (observation is { Succeeded: true } && !string.IsNullOrWhiteSpace(observation.Result))
+                {
+                    combined = string.Concat(combined, " ", observation.Result);
+                }
+            }
+        }
+
+        var added = 0;
+        foreach (var alias in ExtractExplicitAliases(combined))
+        {
+            if (queries.Count >= MaxControlledQueries || added >= MaxAliasQueries)
+            {
+                return;
+            }
+            if (queries.Any(query => string.Equals(query.Text, alias, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            queries.Add(new AgentRetrievalQuery
+            {
+                Text = alias,
+                Type = AgentRetrievalQueryType.Keyword,
+                Weight = 0.85,
+                Reason = "显式别名"
+            });
+            added++;
+        }
+    }
+
+    private static IEnumerable<string> ExtractExplicitAliases(string text)
+    {
+        // 括号同指：A（B）里的 B 是 A 的显式别名。括号内容必须是短技术名
+        // （含拉丁字母/数字）——纯中文括号注释（详见下文）不是别名，不产生查询。
+        foreach (Match match in ParenthesizedAliasRegex.Matches(text))
+        {
+            var alias = match.Groups[1].Value.Trim();
+            if (IsValidAlias(alias))
+            {
+                yield return alias;
+            }
+        }
+
+        // 同指标记：A 又称 B / A 别名 B 里 B 是别名（显式标记，含中文别名）。
+        foreach (Match match in AliasMarkerRegex.Matches(text))
+        {
+            var alias = match.Groups[1].Value.Trim();
+            if (IsValidAlias(alias))
+            {
+                yield return alias;
+            }
+        }
+    }
+
+    private static bool IsValidAlias(string alias)
+        => alias.Length >= 2
+           && alias.Length <= 24
+           && !StopWords.Contains(alias)
+           && !alias.All(char.IsDigit)
+           && alias.Any(ch => char.IsAsciiLetterOrDigit(ch));
+
+    // 时效限定查询：任务/意图/目标里的生命周期/时间限定短语单独成低权重问句。
+    // 限定词在长任务里可能被匹配器词元预算挤掉，独立保留后含相同限定词的文档标题仍可命中；
+    // 只按完全重复去重，上限受 MaxTimeQualifierQueries 约束。
+    private static void TryAddTimeQualifierQueries(
+        List<AgentRetrievalQuery> queries,
+        string task,
+        string intent,
+        IReadOnlyList<string> goals)
+    {
+        var combined = Concat(task, intent, goals);
+        var added = 0;
+        foreach (Match match in TimeQualifierRegex.Matches(combined))
+        {
+            if (queries.Count >= MaxControlledQueries || added >= MaxTimeQualifierQueries)
+            {
+                return;
+            }
+            var qualifier = match.Value;
+            if (queries.Any(query => string.Equals(query.Text, qualifier, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            queries.Add(new AgentRetrievalQuery
+            {
+                Text = qualifier,
+                Type = AgentRetrievalQueryType.Keyword,
+                Weight = 0.5,
+                Reason = "时效限定"
+            });
+            added++;
         }
     }
 

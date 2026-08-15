@@ -11,6 +11,18 @@ namespace ContextCore.Core.Services;
 public sealed class LearningFeedbackService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    // 列表字段上限：反馈事件只携带身份信息，不携带正文，超限直接截断并告警。
+    private const int MaxQueryIds = 64;
+    private const int MaxCandidateIds = 64;
+    private const int MaxToolResults = 16;
+    private const int MaxToolEntityIds = 8;
+
+    // 可能被用来携带正文的元数据键；命中即剥离（正文默认不进入反馈事件）。
+    private static readonly HashSet<string> BodyLikeMetadataKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "content", "body", "text", "payload", "material", "document", "raw"
+    };
     private static readonly HashSet<string> AllowedKinds = new(StringComparer.OrdinalIgnoreCase)
     {
         LearningFeedbackKinds.Useful,
@@ -25,7 +37,12 @@ public sealed class LearningFeedbackService
         LearningFeedbackKinds.PromotionWrong,
         LearningFeedbackKinds.ShouldPromote,
         LearningFeedbackKinds.ShouldReject,
-        LearningFeedbackKinds.NeedsMoreEvidence
+        LearningFeedbackKinds.NeedsMoreEvidence,
+        LearningFeedbackKinds.Revoke,
+        LearningFeedbackKinds.EvidenceNotRecalled,
+        LearningFeedbackKinds.RecalledNotSelected,
+        LearningFeedbackKinds.SelectedNotUsed,
+        LearningFeedbackKinds.ToolFailed
     };
 
     private static readonly HashSet<string> AllowedCapabilities = new(StringComparer.OrdinalIgnoreCase)
@@ -220,11 +237,19 @@ public sealed class LearningFeedbackService
             throw new ArgumentException($"Invalid targetType '{targetType}'.", nameof(source));
         }
 
+        var revokesFeedbackId = NormalizeOptional(source.RevokesFeedbackId);
+        if (!string.IsNullOrWhiteSpace(revokesFeedbackId)
+            && !string.Equals(feedbackKind, LearningFeedbackKinds.Revoke, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("撤销事件必须使用 feedbackKind 'Revoke'。", nameof(source));
+        }
+
         var metadata = new Dictionary<string, string>(source.Metadata, StringComparer.OrdinalIgnoreCase)
         {
             ["storedFor"] = "runtime_feedback_collection",
             ["trainingUse"] = "disabled_until_review"
         };
+        StripBodyLikeMetadata(metadata, warnings);
         var requestedRedactionMode = string.IsNullOrWhiteSpace(source.RedactionMode)
             ? GetMetadata(metadata, "redactionMode") ?? string.Empty
             : source.RedactionMode.Trim();
@@ -258,6 +283,16 @@ public sealed class LearningFeedbackService
             MetadataOnly = metadataOnly,
             TrainingUse = "disabled_until_review",
             Confidence = Clamp(source.Confidence, 0.0, 1.0),
+            EventSchemaVersion = Math.Max(1, source.EventSchemaVersion),
+            RequestId = NormalizeOptional(source.RequestId),
+            PolicyVersion = NormalizeOptional(source.PolicyVersion),
+            QueryIds = NormalizeIdList(source.QueryIds, MaxQueryIds, "queryIds", warnings),
+            CandidateIds = NormalizeIdList(source.CandidateIds, MaxCandidateIds, "candidateIds", warnings),
+            SelectedIds = NormalizeIdList(source.SelectedIds, MaxCandidateIds, "selectedIds", warnings),
+            ToolResults = NormalizeToolResults(source.ToolResults, warnings),
+            RevokesFeedbackId = revokesFeedbackId,
+            RevokedAt = source.RevokedAt
+                ?? (string.IsNullOrWhiteSpace(revokesFeedbackId) ? null : createdAt),
             CreatedAt = createdAt,
             Metadata = metadata
         };
@@ -294,6 +329,15 @@ public sealed class LearningFeedbackService
             MetadataOnly = request.MetadataOnly,
             TrainingUse = request.TrainingUse,
             Confidence = request.Confidence,
+            EventSchemaVersion = request.EventSchemaVersion,
+            RequestId = request.RequestId,
+            PolicyVersion = request.PolicyVersion,
+            QueryIds = request.QueryIds,
+            CandidateIds = request.CandidateIds,
+            SelectedIds = request.SelectedIds,
+            ToolResults = request.ToolResults,
+            RevokesFeedbackId = request.RevokesFeedbackId,
+            RevokedAt = request.RevokedAt,
             CreatedAt = request.CreatedAt,
             Metadata = metadata
         };
@@ -359,9 +403,88 @@ public sealed class LearningFeedbackService
             NormalizeOptional(source.TargetId),
             NormalizeOptional(source.TargetType),
             feedbackKind,
-            source.FeedbackValue.ToString("R", CultureInfo.InvariantCulture));
+            source.FeedbackValue.ToString("R", CultureInfo.InvariantCulture),
+            NormalizeOptional(source.RequestId),
+            NormalizeOptional(source.PolicyVersion),
+            string.Join(",", (source.QueryIds ?? Array.Empty<string>()).Select(NormalizeOptional)),
+            string.Join(",", (source.CandidateIds ?? Array.Empty<string>()).Select(NormalizeOptional)),
+            string.Join(",", (source.SelectedIds ?? Array.Empty<string>()).Select(NormalizeOptional)),
+            NormalizeOptional(source.RevokesFeedbackId));
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return "lfb_" + Convert.ToHexString(hash)[..24].ToLowerInvariant();
+    }
+
+    private static void StripBodyLikeMetadata(Dictionary<string, string> metadata, List<string> warnings)
+    {
+        foreach (var key in BodyLikeMetadataKeys)
+        {
+            if (metadata.Remove(key))
+            {
+                warnings.Add($"元数据键 '{key}' 已移除：反馈事件不携带正文。");
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> NormalizeIdList(
+        IEnumerable<string>? values,
+        int maxCount,
+        string fieldName,
+        List<string> warnings)
+    {
+        var result = new List<string>();
+        foreach (var raw in values ?? Enumerable.Empty<string>())
+        {
+            var value = NormalizeOptional(raw);
+            if (value.Length == 0)
+            {
+                continue;
+            }
+
+            if (result.Contains(value, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (result.Count >= maxCount)
+            {
+                warnings.Add($"{fieldName} 已截断至 {maxCount} 条。");
+                break;
+            }
+
+            result.Add(value);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<FeedbackToolResult> NormalizeToolResults(
+        IEnumerable<FeedbackToolResult>? results,
+        List<string> warnings)
+    {
+        var normalized = new List<FeedbackToolResult>();
+        foreach (var raw in results ?? Enumerable.Empty<FeedbackToolResult>())
+        {
+            if (normalized.Count >= MaxToolResults)
+            {
+                warnings.Add($"toolResults 已截断至 {MaxToolResults} 条。");
+                break;
+            }
+
+            var toolName = NormalizeOptional(raw.ToolName);
+            if (toolName.Length == 0)
+            {
+                continue;
+            }
+
+            normalized.Add(new FeedbackToolResult
+            {
+                ToolName = toolName,
+                Succeeded = raw.Succeeded,
+                EntityIds = NormalizeIdList(raw.EntityIds, MaxToolEntityIds, "toolResults.entityIds", warnings)
+            });
+        }
+
+        return normalized;
     }
 
     private static Dictionary<string, int> CountBy(

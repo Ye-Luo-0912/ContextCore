@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Storage.FileSystem.Stores;
 
 /// <summary>基于 JSONL 文件的向量存储，提供轻量本地相似度检索。</summary>
-public sealed class FileVectorStore : IVectorStore
+public sealed class FileVectorStore : IVectorStore, IVectorStoreMultiSearch
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FileJsonLineStore _jsonLines;
@@ -98,6 +98,73 @@ public sealed class FileVectorStore : IVectorStore
                 Score = item.Score,
                 Rank = index + 1
             })];
+    }
+
+    /// <summary>
+    /// 多问句向量检索：一次快照完成全部问句——全部向量文件只读一次，
+    /// 共享过滤只评估一次；每条问句独立计算余弦并保留各自 TopK，
+    /// 语义与逐条 SearchAsync 完全一致（含 MinScore 过滤时机与确定性 tie-break）。
+    /// </summary>
+    public async Task<IReadOnlyList<VectorMultiSearchResult>> SearchMultiAsync(
+        VectorMultiQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        if (query.Queries.Count == 0)
+        {
+            return Array.Empty<VectorMultiSearchResult>();
+        }
+
+        // 一次快照：全部问句共享同一批读取记录（单次文件 I/O，不再 q 次全量读）。
+        var records = new List<VectorRecord>();
+        foreach (var path in ResolveVectorPaths(query.WorkspaceId, query.CollectionId))
+        {
+            records.AddRange(await _jsonLines.ReadAsync<VectorRecord>(path, cancellationToken)
+                .ConfigureAwait(false));
+        }
+
+        var tags = query.Tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceKinds = query.SourceKinds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var excludedSourceIds = query.ExcludeSourceIds.Count == 0
+            ? null
+            : new HashSet<string>(query.ExcludeSourceIds, StringComparer.OrdinalIgnoreCase);
+        var topK = query.TopK > 0 ? query.TopK : 10;
+
+        var candidates = records
+            .Where(record => string.Equals(record.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(record => string.IsNullOrWhiteSpace(query.CollectionId)
+                || string.Equals(record.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
+            .Where(record => sourceKinds.Count == 0 || sourceKinds.Contains(record.SourceKind))
+            .Where(record => tags.Count == 0 || tags.All(record.Tags.Contains))
+            .Where(record => excludedSourceIds is null || !excludedSourceIds.Contains(record.SourceId))
+            .ToArray();
+
+        var results = new List<VectorMultiSearchResult>(query.Queries.Count);
+        foreach (var q in query.Queries)
+        {
+            var hits = candidates
+                .Select(record => new
+                {
+                    Record = record,
+                    Score = Cosine(q.Vector, record.Vector)
+                })
+                .Where(item => query.MinScore is null || item.Score >= query.MinScore.Value)
+                .OrderByDescending(item => item.Score)
+                .ThenByDescending(item => item.Record.UpdatedAt)
+                .ThenBy(item => item.Record.SourceId, StringComparer.OrdinalIgnoreCase)
+                .Take(topK)
+                .Select((item, index) => new VectorSearchResult
+                {
+                    Record = Clone(item.Record, includeVector: query.IncludeVector),
+                    Score = item.Score,
+                    Rank = index + 1
+                })
+                .ToArray();
+            results.Add(new VectorMultiSearchResult { QueryId = q.Id, Hits = hits });
+        }
+
+        return results;
     }
 
     public async Task DeleteAsync(

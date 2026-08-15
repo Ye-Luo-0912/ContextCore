@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
@@ -109,5 +110,106 @@ public static class DecisionOutcomeRecomputer
             ContextCandidateSource.RelatedContext => "related",
             _ => "default"
         };
+    }
+
+    /// <summary>
+    /// 候选排序比较器（权威实现）：FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序。
+    /// 引擎第一阶段排序与分配器的 mandatory 排序共用，保证分配前输入即为评分降序。
+    /// </summary>
+    public static int CompareByScoreDesc(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+
+        var cmp = b.Utility.FinalScore.CompareTo(a.Utility.FinalScore);
+        if (cmp != 0) return cmp;
+        cmp = GetEffectiveTokens(b).CompareTo(GetEffectiveTokens(a));
+        if (cmp != 0) return cmp;
+        return StringComparer.OrdinalIgnoreCase.Compare(a.CandidateId, b.CandidateId);
+    }
+
+    /// <summary>
+    /// 将 <see cref="RequestBudgetOverride"/> 的非空字段合并到 bundle 的 <see cref="BudgetProfile"/>，
+    /// 不替换整个 profile。baseProfile 为 null 时返回 null（Legacy 路径无 bundle 语义）。
+    /// </summary>
+    public static BudgetProfile? ApplyBudgetOverride(
+        BudgetProfile? baseProfile,
+        RequestBudgetOverride? budgetOverride)
+    {
+        if (baseProfile is null) return null;
+        if (budgetOverride is null) return baseProfile;
+        return baseProfile with
+        {
+            DefaultTokenBudget = budgetOverride.TokenBudget ?? baseProfile.DefaultTokenBudget,
+            DefaultTopK = budgetOverride.TopK ?? baseProfile.DefaultTopK,
+            SectionRatios = budgetOverride.SectionRatios ?? baseProfile.SectionRatios
+        };
+    }
+
+    /// <summary>
+    /// 将 <see cref="RequestRoutingOverride"/> 的非空字段合并到 bundle 的 <see cref="RoutingProfile"/>，
+    /// 仅覆盖 EnableModelScoring，不替换整个 profile。baseProfile 为 null 时返回 null。
+    /// </summary>
+    public static RoutingProfile? ApplyRoutingOverride(
+        RoutingProfile? baseProfile,
+        RequestRoutingOverride? routingOverride)
+    {
+        if (baseProfile is null) return null;
+        if (routingOverride is null) return baseProfile;
+        return baseProfile with
+        {
+            EnableModelScoring = routingOverride.EnableModelScoring ?? baseProfile.EnableModelScoring
+        };
+    }
+
+    /// <summary>
+    /// 生成 dropped 候选的可读原因文本（gate 拦截或预算/配额裁掉都带原因；
+    /// 预算裁掉的候选仍通过 safety gate，因此不能只看 PassesSafetyGate）。
+    /// </summary>
+    public static string ResolveDropReasonText(ContextCandidateEnvelope envelope)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+
+        var safety = envelope.Safety;
+        if (!safety.PassesSafetyGate || safety.BlockReasonCode != CandidateDecisionReasonCode.Unknown)
+        {
+            var code = safety.BlockReasonCode;
+            var detail = safety.BlockReasonDetail;
+            return string.IsNullOrEmpty(detail) ? code.ToString() : $"{code}: {detail}";
+        }
+        return "budget exceeded";
+    }
+
+    /// <summary>
+    /// 将 <see cref="ContextCandidateSource"/> 映射到 <see cref="ExpertKind"/>
+    /// （用于 Origins / ExpertContributions；适配器共用，消除重复 switch）。
+    /// </summary>
+    public static ExpertKind MapSourceToExpertKind(ContextCandidateSource source) => source switch
+    {
+        ContextCandidateSource.Mandatory => ExpertKind.Mandatory,
+        ContextCandidateSource.Constraint => ExpertKind.Constraint,
+        ContextCandidateSource.Lexical => ExpertKind.Lexical,
+        ContextCandidateSource.Semantic => ExpertKind.Semantic,
+        ContextCandidateSource.WorkingMemory => ExpertKind.WorkingMemory,
+        ContextCandidateSource.StableMemory => ExpertKind.StableMemory,
+        ContextCandidateSource.Graph => ExpertKind.Graph,
+        ContextCandidateSource.Recency => ExpertKind.Recency,
+        ContextCandidateSource.GlobalContext => ExpertKind.Mandatory,
+        ContextCandidateSource.RelatedContext => ExpertKind.Graph,
+        _ => ExpertKind.Lexical
+    };
+
+    /// <summary>
+    /// 从 score breakdown 字典读取字段值：空字典按缺省处理（value=0, false），
+    /// 非空字典委托 TryGetValue（FeaturePipeline 与 UtilityScorer 共用，消除重复）。
+    /// </summary>
+    public static bool TryGetScoreBreakdown(IReadOnlyDictionary<string, double>? breakdown, string key, out double value)
+    {
+        if (breakdown is null || breakdown.Count == 0)
+        {
+            value = 0;
+            return false;
+        }
+        return breakdown.TryGetValue(key, out value);
     }
 }

@@ -27,7 +27,9 @@ internal static class TraceQueryHelper
         var count = take > 0 ? take : 50;
         // 安全余量：append-only + 日期分片下，同一文件内 CreatedAt 单调递增，
         // 但跨文件（legacy/并发写入）可能乱序，保留 2x 余量保证最终 Take 后排序正确。
-        var budget = count * 2;
+        // 点查（GetAsync）以 int.MaxValue 为 take：2x 会溢出为负，钳制到 int.MaxValue
+        //（List 容量另有 256 上限，不限制读取量）。
+        var budget = count <= int.MaxValue / 2 ? count * 2 : int.MaxValue;
         var results = new List<T>(Math.Min(budget, 256));
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

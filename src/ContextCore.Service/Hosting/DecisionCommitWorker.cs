@@ -13,9 +13,10 @@ namespace ContextCore.Service.Hosting;
 /// Decision Record + Evidence 引用 + 物化意图经 outbox 连成可靠链。
 /// </summary>
 /// <remarks>
-/// 仅 Postgres provider 时激活（IDecisionCommitOutbox 已注册）；
-/// FileSystem / InMemory provider 时探测到 null 立即退出（决策记录由产生点直接落库的
-/// 轻路径不在此处处理，语义与 Postgres 路径一致：记录最终持久化）。
+/// 只要 <see cref="IDecisionCommitOutbox"/> 已注册即激活：Postgres provider 用
+/// 持久化 outbox；FileSystem / InMemory provider 用进程内 outbox（进程崩溃会丢
+/// 未消费条目，属开发平面预期）。未注册 outbox 的组合（异常组合）时探测到 null
+/// 立即退出。消费端落库必须幂等（按 decision_id 覆盖），保证重放不重复落库。
 /// </remarks>
 public sealed class DecisionCommitWorker : BackgroundService
 {

@@ -5,8 +5,10 @@ namespace ContextCore.Storage.FileSystem.Stores;
 
 /// <summary>
 /// 将统一决策记录（V17.0 decision trace）持久化为按日期分片的 JSONL 文件。
-/// 写入使用 append-only 语义（决策记录是事件流，每次 Save 都是新记录），
-/// 避免旧 Upsert 实现的"读全部→反序列化→重新序列化→原子重写整个文件"开销。
+/// 写入按 (workspace_id, collection_id, decision_id) 稳定主键 Upsert：决策提交 outbox
+/// 重放（worker 落库后崩溃、未 Ack → 重新领取重投递）不会重复落库，与 InMemory /
+/// Postgres 实现的幂等语义保持一致；同一条决策的更新覆盖旧记录，点查与最近列表唯一。
+/// 读改写在同一写锁内完成（FileJsonLineStore.UpsertAsync），避免并发写入互相覆盖。
 /// </summary>
 public sealed class FileDecisionTraceStore : IDecisionTraceStore
 {
@@ -42,7 +44,10 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
         ArgumentNullException.ThrowIfNull(record);
         var path = _paths.GetDecisionTraceJsonlPath(record.WorkspaceId, record.CollectionId);
 
-        await _jsonLines.AppendAsync(path, record, cancellationToken).ConfigureAwait(false);
+        // 按稳定主键 Upsert（存在则覆盖，不存在则追加）：重放 / 重投递幂等，
+        // 保证任意时刻同一条决策在决策记录平面至多一条。
+        await _jsonLines.UpsertAsync(
+            path, record, r => r.DecisionId ?? string.Empty, cancellationToken).ConfigureAwait(false);
 
         // retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
         _pendingPurge = _janitor.MaybePurge(_paths.GetDecisionTraceDirectory(record.WorkspaceId, record.CollectionId));

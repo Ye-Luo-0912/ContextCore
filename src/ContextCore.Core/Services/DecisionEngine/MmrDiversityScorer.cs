@@ -221,13 +221,14 @@ internal static class MmrDiversityScorer
         IReadOnlyList<ContextCandidateEnvelope> candidates,
         int topN)
     {
-        // 用 partial TopK 选择（最小堆，大小 topN）避免全量排序
+        // 用 partial TopK 选择（最大堆，大小 topN）避免全量排序
         if (candidates.Count <= topN)
         {
             return candidates;
         }
 
-        // 最小堆：堆顶是当前堆中 FinalScore 最小者（CandidateId 最大者作为 tie-break）
+        // 最大堆：堆顶是当前堆中 FinalScore 最小者（CandidateId 最大者作为 tie-break），
+        // 即保留集合中最差候选；扫描时更优者替换堆顶。
         var heap = new List<ContextCandidateEnvelope>(topN);
         for (var i = 0; i < topN; i++)
         {
@@ -238,8 +239,8 @@ internal static class MmrDiversityScorer
         for (var i = topN; i < candidates.Count; i++)
         {
             var candidate = candidates[i];
-            // 堆顶是最小者；若当前候选更大则替换堆顶并下沉
-            if (CompareByScore(candidate, heap[0]) > 0)
+            // 堆顶是最差候选；若当前候选更优（排序靠前）则替换堆顶并下沉
+            if (CompareByScore(candidate, heap[0]) < 0)
             {
                 heap[0] = candidate;
                 SiftDownByScore(heap, 0, heap.Count);
@@ -262,7 +263,7 @@ internal static class MmrDiversityScorer
         while (idx > 0)
         {
             var parent = (idx - 1) >> 1;
-            if (CompareByScore(heap[idx], heap[parent]) < 0)
+            if (CompareByScore(heap[idx], heap[parent]) > 0)
             {
                 (heap[idx], heap[parent]) = (heap[parent], heap[idx]);
                 idx = parent;
@@ -280,19 +281,19 @@ internal static class MmrDiversityScorer
         {
             var left = 2 * idx + 1;
             var right = 2 * idx + 2;
-            var smallest = idx;
-            if (left < count && CompareByScore(heap[left], heap[smallest]) < 0)
+            var extreme = idx;
+            if (left < count && CompareByScore(heap[left], heap[extreme]) > 0)
             {
-                smallest = left;
+                extreme = left;
             }
-            if (right < count && CompareByScore(heap[right], heap[smallest]) < 0)
+            if (right < count && CompareByScore(heap[right], heap[extreme]) > 0)
             {
-                smallest = right;
+                extreme = right;
             }
-            if (smallest != idx)
+            if (extreme != idx)
             {
-                (heap[idx], heap[smallest]) = (heap[smallest], heap[idx]);
-                idx = smallest;
+                (heap[idx], heap[extreme]) = (heap[extreme], heap[idx]);
+                idx = extreme;
             }
             else
             {

@@ -165,6 +165,21 @@ public sealed record RoutingProfile
     /// <summary>是否启用模型评分（per-request 可通过 Request.EnableModel=false 强制关闭）。</summary>
     public bool EnableModelScoring { get; init; } = false;
 
+    /// <summary>
+    /// 是否启用候选分数分桶校准。启用后分配器消费的是各通道原始分经
+    /// <c>ICandidateScoreCalibrator</c> 映射到公共刻度的校准分，
+    /// 不再直接比较语义不同的 lexical/vector/graph 原始分数。
+    /// 默认 false：保持原始分数排序，行为与旧版一致。
+    /// </summary>
+    public bool EnableScoreCalibration { get; init; } = false;
+
+    /// <summary>
+    /// 是否启用两阶段排序的第二阶段确定性重排。启用后分配器之前先对
+    /// 有限候选窗口做来源多样性重排（不改 FinalScore，只改顺序）。
+    /// 默认 false：直接按评分排序分配，行为与旧版一致。
+    /// </summary>
+    public bool EnableTwoStageRerank { get; init; } = false;
+
     /// <summary>引用的模型 artifact ID（null = 纯 deterministic 路径）。</summary>
     public string? ModelArtifactId { get; init; }
 
