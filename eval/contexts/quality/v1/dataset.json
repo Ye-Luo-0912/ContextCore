@@ -1,0 +1,24 @@
+{
+  "Version": "v1",
+  "SchemaVersion": "1",
+  "HashAlgorithm": "sha256",
+  "TrainRatio": 70,
+  "DevRatio": 15,
+  "TestRatio": 15,
+  "SampleCount": 18,
+  "SplitCounts": {
+    "train": 14,
+    "dev": 2,
+    "test": 2
+  },
+  "CoverageCounts": {
+    "exact-keyword": 3,
+    "semantic-hard-negative": 3,
+    "multi-query-tool": 3,
+    "lifecycle-permission": 3,
+    "graph-evidence": 3,
+    "provider-parity": 3
+  },
+  "CoverageComplete": true,
+  "CreatedAt": "2026-08-14T11:08:08.0344615+00:00"
+}

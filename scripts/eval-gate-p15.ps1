@@ -1,6 +1,6 @@
 param(
-    [string]$A3Report = "eval/eval-report-p15-a3.json",
-    [string]$ExtendedReport = "eval/eval-report-p15-extended.json",
+    [string]$A3Report = "artifacts/eval/eval-report-p15-a3.json",
+    [string]$ExtendedReport = "artifacts/eval/eval-report-p15-extended.json",
     [switch]$SkipBuildTest,
     [int]$BuildRetryLimit = 3,
     [int]$TestRetryLimit = 2,
@@ -206,8 +206,9 @@ function Write-DiagnosticsReport {
     })
     $script:Diagnostics.BinObjLockCheck = Get-BinObjLockSummary
 
-    # JSON
-    $jsonPath = "eval/p15-build-lock-diagnostics.json"
+    # JSON（写入被忽略的 artifacts/，避免报告回流到版本控制目录）
+    $jsonPath = "artifacts/eval/p15-build-lock-diagnostics.json"
+    New-Item -ItemType Directory -Force -Path (Split-Path $jsonPath) | Out-Null
     $diagJson = [ordered]@{
         OperationId = "p15-build-lock-diagnostics-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         GeneratedAt = (Get-Date -Format "o")
@@ -234,8 +235,8 @@ function Write-DiagnosticsReport {
     $diagJson | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $jsonPath -Encoding utf8
     Write-Host "[Diagnostics] Wrote $jsonPath"
 
-    # Markdown
-    $mdPath = "eval/p15-build-lock-diagnostics.md"
+    # Markdown（写入被忽略的 artifacts/，避免报告回流到版本控制目录）
+    $mdPath = "artifacts/eval/p15-build-lock-diagnostics.md"
     $s = $diagJson.Summary
     $md = @"
 # P15 Build-Lock Diagnostics
@@ -458,9 +459,9 @@ function Add-BaselineFreezeNote {
 
 ## P15 Baseline Freeze
 
-- Baseline doc: `docs/eval-baseline-p15.md`
-- A3 report: `eval/eval-report-p15-a3.json`
-- Extended report: `eval/eval-report-p15-extended.json`
+- Baseline doc: `artifacts/eval/eval-baseline-p15.md`
+- A3 report: `artifacts/eval/eval-report-p15-a3.json`
+- Extended report: `artifacts/eval/eval-report-p15-extended.json`
 - A3 baseline: `50 total / 0 failed / 100.00%`
 - Extended baseline: `113 total / 0 failed / 100.00%`
 
@@ -494,7 +495,7 @@ else {
 }
 
 # Clean stale eval report files to avoid memory-mapped file lock
-foreach ($rpt in @($script:A3Report, $script:ExtendedReport, "eval/extended-failure-triage-report.json", "eval/extended-failure-triage-report.md")) {
+foreach ($rpt in @($script:A3Report, $script:ExtendedReport)) {
     if (Test-Path $rpt) {
         try { Remove-Item -LiteralPath $rpt -Force -ErrorAction Stop }
         catch { Write-Host "    [cleanup] Could not remove $rpt (locked), using temp path." }
@@ -510,13 +511,13 @@ foreach ($rpt in @($script:A3Report, $script:ExtendedReport, "eval/extended-fail
     }
 }
 
-Invoke-Step -Name "A3 baseline eval" -Command @("dotnet", "run", "--project", "src\ContextCore.ControlRoom", "--", "eval", "run", "--out", $script:A3Report) -FallbackCopyFrom "eval/eval-report-latest.json" -FallbackCopyTo $script:A3Report
-Invoke-Step -Name "Extended baseline eval" -Command @("dotnet", "run", "--project", "src\ContextCore.ControlRoom", "--", "eval", "run", "--include-batches", "--out", $script:ExtendedReport) -FallbackCopyFrom "eval/eval-report-latest.json" -FallbackCopyTo $script:ExtendedReport
+Invoke-Step -Name "A3 baseline eval" -Command @("dotnet", "run", "--project", "src\ContextCore.ControlRoom", "--", "eval", "run", "--out", $script:A3Report) -FallbackCopyFrom "artifacts/eval/eval-report-latest.json" -FallbackCopyTo $script:A3Report
+Invoke-Step -Name "Extended baseline eval" -Command @("dotnet", "run", "--project", "src\ContextCore.ControlRoom", "--", "eval", "run", "--include-batches", "--out", $script:ExtendedReport) -FallbackCopyFrom "artifacts/eval/eval-report-latest.json" -FallbackCopyTo $script:ExtendedReport
 
 Test-Report -Path $script:A3Report -ExpectedTotal 50 -Name "A3 P15"
 Test-Report -Path $script:ExtendedReport -ExpectedTotal 113 -Name "Extended P15"
 
-try { Add-BaselineFreezeNote -Path "eval/extended-failure-triage-report.md" }
+try { Add-BaselineFreezeNote -Path "artifacts/eval/extended-failure-triage-report.md" }
 catch { Write-Host "    [warn] Could not update baseline freeze note: $_" }
 
 Write-Host "P15 eval regression gate passed."

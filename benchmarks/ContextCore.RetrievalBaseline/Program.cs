@@ -10,6 +10,9 @@ using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
+using ContextCore.Storage.Postgres;
+using ContextCore.Storage.Postgres.Infrastructure;
+using ContextCore.Storage.Postgres.Stores;
 
 namespace ContextCore.RetrievalBaseline;
 
@@ -33,17 +36,39 @@ internal static class Program
 {
     private const string WorkspaceId = "bench-ws";
     private const string CollectionId = "bench-col";
-    private const int ItemCount = 1200;
+    private static int ItemCount = 1200;
     private const int KeywordCount = 8;
 
     private static readonly int[] QueryCounts = [1, 4, 8];
     private static readonly int[] TopKs = [10, 50, 100];
     private static readonly int[] HeldCounts = [0, 10, 100];
-    private static readonly string[] Providers = ["InMemory", "FileSystem"];
+    private static readonly string[] BaseProviders = ["InMemory", "FileSystem"];
     private static readonly string[] Modes = ["lexical-only", "semantic-only", "combined"];
 
-    private static async Task<int> Main()
+    private static readonly List<string> ActiveProviders = [.. BaseProviders];
+    private static string? PostgresConnectionString;
+
+    private static async Task<int> Main(string[] args)
     {
+        // 可选参数：--items <n> 数据集规模；--postgres <connstr> 启用 Postgres 维度
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--items" && i + 1 < args.Length && int.TryParse(args[i + 1], out var n) && n > 0)
+            {
+                ItemCount = n;
+                i++;
+            }
+            else if (args[i] == "--postgres" && i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
+            {
+                PostgresConnectionString = args[i + 1];
+                if (!ActiveProviders.Contains("Postgres"))
+                {
+                    ActiveProviders.Add("Postgres");
+                }
+                i++;
+            }
+        }
+
         var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var resultsDir = Path.Combine("benchmarks", "results", "results");
         Directory.CreateDirectory(resultsDir);
@@ -56,9 +81,11 @@ internal static class Program
         Console.WriteLine();
 
         var sb = new StringBuilder();
-        sb.AppendLine("provider,query_count,top_k,held,mode,p50_ms,p95_ms,mean_ms,ops_per_sec,alloc_bytes_per_op,embedding_calls_per_op,vector_search_calls_per_op,storage_roundtrips_per_op,valid_candidates_per_op,under_recall_per_op");
+        sb.AppendLine("provider,query_count,top_k,held,mode,p50_ms,p95_ms,mean_ms,ops_per_sec,alloc_bytes_per_op,embedding_calls_per_op,vector_search_calls_per_op,storage_roundtrips_per_op,valid_candidates_per_op,under_recall_per_op,pool_connections");
+        var coldSb = new StringBuilder();
+        coldSb.AppendLine("provider,query_count,top_k,held,mode,cold_ms");
 
-        foreach (var provider in Providers)
+        foreach (var provider in ActiveProviders)
         {
             var stores = await BuildStoresAsync(provider);
             try
@@ -71,12 +98,20 @@ internal static class Program
                         {
                             foreach (var mode in Modes)
                             {
-                                var row = await MeasureAsync(provider, queryCount, topK, held, mode, stores);
+                                var (row, coldMs) = await MeasureAsync(provider, queryCount, topK, held, mode, stores);
                                 sb.AppendLine(row.ToCsv());
+                                coldSb.AppendLine($"{provider},{queryCount},{topK},{held},{mode},{coldMs.ToString("F2", CultureInfo.InvariantCulture)}");
                                 Console.WriteLine(row.ToTable());
                             }
                         }
                     }
+                }
+
+                // Postgres 维度：sweep 后额外采集 multiquery / hydration / vector 的真实
+                // EXPLAIN (ANALYZE, BUFFERS) 基线（需真实数据库；无 --postgres 时跳过）。
+                if (provider == "Postgres" && stores.PgContext is not null && stores.PgVector is not null)
+                {
+                    await CaptureExplainAsync(stores, timestamp, resultsDir).ConfigureAwait(false);
                 }
             }
             finally
@@ -86,9 +121,109 @@ internal static class Program
         }
 
         await File.WriteAllTextAsync(csvPath, sb.ToString(), new UTF8Encoding(false));
+        var coldPath = Path.Combine(resultsDir, $"multiquery-recall-baseline-{timestamp}-cold.csv");
+        await File.WriteAllTextAsync(coldPath, coldSb.ToString(), new UTF8Encoding(false));
+
+        // 随 CSV 记录运行环境元数据：commit / 运行时 / OS / CPU / GC / 数据规模 / 维度配置
+        var envPath = Path.Combine(resultsDir, $"multiquery-recall-baseline-{timestamp}.env.json");
+        var env = new
+        {
+            generatedAt = DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+            commit = TryGetGitHead(),
+            runtime = RuntimeInformation.FrameworkDescription,
+            os = RuntimeInformation.OSDescription,
+            machine = Environment.MachineName,
+            processorCount = Environment.ProcessorCount,
+            gc = System.Runtime.GCSettings.IsServerGC ? "Server" : "Workstation",
+            dataset = new { items = ItemCount, keywordGroups = KeywordCount, dimensions = 8 },
+            sweep = new { queryCounts = QueryCounts, topKs = TopKs, heldCounts = HeldCounts, providers = ActiveProviders.ToArray(), modes = Modes, warmupOps = 30 },
+            postgres = PostgresConnectionString is null ? null : new { enabled = true, host = ExtractPostgresHost(PostgresConnectionString) },
+            csv = Path.GetFileName(csvPath),
+            coldCsv = Path.GetFileName(coldPath)
+        };
+        await File.WriteAllTextAsync(
+            envPath,
+            System.Text.Json.JsonSerializer.Serialize(env, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(false));
+        Console.WriteLine($"环境元数据已写入：{envPath}");
+        Console.WriteLine($"冷启动样本已写入：{coldPath}");
+
         Console.WriteLine();
         Console.WriteLine($"CSV 已写入：{csvPath}");
         return 0;
+    }
+
+    /// <summary>
+    /// Postgres 维度：采集 multiquery / hydration / vector 三条热路径的真实
+    /// EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) 基线，写入 results 目录 JSON 文件。
+    /// EXPLAIN ANALYZE 会真实执行查询，计划中的 Execution Time 即该路径的 roundtrip 耗时。
+    /// </summary>
+    private static async Task CaptureExplainAsync(BenchStores stores, string timestamp, string resultsDir)
+    {
+        var multiQuery = new ContextMultiQuery
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Take = 50,
+            IncludeContent = false,
+            IncludeDerived = false,
+            Queries = Enumerable.Range(0, 8)
+                .Select(k => new ContextMultiQueryText { QueryText = $"alpha-{k}" })
+                .ToArray()
+        };
+        var vectorQuery = new VectorQuery
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Vector = Enumerable.Range(0, 8).Select(i => (float)(i + 1) / 8f).ToArray(),
+            TopK = 50
+        };
+        var hydrateIds = Enumerable.Range(0, 8).Select(k => $"alpha-{k}").ToArray();
+
+        var explain = new
+        {
+            generatedAt = DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+            dataset = new { items = ItemCount, keywordGroups = KeywordCount },
+            multiquery = await stores.PgContext!.ExplainMultiQueryAsync(multiQuery, CancellationToken.None)
+                .ConfigureAwait(false),
+            hydration = await stores.PgContext.ExplainBatchLookupAsync(
+                WorkspaceId, CollectionId, hydrateIds, CancellationToken.None).ConfigureAwait(false),
+            vectorSearch = await stores.PgVector!.ExplainSearchAsync(vectorQuery, CancellationToken.None)
+                .ConfigureAwait(false)
+        };
+
+        var explainPath = Path.Combine(resultsDir, $"multiquery-explain-{timestamp}.json");
+        await File.WriteAllTextAsync(
+            explainPath,
+            System.Text.Json.JsonSerializer.Serialize(explain, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(false)).ConfigureAwait(false);
+        Console.WriteLine($"EXPLAIN 基线已写入：{explainPath}");
+    }
+
+    private static string? ExtractPostgresHost(string connectionString)
+    {
+        var part = connectionString.Split(';')
+            .FirstOrDefault(p => p.TrimStart().StartsWith("Host=", StringComparison.OrdinalIgnoreCase));
+        return part?.Split('=', 2)[1].Trim();
+    }
+
+    private static string? TryGetGitHead()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("git", "rev-parse HEAD")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(psi);
+            return p?.StandardOutput.ReadToEnd().Trim();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -102,11 +237,50 @@ internal static class Program
         public required CountingContextStore CountingContext;
         public required CountingVectorStore CountingVector;
         public required Action DisposeInner;
+        public PostgresConnectionFactory? PgFactory;
+        public PostgresContextStore? PgContext;
+        public PostgresVectorStore? PgVector;
         public void Dispose() => DisposeInner();
+    }
+
+    private static async Task<BenchStores> BuildPostgresStoresAsync()
+    {
+        var connectionString = PostgresConnectionString!;
+        var options = new PostgresOptions
+        {
+            ConnectionString = connectionString,
+            AutoMigrate = true,
+            EnablePgVectorExtension = true,
+            TablePrefix = "bench_" + Guid.NewGuid().ToString("N")[..8]
+        };
+        var factory = new PostgresConnectionFactory(options);
+        var serializer = new PostgresJsonSerializer();
+        var migrationRunner = new PostgresMigrationRunner(factory);
+        await migrationRunner.MigrateAsync().ConfigureAwait(false);
+
+        var context = new PostgresContextStore(factory, serializer, migrationRunner);
+        var vector = new PostgresVectorStore(factory, serializer, migrationRunner);
+        await PopulateAsync(context, vector);
+
+        return new BenchStores
+        {
+            Context = context,
+            Vector = vector,
+            CountingContext = new CountingContextStore(context),
+            CountingVector = new CountingVectorStore(vector),
+            PgFactory = factory,
+            PgContext = context,
+            PgVector = vector,
+            DisposeInner = () => factory.DisposeAsync().AsTask().GetAwaiter().GetResult()
+        };
     }
 
     private static async Task<BenchStores> BuildStoresAsync(string provider)
     {
+        if (provider == "Postgres")
+        {
+            return await BuildPostgresStoresAsync();
+        }
         if (provider == "InMemory")
         {
             var context = new InMemoryContextStore();
@@ -201,7 +375,7 @@ internal static class Program
     // 单组合测量
     // ------------------------------------------------------------------
 
-    private static async Task<Row> MeasureAsync(
+    private static async Task<(Row Row, double ColdMs)> MeasureAsync(
         string provider,
         int queryCount,
         int topK,
@@ -221,6 +395,12 @@ internal static class Program
             stores.CountingContext, memoryStore: null, embeddingProvider: embedding,
             vectorStore: stores.CountingVector, tokenizerResolver: null);
 
+        // 冷启动样本：预热前的首次执行（JIT / 文件缓存均未加热）。
+        var coldSw = Stopwatch.StartNew();
+        await ExecuteOnceAsync(mode, queryCount, topK, heldIds, lexical, semantic, stores);
+        coldSw.Stop();
+        var coldMs = coldSw.Elapsed.TotalMilliseconds;
+
         // 预热：让 JIT / PGO / 文件缓存进入稳定状态。
         for (var i = 0; i < 30; i++)
         {
@@ -232,28 +412,34 @@ internal static class Program
 
         var iterations = provider == "InMemory" ? 120 : 40;
         var timings = new List<double>(iterations);
-        var allocs = new List<long>(iterations);
         var validSamples = new List<int>(iterations);
         var underSamples = new List<int>(iterations);
 
+        // 分配用进程级单调计数（async 换线程会让 GetCurrentThread 出负值），
+        // 整段循环前后各取一次再除以迭代数，避免逐次采样的 GC 噪声。
+        var poolPeak = stores.PgFactory is null ? 0 : await SamplePoolConnectionsAsync(stores.PgFactory);
+        var allocBefore = GC.GetTotalAllocatedBytes(precise: false);
         for (var i = 0; i < iterations; i++)
         {
-            var beforeAlloc = GC.GetAllocatedBytesForCurrentThread();
             var sw = Stopwatch.StartNew();
             var result = await ExecuteOnceAsync(mode, queryCount, topK, heldIds, lexical, semantic, stores);
             sw.Stop();
 
             timings.Add(sw.Elapsed.TotalMilliseconds);
-            allocs.Add(GC.GetAllocatedBytesForCurrentThread() - beforeAlloc);
 
             var validNew = result.Envelopes.Count(e => !heldSet.Contains(e.CanonicalKey.EntityId));
             validSamples.Add(validNew);
             var expected = Math.Min(topK, ItemCount - heldSet.Count);
             underSamples.Add(Math.Max(0, expected - validNew));
         }
+        var allocAfter = GC.GetTotalAllocatedBytes(precise: false);
+        if (stores.PgFactory is not null)
+        {
+            poolPeak = Math.Max(poolPeak, await SamplePoolConnectionsAsync(stores.PgFactory));
+        }
 
         var calls = await CaptureCallCountsAsync(stores, embedding, iterations);
-        return new Row
+        var row = new Row
         {
             Provider = provider,
             QueryCount = queryCount,
@@ -264,13 +450,31 @@ internal static class Program
             P95Ms = Percentile(timings, 0.95),
             MeanMs = timings.Average(),
             OpsPerSec = 1000.0 / timings.Average(),
-            AllocBytesPerOp = allocs.Average(),
+            AllocBytesPerOp = allocAfter >= allocBefore ? (double)(allocAfter - allocBefore) / iterations : 0,
             EmbeddingCallsPerOp = calls.Embedding,
             VectorSearchCallsPerOp = calls.VectorSearch,
             StorageRoundtripsPerOp = calls.Storage,
             ValidCandidatesPerOp = validSamples.Average(),
-            UnderRecallPerOp = underSamples.Average()
+            UnderRecallPerOp = underSamples.Average(),
+            PoolConnections = poolPeak
         };
+        return (row, coldMs);
+    }
+
+    private static async Task<int> SamplePoolConnectionsAsync(PostgresConnectionFactory factory)
+    {
+        try
+        {
+            await using var connection = await factory.OpenConnectionAsync().ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database();";
+            var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+            return result is long l ? (int)l : result is int i ? i : 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private static async Task<ExpertExecutionResult> ExecuteOnceAsync(
@@ -382,8 +586,8 @@ internal static class Program
         BenchStores stores, FixedEmbeddingProvider embedding, int iterations)
     {
         // 计数在测量循环内累积，除以迭代数得到每次操作的平均调用次数。
-        var storageCalls = stores.CountingContext.QueryCalls + stores.CountingContext.BatchCalls;
-        var vectorCalls = stores.CountingVector.SearchCalls;
+        var storageCalls = stores.CountingContext.QueryCalls + stores.CountingContext.BatchCalls + stores.CountingContext.MultiQueryCalls;
+        var vectorCalls = stores.CountingVector.SearchCalls + stores.CountingVector.MultiSearchCalls;
         var embeddingCalls = embedding.CallCount;
         return Task.FromResult((
             embeddingCalls / Math.Max(1, iterations),
@@ -403,24 +607,28 @@ internal static class Program
     // 计数包装
     // ------------------------------------------------------------------
 
-    private sealed class CountingContextStore : IContextStore, IContextStoreBatchLookup
+    private sealed class CountingContextStore : IContextStore, IContextStoreBatchLookup, IContextStoreMultiQuery
     {
         private readonly IContextStore _inner;
         private readonly IContextStoreBatchLookup _batch;
+        private readonly IContextStoreMultiQuery? _multi;
 
         public int QueryCalls;
         public int BatchCalls;
+        public int MultiQueryCalls;
 
         public CountingContextStore(IContextStore inner)
         {
             _inner = inner;
             _batch = (IContextStoreBatchLookup)inner;
+            _multi = inner as IContextStoreMultiQuery;
         }
 
         public void Reset()
         {
             QueryCalls = 0;
             BatchCalls = 0;
+            MultiQueryCalls = 0;
         }
 
         public Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default)
@@ -450,23 +658,73 @@ internal static class Program
             BatchCalls++;
             return _batch.BatchGetAsync(workspaceId, collectionId, ids, cancellationToken);
         }
+
+        public Task<IReadOnlyList<ContextMultiQueryResult>> QueryMultiAsync(
+            ContextMultiQuery query, CancellationToken cancellationToken = default)
+        {
+            MultiQueryCalls++;
+            if (_multi is not null)
+            {
+                return _multi.QueryMultiAsync(query, cancellationToken);
+            }
+            // 回退：逐问句调用（计数仍计入 MultiQueryCalls，便于观测 provider 是否走批量路径）。
+            return SimulateMultiAsync(query, cancellationToken);
+        }
+
+        private async Task<IReadOnlyList<ContextMultiQueryResult>> SimulateMultiAsync(
+            ContextMultiQuery query, CancellationToken cancellationToken = default)
+        {
+            var results = new List<ContextMultiQueryResult>(query.Queries.Count);
+            for (var i = 0; i < query.Queries.Count; i++)
+            {
+                var q = query.Queries[i];
+                var items = await QueryAsync(new ContextQuery
+                {
+                    WorkspaceId = query.WorkspaceId,
+                    CollectionId = query.CollectionId,
+                    QueryText = q.QueryText,
+                    Tags = query.Tags,
+                    Types = query.Types,
+                    Refs = q.Refs,
+                    ExcludedTypes = query.ExcludedTypes,
+                    ExcludedIds = query.ExcludedIds,
+                    Take = query.Take,
+                    IncludeContent = query.IncludeContent,
+                    IncludeDerived = query.IncludeDerived
+                }, cancellationToken).ConfigureAwait(false);
+                results.Add(new ContextMultiQueryResult { QueryIndex = i, QueryText = q.QueryText, Items = items });
+            }
+            return results;
+        }
     }
 
-    private sealed class CountingVectorStore : IVectorStore
+    private sealed class CountingVectorStore : IVectorStore, IVectorStoreMultiSearch
     {
         private readonly IVectorStore _inner;
 
         public int SearchCalls;
+        public int MultiSearchCalls;
 
         public CountingVectorStore(IVectorStore inner) => _inner = inner;
 
-        public void Reset() => SearchCalls = 0;
+        public void Reset()
+        {
+            SearchCalls = 0;
+            MultiSearchCalls = 0;
+        }
 
         public Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
             VectorQuery query, CancellationToken cancellationToken = default)
         {
             SearchCalls++;
             return _inner.SearchAsync(query, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<VectorMultiSearchResult>> SearchMultiAsync(
+            VectorMultiQuery query, CancellationToken cancellationToken = default)
+        {
+            MultiSearchCalls++;
+            return ((IVectorStoreMultiSearch)_inner).SearchMultiAsync(query, cancellationToken);
         }
 
         public Task UpsertAsync(VectorRecord record, CancellationToken cancellationToken = default)
@@ -558,19 +816,20 @@ internal static class Program
         public required double StorageRoundtripsPerOp;
         public required double ValidCandidatesPerOp;
         public required double UnderRecallPerOp;
+        public required int PoolConnections;
 
         public string ToCsv() =>
             string.Join(',', Provider, QueryCount, TopK, Held, Mode,
                 F(P50Ms), F(P95Ms), F(MeanMs), F(OpsPerSec), F(AllocBytesPerOp),
                 F(EmbeddingCallsPerOp), F(VectorSearchCallsPerOp), F(StorageRoundtripsPerOp),
-                F(ValidCandidatesPerOp), F(UnderRecallPerOp));
+                F(ValidCandidatesPerOp), F(UnderRecallPerOp), PoolConnections);
 
         public string ToTable() =>
             $"{Provider,-10} q={QueryCount,-2} topK={TopK,-4} held={Held,-4} {Mode,-13} " +
             $"p50={P50Ms,7:F3}ms p95={P95Ms,7:F3}ms mean={MeanMs,7:F3}ms " +
             $"ops/s={OpsPerSec,8:F1} alloc={AllocBytesPerOp,9:F0}B " +
             $"emb={EmbeddingCallsPerOp,3:F0} vec={VectorSearchCallsPerOp,3:F0} rt={StorageRoundtripsPerOp,3:F0} " +
-            $"valid={ValidCandidatesPerOp,5:F1} under={UnderRecallPerOp,3:F0}";
+            $"valid={ValidCandidatesPerOp,5:F1} under={UnderRecallPerOp,3:F0} pool={PoolConnections,2}";
 
         private static string F(double v) => v.ToString("F2", CultureInfo.InvariantCulture);
     }

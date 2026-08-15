@@ -13,5 +13,6 @@
     <ProjectReference Include="..\..\src\ContextCore.Core\ContextCore.Core.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Storage.InMemory\ContextCore.Storage.InMemory.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Storage.Postgres\ContextCore.Storage.Postgres.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,236 @@
+[
+  {
+    "sampleId": "lr1a-kw-001",
+    "query": "PostgreSQL GIN 索引与 pg_trgm 中文全文检索如何配置",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "精确实体与关键词：查询包含文档标题中的全部精确词元（PostgreSQL/GIN/pg_trgm/中文全文检索），应按词元命中主文档；已废弃的 ES 方案文档共享部分词元但不应出现。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:pg-gin-config"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:deprecated-es"]
+    },
+    "coverageDimensions": ["exact-keyword"],
+    "metadata": { "focus": "exact term match" }
+  },
+  {
+    "sampleId": "lr1a-kw-002",
+    "query": "PurpleBicycle-42 项目的上下文组织方式",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "精确实体：查询含唯一实体标识 PurpleBicycle-42，应按实体 ID 精确召回对应项目笔记。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:purple-bicycle-42"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["exact-keyword"],
+    "metadata": { "focus": "exact entity id" }
+  },
+  {
+    "sampleId": "lr1a-kw-003",
+    "query": "并发写入导致状态冲突时如何保证最终一致",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "精确关键词：查询包含分布式一致性文档标题的关键词（并发写入/状态冲突/最终一致），应按词元命中。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:dist-consistency"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["exact-keyword"],
+    "metadata": { "focus": "keyword recall" }
+  },
+  {
+    "sampleId": "lr1a-sm-001",
+    "query": "系统怎么保证多节点同时写入不打架",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "同义改写：查询与文档标题无共享关键词（多节点同时写入不打架 ≈ 并发写入状态冲突），只能靠语义匹配命中；缓存失效文档因共享‘写入/节点’词元是 hard negative，不得入选。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:dist-consistency"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:cache-invalidation"]
+    },
+    "coverageDimensions": ["semantic-hard-negative"],
+    "metadata": { "focus": "paraphrase + hard negative" }
+  },
+  {
+    "sampleId": "lr1a-sm-002",
+    "query": "谁负责记录每一次操作的执行者和时间",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "语义匹配：查询不含‘审计/轨迹/审计日志’等术语，通过语义（记录操作者与时间 ≈ 审计轨迹）命中审计文档；审计旧版本文档共享标题词元但已废弃，是 hard negative。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:audit-trail"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:audit-trail-superseded"]
+    },
+    "coverageDimensions": ["semantic-hard-negative"],
+    "metadata": { "focus": "semantic match" }
+  },
+  {
+    "sampleId": "lr1a-sm-003",
+    "query": "多路召回信号合并时各通道权重怎么定",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "同义改写：查询不含 BM25/MRR/融合等术语，需语义命中混合检索融合决策文档；含相同关键词的旧决策记录是 hard negative，不得入选。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:hybrid-fusion-decision"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:hybrid-fusion-old"]
+    },
+    "coverageDimensions": ["semantic-hard-negative"],
+    "metadata": { "focus": "paraphrase + hard negative" }
+  },
+  {
+    "sampleId": "lr1a-mq-001",
+    "query": "当前召回优化的三个子问题：一是预算分配，二是去重，三是冷启动",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "多问句：单条请求含三个子问句（预算分配/去重/冷启动），要求三条不同证据全部召回，任一条漏失即失败。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:alloc-budget", "q:dedup-policy", "q:cold-start"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["multi-query-tool"],
+    "metadata": { "focus": "multi-query", "queryCount": "3" }
+  },
+  {
+    "sampleId": "lr1a-mq-002",
+    "query": "工具刚返回的 AmberCompass-17 文件里说的配置项是什么",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "工具观察：查询引用工具观察到的实体（AmberCompass-17），该证据不在工作集，需要靠实体词搜索找回。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:amber-compass-17"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["multi-query-tool"],
+    "metadata": { "focus": "tool observation entity" }
+  },
+  {
+    "sampleId": "lr1a-mq-003",
+    "query": "上一轮提到过的那条长笔记，现在再找回来",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "忘掉再找回：证据曾在上一轮被预算裁掉（不在种子），本轮需通过搜索重新召回，验证‘忘掉靠搜索找回’的跨轮行为。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:forgotten-long-note"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["multi-query-tool"],
+    "metadata": { "focus": "forget and re-recall" }
+  },
+  {
+    "sampleId": "lr1a-lc-001",
+    "query": "当前生效的检索优化方案是哪版",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "生命周期：检索优化方案有多版，只有标记为当前生效的版本应入选；已废弃版本（生命周期终态）即使词元匹配也不得出现。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:retrieval-plan-current"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:retrieval-plan-superseded"]
+    },
+    "coverageDimensions": ["lifecycle-permission"],
+    "metadata": { "focus": "lifecycle staleness" }
+  },
+  {
+    "sampleId": "lr1a-lc-002",
+    "query": "这个 workspace 里有没有关于权限隔离的说明",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "权限边界：查询限定当前 workspace，其他租户/workspace 的证据即使语义相关也不得越权召回（排除与权限边界）。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:perm-isolation"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:other-tenant-perm"]
+    },
+    "coverageDimensions": ["lifecycle-permission"],
+    "metadata": { "focus": "permission boundary" }
+  },
+  {
+    "sampleId": "lr1a-lc-003",
+    "query": "上个月那条过期的容量评估还作数吗",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "时效性：查询提及过期评估，期望命中当前有效评估；旧评估记录已超时效窗口，不得作为有效证据出现。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:capacity-current"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:capacity-stale"]
+    },
+    "coverageDimensions": ["lifecycle-permission"],
+    "metadata": { "focus": "timeliness" }
+  },
+  {
+    "sampleId": "lr1a-gr-001",
+    "query": "从服务入口到最终落库这条链路上有哪些组件",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "多跳证据：答案需要沿关系链（服务入口 → 处理中间件 → 落库）走两跳，三个节点证据都要召回；只召回入口节点不算命中。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:hop-entry", "q:hop-middle", "q:hop-storage"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["graph-evidence"],
+    "metadata": { "focus": "multi-hop chain", "hops": "2" }
+  },
+  {
+    "sampleId": "lr1a-gr-002",
+    "query": "这次决策最终按哪个方案执行",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "证据冲突：草案与最终方案相互矛盾，只有标记为最终的证据可入选；草案证据不得出现（证据冲突取正确一条）。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:decision-final"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": ["q:decision-draft"]
+    },
+    "coverageDimensions": ["graph-evidence"],
+    "metadata": { "focus": "evidence conflict" }
+  },
+  {
+    "sampleId": "lr1a-gr-003",
+    "query": "关联关系扩展能否把这条决策的影响面串起来",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "图关系：查询验证关系扩展（决策 → 影响模块 → 相关测试）的多跳关联召回，三个关联节点均需出现。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:decision-node", "q:module-node", "q:test-node"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["graph-evidence"],
+    "metadata": { "focus": "relation expansion" }
+  },
+  {
+    "sampleId": "lr1a-pp-001",
+    "query": "当前正在推进哪个召回质量改进工作项",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "Provider parity：同一查询在 FileSystem / Postgres / InMemory 三通道都应命中同一证据，验证存储通道语义一致。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:active-retrieval-task"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["provider-parity"],
+    "metadata": { "focus": "parity", "providers": "filesystem,postgres,inmemory" }
+  },
+  {
+    "sampleId": "lr1a-pp-002",
+    "query": "最近一次检索回归的根因记录在哪",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "Provider parity：同一查询在三通道应一致命中根因记录，验证关键词路径在 FileSystem / Postgres（FTS）/ InMemory 的匹配语义一致。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:recall-regression-rootcause"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["provider-parity"],
+    "metadata": { "focus": "parity", "providers": "filesystem,postgres,inmemory" }
+  },
+  {
+    "sampleId": "lr1a-pp-003",
+    "query": "混合检索的向量与词法两路默认开关是什么",
+    "source": "eval/contexts/quality/declarations.json · 2026-08-14 · LR-1A 起步集",
+    "annotationReason": "Provider parity：同一查询在三通道应一致命中混合检索默认配置文档，验证语义通道缺省行为一致。",
+    "evidence": {
+      "requiredEvidenceIds": ["q:hybrid-defaults"],
+      "relevantEvidenceIds": [],
+      "forbiddenExcludedIds": []
+    },
+    "coverageDimensions": ["provider-parity"],
+    "metadata": { "focus": "parity", "providers": "filesystem,postgres,inmemory" }
+  }
+]
